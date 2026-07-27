@@ -421,7 +421,7 @@ async function serveAsset(request, env) {
   const isClientRoute = wantsHtml && !lastPathSegment.includes(".");
 
   if (isClientRoute) {
-    const indexUrl = new URL("/index.html", request.url);
+    const indexUrl = new URL("/", request.url);
     return withSecurityHeaders(
       await env.ASSETS.fetch(new Request(indexUrl, request)),
     );
@@ -432,7 +432,7 @@ async function serveAsset(request, env) {
     response.status === 404 &&
     wantsHtml
   ) {
-    const indexUrl = new URL("/index.html", request.url);
+    const indexUrl = new URL("/", request.url);
     response = await env.ASSETS.fetch(new Request(indexUrl, request));
   }
   return withSecurityHeaders(response);

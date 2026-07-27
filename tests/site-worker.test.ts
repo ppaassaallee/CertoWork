@@ -8,7 +8,7 @@ function environment(overrides: Record<string, unknown> = {}) {
     ASSETS: {
       async fetch(request: Request) {
         const pathname = new URL(request.url).pathname;
-        if (pathname === "/index.html") {
+        if (pathname === "/" || pathname === "/index.html") {
           return new Response("<!doctype html><title>Gazelle</title>", {
             headers: { "content-type": "text/html" },
           });
@@ -51,7 +51,7 @@ test("Sites worker preserves client-side routes through the SPA fallback", async
       async fetch(request: Request) {
         const pathname = new URL(request.url).pathname;
         requestedPaths.push(pathname);
-        if (pathname === "/index.html") {
+        if (pathname === "/") {
           return new Response("<!doctype html><title>Gazelle</title>", {
             headers: { "content-type": "text/html" },
           });
@@ -69,7 +69,7 @@ test("Sites worker preserves client-side routes through the SPA fallback", async
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Gazelle/);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-  assert.deepEqual(requestedPaths, ["/index.html"]);
+  assert.deepEqual(requestedPaths, ["/"]);
 });
 
 test("Boldi compatibility route rejects unauthenticated requests", async () => {
