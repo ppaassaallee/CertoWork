@@ -45,15 +45,31 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
 });
 
 test("Sites worker preserves client-side routes through the SPA fallback", async () => {
+  const requestedPaths: string[] = [];
+  const env = environment({
+    ASSETS: {
+      async fetch(request: Request) {
+        const pathname = new URL(request.url).pathname;
+        requestedPaths.push(pathname);
+        if (pathname === "/index.html") {
+          return new Response("<!doctype html><title>Gazelle</title>", {
+            headers: { "content-type": "text/html" },
+          });
+        }
+        return Response.redirect("https://gazelle.test/", 307);
+      },
+    },
+  });
   const response = await worker.fetch(
     new Request("https://gazelle.test/work/projects", {
       headers: { accept: "text/html" },
     }),
-    environment(),
+    env,
   );
   assert.equal(response.status, 200);
   assert.match(await response.text(), /Gazelle/);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.deepEqual(requestedPaths, ["/index.html"]);
 });
 
 test("Boldi compatibility route rejects unauthenticated requests", async () => {

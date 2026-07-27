@@ -413,11 +413,24 @@ function capabilities(env) {
 }
 
 async function serveAsset(request, env) {
+  const url = new URL(request.url);
+  const wantsHtml =
+    request.method === "GET" &&
+    (request.headers.get("accept") || "").includes("text/html");
+  const lastPathSegment = url.pathname.split("/").pop() || "";
+  const isClientRoute = wantsHtml && !lastPathSegment.includes(".");
+
+  if (isClientRoute) {
+    const indexUrl = new URL("/index.html", request.url);
+    return withSecurityHeaders(
+      await env.ASSETS.fetch(new Request(indexUrl, request)),
+    );
+  }
+
   let response = await env.ASSETS.fetch(request);
   if (
     response.status === 404 &&
-    request.method === "GET" &&
-    (request.headers.get("accept") || "").includes("text/html")
+    wantsHtml
   ) {
     const indexUrl = new URL("/index.html", request.url);
     response = await env.ASSETS.fetch(new Request(indexUrl, request));
