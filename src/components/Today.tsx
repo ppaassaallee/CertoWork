@@ -181,10 +181,10 @@ export function Today() {
       {/* Mobile Secondary Navigation Horizontal Chips */}
       <div className="flex md:hidden gap-1 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-none border-b border-gray-100">
         <button onClick={() => navigate("/")} className="px-3 py-1.5 bg-black text-white rounded-full text-xs font-semibold whitespace-nowrap">Focus</button>
-        <button onClick={() => navigate("/work/calendar")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Agenda</button>
+        <button onClick={() => navigate("/today/agenda")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Agenda</button>
         <button onClick={() => navigate("/work/timeblocks")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Time Blocks</button>
-        <button onClick={() => navigate("/work/routines")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Routines</button>
-        <button onClick={() => navigate("/work/meeting-intake")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Meetings</button>
+        <button onClick={() => navigate("/today/routines")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Routines</button>
+        <button onClick={() => navigate("/capture")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Meetings</button>
         <button onClick={() => navigate("/work/waiting")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Waiting For</button>
       </div>
 
@@ -357,7 +357,7 @@ export function Today() {
           Ensure calendar integrity: protect work sessions and align admin, message buffers, and fitness blocks.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link to="/work/calendar" className="p-4 bg-gray-50 hover:bg-gray-100/80 rounded-2xl border border-gray-150/70 transition-all flex items-center justify-between group">
+          <Link to="/today/agenda" className="p-4 bg-gray-50 hover:bg-gray-100/80 rounded-2xl border border-gray-150/70 transition-all flex items-center justify-between group">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><Calendar className="w-4 h-4" /></div>
               <div>

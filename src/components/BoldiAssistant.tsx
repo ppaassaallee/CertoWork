@@ -64,6 +64,7 @@ import {
 } from "../lib/judgment";
 import { handleFirestoreError, OperationType } from "../lib/firestore-error-helper";
 import { SPECIALIST_AGENTS } from "../lib/agentContracts";
+import { shouldQueueOfflineCapture } from "../lib/assistantFallback";
 
 type MessageRole = "user" | "assistant" | "system";
 
@@ -250,6 +251,16 @@ function buildOfflineReply(text: string, judgment: JudgmentAssessment) {
     return "The AI provider is unavailable, but your workspace is still usable. I saved this report request and will keep all source records unchanged.";
   }
   return "Captured. The AI provider is unavailable right now, so I placed this in the offline queue instead of pretending it was processed. Nothing else changed.";
+}
+
+function buildProviderUnavailableReply(judgment: JudgmentAssessment) {
+  const lead =
+    judgment.verdict === "stop"
+      ? judgment.recommendation
+      : judgment.verdict === "challenge"
+        ? judgment.userNeedsToHear
+        : "Your request passed the deterministic safety checks.";
+  return `${lead}\n\nThe AI provider is currently unavailable. Nothing has been executed or added to the offline queue.`;
 }
 
 function RichText({ text }: { text: string }) {
@@ -679,6 +690,8 @@ export function BoldiAssistant() {
 
     let activeConversationId = conversationId;
     let judgment: JudgmentAssessment;
+    let assistantRequestStarted = false;
+    let assistantResponseReceived = false;
     try {
       activeConversationId = await ensureConversation(text);
       await addDoc(collection(db, "boldi_messages"), {
@@ -698,6 +711,7 @@ export function BoldiAssistant() {
       if (!navigator.onLine) throw new Error("offline");
 
       const idToken = await user.getIdToken();
+      assistantRequestStarted = true;
       const response = await fetch("/api/boldi/chat", {
         method: "POST",
         headers: {
@@ -724,6 +738,7 @@ export function BoldiAssistant() {
           },
         }),
       });
+      assistantResponseReceived = true;
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error || "Assistant provider unavailable");
@@ -749,7 +764,7 @@ export function BoldiAssistant() {
       });
       setProviderLabel(
         result.provider?.provider
-          ? `${result.provider.provider === "openai" ? "OpenAI" : "Gemini"} · Chief of Staff`
+          ? `${result.provider.provider === "openai" ? "OpenAI" : "Legacy AI adapter"} · Chief of Staff`
           : "Chief of Staff",
       );
       if (activeConversationId) {
@@ -762,15 +777,25 @@ export function BoldiAssistant() {
       const liveSnapshot = snapshot.loaded ? snapshot : await loadWorkspaceSnapshot();
       judgment = evaluateJudgment(text, liveSnapshot);
       setLatestJudgment(judgment);
-      const queueLength = storeOfflineCapture(text);
-      setOfflineCount(queueLength);
-      const reply = buildOfflineReply(text, judgment);
+      const shouldQueue = shouldQueueOfflineCapture({
+        isOnline: navigator.onLine,
+        requestStarted: assistantRequestStarted,
+        responseReceived: assistantResponseReceived,
+        errorName: error instanceof Error ? error.name : undefined,
+      });
+      if (shouldQueue) {
+        const queueLength = storeOfflineCapture(text);
+        setOfflineCount(queueLength);
+      }
+      const reply = shouldQueue
+        ? buildOfflineReply(text, judgment)
+        : buildProviderUnavailableReply(judgment);
       await streamText(reply);
       const fallbackMessage: ConversationMessage = {
-        id: `offline-${Date.now()}`,
+        id: `${shouldQueue ? "offline" : "provider-unavailable"}-${Date.now()}`,
         role: "assistant",
         content: reply,
-        offline: true,
+        offline: shouldQueue,
         createdAt: Date.now(),
       };
       if (activeConversationId && navigator.onLine) {
@@ -784,11 +809,11 @@ export function BoldiAssistant() {
             inputType: "text",
             provider: { provider: "offline-safe", model: "deterministic" },
             judgment,
-            offline: true,
+            offline: shouldQueue,
             createdAt: serverTimestamp(),
           });
         } catch {
-          // The local fallback below remains visible and the capture stays queued.
+          // The local fallback below remains visible.
         }
       }
       setMessages((current) => {
@@ -800,11 +825,11 @@ export function BoldiAssistant() {
           ...withoutLocal,
           ...(userAlreadyPersisted
             ? []
-            : [{ id: localId, role: "user" as const, content: text, createdAt: Date.now(), offline: true }]),
+            : [{ id: localId, role: "user" as const, content: text, createdAt: Date.now(), offline: shouldQueue }]),
           fallbackMessage,
         ];
       });
-      setProviderLabel("Offline-safe mode");
+      setProviderLabel(shouldQueue ? "Offline-safe mode" : "AI unavailable · deterministic mode");
     } finally {
       setStreamingReply("");
       setSubmitting(false);

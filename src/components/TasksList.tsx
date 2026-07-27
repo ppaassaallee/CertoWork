@@ -2353,6 +2353,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
           )}
           <button 
             type="submit" 
+            aria-label="Add task"
             disabled={!newTaskTitle.trim() || isAdding}
             className="bg-black text-white p-2.5 rounded-xl font-medium disabled:opacity-50 flex justify-center items-center transition-transform hover:scale-105 active:scale-95 m-1 shrink-0"
           >

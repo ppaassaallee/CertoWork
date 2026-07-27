@@ -155,7 +155,7 @@ export function InvokeSkillModal({
             </div>
             <div>
               <h2 className="font-black text-gray-900 text-lg tracking-tight">Invoke AI Skill (Claude Skills for Gazelle)</h2>
-              <p className="text-xs text-gray-400">Run a custom instruction set on "{itemTitle}" via gemini-3.5-flash</p>
+              <p className="text-xs text-gray-400">Run a custom instruction set on "{itemTitle}" through the configured AI provider</p>
             </div>
           </div>
           <button 
@@ -250,7 +250,7 @@ export function InvokeSkillModal({
                   {executing ? (
                     <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
                       <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
-                      <p className="text-xs font-bold text-gray-700">Gemini 3.5 Flash is executing your skill...</p>
+                      <p className="text-xs font-bold text-gray-700">The configured AI provider is executing your skill...</p>
                       <p className="text-[10px] text-gray-400">Analyzing context & applying custom instructions</p>
                     </div>
                   ) : null}

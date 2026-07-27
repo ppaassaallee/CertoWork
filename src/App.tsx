@@ -610,6 +610,13 @@ export default function App() {
             <Route path="/work/knowledge" element={<Navigate to="/capture/documents?tab=documents" replace />} />
             <Route path="/work/knowledge/:id" element={<KnowledgeDetail />} />
             <Route path="/work/timeblocks" element={<TimeBlocksPlanner />} />
+            <Route path="/work/calendar" element={<Navigate to="/today/agenda" replace />} />
+            <Route path="/work/routines" element={<Navigate to="/today/routines" replace />} />
+            <Route path="/work/meeting-intake" element={<Navigate to="/capture" replace />} />
+            <Route path="/work/warroom" element={<Navigate to="/work/agent-workspace" replace />} />
+            <Route path="/work/habits" element={<Navigate to="/review/habits" replace />} />
+            <Route path="/work/workouts" element={<Navigate to="/review/workouts" replace />} />
+            <Route path="/work/strategy" element={<Navigate to="/plan/strategy" replace />} />
 
             <Route path="/plan" element={<PlanPage />} />
             <Route path="/plan/week" element={<ReviewHub />} />

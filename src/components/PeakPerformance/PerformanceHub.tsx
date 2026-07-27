@@ -293,7 +293,7 @@ export function PerformanceHub() {
                     </div>
 
                     <button 
-                        onClick={() => navigate('/work/habits')}
+                        onClick={() => navigate('/review/habits')}
                         className="w-full bg-white text-indigo-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all"
                     >
                         Review Habits <ChevronRight className="w-4 h-4" />
@@ -363,7 +363,7 @@ export function PerformanceHub() {
                         <h2 className="text-2xl font-black flex items-center gap-2">
                             <Dumbbell className="w-6 h-6 text-black" /> Training Block
                         </h2>
-                        <button onClick={() => navigate('/work/workouts')} className="text-sm font-bold text-indigo-600 hover:underline">View All</button>
+                        <button onClick={() => navigate('/review/workouts')} className="text-sm font-bold text-indigo-600 hover:underline">View All</button>
                     </div>
                     
                     <div className="p-8 flex-1 flex flex-col justify-center">
@@ -387,7 +387,7 @@ export function PerformanceHub() {
                            <div className="text-center py-8 space-y-2">
                                <p className="text-gray-400 font-medium">No workout scheduled for today.</p>
                                <button 
-                                 onClick={() => navigate('/work/workouts')}
+                                 onClick={() => navigate('/review/workouts')}
                                  className="px-8 py-3 bg-gray-100 rounded-2xl font-bold text-sm hover:bg-gray-200 transition-colors"
                                >
                                  + Plan Session

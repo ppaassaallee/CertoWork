@@ -102,7 +102,7 @@ export function Plan() {
       color: "text-emerald-600",
       bg: "bg-emerald-50 border-emerald-100",
       cta: "Manage Strategy & OKRs",
-      path: "/work/strategy"
+      path: "/plan/strategy"
     },
     {
       id: "year",
@@ -128,7 +128,7 @@ export function Plan() {
       {/* Horizontal Nav Chips on Mobile */}
       <div className="flex md:hidden gap-1 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-none border-b border-b-gray-100">
         <button onClick={() => navigate("/review")} className="px-3 py-1.5 bg-black text-white rounded-full text-xs font-semibold whitespace-nowrap">Weekly Review</button>
-        <button onClick={() => navigate("/work/strategy")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Strategy Center</button>
+        <button onClick={() => navigate("/plan/strategy")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Strategy Center</button>
         <button onClick={() => navigate("/boldr")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">OS Command</button>
       </div>
 
@@ -139,7 +139,7 @@ export function Plan() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            to="/work/strategy"
+            to="/plan/strategy"
             className="flex items-center gap-1.5 px-3.5 py-2 bg-black hover:bg-neutral-900 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
           >
             <TrendingUp className="w-3.5 h-3.5 text-yellow-400" /> Strategy Desk

@@ -281,7 +281,7 @@ export function AudioCaptureZone({ onComplete }: { onComplete: () => void }) {
       {isProcessing ? (
         <div className="flex flex-col items-center py-4">
           <Loader2 className="w-8 h-8 text-black animate-spin mb-4" />
-          <p className="font-bold">Analyzing audio with Gemini...</p>
+          <p className="font-bold">Analyzing audio with the configured AI provider...</p>
           <p className="text-sm text-gray-500 mt-1">Transcribing and extracting actions faithfully</p>
         </div>
       ) : (

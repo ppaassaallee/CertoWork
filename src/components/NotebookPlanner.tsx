@@ -1164,7 +1164,7 @@ export function NotebookPlanner() {
                   <button
                     onClick={handleOrganizeNotesAI}
                     className="text-xs bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-xl font-bold flex items-center gap-1 shadow-sm transition-all"
-                    title="Use Gemini to structure, categorize and clean your raw reflections"
+                    title="Use the configured AI provider to structure, categorize and clean your raw reflections"
                   >
                     <Sparkles className="w-3.5 h-3.5" /> Organize Notes
                   </button>

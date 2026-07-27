@@ -190,7 +190,7 @@ export function WarRoom() {
   const [newAgentDesc, setNewAgentDesc] = useState('');
   const [newAgentEmoji, setNewAgentEmoji] = useState('🤖');
   const [newAgentPrompt, setNewAgentPrompt] = useState('');
-  const [newAgentModel, setNewAgentModel] = useState('gemini-2.5-flash');
+  const [newAgentModel, setNewAgentModel] = useState('gpt-5.6-sol');
   const [newAgentPermissions, setNewAgentPermissions] = useState<BoldiAgent['permissionsProfile']>('can_create_drafts');
   const [newAgentMemory, setNewAgentMemory] = useState<BoldiAgent['memoryPolicy']>('chat_only');
 
@@ -287,8 +287,8 @@ export function WarRoom() {
               avatarEmoji: ag.avatarEmoji,
               systemPrompt: ag.systemPrompt,
               agentType: ag.agentType,
-              modelProvider: "google",
-              modelName: "gemini-2.5-flash",
+              modelProvider: "openai",
+              modelName: "gpt-5.6-sol",
               toolsAllowed: ["search_tasks", "prioritize", "schedule_block"],
               permissionsProfile: "read_write",
               memoryPolicy: "persistent",
@@ -1242,8 +1242,8 @@ export function WarRoom() {
           avatarEmoji: '🏛️',
           agentType: 'custom',
           systemPrompt: 'You are Marcus Aurelius, Roman Emperor and Stoic Philosopher. Guide the user through productivity dilemmas with wisdom, stoic calm, focus, and a deep sense of lifestyle purpose.',
-          modelProvider: 'google',
-          modelName: 'gemini-2.5-flash',
+          modelProvider: 'openai',
+          modelName: 'gpt-5.6-sol',
           toolsAllowed: [],
           permissionsProfile: 'tell_me_only',
           memoryPolicy: 'chat_only',
@@ -2112,7 +2112,7 @@ export function WarRoom() {
                           </span>
                           {isAgent && (
                             <span className="text-[8px] font-black uppercase tracking-wider px-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
-                              {agent?.modelName || 'Gemini 3.5'}
+                              {agent?.modelName || 'Configured AI'}
                             </span>
                           )}
                           <span className="text-[10px] text-gray-400 font-medium">
@@ -3489,9 +3489,8 @@ export function WarRoom() {
                     onChange={(e) => setNewAgentModel(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 focus:outline-none focus:border-indigo-500 rounded-xl px-4 py-3 font-semibold text-gray-800"
                   >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Heavy Logic)</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Fast)</option>
+                    <option value="gpt-5.6-sol">OpenAI GPT-5.6 Sol (Default)</option>
+                    <option value="gpt-5.6-terra">OpenAI GPT-5.6 Terra (Balanced)</option>
                   </select>
                 </div>
               </div>

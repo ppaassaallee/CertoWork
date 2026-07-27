@@ -37,7 +37,7 @@ export function Work() {
   const sections = [
     { title: "Action Board", count: taskCount !== null ? `${taskCount} open tasks` : "Loading...", icon: CheckSquare, color: "text-indigo-600", bg: "bg-indigo-50", implemented: true, path: "/work/tasks" },
     { title: "Projects & Deals", count: "Portfolio control", icon: Folders, color: "text-purple-600", bg: "bg-purple-50", implemented: true, path: "/work/projects" },
-    { title: "Agent Workspace", count: "Interactive multi-agent cockpit", icon: MessageSquare, color: "text-rose-600", bg: "bg-rose-50", implemented: true, path: "/work/warroom" },
+    { title: "Agent Workspace", count: "Interactive multi-agent cockpit", icon: MessageSquare, color: "text-rose-600", bg: "bg-rose-50", implemented: true, path: "/work/agent-workspace" },
     { title: "Stakeholders", count: stakeholderCount !== null ? `${stakeholderCount} active` : "Loading...", icon: Users, color: "text-emerald-600", bg: "bg-emerald-50", implemented: true, path: "/work/stakeholders" },
     { title: "Playbooks", count: "Operational SOPs", icon: HelpCircle, color: "text-teal-600", bg: "bg-teal-50", implemented: true, path: "/capture/documents?tab=playbooks" },
     { title: "Knowledge Base", count: "Resource docs", icon: BookOpen, color: "text-orange-600", bg: "bg-orange-50", implemented: true, path: "/capture/documents?tab=documents" },
@@ -58,7 +58,7 @@ export function Work() {
         <button onClick={() => navigate("/work/projects")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Projects</button>
         <button onClick={() => navigate("/work")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Operations</button>
         <button onClick={() => navigate("/capture/documents")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Documents Hub</button>
-        <button onClick={() => navigate("/work/warroom")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Agent Workspace</button>
+        <button onClick={() => navigate("/work/agent-workspace")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Agent Workspace</button>
       </div>
 
       <header className="flex justify-between items-center border-b border-gray-100 pb-5">

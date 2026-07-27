@@ -23,7 +23,7 @@ export function SetupSettings() {
          description: "Processes raw inbox items into review candidates.",
          status: "active",
          triggerType: "manual",
-         steps: ["Read inbox", "Ask Gemini to categorize", "Output candidates"],
+         steps: ["Read inbox", "Ask the configured AI provider to categorize", "Output candidates"],
          version: "1.0",
          createdAt: serverTimestamp()
       });

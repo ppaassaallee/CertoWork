@@ -236,7 +236,7 @@ export function Me() {
       <section className="space-y-3 mt-8">
         <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">My Operating System</h2>
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
-          <button onClick={() => navigate("/work/habits")} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
+          <button onClick={() => navigate("/review/habits")} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600">
                 <Zap className="w-4 h-4" />
@@ -245,7 +245,7 @@ export function Me() {
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
-          <button onClick={() => navigate("/work/workouts")} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
+          <button onClick={() => navigate("/review/workouts")} className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-orange-50 text-orange-600">
                 <Dumbbell className="w-4 h-4" />

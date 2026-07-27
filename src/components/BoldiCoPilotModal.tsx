@@ -312,7 +312,7 @@ ${shContext}
       console.error(err);
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: `Error calling Gemini: ${err.message || "Unknown error"}`
+        content: `AI provider unavailable: ${err.message || "Unknown error"}`
       }]);
     } finally {
       setSubmitting(false);
