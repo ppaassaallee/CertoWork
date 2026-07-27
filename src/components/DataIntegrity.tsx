@@ -32,6 +32,7 @@ export function DataIntegrity() {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [migrationLogs, setMigrationLogs] = useState<string[]>([]);
   const [migrationStats, setMigrationStats] = useState<any>(null);
+  const [auditError, setAuditError] = useState("");
   const [activeTab, setActiveTab] = useState<"health" | "migrations" | "audit_logs" | "indexes">("health");
 
   useEffect(() => {
@@ -51,6 +52,7 @@ export function DataIntegrity() {
   const runLiveAudit = async () => {
     if (!user || !workspace) return;
     setAuditRunning(true);
+    setAuditError("");
     try {
       const res = await fetch("/api/data-management/audit", {
         method: "POST",
@@ -64,10 +66,14 @@ export function DataIntegrity() {
         const data = await res.json();
         setAuditReport(data);
       } else {
-        console.error("Failed to run live audit", await res.text());
+        const details = await res.json().catch(() => ({}));
+        setAuditReport(null);
+        setAuditError(details.error || "Live audit is unavailable in this deployment.");
       }
     } catch (err) {
       console.error(err);
+      setAuditReport(null);
+      setAuditError("Live audit is unavailable in this deployment.");
     } finally {
       setAuditRunning(false);
     }
@@ -245,6 +251,11 @@ export function DataIntegrity() {
         </div>
       ) : (
         <>
+          {auditError && (
+            <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+              {auditError} No database health claim has been inferred from missing data.
+            </div>
+          )}
           {/* Key Diagnostics Overview */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
@@ -252,8 +263,10 @@ export function DataIntegrity() {
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total User Records</span>
                 <Database className="w-4 h-4 text-gray-400" />
               </div>
-              <div className="text-3xl font-bold text-gray-900">{auditReport?.totalCount || 0}</div>
-              <p className="text-[10px] text-gray-400 mt-1">Across {Object.keys(auditReport?.stats || {}).length} registered collections</p>
+              <div className="text-3xl font-bold text-gray-900">{auditReport ? auditReport.totalCount || 0 : "—"}</div>
+              <p className="text-[10px] text-gray-400 mt-1">
+                {auditReport ? `Across ${Object.keys(auditReport.stats || {}).length} registered collections` : "Audit data unavailable"}
+              </p>
             </div>
 
             <div className={`bg-white rounded-2xl border p-5 shadow-sm ${auditReport?.criticalCount > 0 ? "border-red-200 bg-red-50/10" : "border-gray-200"}`}>
@@ -264,7 +277,7 @@ export function DataIntegrity() {
                 <AlertOctagon className={`w-4 h-4 ${auditReport?.criticalCount > 0 ? "text-red-500 animate-pulse" : "text-gray-400"}`} />
               </div>
               <div className={`text-3xl font-bold ${auditReport?.criticalCount > 0 ? "text-red-600" : "text-gray-900"}`}>
-                {auditReport?.criticalCount || 0}
+                {auditReport ? auditReport.criticalCount || 0 : "—"}
               </div>
               <p className="text-[10px] text-gray-400 mt-1">Records violating workspace scoping rules</p>
             </div>
@@ -274,7 +287,7 @@ export function DataIntegrity() {
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Total Audit Warnings</span>
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
               </div>
-              <div className="text-3xl font-bold text-gray-900">{auditReport?.issues?.length || 0}</div>
+              <div className="text-3xl font-bold text-gray-900">{auditReport ? auditReport.issues?.length || 0 : "—"}</div>
               <p className="text-[10px] text-gray-400 mt-1">Schema, timestamp, reference issues</p>
             </div>
 
@@ -284,13 +297,17 @@ export function DataIntegrity() {
                 <ShieldCheck className="w-4 h-4 text-emerald-500" />
               </div>
               <div className="text-lg font-bold text-gray-900 flex items-center gap-1.5 mt-1">
-                {auditReport?.criticalCount === 0 ? (
+                {!auditReport ? (
+                  <span className="text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full text-xs font-semibold">Unavailable</span>
+                ) : auditReport.criticalCount === 0 ? (
                   <span className="text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-semibold">Ready & Secure</span>
                 ) : (
                   <span className="text-red-600 bg-red-50 px-2.5 py-1 rounded-full text-xs font-semibold">Needs Attention</span>
                 )}
               </div>
-              <p className="text-[10px] text-gray-400 mt-2">Checked: {new Date(auditReport?.checkedAt).toLocaleTimeString()}</p>
+              <p className="text-[10px] text-gray-400 mt-2">
+                {auditReport?.checkedAt ? `Checked: ${new Date(auditReport.checkedAt).toLocaleTimeString()}` : "Not checked"}
+              </p>
             </div>
           </section>
 
@@ -339,7 +356,13 @@ export function DataIntegrity() {
                     <span className="text-[10px] font-mono text-gray-400">Scanned on-demand</span>
                   </div>
 
-                  {auditReport?.issues?.length === 0 ? (
+                  {!auditReport ? (
+                    <div className="text-center p-12 bg-amber-50/50 rounded-2xl border border-dashed border-amber-200">
+                      <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                      <h4 className="font-semibold text-sm text-amber-900">Live Audit Unavailable</h4>
+                      <p className="text-xs text-amber-700 mt-1">No health conclusion is shown until the audit service returns verified results.</p>
+                    </div>
+                  ) : auditReport.issues?.length === 0 ? (
                     <div className="text-center p-12 bg-neutral-50 rounded-2xl border border-dashed border-gray-200">
                       <ShieldCheck className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
                       <h4 className="font-semibold text-sm text-gray-800">Your Database is Healthy</h4>

@@ -71,6 +71,7 @@ export function ProjectDetails() {
   // Status Report Generator states
   const [showReportModal, setShowReportModal] = useState(false);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [reportTitle, setReportTitle] = useState("");
   const [reportSummary, setReportSummary] = useState("");
   const [reportWins, setReportWins] = useState("");
@@ -377,6 +378,7 @@ export function ProjectDetails() {
   const handleGenerateAIReport = async () => {
     if (!project) return;
     setGeneratingReport(true);
+    setReportError("");
     try {
       const response = await fetch("/api/projects/generate-report", {
         method: "POST",
@@ -393,7 +395,10 @@ export function ProjectDetails() {
           recentUpdates: project.statusUpdates || []
         })
       });
-      if (!response.ok) throw new Error("AI failed to generate report");
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(details.error || "The configured AI provider is unavailable.");
+      }
       const data = await response.json();
       
       setReportTitle(`Executive Status Report - ${new Date().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`);
@@ -404,7 +409,9 @@ export function ProjectDetails() {
       setReportNextSteps(data.nextSteps || "");
     } catch (err) {
       console.error(err);
-      alert("Failed to connect to Boldi AI workspace. Please check internet connection.");
+      setReportError(
+        "AI drafting is unavailable in this deployment. You can still complete and save the report manually below.",
+      );
     } finally {
       setGeneratingReport(false);
     }
@@ -1368,7 +1375,13 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               <h3 className="font-black text-gray-950 uppercase tracking-wider text-sm flex items-center gap-1.5">
                 <Sparkles className="w-5 h-5 text-indigo-600" /> PMI Status Report Draftsman
               </h3>
-              <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-black"><X className="w-5 h-5" /></button>
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="text-gray-400 hover:text-black"
+                aria-label="Close report builder"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {generatingReport ? (
@@ -1378,6 +1391,11 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               </div>
             ) : (
               <form onSubmit={handleSaveStatusReport} className="space-y-4 text-xs">
+                {reportError && (
+                  <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                    {reportError}
+                  </div>
+                )}
                 <div>
                   <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Report Title</label>
                   <input 

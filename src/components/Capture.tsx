@@ -1,16 +1,18 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Send, Inbox as InboxIcon, Sparkles, RefreshCw, Zap } from "lucide-react";
+import { Send, Inbox as InboxIcon, Sparkles, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { triageInputWithAI } from "../lib/gemini";
 import { AudioCaptureZone } from "./AudioCaptureZone";
 import { ReviewCandidateCard } from "./ReviewCandidateCard";
+import { usePlatformCapabilities } from "../lib/capabilities";
 
 
 export function Capture() {
   const { user, workspace } = useAuth();
+  const { capabilities } = usePlatformCapabilities();
   
   const [input, setInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -134,6 +136,14 @@ export function Capture() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDiscardCapture = async (id: string) => {
+    await updateDoc(doc(db, "inbox_items", id), {
+      status: "discarded",
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   };
 
 
@@ -268,7 +278,8 @@ export function Capture() {
             </div>
             {activeTab === 'quick' && (
               <span className="text-[10px] text-indigo-600 font-extrabold flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" /> AI Triage Active
+                <Sparkles className="w-3 h-3 text-indigo-500" />
+                {capabilities?.activeAIProvider.configured ? "AI Triage Active" : "Manual Triage · AI Offline"}
               </span>
             )}
           </div>
@@ -384,6 +395,15 @@ export function Capture() {
                       <span className="text-sm font-semibold text-gray-800">{item.content}</span>
                       <span className="text-[10px] text-gray-400 mt-1">{item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleDateString() : "Just now"}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDiscardCapture(item.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                      aria-label={`Discard capture: ${item.content}`}
+                      title="Discard capture"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
