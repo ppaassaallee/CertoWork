@@ -1,0 +1,489 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "InboxItem": {
+      "title": "InboxItem",
+      "description": "Raw captured item waiting for triage",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "content": { "type": "string" },
+        "typeHint": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "ReviewCandidate": {
+      "title": "ReviewCandidate",
+      "description": "Item ready for user review after AI triage",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "why": { "type": "string" },
+        "source": { "type": "string" },
+        "proposed": { "type": "object" },
+        "confidence": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Approved task",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string" },
+        "priority": { "type": ["string", "number", "null"] },
+        "dueDate": { "type": ["string", "null"] },
+        "itemType": { "type": ["string", "null"] },
+        "gtdContext": { "type": ["string", "null"] },
+        "tags": { "type": "array" },
+        "projectId": { "type": "string" },
+        "stakeholderIds": { "type": "array" },
+        "isRoutineTask": { "type": "boolean" },
+        "recurrenceType": { "type": "string" },
+        "recurrenceInterval": { "type": "number" },
+        "recurrenceUnit": { "type": "string" },
+        "recurrenceAnchorDate": { "type": "string" },
+        "recurrenceStatus": { "type": "string" },
+        "recurringSeriesId": { "type": "string" },
+        "previousOccurrenceId": { "type": "string" },
+        "occurrenceDate": { "type": "string" },
+        "nextOccurrenceAt": { "type": "string" },
+        "boldiActionPlanId": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Stakeholder": {
+      "title": "Stakeholder",
+      "description": "Project or task stakeholder",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Habit": {
+      "title": "Habit",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "cadenceType": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "FitnessProfile": {
+      "title": "FitnessProfile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "goal": { "type": "string" },
+        "experienceLevel": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "WorkoutSession": {
+      "title": "WorkoutSession",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "PerformanceAnalysis": {
+      "title": "PerformanceAnalysis",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "periodStart": { "type": "string" },
+        "periodEnd": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "DailyMetric": {
+      "title": "DailyMetric",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "weight": { "type": "number" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "FocusSession": {
+      "title": "FocusSession",
+      "description": "Log of a focused work session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "taskIds": { "type": "array" },
+        "duration": { "type": "number" },
+        "startedAt": { "type": "string" },
+        "endedAt": { "type": "string" }
+      }
+    },
+    "DailyClarityPreferences": {
+      "title": "DailyClarityPreferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "autoShowEnabled": { "type": "boolean" },
+        "remindLaterDate": { "type": "string" },
+        "skippedDates": { "type": "array" },
+        "lastShownDate": { "type": "string" },
+        "habitLinked": { "type": "boolean" },
+        "habitId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "MentalClaritySession": {
+      "title": "MentalClaritySession",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "status": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "reflection": { "type": "string" }
+      }
+    },
+    "MentalClarityItem": {
+      "title": "MentalClarityItem",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "selectedForAction": { "type": "boolean" },
+        "convertedToReviewId": { "type": "string" },
+        "suggestedCalendarBlock": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "LetGoItem": {
+      "title": "LetGoItem",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "NotebookPage": {
+      "title": "NotebookPage",
+      "description": "Digital notebook daily/weekly planning page",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "date": { "type": "string" },
+        "title": { "type": "string" },
+        "mode": { "type": "string" },
+        "status": { "type": "string" },
+        "oneThingTaskId": { "type": "string" },
+        "topTaskIds": { "type": "array" },
+        "notes": { "type": "string" },
+        "brainDumpText": { "type": "string" },
+        "reflectionText": { "type": "string" },
+        "handwritingAssetIds": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "NotebookEntry": {
+      "title": "NotebookEntry",
+      "description": "Granular dynamic link or content entry in a notebook page",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "notebookPageId": { "type": "string" },
+        "type": { "type": "string" },
+        "text": { "type": "string" },
+        "linkedEntityType": { "type": "string" },
+        "linkedEntityId": { "type": "string" },
+        "order": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "NotebookHandwritingAsset": {
+      "title": "NotebookHandwritingAsset",
+      "description": "Captured handwriting vector or raster data from pointer events",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "notebookPageId": { "type": "string" },
+        "storagePathOrDataRef": { "type": "string" },
+        "format": { "type": "string" },
+        "inputDevice": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrProject": {
+      "title": "BoldrProject",
+      "description": "Boldr Stage Opportunity/Project",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "name": { "type": "string" },
+        "companyName": { "type": "string" },
+        "stage": { "type": "string" },
+        "deliveryRiskLevel": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrInitiative": {
+      "title": "BoldrInitiative",
+      "description": "Boldr Workflow/Initiative candidate",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "workflowName": { "type": "string" },
+        "department": { "type": "string" },
+        "status": { "type": "string" },
+        "painArea": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrBlocker": {
+      "title": "BoldrBlocker",
+      "description": "Boldr Delivery Risk/Blocker",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "severity": { "type": "string" },
+        "status": { "type": "string" },
+        "projectId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrQA": {
+      "title": "BoldrQA",
+      "description": "Boldr QA Status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "status": { "type": "string" },
+        "issuesFound": { "type": "number" },
+        "testDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrMBR": {
+      "title": "BoldrMBR",
+      "description": "Boldr Monthly Business Review record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "month": { "type": "string" },
+        "status": { "type": "string" },
+        "decisionRequired": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldrArtifact": {
+      "title": "BoldrArtifact",
+      "description": "Boldr Google Drive/Design Artifact",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "type": { "type": "string" },
+        "name": { "type": "string" },
+        "googleDriveLink": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "BoldiProfile": {
+      "title": "BoldiProfile",
+      "description": "Gazelle Strategic User Profile",
+      "type": "object",
+      "properties": {
+        "assistantName": { "type": "string" },
+        "onboardingStep": { "type": "string" },
+        "fiveYearAmbition": { "type": "string" },
+        "goals": { "type": "array" },
+        "dimensions": { "type": "array" },
+        "nonNegotiables": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{documentId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users collection"
+    },
+    "/inbox_items/{documentId}": {
+      "schema": { "$ref": "#/entities/InboxItem" },
+      "description": "Captured raw items"
+    },
+    "/review_candidates/{documentId}": {
+      "schema": { "$ref": "#/entities/ReviewCandidate" },
+      "description": "Prepared items for review"
+    },
+    "/tasks/{documentId}": {
+      "schema": { "$ref": "#/entities/Task" },
+      "description": "Tasks"
+    },
+    "/habits/{documentId}": {
+      "schema": { "$ref": "#/entities/Habit" },
+      "description": "Habit definitions"
+    },
+    "/habit_logs/{documentId}": {
+      "schema": { "type": "object" },
+      "description": "Logs for habit completion"
+    },
+    "/fitness_profiles/{documentId}": {
+      "schema": { "$ref": "#/entities/FitnessProfile" },
+      "description": "User fitness goals and profile"
+    },
+    "/workout_plans/{documentId}": {
+      "schema": { "type": "object" },
+      "description": "Aggregated workout plans"
+    },
+    "/workout_sessions/{documentId}": {
+      "schema": { "$ref": "#/entities/WorkoutSession" },
+      "description": "Individual workout sessions"
+    },
+    "/workout_logs/{documentId}": {
+      "schema": { "type": "object" },
+      "description": "Logs for completed workouts"
+    },
+    "/analytics_snapshots/{documentId}": {
+      "schema": { "type": "object" },
+      "description": "Computed metrics for periods"
+    },
+    "/performance_analyses/{documentId}": {
+      "schema": { "$ref": "#/entities/PerformanceAnalysis" },
+      "description": "AI-generated performance reports"
+    },
+    "/performance_recommendations/{documentId}": {
+      "schema": { "type": "object" },
+      "description": "AI-suggested improvements"
+    },
+    "/stakeholders/{documentId}": {
+      "schema": { "$ref": "#/entities/Stakeholder" },
+      "description": "Stakeholders"
+    },
+    "/daily_metrics/{documentId}": {
+      "schema": { "$ref": "#/entities/DailyMetric" },
+      "description": "Daily weight and Whoop tracking"
+    },
+    "/focus_sessions/{documentId}": {
+      "schema": { "$ref": "#/entities/FocusSession" },
+      "description": "Focus timer logs"
+    },
+    "/daily_clarity_preferences/{documentId}": {
+      "schema": { "$ref": "#/entities/DailyClarityPreferences" },
+      "description": "User preferences for daily mental clarity reset"
+    },
+    "/mental_clarity_sessions/{documentId}": {
+      "schema": { "$ref": "#/entities/MentalClaritySession" },
+      "description": "Sessions for daily mental clarity resets"
+    },
+    "/mental_clarity_items/{documentId}": {
+      "schema": { "$ref": "#/entities/MentalClarityItem" },
+      "description": "Items captured during mental clarity resets"
+    },
+    "/let_go_items/{documentId}": {
+      "schema": { "$ref": "#/entities/LetGoItem" },
+      "description": "Items let go of during mental clarity resets"
+    },
+    "/notebook_pages/{documentId}": {
+      "schema": { "$ref": "#/entities/NotebookPage" },
+      "description": "User digital notebook pages"
+    },
+    "/notebook_entries/{documentId}": {
+      "schema": { "$ref": "#/entities/NotebookEntry" },
+      "description": "User digital notebook entries"
+    },
+    "/notebook_handwriting_assets/{documentId}": {
+      "schema": { "$ref": "#/entities/NotebookHandwritingAsset" },
+      "description": "User digital notebook handwriting assets"
+    },
+    "/boldr_projects/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrProject" },
+      "description": "Boldr projects list"
+    },
+    "/boldr_initiatives/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrInitiative" },
+      "description": "Boldr initiatives list"
+    },
+    "/boldr_risks/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrBlocker" },
+      "description": "Boldr delivery blockers"
+    },
+    "/boldr_qas/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrQA" },
+      "description": "Boldr QA status checks"
+    },
+    "/boldr_mbrs/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrMBR" },
+      "description": "Boldr MBR calendar"
+    },
+    "/boldr_artifacts/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldrArtifact" },
+      "description": "Boldr project deliverables and artifacts from Google Drive"
+    },
+    "/boldi_profiles/{documentId}": {
+      "schema": { "$ref": "#/entities/BoldiProfile" },
+      "description": "Strategic profiles and onboarding setup data"
+    }
+  }
+}

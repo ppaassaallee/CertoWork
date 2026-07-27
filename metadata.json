@@ -1,0 +1,7 @@
+{
+  "name": "GAZELLE powered by Boldr Ai",
+  "description": "Personal operating system for executing your best work.",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
