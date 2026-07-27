@@ -180,7 +180,7 @@ function groundedCitations(query, workspaceContext) {
   return ranked
     .sort((left, right) => right.score - left.score)
     .slice(0, 6)
-    .map(({ score: _score, ...citation }) => citation);
+    .map(({ id, title, type }) => ({ id, title, type }));
 }
 
 function compactEvidence(citations, workspaceContext) {
