@@ -310,8 +310,8 @@ export function ProjectsList() {
               {workspace?.name || 'Workspace'} Governance
             </span>
           </div>
-          <h1 className="text-2xl font-black font-sans tracking-tight text-gray-900 mt-1">Projects & Deals deck</h1>
-          <p className="text-gray-500 text-xs mt-0.5">Filter, configure, and transition initiatives through strategic macro stages.</p>
+          <h1 className="text-2xl font-black font-sans tracking-tight text-gray-900 mt-1">Projects & Deals</h1>
+          <p className="text-gray-500 text-xs mt-0.5">Create, review, and move initiatives without leaving the workspace flow.</p>
         </div>
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -319,13 +319,13 @@ export function ProjectsList() {
              onClick={() => navigate("/work/projects/health")}
              className="flex-1 sm:flex-initial bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 hover:text-black px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
           >
-             <Activity className="w-4 h-4 text-indigo-600 animate-pulse" /> <span>Health Center</span>
+             <Activity className="w-4 h-4 text-indigo-600" /> <span>Health</span>
           </button>
           <button
              onClick={() => setShowAIBuilder(true)}
              className="flex-1 sm:flex-initial bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
           >
-             <Sparkles className="w-4 h-4" /> <span>AI Builder</span>
+             <Sparkles className="w-4 h-4" /> <span>Guided Builder</span>
           </button>
         </div>
       </header>
@@ -363,7 +363,7 @@ export function ProjectsList() {
             <Folder className={`w-4 h-4 ${selectedStage === 'all' && selectedStatus === 'all_active' && selectedHealth === 'all' ? 'text-indigo-200' : 'text-indigo-600'}`} />
           </div>
           <div className="text-2xl font-black">{totalActive}</div>
-          <div className="text-[9px] opacity-75 mt-0.5">Click to view all active</div>
+          <div className="text-[9px] opacity-75 mt-0.5">All active initiatives</div>
         </div>
 
         {/* Deals card */}
@@ -380,11 +380,11 @@ export function ProjectsList() {
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">💰 Deals</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">Deals</span>
             <Briefcase className={`w-4 h-4 ${selectedStage === 'deal' && selectedStatus === 'all_active' && selectedHealth === 'all' ? 'text-amber-200' : 'text-amber-600'}`} />
           </div>
           <div className="text-2xl font-black">{totalDeals}</div>
-          <div className="text-[9px] opacity-75 mt-0.5">Sales Pipeline</div>
+          <div className="text-[9px] opacity-75 mt-0.5">Sales pipeline</div>
         </div>
 
         {/* Implementation card */}
@@ -401,11 +401,11 @@ export function ProjectsList() {
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">⚙️ Implementation</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">Implementation</span>
             <ArrowRightLeft className={`w-4 h-4 ${selectedStage === 'implementation' && selectedStatus === 'all_active' && selectedHealth === 'all' ? 'text-sky-200' : 'text-sky-600'}`} />
           </div>
           <div className="text-2xl font-black">{totalImplementation}</div>
-          <div className="text-[9px] opacity-75 mt-0.5">Active Setup Phase</div>
+          <div className="text-[9px] opacity-75 mt-0.5">Active setup</div>
         </div>
 
         {/* Ongoing card */}
@@ -422,11 +422,11 @@ export function ProjectsList() {
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">🔄 Ongoing</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">Ongoing</span>
             <CheckSquare className={`w-4 h-4 ${selectedStage === 'ongoing' && selectedStatus === 'all_active' && selectedHealth === 'all' ? 'text-emerald-200' : 'text-emerald-600'}`} />
           </div>
           <div className="text-2xl font-black">{totalOngoing}</div>
-          <div className="text-[9px] opacity-75 mt-0.5">Recurring Delivery</div>
+          <div className="text-[9px] opacity-75 mt-0.5">Recurring delivery</div>
         </div>
 
         {/* Blocked/At Risk card */}
@@ -442,11 +442,11 @@ export function ProjectsList() {
           }`}
         >
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">⚠️ At Risk/Blocked</span>
-            <ShieldAlert className={`w-4 h-4 ${selectedHealth === 'blocked' ? 'text-red-200' : 'text-red-500 animate-pulse'}`} />
+            <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">At risk or blocked</span>
+            <ShieldAlert className={`w-4 h-4 ${selectedHealth === 'blocked' ? 'text-red-200' : 'text-red-500'}`} />
           </div>
           <div className="text-2xl font-black text-red-500" style={{ color: selectedHealth === 'blocked' ? '#ffffff' : undefined }}>{totalAtRiskOrBlocked}</div>
-          <div className="text-[9px] opacity-75 mt-0.5">Requires Intervention</div>
+          <div className="text-[9px] opacity-75 mt-0.5">Needs attention</div>
         </div>
       </div>
 
@@ -455,7 +455,7 @@ export function ProjectsList() {
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            Command Center Filter Deck
+            Filters
           </h2>
           {hasActiveFilters && (
             <button 
@@ -563,9 +563,9 @@ export function ProjectsList() {
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex-1">
           <h3 className="font-bold text-sm text-gray-900">
-            Create New {selectedStage === 'deal' ? 'Deal' : selectedStage === 'implementation' ? 'Implementation Project' : selectedStage === 'ongoing' ? 'Ongoing Project' : 'Project/Deal'}
+            Create {selectedStage === 'deal' ? 'Deal' : selectedStage === 'implementation' ? 'Implementation Project' : selectedStage === 'ongoing' ? 'Ongoing Project' : 'Project/Deal'}
           </h3>
-          <p className="text-gray-500 text-xs mt-0.5">Quickly seed a record in active focus workspace.</p>
+          <p className="text-gray-500 text-xs mt-0.5">Add it to this workspace and open it when ready.</p>
         </div>
         
         <form onSubmit={handleAddProject} className="flex-1 flex gap-2 w-full">
@@ -586,7 +586,7 @@ export function ProjectsList() {
             disabled={!newProjectTitle.trim()}
             className="bg-black text-white px-5 rounded-xl text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
           >
-            <Plus className="w-3.5 h-3.5" /> Seed
+            <Plus className="w-3.5 h-3.5" /> Create
           </button>
         </form>
 
@@ -620,7 +620,7 @@ export function ProjectsList() {
               Initiatives Deck ({sortedFilteredProjects.length})
             </h2>
             <span className="text-[10px] text-gray-500 italic bg-gray-50 px-2 py-0.5 rounded-md">
-              Showing matching {selectedStage !== 'all' ? selectedStage : 'all'} types
+              Showing {selectedStage !== 'all' ? selectedStage : 'all'} types
             </span>
           </div>
 
