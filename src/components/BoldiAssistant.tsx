@@ -431,7 +431,15 @@ function ActionPlanArtifact({
   );
 }
 
-export function BoldiAssistant() {
+export function BoldiAssistant({
+  embedded = false,
+  onOpenNavigation,
+  onOpenContext,
+}: {
+  embedded?: boolean;
+  onOpenNavigation?: () => void;
+  onOpenContext?: () => void;
+}) {
   const { user, workspace, workspaces, setWorkspace } = useAuth();
   const { pushAction } = useUndo();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -971,6 +979,253 @@ export function BoldiAssistant() {
     day: "numeric",
   }).format(new Date());
 
+  const conversationMain = (
+      <main className="gazelle-conversation-main">
+        <header className="gazelle-chat-header">
+          <button
+            aria-label="Open navigation"
+            className="gazelle-mobile-icon-button"
+            onClick={() => (onOpenNavigation ? onOpenNavigation() : setSidebarOpen(true))}
+            type="button"
+          >
+            <Menu className="h-4.5 w-4.5" />
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#96998f]">
+              <span>{workspace?.name || "Personal Focus"}</span>
+              <ChevronRight className="h-2.5 w-2.5" />
+              <span className="truncate">{currentConversation?.title || "Chief of Staff"}</span>
+            </div>
+            <div className="mt-0.5 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#72885d]" />
+              <p className="text-[11px] font-medium text-[#676c62]">{providerLabel}</p>
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            {offlineCount > 0 && (
+              <span className="hidden rounded-full bg-[#f2ead5] px-2.5 py-1 text-[9px] font-semibold text-[#7b672c] sm:inline">
+                {offlineCount} queued
+              </span>
+            )}
+            <Link
+              className="gazelle-header-button"
+              title="Review queue"
+              to="/capture/review"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Review queue</span>
+            </Link>
+            <button
+              aria-label="Open context"
+              className="gazelle-mobile-icon-button"
+              onClick={() => (onOpenContext ? onOpenContext() : setRailOpen(true))}
+              type="button"
+            >
+              <PanelRight className="h-4.5 w-4.5" />
+            </button>
+          </div>
+        </header>
+
+        <div className="gazelle-message-viewport">
+          {visibleMessages.length === 0 && !submitting ? (
+            <div className="gazelle-opening">
+              <div className="gazelle-opening-mark">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#899080]">
+                {todayLabel}
+              </p>
+              <h1 className="mt-2 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-[1.08] tracking-[-0.035em] text-[#20231e]">
+                Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"},{" "}
+                {userName}.
+              </h1>
+              <p className="mt-3 max-w-xl text-balance text-[15px] leading-6 text-[#777c71]">
+                What are we making clearer, lighter, or more achievable?
+              </p>
+              <div className="gazelle-prompt-grid">
+                {dynamicPrompts.map(({ eyebrow, title, text, icon: Icon }) => (
+                  <button
+                    className="gazelle-prompt-card"
+                    key={title}
+                    onClick={() => sendMessage(text)}
+                    type="button"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#89917f]">
+                        {eyebrow}
+                      </span>
+                      <Icon className="h-3.5 w-3.5 text-[#828b77]" />
+                    </div>
+                    <p className="mt-3 text-left text-[13px] font-semibold text-[#272a25]">{title}</p>
+                    <p className="mt-1 text-left text-[11px] leading-[1.5] text-[#858980]">{text}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="gazelle-thread">
+              {visibleMessages.map((message) => (
+                <article className={`gazelle-message gazelle-message-${message.role}`} key={message.id}>
+                  {message.role === "user" ? (
+                    <div className="gazelle-user-bubble">{message.content}</div>
+                  ) : (
+                    <div className="flex items-start gap-3.5">
+                      <div className="gazelle-assistant-avatar">
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-[11px] font-semibold text-[#343832]">Gazelle</span>
+                          {message.offline && (
+                            <span className="rounded-full bg-[#f2ead5] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#806a2d]">
+                              Offline-safe
+                            </span>
+                          )}
+                        </div>
+                        <RichText text={message.content} />
+                        {/\b(weekly theme|executive progress|progress snapshot|weekly report)\b/i.test(
+                          message.content,
+                        ) && (
+                          <button
+                            className="gazelle-citation mt-3"
+                            onClick={() => downloadMarkdown(message.content)}
+                            type="button"
+                          >
+                            <Download className="h-3 w-3" />
+                            Download snapshot
+                          </button>
+                        )}
+                        {message.citations && message.citations.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {message.citations.map((citation) => (
+                              <Link
+                                className="gazelle-citation"
+                                key={citation.id}
+                                to={citationHref(citation)}
+                              >
+                                <FileText className="h-3 w-3" />
+                                {citation.title}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        {message.actionPlan && (
+                          <ActionPlanArtifact
+                            onApprove={() => approvePlan(message, message.actionPlan!)}
+                            onDismiss={() =>
+                              setPlanStatuses((current) => ({ ...current, [message.id]: "dismissed" }))
+                            }
+                            onEdit={() => {
+                              setInput(`Revise this plan before staging: ${message.actionPlan?.summary || ""}`);
+                              textareaRef.current?.focus();
+                            }}
+                            plan={message.actionPlan}
+                            status={planStatuses[message.id]}
+                          />
+                        )}
+                        {message.suggestedChips && message.suggestedChips.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {message.suggestedChips.slice(0, 4).map((chip) => (
+                              <button
+                                className="gazelle-chip"
+                                key={chip}
+                                onClick={() => sendMessage(chip)}
+                                type="button"
+                              >
+                                {chip}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              ))}
+              {streamingReply && (
+                <article className="gazelle-message gazelle-message-assistant">
+                  <div className="flex items-start gap-3.5">
+                    <div className="gazelle-assistant-avatar">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 text-[11px] font-semibold text-[#343832]">Gazelle</div>
+                      <RichText text={streamingReply} />
+                      <span className="gazelle-stream-cursor" />
+                    </div>
+                  </div>
+                </article>
+              )}
+              {submitting && !streamingReply && (
+                <div className="flex items-center gap-3.5 py-6">
+                  <div className="gazelle-assistant-avatar">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="gazelle-thinking-dot" />
+                    <span className="gazelle-thinking-dot" />
+                    <span className="gazelle-thinking-dot" />
+                    <span className="ml-2 text-[10px] text-[#92968d]">
+                      Checking capacity, conflicts, and context
+                    </span>
+                  </div>
+                </div>
+              )}
+              {latestJudgment && latestJudgment.signals.length > 0 && (
+                <JudgmentArtifact assessment={latestJudgment} />
+              )}
+              <div ref={endRef} />
+            </div>
+          )}
+        </div>
+
+        <div className="gazelle-composer-wrap">
+          <div className="gazelle-composer">
+            <textarea
+              aria-label="Message Gazelle"
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="Capture anything, plan the day, or pressure-test a commitment..."
+              ref={textareaRef}
+              rows={1}
+              value={input}
+            />
+            <div className="mt-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <button
+                  aria-label={isListening ? "Stop voice capture" : "Start voice capture"}
+                  className={`gazelle-composer-icon ${isListening ? "is-active" : ""}`}
+                  disabled={!voiceSupported}
+                  onClick={toggleListening}
+                  title="Voice capture"
+                  type="button"
+                >
+                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                </button>
+                <span className="hidden text-[9px] text-[#9a9d95] sm:inline">
+                  {isListening ? "Listening..." : "Enter to send - Shift+Enter for a new line"}
+                </span>
+              </div>
+              <button
+                aria-label="Send message"
+                className="gazelle-send-button"
+                disabled={!input.trim() || submitting}
+                onClick={() => sendMessage()}
+                type="button"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-center text-[9px] text-[#a1a49b]">
+            Gazelle shows assumptions and asks before making changes. You always retain override authority.
+          </p>
+        </div>
+      </main>
+  );
+
+  if (embedded) return conversationMain;
+
   return (
     <div className="gazelle-conversation-shell">
       <button
@@ -1141,248 +1396,7 @@ export function BoldiAssistant() {
         </div>
       </aside>
 
-      <main className="gazelle-conversation-main">
-        <header className="gazelle-chat-header">
-          <button
-            aria-label="Open navigation"
-            className="gazelle-mobile-icon-button"
-            onClick={() => setSidebarOpen(true)}
-            type="button"
-          >
-            <Menu className="h-4.5 w-4.5" />
-          </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#96998f]">
-              <span>{workspace?.name || "Personal Focus"}</span>
-              <ChevronRight className="h-2.5 w-2.5" />
-              <span className="truncate">{currentConversation?.title || "Chief of Staff"}</span>
-            </div>
-            <div className="mt-0.5 flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#72885d]" />
-              <p className="text-[11px] font-medium text-[#676c62]">{providerLabel}</p>
-            </div>
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
-            {offlineCount > 0 && (
-              <span className="hidden rounded-full bg-[#f2ead5] px-2.5 py-1 text-[9px] font-semibold text-[#7b672c] sm:inline">
-                {offlineCount} queued
-              </span>
-            )}
-            <Link
-              className="gazelle-header-button"
-              title="Review queue"
-              to="/capture/review"
-            >
-              <Archive className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Review queue</span>
-            </Link>
-            <button
-              aria-label="Open context"
-              className="gazelle-mobile-icon-button"
-              onClick={() => setRailOpen(true)}
-              type="button"
-            >
-              <PanelRight className="h-4.5 w-4.5" />
-            </button>
-          </div>
-        </header>
-
-        <div className="gazelle-message-viewport">
-          {visibleMessages.length === 0 && !submitting ? (
-            <div className="gazelle-opening">
-              <div className="gazelle-opening-mark">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#899080]">
-                {todayLabel}
-              </p>
-              <h1 className="mt-2 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-[1.08] tracking-[-0.035em] text-[#20231e]">
-                Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"},{" "}
-                {userName}.
-              </h1>
-              <p className="mt-3 max-w-xl text-balance text-[15px] leading-6 text-[#777c71]">
-                What are we making clearer, lighter, or more achievable?
-              </p>
-              <div className="gazelle-prompt-grid">
-                {dynamicPrompts.map(({ eyebrow, title, text, icon: Icon }) => (
-                  <button
-                    className="gazelle-prompt-card"
-                    key={title}
-                    onClick={() => sendMessage(text)}
-                    type="button"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#89917f]">
-                        {eyebrow}
-                      </span>
-                      <Icon className="h-3.5 w-3.5 text-[#828b77]" />
-                    </div>
-                    <p className="mt-3 text-left text-[13px] font-semibold text-[#272a25]">{title}</p>
-                    <p className="mt-1 text-left text-[11px] leading-[1.5] text-[#858980]">{text}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="gazelle-thread">
-              {visibleMessages.map((message) => (
-                <article className={`gazelle-message gazelle-message-${message.role}`} key={message.id}>
-                  {message.role === "user" ? (
-                    <div className="gazelle-user-bubble">{message.content}</div>
-                  ) : (
-                    <div className="flex items-start gap-3.5">
-                      <div className="gazelle-assistant-avatar">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-[#343832]">Gazelle</span>
-                          {message.offline && (
-                            <span className="rounded-full bg-[#f2ead5] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#806a2d]">
-                              Offline-safe
-                            </span>
-                          )}
-                        </div>
-                        <RichText text={message.content} />
-                        {/\b(weekly theme|executive progress|progress snapshot|weekly report)\b/i.test(
-                          message.content,
-                        ) && (
-                          <button
-                            className="gazelle-citation mt-3"
-                            onClick={() => downloadMarkdown(message.content)}
-                            type="button"
-                          >
-                            <Download className="h-3 w-3" />
-                            Download snapshot
-                          </button>
-                        )}
-                        {message.citations && message.citations.length > 0 && (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {message.citations.map((citation) => (
-                              <Link
-                                className="gazelle-citation"
-                                key={citation.id}
-                                to={citationHref(citation)}
-                              >
-                                <FileText className="h-3 w-3" />
-                                {citation.title}
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                        {message.actionPlan && (
-                          <ActionPlanArtifact
-                            onApprove={() => approvePlan(message, message.actionPlan!)}
-                            onDismiss={() =>
-                              setPlanStatuses((current) => ({ ...current, [message.id]: "dismissed" }))
-                            }
-                            onEdit={() => {
-                              setInput(`Revise this plan before staging: ${message.actionPlan?.summary || ""}`);
-                              textareaRef.current?.focus();
-                            }}
-                            plan={message.actionPlan}
-                            status={planStatuses[message.id]}
-                          />
-                        )}
-                        {message.suggestedChips && message.suggestedChips.length > 0 && (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {message.suggestedChips.slice(0, 4).map((chip) => (
-                              <button
-                                className="gazelle-chip"
-                                key={chip}
-                                onClick={() => sendMessage(chip)}
-                                type="button"
-                              >
-                                {chip}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              ))}
-              {streamingReply && (
-                <article className="gazelle-message gazelle-message-assistant">
-                  <div className="flex items-start gap-3.5">
-                    <div className="gazelle-assistant-avatar">
-                      <Sparkles className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 text-[11px] font-semibold text-[#343832]">Gazelle</div>
-                      <RichText text={streamingReply} />
-                      <span className="gazelle-stream-cursor" />
-                    </div>
-                  </div>
-                </article>
-              )}
-              {submitting && !streamingReply && (
-                <div className="flex items-center gap-3.5 py-6">
-                  <div className="gazelle-assistant-avatar">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="gazelle-thinking-dot" />
-                    <span className="gazelle-thinking-dot" />
-                    <span className="gazelle-thinking-dot" />
-                    <span className="ml-2 text-[10px] text-[#92968d]">
-                      Checking capacity, conflicts, and context
-                    </span>
-                  </div>
-                </div>
-              )}
-              {latestJudgment && latestJudgment.signals.length > 0 && (
-                <JudgmentArtifact assessment={latestJudgment} />
-              )}
-              <div ref={endRef} />
-            </div>
-          )}
-        </div>
-
-        <div className="gazelle-composer-wrap">
-          <div className="gazelle-composer">
-            <textarea
-              aria-label="Message Gazelle"
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleComposerKeyDown}
-              placeholder="Capture anything, plan the day, or pressure-test a commitment…"
-              ref={textareaRef}
-              rows={1}
-              value={input}
-            />
-            <div className="mt-2.5 flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <button
-                  aria-label={isListening ? "Stop voice capture" : "Start voice capture"}
-                  className={`gazelle-composer-icon ${isListening ? "is-active" : ""}`}
-                  disabled={!voiceSupported}
-                  onClick={toggleListening}
-                  title="Voice capture"
-                  type="button"
-                >
-                  {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                </button>
-                <span className="hidden text-[9px] text-[#9a9d95] sm:inline">
-                  {isListening ? "Listening…" : "Enter to send · Shift+Enter for a new line"}
-                </span>
-              </div>
-              <button
-                aria-label="Send message"
-                className="gazelle-send-button"
-                disabled={!input.trim() || submitting}
-                onClick={() => sendMessage()}
-                type="button"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <p className="mt-2 text-center text-[9px] text-[#a1a49b]">
-            Gazelle shows assumptions and asks before making changes. You always retain override authority.
-          </p>
-        </div>
-      </main>
+      {conversationMain}
 
       <aside className={`gazelle-context-rail ${railOpen ? "is-open" : ""}`}>
         <div className="flex items-center justify-between border-b border-[#e7e6df] px-4 py-4">

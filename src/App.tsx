@@ -4,12 +4,15 @@ import { AnimatePresence } from 'motion/react';
 import { 
   Calendar as CalendarIcon, Settings, CheckSquare, LogIn, Loader2, 
   Layers, Briefcase, Zap, Activity, TrendingUp, Dumbbell, Brain, Sparkles, 
-  ChevronLeft, ChevronRight, MessageSquare, Inbox, 
-  Clock, BookOpen, ArrowUp, ShieldCheck
+  ChevronRight, MessageSquare, Inbox,
+  Clock, BookOpen, ArrowUp, ShieldCheck, Menu, X, PanelRight, Plus, Search,
+  MoreHorizontal
 } from 'lucide-react';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from './lib/AuthContext';
 import { UndoProvider } from './lib/UndoContext';
 import { BoldiAssistant } from './components/BoldiAssistant';
+import { db } from './lib/firebase';
 
 function lazyNamed<T extends React.ComponentType<any>>(
   loader: () => Promise<any>,
@@ -51,7 +54,6 @@ const MonthlyPlanningRitual = lazyNamed(
   'MonthlyPlanningRitual',
 );
 const DataIntegrity = lazyNamed(() => import('./components/DataIntegrity'), 'DataIntegrity');
-const WorkspaceSwitcher = lazyNamed(() => import('./components/WorkspaceSwitcher'), 'WorkspaceSwitcher');
 const GlobalUndoRedo = lazyNamed(() => import('./components/GlobalUndoRedo'), 'GlobalUndoRedo');
 const HabitsHome = lazyNamed(() => import('./components/Habits/HabitsHome'), 'HabitsHome');
 const WorkoutsHome = lazyNamed(() => import('./components/Workouts/WorkoutsHome'), 'WorkoutsHome');
@@ -92,49 +94,11 @@ function RedirectToTask() {
   return <Navigate to={`/work/action-board/${id}`} replace />;
 }
 
-function NavLink({ to, icon: Icon, label }: { to: string, icon: React.ElementType, label: string }) {
-  const location = useLocation();
-  const isActive = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
-  
-  return (
-    <Link 
-      to={to} 
-      className={`flex flex-col items-center justify-center gap-0.5 p-2 rounded-xl transition-all ${
-        isActive 
-          ? 'text-black font-extrabold' 
-          : 'text-gray-400 hover:text-gray-700'
-      }`}
-    >
-      <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-black' : ''}`} />
-      <span className="text-[9px] font-bold tracking-tight uppercase">{label}</span>
-    </Link>
-  );
-}
-
 export function checkRouteActive(to: string, path: string) {
   if (to === "/") {
     return path === "/";
   }
   return path.startsWith(to);
-}
-
-function SidebarLink({ to, icon: Icon, label }: { to: string, icon: React.ElementType, label: string, isCollapsed?: boolean }) {
-  const location = useLocation();
-  const isActive = checkRouteActive(to, location.pathname);
-
-  return (
-    <Link 
-      to={to} 
-      className={`relative flex items-center gap-2.5 py-1.5 px-3 rounded-lg transition-all text-xs group ${
-        isActive 
-          ? 'bg-gray-100 text-black font-bold' 
-          : 'text-gray-500 hover:text-black hover:bg-gray-50'
-      }`}
-    >
-      <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:scale-105 ${isActive ? 'text-black' : 'text-gray-400 group-hover:text-black'}`} />
-      <span className="truncate">{label}</span>
-    </Link>
-  );
 }
 
 const SECTIONS = [
@@ -213,255 +177,387 @@ function isSectionActive(sec: any, pathname: string) {
   return pathname.startsWith(sec.path) || sec.items.some((item: any) => pathname.startsWith(item.to));
 }
 
+function timestampValue(value: any) {
+  if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
+  if (typeof value === "number") return value;
+  return 0;
+}
+
+function relativeDate(value: any) {
+  const time = timestampValue(value);
+  if (!time) return "Now";
+  const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000));
+  if (minutes < 1) return "Now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "Yesterday" : `${days}d`;
+}
+
+function sectionForPath(pathname: string) {
+  if (pathname === "/boldi" || pathname === "/") {
+    return {
+      title: "Chief of Staff",
+      description: "Conversation, judgment, and action proposals.",
+      eyebrow: "Conversation home",
+    };
+  }
+  if (pathname.startsWith("/settings") || pathname.startsWith("/me")) {
+    return {
+      title: "Settings",
+      description: "Account, workspace, platform health, and connected services.",
+      eyebrow: "System profile",
+    };
+  }
+  if (pathname.startsWith("/boldr")) {
+    return {
+      title: "Boldr OS",
+      description: "Operating rhythm, delivery health, and internal coordination.",
+      eyebrow: "Company operating layer",
+    };
+  }
+  const section = SECTIONS.find((item) => isSectionActive(item, pathname));
+  return {
+    title: section?.title || "Workspace",
+    description: section?.description || "Move between your work without changing context.",
+    eyebrow: section ? "Workspace module" : "Gazelle",
+  };
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { user } = useAuth();
-  
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(() => {
-    const saved = localStorage.getItem("gazelle_sidebar_collapsed");
-    return saved ? saved === "true" : false;
+  const { user, workspace } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [railOpen, setRailOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [conversations, setConversations] = React.useState<any[]>([]);
+  const [projects, setProjects] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (!user || !workspace) return;
+    const q = query(
+      collection(db, "boldi_conversations"),
+      where("userId", "==", user.uid),
+      where("workspaceId", "==", workspace.id),
+      where("status", "==", "active"),
+    );
+    return onSnapshot(q, (snap) => {
+      setConversations(
+        (snap.docs
+          .map((item) => ({ id: item.id, ...item.data() }))
+          .sort((a: any, b: any) => timestampValue(b.updatedAt || b.createdAt) - timestampValue(a.updatedAt || a.createdAt)) as any[]),
+      );
+    });
+  }, [user, workspace]);
+
+  React.useEffect(() => {
+    if (!user || !workspace) return;
+    const q = query(
+      collection(db, "projects"),
+      where("userId", "==", user.uid),
+      where("workspaceId", "==", workspace.id),
+    );
+    return onSnapshot(q, (snap) => {
+      setProjects(
+        (snap.docs
+          .map((item) => ({ id: item.id, ...item.data() }))
+          .filter((project: any) => !["done", "completed", "archived"].includes(String(project.status || "").toLowerCase()))
+          .sort((a: any, b: any) => timestampValue(b.updatedAt || b.createdAt) - timestampValue(a.updatedAt || a.createdAt))
+          .slice(0, 6) as any[]),
+      );
+    });
+  }, [user, workspace]);
+
+  const currentSection = sectionForPath(location.pathname);
+  const isConversationHome = location.pathname === "/boldi";
+  const filteredConversations = conversations.filter((conversation) =>
+    !searchQuery.trim() || String(conversation.title || "").toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+  const renderedChild = React.cloneElement(children as React.ReactElement, {
+    key: location.pathname,
+    location,
+    ...(isConversationHome
+      ? {
+          embedded: true,
+          onOpenNavigation: () => setSidebarOpen(true),
+          onOpenContext: () => setRailOpen(true),
+        }
+      : {}),
   });
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem("gazelle_sidebar_collapsed", String(next));
-      return next;
-    });
-  };
-
-  const [activeHoveredSection, setActiveHoveredSection] = React.useState<string | null>(null);
-  const hoverTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
-  const handleMouseEnterSection = (sectionId: string) => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    setActiveHoveredSection(sectionId);
-  };
-
-  const handleMouseLeaveSection = () => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setActiveHoveredSection(null);
-    }, 150);
-  };
-
-  if (location.pathname === "/boldi") {
-    return (
-      <main className="h-[100dvh] w-full overflow-hidden bg-[#FAF9F5]">
-        {React.cloneElement(children as React.ReactElement, { key: location.pathname, location })}
-      </main>
-    );
-  }
-
   return (
-    <div className="flex flex-col min-h-screen bg-[#FDFCFB] text-gray-900 md:flex-row font-sans selection:bg-black selection:text-white pb-16 md:pb-0">
-      {/* Mobile Top Header (only visible on mobile) */}
-      <div className="md:hidden">
-        <WorkspaceSwitcher isMobile={true} />
-      </div>
+    <div className="gazelle-conversation-shell gazelle-app-shell">
+      <button
+        aria-label="Close panels"
+        className={`gazelle-mobile-scrim ${sidebarOpen || railOpen ? "is-open" : ""}`}
+        onClick={() => {
+          setSidebarOpen(false);
+          setRailOpen(false);
+        }}
+        type="button"
+      />
 
-      {/* Desktop Navigation Sidebar */}
-      <nav className={`hidden md:flex flex-col bg-white border-r border-gray-200/80 transition-all duration-300 ease-in-out relative ${
-        isSidebarCollapsed ? 'w-20 overflow-visible' : 'w-64 overflow-y-auto no-scrollbar'
-      }`}>
-        
-        {/* Sidebar Header */}
-        <div className={`p-5 flex items-center justify-between border-b border-gray-100/50 mb-4 ${isSidebarCollapsed ? 'flex-col gap-4 px-2' : ''}`}>
-          {!isSidebarCollapsed ? (
-            <div className="flex flex-col text-left">
-              <span className="font-black text-base tracking-widest text-black">GAZELLE</span>
-              <span className="text-gray-400 text-[9px] mt-0.5 uppercase tracking-widest font-extrabold">Boldr AI OS</span>
+      <aside className={`gazelle-conversation-sidebar ${sidebarOpen ? "is-open" : ""}`}>
+        <div className="flex h-full flex-col">
+          <div className="px-3.5 pb-2 pt-3.5">
+            <Link className="gazelle-workspace-button" to="/boldi" onClick={() => setSidebarOpen(false)}>
+              <span className="gazelle-brand-mark">G</span>
+              <span className="min-w-0 flex-1 text-left">
+                <span className="block truncate text-[13px] font-semibold text-[#242720]">
+                  {workspace?.name || "Personal Focus"}
+                </span>
+                <span className="block text-[10px] text-[#8a8e82]">Gazelle workspace</span>
+              </span>
+              <Sparkles className="h-3.5 w-3.5 text-[#7c8a6c]" />
+            </Link>
+          </div>
+
+          <div className="px-3.5 py-1">
+            <Link className="gazelle-new-chat" to="/boldi" onClick={() => setSidebarOpen(false)}>
+              <Plus className="h-3.5 w-3.5" />
+              New conversation
+            </Link>
+          </div>
+
+          <div className="px-3.5 py-2">
+            <button
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#6f7369] hover:bg-[#eaeae3]"
+              onClick={() => setSearchOpen((current) => !current)}
+              type="button"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Search
+            </button>
+            {searchOpen && (
+              <input
+                autoFocus
+                className="mt-1 w-full rounded-lg border border-[#d7d7cf] bg-white px-3 py-2 text-xs outline-none focus:border-[#9da58f]"
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search conversations"
+                value={searchQuery}
+              />
+            )}
+          </div>
+
+          <div className="gazelle-sidebar-scroll">
+            <div className="px-3.5 pt-2">
+              <p className="gazelle-sidebar-heading">Conversations</p>
+              <div className="mt-1 space-y-0.5">
+                {filteredConversations.slice(0, 6).map((conversation) => (
+                  <Link
+                    className={`gazelle-conversation-row ${isConversationHome ? "is-active" : ""}`}
+                    key={conversation.id}
+                    onClick={() => setSidebarOpen(false)}
+                    to="/boldi"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate text-left">{conversation.title || "New conversation"}</span>
+                    <span className="text-[9px] text-[#a0a299]">{relativeDate(conversation.updatedAt)}</span>
+                  </Link>
+                ))}
+                {filteredConversations.length === 0 && (
+                  <Link className={`gazelle-conversation-row ${isConversationHome ? "is-active" : ""}`} to="/boldi">
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                    <span>Chief of Staff home</span>
+                  </Link>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="font-black text-lg text-black bg-gray-50 border border-gray-100 rounded-xl w-10 h-10 flex items-center justify-center shadow-sm">G</div>
-          )}
-          <button 
-            onClick={toggleSidebar}
-            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-black transition-colors"
-            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+
+            <div className="px-3.5 pt-5">
+              <div className="flex items-center justify-between px-2">
+                <p className="gazelle-sidebar-heading !px-0">Projects</p>
+                <Link aria-label="View all projects" to="/work/projects" onClick={() => setSidebarOpen(false)}>
+                  <Plus className="h-3.5 w-3.5 text-[#94978f]" />
+                </Link>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {projects.map((project, index) => (
+                  <Link
+                    className={`gazelle-conversation-row ${location.pathname === `/work/projects/${project.id}` ? "is-active" : ""}`}
+                    key={project.id || index}
+                    onClick={() => setSidebarOpen(false)}
+                    to={`/work/projects/${project.id}`}
+                  >
+                    <span className="h-2 w-2 rounded-[3px] bg-[#788a63]" />
+                    <span className="truncate">{project.title || "Untitled project"}</span>
+                  </Link>
+                ))}
+                {projects.length === 0 && (
+                  <Link className="gazelle-conversation-row" to="/work/projects" onClick={() => setSidebarOpen(false)}>
+                    <Layers className="h-3.5 w-3.5" />
+                    Create your first project
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <div className="px-3.5 pb-5 pt-5">
+              <p className="gazelle-sidebar-heading">Your system</p>
+              <div className="mt-1 space-y-3">
+                {SECTIONS.map((section) => {
+                  const active = isSectionActive(section, location.pathname);
+                  return (
+                    <div key={section.id}>
+                      <Link
+                        className={`gazelle-system-section ${active ? "is-active" : ""}`}
+                        onClick={() => setSidebarOpen(false)}
+                        to={section.path}
+                      >
+                        <section.icon className="h-3.5 w-3.5" />
+                        <span>{section.title}</span>
+                      </Link>
+                      {active && (
+                        <div className="ml-4 mt-1 space-y-0.5 border-l border-[#deded6] pl-2">
+                          {section.items.map((item) => (
+                            <Link
+                              className={`gazelle-module-link ${checkRouteActive(item.to, location.pathname) ? "is-active" : ""}`}
+                              key={item.to}
+                              onClick={() => setSidebarOpen(false)}
+                              to={item.to}
+                            >
+                              <item.icon className="h-3.5 w-3.5" />
+                              <span className="truncate">{item.label}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-auto border-t border-[#deded6] p-3.5">
+            <button
+              className="mb-2 flex w-full items-center gap-2.5 rounded-xl p-2 text-left text-[11px] font-semibold text-[#594923] hover:bg-[#efe6cf]"
+              onClick={() => {
+                setSidebarOpen(false);
+                window.dispatchEvent(new CustomEvent('open-clarity-reset'));
+              }}
+              type="button"
+            >
+              <Brain className="h-3.5 w-3.5" />
+              Clarity Reset
+            </button>
+            <Link className="flex items-center gap-2.5 rounded-xl p-2 hover:bg-[#e8e8e0]" to="/me" onClick={() => setSidebarOpen(false)}>
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#252921] text-[10px] font-bold text-white">
+                {user?.email?.slice(0, 2).toUpperCase() || "EX"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[11px] font-semibold text-[#33362f]">{user?.email?.split("@")[0] || "Executive"}</p>
+                <p className="truncate text-[9px] text-[#92958c]">{user?.email || "Settings"}</p>
+              </div>
+              <MoreHorizontal className="h-3.5 w-3.5 text-[#90938a]" />
+            </Link>
+          </div>
+        </div>
+      </aside>
+
+      {isConversationHome ? (
+        <AnimatePresence mode="wait">{renderedChild}</AnimatePresence>
+      ) : (
+        <main className="gazelle-conversation-main gazelle-page-main">
+          <header className="gazelle-chat-header">
+            <button
+              aria-label="Open navigation"
+              className="gazelle-mobile-icon-button"
+              onClick={() => setSidebarOpen(true)}
+              type="button"
+            >
+              <Menu className="h-4.5 w-4.5" />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[10px] text-[#96998f]">
+                <span>{currentSection.eyebrow}</span>
+                <ChevronRight className="h-2.5 w-2.5" />
+                <span className="truncate">{workspace?.name || "Personal Focus"}</span>
+              </div>
+              <p className="mt-0.5 truncate text-[12px] font-semibold text-[#343832]">{currentSection.title}</p>
+            </div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <Link className="gazelle-header-button" to="/boldi">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Ask Gazelle</span>
+              </Link>
+              <button
+                aria-label="Open context"
+                className="gazelle-mobile-icon-button"
+                onClick={() => setRailOpen(true)}
+                type="button"
+              >
+                <PanelRight className="h-4.5 w-4.5" />
+              </button>
+            </div>
+          </header>
+          <div className="gazelle-message-viewport gazelle-page-viewport">
+            <AnimatePresence mode="wait">{renderedChild}</AnimatePresence>
+          </div>
+        </main>
+      )}
+
+      <aside className={`gazelle-context-rail ${railOpen ? "is-open" : ""}`}>
+        <div className="flex items-center justify-between border-b border-[#e7e6df] px-4 py-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#91958b]">Live context</p>
+            <p className="mt-0.5 text-xs font-semibold text-[#31352e]">{currentSection.title}</p>
+          </div>
+          <button
+            aria-label="Close context"
+            className="gazelle-mobile-icon-button"
+            onClick={() => setRailOpen(false)}
+            type="button"
           >
-            {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            <X className="h-4 w-4" />
           </button>
         </div>
-
-        {/* Workspace Switcher */}
-        <div className={`${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
-          <WorkspaceSwitcher isCollapsed={isSidebarCollapsed} />
-        </div>
-
-        {/* Dynamic Nested Sidebar Items (Exactly 5 sections) */}
-        <div className="flex-1 py-4 flex flex-col gap-2.5 px-3">
-          {SECTIONS.map((sec) => {
-            const active = isSectionActive(sec, location.pathname);
-
-            return (
-              <div 
-                key={sec.id} 
-                className="relative"
-                onMouseEnter={() => isSidebarCollapsed && handleMouseEnterSection(sec.id)}
-                onMouseLeave={() => isSidebarCollapsed && handleMouseLeaveSection()}
-              >
-                {/* Main section button/link */}
+        <div className="gazelle-rail-scroll">
+          <section className="gazelle-rail-section">
+            <p className="gazelle-rail-heading">Where you are</p>
+            <p className="mt-3 text-[11px] leading-5 text-[#676c62]">{currentSection.description}</p>
+          </section>
+          <section className="gazelle-rail-section">
+            <p className="gazelle-rail-heading">Fast moves</p>
+            <div className="mt-3 space-y-1">
+              {[
+                { to: "/boldi", label: "Open conversation", icon: Sparkles },
+                { to: "/capture", label: "Capture input", icon: Inbox },
+                { to: "/work/action-board", label: "Open tasks", icon: CheckSquare },
+                { to: "/capture/review", label: "Review proposals", icon: ShieldCheck },
+              ].map((item) => (
                 <Link
-                  to={sec.path}
-                  className={`relative flex items-center gap-3 py-2.5 px-3.5 rounded-xl transition-all text-[13px] font-bold group ${
-                    active 
-                      ? 'bg-black text-white shadow-sm font-extrabold' 
-                      : 'text-gray-600 hover:text-black hover:bg-gray-100/80'
-                  } ${isSidebarCollapsed ? 'justify-center px-2' : ''}`}
-                  title={isSidebarCollapsed ? sec.title : ""}
+                  className="gazelle-conversation-row"
+                  key={item.to}
+                  onClick={() => setRailOpen(false)}
+                  to={item.to}
                 >
-                  <sec.icon className={`w-4.5 h-4.5 flex-shrink-0 transition-transform duration-200 group-hover:scale-105 ${active ? 'text-white' : 'text-gray-400 group-hover:text-black'}`} />
-                  {!isSidebarCollapsed && (
-                    <span className="truncate">{sec.title}</span>
-                  )}
-                  {active && !isSidebarCollapsed && (
-                    <span className="absolute right-3.5 w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                  )}
+                  <item.icon className="h-3.5 w-3.5" />
+                  <span>{item.label}</span>
                 </Link>
-
-                {/* Sub-navigation items (expanded below active section on desktop) */}
-                {active && !isSidebarCollapsed && (
-                  <div className="flex flex-col gap-0.5 pl-4 mt-1 border-l border-gray-100 ml-5">
-                    {sec.items.map((item) => (
-                      <SidebarLink
-                        key={item.to}
-                        to={item.to}
-                        icon={item.icon}
-                        label={item.label}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* Pop-up flyout submenu when sidebar is collapsed */}
-                {isSidebarCollapsed && activeHoveredSection === sec.id && (
-                  <div 
-                    className="absolute left-14 top-0 ml-1.5 z-[100] bg-white border border-gray-200 rounded-2xl shadow-xl py-3 px-4 min-w-[200px] animate-in fade-in slide-in-from-left-2 duration-150 flex flex-col gap-1"
-                    onMouseEnter={() => {
-                      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                    }}
-                    onMouseLeave={() => handleMouseLeaveSection()}
-                  >
-                    <div className="flex flex-col mb-2 border-b border-gray-100 pb-1 px-1 text-left">
-                      <span className="text-[10px] font-extrabold text-black uppercase tracking-wider">{sec.title}</span>
-                      <span className="text-[9px] text-gray-400">{sec.description}</span>
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      {sec.items.map(item => {
-                        const itemActive = checkRouteActive(item.to, location.pathname);
-                        return (
-                          <Link
-                            key={item.to}
-                            to={item.to}
-                            className={`flex items-center gap-2 py-1.5 px-2.5 rounded-lg text-xs transition-all ${
-                              itemActive 
-                                ? 'bg-black text-white font-semibold' 
-                                : 'text-gray-600 hover:text-black hover:bg-gray-50'
-                            }`}
-                          >
-                            <item.icon className={`w-3.5 h-3.5 ${itemActive ? 'text-white' : 'text-gray-400'}`} />
-                            <span className="truncate">{item.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          </section>
+          <section className="gazelle-rail-section">
+            <p className="gazelle-rail-heading">Continuity</p>
+            <div className="mt-3 rounded-xl border border-dashed border-[#d9d9d1] px-3 py-3">
+              <p className="text-[10px] leading-4 text-[#7f837a]">
+                Projects, tasks, planning, review, and capture now open inside the same workspace frame. Use the left rail to move without losing orientation.
+              </p>
+            </div>
+          </section>
+          <section className="gazelle-rail-section">
+            <div className="flex items-center gap-2 text-[10px] text-[#8d9187]">
+              <Settings className="h-3.5 w-3.5" />
+              <span>Actions remain approval-gated and recoverable.</span>
+            </div>
+          </section>
         </div>
+      </aside>
 
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-gray-100 mt-auto flex flex-col gap-2 bg-gray-50/30">
-          {!isSidebarCollapsed ? (
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('open-clarity-reset'))}
-              className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-200/40 flex items-center justify-between hover:bg-amber-500/20 text-amber-900 cursor-pointer transition-all group shadow-sm mb-1"
-              title="Start 10-Minute Mental Clarity Reset"
-            >
-              <div className="flex items-center gap-2.5 overflow-hidden text-left">
-                <div className="bg-amber-500 text-black p-1 rounded-lg flex-shrink-0">
-                  <Brain className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-bold tracking-tight">Clarity Reset</span>
-                  <span className="text-[9px] text-amber-700/80">10-Min Session</span>
-                </div>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-amber-600/70 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          ) : (
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('open-clarity-reset'))}
-              className="w-12 h-12 mx-auto rounded-xl bg-amber-500/10 border border-amber-200/40 flex items-center justify-center hover:bg-amber-500/20 text-amber-600 cursor-pointer transition-all shadow-sm mb-1 group relative"
-              title="10-Minute Mental Clarity Reset"
-            >
-              <Brain className="w-4 h-4 animate-pulse" />
-              <div className="absolute left-14 ml-2 z-[100] bg-gray-900 text-white text-[10px] py-1 px-2 rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                10-Min Clarity Reset
-              </div>
-            </button>
-          )}
-
-          {/* Settings Profile Link */}
-          {!isSidebarCollapsed ? (
-            <Link
-              to="/me"
-              className={`flex items-center justify-between p-2 rounded-xl transition-all border ${
-                location.pathname === "/me" 
-                  ? 'bg-gray-100 border-gray-200 text-black font-semibold' 
-                  : 'bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50 text-gray-700'
-              }`}
-            >
-              <div className="flex items-center gap-2.5 overflow-hidden text-left">
-                <div className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center text-xs font-bold font-mono">
-                  {user?.email?.substring(0, 2).toUpperCase() || 'EX'}
-                </div>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-[11px] font-bold text-gray-900 truncate">{user?.email?.split('@')[0] || 'Executive'}</span>
-                  <span className="text-[9px] text-gray-400 truncate">{user?.email || 'Settings'}</span>
-                </div>
-              </div>
-              <Settings className="w-3.5 h-3.5 text-gray-400 hover:text-black transition-colors" />
-            </Link>
-          ) : (
-            <Link
-              to="/me"
-              className={`w-12 h-12 mx-auto rounded-xl border flex items-center justify-center transition-all group relative ${
-                location.pathname === "/me"
-                  ? 'bg-black border-black text-white'
-                  : 'bg-white border-gray-100 hover:border-gray-200 text-gray-500 hover:text-black'
-              }`}
-              title="Executive Settings"
-            >
-              <Settings className="w-4 h-4" />
-              <div className="absolute left-14 ml-2 z-[100] bg-gray-900 text-white text-[10px] py-1 px-2 rounded-md shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                System Profile & Settings
-              </div>
-            </Link>
-          )}
-        </div>
-      </nav>
-
-      {/* Main Content Viewport */}
-      <main className="flex-1 overflow-x-hidden overflow-y-auto w-full relative">
-        <AnimatePresence mode="wait">
-          {React.cloneElement(children as React.ReactElement, { key: location.pathname, location })}
-        </AnimatePresence>
-      </main>
-
-      {/* Mobile Navigation bottom drawer bar (exactly 5 items) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-md border-t border-gray-200 flex justify-around items-center px-2 pb-safe z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
-        <NavLink to="/" icon={CalendarIcon} label="Today" />
-        <NavLink to="/inbox" icon={Inbox} label="Inbox" />
-        <NavLink to="/work" icon={Briefcase} label="Work" />
-        <NavLink to="/plan" icon={Layers} label="Plan" />
-        <NavLink to="/review" icon={CheckSquare} label="Review" />
-      </nav>
-
-      {/* Global AI Co-Pilot overlay */}
-      <BoldiFloatingWidget />
+      {!isConversationHome && <BoldiFloatingWidget />}
     </div>
   );
 }

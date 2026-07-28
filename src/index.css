@@ -217,6 +217,36 @@
     color: #282c26;
   }
 
+  .gazelle-module-link.is-active {
+    background: rgba(255, 255, 255, 0.86);
+    color: #242821;
+    font-weight: 650;
+    box-shadow: 0 1px 4px rgba(26, 30, 23, 0.05);
+  }
+
+  .gazelle-system-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 10px;
+    padding: 7px 9px;
+    color: #5f655b;
+    font-size: 11px;
+    font-weight: 650;
+    transition: all 130ms ease;
+  }
+
+  .gazelle-system-section:hover {
+    background: rgba(225, 225, 217, 0.72);
+    color: #282c26;
+  }
+
+  .gazelle-system-section.is-active {
+    background: #252921;
+    color: #fff;
+    box-shadow: 0 5px 14px rgba(29, 33, 26, 0.12);
+  }
+
   .gazelle-conversation-main {
     position: relative;
     display: flex;
@@ -226,6 +256,34 @@
     background:
       linear-gradient(rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.88)),
       radial-gradient(circle at 50% 12%, #edf2e4, transparent 38%);
+  }
+
+  .gazelle-page-main {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.9)),
+      #faf9f5;
+  }
+
+  .gazelle-page-viewport {
+    padding: 12px 18px 48px;
+  }
+
+  .gazelle-page-viewport > div,
+  .gazelle-page-viewport > section {
+    max-width: 1120px;
+  }
+
+  .gazelle-page-viewport .rounded-3xl {
+    border-radius: 18px;
+  }
+
+  .gazelle-page-viewport .shadow-xl,
+  .gazelle-page-viewport .shadow-2xl {
+    box-shadow: 0 18px 48px rgba(31, 35, 28, 0.12);
+  }
+
+  .gazelle-integrated-page {
+    color: #20231e;
   }
 
   .gazelle-chat-header {

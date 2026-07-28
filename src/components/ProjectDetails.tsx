@@ -498,13 +498,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
     <motion.div 
       initial={{ opacity: 0 }} 
       animate={{ opacity: 1 }} 
-      className="p-4 max-w-6xl mx-auto pb-32 w-full"
+      className="gazelle-integrated-page p-4 max-w-6xl mx-auto pb-32 w-full"
     >
-      {/* 1. HEADER SECTION (COCKPIT PROFILE) */}
-      <header className="mb-6 mt-4 bg-white p-6 rounded-3xl border border-gray-200/80 shadow-sm relative overflow-hidden">
-        {/* Decorative background accent */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-indigo-50/50 to-transparent pointer-events-none rounded-bl-full" />
-        
+      <header className="mb-6 mt-4 bg-white p-5 md:p-6 rounded-[18px] border border-[#deded6] shadow-[0_8px_24px_rgba(30,35,25,0.04)] relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-start gap-4 justify-between">
           <div className="flex items-start gap-3">
             <Link 
@@ -529,9 +525,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                       'bg-emerald-50 text-emerald-700 border-emerald-200/50'
                     }`}
                   >
-                    <option value="deal">💰 Deal</option>
-                    <option value="implementation">⚙️ Implementation Project</option>
-                    <option value="ongoing">🔄 Ongoing Project</option>
+                    <option value="deal">Deal</option>
+                    <option value="implementation">Implementation project</option>
+                    <option value="ongoing">Ongoing project</option>
                   </select>
                 </div>
 
@@ -548,7 +544,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     <option value="paused">Paused</option>
                     <option value="done">Done</option>
                     <option value="cancelled">Cancelled</option>
-                    <option value="archived">📦 Archived</option>
+                    <option value="archived">Archived</option>
                   </select>
                 </div>
 
@@ -565,9 +561,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     }`}
                   >
                     <option value="">Health: evaluate</option>
-                    <option value="on_track">🟢 On Track</option>
-                    <option value="at_risk">🟡 At Risk</option>
-                    <option value="blocked">🔴 Blocked</option>
+                    <option value="on_track">On track</option>
+                    <option value="at_risk">At risk</option>
+                    <option value="blocked">Blocked</option>
                   </select>
                 </div>
 
@@ -646,7 +642,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 onClick={() => setIsCoPilotOpen(true)}
                 className="bg-black hover:bg-gray-800 text-white px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
               >
-                <Bot className="w-3.5 h-3.5 text-white animate-pulse" /> Boldi Co-Pilot
+                <Bot className="w-3.5 h-3.5 text-white" /> Ask Gazelle
               </button>
 
               <button 
@@ -660,7 +656,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 onClick={handleAskBoldiAboutProject}
                 className="bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
               >
-                <Bot className="w-3.5 h-3.5 text-amber-600" /> Ask Boldi
+                <Bot className="w-3.5 h-3.5 text-amber-600" /> Analyze
               </button>
 
               <button 
@@ -801,37 +797,36 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
         </div>
       )}
 
-      {/* 2. TAB NAVIGATION */}
-      <div className="flex bg-gray-100 p-1.5 rounded-2xl w-full max-w-2xl mb-8 border border-gray-200/50 shadow-inner">
+      <div className="flex bg-[#efeee8] p-1.5 rounded-[16px] w-full max-w-2xl mb-8 border border-[#deded6] shadow-inner overflow-x-auto">
         <button 
           onClick={() => setCurrentView("overview")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'overview' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
-          <TrendingUp className="w-4 h-4" /> Cockpit Cockpit
+          <TrendingUp className="w-4 h-4" /> Overview
         </button>
         <button 
           onClick={() => setCurrentView("board")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'board' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
-          <Kanban className="w-4 h-4" /> Board Board
+          <Kanban className="w-4 h-4" /> Board
         </button>
         <button 
           onClick={() => setCurrentView("timeline")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'timeline' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
-          <Calendar className="w-4 h-4" /> Timeline Timeline
+          <Calendar className="w-4 h-4" /> Timeline
         </button>
         <button 
           onClick={() => setCurrentView("documents")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'documents' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
-          <Folder className="w-4 h-4" /> Workspace & Docs Workspace
+          <Folder className="w-4 h-4" /> Docs
         </button>
         <button 
           onClick={() => setCurrentView("reports")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'reports' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
-          <FileText className="w-4 h-4" /> Status Reports Status
+          <FileText className="w-4 h-4" /> Reports
         </button>
       </div>
 
@@ -1000,7 +995,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
         </div>
       )}
 
+      {currentView === 'board' && (
         <TasksList hideCockpit={true} projectId={id} />
+      )}
 
       {currentView === 'timeline' && (
          <div className="space-y-8">
@@ -1067,7 +1064,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                <div className="flex justify-between items-center mb-6">
                  <div>
                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Document & Resource Index</h3>
-                   <p className="text-xs text-gray-400 mt-1">Manage all Figma wireframes, Notion wikis, meeting briefs and design assets in one clean cockpit.</p>
+                   <p className="text-xs text-gray-400 mt-1">Keep project links, notes, meeting briefs, and working files in one place.</p>
                  </div>
                  <button 
                    onClick={() => setShowAddDocModal(true)}
@@ -1119,7 +1116,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                  ))}
 
                  {(project.documents || []).length === 0 && (
-                   <div className="col-span-full text-center py-8 text-xs text-gray-400">No external resources added. Click "Add Document" to organize your stack!</div>
+                   <div className="col-span-full text-center py-8 text-xs text-gray-400">No resources added yet.</div>
                  )}
                </div>
              </div>
@@ -1187,8 +1184,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
            <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
              <div className="flex justify-between items-center mb-6">
                <div>
-                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">PMI Status Reports History</h3>
-                 <p className="text-xs text-gray-400 mt-1">Review formal executive reviews and audit status trails generated by Boldi.</p>
+                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Status report history</h3>
+                 <p className="text-xs text-gray-400 mt-1">Review saved executive updates and project decisions.</p>
                </div>
                <button 
                  onClick={() => {
@@ -1250,7 +1247,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                ))}
 
                {(project.statusReports || []).length === 0 && (
-                 <div className="text-center py-12 text-xs text-gray-400">No status reports logged. Click "Draft New Report" to let Boldi AI scan progress and build one for you!</div>
+                 <div className="text-center py-12 text-xs text-gray-400">No status reports saved yet.</div>
                )}
              </div>
            </div>
@@ -1373,7 +1370,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
           <div className="bg-white rounded-3xl p-6 max-w-2xl w-full border border-gray-200 shadow-2xl my-8">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-black text-gray-950 uppercase tracking-wider text-sm flex items-center gap-1.5">
-                <Sparkles className="w-5 h-5 text-indigo-600" /> PMI Status Report Draftsman
+                <Sparkles className="w-5 h-5 text-indigo-600" /> Status report draft
               </h3>
               <button
                 onClick={() => setShowReportModal(false)}
@@ -1387,7 +1384,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
             {generatingReport ? (
               <div className="py-20 text-center space-y-3">
                 <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600" />
-                <p className="text-xs text-gray-500">Boldi is auditing tasks list, stage completion rate, and building your Executive report draft...</p>
+                <p className="text-xs text-gray-500">Gazelle is reviewing tasks, milestones, and recent updates...</p>
               </div>
             ) : (
               <form onSubmit={handleSaveStatusReport} className="space-y-4 text-xs">
