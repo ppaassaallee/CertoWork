@@ -985,7 +985,13 @@ export function BoldiAssistant({
           <button
             aria-label="Open navigation"
             className="gazelle-mobile-icon-button"
-            onClick={() => (onOpenNavigation ? onOpenNavigation() : setSidebarOpen(true))}
+            onClick={() =>
+              onOpenNavigation
+                ? onOpenNavigation()
+                : embedded
+                  ? window.dispatchEvent(new CustomEvent("gazelle-open-navigation"))
+                  : setSidebarOpen(true)
+            }
             type="button"
           >
             <Menu className="h-4.5 w-4.5" />
@@ -1018,7 +1024,13 @@ export function BoldiAssistant({
             <button
               aria-label="Open context"
               className="gazelle-mobile-icon-button"
-              onClick={() => (onOpenContext ? onOpenContext() : setRailOpen(true))}
+              onClick={() =>
+                onOpenContext
+                  ? onOpenContext()
+                  : embedded
+                    ? window.dispatchEvent(new CustomEvent("gazelle-open-context"))
+                    : setRailOpen(true)
+              }
               type="button"
             >
               <PanelRight className="h-4.5 w-4.5" />

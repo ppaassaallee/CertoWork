@@ -253,6 +253,17 @@ function Layout({ children }: { children: React.ReactNode }) {
   }, [user, workspace]);
 
   React.useEffect(() => {
+    const openNavigation = () => setSidebarOpen(true);
+    const openContext = () => setRailOpen(true);
+    window.addEventListener("gazelle-open-navigation", openNavigation);
+    window.addEventListener("gazelle-open-context", openContext);
+    return () => {
+      window.removeEventListener("gazelle-open-navigation", openNavigation);
+      window.removeEventListener("gazelle-open-context", openContext);
+    };
+  }, []);
+
+  React.useEffect(() => {
     if (!user || !workspace) return;
     const q = query(
       collection(db, "projects"),
@@ -729,7 +740,7 @@ export default function App() {
             <Route path="/review/habits" element={<HabitsHome />} />
             <Route path="/review/health" element={<DailyMetrics />} />
             <Route path="/review/workouts" element={<WorkoutsHome />} />
-            <Route path="/boldi" element={<BoldiAssistant />} />
+            <Route path="/boldi" element={<BoldiAssistant embedded />} />
 
             {/* Other routes that exist */}
             <Route path="/work/stakeholders" element={<StakeholdersList />} />
