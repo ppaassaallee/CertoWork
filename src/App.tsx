@@ -195,6 +195,9 @@ function relativeDate(value: any) {
   return days === 1 ? "Yesterday" : `${days}d`;
 }
 
+const NEW_CONVERSATION_PENDING_KEY = "gazelle_new_conversation_pending";
+const SELECTED_CONVERSATION_KEY = "gazelle_selected_conversation_id";
+
 function sectionForPath(pathname: string) {
   if (pathname === "/boldi" || pathname === "/") {
     return {
@@ -326,7 +329,15 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="px-3.5 py-1">
-            <Link className="gazelle-new-chat" to="/boldi" onClick={() => setSidebarOpen(false)}>
+            <Link
+              className="gazelle-new-chat"
+              to="/boldi"
+              onClick={() => {
+                sessionStorage.setItem(NEW_CONVERSATION_PENDING_KEY, "true");
+                window.dispatchEvent(new CustomEvent("gazelle-new-conversation"));
+                setSidebarOpen(false);
+              }}
+            >
               <Plus className="h-3.5 w-3.5" />
               New conversation
             </Link>
@@ -360,7 +371,15 @@ function Layout({ children }: { children: React.ReactNode }) {
                   <Link
                     className={`gazelle-conversation-row ${isConversationHome ? "is-active" : ""}`}
                     key={conversation.id}
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={() => {
+                      sessionStorage.setItem(SELECTED_CONVERSATION_KEY, conversation.id);
+                      window.dispatchEvent(
+                        new CustomEvent("gazelle-select-conversation", {
+                          detail: { conversationId: conversation.id },
+                        }),
+                      );
+                      setSidebarOpen(false);
+                    }}
                     to="/boldi"
                   >
                     <MessageSquare className="h-3.5 w-3.5 shrink-0" />

@@ -116,6 +116,8 @@ interface WorkspaceSnapshot extends JudgmentContext {
 }
 
 const OFFLINE_QUEUE_KEY = "gazelle_offline_capture_queue_v1";
+const NEW_CONVERSATION_PENDING_KEY = "gazelle_new_conversation_pending";
+const SELECTED_CONVERSATION_KEY = "gazelle_selected_conversation_id";
 
 const MODULES = [
   { label: "Today", to: "/today", icon: CalendarDays },
@@ -260,7 +262,7 @@ function buildProviderUnavailableReply(judgment: JudgmentAssessment) {
       : judgment.verdict === "challenge"
         ? judgment.userNeedsToHear
         : "Your request passed the deterministic safety checks.";
-  return `${lead}\n\nThe AI provider is currently unavailable. Nothing has been executed or added to the offline queue.`;
+  return `${lead}\n\nAI responses are not active in this deployment because OpenAI is not configured yet. I did not execute anything or add this to the offline queue.`;
 }
 
 function RichText({ text }: { text: string }) {
@@ -674,6 +676,57 @@ export function BoldiAssistant({
     setSidebarOpen(false);
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
+
+  useEffect(() => {
+    if (!embedded || !user || !workspace) return;
+
+    const consumePendingSelection = () => {
+      const selectedConversationId = sessionStorage.getItem(SELECTED_CONVERSATION_KEY);
+      if (selectedConversationId) {
+        sessionStorage.removeItem(SELECTED_CONVERSATION_KEY);
+        setConversationId(selectedConversationId);
+        setMessages([]);
+        setLatestJudgment(null);
+        setInput("");
+        requestAnimationFrame(() => textareaRef.current?.focus());
+        return true;
+      }
+      return false;
+    };
+
+    const consumePendingNewConversation = () => {
+      if (sessionStorage.getItem(NEW_CONVERSATION_PENDING_KEY) !== "true") return false;
+      sessionStorage.removeItem(NEW_CONVERSATION_PENDING_KEY);
+      createConversation();
+      return true;
+    };
+
+    consumePendingSelection();
+    consumePendingNewConversation();
+
+    const handleNewConversation = () => {
+      sessionStorage.removeItem(NEW_CONVERSATION_PENDING_KEY);
+      createConversation();
+    };
+    const handleSelectConversation = (event: Event) => {
+      const conversationIdFromEvent = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId;
+      const nextConversationId = conversationIdFromEvent || sessionStorage.getItem(SELECTED_CONVERSATION_KEY);
+      if (!nextConversationId) return;
+      sessionStorage.removeItem(SELECTED_CONVERSATION_KEY);
+      setConversationId(nextConversationId);
+      setMessages([]);
+      setLatestJudgment(null);
+      setInput("");
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    };
+
+    window.addEventListener("gazelle-new-conversation", handleNewConversation);
+    window.addEventListener("gazelle-select-conversation", handleSelectConversation);
+    return () => {
+      window.removeEventListener("gazelle-new-conversation", handleNewConversation);
+      window.removeEventListener("gazelle-select-conversation", handleSelectConversation);
+    };
+  }, [embedded, user, workspace]);
 
   const streamText = async (text: string) => {
     const chunkSize = Math.max(4, Math.ceil(text.length / 90));
