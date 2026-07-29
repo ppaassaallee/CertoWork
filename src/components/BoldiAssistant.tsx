@@ -255,14 +255,18 @@ function buildOfflineReply(text: string, judgment: JudgmentAssessment) {
   return "Captured. The AI provider is unavailable right now, so I placed this in the offline queue instead of pretending it was processed. Nothing else changed.";
 }
 
-function buildProviderUnavailableReply(judgment: JudgmentAssessment) {
+function buildProviderUnavailableReply(judgment: JudgmentAssessment, providerError?: string) {
   const lead =
     judgment.verdict === "stop"
       ? judgment.recommendation
       : judgment.verdict === "challenge"
         ? judgment.userNeedsToHear
         : "Your request passed the deterministic safety checks.";
-  return `${lead}\n\nAI responses are not active in this deployment because OpenAI is not configured yet. I did not execute anything or add this to the offline queue.`;
+  const safeError = providerError?.trim();
+  const detail = safeError
+    ? `OpenAI returned this provider error: ${safeError}`
+    : "OpenAI did not return a usable response.";
+  return `${lead}\n\n${detail}\n\nI did not execute anything or add this to the offline queue.`;
 }
 
 function RichText({ text }: { text: string }) {
@@ -848,9 +852,10 @@ export function BoldiAssistant({
         const queueLength = storeOfflineCapture(text);
         setOfflineCount(queueLength);
       }
+      const providerError = error instanceof Error ? error.message : undefined;
       const reply = shouldQueue
         ? buildOfflineReply(text, judgment)
-        : buildProviderUnavailableReply(judgment);
+        : buildProviderUnavailableReply(judgment, providerError);
       await streamText(reply);
       const fallbackMessage: ConversationMessage = {
         id: `${shouldQueue ? "offline" : "provider-unavailable"}-${Date.now()}`,
