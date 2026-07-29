@@ -351,10 +351,17 @@ async function chat(request, env) {
       body: JSON.stringify({
         model,
         instructions: assistantInstructions(body, citations),
-        input: body.messages.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
+        input: [
+          {
+            role: "user",
+            content:
+              "Gazelle response contract: return exactly one valid JSON object matching the provided instructions.",
+          },
+          ...body.messages.map((message) => ({
+            role: message.role,
+            content: message.content,
+          })),
+        ],
         text: { format: { type: "json_object" } },
         store: false,
       }),
