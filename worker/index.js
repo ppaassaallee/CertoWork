@@ -422,9 +422,11 @@ async function serveAsset(request, env) {
 
   if (isClientRoute) {
     const indexUrl = new URL("/?gazelle-spa=1", request.url);
-    return withSecurityHeaders(
+    const response = withSecurityHeaders(
       await env.ASSETS.fetch(new Request(indexUrl, request)),
     );
+    response.headers.set("cache-control", "no-store, max-age=0");
+    return response;
   }
 
   let response = await env.ASSETS.fetch(request);
