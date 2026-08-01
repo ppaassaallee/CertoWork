@@ -210,6 +210,7 @@ export function DelivereeWorkspace() {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -261,6 +262,10 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, streamed, submitting]);
+
+  useEffect(() => {
+    viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
 
   useEffect(() => {
     const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -754,7 +759,7 @@ export function DelivereeWorkspace() {
 
         {notice && <div className="do-notice" role="status"><CheckCircle2 size={15} /><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")} type="button"><X size={14} /></button></div>}
 
-        <div className="do-thread-viewport">
+        <div className="do-thread-viewport" ref={viewportRef}>
           <div className="do-thread">
             {contextualMessages.length === 0 && !submitting ? (
               <div className="do-opening">
@@ -773,6 +778,7 @@ export function DelivereeWorkspace() {
               </div>
             ) : (
               <>
+                {!activeProject && lens.kind !== "home" && <div className="do-thread-lens">{renderLensArtifact()}</div>}
                 {activeProject && <div className="do-inline-context">Working in <strong>{entityTitle(activeProject)}</strong><span>{titleCase(normalizeDeliveryStage(activeProject.deliveryStage || activeProject.status))}</span></div>}
                 {contextualMessages.map((message) => (
                   <article className={`do-message is-${message.role}`} key={message.id}>

@@ -223,6 +223,7 @@ button { color: inherit; }
 .do-prompt-list button svg { flex: none; color: #62806f; }
 
 .do-inline-context { display: flex; align-items: center; gap: 5px; margin: 0 0 26px 42px; color: #8b938e; font-size: 9px; }
+.do-thread-lens { margin-bottom: 28px; }
 .do-inline-context strong { color: #4d5650; }
 .do-inline-context span { margin-left: 3px; border-radius: 8px; background: #eef2ef; padding: 3px 7px; color: #68726b; }
 .do-message { margin-bottom: 26px; }
