@@ -50,7 +50,13 @@ import {
   resolveDelivereeLens,
 } from "../lib/delivereeRoutes";
 
-type Conversation = { id: string; title?: string; updatedAt?: any; createdAt?: any };
+type Conversation = {
+  id: string;
+  title?: string;
+  contextEntityId?: string | null;
+  updatedAt?: any;
+  createdAt?: any;
+};
 type Message = {
   id: string;
   role: "user" | "assistant" | "system";
@@ -310,6 +316,19 @@ export function DelivereeWorkspace() {
           : "Delivery room";
 
   const currentConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const conversationInContext = activeProject
+    ? currentConversation?.contextEntityId === activeProject.id
+    : !currentConversation?.contextEntityId;
+  const contextualMessages = conversationInContext ? visibleMessages : [];
+
+  useEffect(() => {
+    const targetEntityId = activeProject?.id || null;
+    setConversationId((currentId) => {
+      const current = conversations.find((conversation) => conversation.id === currentId);
+      if ((current?.contextEntityId || null) === targetEntityId) return currentId;
+      return conversations.find((conversation) => (conversation.contextEntityId || null) === targetEntityId)?.id || currentId;
+    });
+  }, [activeProject, conversations]);
 
   const createConversation = useCallback(async () => {
     if (!user || !workspace) return;
@@ -349,7 +368,7 @@ export function DelivereeWorkspace() {
   }, [createConversation]);
 
   const ensureConversation = async (title: string) => {
-    if (conversationId) return conversationId;
+    if (conversationId && conversationInContext) return conversationId;
     if (!user || !workspace) throw new Error("Workspace is still loading");
     const ref = await addDoc(collection(db, "boldi_conversations"), {
       userId: user.uid,
@@ -417,7 +436,7 @@ export function DelivereeWorkspace() {
           workspaceId: workspace.id,
           conversationId: activeConversationId,
           messages: [
-            ...visibleMessages.map((message) => ({ role: message.role, content: message.content })),
+            ...contextualMessages.map((message) => ({ role: message.role, content: message.content })),
             { role: "user", content: text },
           ],
           workspaceContext: {
@@ -452,7 +471,7 @@ export function DelivereeWorkspace() {
       });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
-          title: visibleMessages.length === 0 ? text.slice(0, 64) : currentConversation?.title || text.slice(0, 64),
+          title: contextualMessages.length === 0 ? text.slice(0, 64) : currentConversation?.title || text.slice(0, 64),
           contextEntityId: activeProject?.id || null,
           updatedAt: serverTimestamp(),
         });
@@ -695,7 +714,7 @@ export function DelivereeWorkspace() {
             <div className="do-section-head"><span>Recent</span><button aria-label="Search conversations" onClick={() => setSearchOpen((open) => !open)} type="button"><Search size={13} /></button></div>
             {searchOpen && <input aria-label="Search conversations" autoFocus onChange={(event) => setSearch(event.target.value)} placeholder="Search" value={search} />}
             {filteredConversations.slice(0, 8).map((conversation) => (
-              <button className={conversation.id === conversationId ? "is-active" : ""} key={conversation.id} onClick={() => { setConversationId(conversation.id); setSidebarOpen(false); }} type="button">
+              <button className={conversation.id === conversationId && conversationInContext ? "is-active" : ""} key={conversation.id} onClick={() => { setConversationId(conversation.id); navigate(conversation.contextEntityId ? `/work/projects/${conversation.contextEntityId}` : "/"); setSidebarOpen(false); }} type="button">
                 <MessageSquare size={13} /><span>{conversation.title || "New conversation"}</span><small>{timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
               </button>
             ))}
@@ -732,7 +751,7 @@ export function DelivereeWorkspace() {
 
         <div className="do-thread-viewport">
           <div className="do-thread">
-            {visibleMessages.length === 0 && !submitting ? (
+            {contextualMessages.length === 0 && !submitting ? (
               <div className="do-opening">
                 {renderLensArtifact()}
                 {!activeProject && lens.kind === "home" && (
@@ -750,7 +769,7 @@ export function DelivereeWorkspace() {
             ) : (
               <>
                 {activeProject && <div className="do-inline-context">Working in <strong>{entityTitle(activeProject)}</strong><span>{titleCase(normalizeDeliveryStage(activeProject.deliveryStage || activeProject.status))}</span></div>}
-                {visibleMessages.map((message) => (
+                {contextualMessages.map((message) => (
                   <article className={`do-message is-${message.role}`} key={message.id}>
                     {message.role === "user" ? <div className="do-user-message">{message.content}</div> : (
                       <div className="do-assistant-message">
