@@ -6,7 +6,7 @@ import {
   Layers, Briefcase, Zap, Activity, TrendingUp, Dumbbell, Brain, Sparkles, 
   ChevronRight, MessageSquare, Inbox,
   Clock, BookOpen, ArrowUp, ShieldCheck, Menu, X, PanelRight, Plus, Search,
-  MoreHorizontal
+  MoreHorizontal, Rocket
 } from 'lucide-react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from './lib/AuthContext';
@@ -35,6 +35,7 @@ const TasksList = lazyNamed(() => import('./components/TasksList'), 'TasksList')
 const TaskDetails = lazyNamed(() => import('./components/TaskDetails'), 'TaskDetails');
 const ProjectsList = lazyNamed(() => import('./components/ProjectsList'), 'ProjectsList');
 const ProjectDetails = lazyNamed(() => import('./components/ProjectDetails'), 'ProjectDetails');
+const DeliveryOS = lazyNamed(() => import('./components/DeliveryOS'), 'DeliveryOS');
 const PlaybookDetails = lazyNamed(() => import('./components/PlaybookDetails'), 'PlaybookDetails');
 const KnowledgeBase = lazyNamed(() => import('./components/KnowledgeBase'), 'KnowledgeBase');
 const SkillDetail = lazyNamed(() => import('./components/SkillDetail'), 'SkillDetail');
@@ -136,6 +137,7 @@ const SECTIONS = [
     items: [
       { to: "/work/action-board", label: "Action Board", icon: CheckSquare },
       { to: "/work/projects", label: "Projects & Deals", icon: Layers },
+      { to: "/work/delivery-os", label: "DelivereeOS", icon: Rocket },
       { to: "/work/agent-workspace", label: "Agent Workspace", icon: MessageSquare },
       { to: "/work/documents", label: "Documents", icon: BookOpen }
     ]
@@ -220,11 +222,18 @@ function sectionForPath(pathname: string) {
       eyebrow: "Company operating layer",
     };
   }
+  if (pathname.startsWith("/work/delivery-os")) {
+    return {
+      title: "DelivereeOS",
+      description: "AI delivery intake, portfolio governance, prompt operations, artifacts, support, and reviews.",
+      eyebrow: "AI delivery operating system",
+    };
+  }
   const section = SECTIONS.find((item) => isSectionActive(item, pathname));
   return {
     title: section?.title || "Workspace",
     description: section?.description || "Move between your work without changing context.",
-    eyebrow: section ? "Workspace module" : "Gazelle",
+    eyebrow: section ? "Workspace module" : "DelivereeOS",
   };
 }
 
@@ -317,12 +326,12 @@ function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex h-full flex-col">
           <div className="px-3.5 pb-2 pt-3.5">
             <Link className="gazelle-workspace-button" to="/boldi" onClick={() => setSidebarOpen(false)}>
-              <span className="gazelle-brand-mark">G</span>
+              <span className="gazelle-brand-mark">D</span>
               <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-[13px] font-semibold text-[#242720]">
                   {workspace?.name || "Personal Focus"}
                 </span>
-                <span className="block text-[10px] text-[#8a8e82]">Gazelle workspace</span>
+                <span className="block text-[10px] text-[#8a8e82]">DelivereeOS workspace</span>
               </span>
               <Sparkles className="h-3.5 w-3.5 text-[#7c8a6c]" />
             </Link>
@@ -621,10 +630,10 @@ export default function App() {
         <header className="relative z-10 flex h-16 items-center justify-between border-b border-black/[0.06] px-5 md:px-9">
           <div className="flex items-center gap-2.5">
             <div className="grid h-8 w-8 place-items-center rounded-[10px] bg-[#242821] text-xs font-bold text-white shadow-sm">
-              G
+              D
             </div>
             <div>
-              <p className="text-xs font-black tracking-[0.15em]">GAZELLE</p>
+              <p className="text-xs font-black tracking-[0.15em]">DELIVEREEOS</p>
               <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[#8b8f85]">by Boldr AI</p>
             </div>
           </div>
@@ -635,13 +644,13 @@ export default function App() {
         <main className="relative z-10 mx-auto grid min-h-[calc(100dvh-64px)] max-w-6xl items-center gap-12 px-6 py-12 md:grid-cols-[1.05fr_0.95fr] md:px-10">
           <section>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#748265]">
-              Your AI Chief of Staff
+              AI Delivery Operating System
             </p>
             <h1 className="mt-5 max-w-xl text-balance text-[clamp(42px,6vw,72px)] font-medium leading-[0.98] tracking-[-0.055em]">
-              Your work, with judgment.
+              AI delivery, with judgment.
             </h1>
             <p className="mt-6 max-w-lg text-[15px] leading-7 text-[#747970]">
-              Capture anything. Build realistic plans. Pressure-test commitments. Approve every action before it changes your system.
+              Capture AI opportunities, govern delivery, manage prompts and artifacts, and approve every risky action before it changes your system.
             </p>
             <button
               onClick={signIn}
@@ -728,6 +737,8 @@ export default function App() {
             <Route path="/work/action-board/:id" element={<TaskDetails />} />
             <Route path="/work/projects" element={<ProjectsList />} />
             <Route path="/work/projects/:id" element={<ProjectDetails />} />
+            <Route path="/work/delivery-os" element={<DeliveryOS />} />
+            <Route path="/work/delivery-os/:tab" element={<DeliveryOS />} />
             <Route path="/work/deals" element={<ProjectsList />} />
             <Route path="/work/agent-workspace" element={<WarRoom />} />
             <Route path="/work/agent-workspace/:id" element={<WarRoom />} />
@@ -782,6 +793,7 @@ export default function App() {
             <Route path="/settings/workspace" element={<WorkspaceSettings />} />
             <Route path="/settings/integrations" element={<Integrations />} />
             <Route path="/settings/integrations/notion" element={<NotionConnector />} />
+            <Route path="/settings/integrations/hermes" element={<Navigate to="/work/delivery-os/integrations" replace />} />
             <Route path="/settings/boldi" element={<BoldiSettings />} />
             <Route path="/settings/boldi/context" element={<GenericModulePage title="System Context" collectionName="system_context" entityName="Context File" />} />
             <Route path="/settings/boldi/context/:id" element={<GenericModuleDetail collectionName="system_context" />} />
@@ -828,6 +840,7 @@ export default function App() {
             <Route path="/work/tasks" element={<Navigate to="/work/action-board" replace />} />
             <Route path="/work/tasks/:id" element={<RedirectToTask />} />
             <Route path="/projects-deals" element={<Navigate to="/work/projects" replace />} />
+            <Route path="/delivery-os" element={<Navigate to="/work/delivery-os" replace />} />
             <Route path="/operations-hub" element={<Navigate to="/work" replace />} />
             
             <Route path="/weekly-plan" element={<Navigate to="/plan/week" replace />} />

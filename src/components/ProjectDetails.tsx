@@ -1,17 +1,17 @@
 import { motion } from "motion/react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, Loader2, Plus, Kanban, 
-  Settings, X, 
-  Calendar, Folder, Zap, Trash2, Link as LinkIcon, 
-  User, Tag, AlertTriangle, FileText, CheckCircle, 
-  TrendingUp, Bot, ShieldAlert, Sparkles, Archive
+import {
+  ArrowLeft, Loader2, Plus, Kanban,
+  Settings, X,
+  Calendar, Folder, Zap, Trash2, Link as LinkIcon,
+  User, Tag, AlertTriangle, FileText, CheckCircle,
+  TrendingUp, Bot, ShieldAlert, Sparkles, Archive, Rocket
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
-import { 
-  doc, collection, query, where, onSnapshot, 
-  updateDoc, deleteDoc, setDoc 
+import {
+  doc, collection, query, where, onSnapshot,
+  updateDoc, deleteDoc, setDoc
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { toggleTaskStatus } from "../lib/tasks";
@@ -21,8 +21,9 @@ import { ProjectMilestonesView } from "./ProjectMilestonesView";
 import { TasksList } from "./TasksList";
 import { getRoleForUser, canPerform } from "../lib/permissions";
 import { BoldiCoPilotModal } from "./BoldiCoPilotModal";
+import { ProjectDeliveryOSPanel } from "./ProjectDeliveryOSPanel";
 
-type ViewType = "overview" | "board" | "timeline" | "documents" | "reports";
+type ViewType = "overview" | "delivery_os" | "board" | "timeline" | "documents" | "reports";
 
 export function ProjectDetails() {
   const { id } = useParams();
@@ -43,7 +44,7 @@ export function ProjectDetails() {
   const [milestones, setMilestones] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCoPilotOpen, setIsCoPilotOpen] = useState(false);
-  
+
   // Navigation View
   const [currentView, setCurrentView] = useState<ViewType>("overview");
 
@@ -51,7 +52,7 @@ export function ProjectDetails() {
   const [isEditingStages, setIsEditingStages] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [newStageName, setNewStageName] = useState("");
-  
+
   // Custom Tag input
   const [newTag, setNewTag] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
@@ -98,9 +99,9 @@ export function ProjectDetails() {
 
     // Fetch related tasks
     const qTasks = query(
-      collection(db, "tasks"), 
-      where("userId", "==", user.uid), 
-      where("workspaceId", "==", workspace.id), 
+      collection(db, "tasks"),
+      where("userId", "==", user.uid),
+      where("workspaceId", "==", workspace.id),
       where("projectId", "==", id)
     );
     const unsubTasks = onSnapshot(qTasks, (snapshot) => {
@@ -114,9 +115,9 @@ export function ProjectDetails() {
 
     // Fetch related milestones
     const qMilestones = query(
-      collection(db, "milestones"), 
-      where("userId", "==", user.uid), 
-      where("workspaceId", "==", workspace.id), 
+      collection(db, "milestones"),
+      where("userId", "==", user.uid),
+      where("workspaceId", "==", workspace.id),
       where("projectId", "==", id)
     );
     const unsubMilestones = onSnapshot(qMilestones, (snapshot) => {
@@ -148,12 +149,12 @@ export function ProjectDetails() {
   const handleAddStage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStageName.trim() || !project) return;
-    
+
     const newStage = {
       id: "stage-" + Math.random().toString(36).substring(2, 9),
       name: newStageName.trim()
     };
-    
+
     try {
       await updateDoc(doc(db, "projects", project.id), {
         stages: [...projectStages, newStage]
@@ -231,7 +232,7 @@ export function ProjectDetails() {
         } else {
            const doneStage = projectStages.find((s: any) => s.name.toLowerCase() === 'done');
            await toggleTaskStatus({ ...task, userId: user?.uid });
-           
+
            const updateData: any = {};
            if (doneStage && task.stageId !== doneStage.id) {
              updateData.stageId = doneStage.id;
@@ -253,9 +254,9 @@ export function ProjectDetails() {
     try {
       const projData = { ...project };
       delete projData.id;
-      
+
       await deleteDoc(doc(db, "projects", project.id));
-      
+
       pushAction({
         id: `delete-project-${project.id}`,
         description: `Delete project "${project.title || 'Untitled'}"`,
@@ -266,7 +267,7 @@ export function ProjectDetails() {
           await deleteDoc(doc(db, "projects", project.id));
         }
       });
-      
+
       navigate("/work/projects");
     } catch (err) {
       console.error(err);
@@ -400,7 +401,7 @@ export function ProjectDetails() {
         throw new Error(details.error || "The configured AI provider is unavailable.");
       }
       const data = await response.json();
-      
+
       setReportTitle(`Executive Status Report - ${new Date().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`);
       setReportSummary(data.executiveSummary || "");
       setReportWins(data.wins || "");
@@ -473,10 +474,10 @@ export function ProjectDetails() {
 - Goals: ${project.description || "No description set"}
 
 Give me 3 concrete productivity strategies based on Carl Pullein's principles (protecting core work, daily 2+8, time sectors) to speed up execution.`;
-    
+
     // Dispatch custom event to trigger floating widget
-    window.dispatchEvent(new CustomEvent("open-boldi-assistant", { 
-      detail: { message: promptMessage } 
+    window.dispatchEvent(new CustomEvent("open-boldi-assistant", {
+      detail: { message: promptMessage }
     }));
   };
 
@@ -495,32 +496,32 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
   const unscheduledTasks = tasks.filter(t => !t.startDate && !t.dueDate);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }} 
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       className="gazelle-integrated-page p-4 max-w-6xl mx-auto pb-32 w-full"
     >
       <header className="mb-6 mt-4 bg-white p-5 md:p-6 rounded-[18px] border border-[#deded6] shadow-[0_8px_24px_rgba(30,35,25,0.04)] relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-start gap-4 justify-between">
           <div className="flex items-start gap-3">
-            <Link 
-              to="/work/projects" 
-              className="w-10 h-10 bg-gray-50 hover:bg-gray-100 rounded-xl flex justify-center items-center transition-all border border-gray-200 shrink-0 mt-1" 
+            <Link
+              to="/work/projects"
+              className="w-10 h-10 bg-gray-50 hover:bg-gray-100 rounded-xl flex justify-center items-center transition-all border border-gray-200 shrink-0 mt-1"
               title="Back to Projects"
             >
               <ArrowLeft className="w-5 h-5 text-gray-700" />
             </Link>
-            
+
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {/* Project/Deal indicator - 3 Macro Stages selection */}
                 <div className="relative">
-                  <select 
+                  <select
                     value={project.projectType || 'project'}
                     disabled={!canUpdateProject}
                     onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { projectType: e.target.value })}
                     className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer disabled:opacity-85 ${
-                      project.projectType === 'deal' ? 'bg-amber-50 text-amber-700 border-amber-200/50' : 
+                      project.projectType === 'deal' ? 'bg-amber-50 text-amber-700 border-amber-200/50' :
                       project.projectType === 'implementation' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/50' :
                       'bg-emerald-50 text-emerald-700 border-emerald-200/50'
                     }`}
@@ -533,7 +534,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                 {/* STATUS BADGE SELECT */}
                 <div className="relative">
-                  <select 
+                  <select
                     value={project.status || 'open'}
                     disabled={!canUpdateProject}
                     onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { status: e.target.value })}
@@ -550,13 +551,13 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                 {/* HEALTH BADGE SELECT */}
                 <div className="relative">
-                  <select 
+                  <select
                     value={project.health || ''}
                     disabled={!canUpdateProject}
                     onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { health: e.target.value })}
                     className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer disabled:opacity-85 ${
-                      project.health === 'on_track' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                      project.health === 'at_risk' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                      project.health === 'on_track' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      project.health === 'at_risk' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                       project.health === 'blocked' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'
                     }`}
                   >
@@ -569,11 +570,11 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                 {/* PRIORITY SELECT */}
                 <div className="relative">
-                  <select 
+                  <select
                     value={project.priority || 'medium'}
                     onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { priority: e.target.value })}
                     className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border focus:outline-none cursor-pointer ${
-                      project.priority === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' : 
+                      project.priority === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                       project.priority === 'low' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-600 border-gray-200'
                     }`}
                   >
@@ -585,7 +586,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                 {/* CATEGORY SELECT */}
                 <div className="relative">
-                  <select 
+                  <select
                     value={project.category || ''}
                     onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { category: e.target.value })}
                     className="bg-gray-50 hover:bg-gray-100 text-gray-600 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border border-gray-200 focus:outline-none cursor-pointer"
@@ -603,7 +604,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{project.title}</h1>
               <p className="text-gray-500 text-sm mt-1 max-w-2xl">{project.description || "No strategic overview written yet. Keep your focus high by adding notes."}</p>
-              
+
               {/* Tag Index bar */}
               <div className="flex flex-wrap items-center gap-1.5 mt-4">
                 <Tag className="w-3.5 h-3.5 text-gray-400" />
@@ -613,13 +614,13 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     <button onClick={() => handleRemoveTag(t)} className="text-gray-400 hover:text-red-500 font-bold ml-0.5 text-[9px]">&times;</button>
                   </span>
                 ))}
-                
+
                 {showTagInput ? (
                   <form onSubmit={handleAddTag} className="inline-flex gap-1">
-                    <input 
-                      type="text" 
-                      placeholder="tag..." 
-                      value={newTag} 
+                    <input
+                      type="text"
+                      placeholder="tag..."
+                      value={newTag}
                       onChange={e => setNewTag(e.target.value)}
                       className="bg-gray-50 border border-gray-300 rounded-full px-2 py-0.5 text-xs w-20 focus:outline-none"
                     />
@@ -638,28 +639,28 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
           {/* Action Panel */}
           <div className="flex flex-col gap-2 shrink-0 md:text-right mt-4 md:mt-0">
             <div className="flex flex-wrap items-center gap-2">
-              <button 
+              <button
                 onClick={() => setIsCoPilotOpen(true)}
                 className="bg-black hover:bg-gray-800 text-white px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
               >
                 <Bot className="w-3.5 h-3.5 text-white" /> Ask Gazelle
               </button>
 
-              <button 
+              <button
                 onClick={() => setShowStatusUpdateModal(true)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
               >
                 <Zap className="w-3.5 h-3.5" /> Log Update
               </button>
 
-              <button 
+              <button
                 onClick={handleAskBoldiAboutProject}
                 className="bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all"
               >
                 <Bot className="w-3.5 h-3.5 text-amber-600" /> Analyze
               </button>
 
-              <button 
+              <button
                 onClick={() => {
                   setShowReportModal(true);
                   handleGenerateAIReport(); // Auto generate draft
@@ -671,16 +672,16 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
             </div>
 
             <div className="text-xs text-gray-400 mt-1 md:pr-1 flex flex-col md:items-end">
-              <span>Owner: <input 
-                type="text" 
-                value={project.owner || ""} 
-                placeholder="Assign Owner" 
+              <span>Owner: <input
+                type="text"
+                value={project.owner || ""}
+                placeholder="Assign Owner"
                 onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { owner: e.target.value })}
                 className="bg-transparent border-b border-transparent hover:border-gray-200 focus:border-indigo-400 focus:outline-none px-1 text-gray-700 font-medium text-right max-w-[120px]"
               /></span>
-              <span>Target End: <input 
-                type="date" 
-                value={project.targetEndDate && /^\d{4}-\d{2}-\d{2}/.test(project.targetEndDate) ? project.targetEndDate.substring(0, 10) : ''} 
+              <span>Target End: <input
+                type="date"
+                value={project.targetEndDate && /^\d{4}-\d{2}-\d{2}/.test(project.targetEndDate) ? project.targetEndDate.substring(0, 10) : ''}
                 onChange={async (e) => await updateDoc(doc(db, "projects", project.id), { targetEndDate: e.target.value })}
                 className="bg-transparent border-none text-right cursor-pointer text-gray-600 max-w-[120px] focus:outline-none focus:ring-0 text-[11px]"
               /></span>
@@ -700,21 +701,21 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button 
+            <button
               onClick={() => setIsEditingStages(!isEditingStages)}
               className={`p-2 rounded-xl border transition-colors ${isEditingStages ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
               title="Pipeline Stages Config"
             >
               <Settings className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setShowAutomations(!showAutomations)}
               className={`p-2 rounded-xl border transition-colors ${showAutomations ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
               title="Workflow Automation"
             >
               <Zap className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={async () => {
                 if (!canArchiveProject) {
                   alert("You do not have permission to archive this project.");
@@ -728,7 +729,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
             >
               <Archive className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={handleDeleteProject}
               disabled={!canDeleteProject}
               className="p-2 rounded-xl border border-gray-200 bg-white text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
@@ -752,8 +753,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                    <div className="font-bold text-sm text-amber-900">{auto.name}</div>
                    <div className="text-xs font-semibold text-amber-700">WHEN: {auto.trigger} &rarr; THEN: {auto.action}</div>
                  </div>
-                 <input 
-                    type="checkbox" 
+                 <input
+                    type="checkbox"
                     checked={auto.active}
                     onChange={() => {
                       setAutomations(automations.map(a => a.id === auto.id ? { ...a, active: !a.active } : a))
@@ -784,10 +785,10 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               </div>
             ))}
             <form onSubmit={handleAddStage} className="flex gap-2 pt-2">
-              <input 
-                type="text" 
-                placeholder="Custom stage name..." 
-                value={newStageName} 
+              <input
+                type="text"
+                placeholder="Custom stage name..."
+                value={newStageName}
                 onChange={e => setNewStageName(e.target.value)}
                 className="flex-1 bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs focus:outline-none"
               />
@@ -798,31 +799,37 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
       )}
 
       <div className="flex bg-[#efeee8] p-1.5 rounded-[16px] w-full max-w-2xl mb-8 border border-[#deded6] shadow-inner overflow-x-auto">
-        <button 
+        <button
           onClick={() => setCurrentView("overview")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'overview' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <TrendingUp className="w-4 h-4" /> Overview
         </button>
-        <button 
+        <button
+          onClick={() => setCurrentView("delivery_os")}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'delivery_os' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+        >
+          <Rocket className="w-4 h-4" /> Delivery OS
+        </button>
+        <button
           onClick={() => setCurrentView("board")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'board' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <Kanban className="w-4 h-4" /> Board
         </button>
-        <button 
+        <button
           onClick={() => setCurrentView("timeline")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'timeline' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <Calendar className="w-4 h-4" /> Timeline
         </button>
-        <button 
+        <button
           onClick={() => setCurrentView("documents")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'documents' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
           <Folder className="w-4 h-4" /> Docs
         </button>
-        <button 
+        <button
           onClick={() => setCurrentView("reports")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'reports' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
         >
@@ -835,7 +842,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main left column: status logs & actions */}
           <div className="lg:col-span-2 space-y-6">
-            
+
             {/* Quick KPIs stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm text-center">
@@ -864,14 +871,14 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 <span>Immediate Next Actions</span>
                 <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full">Focused</span>
               </h3>
-              
+
               <div className="space-y-2.5">
                 {parentTasks.filter(t => t.status !== 'done').slice(0, 5).map(task => (
                   <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-all">
                     <div className="flex items-center gap-3">
-                      <input 
-                        type="checkbox" 
-                        checked={task.status === 'done'} 
+                      <input
+                        type="checkbox"
+                        checked={task.status === 'done'}
                         onChange={() => handleToggleTask(task.id)}
                         className="w-4 h-4 rounded text-indigo-600 focus:ring-0 cursor-pointer"
                       />
@@ -889,7 +896,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     </div>
                   </div>
                 ))}
-                
+
                 {parentTasks.filter(t => t.status !== 'done').length === 0 && (
                   <div className="text-center py-6 text-xs text-gray-400">No active tasks. Add tasks under the "Board" tab!</div>
                 )}
@@ -907,7 +914,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     <p className="text-xs text-gray-700 mt-0.5">{u.content}</p>
                   </div>
                 ))}
-                
+
                 {(project.statusUpdates || []).length === 0 && (
                   <div className="text-center py-4 text-xs text-gray-400">No status updates logged yet. Use "Log Update" above to record progress.</div>
                 )}
@@ -918,7 +925,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
           {/* Right column: Stakeholders & Metadata */}
           <div className="space-y-6">
-            
+
             {/* Health Checklist cockpit */}
             <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-1">
@@ -978,7 +985,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     <div className="text-gray-400 text-[10px]">Project Owner & Lead</div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3 text-gray-400">
                   <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold">
                     +
@@ -995,6 +1002,15 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
         </div>
       )}
 
+      {currentView === 'delivery_os' && (
+        <ProjectDeliveryOSPanel
+          canUpdateProject={canUpdateProject}
+          project={project}
+          user={user}
+          workspace={workspace}
+        />
+      )}
+
       {currentView === 'board' && (
         <TasksList hideCockpit={true} projectId={id} />
       )}
@@ -1008,12 +1024,12 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
             <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
               <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-4">Milestone checkpoints</h2>
-              <ProjectMilestonesView 
-                project={project} 
-                tasks={tasks} 
-                milestones={milestones} 
-                user={user} 
-                workspace={workspace} 
+              <ProjectMilestonesView
+                project={project}
+                tasks={tasks}
+                milestones={milestones}
+                user={user}
+                workspace={workspace}
                 canCreateMilestone={canCreateMilestone}
                 canCreateTask={canCreateTask}
                 canUpdateTask={canUpdateTask}
@@ -1026,17 +1042,17 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 <AlertTriangle className="w-4 h-4 text-amber-600" /> Date Planning Triage ({unscheduledTasks.length} unscheduled)
               </h3>
               <p className="text-xs text-amber-700 mb-4">Assign dates to unscheduled tasks below to pull them into your Gantt chart immediately.</p>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {unscheduledTasks.map(task => (
                   <div key={task.id} className="bg-white p-3 rounded-2xl shadow-sm border border-amber-100 flex items-center justify-between gap-4">
                     <span className="text-xs font-semibold text-gray-800 truncate flex-1">{task.title}</span>
                     <div className="flex gap-1.5 shrink-0">
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         onChange={async (e) => {
                           if (e.target.value) {
-                            await updateDoc(doc(db, "tasks", task.id), { 
+                            await updateDoc(doc(db, "tasks", task.id), {
                               startDate: e.target.value,
                               dueDate: e.target.value
                             });
@@ -1047,7 +1063,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                     </div>
                   </div>
                 ))}
-                
+
                 {unscheduledTasks.length === 0 && (
                   <div className="col-span-full text-center py-4 text-xs text-amber-800 font-medium">All tasks are scheduled! Perfect execution readiness.</div>
                 )}
@@ -1066,7 +1082,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Document & Resource Index</h3>
                    <p className="text-xs text-gray-400 mt-1">Keep project links, notes, meeting briefs, and working files in one place.</p>
                  </div>
-                 <button 
+                 <button
                    onClick={() => setShowAddDocModal(true)}
                    className="bg-black text-white px-3 py-1.5 text-xs font-bold rounded-xl flex items-center gap-1 hover:bg-gray-800 transition-all"
                  >
@@ -1077,7 +1093,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  {(project.documents || []).map((docObj: any) => (
                     <div key={docObj.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col justify-between hover:border-gray-200 transition-all relative">
-                      <button 
+                      <button
                         onClick={() => handleDeleteDocument(docObj.id)}
                         className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 rounded"
                         title="Remove link"
@@ -1103,10 +1119,10 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                       </div>
 
                       {docObj.url && (
-                        <a 
-                          href={docObj.url} 
-                          target="_blank" 
-                          rel="noreferrer" 
+                        <a
+                          href={docObj.url}
+                          target="_blank"
+                          rel="noreferrer"
                           className="mt-4 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
                         >
                           Open Resource &rarr;
@@ -1128,27 +1144,27 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                <div className="absolute top-0 right-0 p-4">
                  <Folder className="w-8 h-8 text-green-600/10" />
                </div>
-               
+
                <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-2">Google Drive Folder</h3>
-               
+
                {project.googleDriveFolder ? (
                  <div className="space-y-4">
                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
                      <Folder className="w-8 h-8 text-emerald-600" />
                      <div className="truncate">
                        <div className="font-bold text-xs text-emerald-900">Connected GDrive Workspace</div>
-                       <a 
-                         href={project.googleDriveFolder} 
-                         target="_blank" 
-                         rel="noreferrer" 
+                       <a
+                         href={project.googleDriveFolder}
+                         target="_blank"
+                         rel="noreferrer"
                          className="text-[10px] text-emerald-700 underline truncate block"
                        >
                          {project.googleDriveFolder}
                        </a>
                      </div>
                    </div>
-                   
-                   <button 
+
+                   <button
                      onClick={async () => await updateDoc(doc(db, "projects", project.id), { googleDriveFolder: null })}
                      className="text-[10px] text-red-500 font-bold hover:underline"
                    >
@@ -1158,15 +1174,15 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                ) : (
                  <form onSubmit={handleConnectGoogleDrive} className="space-y-3">
                    <p className="text-xs text-gray-400">Connect a dedicated Google Drive folder to synchronize stakeholders briefs and PDFs.</p>
-                   <input 
-                     type="url" 
-                     placeholder="Paste Google Drive folder URL..." 
+                   <input
+                     type="url"
+                     placeholder="Paste Google Drive folder URL..."
                      value={gdriveLinkInput}
                      onChange={e => setGdriveLinkInput(e.target.value)}
                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-green-400 focus:border-green-400"
                    />
-                   <button 
-                     type="submit" 
+                   <button
+                     type="submit"
                      disabled={!gdriveLinkInput.trim()}
                      className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-xs font-bold disabled:opacity-50 transition-all"
                    >
@@ -1187,7 +1203,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Status report history</h3>
                  <p className="text-xs text-gray-400 mt-1">Review saved executive updates and project decisions.</p>
                </div>
-               <button 
+               <button
                  onClick={() => {
                    setShowReportModal(true);
                    handleGenerateAIReport(); // Auto generate draft
@@ -1201,7 +1217,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
              <div className="space-y-4">
                {(project.statusReports || []).map((rep: any) => (
                   <div key={rep.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-150 relative">
-                    <button 
+                    <button
                       onClick={() => handleDeleteStatusReport(rep.id)}
                       className="absolute top-4 right-4 text-gray-400 hover:text-red-500 p-1"
                       title="Delete Report"
@@ -1222,7 +1238,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                         <h5 className="text-[10px] uppercase font-black text-indigo-600 tracking-wider mb-1">Executive Summary</h5>
                         <p className="text-xs text-gray-700 whitespace-pre-line leading-relaxed">{rep.summary}</p>
                       </div>
-                      
+
                       <div>
                         <h5 className="text-[10px] uppercase font-black text-emerald-600 tracking-wider mb-1">Key Wins</h5>
                         <p className="text-xs text-gray-700 whitespace-pre-line leading-relaxed">{rep.wins}</p>
@@ -1255,7 +1271,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
       )}
 
       {/* MODALS */}
-      
+
       {/* 1. QUICK STATUS UPDATE LOG MODAL */}
       {showStatusUpdateModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1264,9 +1280,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               <h3 className="font-bold text-gray-900">Log Quick Status Update</h3>
               <button onClick={() => setShowStatusUpdateModal(false)} className="text-gray-400 hover:text-black"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <form onSubmit={handleSaveQuickStatusUpdate} className="space-y-4">
-              <textarea 
+              <textarea
                 placeholder="Log progress, design decisions, or current work sector... (e.g., Kicked off Figma workshop with the design lead.)"
                 value={statusUpdateText}
                 onChange={e => setStatusUpdateText(e.target.value)}
@@ -1274,8 +1290,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 required
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl text-xs font-bold"
               >
                 Post Status Log
@@ -1293,21 +1309,21 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               <h3 className="font-bold text-gray-900">Add Project Document</h3>
               <button onClick={() => setShowAddDocModal(false)} className="text-gray-400 hover:text-black"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <form onSubmit={handleSaveDocument} className="space-y-4 text-xs">
               <div>
                 <label className="block text-gray-500 font-bold mb-1">Doc Type</label>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
-                  <button 
-                    type="button" 
-                    onClick={() => setDocType("link")} 
+                  <button
+                    type="button"
+                    onClick={() => setDocType("link")}
                     className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold ${docType === 'link' ? 'bg-white text-black shadow-sm' : 'text-gray-500'}`}
                   >
                     Link/URL
                   </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setDocType("note")} 
+                  <button
+                    type="button"
+                    onClick={() => setDocType("note")}
                     className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold ${docType === 'note' ? 'bg-white text-black shadow-sm' : 'text-gray-500'}`}
                   >
                     Workspace Note
@@ -1317,9 +1333,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
               <div>
                 <label className="block text-gray-500 font-bold mb-1">Document Name</label>
-                <input 
-                  type="text" 
-                  placeholder="e.g. Figma Prototype Link" 
+                <input
+                  type="text"
+                  placeholder="e.g. Figma Prototype Link"
                   value={docName}
                   onChange={e => setDocName(e.target.value)}
                   required
@@ -1330,9 +1346,9 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               {docType === "link" ? (
                 <div>
                   <label className="block text-gray-500 font-bold mb-1">URL Link</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://example.com" 
+                  <input
+                    type="url"
+                    placeholder="https://example.com"
                     value={docUrl}
                     onChange={e => setDocUrl(e.target.value)}
                     required={docType === "link"}
@@ -1342,8 +1358,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
               ) : (
                 <div>
                   <label className="block text-gray-500 font-bold mb-1">Note Content</label>
-                  <textarea 
-                    placeholder="Write your note/memo details here..." 
+                  <textarea
+                    placeholder="Write your note/memo details here..."
                     value={docNoteContent}
                     onChange={e => setDocNoteContent(e.target.value)}
                     required={docType === "note"}
@@ -1353,8 +1369,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 </div>
               )}
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="w-full bg-black hover:bg-gray-800 text-white py-2.5 rounded-xl text-xs font-bold"
               >
                 Add to Index
@@ -1395,8 +1411,8 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 )}
                 <div>
                   <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Report Title</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={reportTitle}
                     onChange={e => setReportTitle(e.target.value)}
                     required
@@ -1407,7 +1423,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Executive Summary</label>
-                    <textarea 
+                    <textarea
                       value={reportSummary}
                       onChange={e => setReportSummary(e.target.value)}
                       rows={4}
@@ -1417,7 +1433,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                   <div>
                     <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Key Achievements & Wins</label>
-                    <textarea 
+                    <textarea
                       value={reportWins}
                       onChange={e => setReportWins(e.target.value)}
                       rows={4}
@@ -1427,7 +1443,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                   <div>
                     <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Current Blockers</label>
-                    <textarea 
+                    <textarea
                       value={reportBlockers}
                       onChange={e => setReportBlockers(e.target.value)}
                       rows={3}
@@ -1437,7 +1453,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                   <div>
                     <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Identified Future Risks</label>
-                    <textarea 
+                    <textarea
                       value={reportRisks}
                       onChange={e => setReportRisks(e.target.value)}
                       rows={3}
@@ -1447,7 +1463,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
 
                   <div className="md:col-span-2">
                     <label className="block text-gray-500 font-black uppercase tracking-wider text-[10px] mb-1">Immediate Next Actions & Priorities</label>
-                    <textarea 
+                    <textarea
                       value={reportNextSteps}
                       onChange={e => setReportNextSteps(e.target.value)}
                       rows={3}
@@ -1457,15 +1473,15 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t border-gray-100">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleGenerateAIReport}
                     className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl font-bold border border-indigo-200"
                   >
                     Regenerate AI Draft
                   </button>
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="flex-1 bg-black hover:bg-gray-800 text-white py-2.5 rounded-xl font-bold text-center"
                   >
                     Save & Publish Report

@@ -10,7 +10,7 @@ interface ReviewCandidateCardProps {
   onProcessed: () => void;
 }
 
-type DestinationType = "task" | "someday" | "decision" | "knowledge" | "waiting_for" | "skill" | "playbook" | "project";
+type DestinationType = "task" | "someday" | "decision" | "knowledge" | "waiting_for" | "skill" | "playbook" | "project" | "ai_initiative";
 
 export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateCardProps) {
   const { user, workspace } = useAuth();
@@ -28,6 +28,7 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
     if (t === "skill" || t === "ai_skill") return "skill";
     if (t === "playbook") return "playbook";
     if (t === "project") return "project";
+    if (t === "ai_initiative" || t === "ai opportunity" || t === "ai_opportunity") return "ai_initiative";
     return "task";
   });
 
@@ -164,6 +165,22 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
           description: notes.trim(),
         };
         createdRef = await addDoc(collection(db, "projects"), projectPayload);
+      } else if (type === "ai_initiative") {
+        const initiativePayload = {
+          ...basePayload,
+          description: notes.trim(),
+          businessProblem: candidate.proposed?.businessProblem || notes.trim(),
+          expectedBusinessImpact: candidate.proposed?.expectedBusinessImpact || "",
+          clientName: candidate.proposed?.clientName || "",
+          urgency: candidate.proposed?.urgency || "medium",
+          strategicAlignment: candidate.proposed?.strategicAlignment || "medium",
+          complexity: candidate.proposed?.complexity || "medium",
+          risk: candidate.proposed?.risk || "medium",
+          reusability: candidate.proposed?.reusability || "medium",
+          recommendedDecision: "needs_more_info",
+          decisionReason: "Created from Needs Review. Complete scoring in DelivereeOS Intake before project conversion.",
+        };
+        createdRef = await addDoc(collection(db, "ai_initiatives"), initiativePayload);
       }
 
       // Record bidirectional link if created successfully
@@ -244,7 +261,7 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
       {/* Segmented Destination Selector */}
       <div className="space-y-1 pl-2">
         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Assign Destination</label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-9 gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200">
           <button
             type="button"
             onClick={() => setType("task")}
@@ -314,6 +331,16 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
           >
             <Briefcase className="w-3.5 h-3.5" />
             Project
+          </button>
+          <button
+            type="button"
+            onClick={() => setType("ai_initiative")}
+            className={`py-1.5 px-1 rounded-lg text-[9px] font-black flex flex-col items-center gap-1 transition-all ${
+              type === "ai_initiative" ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-black"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            AI Init
           </button>
           <button
             type="button"

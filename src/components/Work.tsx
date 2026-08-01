@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { ChevronRight, CheckSquare, Folders, HelpCircle, BrainCircuit, BookOpen, Users, Brain, MessageSquare, Briefcase } from "lucide-react";
+import { ChevronRight, CheckSquare, Folders, HelpCircle, BrainCircuit, BookOpen, Users, Brain, MessageSquare, Briefcase, Rocket } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
@@ -37,6 +37,7 @@ export function Work() {
   const sections = [
     { title: "Action Board", count: taskCount !== null ? `${taskCount} open tasks` : "Loading...", icon: CheckSquare, color: "text-indigo-600", bg: "bg-indigo-50", implemented: true, path: "/work/tasks" },
     { title: "Projects & Deals", count: "Portfolio control", icon: Folders, color: "text-purple-600", bg: "bg-purple-50", implemented: true, path: "/work/projects" },
+    { title: "DelivereeOS", count: "AI delivery operating layer", icon: Rocket, color: "text-lime-700", bg: "bg-lime-50", implemented: true, path: "/work/delivery-os" },
     { title: "Agent Workspace", count: "Interactive multi-agent cockpit", icon: MessageSquare, color: "text-rose-600", bg: "bg-rose-50", implemented: true, path: "/work/agent-workspace" },
     { title: "Stakeholders", count: stakeholderCount !== null ? `${stakeholderCount} active` : "Loading...", icon: Users, color: "text-emerald-600", bg: "bg-emerald-50", implemented: true, path: "/work/stakeholders" },
     { title: "Playbooks", count: "Operational SOPs", icon: HelpCircle, color: "text-teal-600", bg: "bg-teal-50", implemented: true, path: "/capture/documents?tab=playbooks" },
@@ -56,6 +57,7 @@ export function Work() {
       <div className="flex md:hidden gap-1 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-none border-b border-b-gray-100">
         <button onClick={() => navigate("/work/tasks")} className="px-3 py-1.5 bg-black text-white rounded-full text-xs font-semibold whitespace-nowrap">Action Board</button>
         <button onClick={() => navigate("/work/projects")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Projects</button>
+        <button onClick={() => navigate("/work/delivery-os")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">DelivereeOS</button>
         <button onClick={() => navigate("/work")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Operations</button>
         <button onClick={() => navigate("/capture/documents")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Documents Hub</button>
         <button onClick={() => navigate("/work/agent-workspace")} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold whitespace-nowrap">Agent Workspace</button>
