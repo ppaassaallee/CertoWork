@@ -159,6 +159,15 @@ function groundedCitations(query, workspaceContext) {
   ];
   const ranked = [];
 
+  if (workspaceContext?.activeProject?.id) {
+    ranked.push({
+      id: String(workspaceContext.activeProject.id),
+      title: String(workspaceContext.activeProject.title || workspaceContext.activeProject.name || "Active project"),
+      type: "project",
+      score: 100,
+    });
+  }
+
   for (const [type, values] of sources) {
     for (const item of Array.isArray(values) ? values : []) {
       const title = item.title || item.name || "Untitled";
@@ -177,8 +186,15 @@ function groundedCitations(query, workspaceContext) {
     }
   }
 
+  const seen = new Set();
   return ranked
     .sort((left, right) => right.score - left.score)
+    .filter((candidate) => {
+      const key = `${candidate.type}:${candidate.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, 6)
     .map(({ id, title, type }) => ({ id, title, type }));
 }
@@ -213,6 +229,7 @@ Product behavior:
 - Speak in delivery language: projects, issues, owners, stages, dependencies, gates, readiness, evidence, risks, and decisions.
 - Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks for portfolio context.
+- When the active project includes resolvedDeliveryStage, use that normalized lifecycle stage instead of its legacy status field.
 - Use the supplied workspace records as the source of truth. Say "Not enough data" when evidence is missing.
 - Treat tasks as delivery issues. Do not introduce personal productivity modules, life planning, habits, workouts, or Gazelle terminology.
 - The UI is conversational: give the user a next move in plain language instead of telling them to open another module.

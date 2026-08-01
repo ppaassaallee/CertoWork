@@ -444,7 +444,12 @@ export function DelivereeWorkspace() {
             judgment: nextJudgment,
             mode: "delivery_co_work",
             activeLens: lens,
-            activeProject: activeProject || null,
+            activeProject: activeProject
+              ? {
+                  ...activeProject,
+                  resolvedDeliveryStage: normalizeDeliveryStage(activeProject.deliveryStage || activeProject.status),
+                }
+              : null,
             pendingReviewCount: reviewItems.length,
             userId: user.uid,
             workspaceId: workspace.id,
