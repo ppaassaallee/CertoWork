@@ -28,7 +28,7 @@ test("Sites worker reports an offline-safe health state without an API key", asy
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     ok: true,
-    service: "gazelle-codex-sites",
+    service: "delivereeos-codex-sites",
     aiProvider: "offline-safe",
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Gazelle production edge entry point for Codex Sites.
+ * DelivereeOS production edge entry point for Codex Sites.
  *
  * The existing Express server remains available for local/legacy operation.
  * This adapter provides the production SPA shell and the conversation-first
@@ -206,23 +206,32 @@ function compactEvidence(citations, workspaceContext) {
 
 function assistantInstructions(body, citations) {
   const context = body.workspaceContext || {};
-  return `You are Gazelle's accountable Chief of Staff: concise, practical, warm, and willing to challenge overload.
+  return `You are DelivereeOS, a conversational AI delivery operating system. You combine the clarity of a strong delivery lead with the structured discipline of Jira, but the user interacts with you through one continuous conversation.
 
-Operating system:
-- Use COD: Collect, Organize, Do.
-- Organize work by time horizon and protect Core Work.
-- Daily planning uses 2 Must Dos, up to 8 Should Dos, then optional Could Dos.
-- Weekly planning is forward-looking: theme, top 3 objectives, core work, projects, personal life, radar, risks, not-this-week, and first actions.
-- Respect calendar reality, buffers, sleep, recovery, and work-in-progress limits.
+Product behavior:
+- Help run AI initiatives from intake through assessment, planning, delivery, UAT, production, and support.
+- Speak in delivery language: projects, issues, owners, stages, dependencies, gates, readiness, evidence, risks, and decisions.
+- Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
+- When a project is active, keep the answer scoped to that project unless the user explicitly asks for portfolio context.
+- Use the supplied workspace records as the source of truth. Say "Not enough data" when evidence is missing.
+- Treat tasks as delivery issues. Do not introduce personal productivity modules, life planning, habits, workouts, or Gazelle terminology.
+- The UI is conversational: give the user a next move in plain language instead of telling them to open another module.
 
 Safety and judgment:
 - Treat the deterministic judgment preflight as evidence. Never hide blocking or warning signals.
 - Distinguish what the user wants to hear from what they need to hear.
 - The user retains override authority.
 - You may propose actions, but never claim they were executed.
-- Any mutation must be returned as an actionPlan for explicit approval and must be reversible where possible.
+- Any workspace mutation must be returned as an actionPlan for explicit approval. A create_task action means create a delivery issue.
 - Never claim an external integration exists unless it is present in the supplied evidence.
-- Do not mention Google AI Studio, Gemini, HubSpot, or pretend to have contacted anyone.
+- Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
+
+Active conversational context:
+${JSON.stringify({
+  lens: context.activeLens || { kind: "home" },
+  project: context.activeProject || null,
+  pendingReviewCount: context.pendingReviewCount || 0,
+})}
 
 Current deterministic judgment:
 ${JSON.stringify(context.judgment || { verdict: "not_run", signals: [] })}
@@ -241,7 +250,7 @@ ${JSON.stringify(compactEvidence(citations, context))}
 Return one valid JSON object and no Markdown fence:
 {
   "reply": "A concise, useful answer. Markdown inside this string is allowed.",
-  "toolName": "optional bounded agent or tool name",
+  "toolName": "delivery_orchestrator",
   "actionPlan": {
     "title": "string",
     "summary": "string",
@@ -255,7 +264,7 @@ Return one valid JSON object and no Markdown fence:
       "confidence": 0.9
     }]
   },
-  "suggestedChips": ["exactly four short contextual next prompts"],
+  "suggestedChips": ["two to four short contextual next prompts"],
   "citations": [{"id": "string", "title": "string", "type": "string"}]
 }
 Omit actionPlan when no action is being proposed. Use only supplied citation IDs.`;
@@ -267,7 +276,7 @@ function normalizeAssistantResult(result, citations, model) {
   }
   const normalized = {
     reply: result.reply.trim(),
-    toolName: typeof result.toolName === "string" ? result.toolName : "chief_of_staff_orchestrator",
+    toolName: typeof result.toolName === "string" ? result.toolName : "delivery_orchestrator",
     suggestedChips: Array.isArray(result.suggestedChips)
       ? result.suggestedChips.slice(0, 4).map(String)
       : [],
@@ -329,7 +338,7 @@ async function chat(request, env) {
     return json(
       {
         error:
-          "OpenAI is not configured yet. Gazelle preserved your capture and switched to offline-safe judgment.",
+          "OpenAI is not configured for this DelivereeOS deployment yet.",
         code: "OPENAI_NOT_CONFIGURED",
       },
       503,
@@ -355,7 +364,7 @@ async function chat(request, env) {
           {
             role: "user",
             content:
-              "Gazelle response contract: return exactly one valid JSON object matching the provided instructions.",
+              "DelivereeOS response contract: return exactly one valid JSON object matching the provided instructions.",
           },
           ...body.messages.map((message) => ({
             role: message.role,
@@ -466,7 +475,7 @@ const worker = {
     if (request.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/health")) {
       return json({
         ok: true,
-        service: "gazelle-codex-sites",
+    service: "delivereeos-codex-sites",
         aiProvider: env.OPENAI_API_KEY ? "openai" : "offline-safe",
       });
     }
