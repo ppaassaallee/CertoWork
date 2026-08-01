@@ -653,6 +653,81 @@ service cloud.firestore {
     match /strategic_alignment_suggestions/{id} { allow read, write: if isSignedIn(); }
     match /strategic_alerts/{id} { allow read, write: if isSignedIn(); }
 
+    function canCreateUserOwnedRecord(data) {
+      return isSignedIn()
+        && data.userId is string
+        && data.userId == request.auth.uid
+        && (!('workspaceId' in data) || data.workspaceId is string);
+    }
+
+    function canAccessUserOwnedRecord(data) {
+      return isSignedIn()
+        && data.userId is string
+        && data.userId == request.auth.uid;
+    }
+
+    function preservesUserOwnedRecord(data) {
+      return canCreateUserOwnedRecord(data)
+        && data.userId == resource.data.userId
+        && (!('workspaceId' in resource.data) || !('workspaceId' in data) || data.workspaceId == resource.data.workspaceId);
+    }
+
+    match /ai_initiatives/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /prompt_assets/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /prompt_versions/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /ai_artifacts/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /support_cases/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /delivery_reviews/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /delivery_gates/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
+    match /integration_configs/{id} {
+      allow get, list: if canAccessUserOwnedRecord(resource.data);
+      allow create: if isValidId(id) && canCreateUserOwnedRecord(incoming());
+      allow update: if isValidId(id) && canAccessUserOwnedRecord(resource.data) && preservesUserOwnedRecord(incoming());
+      allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
+    }
+
     match /workspace_members/{memberId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)));
       allow create, update: if isSignedIn() && (
