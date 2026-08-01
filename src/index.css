@@ -364,6 +364,7 @@ button { color: inherit; }
 
 @media (max-width: 760px) {
   .do-shell { display: block; }
+  .do-main { height: 100dvh; }
   .do-sidebar { position: fixed; z-index: 70; top: 0; bottom: 0; left: 0; width: min(86vw, 300px); transform: translateX(-100%); box-shadow: 18px 0 50px rgba(25, 38, 30, .14); transition: transform .2s ease; }
   .do-sidebar.is-open { transform: translateX(0); }
   .do-mobile-close { display: grid; place-items: center; }
