@@ -260,8 +260,9 @@ export function DelivereeWorkspace() {
   }, [conversationId, user, workspace]);
 
   useEffect(() => {
+    if (["work", "review", "settings"].includes(lens.kind) && !submitting && !streamed) return;
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, streamed, submitting]);
+  }, [lens.kind, messages, streamed, submitting]);
 
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: 0, behavior: "smooth" });
