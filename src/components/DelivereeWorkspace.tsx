@@ -58,7 +58,7 @@ import {
   conversationTaskIds,
   type ConversationScopeType,
 } from "../lib/conversationScope";
-import { ProjectCommandCenter, ProjectRecordModal } from "./ProjectSurfaces";
+import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 
 type Conversation = {
   id: string;
@@ -84,7 +84,7 @@ type Message = {
   offline?: boolean;
 };
 
-type Panel = "today" | "projects" | "approvals" | null;
+type Panel = "today" | "projects" | "project" | "approvals" | null;
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
@@ -299,7 +299,7 @@ export function DelivereeWorkspace() {
   const [search, setSearch] = useState("");
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
-  const [projectModalId, setProjectModalId] = useState<string | null>(null);
+  const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [commandCenterOpen, setCommandCenterOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -424,9 +424,9 @@ export function DelivereeWorkspace() {
     )),
     [contextTaskIds, directContextProjectIds, openTasks],
   );
-  const modalProject = useMemo(
-    () => projects.find((project) => project.id === projectModalId) || null,
-    [projectModalId, projects],
+  const consoleProject = useMemo(
+    () => projects.find((project) => project.id === projectConsoleId) || primaryProject || activeProject || null,
+    [activeProject, primaryProject, projectConsoleId, projects],
   );
   const projectDocuments = useMemo(
     () => knowledgeItems.filter((item) => contextProjectIds.includes(item.projectId) && item.status !== "archived"),
@@ -968,7 +968,8 @@ export function DelivereeWorkspace() {
   const openProjectRecord = (project: any) => {
     selectProjectContext(project);
     setCommandCenterOpen(false);
-    setProjectModalId(project.id);
+    setProjectConsoleId(project.id);
+    setPanel("project");
   };
 
   const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
@@ -977,7 +978,10 @@ export function DelivereeWorkspace() {
 
   const archiveProject = async (project: any) => {
     await updateProject(project.id, { status: "archived", archivedAt: serverTimestamp() });
-    if (projectModalId === project.id) setProjectModalId(null);
+    if (projectConsoleId === project.id) {
+      setProjectConsoleId(null);
+      setPanel(null);
+    }
     if (activeProject?.id === project.id) navigate("/");
     setNotice(`${entityTitle(project)} archived. Its history is preserved.`);
   };
@@ -1160,6 +1164,18 @@ export function DelivereeWorkspace() {
             <span>{currentContextLabel}</span><ChevronRight size={13} />
           </button>
           <div className="do-header-actions">
+            {primaryProject && (
+              <button
+                className={`do-header-button ${panel === "project" ? "is-active" : ""}`}
+                onClick={() => {
+                  setProjectConsoleId(primaryProject.id);
+                  setPanel(panel === "project" ? null : "project");
+                }}
+                type="button"
+              >
+                <Folder size={15} /><span>Project console</span>
+              </button>
+            )}
             <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
             <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Drafts</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
           </div>
@@ -1190,7 +1206,7 @@ export function DelivereeWorkspace() {
                   <div className="do-project-pulse">
                     <span>{projectTasks.length} open in context</span>
                     <span>{currentContextLabel}</span>
-                    {primaryProject && <button onClick={() => openProjectRecord(primaryProject)} type="button">Open project</button>}
+                    {primaryProject && <button onClick={() => openProjectRecord(primaryProject)} type="button">Project console</button>}
                   </div>
                 )}
 
@@ -1275,16 +1291,37 @@ export function DelivereeWorkspace() {
         </div>
       </main>
 
-      <aside className={`do-panel ${panel ? "is-open" : ""}`} aria-hidden={!panel}>
+      <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
         <div className="do-panel-head">
           <div>
-            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : "Drafts"}</h2>
+            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : "CONTROL"}</span>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : "Drafts"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
 
         <div className="do-panel-body">
+          {panel === "project" && (
+            consoleProject ? (
+              <ProjectConsolePanel
+                documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
+                milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
+                onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}
+                onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
+                onAddTask={(title, status) => addProjectTask(consoleProject.id, title, status)}
+                onArchiveProject={archiveProject}
+                onAsk={setComposer}
+                onUpdateProject={updateProject}
+                onUpdateTask={updateProjectTask}
+                project={consoleProject}
+                risks={risks.filter((item) => item.projectId === consoleProject.id)}
+                tasks={tasks.filter((item) => item.projectId === consoleProject.id)}
+              />
+            ) : (
+              <div className="do-panel-empty"><Folder size={20} /><strong>No project selected.</strong><span>Choose a project from the sidebar, then open its console.</span></div>
+            )
+          )}
+
           {panel === "today" && (
             <>
               <p className="do-panel-intro">Only the work that may need your attention now.</p>
@@ -1326,7 +1363,7 @@ export function DelivereeWorkspace() {
                     return <button className={selected ? "is-selected" : ""} key={task.id} onClick={() => updateConversationContext(directContextProjectIds, selected ? contextTaskIds.filter((id) => id !== task.id) : [...contextTaskIds, task.id])} type="button"><ListTodo size={14} /><span><strong>{entityTitle(task)}</strong><small>{task.projectId ? entityTitle(projects.find((project) => project.id === task.projectId)) : "No project"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
                   })}
               </div>
-              {primaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(primaryProject)} type="button"><Folder size={15} /> Open {entityTitle(primaryProject)}</button>}
+              {primaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(primaryProject)} type="button"><Folder size={15} /> Open project console</button>}
               <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
               <button className="do-panel-secondary" onClick={() => { setPanel(null); setCommandCenterOpen(true); }} type="button">Project command center</button>
             </>
@@ -1370,24 +1407,6 @@ export function DelivereeWorkspace() {
         />
       )}
 
-      {modalProject && (
-        <ProjectRecordModal
-          key={modalProject.id}
-          documents={knowledgeItems.filter((item) => item.projectId === modalProject.id && item.status !== "archived")}
-          milestones={milestones.filter((item) => item.projectId === modalProject.id)}
-          onAddMilestone={(title) => addProjectMilestone(modalProject.id, title)}
-          onAddRisk={(title) => addProjectRisk(modalProject.id, title)}
-          onAddTask={(title, status) => addProjectTask(modalProject.id, title, status)}
-          onArchiveProject={archiveProject}
-          onAsk={setComposer}
-          onClose={() => setProjectModalId(null)}
-          onUpdateProject={updateProject}
-          onUpdateTask={updateProjectTask}
-          project={modalProject}
-          risks={risks.filter((item) => item.projectId === modalProject.id)}
-          tasks={tasks.filter((item) => item.projectId === modalProject.id)}
-        />
-      )}
     </div>
   );
 }

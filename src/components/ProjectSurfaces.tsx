@@ -295,6 +295,180 @@ export function ProjectRecordModal({
   );
 }
 
+export function ProjectConsolePanel({
+  project,
+  tasks,
+  milestones,
+  risks,
+  documents,
+  onAsk,
+  onUpdateProject,
+  onArchiveProject,
+  onAddTask,
+  onUpdateTask,
+  onAddMilestone,
+  onAddRisk,
+}: {
+  project: any;
+  tasks: any[];
+  milestones: any[];
+  risks: any[];
+  documents: any[];
+  onAsk: (prompt: string) => void;
+  onUpdateProject: SharedProjectActions["onUpdateProject"];
+  onArchiveProject: SharedProjectActions["onArchiveProject"];
+  onAddTask: (title: string, status: WorkLane) => Promise<void> | void;
+  onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
+  onAddMilestone: (title: string) => Promise<void> | void;
+  onAddRisk: (title: string) => Promise<void> | void;
+}) {
+  const [tab, setTab] = useState<"brief" | "plan" | "work" | "risks" | "docs">("brief");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [milestoneTitle, setMilestoneTitle] = useState("");
+  const [riskTitle, setRiskTitle] = useState("");
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const methodology = String(project.methodology || "scrum").toLowerCase();
+  const currentHealth = projectHealth(project, tasks, risks);
+  const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
+  const openMilestones = milestones.filter((item) => String(item.status || "").toLowerCase() !== "completed");
+  const blockedTasks = tasks.filter((task) => taskWorkLane(task) === "blocked");
+  const lanes = useMemo(() => ({
+    backlog: tasks.filter((task) => taskWorkLane(task) === "backlog"),
+    in_progress: tasks.filter((task) => taskWorkLane(task) === "in_progress"),
+    blocked: blockedTasks,
+    done: tasks.filter((task) => taskWorkLane(task) === "done"),
+  }), [blockedTasks, tasks]);
+
+  useEffect(() => {
+    setTab("brief");
+    setArchiveConfirm(false);
+  }, [project.id]);
+
+  const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
+  const submitTask = async () => {
+    if (!taskTitle.trim()) return;
+    await onAddTask(taskTitle.trim(), "backlog");
+    setTaskTitle("");
+  };
+  const nextMilestone = openMilestones[0];
+  const nextRisk = risks.find((risk) => String(risk.status || "open").toLowerCase() !== "closed") || blockedTasks[0];
+
+  return (
+    <section className="do-project-console" data-testid="project-console">
+      <div className="do-console-hero">
+        <div>
+          <span className="do-project-card-kicker">PROJECT CONSOLE</span>
+          <h3>{projectTitle(project)}</h3>
+          <p>{project.outcome || project.objective || project.description || "Define the outcome so every conversation and work item points to the same finish line."}</p>
+        </div>
+        <button aria-label={isProjectFavorite(project) ? "Remove from favorites" : "Add to favorites"} className={isProjectFavorite(project) ? "is-favorite" : ""} onClick={() => update({ favorite: !isProjectFavorite(project) })} type="button"><Star fill={isProjectFavorite(project) ? "currentColor" : "none"} size={15} /></button>
+      </div>
+
+      <div className="do-console-metrics">
+        <div><strong>{openTasks.length}</strong><span>Open</span></div>
+        <div><strong>{openMilestones.length}</strong><span>Milestones</span></div>
+        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}><strong>{blockedTasks.length + risks.length}</strong><span>Risks</span></div>
+        <div className={healthClass(currentHealth)}><strong>{projectHealthLabel(currentHealth)}</strong><span>Health</span></div>
+      </div>
+
+      <div className="do-console-controls">
+        <ProjectStatusSelect onUpdate={update} project={project} />
+        <select aria-label="Project method" onChange={(event) => update({ methodology: event.target.value })} value={methodology}>
+          <option value="scrum">Scrum</option>
+          <option value="pmi">PMI</option>
+          <option value="hybrid">Hybrid</option>
+        </select>
+        <button onClick={() => onAsk(`Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`)} type="button"><MessageSquare size={13} /> Ask</button>
+      </div>
+
+      <nav className="do-console-tabs" aria-label="Project console sections">
+        {([
+          ["brief", "Brief"], ["plan", "Plan"], ["work", "Work"], ["risks", "Risks"], ["docs", "Docs"],
+        ] as const).map(([value, label]) => (
+          <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}</button>
+        ))}
+      </nav>
+
+      {tab === "brief" && (
+        <div className="do-console-section">
+          <EditableField label="Outcome" multiline onCommit={(outcome) => update({ outcome })} placeholder="What will be observably true when this project is done?" value={project.outcome || project.objective} />
+          <div className="do-console-insights">
+            <article><span>Next milestone</span><strong>{nextMilestone?.title || nextMilestone?.name || "No milestone set"}</strong><small>{nextMilestone?.dueDate || nextMilestone?.targetDate || "Add the next delivery point."}</small></article>
+            <article><span>Main risk</span><strong>{nextRisk?.title || nextRisk?.description || "No active risk recorded"}</strong><small>{nextRisk?.mitigation || nextRisk?.response || nextRisk?.assignee || "Keep the risk register honest."}</small></article>
+          </div>
+          <div className="do-console-ask-grid">
+            <button onClick={() => onAsk(`Create the next coherent implementation batch for ${projectTitle(project)} with owners, dependencies, acceptance evidence, and requirement IDs.`)} type="button"><Sparkles size={13} /> Build next batch</button>
+            <button onClick={() => onAsk(`Prepare a team planning agenda for ${projectTitle(project)} using ${methodology.toUpperCase()} with decisions, roles, milestones, risks, and next actions.`)} type="button"><Users size={13} /> Team planning</button>
+          </div>
+        </div>
+      )}
+
+      {tab === "plan" && (
+        <div className="do-console-section">
+          <EditableField label={methodology === "pmi" ? "Delivery governance" : "Sprint goal"} multiline onCommit={(sprintGoal) => update({ sprintGoal })} placeholder={methodology === "pmi" ? "Scope, approvals, controls, and closeout criteria." : "What should this sprint prove or deliver?"} value={project.sprintGoal || project.deliveryGovernance} />
+          <div className="do-console-list">
+            {milestones.map((milestone) => <article key={milestone.id}><Flag size={13} /><span><strong>{milestone.title || milestone.name}</strong><small>{milestone.dueDate || milestone.targetDate || "No date"} · {milestone.status || "not started"}</small></span></article>)}
+            {milestones.length === 0 && <EmptyState icon={<Flag size={18} />} title="No milestones yet" text="Add one meaningful delivery point." />}
+          </div>
+          <div className="do-project-inline-add"><input onChange={(event) => setMilestoneTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && milestoneTitle.trim()) { await onAddMilestone(milestoneTitle.trim()); setMilestoneTitle(""); } }} placeholder="Add milestone..." value={milestoneTitle} /><button disabled={!milestoneTitle.trim()} onClick={async () => { await onAddMilestone(milestoneTitle.trim()); setMilestoneTitle(""); }} type="button"><Plus size={13} /> Add</button></div>
+        </div>
+      )}
+
+      {tab === "work" && (
+        <div className="do-console-section">
+          <div className="do-project-inline-add do-console-add"><input onChange={(event) => setTaskTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitTask()} placeholder="Add work item..." value={taskTitle} /><button disabled={!taskTitle.trim()} onClick={submitTask} type="button"><Plus size={13} /> Add</button></div>
+          <div className="do-console-board">
+            {([
+              ["backlog", "Backlog"], ["in_progress", "Doing"], ["blocked", "Blocked"], ["done", "Done"],
+            ] as const).map(([lane, label]) => (
+              <section key={lane}>
+                <header><span>{label}</span><small>{lanes[lane].length}</small></header>
+                {lanes[lane].slice(0, 8).map((task) => <article key={task.id}><strong>{task.title || task.name}</strong><select aria-label={`Move ${task.title || "task"}`} onChange={(event) => onUpdateTask(task.id, { status: event.target.value })} value={lane}><option value="backlog">Backlog</option><option value="in_progress">Doing</option><option value="blocked">Blocked</option><option value="done">Done</option></select></article>)}
+                {lanes[lane].length === 0 && <p>No work here</p>}
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "risks" && (
+        <div className="do-console-section">
+          <label className="do-console-health"><span>Project health</span><select aria-label="Project health" onChange={(event) => update({ health: event.target.value })} value={currentHealth}>{PROJECT_HEALTH.map((health) => <option key={health} value={health}>{projectHealthLabel(health)}</option>)}</select></label>
+          <div className="do-console-list">
+            {risks.map((risk) => <article key={risk.id}><AlertTriangle size={13} /><span><strong>{risk.title || risk.description}</strong><small>{risk.response || risk.mitigation || risk.owner || "Response needs definition"}</small></span></article>)}
+            {blockedTasks.map((task) => <article key={`task-${task.id}`}><Circle size={13} /><span><strong>{task.title}</strong><small>Blocked work item · {task.assignee || "Unassigned"}</small></span></article>)}
+            {risks.length === 0 && blockedTasks.length === 0 && <EmptyState icon={<CheckCircle2 size={18} />} title="No open risks" text="Add risks early, while they are still manageable." />}
+          </div>
+          <div className="do-project-inline-add"><input onChange={(event) => setRiskTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && riskTitle.trim()) { await onAddRisk(riskTitle.trim()); setRiskTitle(""); } }} placeholder="Add risk or assumption..." value={riskTitle} /><button disabled={!riskTitle.trim()} onClick={async () => { await onAddRisk(riskTitle.trim()); setRiskTitle(""); }} type="button"><Plus size={13} /> Add</button></div>
+        </div>
+      )}
+
+      {tab === "docs" && (
+        <div className="do-console-section">
+          <div className="do-console-list">
+            {documents.map((document) => {
+              const content = String(document.content || document.body || document.description || "");
+              return <article key={document.id}><FileText size={13} /><span><strong>{document.title || document.name || "Untitled document"}</strong><small>{document.summary || content.slice(0, 120) || "No summary recorded."}</small></span><button onClick={() => onAsk(`Using ${document.title || "this project document"}, tell me what ${projectTitle(project)} should do next.`)} type="button"><ArrowRight size={12} /></button></article>;
+            })}
+            {documents.length === 0 && <EmptyState icon={<FileText size={18} />} title="No docs yet" text="Paste a PRD in this project conversation and ask DelivereeOS to save it here." />}
+          </div>
+        </div>
+      )}
+
+      <div className="do-console-danger">
+        {archiveConfirm ? (
+          <>
+            <button onClick={() => setArchiveConfirm(false)} type="button">Cancel</button>
+            <button onClick={() => onArchiveProject(project)} type="button">Archive</button>
+          </>
+        ) : (
+          <button onClick={() => setArchiveConfirm(true)} type="button"><Archive size={13} /> Archive project</button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function ProjectCommandCenter({ projects, tasks, risks, onClose, onUpdateProject, onArchiveProject, onOpenProject }: {
   projects: any[];
   tasks: any[];
