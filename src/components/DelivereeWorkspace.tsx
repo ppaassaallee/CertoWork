@@ -417,6 +417,7 @@ export function DelivereeWorkspace() {
   ])];
   const contextProjects = projects.filter((project) => contextProjectIds.includes(project.id));
   const primaryProject = contextProjects.length === 1 ? contextProjects[0] : null;
+  const routeOrPrimaryProject = primaryProject || activeProject;
   const isFocusedConversation = directContextProjectIds.length > 0 || contextTaskIds.length > 0;
   const projectTasks = useMemo(
     () => openTasks.filter((task) => (
@@ -425,8 +426,8 @@ export function DelivereeWorkspace() {
     [contextTaskIds, directContextProjectIds, openTasks],
   );
   const consoleProject = useMemo(
-    () => projects.find((project) => project.id === projectConsoleId) || primaryProject || activeProject || null,
-    [activeProject, primaryProject, projectConsoleId, projects],
+    () => projects.find((project) => project.id === projectConsoleId) || routeOrPrimaryProject || null,
+    [projectConsoleId, projects, routeOrPrimaryProject],
   );
   const projectDocuments = useMemo(
     () => knowledgeItems.filter((item) => contextProjectIds.includes(item.projectId) && item.status !== "archived"),
@@ -1164,11 +1165,11 @@ export function DelivereeWorkspace() {
             <span>{currentContextLabel}</span><ChevronRight size={13} />
           </button>
           <div className="do-header-actions">
-            {primaryProject && (
+            {routeOrPrimaryProject && (
               <button
                 className={`do-header-button ${panel === "project" ? "is-active" : ""}`}
                 onClick={() => {
-                  setProjectConsoleId(primaryProject.id);
+                  setProjectConsoleId(routeOrPrimaryProject.id);
                   setPanel(panel === "project" ? null : "project");
                 }}
                 type="button"
@@ -1191,7 +1192,7 @@ export function DelivereeWorkspace() {
                   <span className="do-orb"><Sparkles size={21} /></span>
                   {isFocusedConversation && <span className="do-context-eyebrow">FOCUSED · {currentContextLabel}</span>}
                   <h1>{isFocusedConversation ? "What should move next?" : `What matters now, ${displayName(user?.displayName, user?.email)}?`}</h1>
-                  <p>{primaryProject ? primaryProject.outcome || primaryProject.description || `${projectTasks.length} open tasks in this context.` : isFocusedConversation ? `${projectTasks.length} open items are connected to this conversation.` : "Capture anything. Make a plan. Finish the right work."}</p>
+                  <p>{routeOrPrimaryProject ? routeOrPrimaryProject.outcome || routeOrPrimaryProject.description || `${projectTasks.length} open tasks in this context.` : isFocusedConversation ? `${projectTasks.length} open items are connected to this conversation.` : "Capture anything. Make a plan. Finish the right work."}</p>
                 </div>
 
                 {!isFocusedConversation && (
@@ -1206,7 +1207,7 @@ export function DelivereeWorkspace() {
                   <div className="do-project-pulse">
                     <span>{projectTasks.length} open in context</span>
                     <span>{currentContextLabel}</span>
-                    {primaryProject && <button onClick={() => openProjectRecord(primaryProject)} type="button">Project console</button>}
+                    {routeOrPrimaryProject && <button onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button">Project console</button>}
                   </div>
                 )}
 
@@ -1363,7 +1364,7 @@ export function DelivereeWorkspace() {
                     return <button className={selected ? "is-selected" : ""} key={task.id} onClick={() => updateConversationContext(directContextProjectIds, selected ? contextTaskIds.filter((id) => id !== task.id) : [...contextTaskIds, task.id])} type="button"><ListTodo size={14} /><span><strong>{entityTitle(task)}</strong><small>{task.projectId ? entityTitle(projects.find((project) => project.id === task.projectId)) : "No project"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
                   })}
               </div>
-              {primaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(primaryProject)} type="button"><Folder size={15} /> Open project console</button>}
+              {routeOrPrimaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button"><Folder size={15} /> Open project console</button>}
               <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
               <button className="do-panel-secondary" onClick={() => { setPanel(null); setCommandCenterOpen(true); }} type="button">Project command center</button>
             </>
