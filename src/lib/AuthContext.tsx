@@ -16,6 +16,7 @@ interface AuthContextType {
   workspaces: Workspace[];
   setWorkspace: (ws: Workspace | null) => void;
   loading: boolean;
+  workspaceLoading: boolean;
   workspaceError: string;
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
@@ -28,28 +29,48 @@ const AuthContext = createContext<AuthContextType>({
   workspaces: [],
   setWorkspace: () => {},
   loading: true,
+  workspaceLoading: false,
   workspaceError: '',
   signIn: async () => {},
   logOut: async () => {},
   reloadWorkspaces: async () => {}
 });
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspaceState] = useState<Workspace | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState('');
 
   const loadWorkspaces = async (u: User) => {
     setWorkspaceError('');
     try {
       const wsMap = new Map();
+      let lookupSucceeded = false;
 
       // Query owned workspaces
       try {
         const qOwner = query(collection(db, 'workspaces'), where('ownerId', '==', u.uid));
-        const snapOwner = await getDocs(qOwner);
+        const snapOwner = await withTimeout(getDocs(qOwner), 7_000, 'Workspace owner lookup');
+        lookupSucceeded = true;
         snapOwner.forEach(d => wsMap.set(d.id, { id: d.id, ...d.data() }));
       } catch (eOwner) {
         console.error("Failed to load owned workspaces:", eOwner instanceof Error ? eOwner.message : eOwner);
@@ -58,7 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Query member workspaces via workspace_members (safe and respects individual permissions)
       try {
         const qMemberships = query(collection(db, 'workspace_members'), where('userId', '==', u.uid));
-        const snapMemberships = await getDocs(qMemberships);
+        const snapMemberships = await withTimeout(getDocs(qMemberships), 7_000, 'Workspace membership lookup');
+        lookupSucceeded = true;
         
         const fetchPromises = snapMemberships.docs.map(async (mDoc) => {
           const mData = mDoc.data();
@@ -66,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (wsId && !wsMap.has(wsId)) {
             try {
               const wsRef = doc(db, 'workspaces', wsId);
-              const wsSnap = await getDoc(wsRef);
+              const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Workspace ${wsId} lookup`);
               if (wsSnap.exists()) {
                 wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
               }
@@ -75,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         });
-        await Promise.all(fetchPromises);
+        await Promise.allSettled(fetchPromises);
       } catch (eMember) {
         console.error("Failed to load member workspaces:", eMember instanceof Error ? eMember.message : eMember);
       }
@@ -83,14 +105,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const allWs = Array.from(wsMap.values()) as Workspace[];
       
       if (allWs.length > 0) {
-        // Bootstrap and ensure deterministic workspace_members documents exist
+        const storedId = localStorage.getItem('activeWorkspaceId');
+        const active = allWs.find(w => w.id === storedId) || allWs[0];
+
+        // Open the workspace before non-critical membership housekeeping.
+        setWorkspaces(allWs);
+        setWorkspaceState(active);
+        localStorage.setItem('activeWorkspaceId', active.id);
+        localStorage.setItem('activeWorkspaceName', active.name || 'Workspace');
+
+        // Ensure deterministic workspace_members documents without blocking startup.
         const memberPromises = allWs.map(async (ws) => {
           try {
             const memberId = `${ws.id}_${u.uid}`;
             const memberRef = doc(db, 'workspace_members', memberId);
             const isOwner = ws.ownerId === u.uid;
             
-            await setDoc(memberRef, {
+            await withTimeout(setDoc(memberRef, {
               id: memberId,
               workspaceId: ws.id,
               userId: u.uid,
@@ -100,25 +131,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               status: "active",
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
-            }, { merge: true });
+            }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {
             console.error(`Failed to ensure membership doc for workspace ${ws.id}:`, eMemberDoc instanceof Error ? eMemberDoc.message : eMemberDoc);
           }
         });
-        await Promise.all(memberPromises);
-
-        setWorkspaces(allWs);
-        const storedId = localStorage.getItem('activeWorkspaceId');
-        const active = allWs.find(w => w.id === storedId) || allWs[0];
-        setWorkspaceState(active);
+        void Promise.allSettled(memberPromises);
       } else {
+        if (!lookupSucceeded) {
+          throw new Error('Workspace lookups did not complete');
+        }
         const newRef = doc(collection(db, 'workspaces'));
         const newWs = { name: "Personal Focus", ownerId: u.uid, members: [u.email].filter(Boolean) as string[], createdAt: serverTimestamp() };
-        await setDoc(newRef, newWs);
+        await withTimeout(setDoc(newRef, newWs), 7_000, 'Workspace creation');
 
         // Bootstrap owner member document
         const memberId = `${newRef.id}_${u.uid}`;
-        await setDoc(doc(db, 'workspace_members', memberId), {
+        await withTimeout(setDoc(doc(db, 'workspace_members', memberId), {
           id: memberId,
           workspaceId: newRef.id,
           userId: u.uid,
@@ -128,12 +157,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           status: "active",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        });
+        }), 7_000, 'Owner membership creation');
 
         const created = { id: newRef.id, ...newWs } as Workspace;
         setWorkspaces([created]);
         setWorkspaceState(created);
         localStorage.setItem('activeWorkspaceId', created.id);
+        localStorage.setItem('activeWorkspaceName', created.name);
       }
     } catch (e) {
       console.error("Failed in loadWorkspaces master routine:", e instanceof Error ? e.message : e);
@@ -142,25 +172,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const authTimeout = window.setTimeout(() => {
+      setLoading(false);
+      setWorkspaceError('Authentication is taking too long. Try signing in again.');
+    }, 8_000);
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      window.clearTimeout(authTimeout);
       setUser(u);
       if (u) {
-        await loadWorkspaces(u);
+        const storedId = localStorage.getItem('activeWorkspaceId');
+        if (storedId) {
+          setWorkspaceState((current) => current || {
+            id: storedId,
+            name: localStorage.getItem('activeWorkspaceName') || 'Workspace',
+            ownerId: u.uid,
+          });
+        }
+        setLoading(false);
+        setWorkspaceLoading(true);
+        try {
+          await loadWorkspaces(u);
+        } finally {
+          setWorkspaceLoading(false);
+        }
       } else {
         setWorkspaceState(null);
         setWorkspaces([]);
         setWorkspaceError('');
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(authTimeout);
+      unsubscribe();
+    };
   }, []);
 
   const setWorkspace = (ws: Workspace | null) => {
     if (ws) {
         localStorage.setItem('activeWorkspaceId', ws.id);
+        localStorage.setItem('activeWorkspaceName', ws.name || 'Workspace');
     } else {
         localStorage.removeItem('activeWorkspaceId');
+        localStorage.removeItem('activeWorkspaceName');
     }
     setWorkspaceState(ws);
     // Reload to re-fetch all queries with new workspaceId
@@ -169,11 +224,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const reloadWorkspaces = async () => {
     if (!user) return;
-    setLoading(true);
+    setWorkspaceLoading(true);
     try {
       await loadWorkspaces(user);
     } finally {
-      setLoading(false);
+      setWorkspaceLoading(false);
     }
   };
 
@@ -187,7 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceError, signIn, logOut, reloadWorkspaces }}>
+    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, signIn, logOut, reloadWorkspaces }}>
       {children}
     </AuthContext.Provider>
   );

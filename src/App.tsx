@@ -59,17 +59,17 @@ function SignIn() {
 }
 
 function WorkspaceRecovery() {
-  const { reloadWorkspaces, logOut, workspaceError } = useAuth();
+  const { reloadWorkspaces, logOut, workspaceError, workspaceLoading } = useAuth();
   const [retrying, setRetrying] = useState(false);
 
   return (
     <main className="do-recovery">
       <span className="do-logo">D</span>
-      <h1>We couldn’t open your workspace.</h1>
-      <p>{workspaceError || "The workspace is taking longer than expected to load."}</p>
+      <h1>{workspaceLoading ? "Opening your workspace…" : "We couldn’t open your workspace."}</h1>
+      <p>{workspaceError || "This should only take a few seconds. You can retry without losing any data."}</p>
       <div>
         <button
-          disabled={retrying}
+          disabled={retrying || workspaceLoading}
           onClick={async () => {
             setRetrying(true);
             await reloadWorkspaces();
@@ -77,8 +77,8 @@ function WorkspaceRecovery() {
           }}
           type="button"
         >
-          {retrying ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
-          Try again
+          {retrying || workspaceLoading ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+          {workspaceLoading ? "Connecting" : "Try again"}
         </button>
         <button onClick={logOut} type="button">Sign out</button>
       </div>
