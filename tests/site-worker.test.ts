@@ -137,8 +137,9 @@ test("project conversations use delivery-team behavior instead of Chief of Staff
   const instructions = assistantInstructions(
     {
       workspaceContext: {
-        mode: "project_delivery",
+        mode: "focused_delivery",
         activeProject: { id: "fieldops", title: "FieldOps" },
+        contextProjects: [{ id: "fieldops", title: "FieldOps" }],
         currentUserMessageId: "message-prd",
         projectArtifactSourceMessageId: "previous-message-prd",
         tasks: Array.from({ length: 15 }, () => ({ status: "open" })),
@@ -149,12 +150,31 @@ test("project conversations use delivery-team behavior instead of Chief of Staff
     [],
   );
 
-  assert.match(instructions, /PROJECT DELIVERY MODE/);
+  assert.match(instructions, /FOCUSED DELIVERY MODE/);
   assert.match(instructions, /Missing information is a completion checklist, not a refusal/);
   assert.match(instructions, /Never respond with only a gate, lecture, or request to pause another project/);
   assert.match(instructions, /create_project_artifact/);
   assert.match(instructions, /previous-message-prd/);
-  assert.match(instructions, /active_project_only/);
+  assert.match(instructions, /attached_entities_only/);
+});
+
+test("Chief of Staff can route an approved handoff to an existing conversation", () => {
+  const instructions = assistantInstructions(
+    {
+      workspaceContext: {
+        mode: "chief_of_staff",
+        conversationDirectory: [{ id: "fieldops-chat", title: "FieldOps delivery", scope: "FieldOps" }],
+        tasks: [],
+        projects: [],
+      },
+    },
+    [],
+  );
+
+  assert.match(instructions, /Chief of Staff, assistant, engineer, and advisor/);
+  assert.match(instructions, /post_to_conversation/);
+  assert.match(instructions, /fieldops-chat/);
+  assert.match(instructions, /Never invent a conversation ID/);
 });
 
 test("the current pasted PRD and the latest prior PRD remain available for follow-up", () => {

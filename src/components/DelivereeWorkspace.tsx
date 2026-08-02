@@ -50,12 +50,25 @@ import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { sidebarProjectGroups, sortProjectsByRecency, type WorkLane } from "../lib/projectPortfolio";
 import { buildProjectDocumentContext } from "../lib/projectContext";
+import {
+  conversationIncludesProject,
+  conversationProjectIds,
+  conversationScopeLabel,
+  conversationScopeType,
+  conversationTaskIds,
+  type ConversationScopeType,
+} from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectRecordModal } from "./ProjectSurfaces";
 
 type Conversation = {
   id: string;
   title?: string;
   contextEntityId?: string | null;
+  sourceContext?: string | null;
+  conversationType?: ConversationScopeType;
+  linkedProjectIds?: string[];
+  linkedTaskIds?: string[];
+  isChiefOfStaff?: boolean;
   updatedAt?: any;
   createdAt?: any;
 };
@@ -140,7 +153,12 @@ function reviewTypeForAction(type?: string) {
     update_project: "project_update",
     create_project_artifact: "knowledge",
     create_milestone: "milestone",
+    update_milestone: "milestone_update",
     create_risk: "risk",
+    update_risk: "risk_update",
+    update_task: "task_update",
+    reschedule_task: "task_update",
+    post_to_conversation: "conversation_message",
   };
   return types[String(type || "")] || "task";
 }
@@ -151,8 +169,12 @@ function reviewTypeLabel(type?: string) {
     project_update: "Project update",
     knowledge: "Project document",
     milestone: "Milestone",
+    milestone_update: "Milestone update",
     risk: "Risk",
+    risk_update: "Risk update",
+    conversation_message: "Conversation handoff",
     task: "Task",
+    task_update: "Task update",
   };
   return labels[String(type || "task")] || "Item";
 }
@@ -275,6 +297,7 @@ export function DelivereeWorkspace() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectModalId, setProjectModalId] = useState<string | null>(null);
   const [commandCenterOpen, setCommandCenterOpen] = useState(false);
@@ -381,17 +404,33 @@ export function DelivereeWorkspace() {
     () => (lens.kind === "project" ? projects.find((project) => project.id === lens.projectId) : null),
     [lens, projects],
   );
+  const currentConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const impliedConversationScope = currentConversation || (activeProject
+    ? { linkedProjectIds: [activeProject.id], linkedTaskIds: [], conversationType: "project" as const }
+    : null);
+  const directContextProjectIds = conversationProjectIds(impliedConversationScope);
+  const contextTaskIds = conversationTaskIds(impliedConversationScope);
+  const contextTasks = openTasks.filter((task) => contextTaskIds.includes(task.id));
+  const contextProjectIds = [...new Set([
+    ...directContextProjectIds,
+    ...contextTasks.map((task) => String(task.projectId || "")).filter(Boolean),
+  ])];
+  const contextProjects = projects.filter((project) => contextProjectIds.includes(project.id));
+  const primaryProject = contextProjects.length === 1 ? contextProjects[0] : null;
+  const isFocusedConversation = directContextProjectIds.length > 0 || contextTaskIds.length > 0;
   const projectTasks = useMemo(
-    () => (activeProject ? openTasks.filter((task) => task.projectId === activeProject.id) : []),
-    [activeProject, openTasks],
+    () => openTasks.filter((task) => (
+      directContextProjectIds.includes(String(task.projectId || "")) || contextTaskIds.includes(task.id)
+    )),
+    [contextTaskIds, directContextProjectIds, openTasks],
   );
   const modalProject = useMemo(
     () => projects.find((project) => project.id === projectModalId) || null,
     [projectModalId, projects],
   );
   const projectDocuments = useMemo(
-    () => (activeProject ? knowledgeItems.filter((item) => item.projectId === activeProject.id && item.status !== "archived") : []),
-    [activeProject, knowledgeItems],
+    () => knowledgeItems.filter((item) => contextProjectIds.includes(item.projectId) && item.status !== "archived"),
+    [contextProjectIds, knowledgeItems],
   );
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
@@ -402,21 +441,22 @@ export function DelivereeWorkspace() {
     [openTasks, todayKey],
   );
   const visibleMessages = messages.filter((message) => message.role !== "system");
-  const currentConversation = conversations.find((conversation) => conversation.id === conversationId);
-  const conversationInContext = activeProject
-    ? currentConversation?.contextEntityId === activeProject.id
-    : !currentConversation?.contextEntityId;
-  const contextualMessages = conversationInContext ? visibleMessages : [];
+  const contextualMessages = visibleMessages;
+  const currentContextLabel = conversationScopeLabel(impliedConversationScope, projects, tasks);
   const filteredConversations = conversations.filter((conversation) =>
     String(conversation.title || "").toLowerCase().includes(search.toLowerCase()),
   );
 
   useEffect(() => {
-    const targetEntityId = activeProject?.id || null;
+    if (!activeProject) return;
     setConversationId((currentId) => {
       const current = conversations.find((conversation) => conversation.id === currentId);
-      if ((current?.contextEntityId || null) === targetEntityId) return currentId;
-      return conversations.find((conversation) => (conversation.contextEntityId || null) === targetEntityId)?.id || currentId;
+      if (conversationIncludesProject(current, activeProject.id)) return currentId;
+      return conversations.find((conversation) => (
+        conversationProjectIds(conversation).length === 1 &&
+        conversationTaskIds(conversation).length === 0 &&
+        conversationIncludesProject(conversation, activeProject.id)
+      ))?.id || null;
     });
   }, [activeProject, conversations]);
 
@@ -432,6 +472,10 @@ export function DelivereeWorkspace() {
         status: "active",
         sourceContext: activeProject ? "project" : "home",
         contextEntityId: activeProject?.id || null,
+        conversationType: activeProject ? "project" : "general",
+        linkedProjectIds: activeProject ? [activeProject.id] : [],
+        linkedTaskIds: [],
+        isChiefOfStaff: false,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -441,6 +485,10 @@ export function DelivereeWorkspace() {
           id: ref.id,
           title: "New conversation",
           contextEntityId: activeProject?.id || null,
+          sourceContext: activeProject ? "project" : "home",
+          conversationType: activeProject ? "project" : "general",
+          linkedProjectIds: activeProject ? [activeProject.id] : [],
+          linkedTaskIds: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
         },
@@ -473,8 +521,9 @@ export function DelivereeWorkspace() {
   }, [createConversation]);
 
   const ensureConversation = async (title: string) => {
-    if (conversationId && conversationInContext) return conversationId;
+    if (conversationId) return conversationId;
     if (!user || !workspace) throw new Error("Workspace is still loading");
+    const projectIds = activeProject ? [activeProject.id] : [];
     const ref = await addDoc(collection(db, "boldi_conversations"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -482,12 +531,89 @@ export function DelivereeWorkspace() {
       status: "active",
       sourceContext: activeProject ? "project" : "home",
       contextEntityId: activeProject?.id || null,
+      conversationType: conversationScopeType(projectIds, []),
+      linkedProjectIds: projectIds,
+      linkedTaskIds: [],
+      isChiefOfStaff: false,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     setConversationId(ref.id);
     return ref.id;
+  };
+
+  const openChiefOfStaff = async () => {
+    if (!user || !workspace) return;
+    const existing = conversations.find((conversation) => conversation.isChiefOfStaff) ||
+      conversations.find((conversation) => conversationProjectIds(conversation).length === 0 && conversationTaskIds(conversation).length === 0);
+    if (existing) {
+      if (!existing.isChiefOfStaff || existing.conversationType !== "chief_of_staff") {
+        await updateDoc(doc(db, "boldi_conversations", existing.id), {
+          conversationType: "chief_of_staff",
+          isChiefOfStaff: true,
+          updatedAt: serverTimestamp(),
+        });
+        setConversations((current) => current.map((conversation) => conversation.id === existing.id
+          ? { ...conversation, conversationType: "chief_of_staff", isChiefOfStaff: true, updatedAt: Date.now() }
+          : conversation));
+      }
+      setConversationId(existing.id);
+      navigate("/");
+      setSidebarOpen(false);
+      return;
+    }
+    const ref = await addDoc(collection(db, "boldi_conversations"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: "Chief of Staff",
+      status: "active",
+      sourceContext: "home",
+      contextEntityId: null,
+      conversationType: "chief_of_staff",
+      linkedProjectIds: [],
+      linkedTaskIds: [],
+      isChiefOfStaff: true,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setConversationId(ref.id);
+    setMessages([]);
+    navigate("/");
+    setSidebarOpen(false);
+  };
+
+  const updateConversationContext = async (projectIds: string[], taskIds: string[], asChiefOfStaff = false) => {
+    if (!user || !workspace) return;
+    const targetId = await ensureConversation("New conversation");
+    const normalizedProjects = [...new Set(projectIds)].filter(Boolean);
+    const normalizedTasks = [...new Set(taskIds)].filter(Boolean);
+    const derivedScopeType = conversationScopeType(normalizedProjects, normalizedTasks);
+    const scopeType: ConversationScopeType = asChiefOfStaff && normalizedProjects.length === 0 && normalizedTasks.length === 0
+      ? "chief_of_staff"
+      : derivedScopeType;
+    await updateDoc(doc(db, "boldi_conversations", targetId), {
+      sourceContext: scopeType.includes("project") || scopeType === "mixed" ? "project" : scopeType.includes("task") ? "task" : "home",
+      contextEntityId: normalizedProjects.length === 1 && normalizedTasks.length === 0 ? normalizedProjects[0] : null,
+      conversationType: scopeType,
+      linkedProjectIds: normalizedProjects,
+      linkedTaskIds: normalizedTasks,
+      isChiefOfStaff: scopeType === "chief_of_staff",
+      updatedAt: serverTimestamp(),
+    });
+    setConversations((current) => current.map((conversation) => conversation.id === targetId ? {
+      ...conversation,
+      sourceContext: scopeType.includes("project") || scopeType === "mixed" ? "project" : scopeType.includes("task") ? "task" : "home",
+      contextEntityId: normalizedProjects.length === 1 && normalizedTasks.length === 0 ? normalizedProjects[0] : null,
+      conversationType: scopeType,
+      linkedProjectIds: normalizedProjects,
+      linkedTaskIds: normalizedTasks,
+      isChiefOfStaff: scopeType === "chief_of_staff",
+      updatedAt: Date.now(),
+    } : conversation));
+    if (normalizedProjects.length === 1 && normalizedTasks.length === 0) navigate(`/work/projects/${normalizedProjects[0]}`);
+    else navigate("/");
   };
 
   const streamReply = async (text: string) => {
@@ -518,18 +644,24 @@ export function DelivereeWorkspace() {
         role: "user",
         content: text,
         inputType: "text",
-        contextType: activeProject ? "project" : "home",
-        contextEntityId: activeProject?.id || null,
+        contextType: conversationScopeType(directContextProjectIds, contextTaskIds),
+        contextEntityId: primaryProject?.id || null,
         createdAt: serverTimestamp(),
       });
 
-      const operatingScope = activeProject ? "project_delivery" : "chief_of_staff";
-      const scopedTasks = activeProject
-        ? openTasks.filter((task) => task.projectId === activeProject.id)
+      const operatingScope = isFocusedConversation ? "focused_delivery" : "chief_of_staff";
+      const scopedTasks = isFocusedConversation
+        ? projectTasks
         : openTasks;
-      const scopedProjects = activeProject ? [activeProject] : activeProjects;
-      const scopedTodayTasks = activeProject
-        ? todayTasks.filter((task) => task.projectId === activeProject.id)
+      const scopedProjects = isFocusedConversation ? contextProjects : activeProjects;
+      const scopedMilestones = isFocusedConversation
+        ? milestones.filter((item) => contextProjectIds.includes(item.projectId))
+        : milestones;
+      const scopedRisks = isFocusedConversation
+        ? risks.filter((item) => contextProjectIds.includes(item.projectId))
+        : risks;
+      const scopedTodayTasks = isFocusedConversation
+        ? todayTasks.filter((task) => scopedTasks.some((scopedTask) => scopedTask.id === task.id))
         : todayTasks;
       const previousLongProjectMessage = [...contextualMessages]
         .reverse()
@@ -540,12 +672,14 @@ export function DelivereeWorkspace() {
       const workspaceSnapshot = {
         tasks: scopedTasks,
         projects: scopedProjects,
+        milestones: scopedMilestones,
+        risks: scopedRisks,
         goals: [],
         events: [],
         dailyCapacityMinutes: 360,
         loaded: true,
-        scope: operatingScope as "chief_of_staff" | "project_delivery",
-        activeProjectId: activeProject?.id || null,
+        scope: (isFocusedConversation ? "project_delivery" : "chief_of_staff") as "chief_of_staff" | "project_delivery",
+        activeProjectId: primaryProject?.id || null,
       };
       const nextJudgment = evaluateJudgment(text, workspaceSnapshot);
       setJudgment(nextJudgment);
@@ -565,14 +699,26 @@ export function DelivereeWorkspace() {
             ...workspaceSnapshot,
             judgment: nextJudgment,
             mode: operatingScope,
-            activeProject,
+            activeProject: primaryProject,
+            contextProjects,
+            contextTasks,
+            conversationType: conversationScopeType(directContextProjectIds, contextTaskIds),
+            conversationDirectory: conversations.slice(0, 30).map((conversation) => ({
+              id: conversation.id,
+              title: conversation.title || "New conversation",
+              scope: conversationScopeLabel(conversation, projects, tasks),
+              conversationType: conversation.conversationType || conversationScopeType(
+                conversationProjectIds(conversation),
+                conversationTaskIds(conversation),
+              ),
+            })),
             todayTaskCount: scopedTodayTasks.length,
-            pendingReviewCount: activeProject
-              ? reviewItems.filter((item) => (item.projectId || item.proposed?.projectId) === activeProject.id).length
+            pendingReviewCount: isFocusedConversation
+              ? reviewItems.filter((item) => contextProjectIds.includes(item.projectId || item.proposed?.projectId)).length
               : reviewItems.length,
             currentUserMessageId: userMessageRef.id,
             projectArtifactSourceMessageId,
-            documents: activeProject ? buildProjectDocumentContext(projectDocuments, text) : [],
+            documents: isFocusedConversation ? buildProjectDocumentContext(projectDocuments, text) : [],
             userId: user.uid,
             workspaceId: workspace.id,
           },
@@ -599,7 +745,6 @@ export function DelivereeWorkspace() {
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
           title: contextualMessages.length === 0 ? text.slice(0, 64) : currentConversation?.title || text.slice(0, 64),
-          contextEntityId: activeProject?.id || null,
           updatedAt: serverTimestamp(),
         });
       }
@@ -628,14 +773,14 @@ export function DelivereeWorkspace() {
       summary: plan.summary,
       riskLevel: plan.riskLevel || "medium",
       status: "approved_for_review",
-      contextEntityId: activeProject?.id || null,
+      contextEntityId: primaryProject?.id || null,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     for (const action of plan.proposedActions || []) {
       const reviewType = reviewTypeForAction(action.type);
-      const projectId = action.proposedChange?.projectId || activeProject?.id || "";
+      const projectId = action.proposedChange?.projectId || primaryProject?.id || "";
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -675,11 +820,50 @@ export function DelivereeWorkspace() {
       }
       const proposed = candidate.proposed || {};
       const reviewType = String(candidate.type || "task");
-      const projectId = proposed.projectId || candidate.projectId || activeProject?.id || "";
+      const projectId = proposed.projectId || candidate.projectId || primaryProject?.id || "";
       let convertedToType = reviewType;
       let convertedToId = "";
 
-      if (reviewType === "project_update") {
+      if (["task_update", "milestone_update", "risk_update"].includes(reviewType)) {
+        const targetId = String(
+          proposed.taskId || proposed.milestoneId || proposed.riskId || proposed.id || "",
+        );
+        const collectionName = reviewType === "task_update"
+          ? "tasks"
+          : reviewType === "milestone_update" ? "milestones" : "boldr_risks";
+        const allowedFields = reviewType === "task_update"
+          ? ["title", "description", "status", "priority", "dueDate", "owner", "projectId", "timeSector", "definitionOfDone"]
+          : reviewType === "milestone_update"
+            ? ["title", "description", "status", "dueDate", "targetDate", "owner", "projectId"]
+            : ["title", "description", "status", "severity", "owner", "mitigation", "projectId", "type"];
+        if (!targetId) throw new Error("The item to update is required");
+        const patch = Object.fromEntries(
+          allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+        );
+        await updateDoc(doc(db, collectionName, targetId), { ...patch, updatedAt: serverTimestamp() });
+        convertedToType = collectionName;
+        convertedToId = targetId;
+      } else if (reviewType === "conversation_message") {
+        const targetConversationId = String(proposed.targetConversationId || "");
+        const targetConversation = conversations.find((conversation) => conversation.id === targetConversationId);
+        const content = String(proposed.content || proposed.message || proposed.summary || "").trim();
+        if (!targetConversation || !content) throw new Error("A valid target conversation and message are required");
+        await addDoc(collection(db, "boldi_messages"), {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          conversationId: targetConversationId,
+          role: "assistant",
+          content: `**Handoff from Chief of Staff**\n\n${content}`,
+          inputType: "conversation_handoff",
+          sourceConversationId: conversationId,
+          contextType: targetConversation.conversationType || "general",
+          contextEntityId: targetConversation.contextEntityId || null,
+          createdAt: serverTimestamp(),
+        });
+        await updateDoc(doc(db, "boldi_conversations", targetConversationId), { updatedAt: serverTimestamp() });
+        convertedToType = "conversation";
+        convertedToId = targetConversationId;
+      } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
         const allowedFields = [
           "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
@@ -770,6 +954,12 @@ export function DelivereeWorkspace() {
   };
 
   const selectProjectContext = (project: any) => {
+    const projectConversation = conversations.find((conversation) => (
+      conversationProjectIds(conversation).length === 1 &&
+      conversationTaskIds(conversation).length === 0 &&
+      conversationIncludesProject(conversation, project.id)
+    ));
+    setConversationId(projectConversation?.id || null);
     navigate(`/work/projects/${project.id}`);
     setPanel(null);
     setSidebarOpen(false);
@@ -841,11 +1031,11 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const openingPrompts = activeProject
+  const openingPrompts = isFocusedConversation
     ? [
-        `What needs attention in ${entityTitle(activeProject)}?`,
-        `Turn the next step for ${entityTitle(activeProject)} into a clear task.`,
-        `Give me a short, honest project update.`,
+        `What needs attention in ${currentContextLabel}?`,
+        `Turn the next step for ${currentContextLabel} into clear work.`,
+        `Give me a short, honest update for this conversation.`,
       ]
     : [
         "Plan my day realistically.",
@@ -878,6 +1068,12 @@ export function DelivereeWorkspace() {
           {creatingConversation ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}
           {creatingConversation ? "Starting…" : "New conversation"}
           <kbd>⌘K</kbd>
+        </button>
+
+        <button className="do-chief-conversation" onClick={openChiefOfStaff} type="button">
+          <span><Sparkles size={14} /></span>
+          <div><strong>Chief of Staff</strong><small>Coordinate across all work</small></div>
+          <ChevronRight size={13} />
         </button>
 
         <div className="do-sidebar-scroll">
@@ -915,18 +1111,24 @@ export function DelivereeWorkspace() {
             {searchOpen && <input aria-label="Search conversations" autoFocus onChange={(event) => setSearch(event.target.value)} placeholder="Search" value={search} />}
             {filteredConversations.slice(0, chatsExpanded || search.trim() ? 50 : 5).map((conversation) => (
               <button
-                className={conversation.id === conversationId && conversationInContext ? "is-active" : ""}
+                className={conversation.id === conversationId ? "is-active" : ""}
                 key={conversation.id}
                 onClick={() => {
                   setConversationId(conversation.id);
-                  navigate(conversation.contextEntityId ? `/work/projects/${conversation.contextEntityId}` : "/");
+                  const projectIds = conversationProjectIds(conversation);
+                  const taskIds = conversationTaskIds(conversation);
+                  navigate(projectIds.length === 1 && taskIds.length === 0 ? `/work/projects/${projectIds[0]}` : "/");
                   setSidebarOpen(false);
                 }}
                 type="button"
               >
-                <MessageSquare size={13} />
+                {conversationProjectIds(conversation).length > 0
+                  ? <Folder size={13} />
+                  : conversationTaskIds(conversation).length > 0
+                    ? <ListTodo size={13} />
+                    : conversation.isChiefOfStaff ? <Sparkles size={13} /> : <MessageSquare size={13} />}
                 <span>{conversation.title || "New conversation"}</span>
-                <small>{timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
+                <small>{conversationScopeLabel(conversation, projects, tasks)} · {timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
               </button>
             ))}
             {!search.trim() && filteredConversations.length > 5 && (
@@ -955,7 +1157,7 @@ export function DelivereeWorkspace() {
         <header className="do-header">
           <button aria-label="Open navigation" className="do-icon-button do-menu-button" onClick={() => setSidebarOpen(true)} type="button"><Menu size={18} /></button>
           <button className="do-context-title" onClick={() => setPanel("projects")} type="button">
-            <span>{activeProject ? entityTitle(activeProject) : "All work"}</span><ChevronRight size={13} />
+            <span>{currentContextLabel}</span><ChevronRight size={13} />
           </button>
           <div className="do-header-actions">
             <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
@@ -971,12 +1173,12 @@ export function DelivereeWorkspace() {
               <section className="do-opening">
                 <div className="do-welcome">
                   <span className="do-orb"><Sparkles size={21} /></span>
-                  {activeProject && <span className="do-context-eyebrow">PROJECT · {entityTitle(activeProject)}</span>}
-                  <h1>{activeProject ? `What should move next?` : `What matters now, ${displayName(user?.displayName, user?.email)}?`}</h1>
-                  <p>{activeProject ? activeProject.outcome || activeProject.description || `${projectTasks.length} open tasks in this project.` : "Capture anything. Make a plan. Finish the right work."}</p>
+                  {isFocusedConversation && <span className="do-context-eyebrow">FOCUSED · {currentContextLabel}</span>}
+                  <h1>{isFocusedConversation ? "What should move next?" : `What matters now, ${displayName(user?.displayName, user?.email)}?`}</h1>
+                  <p>{primaryProject ? primaryProject.outcome || primaryProject.description || `${projectTasks.length} open tasks in this context.` : isFocusedConversation ? `${projectTasks.length} open items are connected to this conversation.` : "Capture anything. Make a plan. Finish the right work."}</p>
                 </div>
 
-                {!activeProject && (
+                {!isFocusedConversation && (
                   <button className="do-daily-pulse" onClick={() => sendMessage("Give me a realistic plan for today using my current work.")} type="button">
                     <span><CalendarDays size={15} /> Today</span>
                     <strong>{todayTasks.length ? `${todayTasks.length} tasks need attention` : "Your day is open"}</strong>
@@ -984,11 +1186,11 @@ export function DelivereeWorkspace() {
                   </button>
                 )}
 
-                {activeProject && (
+                {isFocusedConversation && (
                   <div className="do-project-pulse">
-                    <span>{projectTasks.length} open tasks</span>
-                    <span>{activeProject.status || "Active"}</span>
-                    <button onClick={() => openProjectRecord(activeProject)} type="button">Open project</button>
+                    <span>{projectTasks.length} open in context</span>
+                    <span>{currentContextLabel}</span>
+                    {primaryProject && <button onClick={() => openProjectRecord(primaryProject)} type="button">Open project</button>}
                   </div>
                 )}
 
@@ -998,12 +1200,12 @@ export function DelivereeWorkspace() {
               </section>
             ) : (
               <>
-                {activeProject && (
+                {isFocusedConversation && (
                   <div className="do-inline-context">
-                    <Folder size={12} />
-                    <strong>{entityTitle(activeProject)}</strong>
+                    {directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}
+                    <strong>{currentContextLabel}</strong>
                     <span>{projectTasks.length} open</span>
-                    <button aria-label="Clear project context" onClick={() => navigate("/")} type="button"><X size={12} /></button>
+                    <button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button>
                   </div>
                 )}
                 {contextualMessages.map((message) => (
@@ -1044,7 +1246,7 @@ export function DelivereeWorkspace() {
               <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>New project</strong><small>Define the outcome and first step</small></span></button>
             </div>
           )}
-          {activeProject && <div className="do-composer-context"><Folder size={12} /><span>{entityTitle(activeProject)}</span><button aria-label="Clear project context" onClick={() => navigate("/")} type="button"><X size={12} /></button></div>}
+          {isFocusedConversation && <div className="do-composer-context">{directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}<span>{currentContextLabel}</span><button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button></div>}
           <div className="do-composer">
             <textarea
               aria-label="Message DelivereeOS"
@@ -1056,7 +1258,7 @@ export function DelivereeWorkspace() {
                   sendMessage();
                 }
               }}
-              placeholder={activeProject ? `Ask about ${entityTitle(activeProject)}…` : "Ask, capture, or plan…"}
+              placeholder={isFocusedConversation ? `Ask about ${currentContextLabel}…` : "Ask, capture, or plan…"}
               ref={composerRef}
               rows={1}
               value={input}
@@ -1077,7 +1279,7 @@ export function DelivereeWorkspace() {
         <div className="do-panel-head">
           <div>
             <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Projects" : "Drafts"}</h2>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : "Drafts"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
@@ -1087,14 +1289,14 @@ export function DelivereeWorkspace() {
             <>
               <p className="do-panel-intro">Only the work that may need your attention now.</p>
               <div className="do-panel-list">
-                {(activeProject ? projectTasks : todayTasks).slice(0, 10).map((task) => (
+                {(isFocusedConversation ? projectTasks : todayTasks).slice(0, 10).map((task) => (
                   <button key={task.id} onClick={() => setComposer(`Help me move this task forward: ${entityTitle(task)}`)} type="button">
                     <Circle size={13} />
                     <span><strong>{entityTitle(task)}</strong><small>{priorityLabel(task.priority)}{task.projectId ? ` · ${entityTitle(projects.find((project) => project.id === task.projectId))}` : ""}</small></span>
                     <ChevronRight size={13} />
                   </button>
                 ))}
-                {(activeProject ? projectTasks : todayTasks).length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>Nothing urgent here.</strong><span>Use the conversation to decide what deserves focus.</span></div>}
+                {(isFocusedConversation ? projectTasks : todayTasks).length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>Nothing urgent here.</strong><span>Use the conversation to decide what deserves focus.</span></div>}
               </div>
               <button className="do-panel-primary" onClick={() => sendMessage("Plan my day realistically using my current work and available capacity.")} type="button"><Sparkles size={15} /> Plan with DelivereeOS</button>
             </>
@@ -1102,17 +1304,30 @@ export function DelivereeWorkspace() {
 
           {panel === "projects" && (
             <>
-              <p className="do-panel-intro">Choose a project to give the conversation its context.</p>
-              <div className="do-panel-list">
-                <button className={!activeProject ? "is-selected" : ""} onClick={() => { navigate("/"); setPanel(null); }} type="button">
-                  <Sparkles size={14} /><span><strong>All work</strong><small>Think across your workspace</small></span><ChevronRight size={13} />
+              <p className="do-panel-intro">A conversation can stay general or focus on one or several projects and tasks.</p>
+              <div className="do-panel-list do-context-options">
+                <button className={!isFocusedConversation ? "is-selected" : ""} onClick={() => updateConversationContext([], [], true)} type="button">
+                  <Sparkles size={14} /><span><strong>Chief of Staff · general</strong><small>Coordinate and manage anything in the workspace</small></span>{!isFocusedConversation ? <Check size={13} /> : <ChevronRight size={13} />}
                 </button>
+                <span className="do-context-section-label">Projects</span>
                 {activeProjects.map((project) => {
                   const count = openTasks.filter((task) => task.projectId === project.id).length;
-                  return <button className={activeProject?.id === project.id ? "is-selected" : ""} key={project.id} onClick={() => selectProjectContext(project)} type="button"><Folder size={14} /><span><strong>{entityTitle(project)}</strong><small>{count} open task{count === 1 ? "" : "s"} · select chat context</small></span><ChevronRight size={13} /></button>;
+                  const selected = directContextProjectIds.includes(project.id);
+                  return <button className={selected ? "is-selected" : ""} key={project.id} onClick={() => updateConversationContext(selected ? directContextProjectIds.filter((id) => id !== project.id) : [...directContextProjectIds, project.id], contextTaskIds)} type="button"><Folder size={14} /><span><strong>{entityTitle(project)}</strong><small>{count} open task{count === 1 ? "" : "s"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
                 })}
+                <span className="do-context-section-label">Tasks</span>
+                <input aria-label="Find tasks for this conversation" onChange={(event) => setContextTaskSearch(event.target.value)} placeholder="Find a task" value={contextTaskSearch} />
+                {openTasks
+                  .filter((task) => !contextTaskSearch.trim() || `${entityTitle(task)} ${entityTitle(projects.find((project) => project.id === task.projectId))}`.toLowerCase().includes(contextTaskSearch.toLowerCase()))
+                  .sort((left, right) => Number(contextTaskIds.includes(right.id)) - Number(contextTaskIds.includes(left.id)))
+                  .slice(0, 15)
+                  .map((task) => {
+                    const selected = contextTaskIds.includes(task.id);
+                    return <button className={selected ? "is-selected" : ""} key={task.id} onClick={() => updateConversationContext(directContextProjectIds, selected ? contextTaskIds.filter((id) => id !== task.id) : [...contextTaskIds, task.id])} type="button"><ListTodo size={14} /><span><strong>{entityTitle(task)}</strong><small>{task.projectId ? entityTitle(projects.find((project) => project.id === task.projectId)) : "No project"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
+                  })}
               </div>
-              {activeProject && <button className="do-panel-primary" onClick={() => openProjectRecord(activeProject)} type="button"><Folder size={15} /> Open project record</button>}
+              {primaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(primaryProject)} type="button"><Folder size={15} /> Open {entityTitle(primaryProject)}</button>}
+              <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
               <button className="do-panel-secondary" onClick={() => { setPanel(null); setCommandCenterOpen(true); }} type="button">Project command center</button>
             </>
           )}

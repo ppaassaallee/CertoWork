@@ -195,6 +195,8 @@ function groundedCitations(query, workspaceContext) {
   const sources = [
     ["task", workspaceContext?.tasks],
     ["project", workspaceContext?.projects],
+    ["milestone", workspaceContext?.milestones],
+    ["risk", workspaceContext?.risks],
     ["goal", workspaceContext?.goals],
     ["calendar", workspaceContext?.events],
     ["document", workspaceContext?.documents],
@@ -247,6 +249,8 @@ function compactEvidence(citations, workspaceContext) {
   const allItems = [
     ...(workspaceContext?.tasks || []),
     ...(workspaceContext?.projects || []),
+    ...(workspaceContext?.milestones || []),
+    ...(workspaceContext?.risks || []),
     ...(workspaceContext?.goals || []),
     ...(workspaceContext?.events || []),
     ...(workspaceContext?.documents || []),
@@ -270,21 +274,30 @@ function compactEvidence(citations, workspaceContext) {
 
 export function assistantInstructions(body, citations) {
   const context = body.workspaceContext || {};
-  const projectDelivery = context.mode === "project_delivery" && Boolean(context.activeProject?.id);
-  const operatingMode = projectDelivery
-    ? `PROJECT DELIVERY MODE — embedded in ${context.activeProject.title || context.activeProject.name || "the active project"}:
-- Act as the project's practical project manager, engineer, delivery advisor, and assistant. Help the team finish the work.
-- Use only this project's tasks, documents, risks, milestones, decisions, and conversation. Never mention the user's global Today list, unrelated tasks, other projects, or portfolio overload unless the user explicitly asks to compare portfolios.
+  const focusedDelivery = ["project_delivery", "focused_delivery"].includes(context.mode) &&
+    ((context.contextProjects || []).length > 0 || (context.contextTasks || []).length > 0 || Boolean(context.activeProject?.id));
+  const focusedLabel = context.activeProject?.title || context.activeProject?.name ||
+    `${(context.contextProjects || []).length} project(s) and ${(context.contextTasks || []).length} selected task(s)`;
+  const allowedProjectIds = [...new Set([
+    ...(context.contextProjects || []).map((project) => project.id).filter(Boolean),
+    context.activeProject?.id,
+  ].filter(Boolean))];
+  const operatingMode = focusedDelivery
+    ? `FOCUSED DELIVERY MODE — embedded in ${focusedLabel}:
+- Act as the practical project manager, engineer, delivery advisor, and assistant for the entities attached to this conversation. Help the team finish the work.
+- Use only the attached projects, selected tasks, documents, risks, milestones, decisions, and this conversation. Never mention the user's global Today list, unrelated tasks, other projects, or portfolio overload unless the user explicitly asks to compare portfolios.
 - Missing information is a completion checklist, not a refusal. Make a useful first pass now with clearly labeled assumptions, then ask at most one high-leverage question while work continues.
 - Never respond with only a gate, lecture, or request to pause another project. A warning may change sequencing or be recorded as a risk, but it must not prevent a reversible draft or backlog slice.
 - When given a large PRD or specification, extract a workable hierarchy: outcome, assumptions, phases or epics, milestones, requirement-linked work, risks, dependencies, owners, and acceptance evidence. Do not create hundreds of flat tasks. Propose the first coherent batch and say what the next batch will cover.
-- If the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject.id)}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
+- If exactly one project is attached and the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject?.id || allowedProjectIds[0] || "")}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
 - If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
-- Every proposed project action must carry projectId ${JSON.stringify(context.activeProject.id)}. Use create_milestone for delivery gates and create_risk for material risks.`
+- Every proposed project action must carry one applicable projectId from ${JSON.stringify(allowedProjectIds)}. When several are attached, separate work by project rather than blending ownership. Use create_milestone for delivery gates and create_risk for material risks.`
     : `CHIEF OF STAFF MODE — general workspace conversation:
-- Help the user choose across personal and cross-project commitments.
+- Be the user's Chief of Staff, assistant, engineer, and advisor. You may inspect and manage any supplied workspace item while keeping the final decision with the user.
+- Help the user choose across personal and cross-project commitments, coordinate work, and route clear handoffs to focused conversations.
 - You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
-- Keep capacity warnings occasional, specific, and paired with a constructive alternative.`;
+- Keep capacity warnings occasional, specific, and paired with a constructive alternative.
+- To leave a handoff in another existing conversation, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
   return `You are DelivereeOS, a calm conversational productivity partner. The entire product is one continuous conversation that helps a person or team turn thoughts into focused, credible action.
 
 ${operatingMode}
@@ -302,35 +315,43 @@ Product behavior:
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
 - In Chief of Staff mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
-- In Project Delivery mode, every suggested chip must be a useful next move for the active project. Never surface unrelated tasks or projects in chips.
+- In Focused Delivery mode, every suggested chip must be a useful next move for the attached context. Never surface unrelated tasks or projects in chips.
 
 Safety and judgment:
-- Treat the deterministic judgment preflight as evidence. In Project Delivery mode, informational gaps are guidance and assumptions, not blockers; only genuine safety, security, authorization, irreversible-action, or impossible-date conditions may stop execution.
+- Treat the deterministic judgment preflight as evidence. In Focused Delivery mode, informational gaps are guidance and assumptions, not blockers; only genuine safety, security, authorization, irreversible-action, or impossible-date conditions may stop execution.
 - Distinguish what the user wants to hear from what they need to hear.
 - The user retains override authority.
 - You may propose actions, but never claim they were executed.
-- Any workspace mutation must be returned as an actionPlan for explicit approval. Supported project actions are create_project_artifact, update_project, create_milestone, create_risk, create_task, and update_task.
+- Any workspace mutation must be returned as an actionPlan for explicit approval. Supported actions include create_project_artifact, update_project, create_milestone, update_milestone, create_risk, update_risk, create_task, update_task, and post_to_conversation. For updates, use the exact existing taskId, milestoneId, riskId, or projectId from evidence.
 - Never claim an external integration exists unless it is present in the supplied evidence.
 - Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
 
 Active conversational context:
 ${JSON.stringify({
   project: context.activeProject || null,
+  contextProjects: context.contextProjects || [],
+  contextTasks: context.contextTasks || [],
+  conversationType: context.conversationType || null,
   todayTaskCount: context.todayTaskCount || 0,
   pendingReviewCount: context.pendingReviewCount || 0,
   currentUserMessageId: context.currentUserMessageId || null,
   projectArtifactSourceMessageId: context.projectArtifactSourceMessageId || null,
-  operatingMode: projectDelivery ? "project_delivery" : "chief_of_staff",
+  operatingMode: focusedDelivery ? "focused_delivery" : "chief_of_staff",
 })}
+
+Conversation directory for approved handoffs:
+${JSON.stringify(context.conversationDirectory || [])}
 
 Current deterministic judgment:
 ${JSON.stringify(context.judgment || { verdict: "not_run", signals: [] })}
 
 Workspace load:
 ${JSON.stringify({
-  scope: projectDelivery ? "active_project_only" : "workspace",
+  scope: focusedDelivery ? "attached_entities_only" : "workspace",
   openTasksInScope: Array.isArray(context.tasks) ? context.tasks.length : 0,
   projectsInScope: Array.isArray(context.projects) ? context.projects.length : 0,
+  milestonesInScope: Array.isArray(context.milestones) ? context.milestones.length : 0,
+  risksInScope: Array.isArray(context.risks) ? context.risks.length : 0,
   projectDocuments: Array.isArray(context.documents) ? context.documents.length : 0,
   goals: Array.isArray(context.goals) ? context.goals.length : 0,
   calendarEvents: Array.isArray(context.events) ? context.events.length : 0,
@@ -349,7 +370,7 @@ Return one valid JSON object and no Markdown fence:
     "riskLevel": "low | medium | high",
     "safetyLevel": 1,
     "proposedActions": [{
-      "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | update_project | create_project_artifact | create_milestone | create_risk | outbox_communication",
+      "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | update_project | create_project_artifact | create_milestone | update_milestone | create_risk | update_risk | post_to_conversation | outbox_communication",
       "proposedChange": {},
       "reason": "string",
       "safetyLevel": 1,

@@ -99,6 +99,13 @@ button { color: inherit; }
 }
 .do-new-conversation:hover { border-color: #b5c0b8; }
 .do-new-conversation kbd { margin-left: auto; color: #9ca39e; font: 500 8px "DM Sans", sans-serif; }
+.do-chief-conversation { display: flex; width: calc(100% - 24px); align-items: center; gap: 8px; margin: 0 12px 3px; border: 0; border-radius: 10px; background: rgba(30, 84, 59, .08); padding: 8px 9px; color: #294f3d; text-align: left; cursor: pointer; }
+.do-chief-conversation > span { display: grid; width: 25px; height: 25px; flex: none; place-items: center; border-radius: 8px; background: #214b39; color: #fff; }
+.do-chief-conversation > div { min-width: 0; flex: 1; }
+.do-chief-conversation strong, .do-chief-conversation small { display: block; }
+.do-chief-conversation strong { font-size: 9px; }
+.do-chief-conversation small { margin-top: 2px; color: #7d8e85; font-size: 7px; }
+.do-chief-conversation > svg { color: #789083; }
 
 .do-sidebar-scroll { min-height: 0; flex: 1; overflow-y: auto; scrollbar-width: none; }
 .do-sidebar-scroll::-webkit-scrollbar,
@@ -134,8 +141,9 @@ button { color: inherit; }
 .do-empty-link { justify-content: center !important; border: 1px dashed #d5dbd6 !important; color: #7d8780 !important; }
 .do-conversations { padding-bottom: 20px; }
 .do-conversations > button { position: relative; background: rgba(25, 62, 46, .035); }
-.do-conversations > button::before { width: 3px; height: 3px; flex: none; border-radius: 50%; background: #789486; content: ""; }
-.do-conversations > button > svg { display: none; }
+.do-conversations > button::before { display: none; }
+.do-conversations > button > svg { display: block; flex: none; color: #6f887b; }
+.do-conversations > button > small { max-width: 72px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .do-conversations > button.is-active { box-shadow: inset 2px 0 #295f47; }
 .do-conversations > button.do-expand-chats { justify-content: center; background: transparent; color: #5d7065; font-size: 8px; font-weight: 600; }
 .do-conversations > button.do-expand-chats::before { display: none; }
@@ -291,6 +299,9 @@ button { color: inherit; }
 .do-panel-list strong, .do-panel-list small { display: block; }
 .do-panel-list strong { overflow: hidden; font-size: 9.5px; white-space: nowrap; text-overflow: ellipsis; }
 .do-panel-list small { overflow: hidden; margin-top: 3px; color: #929a95; font-size: 7.5px; white-space: nowrap; text-overflow: ellipsis; }
+.do-context-section-label { padding: 12px 8px 3px; color: #829087; font-size: 7px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.do-context-options > input { width: 100%; border: 1px solid #dce2dd; border-radius: 9px; background: #fff; padding: 9px 10px; color: #46544c; font-size: 8.5px; outline: none; }
+.do-context-options > input:focus { border-color: #8eaa9a; box-shadow: 0 0 0 2px rgba(53, 105, 78, .08); }
 .do-panel-empty { display: grid; justify-items: center; border: 1px dashed #d8ded9; border-radius: 12px; padding: 28px 18px; color: #688073; text-align: center; }
 .do-panel-empty strong { margin-top: 8px; font-size: 9.5px; }
 .do-panel-empty span { max-width: 230px; margin-top: 4px; color: #909892; font-size: 8px; line-height: 1.5; }
