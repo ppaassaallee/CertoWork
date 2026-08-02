@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ArrowRight, Check, Loader2, LogIn, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Loader2, LogIn, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 
@@ -58,13 +58,42 @@ function SignIn() {
   );
 }
 
+function WorkspaceRecovery() {
+  const { reloadWorkspaces, logOut, workspaceError } = useAuth();
+  const [retrying, setRetrying] = useState(false);
+
+  return (
+    <main className="do-recovery">
+      <span className="do-logo">D</span>
+      <h1>We couldn’t open your workspace.</h1>
+      <p>{workspaceError || "The workspace is taking longer than expected to load."}</p>
+      <div>
+        <button
+          disabled={retrying}
+          onClick={async () => {
+            setRetrying(true);
+            await reloadWorkspaces();
+            setRetrying(false);
+          }}
+          type="button"
+        >
+          {retrying ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+          Try again
+        </button>
+        <button onClick={logOut} type="button">Sign out</button>
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   const { user, loading, workspace } = useAuth();
 
-  if (loading || (user && !workspace)) {
+  if (loading) {
     return <div className="do-loading"><span className="do-logo">D</span><Loader2 className="spin" size={18} /></div>;
   }
   if (!user) return <SignIn />;
+  if (!workspace) return <WorkspaceRecovery />;
 
   return (
     <BrowserRouter>

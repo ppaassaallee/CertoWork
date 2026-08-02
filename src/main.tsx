@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { AuthProvider } from './lib/AuthContext';
+import { installRuntimeRecovery } from './lib/runtimeRecovery';
+
+installRuntimeRecovery();
 
 // Filter out benign React 18/motion v12 peer dependency warnings about 'ref' not being a prop
 if (typeof window !== 'undefined') {

@@ -16,6 +16,7 @@ interface AuthContextType {
   workspaces: Workspace[];
   setWorkspace: (ws: Workspace | null) => void;
   loading: boolean;
+  workspaceError: string;
   signIn: () => Promise<void>;
   logOut: () => Promise<void>;
   reloadWorkspaces: () => Promise<void>;
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   workspaces: [],
   setWorkspace: () => {},
   loading: true,
+  workspaceError: '',
   signIn: async () => {},
   logOut: async () => {},
   reloadWorkspaces: async () => {}
@@ -37,8 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [workspace, setWorkspaceState] = useState<Workspace | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState('');
 
   const loadWorkspaces = async (u: User) => {
+    setWorkspaceError('');
     try {
       const wsMap = new Map();
 
@@ -133,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.error("Failed in loadWorkspaces master routine:", e instanceof Error ? e.message : e);
+      setWorkspaceError("Your workspace could not be opened. Check your connection and try again.");
     }
   };
 
@@ -144,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setWorkspaceState(null);
         setWorkspaces([]);
+        setWorkspaceError('');
       }
       setLoading(false);
     });
@@ -162,7 +168,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const reloadWorkspaces = async () => {
-    if (user) await loadWorkspaces(user);
+    if (!user) return;
+    setLoading(true);
+    try {
+      await loadWorkspaces(user);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signIn = async () => {
@@ -175,11 +187,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, signIn, logOut, reloadWorkspaces }}>
+    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceError, signIn, logOut, reloadWorkspaces }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
-

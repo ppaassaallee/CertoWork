@@ -287,6 +287,13 @@ button { color: inherit; }
 .do-scrim.is-open { display: block; opacity: 1; pointer-events: auto; }
 
 .do-loading { display: flex; min-height: 100dvh; align-items: center; justify-content: center; gap: 13px; background: #f8faf7; color: #748078; }
+.do-recovery { display: grid; min-height: 100dvh; place-content: center; justify-items: center; background: #f8faf7; padding: 24px; color: #27312b; text-align: center; }
+.do-recovery h1 { margin: 18px 0 0; font: 600 clamp(25px, 4vw, 36px)/1.1 "Manrope", sans-serif; letter-spacing: -.04em; }
+.do-recovery p { max-width: 440px; margin: 10px 0 0; color: #78817b; font-size: 11px; line-height: 1.6; }
+.do-recovery > div { display: flex; gap: 7px; margin-top: 20px; }
+.do-recovery button { display: flex; align-items: center; gap: 6px; border: 1px solid #d9dfda; border-radius: 9px; background: #fff; padding: 9px 11px; color: #59645d; font-size: 9px; font-weight: 600; cursor: pointer; }
+.do-recovery button:first-child { border-color: #214b39; background: #214b39; color: #fff; }
+.do-recovery button:disabled { opacity: .6; }
 .do-signin { position: relative; min-height: 100dvh; overflow: hidden; background: #f7f9f6; color: #17221c; }
 .do-signin-glow { position: absolute; inset: -30% -15% auto auto; width: 70vw; height: 70vw; border-radius: 50%; background: radial-gradient(circle, rgba(176, 207, 187, .52), transparent 64%); filter: blur(22px); }
 .do-signin > header { position: relative; z-index: 2; display: flex; height: 68px; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(29, 56, 42, .08); padding: 0 5vw; }
