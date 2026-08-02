@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   CheckCircle2,
   Circle,
   FileText,
@@ -92,6 +94,76 @@ function EmptyState({ icon, title, text }: { icon: React.ReactNode; title: strin
   return <div className="do-project-empty">{icon}<strong>{title}</strong><span>{text}</span></div>;
 }
 
+type WorkItemKind = "epic" | "feature" | "pbi";
+
+function workItemKind(item: any): WorkItemKind {
+  const value = String(item?.workItemType || item?.itemType || item?.taskType || item?.issueType || item?.kind || "").toLowerCase();
+  if (value.includes("epic")) return "epic";
+  if (value.includes("feature")) return "feature";
+  return "pbi";
+}
+
+function workItemParentId(item: any) {
+  return String(item?.parentId || item?.featureId || item?.epicId || "");
+}
+
+function itemOrder(item: any, fallback = 0) {
+  const value = Number(item?.order ?? item?.rank ?? item?.position);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function sortWorkItems(items: any[]) {
+  return [...items].sort((left, right) => (
+    itemOrder(left) - itemOrder(right) ||
+    String(left.priority || "P4").localeCompare(String(right.priority || "P4")) ||
+    projectTitle(left).localeCompare(projectTitle(right))
+  ));
+}
+
+function dateInputValue(value: any) {
+  if (!value) return "";
+  if (typeof value === "string") return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : "";
+  if (value?.toDate) return value.toDate().toISOString().slice(0, 10);
+  if (value?.seconds) return new Date(value.seconds * 1000).toISOString().slice(0, 10);
+  return "";
+}
+
+function priorityValue(value: any) {
+  const normalized = String(value || "").toUpperCase();
+  if (["P1", "P2", "P3", "P4"].includes(normalized)) return normalized;
+  if (["1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "P1";
+  if (["2", "MEDIUM"].includes(normalized)) return "P2";
+  if (["3", "LOW"].includes(normalized)) return "P3";
+  return "P4";
+}
+
+function InlineEdit({
+  ariaLabel,
+  value,
+  placeholder,
+  onCommit,
+}: {
+  ariaLabel: string;
+  value?: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value || "");
+  useEffect(() => setDraft(value || ""), [value]);
+  return (
+    <input
+      aria-label={ariaLabel}
+      onBlur={() => draft.trim() !== String(value || "").trim() && onCommit(draft.trim())}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      placeholder={placeholder}
+      value={draft}
+    />
+  );
+}
+
 export function ProjectRecordModal({
   project,
   tasks,
@@ -116,7 +188,7 @@ export function ProjectRecordModal({
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
-  onAddTask: (title: string, status: WorkLane) => Promise<void> | void;
+  onAddTask: (title: string, status: WorkLane, patch?: ProjectPatch) => Promise<void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
@@ -317,13 +389,16 @@ export function ProjectConsolePanel({
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
-  onAddTask: (title: string, status: WorkLane) => Promise<void> | void;
+  onAddTask: (title: string, status: WorkLane, patch?: ProjectPatch) => Promise<void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
 }) {
-  const [tab, setTab] = useState<"brief" | "plan" | "work" | "risks" | "docs">("brief");
+  const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "docs">("brief");
   const [taskTitle, setTaskTitle] = useState("");
+  const [workTitle, setWorkTitle] = useState("");
+  const [workType, setWorkType] = useState<WorkItemKind>("pbi");
+  const [workParentId, setWorkParentId] = useState("");
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
@@ -338,6 +413,12 @@ export function ProjectConsolePanel({
     blocked: blockedTasks,
     done: tasks.filter((task) => taskWorkLane(task) === "done"),
   }), [blockedTasks, tasks]);
+  const hierarchy = useMemo(() => {
+    const epics = sortWorkItems(tasks.filter((task) => workItemKind(task) === "epic"));
+    const features = sortWorkItems(tasks.filter((task) => workItemKind(task) === "feature"));
+    const pbis = sortWorkItems(tasks.filter((task) => workItemKind(task) === "pbi"));
+    return { epics, features, pbis };
+  }, [tasks]);
 
   useEffect(() => {
     setTab("brief");
@@ -350,8 +431,68 @@ export function ProjectConsolePanel({
     await onAddTask(taskTitle.trim(), "backlog");
     setTaskTitle("");
   };
+  const submitWorkItem = async () => {
+    if (!workTitle.trim()) return;
+    const parent = tasks.find((item) => item.id === workParentId);
+    const parentKind = parent ? workItemKind(parent) : null;
+    const patch: ProjectPatch = {
+      workItemType: workType,
+      itemType: workType,
+      taskType: workType,
+      parentId: workParentId || null,
+      epicId: parentKind === "epic" ? workParentId : parent?.epicId || null,
+      featureId: parentKind === "feature" ? workParentId : null,
+      priority: "P3",
+      order: tasks.length,
+      rank: tasks.length,
+    };
+    await onAddTask(workTitle.trim(), "backlog", patch);
+    setWorkTitle("");
+  };
+  const moveWorkItem = async (items: any[], item: any, direction: -1 | 1) => {
+    const ordered = sortWorkItems(items);
+    const index = ordered.findIndex((candidate) => candidate.id === item.id);
+    const other = ordered[index + direction];
+    if (!other) return;
+    const currentOrder = itemOrder(item, index);
+    const otherOrder = itemOrder(other, index + direction);
+    await onUpdateTask(item.id, { order: otherOrder, rank: otherOrder });
+    await onUpdateTask(other.id, { order: currentOrder, rank: currentOrder });
+  };
   const nextMilestone = openMilestones[0];
   const nextRisk = risks.find((risk) => String(risk.status || "open").toLowerCase() !== "closed") || blockedTasks[0];
+  const parentOptions = workType === "epic"
+    ? []
+    : workType === "feature" ? hierarchy.epics : [...hierarchy.features, ...hierarchy.epics];
+  const renderWorkItemRow = (item: any, peers: any[]) => {
+    const kind = workItemKind(item);
+    return (
+      <article className={`do-backlog-row is-${kind}`} key={item.id}>
+        <div className="do-backlog-rank">
+          <button aria-label={`Move ${projectTitle(item)} up`} onClick={() => moveWorkItem(peers, item, -1)} type="button"><ArrowUp size={12} /></button>
+          <button aria-label={`Move ${projectTitle(item)} down`} onClick={() => moveWorkItem(peers, item, 1)} type="button"><ArrowDown size={12} /></button>
+        </div>
+        <div className="do-backlog-title">
+          <span>{kind === "epic" ? "Epic" : kind === "feature" ? "Feature" : "PBI"}</span>
+          <InlineEdit ariaLabel={`Title for ${projectTitle(item)}`} onCommit={(title) => title && onUpdateTask(item.id, { title })} placeholder="Untitled work item" value={item.title || item.name} />
+        </div>
+        <select aria-label={`Status for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={taskWorkLane(item)}>
+          <option value="backlog">Backlog</option>
+          <option value="in_progress">Doing</option>
+          <option value="blocked">Blocked</option>
+          <option value="done">Done</option>
+        </select>
+        <select aria-label={`Priority for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value })} value={priorityValue(item.priority)}>
+          <option value="P1">P1</option>
+          <option value="P2">P2</option>
+          <option value="P3">P3</option>
+          <option value="P4">P4</option>
+        </select>
+        <input aria-label={`Owner for ${projectTitle(item)}`} defaultValue={item.owner || item.assignee || ""} onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
+        <input aria-label={`Due date for ${projectTitle(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
+      </article>
+    );
+  };
 
   return (
     <section className="do-project-console" data-testid="project-console">
@@ -383,7 +524,7 @@ export function ProjectConsolePanel({
 
       <nav className="do-console-tabs" aria-label="Project console sections">
         {([
-          ["brief", "Brief"], ["plan", "Plan"], ["work", "Work"], ["risks", "Risks"], ["docs", "Docs"],
+          ["brief", "Brief"], ["backlog", "Backlog"], ["plan", "Plan"], ["work", "Flow"], ["risks", "Risks"], ["docs", "Docs"],
         ] as const).map(([value, label]) => (
           <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}</button>
         ))}
@@ -399,6 +540,88 @@ export function ProjectConsolePanel({
           <div className="do-console-ask-grid">
             <button onClick={() => onAsk(`Create the next coherent implementation batch for ${projectTitle(project)} with owners, dependencies, acceptance evidence, and requirement IDs.`)} type="button"><Sparkles size={13} /> Build next batch</button>
             <button onClick={() => onAsk(`Prepare a team planning agenda for ${projectTitle(project)} using ${methodology.toUpperCase()} with decisions, roles, milestones, risks, and next actions.`)} type="button"><Users size={13} /> Team planning</button>
+          </div>
+        </div>
+      )}
+
+      {tab === "backlog" && (
+        <div className="do-console-section">
+          <section className="do-planning-session">
+            <div>
+              <span className="do-project-card-kicker">PLANNING SESSION</span>
+              <h4>{methodology === "pmi" ? "Scope planning" : "Sprint planning"}</h4>
+            </div>
+            <InlineEdit ariaLabel="Planning session name" onCommit={(planningSessionName) => update({ planningSessionName })} placeholder="Session name" value={project.planningSessionName || project.currentSprintName || ""} />
+            <input aria-label="Planning start date" defaultValue={dateInputValue(project.sprintStartDate || project.planningStartDate)} onBlur={(event) => update({ sprintStartDate: event.target.value || null })} type="date" />
+            <input aria-label="Planning end date" defaultValue={dateInputValue(project.sprintEndDate || project.planningEndDate)} onBlur={(event) => update({ sprintEndDate: event.target.value || null })} type="date" />
+            <button onClick={() => onAsk(`Run a planning session for ${projectTitle(project)}. Use the current epics, features, PBIs, priorities, owners, risks, and dates. Help me decide the sprint or phase commitment.`)} type="button"><Sparkles size={13} /> Plan session</button>
+          </section>
+
+          <section className="do-backlog-add">
+            <select aria-label="Work item type" onChange={(event) => { setWorkType(event.target.value as WorkItemKind); setWorkParentId(""); }} value={workType}>
+              <option value="epic">Epic</option>
+              <option value="feature">Feature</option>
+              <option value="pbi">PBI</option>
+            </select>
+            <select aria-label="Parent work item" disabled={parentOptions.length === 0} onChange={(event) => setWorkParentId(event.target.value)} value={workParentId}>
+              <option value="">{workType === "epic" ? "No parent" : workType === "feature" ? "Choose epic" : "Choose feature or epic"}</option>
+              {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemKind(item) === "epic" ? "Epic" : "Feature"} · {projectTitle(item)}</option>)}
+            </select>
+            <input onChange={(event) => setWorkTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitWorkItem()} placeholder={`Add ${workType === "pbi" ? "PBI" : workType}...`} value={workTitle} />
+            <button disabled={!workTitle.trim()} onClick={submitWorkItem} type="button"><Plus size={13} /> Add</button>
+          </section>
+
+          <div className="do-backlog-summary">
+            <span><strong>{hierarchy.epics.length}</strong> Epics</span>
+            <span><strong>{hierarchy.features.length}</strong> Features</span>
+            <span><strong>{hierarchy.pbis.length}</strong> PBIs</span>
+          </div>
+
+          <div className="do-backlog-tree">
+            {hierarchy.epics.map((epic) => {
+              const epicFeatures = hierarchy.features.filter((feature) => workItemParentId(feature) === epic.id || feature.epicId === epic.id);
+              const epicPbis = hierarchy.pbis.filter((pbi) => (pbi.parentId === epic.id || pbi.epicId === epic.id) && !pbi.featureId);
+              return (
+                <section className="do-backlog-epic" key={epic.id}>
+                  {renderWorkItemRow(epic, hierarchy.epics)}
+                  <div className="do-backlog-children">
+                    {epicFeatures.map((feature) => {
+                      const featurePbis = hierarchy.pbis.filter((pbi) => pbi.parentId === feature.id || pbi.featureId === feature.id);
+                      return (
+                        <div className="do-backlog-feature" key={feature.id}>
+                          {renderWorkItemRow(feature, epicFeatures)}
+                          <div className="do-backlog-children is-pbis">
+                            {featurePbis.map((pbi) => renderWorkItemRow(pbi, featurePbis))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {epicPbis.map((pbi) => renderWorkItemRow(pbi, epicPbis))}
+                  </div>
+                </section>
+              );
+            })}
+
+            {hierarchy.features.filter((feature) => !workItemParentId(feature)).map((feature) => {
+              const featurePbis = hierarchy.pbis.filter((pbi) => pbi.parentId === feature.id || pbi.featureId === feature.id);
+              return (
+                <section className="do-backlog-epic is-unassigned" key={feature.id}>
+                  {renderWorkItemRow(feature, hierarchy.features.filter((item) => !workItemParentId(item)))}
+                  <div className="do-backlog-children is-pbis">
+                    {featurePbis.map((pbi) => renderWorkItemRow(pbi, featurePbis))}
+                  </div>
+                </section>
+              );
+            })}
+
+            {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).length > 0 && (
+              <section className="do-backlog-epic is-unassigned">
+                <header><strong>Unassigned PBIs</strong><span>{hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).length}</span></header>
+                {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).map((pbi) => renderWorkItemRow(pbi, hierarchy.pbis.filter((item) => !workItemParentId(item))))}
+              </section>
+            )}
+
+            {tasks.length === 0 && <EmptyState icon={<ListChecks size={18} />} title="No backlog yet" text="Create epics, features, and PBIs here, or ask DelivereeOS to extract them from the PRD." />}
           </div>
         </div>
       )}

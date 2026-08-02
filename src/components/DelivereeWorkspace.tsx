@@ -987,9 +987,10 @@ export function DelivereeWorkspace() {
     setNotice(`${entityTitle(project)} archived. Its history is preserved.`);
   };
 
-  const addProjectTask = async (projectId: string, title: string, status: WorkLane) => {
+  const addProjectTask = async (projectId: string, title: string, status: WorkLane, patch: Record<string, unknown> = {}) => {
     if (!user || !workspace) return;
     await addDoc(collection(db, "tasks"), {
+      ...patch,
       userId: user.uid,
       workspaceId: workspace.id,
       projectId,
@@ -1309,7 +1310,7 @@ export function DelivereeWorkspace() {
                 milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
                 onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}
                 onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
-                onAddTask={(title, status) => addProjectTask(consoleProject.id, title, status)}
+                onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
                 onArchiveProject={archiveProject}
                 onAsk={setComposer}
                 onUpdateProject={updateProject}
