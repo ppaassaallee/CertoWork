@@ -29,29 +29,29 @@ function SignIn() {
     <main className="do-signin">
       <div className="do-signin-glow" />
       <header>
-        <div className="do-brand"><span className="do-logo">D</span><span><strong>DelivereeOS</strong><small>AI delivery, in conversation</small></span></div>
-        <span className="do-signin-pill"><ShieldCheck size={13} /> Approval-gated by design</span>
+        <div className="do-brand"><span className="do-logo">D</span><span><strong>DelivereeOS</strong><small>Think. Choose. Move.</small></span></div>
+        <span className="do-signin-pill"><ShieldCheck size={13} /> You approve every change</span>
       </header>
       <div className="do-signin-grid">
         <section className="do-signin-copy">
-          <span className="do-kicker">CONVERSATIONAL AI DELIVERY</span>
-          <h1>Run delivery.<br />Keep the reasoning.</h1>
-          <p>DelivereeOS is a conversational Jira for AI work: opportunities, projects, issues, readiness, and reviews in one continuous interface.</p>
+          <span className="do-kicker">CONVERSATIONAL PRODUCTIVITY</span>
+          <h1>Turn thought<br />into progress.</h1>
+          <p>Capture, decide, plan, and move your work through one calm conversation. Projects add context without taking you into another app.</p>
           <button className="do-signin-button" disabled={submitting} onClick={handleSignIn} type="button">
             {submitting ? <Loader2 className="spin" size={17} /> : <LogIn size={17} />}
             Continue with Google
             <ArrowRight size={16} />
           </button>
           {error && <p className="do-signin-error" role="alert">{error}</p>}
-          <div className="do-signin-proof"><span><Check size={13} /> One conversational workspace</span><span><Check size={13} /> Real workspace data</span><span><Check size={13} /> Human approval before writes</span></div>
+          <div className="do-signin-proof"><span><Check size={13} /> One conversation</span><span><Check size={13} /> Real workspace context</span><span><Check size={13} /> Approval before changes</span></div>
         </section>
         <section className="do-signin-preview" aria-label="Product preview">
-          <div className="do-preview-top"><span><Sparkles size={15} /> DelivereeOS</span><small>Project · Voice Agent UAT</small></div>
+          <div className="do-preview-top"><span><Sparkles size={15} /> DelivereeOS</span><small>All work</small></div>
           <div className="do-preview-thread">
-            <div className="do-preview-user">Are we ready to move this project into UAT?</div>
-            <div className="do-preview-answer"><span><Sparkles size={14} /></span><div><strong>Not yet.</strong><p>The release candidate is stable, but the rollback owner and Tier 2 runbook are still missing. I recommend closing those two gaps before UAT.</p><div><button>Draft runbook</button><button>Create two issues</button></div></div></div>
+            <div className="do-preview-user">Help me plan today without overloading it.</div>
+            <div className="do-preview-answer"><span><Sparkles size={14} /></span><div><strong>Protect these two outcomes.</strong><p>Finish the client proposal first, then unblock the onboarding project. Move the remaining admin to one afternoon block.</p><div><button>Use this plan</button><button>Adjust priorities</button></div></div></div>
           </div>
-          <div className="do-preview-compose">Ask about this project… <ArrowRight size={15} /></div>
+          <div className="do-preview-compose">Ask, capture, or plan… <ArrowRight size={15} /></div>
         </section>
       </div>
     </main>

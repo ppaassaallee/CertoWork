@@ -31,9 +31,9 @@ test("delivery stage normalization keeps the portfolio coherent", () => {
   assert.equal(normalizeDeliveryStage(undefined), "assessment");
 });
 
-test("project health and issue language support a Jira-like workflow", () => {
+test("project health and task language support conversational productivity", () => {
   assert.equal(projectHealth({ health: "blocked" }), "blocked");
   assert.equal(projectHealth({}, 15), "at_risk");
   assert.equal(projectHealth({}, 2), "on_track");
-  assert.equal(actionLabel("create_task"), "Create issue");
+  assert.equal(actionLabel("create_task"), "Create task");
 });

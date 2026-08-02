@@ -61,9 +61,9 @@ export function projectHealth(project: Record<string, unknown>, openIssueCount =
 
 export function actionLabel(type?: string) {
   const labels: Record<string, string> = {
-    create_task: "Create issue",
-    update_task: "Update issue",
-    reschedule_task: "Reschedule issue",
+    create_task: "Create task",
+    update_task: "Update task",
+    reschedule_task: "Reschedule task",
     create_project: "Create project",
     create_decision: "Record decision",
     create_followup: "Create follow-up",
