@@ -90,10 +90,27 @@ async function verifyFirebaseToken(token, expectedUserId, projectId) {
   return payload;
 }
 
+function platformIdentity(request) {
+  const id = request.headers.get("oai-authenticated-user-id");
+  const email = request.headers.get("oai-authenticated-user-email");
+  const encodedName = request.headers.get("oai-authenticated-user-full-name");
+  const nameEncoding = request.headers.get("oai-authenticated-user-full-name-encoding");
+  let name = "";
+  if (encodedName && nameEncoding === "percent-encoded-utf-8") {
+    try {
+      name = decodeURIComponent(encodedName);
+    } catch {
+      name = "";
+    }
+  }
+  if (!id && !email) return null;
+  return { id: id || email, email: email || "", name };
+}
+
 async function authorize(request, body, env) {
-  const platformEmail = request.headers.get("oai-authenticated-user-email");
-  if (platformEmail) {
-    return { provider: "codex-sites", subject: platformEmail };
+  const identity = platformIdentity(request);
+  if (identity) {
+    return { provider: "codex-sites", subject: identity.id, email: identity.email };
   }
 
   const authorization = request.headers.get("authorization") || "";
@@ -501,6 +518,11 @@ const worker = {
     }
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
       return json(capabilities(env));
+    }
+    if (request.method === "GET" && url.pathname === "/api/session") {
+      const identity = platformIdentity(request);
+      if (!identity) return json({ authenticated: false }, 401);
+      return json({ authenticated: true, provider: "codex-sites", user: identity });
     }
     if (request.method === "POST" && url.pathname === "/api/boldi/chat") {
       return chat(request, env);

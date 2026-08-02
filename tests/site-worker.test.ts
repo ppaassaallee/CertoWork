@@ -44,6 +44,38 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
   assert.equal(body.activeAIProvider.configured, false);
 });
 
+test("Sites worker exposes the signed-in platform identity for the migration path", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/session", {
+      headers: {
+        "oai-authenticated-user-id": "sites-user-1",
+        "oai-authenticated-user-email": "alejandro@getboldr.ai",
+        "oai-authenticated-user-full-name": "Alejandro%20Pascual",
+        "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
+      },
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    authenticated: true,
+    provider: "codex-sites",
+    user: {
+      id: "sites-user-1",
+      email: "alejandro@getboldr.ai",
+      name: "Alejandro Pascual",
+    },
+  });
+});
+
+test("Sites session endpoint rejects anonymous requests", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/session"),
+    environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
 test("Sites worker preserves client-side routes through the SPA fallback", async () => {
   const requestedPaths: string[] = [];
   const env = environment({

@@ -228,6 +228,7 @@ export function DelivereeWorkspace() {
   const [search, setSearch] = useState("");
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [creatingConversation, setCreatingConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -356,7 +357,9 @@ export function DelivereeWorkspace() {
   }, [activeProject, conversations]);
 
   const createConversation = useCallback(async () => {
-    if (!user || !workspace) return;
+    if (!user || !workspace || creatingConversation) return;
+    setCreatingConversation(true);
+    setNotice("");
     try {
       const ref = await addDoc(collection(db, "boldi_conversations"), {
         userId: user.uid,
@@ -369,6 +372,16 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      setConversations((current) => [
+        {
+          id: ref.id,
+          title: "New conversation",
+          contextEntityId: activeProject?.id || null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        ...current.filter((conversation) => conversation.id !== ref.id),
+      ]);
       setConversationId(ref.id);
       setMessages([]);
       setInput("");
@@ -379,8 +392,10 @@ export function DelivereeWorkspace() {
       requestAnimationFrame(() => composerRef.current?.focus());
     } catch {
       setNotice("A new conversation could not be created. Check workspace access and try again.");
+    } finally {
+      setCreatingConversation(false);
     }
-  }, [activeProject, navigate, user, workspace]);
+  }, [activeProject, creatingConversation, navigate, user, workspace]);
 
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
@@ -643,8 +658,10 @@ export function DelivereeWorkspace() {
           <button aria-label="Close navigation" className="do-mobile-close" onClick={() => setSidebarOpen(false)} type="button"><X size={16} /></button>
         </div>
 
-        <button className="do-new-conversation" data-testid="new-conversation" onClick={createConversation} type="button">
-          <Plus size={15} /> New conversation <kbd>⌘K</kbd>
+        <button className="do-new-conversation" data-testid="new-conversation" disabled={creatingConversation} onClick={createConversation} type="button">
+          {creatingConversation ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}
+          {creatingConversation ? "Starting…" : "New conversation"}
+          <kbd>⌘K</kbd>
         </button>
 
         <div className="do-sidebar-scroll">

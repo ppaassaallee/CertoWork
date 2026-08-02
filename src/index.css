@@ -287,6 +287,11 @@ button { color: inherit; }
 .do-scrim.is-open { display: block; opacity: 1; pointer-events: auto; }
 
 .do-loading { display: flex; min-height: 100dvh; align-items: center; justify-content: center; gap: 13px; background: #f8faf7; color: #748078; }
+.do-loading p { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+.do-signin-alternate { display: inline-flex; align-items: center; justify-content: center; margin-top: 12px; padding: 6px 0; border: 0; background: transparent; color: #52645a; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.do-signin-alternate:hover { color: #123f2f; }
+.do-signin-alternate:disabled { cursor: wait; opacity: .5; }
+.do-new-conversation:disabled { cursor: wait; opacity: .72; }
 .do-recovery { display: grid; min-height: 100dvh; place-content: center; justify-items: center; background: #f8faf7; padding: 24px; color: #27312b; text-align: center; }
 .do-recovery h1 { margin: 18px 0 0; font: 600 clamp(25px, 4vw, 36px)/1.1 "Manrope", sans-serif; letter-spacing: -.04em; }
 .do-recovery p { max-width: 440px; margin: 10px 0 0; color: #78817b; font-size: 11px; line-height: 1.6; }

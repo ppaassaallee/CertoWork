@@ -1,7 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import {
+  User,
+  browserLocalPersistence,
+  getRedirectResult,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import {
+  AUTH_BOOT_TIMEOUT_MS,
+  AUTH_POPUP_TIMEOUT_MS,
+  authErrorMessage,
+  withAuthTimeout,
+} from './authFlow';
 
 export interface Workspace {
   id: string;
@@ -18,7 +34,8 @@ interface AuthContextType {
   loading: boolean;
   workspaceLoading: boolean;
   workspaceError: string;
-  signIn: () => Promise<void>;
+  authError: string;
+  signIn: (method?: 'popup' | 'redirect') => Promise<void>;
   logOut: () => Promise<void>;
   reloadWorkspaces: () => Promise<void>;
 }
@@ -31,6 +48,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   workspaceLoading: false,
   workspaceError: '',
+  authError: '',
   signIn: async () => {},
   logOut: async () => {},
   reloadWorkspaces: async () => {}
@@ -59,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState('');
+  const [authError, setAuthError] = useState('');
 
   const loadWorkspaces = async (u: User) => {
     setWorkspaceError('');
@@ -174,13 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const authTimeout = window.setTimeout(() => {
       setLoading(false);
-      setWorkspaceError('Authentication is taking too long. Try signing in again.');
-    }, 8_000);
+      setAuthError('Your session took too long to open. Sign in again to continue.');
+    }, AUTH_BOOT_TIMEOUT_MS);
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       window.clearTimeout(authTimeout);
       setUser(u);
       if (u) {
+        setAuthError('');
         const storedId = localStorage.getItem('activeWorkspaceId');
         if (storedId) {
           setWorkspaceState((current) => current || {
@@ -203,6 +223,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     });
+
+    // Completes the fallback flow after Google returns to this page. The auth
+    // observer above remains the single source of truth for the signed-in user.
+    void getRedirectResult(auth).catch((reason) => {
+      window.clearTimeout(authTimeout);
+      setAuthError(authErrorMessage(reason));
+      setLoading(false);
+    });
+
     return () => {
       window.clearTimeout(authTimeout);
       unsubscribe();
@@ -232,9 +261,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signIn = async () => {
+  const signIn = async (method: 'popup' | 'redirect' = 'popup') => {
+    setAuthError('');
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      if (method === 'redirect') {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      await withAuthTimeout(
+        signInWithPopup(auth, provider),
+        AUTH_POPUP_TIMEOUT_MS,
+        'Google sign-in',
+      );
+    } catch (reason) {
+      const message = authErrorMessage(reason);
+      setAuthError(message);
+      throw new Error(message);
+    }
   };
 
   const logOut = async () => {
@@ -242,7 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, signIn, logOut, reloadWorkspaces }}>
+    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, authError, signIn, logOut, reloadWorkspaces }}>
       {children}
     </AuthContext.Provider>
   );

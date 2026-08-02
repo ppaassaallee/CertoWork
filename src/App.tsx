@@ -5,23 +5,23 @@ import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 
 function SignIn() {
-  const { signIn } = useAuth();
+  const { signIn, authError } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSignIn = async () => {
+  const handleSignIn = async (method: 'popup' | 'redirect' = 'popup') => {
     setSubmitting(true);
+    setRedirecting(method === 'redirect');
     setError("");
     try {
-      await signIn();
+      await signIn(method);
     } catch (reason) {
-      setError(
-        reason instanceof Error && reason.message.includes("popup")
-          ? "The sign-in window was blocked or closed. Allow pop-ups for this site and try again."
-          : "Google sign-in could not be completed. Please try again.",
-      );
+      // AuthContext provides a precise, browser-safe message for the error.
+      setError(reason instanceof Error ? reason.message : "Sign-in could not be completed.");
     } finally {
       setSubmitting(false);
+      setRedirecting(false);
     }
   };
 
@@ -37,12 +37,20 @@ function SignIn() {
           <span className="do-kicker">CONVERSATIONAL PRODUCTIVITY</span>
           <h1>Turn thought<br />into progress.</h1>
           <p>Capture, decide, plan, and move your work through one calm conversation. Projects add context without taking you into another app.</p>
-          <button className="do-signin-button" disabled={submitting} onClick={handleSignIn} type="button">
+          <button className="do-signin-button" disabled={submitting} onClick={() => handleSignIn('popup')} type="button">
             {submitting ? <Loader2 className="spin" size={17} /> : <LogIn size={17} />}
-            Continue with Google
+            {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
             <ArrowRight size={16} />
           </button>
-          {error && <p className="do-signin-error" role="alert">{error}</p>}
+          {(authError || error) && <p className="do-signin-error" role="alert">{authError || error}</p>}
+          <button
+            className="do-signin-alternate"
+            disabled={submitting}
+            onClick={() => handleSignIn('redirect')}
+            type="button"
+          >
+            Having trouble? Use full-page sign-in
+          </button>
           <div className="do-signin-proof"><span><Check size={13} /> One conversation</span><span><Check size={13} /> Real workspace context</span><span><Check size={13} /> Approval before changes</span></div>
         </section>
         <section className="do-signin-preview" aria-label="Product preview">
@@ -90,7 +98,7 @@ export default function App() {
   const { user, loading, workspace } = useAuth();
 
   if (loading) {
-    return <div className="do-loading"><span className="do-logo">D</span><Loader2 className="spin" size={18} /></div>;
+    return <div className="do-loading"><span className="do-logo">D</span><Loader2 className="spin" size={18} /><p>Opening DelivereeOS…</p></div>;
   }
   if (!user) return <SignIn />;
   if (!workspace) return <WorkspaceRecovery />;
