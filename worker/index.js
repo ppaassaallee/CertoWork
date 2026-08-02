@@ -7,6 +7,7 @@
  */
 
 const FIREBASE_PROJECT_ID = "gen-lang-client-0277783597";
+const FIREBASE_AUTH_ORIGIN = "https://gen-lang-client-0277783597.firebaseapp.com";
 const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -32,6 +33,29 @@ function withSecurityHeaders(response) {
   next.headers.set("permissions-policy", "camera=(), geolocation=(), payment=()");
   next.headers.set("x-frame-options", "SAMEORIGIN");
   return next;
+}
+
+export function firebaseAuthProxyUrl(requestUrl) {
+  const upstream = new URL(requestUrl);
+  const firebaseOrigin = new URL(FIREBASE_AUTH_ORIGIN);
+  upstream.protocol = firebaseOrigin.protocol;
+  upstream.host = firebaseOrigin.host;
+  return upstream.toString();
+}
+
+async function proxyFirebaseAuth(request) {
+  const upstreamUrl = firebaseAuthProxyUrl(request.url);
+  const upstreamResponse = await fetch(new Request(upstreamUrl, request), {
+    redirect: "manual",
+  });
+  const response = new Response(upstreamResponse.body, upstreamResponse);
+  const location = response.headers.get("location");
+  if (location?.startsWith(FIREBASE_AUTH_ORIGIN)) {
+    const publicOrigin = new URL(request.url).origin;
+    response.headers.set("location", location.replace(FIREBASE_AUTH_ORIGIN, publicOrigin));
+  }
+  response.headers.set("cache-control", "no-store");
+  return response;
 }
 
 function decodeBase64Url(value) {
@@ -246,13 +270,14 @@ Product behavior:
 - Organize work by when it needs attention: Today, This Week, Later, or a real calendar block.
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
-- Use projects only as context for outcomes, tasks, decisions, owners, dependencies, and risks. Do not introduce boards, sprints, ceremonies, modules, or workflow jargon unless the user asks.
+- Use projects as context for outcomes, tasks, decisions, owners, dependencies, risks, milestones, and delivery. When the user asks for team planning, support a lightweight Scrum backlog/sprint flow or PMI lifecycle without unnecessary ceremony.
 - Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks across all work.
 - Use the supplied workspace records as the source of truth. Say "Not enough data" when evidence is missing.
 - Treat tasks as tasks, not issues. Keep every proposed task concrete: a clear verb, finish condition, owner when known, and realistic timing.
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
+- Do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation; keep it gentle and decision-specific.
 
 Safety and judgment:
 - Treat the deterministic judgment preflight as evidence. Never hide blocking or warning signals.
@@ -261,7 +286,7 @@ Safety and judgment:
 - You may propose actions, but never claim they were executed.
 - Any workspace mutation must be returned as an actionPlan for explicit approval. A create_task action means create a task.
 - Never claim an external integration exists unless it is present in the supplied evidence.
-- Do not mention Google AI Studio, Gemini, Jira, Gazelle, HubSpot, or pretend to have contacted anyone.
+- Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
 
 Active conversational context:
 ${JSON.stringify({
@@ -496,6 +521,10 @@ async function serveAsset(request, env) {
 const worker = {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/__/auth/")) {
+      return proxyFirebaseAuth(request);
+    }
 
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
       return new Response(null, {

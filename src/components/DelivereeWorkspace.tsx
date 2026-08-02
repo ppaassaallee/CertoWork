@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   Folder,
@@ -29,6 +30,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 import {
@@ -45,6 +47,8 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
 import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
+import { sidebarProjectGroups, sortProjectsByRecency, type WorkLane } from "../lib/projectPortfolio";
+import { ProjectCommandCenter, ProjectRecordModal } from "./ProjectSurfaces";
 
 type Conversation = {
   id: string;
@@ -216,6 +220,8 @@ export function DelivereeWorkspace() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [risks, setRisks] = useState<any[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -226,6 +232,9 @@ export function DelivereeWorkspace() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [chatsExpanded, setChatsExpanded] = useState(false);
+  const [projectModalId, setProjectModalId] = useState<string | null>(null);
+  const [commandCenterOpen, setCommandCenterOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [creatingConversation, setCreatingConversation] = useState(false);
@@ -260,6 +269,8 @@ export function DelivereeWorkspace() {
       ),
       makeQuery("projects", setProjects),
       makeQuery("tasks", setTasks),
+      makeQuery("milestones", setMilestones),
+      makeQuery("boldr_risks", setRisks),
       makeQuery("review_candidates", (items) =>
         setReviewItems(items.filter((item) => ["pending", "approved_for_review"].includes(item.status))),
       ),
@@ -317,9 +328,10 @@ export function DelivereeWorkspace() {
   }, []);
 
   const activeProjects = useMemo(
-    () => projects.filter((project) => !isClosed(project.status)),
+    () => sortProjectsByRecency(projects.filter((project) => !isClosed(project.status))),
     [projects],
   );
+  const sidebarProjects = useMemo(() => sidebarProjectGroups(projects), [projects]);
   const openTasks = useMemo(() => tasks.filter((task) => !isClosed(task.status)), [tasks]);
   const activeProject = useMemo(
     () => (lens.kind === "project" ? projects.find((project) => project.id === lens.projectId) : null),
@@ -328,6 +340,10 @@ export function DelivereeWorkspace() {
   const projectTasks = useMemo(
     () => (activeProject ? openTasks.filter((task) => task.projectId === activeProject.id) : []),
     [activeProject, openTasks],
+  );
+  const modalProject = useMemo(
+    () => projects.find((project) => project.id === projectModalId) || null,
+    [projectModalId, projects],
   );
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
@@ -619,10 +635,76 @@ export function DelivereeWorkspace() {
     requestAnimationFrame(() => composerRef.current?.focus());
   };
 
-  const openProject = (project: any) => {
+  const selectProjectContext = (project: any) => {
     navigate(`/work/projects/${project.id}`);
     setPanel(null);
     setSidebarOpen(false);
+  };
+
+  const openProjectRecord = (project: any) => {
+    selectProjectContext(project);
+    setCommandCenterOpen(false);
+    setProjectModalId(project.id);
+  };
+
+  const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
+    await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+  };
+
+  const archiveProject = async (project: any) => {
+    await updateProject(project.id, { status: "archived", archivedAt: serverTimestamp() });
+    if (projectModalId === project.id) setProjectModalId(null);
+    if (activeProject?.id === project.id) navigate("/");
+    setNotice(`${entityTitle(project)} archived. Its history is preserved.`);
+  };
+
+  const addProjectTask = async (projectId: string, title: string, status: WorkLane) => {
+    if (!user || !workspace) return;
+    await addDoc(collection(db, "tasks"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      projectId,
+      title,
+      status,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const updateProjectTask = async (taskId: string, patch: Record<string, unknown>) => {
+    await updateDoc(doc(db, "tasks", taskId), { ...patch, updatedAt: serverTimestamp() });
+  };
+
+  const addProjectMilestone = async (projectId: string, title: string) => {
+    if (!user || !workspace) return;
+    await addDoc(collection(db, "milestones"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      projectId,
+      title,
+      status: "not_started",
+      order: milestones.filter((item) => item.projectId === projectId).length,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const addProjectRisk = async (projectId: string, title: string) => {
+    if (!user || !workspace) return;
+    await addDoc(collection(db, "boldr_risks"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      projectId,
+      title,
+      type: "project_risk",
+      severity: "medium",
+      status: "open",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
   };
 
   const openingPrompts = activeProject
@@ -668,15 +750,22 @@ export function DelivereeWorkspace() {
           <div className="do-sidebar-section">
             <div className="do-section-head">
               <span>Projects</span>
-              <button aria-label="View all projects" onClick={() => setPanel("projects")} type="button">All</button>
+              <button aria-label="Open project command center" onClick={() => { setCommandCenterOpen(true); setSidebarOpen(false); }} type="button">Command center</button>
             </div>
             <div className="do-project-list">
-              {activeProjects.slice(0, 6).map((project) => (
-                <button className={activeProject?.id === project.id ? "is-active" : ""} key={project.id} onClick={() => openProject(project)} type="button">
-                  <Folder size={13} />
-                  <span>{entityTitle(project)}</span>
-                  <small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small>
-                </button>
+              {sidebarProjects.favorites.length > 0 && <span className="do-project-group-label"><Star size={10} /> Favorites</span>}
+              {sidebarProjects.favorites.map((project) => (
+                <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
+                  <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Star fill="currentColor" size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
+                  <button className="do-project-open" onClick={() => openProjectRecord(project)} type="button">Open</button>
+                </div>
+              ))}
+              {sidebarProjects.recent.length > 0 && <span className="do-project-group-label">Recent</span>}
+              {sidebarProjects.recent.map((project) => (
+                <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
+                  <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Folder size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
+                  <button className="do-project-open" onClick={() => openProjectRecord(project)} type="button">Open</button>
+                </div>
               ))}
               {activeProjects.length === 0 && (
                 <button className="do-empty-link" onClick={() => setComposer("Help me create a project for ")} type="button">Create your first project</button>
@@ -686,11 +775,11 @@ export function DelivereeWorkspace() {
 
           <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
-              <span>Recent</span>
+              <span>Conversations</span>
               <button aria-label="Search conversations" onClick={() => setSearchOpen((open) => !open)} type="button"><Search size={13} /></button>
             </div>
             {searchOpen && <input aria-label="Search conversations" autoFocus onChange={(event) => setSearch(event.target.value)} placeholder="Search" value={search} />}
-            {filteredConversations.slice(0, 8).map((conversation) => (
+            {filteredConversations.slice(0, chatsExpanded || search.trim() ? 50 : 5).map((conversation) => (
               <button
                 className={conversation.id === conversationId && conversationInContext ? "is-active" : ""}
                 key={conversation.id}
@@ -706,6 +795,9 @@ export function DelivereeWorkspace() {
                 <small>{timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
               </button>
             ))}
+            {!search.trim() && filteredConversations.length > 5 && (
+              <button className="do-expand-chats" onClick={() => setChatsExpanded((expanded) => !expanded)} type="button"><ChevronDown className={chatsExpanded ? "is-up" : ""} size={13} /><span>{chatsExpanded ? "Show less" : `Show ${filteredConversations.length - 5} more`}</span></button>
+            )}
           </div>
         </div>
 
@@ -762,7 +854,7 @@ export function DelivereeWorkspace() {
                   <div className="do-project-pulse">
                     <span>{projectTasks.length} open tasks</span>
                     <span>{activeProject.status || "Active"}</span>
-                    <button onClick={() => setPanel("today")} type="button">See work</button>
+                    <button onClick={() => openProjectRecord(activeProject)} type="button">Open project</button>
                   </div>
                 )}
 
@@ -883,10 +975,11 @@ export function DelivereeWorkspace() {
                 </button>
                 {activeProjects.map((project) => {
                   const count = openTasks.filter((task) => task.projectId === project.id).length;
-                  return <button className={activeProject?.id === project.id ? "is-selected" : ""} key={project.id} onClick={() => openProject(project)} type="button"><Folder size={14} /><span><strong>{entityTitle(project)}</strong><small>{count} open task{count === 1 ? "" : "s"}</small></span><ChevronRight size={13} /></button>;
+                  return <button className={activeProject?.id === project.id ? "is-selected" : ""} key={project.id} onClick={() => selectProjectContext(project)} type="button"><Folder size={14} /><span><strong>{entityTitle(project)}</strong><small>{count} open task{count === 1 ? "" : "s"} · select chat context</small></span><ChevronRight size={13} /></button>;
                 })}
               </div>
-              <button className="do-panel-primary" onClick={() => setComposer("Help me create a project for ")} type="button"><Plus size={15} /> Create through conversation</button>
+              {activeProject && <button className="do-panel-primary" onClick={() => openProjectRecord(activeProject)} type="button"><Folder size={15} /> Open project record</button>}
+              <button className="do-panel-secondary" onClick={() => { setPanel(null); setCommandCenterOpen(true); }} type="button">Project command center</button>
             </>
           )}
 
@@ -915,6 +1008,36 @@ export function DelivereeWorkspace() {
           <div className="do-panel-judgment"><ShieldCheck size={15} /><span><strong>{judgment.verdict === "stop" ? "A conflict needs attention" : "A planning signal"}</strong><small>{judgment.signals[0].detail}</small></span></div>
         )}
       </aside>
+
+      {commandCenterOpen && (
+        <ProjectCommandCenter
+          onArchiveProject={archiveProject}
+          onClose={() => setCommandCenterOpen(false)}
+          onOpenProject={openProjectRecord}
+          onUpdateProject={updateProject}
+          projects={projects}
+          risks={risks}
+          tasks={tasks}
+        />
+      )}
+
+      {modalProject && (
+        <ProjectRecordModal
+          key={modalProject.id}
+          milestones={milestones.filter((item) => item.projectId === modalProject.id)}
+          onAddMilestone={(title) => addProjectMilestone(modalProject.id, title)}
+          onAddRisk={(title) => addProjectRisk(modalProject.id, title)}
+          onAddTask={(title, status) => addProjectTask(modalProject.id, title, status)}
+          onArchiveProject={archiveProject}
+          onAsk={setComposer}
+          onClose={() => setProjectModalId(null)}
+          onUpdateProject={updateProject}
+          onUpdateTask={updateProjectTask}
+          project={modalProject}
+          risks={risks.filter((item) => item.projectId === modalProject.id)}
+          tasks={tasks.filter((item) => item.projectId === modalProject.id)}
+        />
+      )}
     </div>
   );
 }

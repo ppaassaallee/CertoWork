@@ -32,6 +32,23 @@ test("challenges project creation when WIP is high and the outcome is vague", ()
   assert.ok(result.signals.some((signal) => signal.id === "missing-outcome"));
 });
 
+test("does not repeat a portfolio warning during ordinary daily planning", () => {
+  const result = evaluateJudgment(
+    "Plan my day realistically",
+    {
+      tasks: [],
+      projects: Array.from({ length: 9 }, (_, index) => ({
+        id: String(index),
+        title: `Active project ${index + 1}`,
+        status: "active",
+      })),
+    },
+    new Date("2026-07-27T12:00:00Z"),
+  );
+
+  assert.ok(!result.signals.some((signal) => signal.id === "wip-overload"));
+});
+
 test("clears a reversible capture when no deterministic conflict exists", () => {
   const result = evaluateJudgment(
     "Capture an idea about the weekly report",

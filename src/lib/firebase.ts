@@ -9,7 +9,19 @@ import {
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
+const PRODUCTION_SITE_HOST = 'gazelle-boldr-ai.boldrai-3640.chatgpt.site';
+const runtimeFirebaseConfig = {
+  ...firebaseConfig,
+  // In production the Worker transparently serves Firebase's auth helper from
+  // this same host. That keeps Safari/Firefox from treating the auth handshake
+  // as third-party storage and returns the user to DelivereeOS, not firebaseapp.
+  authDomain:
+    typeof window !== 'undefined' && window.location.hostname === PRODUCTION_SITE_HOST
+      ? PRODUCTION_SITE_HOST
+      : firebaseConfig.authDomain,
+};
+
+const app = initializeApp(runtimeFirebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 // Firebase defaults to IndexedDB before falling back to localStorage. Safari and

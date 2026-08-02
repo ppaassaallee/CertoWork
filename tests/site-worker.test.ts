@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import worker from "../worker/index.js";
+import worker, { firebaseAuthProxyUrl } from "../worker/index.js";
 
 function environment(overrides: Record<string, unknown> = {}) {
   return {
@@ -31,6 +31,15 @@ test("Sites worker reports an offline-safe health state without an API key", asy
     service: "delivereeos-codex-sites",
     aiProvider: "offline-safe",
   });
+});
+
+test("Firebase auth helpers are resolved through the legacy Firebase host", () => {
+  assert.equal(
+    firebaseAuthProxyUrl(
+      "https://gazelle-boldr-ai.boldrai-3640.chatgpt.site/__/auth/handler?providerId=google.com",
+    ),
+    "https://gen-lang-client-0277783597.firebaseapp.com/__/auth/handler?providerId=google.com",
+  );
 });
 
 test("Sites worker truthfully disables Google AI Studio", async () => {

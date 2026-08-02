@@ -99,6 +99,13 @@ function asksForProject(text: string) {
   return /\b(project|launch|initiative|build|roll out|implement)\b/i.test(text);
 }
 
+function startsNewProject(text: string) {
+  return (
+    asksForProject(text) &&
+    /\b(add|begin|build|create|implement|kick off|launch|new|roll out|start)\b/i.test(text)
+  );
+}
+
 function containsConcreteOutcome(text: string) {
   return /\b(by \w+|so that|in order to|result|outcome|metric|increase|reduce|ship|publish|deliver|complete|revenue|users?|customers?)\b/i.test(text);
 }
@@ -170,12 +177,12 @@ export function evaluateJudgment(
     });
   }
 
-  if (mentionsCommitment(requestText) && projects.length > 3) {
+  if (startsNewProject(requestText) && projects.length > 3) {
     signals.push({
       id: "wip-overload",
       severity: projects.length > 5 ? "blocking" : "warning",
-      title: "Work in progress is above the healthy limit",
-      detail: `${projects.length} projects are active. Finishing or pausing one creates a credible place for new work.`,
+      title: "A quick portfolio check may help",
+      detail: `${projects.length} projects are already active. Before starting another, consider whether one can finish or pause.`,
       evidence: projects.slice(0, 3).map((project) => project.title || project.name || "Untitled project"),
     });
   }
