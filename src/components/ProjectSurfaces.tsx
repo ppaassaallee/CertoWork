@@ -148,7 +148,7 @@ export function ProjectRecordModal({
 
   return (
     <div aria-label={`${projectTitle(project)} project record`} aria-modal="true" className="do-project-layer" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="dialog">
-      <section className="do-project-record">
+      <section className="do-project-record" data-testid="project-record">
         <header className="do-project-record-head">
           <div className="do-project-record-title">
             <span className="do-project-record-icon"><FolderKanban size={20} /></span>
@@ -307,7 +307,7 @@ export function ProjectCommandCenter({ projects, tasks, risks, onClose, onUpdate
 
   return (
     <div aria-label="Project command center" aria-modal="true" className="do-project-layer do-command-layer" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="dialog">
-      <section className="do-command-center">
+      <section className="do-command-center" data-testid="project-command-center">
         <header className="do-command-head"><div><span className="do-project-card-kicker">PORTFOLIO CONTROL</span><h1>Project command center</h1><p>Classify, prioritize and move delivery from one quiet place.</p></div><button aria-label="Close command center" onClick={onClose} type="button"><X size={19} /></button></header>
         <div className="do-command-metrics"><div><strong>{openProjects.length}</strong><span>Open projects</span></div><div><strong>{openProjects.filter((project) => projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)) === "on_track").length}</strong><span>On track</span></div><div className="is-risk"><strong>{allAttention.length}</strong><span>Need attention</span></div><div><strong>{tasks.filter((task) => taskWorkLane(task) === "blocked").length}</strong><span>Blocked items</span></div></div>
         <div className="do-command-body">

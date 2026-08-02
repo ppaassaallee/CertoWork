@@ -757,14 +757,14 @@ export function DelivereeWorkspace() {
               {sidebarProjects.favorites.map((project) => (
                 <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
                   <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Star fill="currentColor" size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
-                  <button className="do-project-open" onClick={() => openProjectRecord(project)} type="button">Open</button>
+                  <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
                 </div>
               ))}
               {sidebarProjects.recent.length > 0 && <span className="do-project-group-label">Recent</span>}
               {sidebarProjects.recent.map((project) => (
                 <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
                   <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Folder size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
-                  <button className="do-project-open" onClick={() => openProjectRecord(project)} type="button">Open</button>
+                  <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
                 </div>
               ))}
               {activeProjects.length === 0 && (
