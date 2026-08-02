@@ -210,6 +210,9 @@ button { color: inherit; }
 .do-inline-context button { display: grid; border: 0; background: none; padding: 0; color: #858d88; cursor: pointer; place-items: center; }
 .do-message { margin-bottom: 25px; }
 .do-user-message { width: fit-content; max-width: 78%; margin-left: auto; border: 1px solid #dfe4df; border-radius: 14px 14px 4px 14px; background: #f0f2ef; padding: 10px 13px; font-size: 10.5px; line-height: 1.55; }
+.do-user-message.is-document { width: min(620px, 88%); max-width: 88%; white-space: pre-wrap; }
+.do-user-document-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -2px -3px 9px; border-bottom: 1px solid #d9dfda; padding: 0 3px 8px; color: #6d7b73; font-size: 7.5px; font-weight: 700; letter-spacing: .03em; }
+.do-user-document-head button { flex: none; border: 0; border-radius: 7px; background: #dfe8e2; padding: 4px 6px; color: #315943; font-size: 7px; font-weight: 700; cursor: pointer; }
 .do-assistant-message { display: flex; align-items: flex-start; gap: 11px; }
 .do-assistant-mark { display: grid; width: 29px; height: 29px; flex: none; place-items: center; border: 1px solid #dce5de; border-radius: 9px; background: #edf5f0; color: #2c654e; }
 .do-assistant-content { min-width: 0; flex: 1; }
@@ -355,6 +358,16 @@ button { color: inherit; }
 .do-project-ai-card p { margin: 3px 0 0; color: #718178; font-size: 8px; }
 .do-project-ai-card button, .do-team-guidance button { display: flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: #214e39; padding: 8px 10px; color: #fff; font-size: 8px; font-weight: 700; cursor: pointer; }
 .do-project-plan, .do-project-risks, .do-project-team { display: grid; gap: 12px; }
+.do-project-documents { display: grid; gap: 12px; }
+.do-project-card-copy { margin: 7px 0 0; color: #7d8881; font-size: 8.5px; line-height: 1.5; }
+.do-project-document-list { display: grid; gap: 7px; margin-top: 14px; }
+.do-project-document-list article { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #e1e6e2; border-radius: 11px; background: #f8faf7; padding: 11px; }
+.do-project-document-list article > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: #e5eee8; color: #37634d; }
+.do-project-document-list article small, .do-project-document-list article strong { display: block; }
+.do-project-document-list article small { color: #71857a; font-size: 6.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.do-project-document-list article strong { margin-top: 2px; color: #344039; font-size: 9.5px; }
+.do-project-document-list article p { max-width: 720px; margin: 4px 0 0; color: #818b85; font-size: 7.5px; line-height: 1.45; }
+.do-project-document-list article button { display: flex; align-items: center; gap: 4px; border: 1px solid #d5dfd8; border-radius: 8px; background: #fff; padding: 7px 8px; color: #42624f; font-size: 7.5px; font-weight: 700; cursor: pointer; }
 .do-plan-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .do-plan-hero p { max-width: 640px; margin: 7px 0 0; color: #76827b; font-size: 9px; line-height: 1.55; }
 .do-pmi-phases { display: grid; grid-template-columns: repeat(5, 1fr); overflow: hidden; border: 1px solid #dfe4e0; border-radius: 14px; background: #fff; }
@@ -529,6 +542,7 @@ button { color: inherit; }
   .do-opening { min-height: 410px; padding-bottom: 28px; }
   .do-welcome h1 { font-size: 30px; }
   .do-user-message { max-width: 88%; }
+  .do-user-message.is-document { width: 94%; max-width: 94%; }
   .do-inline-context { margin-left: 39px; }
   .do-composer-wrap { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   .do-composer-note { display: none; }
@@ -559,6 +573,8 @@ button { color: inherit; }
   .do-work-board { grid-template-columns: repeat(4, 230px); }
   .do-work-lane { min-height: 360px; }
   .do-project-field-grid { grid-template-columns: 1fr; }
+  .do-project-document-list article { grid-template-columns: 30px minmax(0, 1fr); }
+  .do-project-document-list article button { grid-column: 1 / -1; justify-content: center; }
   .do-risk-banner { align-items: flex-start; flex-wrap: wrap; }
   .do-command-head { min-height: 80px; padding: 12px; }
   .do-command-head p { display: none; }

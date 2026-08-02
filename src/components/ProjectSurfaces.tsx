@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Circle,
+  FileText,
   Flag,
   FolderKanban,
   LayoutGrid,
@@ -96,6 +97,7 @@ export function ProjectRecordModal({
   tasks,
   milestones,
   risks,
+  documents,
   onClose,
   onAsk,
   onUpdateProject,
@@ -109,6 +111,7 @@ export function ProjectRecordModal({
   tasks: any[];
   milestones: any[];
   risks: any[];
+  documents: any[];
   onClose: () => void;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
@@ -118,7 +121,7 @@ export function ProjectRecordModal({
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
 }) {
-  const [tab, setTab] = useState<"overview" | "plan" | "work" | "risks" | "team">("overview");
+  const [tab, setTab] = useState<"overview" | "plan" | "work" | "risks" | "docs" | "team">("overview");
   const [taskTitle, setTaskTitle] = useState("");
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
@@ -173,8 +176,8 @@ export function ProjectRecordModal({
 
         <nav className="do-project-tabs" aria-label="Project sections">
           {([
-            ["overview", "Overview"], ["plan", "Plan"], ["work", "Work"], ["risks", "Risks"], ["team", "Team"],
-          ] as const).map(([value, label]) => <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}{value === "risks" && risks.length > 0 ? <small>{risks.length}</small> : null}</button>)}
+            ["overview", "Overview"], ["plan", "Plan"], ["work", "Work"], ["risks", "Risks"], ["docs", "Docs"], ["team", "Team"],
+          ] as const).map(([value, label]) => <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}{value === "risks" && risks.length > 0 ? <small>{risks.length}</small> : value === "docs" && documents.length > 0 ? <small>{documents.length}</small> : null}</button>)}
         </nav>
 
         <div className="do-project-record-body">
@@ -254,6 +257,22 @@ export function ProjectRecordModal({
                   {risks.length === 0 && lanes.blocked.length === 0 && <EmptyState icon={<CheckCircle2 size={19} />} title="No open risks" text="Keep this honest: add a risk as soon as it can affect scope, time or outcome." />}
                 </div>
                 <div className="do-project-inline-add"><input onChange={(event) => setRiskTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && riskTitle.trim()) { await onAddRisk(riskTitle.trim()); setRiskTitle(""); } }} placeholder="Describe a risk or assumption…" value={riskTitle} /><button disabled={!riskTitle.trim()} onClick={async () => { await onAddRisk(riskTitle.trim()); setRiskTitle(""); }} type="button"><Plus size={13} /> Add risk</button></div>
+              </section>
+            </div>
+          )}
+
+          {tab === "docs" && (
+            <div className="do-project-documents">
+              <section className="do-project-card">
+                <div className="do-project-card-head"><div><span className="do-project-card-kicker">PROJECT KNOWLEDGE</span><h2>Requirements and working documents</h2></div><FileText size={17} /></div>
+                <p className="do-project-card-copy">Documents saved here stay attached to this project and can ground future project conversations.</p>
+                <div className="do-project-document-list">
+                  {documents.map((document) => {
+                    const content = String(document.content || document.body || document.description || "");
+                    return <article key={document.id}><span><FileText size={15} /></span><div><small>{document.docType || document.type || "Document"}</small><strong>{document.title || document.name || "Untitled document"}</strong><p>{document.summary || content.slice(0, 260) || "No summary recorded."}</p></div><button onClick={() => { onClose(); onAsk(`Using ${document.title || "this project document"}, help me move ${projectTitle(project)} forward.`); }} type="button">Ask about it <ArrowRight size={12} /></button></article>;
+                  })}
+                  {documents.length === 0 && <EmptyState icon={<FileText size={19} />} title="No project documents yet" text="Paste a PRD or specification in the project conversation and ask DelivereeOS to add it here." />}
+                </div>
               </section>
             </div>
           )}

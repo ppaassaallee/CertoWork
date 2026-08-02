@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import worker, { firebaseAuthProxyUrl } from "../worker/index.js";
+import worker, {
+  assistantInstructions,
+  firebaseAuthProxyUrl,
+  normalizeConversationMessages,
+} from "../worker/index.js";
 
 function environment(overrides: Record<string, unknown> = {}) {
   return {
@@ -127,4 +131,44 @@ test("Boldi compatibility route rejects unauthenticated requests", async () => {
     environment(),
   );
   assert.equal(response.status, 401);
+});
+
+test("project conversations use delivery-team behavior instead of Chief of Staff lecturing", () => {
+  const instructions = assistantInstructions(
+    {
+      workspaceContext: {
+        mode: "project_delivery",
+        activeProject: { id: "fieldops", title: "FieldOps" },
+        currentUserMessageId: "message-prd",
+        projectArtifactSourceMessageId: "previous-message-prd",
+        tasks: Array.from({ length: 15 }, () => ({ status: "open" })),
+        projects: [{ id: "fieldops", title: "FieldOps" }],
+        documents: [],
+      },
+    },
+    [],
+  );
+
+  assert.match(instructions, /PROJECT DELIVERY MODE/);
+  assert.match(instructions, /Missing information is a completion checklist, not a refusal/);
+  assert.match(instructions, /Never respond with only a gate, lecture, or request to pause another project/);
+  assert.match(instructions, /create_project_artifact/);
+  assert.match(instructions, /previous-message-prd/);
+  assert.match(instructions, /active_project_only/);
+});
+
+test("the current pasted PRD and the latest prior PRD remain available for follow-up", () => {
+  const prd = "P".repeat(120_000);
+  const olderPrd = "O".repeat(30_000);
+  const normalized = normalizeConversationMessages([
+    { role: "user", content: olderPrd },
+    { role: "assistant", content: "older acknowledgement" },
+    { role: "user", content: prd },
+    { role: "assistant", content: "acknowledged" },
+    { role: "user", content: "Add the PRD from my previous message to FieldOps" },
+  ]);
+
+  assert.equal(normalized[0].content.length, 16_000);
+  assert.equal(normalized[2].content.length, prd.length);
+  assert.equal(normalized.at(-1)?.content, "Add the PRD from my previous message to FieldOps");
 });

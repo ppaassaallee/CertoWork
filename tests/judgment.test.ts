@@ -49,6 +49,30 @@ test("does not repeat a portfolio warning during ordinary daily planning", () =>
   assert.ok(!result.signals.some((signal) => signal.id === "wip-overload"));
 });
 
+test("keeps project delivery moving without importing global portfolio overload", () => {
+  const result = evaluateJudgment(
+    "Add this PRD and create the implementation backlog for the project",
+    {
+      scope: "project_delivery",
+      activeProjectId: "fieldops",
+      tasks: Array.from({ length: 15 }, (_, index) => ({
+        id: String(index),
+        projectId: "fieldops",
+        title: `Project work ${index + 1}`,
+        status: "open",
+        dueDate: "2026-07-27",
+      })),
+      projects: [{ id: "fieldops", title: "FieldOps", status: "active" }],
+    },
+    new Date("2026-07-27T12:00:00Z"),
+  );
+
+  assert.equal(result.verdict, "clear");
+  assert.ok(!result.signals.some((signal) => ["daily-capacity", "weekly-capacity", "wip-overload"].includes(signal.id)));
+  assert.ok(result.signals.some((signal) => signal.id === "missing-outcome" && signal.severity === "info"));
+  assert.match(result.recommendation, /useful project draft/i);
+});
+
 test("clears a reversible capture when no deterministic conflict exists", () => {
   const result = evaluateJudgment(
     "Capture an idea about the weekly report",

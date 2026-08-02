@@ -37,6 +37,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -48,6 +49,7 @@ import { useAuth } from "../lib/AuthContext";
 import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { sidebarProjectGroups, sortProjectsByRecency, type WorkLane } from "../lib/projectPortfolio";
+import { buildProjectDocumentContext } from "../lib/projectContext";
 import { ProjectCommandCenter, ProjectRecordModal } from "./ProjectSurfaces";
 
 type Conversation = {
@@ -132,6 +134,29 @@ function priorityLabel(value: any) {
   return "Open";
 }
 
+function reviewTypeForAction(type?: string) {
+  const types: Record<string, string> = {
+    create_project: "project",
+    update_project: "project_update",
+    create_project_artifact: "knowledge",
+    create_milestone: "milestone",
+    create_risk: "risk",
+  };
+  return types[String(type || "")] || "task";
+}
+
+function reviewTypeLabel(type?: string) {
+  const labels: Record<string, string> = {
+    project: "Project",
+    project_update: "Project update",
+    knowledge: "Project document",
+    milestone: "Milestone",
+    risk: "Risk",
+    task: "Task",
+  };
+  return labels[String(type || "task")] || "Item";
+}
+
 function RichText({ text }: { text: string }) {
   return (
     <div className="do-rich-text">
@@ -149,6 +174,23 @@ function RichText({ text }: { text: string }) {
         }
         return <p key={index}>{plain}</p>;
       })}
+    </div>
+  );
+}
+
+function UserMessage({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isDocument = text.length > 2_500;
+  const visible = isDocument && !expanded ? `${text.slice(0, 1_400).trimEnd()}…` : text;
+  return (
+    <div className={`do-user-message ${isDocument ? "is-document" : ""}`}>
+      {isDocument && (
+        <div className="do-user-document-head">
+          <span>Long project input · {text.length.toLocaleString()} characters</span>
+          <button onClick={() => setExpanded((value) => !value)} type="button">{expanded ? "Collapse" : "Show full"}</button>
+        </div>
+      )}
+      <div>{visible}</div>
     </div>
   );
 }
@@ -222,6 +264,7 @@ export function DelivereeWorkspace() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
+  const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -271,6 +314,7 @@ export function DelivereeWorkspace() {
       makeQuery("tasks", setTasks),
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
+      makeQuery("knowledge_items", setKnowledgeItems),
       makeQuery("review_candidates", (items) =>
         setReviewItems(items.filter((item) => ["pending", "approved_for_review"].includes(item.status))),
       ),
@@ -344,6 +388,10 @@ export function DelivereeWorkspace() {
   const modalProject = useMemo(
     () => projects.find((project) => project.id === projectModalId) || null,
     [projectModalId, projects],
+  );
+  const projectDocuments = useMemo(
+    () => (activeProject ? knowledgeItems.filter((item) => item.projectId === activeProject.id && item.status !== "archived") : []),
+    [activeProject, knowledgeItems],
   );
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
@@ -463,7 +511,7 @@ export function DelivereeWorkspace() {
     let activeConversationId: string | null = conversationId;
     try {
       activeConversationId = await ensureConversation(text);
-      await addDoc(collection(db, "boldi_messages"), {
+      const userMessageRef = await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
         workspaceId: workspace.id,
         conversationId: activeConversationId,
@@ -475,13 +523,29 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
       });
 
+      const operatingScope = activeProject ? "project_delivery" : "chief_of_staff";
+      const scopedTasks = activeProject
+        ? openTasks.filter((task) => task.projectId === activeProject.id)
+        : openTasks;
+      const scopedProjects = activeProject ? [activeProject] : activeProjects;
+      const scopedTodayTasks = activeProject
+        ? todayTasks.filter((task) => task.projectId === activeProject.id)
+        : todayTasks;
+      const previousLongProjectMessage = [...contextualMessages]
+        .reverse()
+        .find((message) => message.role === "user" && message.content.trim().length >= 2_500);
+      const projectArtifactSourceMessageId = text.length >= 2_500
+        ? userMessageRef.id
+        : previousLongProjectMessage?.id || userMessageRef.id;
       const workspaceSnapshot = {
-        tasks: openTasks,
-        projects: activeProjects,
+        tasks: scopedTasks,
+        projects: scopedProjects,
         goals: [],
         events: [],
         dailyCapacityMinutes: 360,
         loaded: true,
+        scope: operatingScope as "chief_of_staff" | "project_delivery",
+        activeProjectId: activeProject?.id || null,
       };
       const nextJudgment = evaluateJudgment(text, workspaceSnapshot);
       setJudgment(nextJudgment);
@@ -500,10 +564,15 @@ export function DelivereeWorkspace() {
           workspaceContext: {
             ...workspaceSnapshot,
             judgment: nextJudgment,
-            mode: "conversational_productivity",
+            mode: operatingScope,
             activeProject,
-            todayTaskCount: todayTasks.length,
-            pendingReviewCount: reviewItems.length,
+            todayTaskCount: scopedTodayTasks.length,
+            pendingReviewCount: activeProject
+              ? reviewItems.filter((item) => (item.projectId || item.proposed?.projectId) === activeProject.id).length
+              : reviewItems.length,
+            currentUserMessageId: userMessageRef.id,
+            projectArtifactSourceMessageId,
+            documents: activeProject ? buildProjectDocumentContext(projectDocuments, text) : [],
             userId: user.uid,
             workspaceId: workspace.id,
           },
@@ -565,19 +634,22 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     for (const action of plan.proposedActions || []) {
+      const reviewType = reviewTypeForAction(action.type);
+      const projectId = action.proposedChange?.projectId || activeProject?.id || "";
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
         createdBy: user.uid,
         title: action.proposedChange?.title || actionLabel(action.type),
-        type: action.type === "create_project" ? "project" : "task",
+        type: reviewType,
         why: action.reason || "Proposed in conversation",
         action: actionLabel(action.type),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
           ...(action.proposedChange || {}),
-          projectId: action.proposedChange?.projectId || activeProject?.id || "",
+          projectId,
         },
+        projectId,
         source: plan.summary || "DelivereeOS conversation",
         sourceType: "delivereeos",
         sourceId: planRef.id,
@@ -602,27 +674,89 @@ export function DelivereeWorkspace() {
         return;
       }
       const proposed = candidate.proposed || {};
-      const collectionName = candidate.type === "project" ? "projects" : "tasks";
-      const created = await addDoc(collection(db, collectionName), {
-        ...proposed,
-        userId: user.uid,
-        workspaceId: workspace.id,
-        title: candidate.title || proposed.title || "Untitled",
-        status: proposed.status || (candidate.type === "project" ? "planning" : "open"),
-        ...(candidate.type === "project" ? {} : { projectId: proposed.projectId || activeProject?.id || "" }),
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const reviewType = String(candidate.type || "task");
+      const projectId = proposed.projectId || candidate.projectId || activeProject?.id || "";
+      let convertedToType = reviewType;
+      let convertedToId = "";
+
+      if (reviewType === "project_update") {
+        if (!projectId) throw new Error("Project context is required");
+        const allowedFields = [
+          "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
+          "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
+          "sponsor", "teamMembers", "definitionOfDone",
+        ];
+        const patch = Object.fromEntries(
+          allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+        );
+        await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+        convertedToType = "project";
+        convertedToId = projectId;
+      } else {
+        let collectionName = "tasks";
+        let payload: Record<string, unknown> = {
+          ...proposed,
+          userId: user.uid,
+          workspaceId: workspace.id,
+          projectId,
+          title: candidate.title || proposed.title || "Untitled",
+          status: proposed.status || "open",
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        if (reviewType === "project") {
+          collectionName = "projects";
+          payload = { ...payload, status: proposed.status || "planning" };
+          delete payload.projectId;
+        } else if (reviewType === "milestone") {
+          collectionName = "milestones";
+          payload = { ...payload, status: proposed.status || "not_started" };
+        } else if (reviewType === "risk") {
+          collectionName = "boldr_risks";
+          payload = {
+            ...payload,
+            status: proposed.status || "open",
+            severity: proposed.severity || "medium",
+            type: proposed.riskType || "project_risk",
+          };
+        } else if (reviewType === "knowledge") {
+          collectionName = "knowledge_items";
+          let sourceContent = String(proposed.content || proposed.body || "");
+          if (proposed.sourceMessageId) {
+            const sourceMessage = await getDoc(doc(db, "boldi_messages", String(proposed.sourceMessageId)));
+            if (sourceMessage.exists()) sourceContent = String(sourceMessage.data().content || sourceContent);
+          }
+          payload = {
+            ...payload,
+            type: "Project Document",
+            docType: proposed.docType || "PRD",
+            status: "active",
+            content: sourceContent,
+            body: sourceContent,
+            summary: proposed.summary || proposed.description || "",
+            sensitivity: proposed.sensitivity || "internal",
+            aiReadable: true,
+            isAIReadable: true,
+            aiUsageScope: "project_builder",
+            sourceMessageId: proposed.sourceMessageId || "",
+          };
+        }
+
+        const created = await addDoc(collection(db, collectionName), payload);
+        convertedToType = collectionName;
+        convertedToId = created.id;
+      }
       await updateDoc(doc(db, "review_candidates", candidate.id), {
         status: "approved",
         approvedBy: user.uid,
         approvedAt: serverTimestamp(),
-        convertedToType: candidate.type === "project" ? "project" : "task",
-        convertedToId: created.id,
+        convertedToType,
+        convertedToId,
         updatedAt: serverTimestamp(),
       });
-      setNotice(`${candidate.type === "project" ? "Project" : "Task"} created.`);
+      setNotice(`${reviewTypeLabel(reviewType)} ${reviewType === "project_update" ? "updated" : "created"}.`);
     } catch {
       setNotice("That draft could not be processed. It is still waiting for you.");
     }
@@ -874,7 +1008,7 @@ export function DelivereeWorkspace() {
                 )}
                 {contextualMessages.map((message) => (
                   <article className={`do-message is-${message.role}`} key={message.id}>
-                    {message.role === "user" ? <div className="do-user-message">{message.content}</div> : (
+                    {message.role === "user" ? <UserMessage text={message.content} /> : (
                       <div className="do-assistant-message">
                         <div className="do-assistant-mark"><Bot size={16} /></div>
                         <div className="do-assistant-content">
@@ -1024,6 +1158,7 @@ export function DelivereeWorkspace() {
       {modalProject && (
         <ProjectRecordModal
           key={modalProject.id}
+          documents={knowledgeItems.filter((item) => item.projectId === modalProject.id && item.status !== "archived")}
           milestones={milestones.filter((item) => item.projectId === modalProject.id)}
           onAddMilestone={(title) => addProjectMilestone(modalProject.id, title)}
           onAddRisk={(title) => addProjectRisk(modalProject.id, title)}

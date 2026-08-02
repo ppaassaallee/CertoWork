@@ -35,6 +35,8 @@ export interface JudgmentContext {
   events?: JudgmentEvent[];
   goals?: Array<{ id?: string; title?: string; type?: string }>;
   dailyCapacityMinutes?: number;
+  scope?: "chief_of_staff" | "project_delivery";
+  activeProjectId?: string | null;
 }
 
 export interface JudgmentSignal {
@@ -156,8 +158,9 @@ export function evaluateJudgment(
   const estimatedWeeklyLoadMinutes = dueThisWeek.length * 45;
   const signals: JudgmentSignal[] = [];
   const request = normalize(requestText);
+  const projectDelivery = context.scope === "project_delivery";
 
-  if (mentionsCommitment(requestText) && dueToday.length >= 6) {
+  if (!projectDelivery && mentionsCommitment(requestText) && dueToday.length >= 6) {
     signals.push({
       id: "daily-capacity",
       severity: dueToday.length >= 9 ? "blocking" : "warning",
@@ -167,7 +170,7 @@ export function evaluateJudgment(
     });
   }
 
-  if (mentionsCommitment(requestText) && estimatedWeeklyLoadMinutes > weeklyAvailableMinutes * 0.8) {
+  if (!projectDelivery && mentionsCommitment(requestText) && estimatedWeeklyLoadMinutes > weeklyAvailableMinutes * 0.8) {
     signals.push({
       id: "weekly-capacity",
       severity: estimatedWeeklyLoadMinutes > weeklyAvailableMinutes ? "blocking" : "warning",
@@ -177,7 +180,7 @@ export function evaluateJudgment(
     });
   }
 
-  if (startsNewProject(requestText) && projects.length > 3) {
+  if (!projectDelivery && startsNewProject(requestText) && projects.length > 3) {
     signals.push({
       id: "wip-overload",
       severity: projects.length > 5 ? "blocking" : "warning",
@@ -194,7 +197,7 @@ export function evaluateJudgment(
   if (duplicate) {
     signals.push({
       id: "duplicate-work",
-      severity: "warning",
+      severity: projectDelivery ? "info" : "warning",
       title: "This may already exist",
       detail: `“${duplicate.title}” looks materially similar to this request.`,
       evidence: duplicate.id ? [duplicate.id] : undefined,
@@ -204,7 +207,7 @@ export function evaluateJudgment(
   if (looksVague(requestText)) {
     signals.push({
       id: "vague-action",
-      severity: "warning",
+      severity: projectDelivery ? "info" : "warning",
       title: "The next action is not concrete yet",
       detail: "A verb, finish condition, and realistic time window are needed before this can be planned.",
     });
@@ -213,7 +216,7 @@ export function evaluateJudgment(
   if (asksForProject(requestText) && !containsConcreteOutcome(requestText)) {
     signals.push({
       id: "missing-outcome",
-      severity: "warning",
+      severity: projectDelivery ? "info" : "warning",
       title: "Project outcome is missing",
       detail: "Define what will be observably different when this project is complete.",
     });
@@ -263,7 +266,7 @@ export function evaluateJudgment(
     }
   }
 
-  if (repeated.length > 0 && mentionsCommitment(requestText)) {
+  if (!projectDelivery && repeated.length > 0 && mentionsCommitment(requestText)) {
     signals.push({
       id: "repeated-postponement",
       severity: "warning",
@@ -273,7 +276,7 @@ export function evaluateJudgment(
     });
   }
 
-  if (blocked.length > 0 && mentionsCommitment(requestText)) {
+  if (!projectDelivery && blocked.length > 0 && mentionsCommitment(requestText)) {
     signals.push({
       id: "missing-dependencies",
       severity: "warning",
@@ -283,7 +286,7 @@ export function evaluateJudgment(
     });
   }
 
-  if (unclearTasks.length >= 3 && mentionsCommitment(requestText)) {
+  if (!projectDelivery && unclearTasks.length >= 3 && mentionsCommitment(requestText)) {
     signals.push({
       id: "unclear-existing-tasks",
       severity: "info",
@@ -306,20 +309,22 @@ export function evaluateJudgment(
 
   const hasBlocking = signals.some((signal) => signal.severity === "blocking");
   const hasWarnings = signals.some((signal) => signal.severity === "warning");
-  const overloaded =
+  const overloaded = !projectDelivery && (
     estimatedLoadMinutes > availableMinutes ||
     estimatedWeeklyLoadMinutes > weeklyAvailableMinutes ||
-    dueToday.length >= 9;
-  const tight =
+    dueToday.length >= 9);
+  const tight = !projectDelivery && (
     estimatedLoadMinutes > availableMinutes * 0.7 ||
     estimatedWeeklyLoadMinutes > weeklyAvailableMinutes * 0.8 ||
-    dueToday.length >= 6;
+    dueToday.length >= 6);
   const verdict = hasBlocking ? "stop" : hasWarnings ? "challenge" : "clear";
 
   return {
     verdict,
     recommendation:
-      verdict === "stop"
+      projectDelivery && verdict !== "stop"
+        ? "Continue with a useful project draft now. Record assumptions and turn missing inputs into guided follow-ups."
+        : verdict === "stop"
         ? "Do not add this as written. Resolve the blocking condition or choose a safer alternative."
         : verdict === "challenge"
           ? "Clarify the outcome and make room before committing. You can still override after reviewing the trade-off."
@@ -339,7 +344,7 @@ export function evaluateJudgment(
     dimensions: {
       strategicAlignment: context.goals?.length ? "aligned" : "unclear",
       capacity: overloaded ? "overloaded" : tight ? "tight" : "healthy",
-      opportunityCost: projects.length > 5 ? "high" : projects.length > 3 ? "medium" : "low",
+      opportunityCost: projectDelivery ? "low" : projects.length > 5 ? "high" : projects.length > 3 ? "medium" : "low",
       risk: hasBlocking ? "high" : hasWarnings ? "medium" : "low",
       sustainability: overloaded ? "unsustainable" : tight ? "strained" : "sustainable",
       reversibility: /\b(send|email|publish|delete|pay|purchase|invite)\b/i.test(requestText)
@@ -350,11 +355,15 @@ export function evaluateJudgment(
     },
     userWantsToHear: "There is room to add this and move immediately.",
     userNeedsToHear:
-      verdict === "clear"
+      projectDelivery
+        ? "Use the available project evidence, make assumptions explicit, and keep delivery moving."
+        : verdict === "clear"
         ? "A small, reversible first step is more credible than a broad commitment."
         : "Adding work without removing or clarifying something else will make the plan less believable.",
     alternatives:
-      verdict === "clear"
+      projectDelivery
+        ? ["Draft the next delivery slice with explicit assumptions", "Ask one focused question while work continues"]
+        : verdict === "clear"
         ? ["Capture it without scheduling", "Define one 30-minute first action"]
         : ["Pause or finish one active item first", "Capture it for the next weekly review", "Reduce it to a 30-minute experiment"],
     conditions:

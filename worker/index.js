@@ -197,6 +197,7 @@ function groundedCitations(query, workspaceContext) {
     ["project", workspaceContext?.projects],
     ["goal", workspaceContext?.goals],
     ["calendar", workspaceContext?.events],
+    ["document", workspaceContext?.documents],
   ];
   const ranked = [];
 
@@ -212,7 +213,9 @@ function groundedCitations(query, workspaceContext) {
   for (const [type, values] of sources) {
     for (const item of Array.isArray(values) ? values : []) {
       const title = item.title || item.name || "Untitled";
-      const body = `${title} ${item.description || item.outcome || item.objective || ""}`;
+      const body = `${title} ${item.description || item.outcome || item.objective || ""} ${item.summary || ""} ${
+        Array.isArray(item.excerpts) ? item.excerpts.map((excerpt) => excerpt?.excerpt || "").join(" ") : ""
+      }`;
       const itemTokens = tokenize(body);
       let score = 0;
       for (const token of queryTokens) if (itemTokens.has(token)) score += 1;
@@ -246,6 +249,7 @@ function compactEvidence(citations, workspaceContext) {
     ...(workspaceContext?.projects || []),
     ...(workspaceContext?.goals || []),
     ...(workspaceContext?.events || []),
+    ...(workspaceContext?.documents || []),
   ];
   return citations.map((citation) => {
     const item = allItems.find((candidate) => String(candidate.id) === citation.id);
@@ -257,13 +261,33 @@ function compactEvidence(citations, workspaceContext) {
       outcome: item?.outcome || item?.objective,
       start: item?.start,
       end: item?.end,
+      summary: item?.summary,
+      characterCount: item?.characterCount,
+      excerpts: item?.excerpts,
     };
   });
 }
 
-function assistantInstructions(body, citations) {
+export function assistantInstructions(body, citations) {
   const context = body.workspaceContext || {};
+  const projectDelivery = context.mode === "project_delivery" && Boolean(context.activeProject?.id);
+  const operatingMode = projectDelivery
+    ? `PROJECT DELIVERY MODE — embedded in ${context.activeProject.title || context.activeProject.name || "the active project"}:
+- Act as the project's practical project manager, engineer, delivery advisor, and assistant. Help the team finish the work.
+- Use only this project's tasks, documents, risks, milestones, decisions, and conversation. Never mention the user's global Today list, unrelated tasks, other projects, or portfolio overload unless the user explicitly asks to compare portfolios.
+- Missing information is a completion checklist, not a refusal. Make a useful first pass now with clearly labeled assumptions, then ask at most one high-leverage question while work continues.
+- Never respond with only a gate, lecture, or request to pause another project. A warning may change sequencing or be recorded as a risk, but it must not prevent a reversible draft or backlog slice.
+- When given a large PRD or specification, extract a workable hierarchy: outcome, assumptions, phases or epics, milestones, requirement-linked work, risks, dependencies, owners, and acceptance evidence. Do not create hundreds of flat tasks. Propose the first coherent batch and say what the next batch will cover.
+- If the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject.id)}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
+- If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
+- Every proposed project action must carry projectId ${JSON.stringify(context.activeProject.id)}. Use create_milestone for delivery gates and create_risk for material risks.`
+    : `CHIEF OF STAFF MODE — general workspace conversation:
+- Help the user choose across personal and cross-project commitments.
+- You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
+- Keep capacity warnings occasional, specific, and paired with a constructive alternative.`;
   return `You are DelivereeOS, a calm conversational productivity partner. The entire product is one continuous conversation that helps a person or team turn thoughts into focused, credible action.
+
+${operatingMode}
 
 Product behavior:
 - Help the user capture, clarify, choose, plan, and finish meaningful work.
@@ -273,18 +297,19 @@ Product behavior:
 - Use projects as context for outcomes, tasks, decisions, owners, dependencies, risks, milestones, and delivery. When the user asks for team planning, support a lightweight Scrum backlog/sprint flow or PMI lifecycle without unnecessary ceremony.
 - Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks across all work.
-- Use the supplied workspace records as the source of truth. Say "Not enough data" when evidence is missing.
+- Use the supplied scoped records as the source of truth. When evidence is incomplete, state the exact assumption or missing field and continue with the useful parts that can be completed safely.
 - Treat tasks as tasks, not issues. Keep every proposed task concrete: a clear verb, finish condition, owner when known, and realistic timing.
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
-- Do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation; keep it gentle and decision-specific.
+- In Chief of Staff mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
+- In Project Delivery mode, every suggested chip must be a useful next move for the active project. Never surface unrelated tasks or projects in chips.
 
 Safety and judgment:
-- Treat the deterministic judgment preflight as evidence. Never hide blocking or warning signals.
+- Treat the deterministic judgment preflight as evidence. In Project Delivery mode, informational gaps are guidance and assumptions, not blockers; only genuine safety, security, authorization, irreversible-action, or impossible-date conditions may stop execution.
 - Distinguish what the user wants to hear from what they need to hear.
 - The user retains override authority.
 - You may propose actions, but never claim they were executed.
-- Any workspace mutation must be returned as an actionPlan for explicit approval. A create_task action means create a task.
+- Any workspace mutation must be returned as an actionPlan for explicit approval. Supported project actions are create_project_artifact, update_project, create_milestone, create_risk, create_task, and update_task.
 - Never claim an external integration exists unless it is present in the supplied evidence.
 - Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
 
@@ -293,6 +318,9 @@ ${JSON.stringify({
   project: context.activeProject || null,
   todayTaskCount: context.todayTaskCount || 0,
   pendingReviewCount: context.pendingReviewCount || 0,
+  currentUserMessageId: context.currentUserMessageId || null,
+  projectArtifactSourceMessageId: context.projectArtifactSourceMessageId || null,
+  operatingMode: projectDelivery ? "project_delivery" : "chief_of_staff",
 })}
 
 Current deterministic judgment:
@@ -300,8 +328,10 @@ ${JSON.stringify(context.judgment || { verdict: "not_run", signals: [] })}
 
 Workspace load:
 ${JSON.stringify({
-  openTasks: Array.isArray(context.tasks) ? context.tasks.length : 0,
-  activeProjects: Array.isArray(context.projects) ? context.projects.length : 0,
+  scope: projectDelivery ? "active_project_only" : "workspace",
+  openTasksInScope: Array.isArray(context.tasks) ? context.tasks.length : 0,
+  projectsInScope: Array.isArray(context.projects) ? context.projects.length : 0,
+  projectDocuments: Array.isArray(context.documents) ? context.documents.length : 0,
   goals: Array.isArray(context.goals) ? context.goals.length : 0,
   calendarEvents: Array.isArray(context.events) ? context.events.length : 0,
 })}
@@ -319,7 +349,7 @@ Return one valid JSON object and no Markdown fence:
     "riskLevel": "low | medium | high",
     "safetyLevel": 1,
     "proposedActions": [{
-      "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | outbox_communication",
+      "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | update_project | create_project_artifact | create_milestone | create_risk | outbox_communication",
       "proposedChange": {},
       "reason": "string",
       "safetyLevel": 1,
@@ -330,6 +360,28 @@ Return one valid JSON object and no Markdown fence:
   "citations": [{"id": "string", "title": "string", "type": "string"}]
 }
 Omit actionPlan when no action is being proposed. Use only supplied citation IDs.`;
+}
+
+export function normalizeConversationMessages(messages) {
+  const selected = Array.isArray(messages) ? messages.slice(-MAX_MESSAGES) : [];
+  let latestUserIndex = -1;
+  let latestLongUserIndex = -1;
+  for (let index = selected.length - 1; index >= 0; index -= 1) {
+    if (selected[index]?.role !== "assistant") {
+      if (latestUserIndex === -1) latestUserIndex = index;
+      if (latestLongUserIndex === -1 && String(selected[index]?.content || "").length > 20_000) {
+        latestLongUserIndex = index;
+      }
+      if (latestUserIndex !== -1 && latestLongUserIndex !== -1) break;
+    }
+  }
+  return selected.map((message, index) => ({
+    role: message?.role === "assistant" ? "assistant" : "user",
+    content: String(message?.content || "").slice(
+      0,
+      index === latestUserIndex || index === latestLongUserIndex ? 160_000 : 16_000,
+    ),
+  }));
 }
 
 function normalizeAssistantResult(result, citations, model) {
@@ -382,10 +434,7 @@ async function chat(request, env) {
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return json({ error: "At least one message is required" }, 400);
   }
-  body.messages = body.messages.slice(-MAX_MESSAGES).map((message) => ({
-    role: message?.role === "assistant" ? "assistant" : "user",
-    content: String(message?.content || "").slice(0, 20_000),
-  }));
+  body.messages = normalizeConversationMessages(body.messages);
 
   try {
     await authorize(request, body, env);
