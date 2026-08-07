@@ -67,3 +67,5 @@ This is an explicit, auditable integration. It does not scrape a Codex chat, fab
 ## Operational limitation
 
 Authorized events remain safely queued in D1 until the project Codex tab is opened. The current release intentionally uses this pull-and-apply model instead of pretending a background Firebase service account exists. A future trusted backend can apply events continuously without changing the MCP contract.
+
+The production Site currently uses owner-only access. Codex's standalone MCP client cannot reuse the Site browser cookie, so a secure machine-to-machine access decision is still required before enabling the remote MCP as mandatory. The plugin therefore treats the server as optional and never prevents unrelated Codex tasks from starting. Do not issue or embed a global Site bypass credential without an explicit security decision; prefer a dedicated public MCP origin with per-user, revocable bridge tokens.

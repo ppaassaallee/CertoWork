@@ -1,6 +1,6 @@
 {
   "name": "delivereeos-bridge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect Codex delivery tasks to scoped DelivereeOS projects, work items, and knowledge evidence.",
   "author": {
     "name": "Boldr AI"

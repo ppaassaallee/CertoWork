@@ -41,6 +41,9 @@ const CODEX_PLUGIN_URL =
   "codex://plugins/delivereeos-bridge?marketplacePath=%2FUsers%2Falejandropascual%2F.agents%2Fplugins%2Fmarketplace.json";
 const CONNECTION_COLLECTION = "integration_configs";
 const DELIVERY_AUDIT_COLLECTION = "delivery_reviews";
+// A standalone Codex MCP client cannot reuse the browser's private Sites
+// session. Keep sync explicitly pending until revocable machine access exists.
+const REMOTE_MCP_READY = false;
 
 function projectTitle(project: any) {
   return project?.title || project?.name || "Untitled project";
@@ -475,13 +478,15 @@ export function CodexBridgePanel({
           <div><span className="do-project-card-kicker">CODEX DELIVERY BRIDGE</span><h4>Link this project conversation to real engineering work.</h4><p>Codex receives only the project and PBIs you select. It returns progress, evidence, gaps, and delivery notes to this console—without pretending that a build or deployment happened.</p></div>
         </section>
 
+        {!REMOTE_MCP_READY && <p className="do-codex-readiness"><ShieldCheck size={14} /><span><strong>Secure Codex access still needs activation.</strong> This private Site does not expose its browser session to the standalone Codex MCP client. You can prepare the scoped handoff now; automatic two-way sync remains off until a revocable machine credential or dedicated MCP origin is approved.</span></p>}
+
         <section className="do-codex-steps">
           <label><span><strong>1</strong> Repository</span><input onChange={(event) => setRepositoryRoot(event.target.value)} placeholder="/path/to/the/repository" value={repositoryRoot} /><input onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="Optional GitHub repository URL" value={repositoryUrl} /></label>
           <div className="do-codex-step"><span><strong>2</strong> Work Codex may receive</span><div className="do-codex-work-list">{executableItems.map((item) => <label key={item.id}><input checked={selectedIds.includes(item.id)} onChange={() => setSelectedIds((values) => values.includes(item.id) ? values.filter((id) => id !== item.id) : [...values, item.id])} type="checkbox" /><span><b>{item.key || "PBI"}</b>{item.title || item.name}</span></label>)}{executableItems.length === 0 && <p>Create an executable PBI, story, task, or bug before linking Codex.</p>}</div></div>
           <div className="do-codex-step"><span><strong>3</strong> Update permission</span><label className="do-codex-radio"><input checked={syncMode === "completion_and_notes"} onChange={() => setSyncMode("completion_and_notes")} type="radio" /><span><b>Sync delivery automatically</b><small>Progress, completion, tests, and knowledge notes. Scope changes still wait for review.</small></span></label><label className="do-codex-radio"><input checked={syncMode === "review_every_change"} onChange={() => setSyncMode("review_every_change")} type="radio" /><span><b>Review every update</b><small>Codex sends drafts; you apply each one here.</small></span></label></div>
         </section>
 
-        <button className="do-codex-primary" disabled={busy !== "" || executableItems.length === 0} onClick={createConnection} type="button">{busy === "link" ? <Loader2 className="spin" size={14} /> : <Link2 size={14} />} Create Codex link</button>
+        <button className="do-codex-primary" disabled={busy !== "" || executableItems.length === 0} onClick={createConnection} type="button">{busy === "link" ? <Loader2 className="spin" size={14} /> : <Link2 size={14} />} {REMOTE_MCP_READY ? "Create Codex link" : "Prepare Codex handoff"}</button>
         {notice && <p className="do-codex-notice">{notice}</p>}
       </div>
     );
@@ -491,12 +496,12 @@ export function CodexBridgePanel({
   return (
     <div className="do-codex-connected">
       <section className="do-codex-status-card">
-        <div className={`do-codex-status is-${connection.status}`}><span><CheckCircle2 size={15} /></span><div><strong>{connection.status === "connected" ? "Codex linked" : connection.status === "error" ? "Connection needs attention" : "Handoff ready"}</strong><small>{projectTitle(project)} · {selectedIds.length} selected item{selectedIds.length === 1 ? "" : "s"}</small></div></div>
+        <div className={`do-codex-status is-${connection.status}`}><span><CheckCircle2 size={15} /></span><div><strong>{REMOTE_MCP_READY && connection.status === "connected" ? "Codex linked" : connection.status === "error" ? "Connection needs attention" : REMOTE_MCP_READY ? "Handoff ready" : "Handoff prepared · sync pending"}</strong><small>{projectTitle(project)} · {selectedIds.length} selected item{selectedIds.length === 1 ? "" : "s"}</small></div></div>
         <div className="do-codex-status-meta"><span>DelivereeOS conversation<b>{connection.conversationId ? connection.conversationId.slice(0, 10) : "Project context"}</b></span><span>Last synchronized<b>{dateLabel(connection.lastSyncAt)}</b></span><span>Handoff code<b>{connection.handoffCode}</b></span></div>
       </section>
 
       <section className="do-codex-launch">
-        <div><span className="do-project-card-kicker">START OR LINK A CODEX TASK</span><h4>One brief carries the project context and reporting contract.</h4><p>Open the DelivereeOS plugin in Codex, start a task in this repository, then paste the brief. The first tool call links both conversations through this handoff.</p></div>
+        <div><span className="do-project-card-kicker">START OR LINK A CODEX TASK</span><h4>One brief carries the project context and reporting contract.</h4><p>{REMOTE_MCP_READY ? "Open the DelivereeOS plugin in Codex, start a task in this repository, then paste the brief. The first tool call links both conversations through this handoff." : "Copy the brief as a manual, scoped handoff. The plugin is installed locally, but automatic calls remain intentionally disabled by the private Site gate until secure machine access is approved."}</p></div>
         <div className="do-codex-launch-actions"><button onClick={async () => { await navigator.clipboard.writeText(handoffBrief); setCopied(true); window.setTimeout(() => setCopied(false), 2_000); }} type="button">{copied ? <Check size={13} /> : <Clipboard size={13} />}{copied ? "Copied" : "Copy launch brief"}</button><a href={CODEX_PLUGIN_URL}><ExternalLink size={13} /> Open plugin in Codex</a></div>
         <details><summary>Preview launch brief</summary><pre>{handoffBrief}</pre></details>
       </section>
