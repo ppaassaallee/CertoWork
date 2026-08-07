@@ -1,3 +1,5 @@
+import { handleCodexBridgeRequest } from "./codex-bridge.js";
+
 /**
  * DelivereeOS production edge entry point for Codex Sites.
  *
@@ -289,7 +291,7 @@ export function assistantInstructions(body, citations) {
 - Missing information is a completion checklist, not a refusal. Make a useful first pass now with clearly labeled assumptions, then ask at most one high-leverage question while work continues.
 - Never respond with only a gate, lecture, or request to pause another project. A warning may change sequencing or be recorded as a risk, but it must not prevent a reversible draft or backlog slice.
 - When given a large PRD or specification, extract a workable hierarchy: outcome, assumptions, phases or epics, milestones, requirement-linked work, risks, dependencies, owners, and acceptance evidence. Do not create hundreds of flat tasks. Propose the first coherent batch and say what the next batch will cover.
-- For product or delivery backlogs, represent hierarchy with create_task actions using proposedChange.workItemType: "epic", "feature", or "pbi". Features should reference an epic with parentId and epicId when known. PBIs should reference a feature with parentId and featureId, or an epic with parentId and epicId when no feature exists. Include priority, status, owner or assignee when known, dueDate when real, requirementId or requirementIds when present, acceptanceCriteria, dependencies, and order.
+- For product or delivery backlogs, use one canonical work-item system through create_task actions. Set proposedChange.workItemType to "epic", "feature", "pbi", "story", "task", "bug", or "subtask". Features reference an epic; executable PBIs/stories/tasks/bugs reference a feature or epic; subtasks reference an executable parent. Include priority only when grounded (otherwise null), canonical status, owner or assignee when known, dueDate when real, requirement IDs, acceptance criteria, dependencies, and order.
 - If exactly one project is attached and the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject?.id || allowedProjectIds[0] || "")}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
 - If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
 - Every proposed project action must carry one applicable projectId from ${JSON.stringify(allowedProjectIds)}. When several are attached, separate work by project rather than blending ownership. Use create_milestone for delivery gates and create_risk for material risks.`
@@ -323,7 +325,7 @@ Safety and judgment:
 - Distinguish what the user wants to hear from what they need to hear.
 - The user retains override authority.
 - You may propose actions, but never claim they were executed.
-- Any workspace mutation must be returned as an actionPlan for explicit approval. Supported actions include create_project_artifact, update_project, create_milestone, update_milestone, create_risk, update_risk, create_task, update_task, and post_to_conversation. For updates, use the exact existing taskId, milestoneId, riskId, or projectId from evidence. For backlog work, use task records with workItemType epic, feature, or pbi so the project console can display the hierarchy.
+- Any workspace mutation must be returned as an actionPlan for explicit approval. Supported actions include create_project_artifact, update_project, create_milestone, update_milestone, create_risk, update_risk, create_task, update_task, and post_to_conversation. For updates, use the exact existing taskId, milestoneId, riskId, or projectId from evidence. For backlog work, use the existing task record with canonical workItemType and hierarchy fields; never invent a second task system.
 - Never claim an external integration exists unless it is present in the supplied evidence.
 - Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
 
@@ -626,6 +628,16 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/boldi/chat") {
       return chat(request, env);
+    }
+    if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
+      const response = await handleCodexBridgeRequest(request, env, {
+        firebaseProjectId: FIREBASE_PROJECT_ID,
+        json,
+        platformIdentity,
+        readJson,
+        verifyFirebaseToken,
+      });
+      if (response) return response;
     }
     if (url.pathname.startsWith("/api/")) {
       return json(

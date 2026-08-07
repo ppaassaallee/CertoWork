@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
-    "build": "tsc -b && rm -rf dist && vite build && mkdir -p dist/server dist/.openai && cp worker/index.js dist/server/index.js && cp .openai/hosting.json dist/.openai/hosting.json",
+    "build": "tsc -b && rm -rf dist && vite build && mkdir -p dist/server dist/.openai && cp worker/*.js dist/server/ && cp .openai/hosting.json dist/.openai/hosting.json",
     "test": "tsx --test tests/*.test.ts",
     "lint": "eslint .",
     "preview": "vite preview"

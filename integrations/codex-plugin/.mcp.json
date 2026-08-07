@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "delivereeos": {
+      "type": "http",
+      "url": "https://gazelle-boldr-ai.boldrai-3640.chatgpt.site/mcp/delivereeos",
+      "auth": "chatgpt",
+      "required": true,
+      "default_tools_approval_mode": "writes"
+    }
+  }
+}

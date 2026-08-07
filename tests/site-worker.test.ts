@@ -24,6 +24,21 @@ function environment(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function bridgeDatabase() {
+  return {
+    prepare(sql: string) {
+      return {
+        sql,
+        bind() { return this; },
+        async run() { return { meta: { changes: 1 } }; },
+        async first() { return null; },
+        async all() { return { results: [] }; },
+      };
+    },
+    async batch(statements: unknown[]) { return statements.map(() => ({ success: true })); },
+  };
+}
+
 test("Sites worker reports an offline-safe health state without an API key", async () => {
   const response = await worker.fetch(
     new Request("https://gazelle.test/api/health"),
@@ -85,6 +100,37 @@ test("Sites session endpoint rejects anonymous requests", async () => {
   const response = await worker.fetch(
     new Request("https://gazelle.test/api/session"),
     environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
+test("Codex bridge exposes its scoped MCP tools only to the signed-in platform user", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/mcp/delivereeos", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "oai-authenticated-user-id": "sites-user-1",
+        "oai-authenticated-user-email": "alejandro@getboldr.ai",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    }),
+    environment({ DB: bridgeDatabase() }),
+  );
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as any;
+  assert.equal(body.result.tools[0].name, "list_delivery_links");
+  assert.equal(body.result.tools.at(-1).name, "report_project_gap");
+});
+
+test("Codex bridge rejects anonymous MCP calls", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/mcp/delivereeos", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    }),
+    environment({ DB: bridgeDatabase() }),
   );
   assert.equal(response.status, 401);
 });

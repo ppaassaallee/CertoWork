@@ -119,6 +119,14 @@ function entityTitle(entity: any) {
   return entity?.title || entity?.name || "Untitled";
 }
 
+function projectWorkKey(project: any) {
+  const explicit = String(project?.projectKey || project?.key || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (explicit) return explicit.slice(0, 10);
+  const words = String(project?.title || project?.name || "WORK").toUpperCase().match(/[A-Z0-9]+/g) || ["WORK"];
+  const initials = words.map((word) => word[0]).join("");
+  return (initials.length >= 2 ? initials : words[0].slice(0, 5)).slice(0, 6);
+}
+
 function isClosed(status?: string) {
   return ["done", "completed", "closed", "archived", "cancelled"].includes(
     String(status || "").toLowerCase(),
@@ -833,7 +841,7 @@ export function DelivereeWorkspace() {
           ? "tasks"
           : reviewType === "milestone_update" ? "milestones" : "boldr_risks";
         const allowedFields = reviewType === "task_update"
-          ? ["title", "description", "status", "priority", "dueDate", "owner", "projectId", "timeSector", "definitionOfDone"]
+          ? ["title", "description", "status", "priority", "dueDate", "owner", "assignee", "assigneeId", "projectId", "timeSector", "definitionOfDone", "type", "workItemType", "itemType", "parentId", "epicId", "featureId", "sprintId", "acceptanceCriteria", "storyPoints", "estimateHours", "labels", "dependencyIds", "blocked", "blockedReason"]
           : reviewType === "milestone_update"
             ? ["title", "description", "status", "dueDate", "targetDate", "owner", "projectId"]
             : ["title", "description", "status", "severity", "owner", "mitigation", "projectId", "type"];
@@ -989,12 +997,28 @@ export function DelivereeWorkspace() {
 
   const addProjectTask = async (projectId: string, title: string, status: WorkLane, patch: Record<string, unknown> = {}) => {
     if (!user || !workspace) return;
+    const project = projects.find((item) => item.id === projectId);
+    const prefix = projectWorkKey(project);
+    const nextSequence = tasks
+      .filter((item) => item.projectId === projectId)
+      .reduce((maximum, item) => {
+        const match = String(item.key || item.workItemKey || "").match(/-(\d+)$/);
+        return Math.max(maximum, match ? Number(match[1]) : 0);
+      }, 0) + 1;
+    const canonicalType = String(patch.workItemType || patch.type || patch.itemType || "task").toLowerCase();
     await addDoc(collection(db, "tasks"), {
       ...patch,
       userId: user.uid,
       workspaceId: workspace.id,
       projectId,
       title,
+      normalizedTitle: title.trim().toLowerCase().replace(/\s+/g, " "),
+      key: String(patch.key || `${prefix}-${nextSequence}`),
+      type: canonicalType,
+      workItemType: canonicalType,
+      itemType: canonicalType,
+      source: String(patch.source || "manual"),
+      priority: patch.priority ?? null,
       status,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
@@ -1306,6 +1330,7 @@ export function DelivereeWorkspace() {
           {panel === "project" && (
             consoleProject ? (
               <ProjectConsolePanel
+                conversationId={conversationId}
                 documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
                 milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
                 onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}

@@ -32,6 +32,7 @@ import {
   taskWorkLane,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { CodexBridgePanel } from "./CodexBridgePanel";
 
 type ProjectPatch = Record<string, unknown>;
 
@@ -94,13 +95,21 @@ function EmptyState({ icon, title, text }: { icon: React.ReactNode; title: strin
   return <div className="do-project-empty">{icon}<strong>{title}</strong><span>{text}</span></div>;
 }
 
-type WorkItemKind = "epic" | "feature" | "pbi";
+type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 
 function workItemKind(item: any): WorkItemKind {
   const value = String(item?.workItemType || item?.itemType || item?.taskType || item?.issueType || item?.kind || "").toLowerCase();
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
+  if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
+  if (value.includes("story")) return "story";
+  if (value.includes("bug")) return "bug";
+  if (value === "task" || value.includes("project_task")) return "task";
   return "pbi";
+}
+
+function workItemLabel(kind: WorkItemKind) {
+  return kind === "pbi" ? "PBI" : kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 function workItemParentId(item: any) {
@@ -130,11 +139,18 @@ function dateInputValue(value: any) {
 
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
+  if (!normalized) return "";
   if (["P1", "P2", "P3", "P4"].includes(normalized)) return normalized;
   if (["1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "P1";
   if (["2", "MEDIUM"].includes(normalized)) return "P2";
   if (["3", "LOW"].includes(normalized)) return "P3";
-  return "P4";
+  return "";
+}
+
+function canonicalWorkStatus(item: any) {
+  const status = String(item?.status || "").toLowerCase();
+  if (["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"].includes(status)) return status;
+  return taskWorkLane(item);
 }
 
 function InlineEdit({
@@ -373,6 +389,7 @@ export function ProjectConsolePanel({
   milestones,
   risks,
   documents,
+  conversationId,
   onAsk,
   onUpdateProject,
   onArchiveProject,
@@ -386,6 +403,7 @@ export function ProjectConsolePanel({
   milestones: any[];
   risks: any[];
   documents: any[];
+  conversationId?: string | null;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
@@ -394,7 +412,7 @@ export function ProjectConsolePanel({
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
 }) {
-  const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "docs">("brief");
+  const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "docs" | "codex">("brief");
   const [taskTitle, setTaskTitle] = useState("");
   const [workTitle, setWorkTitle] = useState("");
   const [workType, setWorkType] = useState<WorkItemKind>("pbi");
@@ -416,8 +434,9 @@ export function ProjectConsolePanel({
   const hierarchy = useMemo(() => {
     const epics = sortWorkItems(tasks.filter((task) => workItemKind(task) === "epic"));
     const features = sortWorkItems(tasks.filter((task) => workItemKind(task) === "feature"));
-    const pbis = sortWorkItems(tasks.filter((task) => workItemKind(task) === "pbi"));
-    return { epics, features, pbis };
+    const pbis = sortWorkItems(tasks.filter((task) => ["pbi", "story", "task", "bug"].includes(workItemKind(task))));
+    const subtasks = sortWorkItems(tasks.filter((task) => workItemKind(task) === "subtask"));
+    return { epics, features, pbis, subtasks };
   }, [tasks]);
 
   useEffect(() => {
@@ -441,8 +460,8 @@ export function ProjectConsolePanel({
       taskType: workType,
       parentId: workParentId || null,
       epicId: parentKind === "epic" ? workParentId : parent?.epicId || null,
-      featureId: parentKind === "feature" ? workParentId : null,
-      priority: "P3",
+      featureId: parentKind === "feature" ? workParentId : parent?.featureId || null,
+      priority: null,
       order: tasks.length,
       rank: tasks.length,
     };
@@ -463,7 +482,11 @@ export function ProjectConsolePanel({
   const nextRisk = risks.find((risk) => String(risk.status || "open").toLowerCase() !== "closed") || blockedTasks[0];
   const parentOptions = workType === "epic"
     ? []
-    : workType === "feature" ? hierarchy.epics : [...hierarchy.features, ...hierarchy.epics];
+    : workType === "feature"
+      ? hierarchy.epics
+      : workType === "subtask"
+        ? hierarchy.pbis
+        : [...hierarchy.features, ...hierarchy.epics];
   const renderWorkItemRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     return (
@@ -473,16 +496,21 @@ export function ProjectConsolePanel({
           <button aria-label={`Move ${projectTitle(item)} down`} onClick={() => moveWorkItem(peers, item, 1)} type="button"><ArrowDown size={12} /></button>
         </div>
         <div className="do-backlog-title">
-          <span>{kind === "epic" ? "Epic" : kind === "feature" ? "Feature" : "PBI"}</span>
+          <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
           <InlineEdit ariaLabel={`Title for ${projectTitle(item)}`} onCommit={(title) => title && onUpdateTask(item.id, { title })} placeholder="Untitled work item" value={item.title || item.name} />
         </div>
-        <select aria-label={`Status for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={taskWorkLane(item)}>
+        <select aria-label={`Status for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalWorkStatus(item)}>
           <option value="backlog">Backlog</option>
-          <option value="in_progress">Doing</option>
+          <option value="ready">Ready</option>
+          <option value="todo">To do</option>
+          <option value="in_progress">In progress</option>
+          <option value="in_review">In review</option>
           <option value="blocked">Blocked</option>
           <option value="done">Done</option>
+          <option value="cancelled">Cancelled</option>
         </select>
         <select aria-label={`Priority for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value })} value={priorityValue(item.priority)}>
+          <option value="">—</option>
           <option value="P1">P1</option>
           <option value="P2">P2</option>
           <option value="P3">P3</option>
@@ -491,6 +519,15 @@ export function ProjectConsolePanel({
         <input aria-label={`Owner for ${projectTitle(item)}`} defaultValue={item.owner || item.assignee || ""} onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
         <input aria-label={`Due date for ${projectTitle(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
+    );
+  };
+  const renderExecutableWithSubtasks = (item: any, peers: any[]) => {
+    const children = hierarchy.subtasks.filter((subtask) => workItemParentId(subtask) === item.id);
+    return (
+      <div className="do-backlog-executable" key={item.id}>
+        {renderWorkItemRow(item, peers)}
+        {children.length > 0 && <div className="do-backlog-subtasks">{children.map((subtask) => renderWorkItemRow(subtask, children))}</div>}
+      </div>
     );
   };
 
@@ -524,7 +561,7 @@ export function ProjectConsolePanel({
 
       <nav className="do-console-tabs" aria-label="Project console sections">
         {([
-          ["brief", "Brief"], ["backlog", "Backlog"], ["plan", "Plan"], ["work", "Flow"], ["risks", "Risks"], ["docs", "Docs"],
+          ["brief", "Brief"], ["backlog", "Backlog"], ["plan", "Plan"], ["work", "Flow"], ["risks", "Risks"], ["docs", "Docs"], ["codex", "Codex"],
         ] as const).map(([value, label]) => (
           <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}</button>
         ))}
@@ -562,19 +599,24 @@ export function ProjectConsolePanel({
               <option value="epic">Epic</option>
               <option value="feature">Feature</option>
               <option value="pbi">PBI</option>
+              <option value="story">Story</option>
+              <option value="task">Task</option>
+              <option value="bug">Bug</option>
+              <option value="subtask">Subtask</option>
             </select>
             <select aria-label="Parent work item" disabled={parentOptions.length === 0} onChange={(event) => setWorkParentId(event.target.value)} value={workParentId}>
-              <option value="">{workType === "epic" ? "No parent" : workType === "feature" ? "Choose epic" : "Choose feature or epic"}</option>
-              {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemKind(item) === "epic" ? "Epic" : "Feature"} · {projectTitle(item)}</option>)}
+              <option value="">{workType === "epic" ? "No parent" : workType === "feature" ? "Choose epic" : workType === "subtask" ? "Choose executable parent" : "Choose feature or epic"}</option>
+              {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {projectTitle(item)}</option>)}
             </select>
-            <input onChange={(event) => setWorkTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitWorkItem()} placeholder={`Add ${workType === "pbi" ? "PBI" : workType}...`} value={workTitle} />
+            <input onChange={(event) => setWorkTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && submitWorkItem()} placeholder={`Add ${workItemLabel(workType)}...`} value={workTitle} />
             <button disabled={!workTitle.trim()} onClick={submitWorkItem} type="button"><Plus size={13} /> Add</button>
           </section>
 
           <div className="do-backlog-summary">
             <span><strong>{hierarchy.epics.length}</strong> Epics</span>
             <span><strong>{hierarchy.features.length}</strong> Features</span>
-            <span><strong>{hierarchy.pbis.length}</strong> PBIs</span>
+            <span><strong>{hierarchy.pbis.length}</strong> Executable</span>
+            <span><strong>{hierarchy.subtasks.length}</strong> Subtasks</span>
           </div>
 
           <div className="do-backlog-tree">
@@ -591,12 +633,12 @@ export function ProjectConsolePanel({
                         <div className="do-backlog-feature" key={feature.id}>
                           {renderWorkItemRow(feature, epicFeatures)}
                           <div className="do-backlog-children is-pbis">
-                            {featurePbis.map((pbi) => renderWorkItemRow(pbi, featurePbis))}
+                            {featurePbis.map((pbi) => renderExecutableWithSubtasks(pbi, featurePbis))}
                           </div>
                         </div>
                       );
                     })}
-                    {epicPbis.map((pbi) => renderWorkItemRow(pbi, epicPbis))}
+                    {epicPbis.map((pbi) => renderExecutableWithSubtasks(pbi, epicPbis))}
                   </div>
                 </section>
               );
@@ -608,7 +650,7 @@ export function ProjectConsolePanel({
                 <section className="do-backlog-epic is-unassigned" key={feature.id}>
                   {renderWorkItemRow(feature, hierarchy.features.filter((item) => !workItemParentId(item)))}
                   <div className="do-backlog-children is-pbis">
-                    {featurePbis.map((pbi) => renderWorkItemRow(pbi, featurePbis))}
+                    {featurePbis.map((pbi) => renderExecutableWithSubtasks(pbi, featurePbis))}
                   </div>
                 </section>
               );
@@ -617,7 +659,14 @@ export function ProjectConsolePanel({
             {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).length > 0 && (
               <section className="do-backlog-epic is-unassigned">
                 <header><strong>Unassigned PBIs</strong><span>{hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).length}</span></header>
-                {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).map((pbi) => renderWorkItemRow(pbi, hierarchy.pbis.filter((item) => !workItemParentId(item))))}
+                {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).map((pbi) => renderExecutableWithSubtasks(pbi, hierarchy.pbis.filter((item) => !workItemParentId(item))))}
+              </section>
+            )}
+
+            {hierarchy.subtasks.filter((subtask) => !hierarchy.pbis.some((item) => item.id === workItemParentId(subtask))).length > 0 && (
+              <section className="do-backlog-epic is-unassigned">
+                <header><strong>Unassigned subtasks</strong><span>{hierarchy.subtasks.filter((subtask) => !hierarchy.pbis.some((item) => item.id === workItemParentId(subtask))).length}</span></header>
+                {hierarchy.subtasks.filter((subtask) => !hierarchy.pbis.some((item) => item.id === workItemParentId(subtask))).map((subtask) => renderWorkItemRow(subtask, hierarchy.subtasks))}
               </section>
             )}
 
@@ -676,6 +725,15 @@ export function ProjectConsolePanel({
             {documents.length === 0 && <EmptyState icon={<FileText size={18} />} title="No docs yet" text="Paste a PRD in this project conversation and ask DelivereeOS to save it here." />}
           </div>
         </div>
+      )}
+
+      {tab === "codex" && (
+        <CodexBridgePanel
+          conversationId={conversationId}
+          documents={documents}
+          project={project}
+          tasks={tasks}
+        />
       )}
 
       <div className="do-console-danger">

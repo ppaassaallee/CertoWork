@@ -1,0 +1,27 @@
+{
+  "name": "delivereeos-bridge",
+  "version": "0.1.0",
+  "description": "Connect Codex delivery tasks to scoped DelivereeOS projects, work items, and knowledge evidence.",
+  "author": {
+    "name": "Boldr AI"
+  },
+  "homepage": "https://gazelle-boldr-ai.boldrai-3640.chatgpt.site",
+  "keywords": ["delivereeos", "delivery", "work-items", "codex", "mcp"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "DelivereeOS Bridge",
+    "shortDescription": "Deliver scoped PBIs and sync evidence.",
+    "longDescription": "Links a Codex task to one DelivereeOS project conversation. Codex can read selected work, claim PBIs, report progress, submit truthful completion evidence, and return missing scope for review.",
+    "developerName": "Boldr AI",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://gazelle-boldr-ai.boldrai-3640.chatgpt.site",
+    "defaultPrompt": [
+      "Open my DelivereeOS delivery handoff.",
+      "Claim the selected PBI and implement it.",
+      "Sync progress and evidence to DelivereeOS."
+    ],
+    "brandColor": "#214B39"
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -79,8 +79,8 @@ export type WorkLane = "backlog" | "in_progress" | "blocked" | "done";
 
 export function taskWorkLane(task: any): WorkLane {
   const status = String(task?.status || "open").toLowerCase();
-  if (["done", "completed", "closed"].includes(status)) return "done";
+  if (["done", "completed", "closed", "cancelled"].includes(status)) return "done";
   if (["blocked", "waiting"].includes(status)) return "blocked";
-  if (["in_progress", "active", "doing"].includes(status)) return "in_progress";
+  if (["in_progress", "in_review", "active", "doing"].includes(status)) return "in_progress";
   return "backlog";
 }

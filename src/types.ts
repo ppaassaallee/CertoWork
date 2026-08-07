@@ -331,6 +331,40 @@ export interface Task {
   tags?: string[];
   boldiActionPlanId?: string;
   updatedBy?: string;
+
+  // Canonical DelivereeOS work-item fields. The existing `tasks` collection is
+  // retained as the one source of truth while records are upgraded additively.
+  type?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';
+  workItemType?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';
+  key?: string;
+  normalizedTitle?: string;
+  epicId?: string | null;
+  featureId?: string | null;
+  sprintId?: string | null;
+  acceptanceCriteria?: string;
+  severity?: string;
+  assigneeId?: string | null;
+  reporterId?: string;
+  ownerId?: string | null;
+  storyPoints?: number | null;
+  estimateHours?: number | null;
+  startDate?: string | null;
+  labels?: string[];
+  dependencyIds?: string[];
+  linkedDocumentIds?: string[];
+  linkedPullRequestIds?: string[];
+  linkedCommitIds?: string[];
+  linkedBuildIds?: string[];
+  linkedDeploymentIds?: string[];
+  blocked?: boolean;
+  blockedReason?: string;
+  source?: 'manual' | 'boldi' | 'import' | 'github' | 'hermes' | 'api' | 'codex';
+  codexStatus?: string;
+  codexRunId?: string | null;
+  codexTaskReference?: string | null;
+  codexLastSummary?: string;
+  lastCodexSyncAt?: any;
+  deliveryEvidence?: Record<string, unknown>;
 }
 
 export interface DailyClarityPreferences {
@@ -649,4 +683,3 @@ export interface StrategicAlert {
   createdAt: any;
   updatedAt: any;
 }
-
