@@ -38,11 +38,13 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
@@ -59,6 +61,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
+import { WorkItemsCenter } from "./WorkItemsCenter";
 
 type Conversation = {
   id: string;
@@ -85,6 +88,7 @@ type Message = {
 };
 
 type Panel = "today" | "projects" | "project" | "approvals" | null;
+type CenterView = "conversation" | "items";
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
@@ -239,8 +243,8 @@ function ActionProposal({
     <section className="do-proposal" data-testid="action-proposal">
       <div className="do-proposal-head">
         <div>
-          <span className="do-kicker">Draft</span>
-          <h3>{plan.title || "Proposed changes"}</h3>
+          <span className="do-kicker">Pending</span>
+          <h3>{plan.title || "Pending changes"}</h3>
           <p>{plan.summary}</p>
         </div>
         <ShieldCheck size={17} />
@@ -257,7 +261,7 @@ function ActionProposal({
         ))}
       </div>
       <div className="do-proposal-foot">
-        <span>Nothing changes until you approve.</span>
+        <span>Nothing changes until you apply it.</span>
         <button
           className="do-button do-button-dark"
           disabled={status !== "idle"}
@@ -275,7 +279,7 @@ function ActionProposal({
           ) : (
             <ShieldCheck size={14} />
           )}
-          {status === "done" ? "Ready to approve" : "Review draft"}
+          {status === "done" ? "Ready to apply" : "Review pending"}
         </button>
       </div>
     </section>
@@ -283,7 +287,7 @@ function ActionProposal({
 }
 
 export function DelivereeWorkspace() {
-  const { user, workspace, workspaces, setWorkspace, logOut } = useAuth();
+  const { user, workspace, logOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
@@ -310,7 +314,12 @@ export function DelivereeWorkspace() {
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [commandCenterOpen, setCommandCenterOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [centerView, setCenterView] = useState<CenterView>("conversation");
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [cleanSlateOpen, setCleanSlateOpen] = useState(false);
+  const [cleanConfirmText, setCleanConfirmText] = useState("");
+  const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -417,10 +426,18 @@ export function DelivereeWorkspace() {
     ? { linkedProjectIds: [activeProject.id], linkedTaskIds: [], conversationType: "project" as const }
     : null);
   const directContextProjectIds = conversationProjectIds(impliedConversationScope);
-  const contextTaskIds = conversationTaskIds(impliedConversationScope);
+  const conversationContextTaskIds = conversationTaskIds(impliedConversationScope);
+  const selectedWorkItem = selectedWorkItemId
+    ? (tasks.find((task) => task.id === selectedWorkItemId) || null)
+    : null;
+  const contextTaskIds = [...new Set([
+    ...conversationContextTaskIds,
+    ...(selectedWorkItem ? [selectedWorkItem.id] : []),
+  ])];
   const contextTasks = openTasks.filter((task) => contextTaskIds.includes(task.id));
   const contextProjectIds = [...new Set([
     ...directContextProjectIds,
+    ...(selectedWorkItem?.projectId ? [String(selectedWorkItem.projectId)] : []),
     ...contextTasks.map((task) => String(task.projectId || "")).filter(Boolean),
   ])];
   const contextProjects = projects.filter((project) => contextProjectIds.includes(project.id));
@@ -451,7 +468,9 @@ export function DelivereeWorkspace() {
   );
   const visibleMessages = messages.filter((message) => message.role !== "system");
   const contextualMessages = visibleMessages;
-  const currentContextLabel = conversationScopeLabel(impliedConversationScope, projects, tasks);
+  const currentContextLabel = selectedWorkItem
+    ? entityTitle(selectedWorkItem)
+    : conversationScopeLabel(impliedConversationScope, projects, tasks);
   const filteredConversations = conversations.filter((conversation) =>
     String(conversation.title || "").toLowerCase().includes(search.toLowerCase()),
   );
@@ -812,7 +831,7 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       });
     }
-    setNotice("Draft ready. Review it before anything changes.");
+    setNotice("Pending change ready. Review it before anything changes.");
     setPanel("approvals");
   };
 
@@ -824,7 +843,7 @@ export function DelivereeWorkspace() {
           status: "dismissed",
           updatedAt: serverTimestamp(),
         });
-        setNotice("Draft dismissed. Nothing changed.");
+        setNotice("Pending change dismissed. Nothing changed.");
         return;
       }
       const proposed = candidate.proposed || {};
@@ -951,7 +970,7 @@ export function DelivereeWorkspace() {
       });
       setNotice(`${reviewTypeLabel(reviewType)} ${reviewType === "project_update" ? "updated" : "created"}.`);
     } catch {
-      setNotice("That draft could not be processed. It is still waiting for you.");
+      setNotice("That pending change could not be processed. It is still waiting for you.");
     }
   };
 
@@ -1028,6 +1047,88 @@ export function DelivereeWorkspace() {
 
   const updateProjectTask = async (taskId: string, patch: Record<string, unknown>) => {
     await updateDoc(doc(db, "tasks", taskId), { ...patch, updatedAt: serverTimestamp() });
+  };
+
+  const resetWorkspaceData = async () => {
+    if (!user || !workspace || cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning) return;
+    setCleaning(true);
+    setNotice("");
+    const collectionsToClear = [
+      "projects",
+      "tasks",
+      "milestones",
+      "boldr_risks",
+      "knowledge_items",
+      "review_candidates",
+      "boldi_conversations",
+      "boldi_messages",
+      "boldi_action_plans",
+      "categories",
+      "stakeholders",
+      "inbox_items",
+      "ai_initiatives",
+      "prompt_assets",
+      "ai_artifacts",
+      "support_cases",
+      "delivery_reviews",
+      "delivery_gates",
+      "integration_configs",
+      "strategic_goals",
+      "key_results",
+      "strategic_initiatives",
+      "daily_metrics",
+      "habits",
+      "habit_logs",
+      "workout_plans",
+      "workout_sessions",
+      "workout_exercises",
+      "workout_logs",
+      "resources",
+      "skills",
+      "skill_folders",
+      "mental_clarity_items",
+      "mental_clarity_sessions",
+      "let_go_items",
+      "daily_clarity_preferences",
+      "daily_briefs",
+      "start_day_sessions",
+      "performance_analyses",
+    ];
+    try {
+      for (const collectionName of collectionsToClear) {
+        const snapshot = await getDocs(
+          query(
+            collection(db, collectionName),
+            where("userId", "==", user.uid),
+            where("workspaceId", "==", workspace.id),
+          ),
+        );
+        for (let index = 0; index < snapshot.docs.length; index += 400) {
+          const batch = writeBatch(db);
+          snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+          await batch.commit();
+        }
+      }
+      setConversationId(null);
+      setMessages([]);
+      setProjects([]);
+      setTasks([]);
+      setMilestones([]);
+      setRisks([]);
+      setKnowledgeItems([]);
+      setReviewItems([]);
+      setSelectedWorkItemId(null);
+      setPanel(null);
+      setCenterView("conversation");
+      setCleanSlateOpen(false);
+      setCleanConfirmText("");
+      navigate("/");
+      setNotice("Clean DelivereeOS is ready. No projects, items, tags, or pending changes remain in this workspace.");
+    } catch {
+      setNotice("I could not finish the clean reset. Please try again after the workspace finishes syncing.");
+    } finally {
+      setCleaning(false);
+    }
   };
 
   const addProjectMilestone = async (projectId: string, title: string) => {
@@ -1170,13 +1271,13 @@ export function DelivereeWorkspace() {
         <div className="do-account">
           <button onClick={() => setWorkspaceOpen((open) => !open)} type="button">
             <span className="do-avatar">{initials(user?.displayName, user?.email)}</span>
-            <span><strong>{workspace?.name || "Workspace"}</strong><small>{user?.email}</small></span>
+            <span><strong>DelivereeOS</strong><small>{user?.email}</small></span>
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
             <div className="do-account-menu">
-              {workspaces.length > 1 && workspaces.map((item) => <button key={item.id} onClick={() => setWorkspace(item)} type="button">{item.name}</button>)}
               <button onClick={() => { navigate("/settings"); setWorkspaceOpen(false); }} type="button"><Settings size={14} /> Settings</button>
+              <button onClick={() => { setCleanSlateOpen(true); setWorkspaceOpen(false); }} type="button">Start clean</button>
               <button onClick={logOut} type="button">Sign out</button>
             </div>
           )}
@@ -1203,12 +1304,25 @@ export function DelivereeWorkspace() {
               </button>
             )}
             <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
-            <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Drafts</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
+            <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Pendientes</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
           </div>
         </header>
 
         {notice && <div className="do-notice" role="status"><CheckCircle2 size={15} /><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")} type="button"><X size={14} /></button></div>}
 
+        <section className="do-center-bar" aria-label="Current work view">
+          <div className="do-breadcrumb">
+            <span>{routeOrPrimaryProject ? entityTitle(routeOrPrimaryProject) : "Chief of Staff"}</span>
+            {selectedWorkItem && <><ChevronRight size={12} /><strong>{entityTitle(selectedWorkItem)}</strong></>}
+          </div>
+          <div className="do-view-switch" role="tablist" aria-label="Central view">
+            <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => setCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
+            <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => setCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
+          </div>
+        </section>
+
+        {centerView === "conversation" ? (
+          <>
         <div className="do-thread-viewport">
           <div className="do-thread">
             {contextualMessages.length === 0 && !submitting ? (
@@ -1313,15 +1427,32 @@ export function DelivereeWorkspace() {
               <button aria-label="Send message" className="do-send" disabled={!input.trim() || submitting} onClick={() => sendMessage()} type="button">{submitting ? <Loader2 className="spin" size={16} /> : <ArrowUp size={17} />}</button>
             </div>
           </div>
-          <p className="do-composer-note">You stay in control. Suggested changes remain drafts until approved.</p>
+          <p className="do-composer-note">You stay in control. Suggested changes remain pending until approved.</p>
         </div>
+          </>
+        ) : (
+          <WorkItemsCenter
+            activeProject={routeOrPrimaryProject}
+            onAddTask={addProjectTask}
+            onAsk={(prompt) => {
+              setComposer(prompt);
+              setCenterView("conversation");
+            }}
+            onOpenProjectConsole={openProjectRecord}
+            onSelectItem={setSelectedWorkItemId}
+            onUpdateTask={updateProjectTask}
+            projects={activeProjects}
+            selectedItemId={selectedWorkItemId}
+            tasks={routeOrPrimaryProject ? tasks.filter((item) => item.projectId === routeOrPrimaryProject.id) : openTasks}
+          />
+        )}
       </main>
 
       <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
         <div className="do-panel-head">
           <div>
             <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : "Drafts"}</h2>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : "Pendientes"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
@@ -1404,14 +1535,15 @@ export function DelivereeWorkspace() {
                   <div className="do-approval-item" key={item.id}>
                     <span className="do-kicker">{item.type || "change"}</span>
                     <strong>{item.title}</strong>
-                    <p>{item.why || item.action || "Proposed in conversation"}</p>
-                    <div>
-                      <button onClick={() => processReview(item, "dismiss")} type="button">Dismiss</button>
-                      <button onClick={() => processReview(item, "approve")} type="button"><Check size={13} /> Approve</button>
-                    </div>
+	                    <p>{item.why || item.action || "Proposed in conversation"}</p>
+	                    <div>
+	                      <button onClick={() => processReview(item, "dismiss")} type="button">Discard</button>
+	                      <button onClick={() => { setPanel(null); setComposer(`Edit this pending change before applying it: ${item.title}\n\n${item.why || item.action || ""}`); }} type="button">Edit</button>
+	                      <button onClick={() => processReview(item, "approve")} type="button"><Check size={13} /> Apply</button>
+	                    </div>
                   </div>
                 ))}
-                {reviewItems.length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>No drafts waiting.</strong><span>New suggestions will appear here before they change your workspace.</span></div>}
+                {reviewItems.length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>No pending changes.</strong><span>New suggestions will appear here before they change your workspace.</span></div>}
               </div>
             </>
           )}
@@ -1430,10 +1562,39 @@ export function DelivereeWorkspace() {
           onUpdateProject={updateProject}
           projects={projects}
           risks={risks}
-          tasks={tasks}
-        />
+	          tasks={tasks}
+	        />
+	      )}
+
+      {cleanSlateOpen && (
+        <div aria-label="Start clean DelivereeOS" aria-modal="true" className="do-clean-layer" role="dialog">
+          <section className="do-clean-modal">
+            <header>
+              <span className="do-kicker">Clean start</span>
+              <h2>Reset DelivereeOS content</h2>
+              <button aria-label="Close clean start" onClick={() => setCleanSlateOpen(false)} type="button"><X size={17} /></button>
+            </header>
+            <p>
+              This clears your current DelivereeOS records: projects, work items, tags, conversations, knowledge, pending changes, habits, workouts, reports, and delivery records. Your sign-in stays active.
+            </p>
+            <div className="do-clean-counts">
+              <span><strong>{projects.length}</strong> projects</span>
+              <span><strong>{tasks.length}</strong> items</span>
+              <span><strong>{conversations.length}</strong> conversations</span>
+              <span><strong>{reviewItems.length}</strong> pending</span>
+            </div>
+            <label>
+              Type CLEAR to confirm
+              <input autoFocus onChange={(event) => setCleanConfirmText(event.target.value)} value={cleanConfirmText} />
+            </label>
+            <footer>
+              <button onClick={() => setCleanSlateOpen(false)} type="button">Cancel</button>
+              <button disabled={cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning} onClick={resetWorkspaceData} type="button">{cleaning ? "Clearing..." : "Start clean"}</button>
+            </footer>
+          </section>
+        </div>
       )}
 
-    </div>
-  );
-}
+	    </div>
+	  );
+	}
