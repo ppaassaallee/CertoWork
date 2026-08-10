@@ -9,6 +9,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowUp,
+  BookOpen,
   Bot,
   CalendarDays,
   Check,
@@ -64,12 +65,14 @@ import {
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
+import { NotesWorkspace } from "./NotesWorkspace";
 import {
   DELIVEREE_SKILLS,
   isProjectWizardInvocation,
   splitProjectWizardLines,
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
+import { buildNotebookContext, type NotebookEntry } from "../lib/notebookContext";
 
 type Conversation = {
   id: string;
@@ -96,7 +99,7 @@ type Message = {
 };
 
 type Panel = "today" | "projects" | "project" | "approvals" | "skills" | null;
-type CenterView = "conversation" | "items";
+type CenterView = "conversation" | "items" | "notes";
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
@@ -307,6 +310,7 @@ export function DelivereeWorkspace() {
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
+  const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -364,6 +368,7 @@ export function DelivereeWorkspace() {
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
       makeQuery("knowledge_items", setKnowledgeItems),
+      makeQuery("notebook_entries", (items) => setNotebookEntries(items as NotebookEntry[])),
       makeQuery("review_candidates", (items) =>
         setReviewItems(items.filter((item) => ["pending", "approved_for_review"].includes(item.status))),
       ),
@@ -712,6 +717,10 @@ export function DelivereeWorkspace() {
       const projectArtifactSourceMessageId = text.length >= 2_500
         ? userMessageRef.id
         : previousLongProjectMessage?.id || userMessageRef.id;
+      const notebookDocuments = buildNotebookContext(notebookEntries, text, {
+        activeProjectId: primaryProject?.id || activeProject?.id || null,
+        limit: isFocusedConversation ? 4 : 6,
+      });
       const workspaceSnapshot = {
         tasks: scopedTasks,
         projects: scopedProjects,
@@ -761,7 +770,11 @@ export function DelivereeWorkspace() {
               : reviewItems.length,
             currentUserMessageId: userMessageRef.id,
             projectArtifactSourceMessageId,
-            documents: isFocusedConversation ? buildProjectDocumentContext(projectDocuments, text) : [],
+            documents: [
+              ...(isFocusedConversation ? buildProjectDocumentContext(projectDocuments, text) : []),
+              ...notebookDocuments,
+            ],
+            notebookNotes: notebookDocuments,
             userId: user.uid,
             workspaceId: workspace.id,
           },
@@ -1200,6 +1213,9 @@ export function DelivereeWorkspace() {
       "workout_exercises",
       "workout_logs",
       "resources",
+      "notebook_pages",
+      "notebook_entries",
+      "notebook_handwriting_assets",
       "skills",
       "skill_folders",
       "mental_clarity_items",
@@ -1232,6 +1248,7 @@ export function DelivereeWorkspace() {
       setMilestones([]);
       setRisks([]);
       setKnowledgeItems([]);
+      setNotebookEntries([]);
       setReviewItems([]);
       setSelectedWorkItemId(null);
       setPanel(null);
@@ -1435,6 +1452,7 @@ export function DelivereeWorkspace() {
           <div className="do-view-switch" role="tablist" aria-label="Central view">
             <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => setCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
             <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => setCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
+            <button aria-selected={centerView === "notes"} className={centerView === "notes" ? "is-active" : ""} onClick={() => setCenterView("notes")} role="tab" type="button"><BookOpen size={13} /> Notas</button>
           </div>
         </section>
 
@@ -1516,6 +1534,7 @@ export function DelivereeWorkspace() {
             <div className="do-quick-actions">
               <button onClick={() => setComposer("Capture this as a task: ")} type="button"><Inbox size={15} /><span><strong>Capture</strong><small>Turn a thought into a clear task</small></span></button>
               <button onClick={() => sendMessage("Plan my day realistically using the 2 must-dos and up to 8 should-dos method.")} type="button"><CalendarDays size={15} /><span><strong>Plan today</strong><small>Choose work that fits the day</small></span></button>
+              <button onClick={() => { setActionMenuOpen(false); setCenterView("notes"); }} type="button"><BookOpen size={15} /><span><strong>Open notes</strong><small>Notebook, section, notes and handwriting</small></span></button>
               <button onClick={() => { setActionMenuOpen(false); setProjectWizardOpen(true); }} type="button"><WandSparkles size={15} /><span><strong>Project Wizard</strong><small>Create or update a project safely</small></span></button>
               <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>Freeform project note</strong><small>Talk it through before creating</small></span></button>
             </div>
@@ -1548,7 +1567,7 @@ export function DelivereeWorkspace() {
           <p className="do-composer-note">You stay in control. Suggested changes remain pending until approved.</p>
         </div>
           </>
-        ) : (
+        ) : centerView === "items" ? (
           <WorkItemsCenter
             activeProject={routeOrPrimaryProject}
             onAddTask={addProjectTask}
@@ -1561,6 +1580,18 @@ export function DelivereeWorkspace() {
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
+            tasks={tasks}
+          />
+        ) : (
+          <NotesWorkspace
+            activeProject={routeOrPrimaryProject}
+            entries={notebookEntries}
+            knowledgeItems={knowledgeItems}
+            onAsk={(prompt) => {
+              setComposer(prompt);
+              setCenterView("conversation");
+            }}
+            projects={projects}
             tasks={tasks}
           />
         )}
