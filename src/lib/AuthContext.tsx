@@ -10,7 +10,7 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
   AUTH_BOOT_TIMEOUT_MS,
@@ -24,6 +24,9 @@ export interface Workspace {
   name: string;
   ownerId: string;
   members?: string[];
+  color?: string;
+  description?: string;
+  roles?: Record<string, string>;
 }
 
 interface AuthContextType {
@@ -120,6 +123,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (eMember) {
         console.error("Failed to load member workspaces:", eMember instanceof Error ? eMember.message : eMember);
       }
+
+      // Accept pending email invitations automatically once the invited person signs in.
+      if (u.email) {
+        try {
+          const emailLower = u.email.toLowerCase();
+          const qInvited = query(collection(db, 'workspace_members'), where('emailLower', '==', emailLower));
+          const snapInvited = await withTimeout(getDocs(qInvited), 7_000, 'Workspace invite lookup');
+          lookupSucceeded = true;
+          const invitePromises = snapInvited.docs.map(async (mDoc) => {
+            const mData = mDoc.data();
+            const wsId = mData.workspaceId;
+            if (!wsId || mData.status === 'removed') return;
+            try {
+              const wsRef = doc(db, 'workspaces', wsId);
+              const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Invited workspace ${wsId} lookup`);
+              if (!wsSnap.exists()) return;
+              wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
+              const memberId = `${wsId}_${u.uid}`;
+              await withTimeout(setDoc(doc(db, 'workspace_members', memberId), {
+                id: memberId,
+                workspaceId: wsId,
+                userId: u.uid,
+                email: u.email || "",
+                emailLower,
+                displayName: u.displayName || "",
+                role: mData.role || "member",
+                status: "active",
+                invitedBy: mData.invitedBy || "",
+                acceptedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              }, { merge: true }), 5_000, `Accept invite ${wsId}`);
+              if (mDoc.id !== memberId) {
+                await withTimeout(updateDoc(mDoc.ref, {
+                  status: "accepted",
+                  acceptedUserId: u.uid,
+                  acceptedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                }), 5_000, `Mark invite ${wsId} accepted`);
+              }
+            } catch (eInviteWs) {
+              console.error(`Failed to accept workspace invite ${wsId}:`, eInviteWs);
+            }
+          });
+          await Promise.allSettled(invitePromises);
+        } catch (eInvite) {
+          console.error("Failed to load invited workspaces:", eInvite instanceof Error ? eInvite.message : eInvite);
+        }
+      }
       
       const allWs = Array.from(wsMap.values()) as Workspace[];
       
@@ -145,8 +197,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               workspaceId: ws.id,
               userId: u.uid,
               email: u.email || "",
+              emailLower: (u.email || "").toLowerCase(),
               displayName: u.displayName || "",
-              role: isOwner ? "owner" : ((ws as any).roles?.[u.email || ""] || "member"),
+              role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
               status: "active",
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
@@ -161,7 +214,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Workspace lookups did not complete');
         }
         const newRef = doc(collection(db, 'workspaces'));
-        const newWs = { name: "Personal Focus", ownerId: u.uid, members: [u.email].filter(Boolean) as string[], createdAt: serverTimestamp() };
+        const newWs = {
+          name: "Personal Focus",
+          ownerId: u.uid,
+          members: [u.email].filter(Boolean) as string[],
+          roles: u.email ? { [u.email.toLowerCase()]: "owner" } : {},
+          color: "#214b39",
+          createdAt: serverTimestamp()
+        };
         await withTimeout(setDoc(newRef, newWs), 7_000, 'Workspace creation');
 
         // Bootstrap owner member document
@@ -171,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           workspaceId: newRef.id,
           userId: u.uid,
           email: u.email || "",
+          emailLower: (u.email || "").toLowerCase(),
           displayName: u.displayName || "",
           role: "owner",
           status: "active",

@@ -35,6 +35,7 @@ import {
 import { CodexBridgePanel } from "./CodexBridgePanel";
 
 type ProjectPatch = Record<string, unknown>;
+type AssignmentMember = { id: string; displayName?: string; email?: string; emailLower?: string; status?: string };
 
 type SharedProjectActions = {
   onUpdateProject: (projectId: string, patch: ProjectPatch) => Promise<void> | void;
@@ -124,7 +125,7 @@ function itemOrder(item: any, fallback = 0) {
 function sortWorkItems(items: any[]) {
   return [...items].sort((left, right) => (
     itemOrder(left) - itemOrder(right) ||
-    String(left.priority || "P4").localeCompare(String(right.priority || "P4")) ||
+    String(priorityValue(left.priority) === "N/A" ? "9" : priorityValue(left.priority)).localeCompare(String(priorityValue(right.priority) === "N/A" ? "9" : priorityValue(right.priority))) ||
     projectTitle(left).localeCompare(projectTitle(right))
   ));
 }
@@ -139,12 +140,10 @@ function dateInputValue(value: any) {
 
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
-  if (!normalized) return "";
-  if (["P1", "P2", "P3", "P4"].includes(normalized)) return normalized;
-  if (["1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "P1";
-  if (["2", "MEDIUM"].includes(normalized)) return "P2";
-  if (["3", "LOW"].includes(normalized)) return "P3";
-  return "";
+  if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
+  if (["2", "P2", "MEDIUM"].includes(normalized)) return "2";
+  if (["3", "P3", "LOW"].includes(normalized)) return "3";
+  return "N/A";
 }
 
 function canonicalWorkStatus(item: any) {
@@ -389,6 +388,7 @@ export function ProjectConsolePanel({
   milestones,
   risks,
   documents,
+  workspaceMembers = [],
   conversationId,
   onAsk,
   onUpdateProject,
@@ -403,6 +403,7 @@ export function ProjectConsolePanel({
   milestones: any[];
   risks: any[];
   documents: any[];
+  workspaceMembers?: AssignmentMember[];
   conversationId?: string | null;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
@@ -420,6 +421,13 @@ export function ProjectConsolePanel({
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const assignmentOptions = useMemo(() => [...new Set([
+    ...workspaceMembers
+      .filter((member) => String(member.status || "active") !== "removed")
+      .map((member) => String(member.displayName || member.email || member.emailLower || "").trim())
+      .filter(Boolean),
+    ...tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean),
+  ])].sort(), [tasks, workspaceMembers]);
   const methodology = String(project.methodology || "scrum").toLowerCase();
   const currentHealth = projectHealth(project, tasks, risks);
   const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
@@ -509,14 +517,13 @@ export function ProjectConsolePanel({
           <option value="done">Done</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <select aria-label={`Priority for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value })} value={priorityValue(item.priority)}>
-          <option value="">—</option>
-          <option value="P1">P1</option>
-          <option value="P2">P2</option>
-          <option value="P3">P3</option>
-          <option value="P4">P4</option>
+        <select aria-label={`Priority for ${projectTitle(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="N/A">N/A</option>
         </select>
-        <input aria-label={`Owner for ${projectTitle(item)}`} defaultValue={item.owner || item.assignee || ""} onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
+        <input aria-label={`Owner for ${projectTitle(item)}`} defaultValue={item.owner || item.assignee || ""} list="do-project-member-options" onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
         <input aria-label={`Due date for ${projectTitle(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
     );
@@ -533,6 +540,9 @@ export function ProjectConsolePanel({
 
   return (
     <section className="do-project-console" data-testid="project-console">
+      <datalist id="do-project-member-options">
+        {assignmentOptions.map((owner) => <option key={owner} value={owner} />)}
+      </datalist>
       <div className="do-console-hero">
         <div>
           <span className="do-project-card-kicker">PROJECT CONSOLE</span>

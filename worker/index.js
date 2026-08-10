@@ -311,6 +311,7 @@ Product behavior:
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
 - Use projects as context for outcomes, tasks, decisions, owners, dependencies, risks, milestones, and delivery. When the user asks for team planning, support a lightweight Scrum backlog/sprint flow or PMI lifecycle without unnecessary ceremony.
+- When workspace members or teams are supplied, use them for ownership suggestions and collaboration planning. Prefer assigning by real person/team from evidence; if unknown, mark owner as null or "Unassigned" rather than inventing a teammate.
 - Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks across all work.
 - Use the supplied scoped records as the source of truth. When evidence is incomplete, state the exact assumption or missing field and continue with the useful parts that can be completed safely.
@@ -339,6 +340,8 @@ ${JSON.stringify({
   conversationType: context.conversationType || null,
   todayTaskCount: context.todayTaskCount || 0,
   pendingReviewCount: context.pendingReviewCount || 0,
+  workspaceMembers: context.workspaceMembers || [],
+  workspaceTeams: context.workspaceTeams || [],
   currentUserMessageId: context.currentUserMessageId || null,
   projectArtifactSourceMessageId: context.projectArtifactSourceMessageId || null,
   operatingMode: focusedDelivery ? "focused_delivery" : "chief_of_staff",

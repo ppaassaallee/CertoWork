@@ -25,6 +25,7 @@ type Props = {
   activeProject: any | null;
   projects: any[];
   tasks: any[];
+  workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string }>;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
@@ -187,6 +188,7 @@ export function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
+  workspaceMembers = [],
   selectedItemId,
   onSelectItem,
   onAsk,
@@ -227,8 +229,14 @@ export function WorkItemsCenter({
   useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, query]);
 
   const owners = useMemo(
-    () => [...new Set(tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean))].sort(),
-    [tasks],
+    () => [...new Set([
+      ...workspaceMembers
+        .filter((member) => String(member.status || "active") !== "removed")
+        .map((member) => String(member.displayName || member.email || member.emailLower || "").trim())
+        .filter(Boolean),
+      ...tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean),
+    ])].sort(),
+    [tasks, workspaceMembers],
   );
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentOptions = useMemo(() => {
@@ -326,7 +334,7 @@ export function WorkItemsCenter({
         <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
           {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
         </select>
-        <input aria-label={`Owner for ${title(item)}`} defaultValue={item.owner || item.assignee || ""} onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
+        <input aria-label={`Owner for ${title(item)}`} defaultValue={item.owner || item.assignee || ""} list="do-workspace-member-options" onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
         <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
     );
@@ -460,6 +468,9 @@ export function WorkItemsCenter({
     <div className="do-items-center" data-testid="work-items-center">
       <section className="do-items-toolbar">
         <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>
+        <datalist id="do-workspace-member-options">
+          {owners.map((owner) => <option key={owner} value={owner} />)}
+        </datalist>
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
           <button aria-label="Table view" className={mode === "table" ? "is-active" : ""} onClick={() => setMode("table")} type="button"><Table2 size={14} /></button>
@@ -584,7 +595,7 @@ export function WorkItemsCenter({
             />
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
-            <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
+            <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} list="do-workspace-member-options" onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
             <div className="do-item-detail-actions">

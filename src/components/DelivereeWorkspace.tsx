@@ -35,6 +35,7 @@ import {
   Sparkles,
   Star,
   Trash2,
+  Users,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -77,6 +79,18 @@ import {
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
 import { buildNotebookContext, type NotebookEntry } from "../lib/notebookContext";
+import {
+  WORKSPACE_LIMIT,
+  WORKSPACE_ROLES,
+  canCreateWorkspace,
+  createInviteCode,
+  memberAssignmentValue,
+  memberLabel,
+  normalizeInviteEmail,
+  roleLabel,
+  type WorkspaceMember,
+  type WorkspaceTeam,
+} from "../lib/workspaceCollaboration";
 
 type Conversation = {
   id: string;
@@ -102,7 +116,7 @@ type Message = {
   offline?: boolean;
 };
 
-type Panel = "today" | "projects" | "project" | "approvals" | "skills" | "digest" | null;
+type Panel = "today" | "projects" | "project" | "approvals" | "skills" | "digest" | "workspace" | null;
 type CenterView = "conversation" | "items" | "notes";
 
 function timestamp(value: any) {
@@ -325,7 +339,7 @@ function ActionProposal({
 }
 
 export function DelivereeWorkspace() {
-  const { user, workspace, logOut } = useAuth();
+  const { user, workspace, workspaces, setWorkspace, reloadWorkspaces, logOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
@@ -339,6 +353,9 @@ export function DelivereeWorkspace() {
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
+  const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -361,6 +378,11 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
+  const [newTeamName, setNewTeamName] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -369,8 +391,11 @@ export function DelivereeWorkspace() {
 
   useEffect(() => {
     if (!user || !workspace) return;
-    const makeQuery = (name: string, callback: (items: any[]) => void, activeOnly = false) => {
-      const clauses: any[] = [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)];
+    setWorkspaceNameDraft(workspace.name || "Workspace");
+    const makeQuery = (name: string, callback: (items: any[]) => void, activeOnly = false, personal = false) => {
+      const clauses: any[] = personal
+        ? [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)]
+        : [where("workspaceId", "==", workspace.id)];
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
@@ -389,15 +414,44 @@ export function DelivereeWorkspace() {
           setConversationId((current) => current || sorted[0]?.id || null);
         },
         true,
+        true,
       ),
       makeQuery("projects", setProjects),
       makeQuery("tasks", setTasks),
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
-      makeQuery("knowledge_items", setKnowledgeItems),
-      makeQuery("notebook_entries", (items) => setNotebookEntries(items as NotebookEntry[])),
+      makeQuery("knowledge_items", setKnowledgeItems, false, true),
+      makeQuery("notebook_entries", (items) => setNotebookEntries(items as NotebookEntry[]), false, true),
       makeQuery("review_candidates", (items) =>
         setReviewItems(items.filter((item) => ["pending", "approved_for_review"].includes(item.status))),
+        false,
+        true,
+      ),
+    ];
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [user, workspace]);
+
+  useEffect(() => {
+    if (!user || !workspace) return;
+    const unsubscribers = [
+      onSnapshot(
+        query(collection(db, "workspace_members"), where("workspaceId", "==", workspace.id)),
+        (snapshot) => setWorkspaceMembers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as WorkspaceMember))),
+        () => setWorkspaceMembers([]),
+      ),
+      onSnapshot(
+        query(collection(db, "agent_groups"), where("workspaceId", "==", workspace.id)),
+        (snapshot) => setWorkspaceTeams(snapshot.docs
+          .map((item) => ({ id: item.id, ...item.data() } as WorkspaceTeam))
+          .filter((team: any) => team.groupType === "workspace_team" && team.status !== "archived")),
+        () => setWorkspaceTeams([]),
+      ),
+      onSnapshot(
+        query(collection(db, "agent_invites"), where("workspaceId", "==", workspace.id)),
+        (snapshot) => setWorkspaceInvites(snapshot.docs
+          .map((item) => ({ id: item.id, ...item.data() }))
+          .filter((invite: any) => invite.inviteType === "workspace_member" && !["accepted", "revoked"].includes(String(invite.status || "").toLowerCase()))),
+        () => setWorkspaceInvites([]),
       ),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -792,6 +846,18 @@ export function DelivereeWorkspace() {
               ),
             })),
             todayTaskCount: scopedTodayTasks.length,
+            workspaceMembers: workspaceMembers.map((member) => ({
+              id: member.id,
+              email: member.email || member.emailLower || "",
+              displayName: member.displayName || "",
+              role: member.role || "member",
+              status: member.status || "active",
+            })),
+            workspaceTeams: workspaceTeams.map((team) => ({
+              id: team.id,
+              name: team.name || "Team",
+              memberEmails: team.memberEmails || [],
+            })),
             pendingReviewCount: isFocusedConversation
               ? reviewItems.filter((item) => contextProjectIds.includes(item.projectId || item.proposed?.projectId)).length
               : reviewItems.length,
@@ -1081,6 +1147,142 @@ export function DelivereeWorkspace() {
 
   const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
     await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+  };
+
+  const updateWorkspaceProfile = async () => {
+    if (!workspace || !workspaceNameDraft.trim()) return;
+    await updateDoc(doc(db, "workspaces", workspace.id), {
+      name: workspaceNameDraft.trim(),
+      updatedAt: serverTimestamp(),
+    });
+    await reloadWorkspaces();
+    setNotice("Workspace updated.");
+  };
+
+  const createWorkspace = async () => {
+    if (!user || !newWorkspaceName.trim()) return;
+    if (!canCreateWorkspace(workspaces.length)) {
+      setNotice(`You can have up to ${WORKSPACE_LIMIT} workspaces in this version.`);
+      return;
+    }
+    const workspaceRef = doc(collection(db, "workspaces"));
+    const email = user.email || "";
+    const emailLower = email.toLowerCase();
+    const workspacePayload = {
+      name: newWorkspaceName.trim(),
+      ownerId: user.uid,
+      members: email ? [emailLower] : [],
+      roles: email ? { [emailLower]: "owner" } : {},
+      color: "#214b39",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(workspaceRef, workspacePayload);
+    await setDoc(doc(db, "workspace_members", `${workspaceRef.id}_${user.uid}`), {
+      id: `${workspaceRef.id}_${user.uid}`,
+      workspaceId: workspaceRef.id,
+      userId: user.uid,
+      email,
+      emailLower,
+      displayName: user.displayName || "",
+      role: "owner",
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNewWorkspaceName("");
+    await reloadWorkspaces();
+    setWorkspace({ id: workspaceRef.id, ...workspacePayload });
+  };
+
+  const inviteWorkspaceMember = async () => {
+    if (!user || !workspace) return;
+    const email = normalizeInviteEmail(inviteEmail);
+    if (!email || !email.includes("@")) {
+      setNotice("Add a valid email to invite someone.");
+      return;
+    }
+    const currentMembers = [...new Set([...(workspace.members || []).map((item) => String(item).toLowerCase()), email])];
+    await updateDoc(doc(db, "workspaces", workspace.id), {
+      members: currentMembers,
+      roles: { ...(workspace.roles || {}), [email]: inviteRole },
+      updatedAt: serverTimestamp(),
+    });
+    const pendingMemberId = `${workspace.id}_invite_${email.replace(/[^a-z0-9]/g, "_")}`;
+    await setDoc(doc(db, "workspace_members", pendingMemberId), {
+      id: pendingMemberId,
+      workspaceId: workspace.id,
+      userId: `pending:${email}`,
+      email,
+      emailLower: email,
+      displayName: email,
+      role: inviteRole,
+      status: "invited",
+      invitedBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    await addDoc(collection(db, "agent_invites"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      email,
+      emailLower: email,
+      role: inviteRole,
+      inviteType: "workspace_member",
+      inviteToken: createInviteCode(),
+      status: "pending",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setInviteEmail("");
+    await reloadWorkspaces();
+    setNotice(`Invite prepared for ${email}. They will join this workspace after signing in with that email.`);
+  };
+
+  const createWorkspaceTeam = async () => {
+    if (!user || !workspace || !newTeamName.trim()) return;
+    await addDoc(collection(db, "agent_groups"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      name: newTeamName.trim(),
+      title: newTeamName.trim(),
+      groupType: "workspace_team",
+      status: "active",
+      memberEmails: [],
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNewTeamName("");
+    setNotice("Team created.");
+  };
+
+  const toggleTeamMember = async (team: WorkspaceTeam, member: WorkspaceMember) => {
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    if (!email) return;
+    const current = (team.memberEmails || []).map((item) => normalizeInviteEmail(item));
+    const next = current.includes(email) ? current.filter((item) => item !== email) : [...current, email];
+    await updateDoc(doc(db, "agent_groups", team.id), {
+      memberEmails: next,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const updateMemberRole = async (member: WorkspaceMember, role: "admin" | "member" | "viewer") => {
+    if (!workspace || !member.id) return;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    await updateDoc(doc(db, "workspace_members", member.id), {
+      role,
+      updatedAt: serverTimestamp(),
+    });
+    if (email) {
+      await updateDoc(doc(db, "workspaces", workspace.id), {
+        roles: { ...(workspace.roles || {}), [email]: role },
+        updatedAt: serverTimestamp(),
+      });
+      await reloadWorkspaces();
+    }
   };
 
   const archiveConversation = async (conversation: Conversation) => {
@@ -1550,11 +1752,12 @@ export function DelivereeWorkspace() {
         <div className="do-account">
           <button onClick={() => setWorkspaceOpen((open) => !open)} type="button">
             <span className="do-avatar">{initials(user?.displayName, user?.email)}</span>
-            <span><strong>DelivereeOS</strong><small>{user?.email}</small></span>
+            <span><strong>{workspace?.name || "DelivereeOS"}</strong><small>{user?.email}</small></span>
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
             <div className="do-account-menu">
+              <button onClick={() => { setPanel("workspace"); setWorkspaceOpen(false); }} type="button"><Users size={14} /> Workspace & team</button>
               <button onClick={() => { navigate("/settings"); setWorkspaceOpen(false); }} type="button"><Settings size={14} /> Settings</button>
               <button onClick={() => { setCleanSlateOpen(true); setWorkspaceOpen(false); }} type="button">Start clean</button>
               <button onClick={logOut} type="button">Sign out</button>
@@ -1728,6 +1931,7 @@ export function DelivereeWorkspace() {
             projects={projects}
             selectedItemId={selectedWorkItemId}
             tasks={tasks}
+            workspaceMembers={workspaceMembers}
           />
         ) : (
           <NotesWorkspace
@@ -1747,8 +1951,8 @@ export function DelivereeWorkspace() {
       <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
         <div className="do-panel-head">
           <div>
-            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : panel === "digest" ? "EMAIL" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : panel === "digest" ? "Digest & reminders" : "Pendientes"}</h2>
+            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : panel === "digest" ? "EMAIL" : panel === "workspace" ? "ADMIN" : "CONTROL"}</span>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : panel === "digest" ? "Digest & reminders" : panel === "workspace" ? "Workspace & team" : "Pendientes"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
@@ -1770,6 +1974,7 @@ export function DelivereeWorkspace() {
                 project={consoleProject}
                 risks={risks.filter((item) => item.projectId === consoleProject.id)}
                 tasks={tasks.filter((item) => item.projectId === consoleProject.id)}
+                workspaceMembers={workspaceMembers}
               />
             ) : (
               <div className="do-panel-empty"><Folder size={20} /><strong>No project selected.</strong><span>Choose a project from the sidebar, then open its console.</span></div>
@@ -1871,6 +2076,117 @@ export function DelivereeWorkspace() {
                 <strong>No fake sending.</strong>
                 <span>Requests are saved now. Actual automatic emails need a configured provider such as Gmail, SendGrid, Resend, or Postmark.</span>
               </div>
+            </>
+          )}
+
+          {panel === "workspace" && (
+            <>
+              <p className="do-panel-intro">Workspaces separate companies, teams, or operating contexts. This version supports up to {WORKSPACE_LIMIT}; conversations stay personal, while projects and tasks live inside the selected workspace.</p>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Current workspace</span>
+                  <strong>{workspace?.name || "Workspace"}</strong>
+                </div>
+                <label>
+                  Workspace name
+                  <input onChange={(event) => setWorkspaceNameDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && updateWorkspaceProfile()} value={workspaceNameDraft} />
+                </label>
+                <button onClick={updateWorkspaceProfile} type="button">Save workspace</button>
+              </section>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Switch</span>
+                  <strong>{workspaces.length}/{WORKSPACE_LIMIT} workspaces</strong>
+                </div>
+                <div className="do-workspace-switcher-list">
+                  {workspaces.map((item) => (
+                    <button className={item.id === workspace?.id ? "is-active" : ""} key={item.id} onClick={() => item.id !== workspace?.id && setWorkspace(item)} type="button">
+                      <span className="do-avatar">{initials(item.name)}</span>
+                      <span><strong>{item.name}</strong><small>{item.ownerId === user?.uid ? "Owner" : "Member"}</small></span>
+                      {item.id === workspace?.id ? <Check size={13} /> : <ChevronRight size={13} />}
+                    </button>
+                  ))}
+                </div>
+                <div className="do-workspace-create-row">
+                  <input disabled={!canCreateWorkspace(workspaces.length)} onChange={(event) => setNewWorkspaceName(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createWorkspace()} placeholder={canCreateWorkspace(workspaces.length) ? "New workspace name" : "Workspace limit reached"} value={newWorkspaceName} />
+                  <button disabled={!newWorkspaceName.trim() || !canCreateWorkspace(workspaces.length)} onClick={createWorkspace} type="button"><Plus size={13} /> Create</button>
+                </div>
+              </section>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Invite</span>
+                  <strong>Access control</strong>
+                </div>
+                <div className="do-workspace-create-row">
+                  <input onChange={(event) => setInviteEmail(event.target.value)} onKeyDown={(event) => event.key === "Enter" && inviteWorkspaceMember()} placeholder="person@company.com" value={inviteEmail} />
+                  <select aria-label="Invite role" onChange={(event) => setInviteRole(event.target.value as "admin" | "member" | "viewer")} value={inviteRole}>
+                    {WORKSPACE_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                  </select>
+                  <button disabled={!inviteEmail.trim()} onClick={inviteWorkspaceMember} type="button">Invite</button>
+                </div>
+                <div className="do-role-help">
+                  {WORKSPACE_ROLES.map((role) => <span key={role.value}><strong>{role.label}</strong>{role.help}</span>)}
+                </div>
+              </section>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Members</span>
+                  <strong>{workspaceMembers.length} people</strong>
+                </div>
+                <div className="do-member-list">
+                  {workspaceMembers.map((member) => {
+                    const isOwner = String(member.role || "").toLowerCase() === "owner" || member.userId === workspace?.ownerId;
+                    return (
+                      <article key={member.id}>
+                        <span className="do-avatar">{initials(member.displayName, member.email || member.emailLower)}</span>
+                        <div><strong>{memberLabel(member)}</strong><small>{member.email || member.emailLower || "No email"} · {String(member.status || "active")}</small></div>
+                        {isOwner ? <em>Owner</em> : (
+                          <select aria-label={`Role for ${memberLabel(member)}`} onChange={(event) => updateMemberRole(member, event.target.value as "admin" | "member" | "viewer")} value={String(member.role || "member")}>
+                            {WORKSPACE_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                          </select>
+                        )}
+                      </article>
+                    );
+                  })}
+                  {workspaceMembers.length === 0 && <div className="do-panel-empty"><Users size={20} /><strong>No members yet.</strong><span>Invite your team to assign work and collaborate by workspace.</span></div>}
+                </div>
+                {workspaceInvites.length > 0 && (
+                  <div className="do-pending-invites">
+                    <span className="do-kicker">Pending invites</span>
+                    {workspaceInvites.map((invite) => <small key={invite.id}>{invite.email} · {roleLabel(invite.role)}</small>)}
+                  </div>
+                )}
+              </section>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Teams</span>
+                  <strong>{workspaceTeams.length} teams</strong>
+                </div>
+                <div className="do-workspace-create-row">
+                  <input onChange={(event) => setNewTeamName(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createWorkspaceTeam()} placeholder="Engineering, Ops, Leadership…" value={newTeamName} />
+                  <button disabled={!newTeamName.trim()} onClick={createWorkspaceTeam} type="button"><Plus size={13} /> Team</button>
+                </div>
+                <div className="do-team-list">
+                  {workspaceTeams.map((team) => (
+                    <article key={team.id}>
+                      <strong>{team.name || "Team"}</strong>
+                      <small>{(team.memberEmails || []).length} member{(team.memberEmails || []).length === 1 ? "" : "s"}</small>
+                      <div>
+                        {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => {
+                          const email = normalizeInviteEmail(member.email || member.emailLower || "");
+                          const selected = (team.memberEmails || []).map((item) => normalizeInviteEmail(item)).includes(email);
+                          return <button className={selected ? "is-selected" : ""} key={`${team.id}-${member.id}`} onClick={() => toggleTeamMember(team, member)} type="button">{memberAssignmentValue(member) || "Member"}</button>;
+                        })}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
             </>
           )}
 
