@@ -154,13 +154,13 @@ export function Plan() {
             <Sparkles className="w-4 h-4 text-yellow-400" /> Need dynamic alignment?
           </h3>
           <p className="text-[11px] text-neutral-300 max-w-md leading-relaxed">
-            Let Boldi inspect your tasks and projects to build a perfectly prioritized Weekly Theme and align calendar blocks.
+            Let Certo Work inspect your tasks and projects to build a perfectly prioritized Weekly Theme and align calendar blocks.
           </p>
         </div>
         <button
           onClick={() => {
             window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-              detail: { message: "Boldi, plan my week and align my calendar blocks to OKRs." }
+              detail: { message: "Certo Work, plan my week and align my calendar blocks to OKRs." }
             }));
           }}
           className="bg-white hover:bg-neutral-100 text-black px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition-colors shrink-0"

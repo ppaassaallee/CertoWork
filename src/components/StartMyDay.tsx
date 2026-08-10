@@ -339,7 +339,7 @@ export function StartMyDay({ onComplete }: { onComplete?: () => void }) {
             {/* Summary */}
             <div className="bg-neutral-50 p-4.5 rounded-2xl border border-neutral-100 space-y-2">
               <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Gazelle Strategic Overview
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Certo Work Strategic Overview
               </h3>
               <p className="text-xs text-neutral-800 font-medium leading-relaxed italic">{brief.strategicObjective}</p>
               <p className="text-xs text-neutral-500 leading-relaxed pt-1 border-t border-neutral-100">{brief.summary}</p>

@@ -154,7 +154,7 @@ export function InvokeSkillModal({
               <Sparkles className="w-4 h-4 text-teal-600" />
             </div>
             <div>
-              <h2 className="font-black text-gray-900 text-lg tracking-tight">Invoke AI Skill (Claude Skills for Gazelle)</h2>
+              <h2 className="font-black text-gray-900 text-lg tracking-tight">Invoke AI Skill (Claude Skills for Certo Work)</h2>
               <p className="text-xs text-gray-400">Run a custom instruction set on "{itemTitle}" through the configured AI provider</p>
             </div>
           </div>

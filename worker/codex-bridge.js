@@ -143,18 +143,18 @@ function toolResult(value, isError = false) {
 export const codexBridgeTools = [
   {
     name: "list_delivery_links",
-    description: "List DelivereeOS project conversations linked to the signed-in Codex user.",
+    description: "List Certo Work project conversations linked to the signed-in Codex user.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "get_delivery_context",
-    description: "Load the selected DelivereeOS project, hierarchy, PBIs, and knowledge summaries for one handoff.",
+    description: "Load the selected Certo Work project, hierarchy, PBIs, and knowledge summaries for one handoff.",
     inputSchema: {
       type: "object",
       properties: {
-        handoffCode: { type: "string", description: "Handoff code shown in the DelivereeOS project console." },
-        projectId: { type: "string", description: "Exact DelivereeOS project ID when the handoff code is unavailable." },
+        handoffCode: { type: "string", description: "Handoff code shown in the Certo Work project console." },
+        projectId: { type: "string", description: "Exact Certo Work project ID when the handoff code is unavailable." },
       },
       additionalProperties: false,
     },
@@ -162,7 +162,7 @@ export const codexBridgeTools = [
   },
   {
     name: "list_ready_work_items",
-    description: "List only executable work items that DelivereeOS explicitly shared with Codex.",
+    description: "List only executable work items that Certo Work explicitly shared with Codex.",
     inputSchema: {
       type: "object",
       properties: { handoffCode: { type: "string" }, projectId: { type: "string" } },
@@ -172,7 +172,7 @@ export const codexBridgeTools = [
   },
   {
     name: "link_codex_task",
-    description: "Link the current Codex task label or URL to a DelivereeOS project conversation.",
+    description: "Link the current Codex task label or URL to a Certo Work project conversation.",
     inputSchema: {
       type: "object",
       required: ["handoffCode"],
@@ -246,7 +246,7 @@ export const codexBridgeTools = [
   },
   {
     name: "report_project_gap",
-    description: "Report missing scope, dependency, design, security, data, or acceptance information without blocking safe work. Suggestions return for DelivereeOS review.",
+    description: "Report missing scope, dependency, design, security, data, or acceptance information without blocking safe work. Suggestions return for Certo Work review.",
     inputSchema: {
       type: "object",
       required: ["handoffCode", "title", "details", "severity"],
@@ -367,7 +367,7 @@ async function getBridgeContext(env, connection, readyOnly = false) {
     workItems,
     documents: readyOnly ? [] : (documentRows.results || []).map((row) => parseJson(row.payload_json)),
     contract: {
-      sourceOfTruth: "DelivereeOS Firestore",
+      sourceOfTruth: "Certo Work Firestore",
       transport: "Scoped Codex bridge snapshot",
       automaticUpdates: connection.sync_mode === "completion_and_notes" ? ["progress", "completion", "delivery_evidence", "knowledge_notes"] : [],
       alwaysRequiresReview: ["new_scope", "new_work_items", "destructive_changes", "cross_project_changes"],
@@ -384,7 +384,7 @@ async function callBridgeTool(env, platform, name, args) {
   }
 
   const connection = await connectionForPlatform(env, platform.id, args);
-  if (!connection) throw new Error("No DelivereeOS handoff matches this signed-in Codex user and code");
+  if (!connection) throw new Error("No Certo Work handoff matches this signed-in Codex user and code");
 
   if (name === "get_delivery_context") return getBridgeContext(env, connection, false);
   if (name === "list_ready_work_items") return getBridgeContext(env, connection, true);
@@ -435,7 +435,7 @@ async function callBridgeTool(env, platform, name, args) {
     return {
       accepted: true,
       event,
-      application: event.status === "authorized" ? "DelivereeOS will apply this scoped update and knowledge evidence automatically." : "This update is waiting for review in the DelivereeOS Project Console.",
+      application: event.status === "authorized" ? "Certo Work will apply this scoped update and knowledge evidence automatically." : "This update is waiting for review in the Certo Work Project Console.",
     };
   }
 
@@ -444,15 +444,15 @@ async function callBridgeTool(env, platform, name, args) {
       title: asText(args.title, 500), details: asText(args.details, 12_000), severity: args.severity || "medium",
       suggestedWorkItems: Array.isArray(args.suggestedWorkItems) ? args.suggestedWorkItems.slice(0, 12) : [],
     }, true);
-    return { recorded: true, event, application: "The gap and suggested work are waiting for review in DelivereeOS; safe in-scope work may continue." };
+    return { recorded: true, event, application: "The gap and suggested work are waiting for review in Certo Work; safe in-scope work may continue." };
   }
 
-  throw new Error(`Unknown DelivereeOS tool: ${name}`);
+  throw new Error(`Unknown Certo Work tool: ${name}`);
 }
 
 async function handleMcp(request, env, helpers) {
   const platform = helpers.platformIdentity(request);
-  if (!platform) return helpers.json({ error: "Sign in to Codex with the account allowed to access this DelivereeOS site." }, 401);
+  if (!platform) return helpers.json({ error: "Sign in to Codex with the account allowed to access this Certo Work site." }, 401);
   await ensureSchema(env);
   let message;
   try {
@@ -469,8 +469,8 @@ async function handleMcp(request, env, helpers) {
     return helpers.json(rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "delivereeos-bridge", title: "DelivereeOS Delivery Bridge", version: "1.0.0" },
-      instructions: "Use a DelivereeOS handoff code to load only the approved project/PBI context. Claim work before implementation. Report truthful progress and completion evidence. Never invent tests, commits, PRs, builds, or deployments.",
+      serverInfo: { name: "delivereeos-bridge", title: "Certo Work Delivery Bridge", version: "1.0.0" },
+      instructions: "Use a Certo Work handoff code to load only the approved project/PBI context. Claim work before implementation. Report truthful progress and completion evidence. Never invent tests, commits, PRs, builds, or deployments.",
     }));
   }
   if (message?.method === "ping") return helpers.json(rpcResult(id, {}));
@@ -480,7 +480,7 @@ async function handleMcp(request, env, helpers) {
       const value = await callBridgeTool(env, platform, message.params?.name, message.params?.arguments || {});
       return helpers.json(rpcResult(id, toolResult(value)));
     } catch (error) {
-      return helpers.json(rpcResult(id, toolResult({ error: error instanceof Error ? error.message : "DelivereeOS bridge error" }, true)));
+      return helpers.json(rpcResult(id, toolResult({ error: error instanceof Error ? error.message : "Certo Work bridge error" }, true)));
     }
   }
   return helpers.json(rpcError(id, -32601, "Method not found"), 404);
@@ -489,7 +489,7 @@ async function handleMcp(request, env, helpers) {
 async function upsertConnection(request, env, helpers) {
   const body = await helpers.readJson(request);
   const identity = await browserIdentity(request, body, env, helpers);
-  if (!identity.platform?.id) throw new Error("Open DelivereeOS from its signed-in ChatGPT Site before creating the Codex link");
+  if (!identity.platform?.id) throw new Error("Open Certo Work from its signed-in ChatGPT Site before creating the Codex link");
   const connection = body.connection || {};
   if (!connection.id || !body.workspaceId || !connection.projectId || !connection.handoffCode) {
     throw new Error("A complete workspace, project, and handoff code are required");
@@ -619,7 +619,7 @@ export async function handleCodexBridgeRequest(request, env, helpers) {
     if (url.pathname === "/api/codex/events" && request.method === "GET") return listEvents(request, env, helpers);
     if (url.pathname === "/api/codex/events/acknowledge" && request.method === "POST") return acknowledgeEvent(request, env, helpers);
     if (url.pathname === "/mcp/delivereeos" && request.method === "GET") {
-      return helpers.json({ name: "DelivereeOS Delivery Bridge", protocol: "MCP Streamable HTTP", status: "ready" });
+      return helpers.json({ name: "Certo Work Delivery Bridge", protocol: "MCP Streamable HTTP", status: "ready" });
     }
     return null;
   } catch (error) {

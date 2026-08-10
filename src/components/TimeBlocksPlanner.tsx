@@ -263,7 +263,7 @@ export function TimeBlocksPlanner() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-amber-900">
                 <Sparkles className="w-5 h-5 text-amber-500" />
-                <h3 className="font-bold text-sm">Gazelle AI Block Optimization</h3>
+                <h3 className="font-bold text-sm">Certo Work Block Optimization</h3>
               </div>
               <div className="flex gap-2">
                 <button

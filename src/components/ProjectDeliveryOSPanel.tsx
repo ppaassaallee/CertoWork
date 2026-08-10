@@ -150,7 +150,7 @@ export function ProjectDeliveryOSPanel({
       <section className="rounded-3xl border border-dashed border-indigo-200 bg-indigo-50/60 p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">DelivereeOS available</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-600">Certo Work available</p>
             <h3 className="mt-2 text-xl font-black text-indigo-950">Enable AI delivery governance for this project</h3>
             <p className="mt-2 max-w-2xl text-xs leading-5 text-indigo-900/70">
               This reuses the existing project workspace and adds delivery stage, gates, readiness, linked prompts, artifacts, and support metadata.
@@ -161,7 +161,7 @@ export function ProjectDeliveryOSPanel({
             disabled={!canUpdateProject}
             onClick={enableDeliveryOS}
           >
-            Enable DelivereeOS
+            Enable Certo Work
           </button>
         </div>
       </section>
@@ -173,7 +173,7 @@ export function ProjectDeliveryOSPanel({
       <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">DelivereeOS Project Workspace</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Certo Work Project Workspace</p>
             <h3 className="mt-2 text-2xl font-black text-gray-950">AI delivery readiness</h3>
             <p className="mt-2 max-w-2xl text-xs leading-5 text-gray-500">
               Gates are advisory and evidence-based. They do not block project usage, but they make readiness gaps visible before UAT, production, and support handoff.

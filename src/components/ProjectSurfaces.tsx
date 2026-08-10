@@ -289,7 +289,7 @@ export function ProjectRecordModal({
               </section>
               <section className="do-project-card do-project-ai-card">
                 <Sparkles size={17} />
-                <div><strong>Plan this with DelivereeOS</strong><p>Use the conversation to challenge assumptions or turn this record into a credible plan.</p></div>
+                <div><strong>Plan this with Certo Work</strong><p>Use the conversation to challenge assumptions or turn this record into a credible plan.</p></div>
                 <button onClick={() => { onClose(); onAsk(`Review ${projectTitle(project)} and tell me the most important decision, risk, and next action.`); }} type="button">Ask <ArrowRight size={13} /></button>
               </section>
             </div>
@@ -358,7 +358,7 @@ export function ProjectRecordModal({
                     const content = String(document.content || document.body || document.description || "");
                     return <article key={document.id}><span><FileText size={15} /></span><div><small>{document.docType || document.type || "Document"}</small><strong>{document.title || document.name || "Untitled document"}</strong><p>{document.summary || content.slice(0, 260) || "No summary recorded."}</p></div><button onClick={() => { onClose(); onAsk(`Using ${document.title || "this project document"}, help me move ${projectTitle(project)} forward.`); }} type="button">Ask about it <ArrowRight size={12} /></button></article>;
                   })}
-                  {documents.length === 0 && <EmptyState icon={<FileText size={19} />} title="No project documents yet" text="Paste a PRD or specification in the project conversation and ask DelivereeOS to add it here." />}
+                  {documents.length === 0 && <EmptyState icon={<FileText size={19} />} title="No project documents yet" text="Paste a PRD or specification in the project conversation and ask Certo Work to add it here." />}
                 </div>
               </section>
             </div>
@@ -680,7 +680,7 @@ export function ProjectConsolePanel({
               </section>
             )}
 
-            {tasks.length === 0 && <EmptyState icon={<ListChecks size={18} />} title="No backlog yet" text="Create epics, features, and PBIs here, or ask DelivereeOS to extract them from the PRD." />}
+            {tasks.length === 0 && <EmptyState icon={<ListChecks size={18} />} title="No backlog yet" text="Create epics, features, and PBIs here, or ask Certo Work to extract them from the PRD." />}
           </div>
         </div>
       )}
@@ -732,7 +732,7 @@ export function ProjectConsolePanel({
               const content = String(document.content || document.body || document.description || "");
               return <article key={document.id}><FileText size={13} /><span><strong>{document.title || document.name || "Untitled document"}</strong><small>{document.summary || content.slice(0, 120) || "No summary recorded."}</small></span><button onClick={() => onAsk(`Using ${document.title || "this project document"}, tell me what ${projectTitle(project)} should do next.`)} type="button"><ArrowRight size={12} /></button></article>;
             })}
-            {documents.length === 0 && <EmptyState icon={<FileText size={18} />} title="No docs yet" text="Paste a PRD in this project conversation and ask DelivereeOS to save it here." />}
+            {documents.length === 0 && <EmptyState icon={<FileText size={18} />} title="No docs yet" text="Paste a PRD in this project conversation and ask Certo Work to save it here." />}
           </div>
         </div>
       )}

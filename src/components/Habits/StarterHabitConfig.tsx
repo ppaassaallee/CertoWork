@@ -29,7 +29,7 @@ export function StarterHabitConfig({ onCreate, isLoading }: StarterHabitsConfigP
       <div className="text-center space-y-2 max-w-xl mx-auto">
         <h2 className="text-xl font-bold text-gray-900 leading-tight">Load Your Core Starter Matrix</h2>
         <p className="text-sm text-gray-500">
-          Gazelle leverages a foundational physical-matrix blueprint. Review and select the routines that correspond to your current Core Work and recovery goals.
+          Certo Work leverages a foundational physical-matrix blueprint. Review and select the routines that correspond to your current Core Work and recovery goals.
         </p>
       </div>
 

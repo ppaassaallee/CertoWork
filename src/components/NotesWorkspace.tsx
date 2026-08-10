@@ -556,7 +556,7 @@ export function NotesWorkspace({
               <textarea
                 aria-label="Note content"
                 onChange={(event) => setEditor((current) => ({ ...current, content: event.target.value }))}
-                placeholder="Write notes here. Use tags so Boldi can find them later."
+                placeholder="Write notes here. Use tags so Certo Work can find them later."
                 value={editor.content}
               />
             </div>
@@ -573,7 +573,7 @@ export function NotesWorkspace({
           <div className="do-notes-empty">
             <BookOpen size={26} />
             <h2>Your notebooks live here.</h2>
-            <p>Create a notebook, capture notes, tag them, and let Boldi analyze or extract actions when you need it.</p>
+            <p>Create a notebook, capture notes, tag them, and let Certo Work analyze or extract actions when you need it.</p>
             <button onClick={() => createNotebook("General")} type="button"><Plus size={14} /> Create General notebook</button>
           </div>
         )}

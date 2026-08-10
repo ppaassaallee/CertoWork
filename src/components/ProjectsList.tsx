@@ -801,10 +801,10 @@ export function ProjectsList() {
                             setCoPilotProject(project);
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-lg text-[10px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs group/boldi shrink-0"
-                          title="Ask Boldi: Research or draft email"
+                          title="Ask Certo Work: Research or draft email"
                         >
                           <Bot className="w-3.5 h-3.5 text-emerald-600 animate-pulse group-hover/boldi:rotate-12 transition-transform" /> 
-                          <span>Ask Boldi</span>
+                          <span>Ask Certo Work</span>
                         </button>
                         <Link 
                           to={`/work/projects/${project.id}`} 
@@ -1031,10 +1031,10 @@ export function ProjectsList() {
                                   setCoPilotProject(project);
                                 }}
                                 className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-lg text-[10px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs group/boldi"
-                                title="Ask Boldi: Research or draft email"
+                                title="Ask Certo Work: Research or draft email"
                               >
                                 <Bot className="w-3.5 h-3.5 text-emerald-600 animate-pulse group-hover/boldi:rotate-12 transition-transform" /> 
-                                <span>Ask Boldi</span>
+                                <span>Ask Certo Work</span>
                               </button>
                               <Link 
                                 to={`/work/projects/${project.id}`}

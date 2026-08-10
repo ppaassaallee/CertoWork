@@ -332,7 +332,7 @@ export interface Task {
   boldiActionPlanId?: string;
   updatedBy?: string;
 
-  // Canonical DelivereeOS work-item fields. The existing `tasks` collection is
+  // Canonical Certo Work work-item fields. The existing `tasks` collection is
   // retained as the one source of truth while records are upgraded additively.
   type?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';
   workItemType?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';

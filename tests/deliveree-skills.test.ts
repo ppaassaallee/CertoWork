@@ -10,7 +10,7 @@ import {
   splitProjectWizardLines,
 } from "../src/lib/delivereeSkills";
 
-test("project wizard is registered as the first DelivereeOS skill", () => {
+test("project wizard is registered as the first Certo Work skill", () => {
   assert.equal(DELIVEREE_SKILLS[0].id, "project_wizard");
   assert.ok(DELIVEREE_SKILLS[0].invocation.includes("/project wizard"));
   assert.ok(DELIVEREE_SKILLS[0].minimalInputs.includes("Outcome"));

@@ -274,7 +274,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
           context: null,
           actionType: null,
           projectId: null,
-          reason: "Failed to load Boldi intelligence recommendation.",
+          reason: "Failed to load Certo Work intelligence recommendation.",
           loading: false
         }
       }));
@@ -352,7 +352,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
             </h2>
             <p className="text-sm text-neutral-600 font-medium max-w-xl mt-1">
               Identify tasks missing essential attributes (priority, dates, contexts, projects, or action types). 
-              Standardized metadata empowers Boldi to build accurate briefings, calendars, and dashboards.
+              Standardized metadata empowers Certo Work to build accurate briefings, calendars, and dashboards.
             </p>
           </div>
         </div>
@@ -401,7 +401,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
             </button>
           </div>
           <p className="text-xs text-violet-200 font-medium">
-            Boldi has scanned your incomplete items and automatically aligned their metadata fields (Priority, Due Date, Context, Action Type, Project, and Tags) using high-fidelity contextual reasoning:
+            Certo Work has scanned your incomplete items and automatically aligned their metadata fields (Priority, Due Date, Context, Action Type, Project, and Tags) using high-fidelity contextual reasoning:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {enrichResults.updatedTasks.map(task => (
@@ -631,14 +631,14 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
                     sugg.loading ? (
                       <div className="flex flex-col items-center justify-center py-6 gap-2">
                         <Loader2 className="w-5 h-5 animate-spin text-neutral-600" />
-                        <span className="text-[10px] text-neutral-500 font-extrabold uppercase">Consulting Boldi AI...</span>
+                        <span className="text-[10px] text-neutral-500 font-extrabold uppercase">Consulting Certo Work...</span>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                           <span className="text-[10px] font-black uppercase text-neutral-800 flex items-center gap-1">
                             <Sparkles className="w-3.5 h-3.5 text-yellow-500 fill-yellow-400" />
-                            Boldi suggests
+                            Certo Work suggests
                           </span>
                           <button
                             onClick={() => handleApproveSuggestion(task.id)}
@@ -682,7 +682,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
                         className="px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-[10px] rounded-xl transition-all flex items-center gap-1 shadow-md hover:shadow-lg"
                       >
                         <Sparkles className="w-3 h-3 text-yellow-400" />
-                        Ask Boldi to Suggest
+                        Ask Certo Work to Suggest
                       </button>
                     </div>
                   )}

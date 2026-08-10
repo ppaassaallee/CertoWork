@@ -35,7 +35,7 @@ export function Integrations() {
     },
     {
       title: "Calendar",
-      description: "Gazelle calendar records",
+      description: "Certo Work calendar records",
       icon: Calendar,
       connected: true,
       path: "/today/agenda",

@@ -1,7 +1,7 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 
 /**
- * DelivereeOS production edge entry point for Codex Sites.
+ * Certo Work production edge entry point for Codex Sites.
  *
  * The existing Express server remains available for local/legacy operation.
  * This adapter provides the production SPA shell and the conversation-first
@@ -301,7 +301,7 @@ export function assistantInstructions(body, citations) {
 - You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
 - Keep capacity warnings occasional, specific, and paired with a constructive alternative.
 - To leave a handoff in another existing conversation, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
-  return `You are DelivereeOS, a calm conversational productivity partner. The entire product is one continuous conversation that helps a person or team turn thoughts into focused, credible action.
+  return `You are Certo Work, a calm conversational productivity partner. The entire product is one continuous conversation that helps a person or team turn thoughts into focused, credible action.
 
 ${operatingMode}
 
@@ -330,7 +330,7 @@ Safety and judgment:
 - You may propose actions, but never claim they were executed.
 - Any workspace mutation must be returned as an actionPlan for explicit approval. Supported actions include create_project_artifact, update_project, create_milestone, update_milestone, create_risk, update_risk, create_task, update_task, and post_to_conversation. For updates, use the exact existing taskId, milestoneId, riskId, or projectId from evidence. For backlog work, use the existing task record with canonical workItemType and hierarchy fields; never invent a second task system.
 - Never claim an external integration exists unless it is present in the supplied evidence.
-- Do not mention Google AI Studio, Gemini, Gazelle, HubSpot, or pretend to have contacted anyone.
+- Do not mention Google AI Studio, Gemini, HubSpot, or pretend to have contacted anyone.
 
 Active conversational context:
 ${JSON.stringify({
@@ -544,7 +544,7 @@ async function chat(request, env) {
     return json(
       {
         error:
-          "OpenAI is not configured for this DelivereeOS deployment yet.",
+          "OpenAI is not configured for this Certo Work deployment yet.",
         code: "OPENAI_NOT_CONFIGURED",
       },
       503,
@@ -570,7 +570,7 @@ async function chat(request, env) {
           {
             role: "user",
             content:
-              "DelivereeOS response contract: return exactly one valid JSON object matching the provided instructions.",
+              "Certo Work response contract: return exactly one valid JSON object matching the provided instructions.",
           },
           ...body.messages.map((message) => ({
             role: message.role,

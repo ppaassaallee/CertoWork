@@ -218,12 +218,12 @@ export function Today() {
           <button 
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-                detail: { message: "Boldi, plan my day." }
+                detail: { message: "Certo Work, plan my day." }
               }));
             }}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all"
           >
-            <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Ask Boldi
+            <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Ask Certo Work
           </button>
         </div>
       </header>
@@ -429,13 +429,13 @@ export function Today() {
       {/* 8. Boldi Suggestion Widget Inside Today Dashboard */}
       <section className="bg-neutral-50 p-5 rounded-3xl border border-gray-200 shadow-sm text-left">
         <h2 className="text-[10px] font-black tracking-widest uppercase text-gray-400 mb-3 flex items-center gap-1">
-          <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Ask Boldi Nav Intelligence Suggestions
+          <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Ask Certo Work Nav Intelligence Suggestions
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button 
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-                detail: { message: "Boldi, plan my day based on calendar blocks and 2+8 priorities." }
+                detail: { message: "Certo Work, plan my day based on calendar blocks and 2+8 priorities." }
               }));
             }}
             className="p-3 bg-white border border-gray-150 hover:border-black rounded-xl text-left transition-all"
@@ -446,7 +446,7 @@ export function Today() {
           <button 
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-                detail: { message: "Boldi, what should I focus on next right now?" }
+                detail: { message: "Certo Work, what should I focus on next right now?" }
               }));
             }}
             className="p-3 bg-white border border-gray-150 hover:border-black rounded-xl text-left transition-all"
@@ -457,7 +457,7 @@ export function Today() {
           <button 
             onClick={() => {
               window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-                detail: { message: "Boldi, is there any critical task or project that is stuck?" }
+                detail: { message: "Certo Work, is there any critical task or project that is stuck?" }
               }));
             }}
             className="p-3 bg-white border border-gray-150 hover:border-black rounded-xl text-left transition-all"

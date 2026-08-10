@@ -191,10 +191,10 @@ export function Me() {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-neutral-900">
-                    Unlock Gazelle Chief-of-Staff
+                    Unlock Certo Work Chief-of-Staff
                   </h3>
                   <p className="text-xs text-neutral-600/90 leading-relaxed mt-1">
-                    You haven't completed your Gazelle onboarding yet. Start the 5-step setup with Laura to declare your Focus Areas, top 3 annual goals, non-negotiables, and struggles.
+                    You haven't completed your Certo Work onboarding yet. Start the 5-step setup with Laura to declare your Focus Areas, top 3 annual goals, non-negotiables, and struggles.
                   </p>
                 </div>
               </div>

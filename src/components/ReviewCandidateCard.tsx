@@ -178,7 +178,7 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
           risk: candidate.proposed?.risk || "medium",
           reusability: candidate.proposed?.reusability || "medium",
           recommendedDecision: "needs_more_info",
-          decisionReason: "Created from Needs Review. Complete scoring in DelivereeOS Intake before project conversion.",
+          decisionReason: "Created from Needs Review. Complete scoring in Certo Work Intake before project conversion.",
         };
         createdRef = await addDoc(collection(db, "ai_initiatives"), initiativePayload);
       }

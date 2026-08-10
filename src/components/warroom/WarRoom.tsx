@@ -302,9 +302,9 @@ export function WarRoom() {
           const resourcesToSeed = [
             {
               slug: "manifesto",
-              title: "Gazelle & Boldi Productivity Manifesto",
+              title: "Certo Work Productivity Manifesto",
               resourceType: "doc",
-              markdownContent: "# Gazelle & Boldi Productivity Manifesto\n\nWelcome to your agent-integrated high-performance workspace. This manifesto outlines how humans and AI agents work together to execute strategy with clinical precision using the Carl Pullein-inspired systems...\n\n## 1. COD: Collect, Organize, Do\nEvery input must be collected immediately. No item stays in memory.\n\n## 2. Time-Based Action\nTasks are grouped by Time Sectors, not by bloated project backlogs.\n\n## 3. The 2+8 Rule\nEvery day starts with up to 2 Must Dos and up to 8 Should Dos. Nothing more.",
+              markdownContent: "# Certo Work Productivity Manifesto\n\nWelcome to your agent-integrated high-performance workspace. This manifesto outlines how humans and AI agents work together to execute strategy with clinical precision using the Carl Pullein-inspired systems...\n\n## 1. COD: Collect, Organize, Do\nEvery input must be collected immediately. No item stays in memory.\n\n## 2. Time-Based Action\nTasks are grouped by Time Sectors, not by bloated project backlogs.\n\n## 3. The 2+8 Rule\nEvery day starts with up to 2 Must Dos and up to 8 Should Dos. Nothing more.",
               tags: ["strategy", "manifesto", "onboarding"]
             },
             {
@@ -362,7 +362,7 @@ export function WarRoom() {
             {
               slug: "marcus_aurelius",
               displayName: "Marcus Aurelius (Stoic Coach)",
-              toEmail: "marcus.stoic@gazelle.ai",
+              toEmail: "marcus.stoic@certowork.ai",
               contactType: "agent_reference",
               status: "pending",
               message: "Greetings. I can assist you as a Stoic philosophy advisor to align your quarterly work with inner life principles.",
@@ -407,7 +407,7 @@ export function WarRoom() {
             id: momentId,
             workspaceId: workspace.id,
             title: "Q2 Strategy Pitch Alignment Session",
-            description: "Saved transcript showing Boldi Orchestrator and David Miller aligning on operations budget approval.",
+            description: "Saved transcript showing Certo Work Orchestrator and David Miller aligning on operations budget approval.",
             createdBy: "system",
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now()
@@ -1786,7 +1786,7 @@ export function WarRoom() {
         {['explore', 'workbench', 'widgets', 'history'].includes(activeTab) && (
           <div className="flex flex-col h-full overflow-hidden">
             <div className="p-4 border-b border-gray-100">
-              <h2 className="text-xs font-bold text-gray-900 tracking-tight font-sans">Boldi Market</h2>
+              <h2 className="text-xs font-bold text-gray-900 tracking-tight font-sans">Certo Work Market</h2>
               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Agents & Operations</p>
             </div>
             <div className="p-3 space-y-1 flex-1 overflow-y-auto no-scrollbar">
@@ -2770,7 +2770,7 @@ export function WarRoom() {
                       <Sparkles className="w-4 h-4 text-purple-500 animate-pulse" />
                       Agent Canvas Refinement
                     </h3>
-                    <p className="text-[10px] text-gray-400 font-semibold">Ask Boldi PM to modify, expand, or recalibrate this canvas strategy.</p>
+                    <p className="text-[10px] text-gray-400 font-semibold">Ask Certo Work PM to modify, expand, or recalibrate this canvas strategy.</p>
                   </div>
 
                   <div className="space-y-3">

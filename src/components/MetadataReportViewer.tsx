@@ -54,7 +54,7 @@ export function MetadataReportViewer({ report }: MetadataReportViewerProps) {
           </div>
           <div>
             <h4 className="font-extrabold text-sm text-neutral-900">
-              Boldi applied task metadata updates
+              Certo Work applied task metadata updates
             </h4>
             <span className="text-[9px] text-neutral-400 font-mono">
               Plan ID: {report.actionPlanId.slice(0, 8)}...

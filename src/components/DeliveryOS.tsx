@@ -282,7 +282,7 @@ export function DeliveryOS() {
 
   const askBoldi = (task: string) => {
     openBoldi(
-      `DelivereeOS request: ${task}. Use only real workspace data. If data is missing, say what is missing. Draft only; do not apply risky changes without approval.`,
+      `Certo Work request: ${task}. Use only real workspace data. If data is missing, say what is missing. Draft only; do not apply risky changes without approval.`,
     );
   };
 
@@ -330,7 +330,7 @@ export function DeliveryOS() {
       title: initiative.title,
       type: "ai_initiative",
       status: "pending",
-      source: "DelivereeOS",
+      source: "Certo Work",
       sourceType: "ai_initiative",
       sourceId: initiative.id,
       confidence: "High",
@@ -404,7 +404,7 @@ export function DeliveryOS() {
         promptAssetId: ref.id,
         version: 1,
         promptText: promptDraft.promptText,
-        changeReason: "Initial DelivereeOS prompt asset.",
+        changeReason: "Initial Certo Work prompt asset.",
         expectedImpact: "Create a governed baseline version.",
         createdBy: user.uid,
         createdAt: serverTimestamp(),
@@ -502,10 +502,10 @@ export function DeliveryOS() {
       reviewType,
       periodStart: start.toISOString().slice(0, 10),
       periodEnd: now.toISOString().slice(0, 10),
-      title: `${reviewType === "weekly" ? "Weekly" : "MBR"} DelivereeOS Review — ${now.toISOString().slice(0, 10)}`,
+      title: `${reviewType === "weekly" ? "Weekly" : "MBR"} Certo Work Review — ${now.toISOString().slice(0, 10)}`,
       executiveSummary:
         deliveryProjects.length === 0
-          ? "Not enough data: no DelivereeOS-enabled projects yet."
+          ? "Not enough data: no Certo Work-enabled projects yet."
           : `${deliveryProjects.length} AI delivery projects, ${productionArtifacts.length} production artifacts, ${supportCases.length} support cases, ${risks.length} readiness risks.`,
       portfolioHealth: atRiskProjects.length ? "At-risk items need review." : "No at-risk Delivery OS projects flagged.",
       newOpportunities: sortedInitiatives.slice(0, 5).map((item) => item.title),
@@ -566,7 +566,7 @@ export function DeliveryOS() {
               userId: user.uid,
               workspaceId: workspace.id,
               title,
-              category: "DelivereeOS",
+              category: "Certo Work",
               outputFormat: "Markdown",
               content: purpose,
               systemInstructions: `${purpose}\nUse real workspace data only. Draft outputs and send risky actions to Needs Review.`,
@@ -583,7 +583,7 @@ export function DeliveryOS() {
               userId: user.uid,
               workspaceId: workspace.id,
               title,
-              category: "DelivereeOS",
+              category: "Certo Work",
               objective,
               content: objective,
               steps: [
@@ -626,17 +626,17 @@ export function DeliveryOS() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-200">Work / AI Delivery Operating System</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">DelivereeOS</h1>
+            <h1 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">Certo Work</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70">
-              Govern AI initiatives from idea to intake, delivery, UAT, production, support, observability, and executive review without duplicating Projects, Action Board, Second Brain, Skills, Playbooks, or Gazelle.
+              Govern AI initiatives from idea to intake, delivery, UAT, production, support, observability, and executive review without duplicating Projects, Action Board, Second Brain, Skills, Playbooks, or Certo Work.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button className="rounded-xl bg-white px-4 py-2 text-xs font-black text-gray-950" onClick={() => navigate("/work/delivery-os/intake")}>
               New opportunity
             </button>
-            <button className="rounded-xl border border-white/20 px-4 py-2 text-xs font-black text-white" onClick={() => askBoldi("Summarize DelivereeOS risks and next actions")}>
-              Ask Gazelle
+            <button className="rounded-xl border border-white/20 px-4 py-2 text-xs font-black text-white" onClick={() => askBoldi("Summarize Certo Work risks and next actions")}>
+              Ask Certo Work
             </button>
           </div>
         </div>
@@ -692,7 +692,7 @@ export function DeliveryOS() {
             </section>
 
             <section className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="text-base font-black text-gray-950">DelivereeOS Health Check</h2>
+              <h2 className="text-base font-black text-gray-950">Certo Work Health Check</h2>
               <div className="mt-4 space-y-2">
                 {healthIssues.slice(0, 6).map((issue, index) => (
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3" key={`${issue.title}-${index}`}>
@@ -700,7 +700,7 @@ export function DeliveryOS() {
                     <p className="mt-1 text-[11px] leading-4 text-gray-500">{issue.detail}</p>
                   </div>
                 ))}
-                {healthIssues.length === 0 && <EmptyState title="No readiness gaps detected" copy="As you add production artifacts, prompts, and support cases, DelivereeOS will surface missing owners, runbooks, and observability." />}
+                {healthIssues.length === 0 && <EmptyState title="No readiness gaps detected" copy="As you add production artifacts, prompts, and support cases, Certo Work will surface missing owners, runbooks, and observability." />}
               </div>
             </section>
           </div>
@@ -751,11 +751,11 @@ export function DeliveryOS() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button className="rounded-xl bg-black px-3 py-2 text-xs font-black text-white" onClick={() => handleConvertToProject(initiative)}>Convert to project</button>
                   <button className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700" onClick={() => handleSendInitiativeToReview(initiative)}>Send to Needs Review</button>
-                  <button className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi(`Improve the business case for AI initiative "${initiative.title}"`)}>Ask Gazelle</button>
+                  <button className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi(`Improve the business case for AI initiative "${initiative.title}"`)}>Ask Certo Work</button>
                 </div>
               </div>
             ))}
-            {sortedInitiatives.length === 0 && <EmptyState title="No AI initiatives yet" copy="Start with one opportunity. Keep raw notes editable and let DelivereeOS score without making the final decision for you." />}
+            {sortedInitiatives.length === 0 && <EmptyState title="No AI initiatives yet" copy="Start with one opportunity. Keep raw notes editable and let Certo Work score without making the final decision for you." />}
           </section>
         </div>
       )}
@@ -923,11 +923,11 @@ export function DeliveryOS() {
         <section className="space-y-4">
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-black text-gray-950">Executive Reviews</h2>
-            <p className="mt-1 text-xs text-gray-500">Drafts are generated from real DelivereeOS records. Missing metrics are stated honestly.</p>
+            <p className="mt-1 text-xs text-gray-500">Drafts are generated from real Certo Work records. Missing metrics are stated honestly.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="rounded-xl bg-black px-4 py-2 text-xs font-black text-white" onClick={() => handleGenerateReview("weekly")}>Generate Weekly Review Draft</button>
               <button className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700" onClick={() => handleGenerateReview("mbr")}>Generate MBR Draft</button>
-              <button className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi("Generate an executive review narrative from DelivereeOS records")}>Ask Gazelle</button>
+              <button className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi("Generate an executive review narrative from Certo Work records")}>Ask Certo Work</button>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -949,7 +949,7 @@ export function DeliveryOS() {
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-black text-gray-950">Hermes Harness</h2>
             <p className="mt-2 text-xs leading-5 text-gray-500">
-              Planned / Not connected. DelivereeOS can store manual Hermes IDs and URLs, but live sync, logs, metrics, incidents, and deployment events are not implemented yet.
+              Planned / Not connected. Certo Work can store manual Hermes IDs and URLs, but live sync, logs, metrics, incidents, and deployment events are not implemented yet.
             </p>
             <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-900">
               <b>Status:</b> {titleCase(hermesConfig?.status || "not_configured")} · <b>Secret:</b> {hermesConfig?.secretConfigured ? "Configured" : "Not configured"}
@@ -963,7 +963,7 @@ export function DeliveryOS() {
           <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-black text-gray-950">Knowledge / Skills / Playbooks</h2>
             <p className="mt-2 text-xs leading-5 text-gray-500">
-              Starter assets are created in the existing Skills Library and Playbooks. The operation is idempotent and will not duplicate records with the same DelivereeOS starter key.
+              Starter assets are created in the existing Skills Library and Playbooks. The operation is idempotent and will not duplicate records with the same Certo Work starter key.
             </p>
             <button className="mt-4 rounded-2xl border border-gray-200 px-4 py-3 text-xs font-black text-gray-700" disabled={saving} onClick={handleCreateStarters}>
               {saving ? "Creating..." : "Create / verify starter assets"}
@@ -985,9 +985,9 @@ export function DeliveryOS() {
               <p className="text-xs text-gray-500">Workspace-scoped records, no frontend AI keys, honest integration status, and approval-gated AI drafts.</p>
             </div>
           </div>
-          <button className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi("Create missing DelivereeOS runbooks, checklists, and review candidates")}>
+          <button className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-black text-gray-700" onClick={() => askBoldi("Create missing Certo Work runbooks, checklists, and review candidates")}>
             <Sparkles className="mr-1 inline h-3.5 w-3.5" />
-            Ask Gazelle for gaps
+            Ask Certo Work for gaps
           </button>
         </div>
       </section>

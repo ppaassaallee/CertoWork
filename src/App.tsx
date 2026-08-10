@@ -29,7 +29,7 @@ function SignIn() {
     <main className="do-signin">
       <div className="do-signin-glow" />
       <header>
-        <div className="do-brand"><span className="do-logo">D</span><span><strong>DelivereeOS</strong><small>Think. Choose. Move.</small></span></div>
+        <div className="do-brand"><span className="do-logo">C</span><span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span></div>
         <span className="do-signin-pill"><ShieldCheck size={13} /> You approve every change</span>
       </header>
       <div className="do-signin-grid">
@@ -54,7 +54,7 @@ function SignIn() {
           <div className="do-signin-proof"><span><Check size={13} /> One conversation</span><span><Check size={13} /> Real workspace context</span><span><Check size={13} /> Approval before changes</span></div>
         </section>
         <section className="do-signin-preview" aria-label="Product preview">
-          <div className="do-preview-top"><span><Sparkles size={15} /> DelivereeOS</span><small>All work</small></div>
+          <div className="do-preview-top"><span><Sparkles size={15} /> Certo Work</span><small>All work</small></div>
           <div className="do-preview-thread">
             <div className="do-preview-user">Help me plan today without overloading it.</div>
             <div className="do-preview-answer"><span><Sparkles size={14} /></span><div><strong>Protect these two outcomes.</strong><p>Finish the client proposal first, then unblock the onboarding project. Move the remaining admin to one afternoon block.</p><div><button>Use this plan</button><button>Adjust priorities</button></div></div></div>
@@ -72,7 +72,7 @@ function WorkspaceRecovery() {
 
   return (
     <main className="do-recovery">
-      <span className="do-logo">D</span>
+      <span className="do-logo">C</span>
       <h1>{workspaceLoading ? "Opening your workspace…" : "We couldn’t open your workspace."}</h1>
       <p>{workspaceError || "This should only take a few seconds. You can retry without losing any data."}</p>
       <div>
@@ -98,7 +98,7 @@ export default function App() {
   const { user, loading, workspace } = useAuth();
 
   if (loading) {
-    return <div className="do-loading"><span className="do-logo">D</span><Loader2 className="spin" size={18} /><p>Opening DelivereeOS…</p></div>;
+    return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
   }
   if (!user) return <SignIn />;
   if (!workspace) return <WorkspaceRecovery />;

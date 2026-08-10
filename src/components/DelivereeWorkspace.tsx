@@ -946,7 +946,7 @@ export function DelivereeWorkspace() {
           projectId,
         },
         projectId,
-        source: plan.summary || "DelivereeOS conversation",
+        source: plan.summary || "Certo Work conversation",
         sourceType: "delivereeos",
         sourceId: planRef.id,
         status: "pending",
@@ -1379,7 +1379,7 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    setNotice(`${labels[kind]} request saved. Email delivery still needs an email service; DelivereeOS can draft it now.`);
+    setNotice(`${labels[kind]} request saved. Email delivery still needs an email service; Certo Work can draft it now.`);
     setComposer(`Draft my ${labels[kind]} from the current workspace. Do not claim it was sent.`);
   };
 
@@ -1597,7 +1597,7 @@ export function DelivereeWorkspace() {
       setCleanSlateOpen(false);
       setCleanConfirmText("");
       navigate("/");
-      setNotice("Clean DelivereeOS is ready. No projects, items, tags, or pending changes remain in this workspace.");
+      setNotice("Clean Certo Work is ready. No projects, items, tags, or pending changes remain in this workspace.");
     } catch {
       setNotice("I could not finish the clean reset. Please try again after the workspace finishes syncing.");
     } finally {
@@ -1663,8 +1663,8 @@ export function DelivereeWorkspace() {
       <aside className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`} data-testid="primary-sidebar">
         <div className="do-brand-row">
           <button className="do-brand" onClick={() => { navigate("/"); setSidebarOpen(false); }} type="button">
-            <span className="do-logo">D</span>
-            <span><strong>DelivereeOS</strong><small>Think. Choose. Move.</small></span>
+            <span className="do-logo">C</span>
+            <span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span>
           </button>
           <button aria-label="Close navigation" className="do-mobile-close" onClick={() => setSidebarOpen(false)} type="button"><X size={16} /></button>
         </div>
@@ -1752,7 +1752,7 @@ export function DelivereeWorkspace() {
         <div className="do-account">
           <button onClick={() => setWorkspaceOpen((open) => !open)} type="button">
             <span className="do-avatar">{initials(user?.displayName, user?.email)}</span>
-            <span><strong>{workspace?.name || "DelivereeOS"}</strong><small>{user?.email}</small></span>
+            <span><strong>{workspace?.name || "Certo Work"}</strong><small>{user?.email}</small></span>
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
@@ -1855,7 +1855,7 @@ export function DelivereeWorkspace() {
                       <div className="do-assistant-message">
                         <div className="do-assistant-mark"><Bot size={16} /></div>
                         <div className="do-assistant-content">
-                          <div className="do-assistant-name">DelivereeOS {message.offline && <span>safe mode</span>}</div>
+                          <div className="do-assistant-name">Certo Work {message.offline && <span>safe mode</span>}</div>
                           <RichText text={message.content} />
                           {message.citations && message.citations.length > 0 && <div className="do-citations">{message.citations.map((citation) => <span key={`${citation.type}-${citation.id}`}>{citation.title}</span>)}</div>}
                           <ActionProposal message={message} onStage={stagePlan} />
@@ -1892,7 +1892,7 @@ export function DelivereeWorkspace() {
           {isFocusedConversation && <div className="do-composer-context">{directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}<span>{currentContextLabel}</span><button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button></div>}
           <div className="do-composer">
             <textarea
-              aria-label="Message DelivereeOS"
+              aria-label="Message Certo Work"
               data-testid="message-composer"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1994,7 +1994,7 @@ export function DelivereeWorkspace() {
                 ))}
                 {(isFocusedConversation ? projectTasks : todayTasks).length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>Nothing urgent here.</strong><span>Use the conversation to decide what deserves focus.</span></div>}
               </div>
-              <button className="do-panel-primary" onClick={() => sendMessage("Plan my day realistically using my current work and available capacity.")} type="button"><Sparkles size={15} /> Plan with DelivereeOS</button>
+              <button className="do-panel-primary" onClick={() => sendMessage("Plan my day realistically using my current work and available capacity.")} type="button"><Sparkles size={15} /> Plan with Certo Work</button>
             </>
           )}
 
@@ -2053,7 +2053,7 @@ export function DelivereeWorkspace() {
 
           {panel === "digest" && (
             <>
-              <p className="do-panel-intro">Ask DelivereeOS for reminders and summaries from the same flow. Email delivery is saved as a request until an email service is connected.</p>
+              <p className="do-panel-intro">Ask Certo Work for reminders and summaries from the same flow. Email delivery is saved as a request until an email service is connected.</p>
               <div className="do-panel-list">
                 <button onClick={() => saveDigestRequest("email_reminder")} type="button">
                   <Mail size={14} />
@@ -2230,15 +2230,15 @@ export function DelivereeWorkspace() {
 	      )}
 
       {cleanSlateOpen && (
-        <div aria-label="Start clean DelivereeOS" aria-modal="true" className="do-clean-layer" role="dialog">
+        <div aria-label="Start clean Certo Work" aria-modal="true" className="do-clean-layer" role="dialog">
           <section className="do-clean-modal">
             <header>
               <span className="do-kicker">Clean start</span>
-              <h2>Reset DelivereeOS content</h2>
+              <h2>Reset Certo Work content</h2>
               <button aria-label="Close clean start" onClick={() => setCleanSlateOpen(false)} type="button"><X size={17} /></button>
             </header>
             <p>
-              This clears your current DelivereeOS records: projects, work items, tags, conversations, knowledge, pending changes, habits, workouts, reports, and delivery records. Your sign-in stays active.
+              This clears your current Certo Work records: projects, work items, tags, conversations, knowledge, pending changes, habits, workouts, reports, and delivery records. Your sign-in stays active.
             </p>
             <div className="do-clean-counts">
               <span><strong>{projects.length}</strong> projects</span>

@@ -96,27 +96,27 @@ export function buildCodexHandoffBrief({
   const repository = connection.repositoryRoot || connection.repositoryUrl || "Repository not recorded";
   const reviewMode = connection.syncMode === "completion_and_notes"
     ? "Progress, completion evidence, and delivery notes are pre-approved for this handoff. Scope changes still require review."
-    : "Every proposed DelivereeOS change requires review in the Project Console.";
+    : "Every proposed Certo Work change requires review in the Project Console.";
 
-  return `You are working from a DelivereeOS delivery handoff.
+  return `You are working from a Certo Work delivery handoff.
 
 Handoff code: ${connection.handoffCode}
 Project: ${project.title || project.name || "Untitled project"}
 Project ID: ${project.id}
 Repository: ${repository}
 
-Start by using the DelivereeOS Bridge tools:
+Start by using the Certo Work Bridge tools:
 1. Call get_delivery_context with handoffCode ${connection.handoffCode}.
 2. Call link_codex_task for this Codex task.
 3. Claim only the work item(s) you will execute.
-4. Keep DelivereeOS current with report_work_item_progress.
+4. Keep Certo Work current with report_work_item_progress.
 5. Before declaring done, run relevant tests and call complete_work_item with files changed, tests, acceptance evidence, commit/PR/deployment links when real, knowledge notes, and remaining gaps.
 
 Selected work:
 ${itemList}
 
 Rules:
-- DelivereeOS is the delivery source of truth; the bridge snapshot is scoped context.
+- Certo Work is the delivery source of truth; the bridge snapshot is scoped context.
 - Do not invent GitHub, build, deployment, test, or completion status.
 - Preserve work-item IDs and hierarchy.
 - If information is missing, report a project gap and continue with the safe work that can be completed.

@@ -335,7 +335,7 @@ export function BoldiFloatingWidget() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "Gazelle_Executive_Report.md");
+    link.setAttribute("download", "Certo Work_Executive_Report.md");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -615,7 +615,7 @@ export function BoldiFloatingWidget() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             content: action.proposedChange.description || "",
-            source: "Boldi Co-Pilot Plan",
+            source: "Certo Work Co-Pilot Plan",
             reason: action.reason
           });
           targetId = docRef.id;
@@ -647,7 +647,7 @@ export function BoldiFloatingWidget() {
           }
         }
 
-        // Save detailed transaction action log for Boldi Audit reporting and rollback tracking
+        // Save detailed transaction action log for Certo Work Audit reporting and rollback tracking
         await addDoc(collection(db, "boldi_actions"), {
           userId: user.uid,
           workspaceId: workspace.id,
@@ -665,7 +665,7 @@ export function BoldiFloatingWidget() {
         });
       }
 
-      setToolLogs(prev => [...prev, `[Audit Log] Saved successfully! Logged in Boldi logs.`]);
+      setToolLogs(prev => [...prev, `[Audit Log] Saved successfully! Logged in Certo Work logs.`]);
 
       // Save a local system message confirming execution
       await addDoc(collection(db, "boldi_messages"), {
@@ -673,7 +673,7 @@ export function BoldiFloatingWidget() {
         workspaceId: workspace.id,
         conversationId: proposedPlan.conversationId,
         role: "system",
-        content: `⚡ **Action Plan Applied:** "${proposedPlan.title}" executed safely. ${proposedPlan.proposedActions.length} changes reported in Boldi Panel.`,
+        content: `⚡ **Action Plan Applied:** "${proposedPlan.title}" executed safely. ${proposedPlan.proposedActions.length} changes reported in Certo Work Panel.`,
         inputType: "system",
         createdAt: serverTimestamp()
       });
@@ -731,9 +731,9 @@ export function BoldiFloatingWidget() {
   };
 
   const starterPrompts = [
-    { label: "Start my day brief", text: "Gazelle, start my day" },
-    { label: "Check stuck tasks", text: "Gazelle, prioritize my tasks" },
-    { label: "Audit strategic drift", text: "Gazelle, audit my workspace for strategic drift" }
+    { label: "Start my day brief", text: "Certo Work, start my day" },
+    { label: "Check stuck tasks", text: "Certo Work, prioritize my tasks" },
+    { label: "Audit strategic drift", text: "Certo Work, audit my workspace for strategic drift" }
   ];
 
   return (
@@ -750,7 +750,7 @@ export function BoldiFloatingWidget() {
           className="bg-black text-white hover:bg-neutral-900 shadow-2xl rounded-full px-5 py-3.5 font-bold flex items-center gap-2 border border-neutral-800 transition-shadow duration-300"
         >
           <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
-          <span className="text-sm font-extrabold tracking-wide">Gazelle</span>
+          <span className="text-sm font-extrabold tracking-wide">Certo Work</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping absolute top-1 right-1" />
         </motion.button>
       </div>
@@ -783,7 +783,7 @@ export function BoldiFloatingWidget() {
                   <Bot className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-black tracking-wide uppercase">Gazelle Co-Pilot</h4>
+                  <h4 className="text-xs font-black tracking-wide uppercase">Certo Work Co-Pilot</h4>
                   <div className="flex items-center gap-1">
                     <span className="text-[9px] text-neutral-400 font-bold uppercase">{getContextName()}</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -793,10 +793,10 @@ export function BoldiFloatingWidget() {
 
               {/* Window Commands */}
               <div className="flex items-center gap-1.5">
-                {/* Reports Button (Gazelle Logs) */}
+                {/* Reports Button (Certo Work Logs) */}
                 <button
                   onClick={() => setIsReportsOpen(!isReportsOpen)}
-                  title="Gazelle Logs"
+                  title="Certo Work Logs"
                   className={`p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors ${isReportsOpen ? 'bg-neutral-800 text-white' : ''}`}
                 >
                   <History className="w-4 h-4" />
@@ -935,7 +935,7 @@ export function BoldiFloatingWidget() {
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       </div>
                       <div className="p-2.5 bg-white border border-neutral-100 rounded-2xl rounded-tl-none text-xs text-neutral-500 flex items-center gap-1.5 font-bold shadow-sm">
-                        <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-spin" /> Gazelle is thinking...
+                        <Sparkles className="w-3.5 h-3.5 text-yellow-500 animate-spin" /> Certo Work is thinking...
                       </div>
                     </div>
                   )}
@@ -1051,7 +1051,7 @@ export function BoldiFloatingWidget() {
                       value={inputMessage}
                       disabled={submitting}
                       onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder={submitting ? "Waiting for response..." : "Ask Gazelle anything..."}
+                      placeholder={submitting ? "Waiting for response..." : "Ask Certo Work anything..."}
                       onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
                       className="flex-1 text-xs px-2 py-1.5 bg-transparent outline-none disabled:opacity-50"
                     />
@@ -1092,7 +1092,7 @@ export function BoldiFloatingWidget() {
         )}
       </AnimatePresence>
 
-      {/* 3. Boldi Logs Slide-out Right Panel Drawer */}
+      {/* 3. Certo Work Logs Slide-out Right Panel Drawer */}
       <AnimatePresence>
         {isReportsOpen && isOpen && (
           <motion.div
@@ -1108,8 +1108,8 @@ export function BoldiFloatingWidget() {
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-neutral-900">Boldi Changes Log</h3>
-                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Gazelle Audit Desk</span>
+                  <h3 className="font-extrabold text-sm text-neutral-900">Certo Work Changes Log</h3>
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase">Certo Work Audit Desk</span>
                 </div>
               </div>
               <button 
@@ -1120,7 +1120,7 @@ export function BoldiFloatingWidget() {
               </button>
             </div>
 
-            {/* Boldi logs feed */}
+            {/* Certo Work logs feed */}
             <div className="flex-1 overflow-y-auto py-4 space-y-4 no-scrollbar">
               <div className="space-y-1 bg-neutral-50 p-3 rounded-2xl border border-neutral-150 text-[11px] text-neutral-500 font-medium">
                 <span className="font-black text-neutral-800 block">Agent Audit Traceability</span>

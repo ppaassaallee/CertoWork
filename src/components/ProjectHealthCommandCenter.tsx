@@ -202,7 +202,7 @@ export function ProjectHealthCommandCenter() {
             className="bg-indigo-50/50 border-2 border-dashed border-indigo-200/60 rounded-3xl p-8 mb-8 text-center flex flex-col items-center justify-center"
           >
             <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mb-4" />
-            <p className="font-bold text-indigo-950 text-lg">Gazelle AI Portfolio Strategic Assessment</p>
+            <p className="font-bold text-indigo-950 text-lg">Certo Work Portfolio Strategic Assessment</p>
             <p className="text-indigo-700 text-sm mt-1 max-w-md">Scanning active focus areas, evaluating milestone dependencies, and checking task slippages...</p>
           </motion.div>
         )}
@@ -216,7 +216,7 @@ export function ProjectHealthCommandCenter() {
           >
             <div className="flex items-center gap-2">
               <Sparkles className="w-6 h-6 text-indigo-600" />
-              <h2 className="text-lg font-black text-indigo-950">Gazelle AI Portfolio Diagnostics</h2>
+              <h2 className="text-lg font-black text-indigo-950">Certo Work Portfolio Diagnostics</h2>
             </div>
 
             <div className="bg-white rounded-2xl border border-indigo-100 p-5 shadow-sm">

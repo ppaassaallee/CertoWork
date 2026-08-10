@@ -1,5 +1,5 @@
 /**
- * Centralized Audit & Platform Event Logging helpers for Gazelle.
+ * Centralized Audit & Platform Event Logging helpers for Certo Work.
  */
 
 export interface AuditLogPayload {

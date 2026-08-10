@@ -442,10 +442,10 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
               setCoPilotTask(task);
             }}
             className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-lg text-[10px] font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs group/boldi shrink-0"
-            title="Ask Boldi: Research or draft email"
+            title="Ask Certo Work: Research or draft email"
           >
             <Bot className="w-3 h-3 text-emerald-600 animate-pulse group-hover/boldi:rotate-12 transition-transform" /> 
-            <span>Ask Boldi</span>
+            <span>Ask Certo Work</span>
           </button>
 
           <button 
@@ -1591,10 +1591,10 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                 type="button"
                 onClick={handleAskBoldi}
                 className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-xl text-xs font-extrabold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xs group/boldi"
-                title="Get contextual AI advice on your tasks from Boldi Assistant"
+                title="Get contextual AI advice on your tasks from Certo Work Assistant"
               >
                 <Bot className="w-4 h-4 text-emerald-600 animate-pulse group-hover/boldi:rotate-12 transition-transform" /> 
-                <span>Ask Boldi</span>
+                <span>Ask Certo Work</span>
               </button>
             </>
           )}

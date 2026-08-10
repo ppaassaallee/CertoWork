@@ -272,9 +272,9 @@ export function TaskDetails() {
             <button 
               onClick={() => setIsCoPilotOpen(true)}
               className="px-4 py-2 bg-black hover:bg-gray-800 text-white rounded-full font-bold text-sm transition-all shadow-sm flex items-center gap-1.5"
-              title="Open Boldi Co-Pilot"
+              title="Open Certo Work Co-Pilot"
             >
-              <Bot className="w-4 h-4 text-white animate-pulse" /> Boldi Co-Pilot
+              <Bot className="w-4 h-4 text-white animate-pulse" /> Certo Work Co-Pilot
             </button>
             <button 
               onClick={() => setIsSkillModalOpen(true)}

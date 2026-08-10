@@ -463,10 +463,10 @@ export function ProjectDetails() {
     }
   };
 
-  // Trigger Boldi Co-Pilot assistant
+  // Trigger Certo Work Co-Pilot assistant
   const handleAskBoldiAboutProject = () => {
     if (!project) return;
-    const promptMessage = `Boldi, analyze the current status of my project "${project.title}".
+    const promptMessage = `Certo Work, analyze the current status of my project "${project.title}".
 - Category: ${project.category || "None"}
 - Health: ${project.health || "Not Evaluated"}
 - Priority: ${project.priority || "Medium"}
@@ -643,7 +643,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                 onClick={() => setIsCoPilotOpen(true)}
                 className="bg-black hover:bg-gray-800 text-white px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
               >
-                <Bot className="w-3.5 h-3.5 text-white" /> Ask Gazelle
+                <Bot className="w-3.5 h-3.5 text-white" /> Ask Certo Work
               </button>
 
               <button
@@ -1400,7 +1400,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
             {generatingReport ? (
               <div className="py-20 text-center space-y-3">
                 <Loader2 className="w-8 h-8 animate-spin mx-auto text-indigo-600" />
-                <p className="text-xs text-gray-500">Gazelle is reviewing tasks, milestones, and recent updates...</p>
+                <p className="text-xs text-gray-500">Certo Work is reviewing tasks, milestones, and recent updates...</p>
               </div>
             ) : (
               <form onSubmit={handleSaveStatusReport} className="space-y-4 text-xs">

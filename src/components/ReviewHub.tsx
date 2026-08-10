@@ -151,18 +151,18 @@ export function ReviewHub() {
                 <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" /> Review Candidate Desktop
               </h3>
               <p className="text-xs text-indigo-900/80 mt-1 max-w-xl">
-                Gazelle extracts candidates from your raw inbox dumps. Approve them to convert them into prioritized tasks, goals, decisions, or projects.
+                Certo Work extracts candidates from your raw inbox dumps. Approve them to convert them into prioritized tasks, goals, decisions, or projects.
               </p>
             </div>
             <button
               onClick={() => {
                 window.dispatchEvent(new CustomEvent('open-boldi-assistant', {
-                  detail: { message: "Boldi, show me my pending review items and tell me what is stuck." }
+                  detail: { message: "Certo Work, show me my pending review items and tell me what is stuck." }
                 }));
               }}
               className="bg-black hover:bg-neutral-900 text-white px-4 py-2 rounded-xl text-xs font-extrabold cursor-pointer transition-colors"
             >
-              Ask Boldi's Opinion
+              Ask Certo Work's Opinion
             </button>
           </div>
 

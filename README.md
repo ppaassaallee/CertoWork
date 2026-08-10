@@ -1,6 +1,6 @@
-# Gazelle — powered by Boldr AI
+# Certo Work — powered by Boldr AI
 
-Gazelle is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Chief of Staff layer.
+Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Chief of Staff layer.
 
 ## Codex Sites deployment
 

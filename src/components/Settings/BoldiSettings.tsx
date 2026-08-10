@@ -134,7 +134,7 @@ export function BoldiSettings() {
           </button>
           <div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">MY ASSISTANT</h1>
-            <p className="text-gray-500 text-xs mt-0.5 font-medium uppercase tracking-wider">Configure Gazelle Chief-of-Staff</p>
+            <p className="text-gray-500 text-xs mt-0.5 font-medium uppercase tracking-wider">Configure Certo Work Chief-of-Staff</p>
           </div>
         </div>
         

@@ -216,7 +216,7 @@ function downloadMarkdown(text: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `Gazelle_Snapshot_${new Date().toISOString().slice(0, 10)}.md`;
+  anchor.download = `Certo Work_Snapshot_${new Date().toISOString().slice(0, 10)}.md`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -1145,7 +1145,7 @@ export function BoldiAssistant({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-[#343832]">Gazelle</span>
+                          <span className="text-[11px] font-semibold text-[#343832]">Certo Work</span>
                           {message.offline && (
                             <span className="rounded-full bg-[#f2ead5] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#806a2d]">
                               Offline-safe
@@ -1219,7 +1219,7 @@ export function BoldiAssistant({
                       <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="mb-2 text-[11px] font-semibold text-[#343832]">Gazelle</div>
+                      <div className="mb-2 text-[11px] font-semibold text-[#343832]">Certo Work</div>
                       <RichText text={streamingReply} />
                       <span className="gazelle-stream-cursor" />
                     </div>
@@ -1252,7 +1252,7 @@ export function BoldiAssistant({
         <div className="gazelle-composer-wrap">
           <div className="gazelle-composer">
             <textarea
-              aria-label="Message Gazelle"
+              aria-label="Message Certo Work"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleComposerKeyDown}
               placeholder="Capture anything, plan the day, or pressure-test a commitment..."
@@ -1288,7 +1288,7 @@ export function BoldiAssistant({
             </div>
           </div>
           <p className="mt-2 text-center text-[9px] text-[#a1a49b]">
-            Gazelle shows assumptions and asks before making changes. You always retain override authority.
+            Certo Work shows assumptions and asks before making changes. You always retain override authority.
           </p>
         </div>
       </main>
@@ -1316,7 +1316,7 @@ export function BoldiAssistant({
               onClick={() => setWorkspaceMenuOpen((current) => !current)}
               type="button"
             >
-              <span className="gazelle-brand-mark">G</span>
+              <span className="gazelle-brand-mark">C</span>
               <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-[13px] font-semibold text-[#242720]">
                   {workspace?.name || "Personal Focus"}

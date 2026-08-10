@@ -14,7 +14,7 @@ function environment(overrides: Record<string, unknown> = {}) {
       async fetch(request: Request) {
         const pathname = new URL(request.url).pathname;
         if (pathname === "/" || pathname === "/index.html") {
-          return new Response("<!doctype html><title>Gazelle</title>", {
+          return new Response("<!doctype html><title>Certo Work</title>", {
             headers: { "content-type": "text/html" },
           });
         }
@@ -144,7 +144,7 @@ test("Sites worker preserves client-side routes through the SPA fallback", async
         const url = new URL(request.url);
         requestedPaths.push(`${url.pathname}${url.search}`);
         if (url.pathname === "/" && url.searchParams.get("gazelle-spa") === "1") {
-          return new Response("<!doctype html><title>Gazelle</title>", {
+          return new Response("<!doctype html><title>Certo Work</title>", {
             headers: { "content-type": "text/html" },
           });
         }
@@ -159,7 +159,7 @@ test("Sites worker preserves client-side routes through the SPA fallback", async
     env,
   );
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /Gazelle/);
+  assert.match(await response.text(), /Certo Work/);
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.deepEqual(requestedPaths, ["/?gazelle-spa=1"]);
 });

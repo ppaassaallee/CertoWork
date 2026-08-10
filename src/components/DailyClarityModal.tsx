@@ -760,7 +760,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
       }
     } catch (err: any) {
       console.error(err);
-      setErrorString("Could not connect to Gazelle AI. Select your priorities today.");
+      setErrorString("Could not connect to Certo Work. Select your priorities today.");
     } finally {
       setAiLoading(false);
     }
@@ -989,7 +989,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                 <Brain className="w-6 h-6" />
               </div>
               <div>
-                <span className="font-extrabold text-sm tracking-widest block text-amber-400">GAZELLE OS</span>
+                <span className="font-extrabold text-sm tracking-widest block text-amber-400">CERTO WORK</span>
                 <span className="text-[10px] uppercase font-bold text-gray-400">Mental Strategy</span>
               </div>
             </div>
@@ -1023,7 +1023,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                 {step === 2 && "Write down everything freely. Do not filter your thoughts; empty out everything currently occupying your mind's RAM."}
                 {step === 3 && (
                   <div className="space-y-2">
-                    <p className="font-semibold text-amber-400">Gazelle System Rules:</p>
+                    <p className="font-semibold text-amber-400">Certo Work System Rules:</p>
                     <p>• Max 3 **Pending** (Core Work).</p>
                     <p>• Exactly 1 **Decision** (to free mental fatigue).</p>
                     <p>• Exactly 1 **Idea** (to schedule today).</p>
@@ -1428,7 +1428,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
                     <div>
-                      <h4 className="text-xs font-bold text-neutral-800">Gazelle Strategy Priority Matrix</h4>
+                      <h4 className="text-xs font-bold text-neutral-800">Certo Work Strategy Priority Matrix</h4>
                       <p className="text-[10px] text-neutral-500">Select maximum 3 tasks, exactly 1 Decision, and exactly 1 Idea. The rest will be deferred.</p>
                     </div>
                   </div>

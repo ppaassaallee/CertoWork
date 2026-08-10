@@ -463,7 +463,7 @@ export function StakeholdersList() {
                     className="bg-emerald-50/40 border-2 border-dashed border-emerald-200/50 rounded-3xl p-6 text-center"
                   >
                     <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-emerald-950">Drafting Gazelle leadership counsel for {selectedStakeholder.name}...</p>
+                    <p className="text-xs font-bold text-emerald-950">Drafting Certo Work leadership counsel for {selectedStakeholder.name}...</p>
                   </motion.div>
                 )}
 

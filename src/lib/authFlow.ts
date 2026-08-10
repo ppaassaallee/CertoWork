@@ -22,7 +22,7 @@ export function authErrorMessage(reason: unknown) {
     case "cancelled-popup-request":
       return "Sign-in was cancelled. Try again when you are ready.";
     case "unauthorized-domain":
-      return "This DelivereeOS address is not authorized for Google sign-in. Contact the workspace owner.";
+      return "This Certo Work address is not authorized for Google sign-in. Contact the workspace owner.";
     case "web-storage-unsupported":
     case "operation-not-supported-in-this-environment":
       return "This browser is blocking the secure session. Allow site storage or use a regular browser window.";

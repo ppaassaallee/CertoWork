@@ -8,7 +8,7 @@ export function SettingsIndex() {
   const settingsNav = [
     { title: "Workspace Settings", description: "Manage members, roles, and name", icon: Users, path: "/settings/workspace", color: "text-indigo-600", bg: "bg-indigo-50" },
     { title: "Integrations", description: "Google Workspace, Notion, CRM", icon: LinkIcon, path: "/settings/integrations", color: "text-emerald-600", bg: "bg-emerald-50" },
-    { title: "Boldi Settings", description: "AI context, models, and permissions", icon: Shield, path: "/settings/boldi", color: "text-purple-600", bg: "bg-purple-50" },
+    { title: "Certo Work Settings", description: "AI context, models, and permissions", icon: Shield, path: "/settings/boldi", color: "text-purple-600", bg: "bg-purple-50" },
     { title: "Platform Health", description: "System diagnostics and capabilities", icon: Activity, path: "/settings/platform-health", color: "text-blue-600", bg: "bg-blue-50" },
     { title: "Data Management", description: "Export, backups, and integrity", icon: Database, path: "/settings/data", color: "text-slate-600", bg: "bg-slate-50" },
     { title: "Setup & Initialization", description: "Starter templates and reset", icon: Zap, path: "/settings/setup", color: "text-amber-600", bg: "bg-amber-50" }

@@ -66,7 +66,7 @@ function EmailComposerCard({ initialTo, initialSubject, initialBody, stakeholder
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700">
           <Mail className="w-3.5 h-3.5" />
-          <span>Boldi Email Drafter</span>
+          <span>Certo Work Email Drafter</span>
         </div>
         <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
           Actionable Draft
@@ -259,7 +259,7 @@ export function BoldiCoPilotModal({
       setMessages([
         {
           role: "assistant",
-          content: `Hi there! I'm **Boldi**, your coworker AI. I'm loaded with the context of this ${itemType}: **"${itemTitle}"**. 
+          content: `Hi there! I'm **Certo Work**, your coworker AI. I'm loaded with the context of this ${itemType}: **"${itemTitle}"**. 
 
 How can I help you today? You can choose one of the quick actions below, or ask me to perform research, write status updates, draft emails, or format description details.`
         }
@@ -424,7 +424,7 @@ ${shContext}
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                Boldi Co-Pilot 
+                Certo Work Co-Pilot 
                 <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium capitalize">
                   {itemType} Helper
                 </span>
@@ -541,7 +541,7 @@ ${shContext}
               <div className="flex flex-col items-start max-w-[85%]">
                 <div className="p-4 rounded-2xl text-sm bg-gray-100/80 text-gray-500 rounded-tl-none border border-gray-200/40 flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-black" />
-                  <span>Boldi is thinking and drafting...</span>
+                  <span>Certo Work is thinking and drafting...</span>
                 </div>
               </div>
             </div>
@@ -592,7 +592,7 @@ ${shContext}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               disabled={submitting}
-              placeholder={`Ask Boldi to draft an email, ask someone for status, or research...`}
+              placeholder={`Ask Certo Work to draft an email, ask someone for status, or research...`}
               className="flex-1 text-sm text-gray-900 placeholder-gray-400 focus:outline-none pr-10 bg-transparent"
             />
             <button
