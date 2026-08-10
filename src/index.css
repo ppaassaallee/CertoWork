@@ -602,6 +602,48 @@ button { color: inherit; }
 .do-clean-modal footer button:last-child { border-color: #9c3c32; background: #9c3c32; color: #fff; }
 .do-clean-modal footer button:disabled { border-color: #e1e4e1; background: #e1e4e1; color: #9da39f; cursor: default; }
 
+.do-skill-list > button { align-items: flex-start; }
+.do-skill-list small { white-space: normal; line-height: 1.4; }
+.do-skill-next { margin-top: 12px; }
+.do-skill-layer { position: fixed; z-index: 125; inset: 0; display: grid; place-items: center; background: rgba(20, 32, 25, .28); padding: 22px; backdrop-filter: blur(6px); animation: do-project-fade .16s ease-out; }
+.do-skill-modal { display: flex; width: min(1060px, calc(100vw - 44px)); height: min(780px, calc(100dvh - 44px)); flex-direction: column; overflow: hidden; border: 1px solid rgba(255, 255, 255, .88); border-radius: 20px; background: #f8faf7; box-shadow: 0 35px 90px rgba(15, 30, 22, .28); animation: do-project-rise .18s ease-out; }
+.do-skill-head { display: flex; min-height: 92px; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid #dfe5e0; background: linear-gradient(120deg, #fbfcfa, #eef5ef); padding: 16px 19px; }
+.do-skill-title { display: grid; min-width: 0; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; }
+.do-skill-title > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 13px; background: #dfeee6; color: #255b43; box-shadow: inset 0 0 0 1px rgba(37, 91, 67, .06); }
+.do-skill-title small { color: #668173; font-size: 7px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+.do-skill-title h2 { margin: 3px 0 0; color: #1e2d25; font: 700 clamp(20px, 2.4vw, 28px) "Manrope", sans-serif; letter-spacing: -.04em; }
+.do-skill-title p { max-width: 690px; margin: 5px 0 0; color: #748078; font-size: 9px; line-height: 1.55; }
+.do-skill-head > button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #dce3dd; border-radius: 10px; background: #fff; color: #68756d; cursor: pointer; }
+.do-skill-body { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(230px, .72fr) minmax(0, 1.55fr); overflow: hidden; }
+.do-skill-readiness { display: flex; min-height: 0; flex-direction: column; border-right: 1px solid #e0e6e1; background: #eff5f0; padding: 18px; }
+.do-skill-readiness h3 { margin: 5px 0 0; color: #244833; font: 700 20px "Manrope", sans-serif; letter-spacing: -.035em; }
+.do-skill-readiness p { margin: 9px 0 0; color: #6f7c74; font-size: 9px; line-height: 1.6; }
+.do-skill-readiness > div { display: grid; gap: 6px; margin-top: 18px; }
+.do-skill-readiness > div span { display: flex; align-items: center; gap: 7px; border: 1px solid #dce5de; border-radius: 10px; background: rgba(255, 255, 255, .58); padding: 8px; color: #68756d; font-size: 8px; font-weight: 700; }
+.do-skill-readiness > div span.is-done { border-color: #cce0d3; background: #fff; color: #285b43; }
+.do-skill-form { min-height: 0; overflow-y: auto; padding: 18px; scrollbar-width: none; }
+.do-skill-form::-webkit-scrollbar { display: none; }
+.do-skill-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 12px; }
+.do-skill-mode button { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #dce3de; border-radius: 11px; background: #fff; padding: 10px; color: #64736a; font-size: 8.5px; font-weight: 800; cursor: pointer; }
+.do-skill-mode button.is-active { border-color: #b8cdbf; background: #e8f2ec; color: #214b39; }
+.do-skill-mode button:disabled { opacity: .45; cursor: default; }
+.do-skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.do-skill-field { display: grid; gap: 5px; margin-bottom: 11px; }
+.do-skill-field > span { color: #66746b; font-size: 7.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.do-skill-field input, .do-skill-field textarea, .do-skill-field select { width: 100%; min-width: 0; border: 1px solid #dce3de; border-radius: 10px; background: #fff; padding: 9px 10px; color: #2d3832; font-size: 9.5px; outline: none; }
+.do-skill-field textarea { min-height: 72px; resize: vertical; line-height: 1.5; }
+.do-skill-field input:focus, .do-skill-field textarea:focus, .do-skill-field select:focus { border-color: #99b0a1; box-shadow: 0 0 0 2px rgba(47, 96, 70, .08); }
+.do-skill-field small { color: #87918b; font-size: 7.5px; line-height: 1.45; }
+.do-skill-field button { width: fit-content; border: 1px solid #dce3de; border-radius: 9px; background: #fff; padding: 6px 8px; color: #617069; font-size: 7.5px; font-weight: 800; cursor: pointer; }
+.do-skill-field button.is-active { border-color: #214b39; background: #214b39; color: #fff; }
+.do-skill-error { margin: 0 0 9px; border: 1px solid #ead0ca; border-radius: 10px; background: #fff6f4; padding: 9px 10px; color: #a34d40; font-size: 8.5px; }
+.do-skill-foot { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid #dfe5e0; background: #fbfcfa; padding: 12px 18px; }
+.do-skill-foot > span { min-width: 0; overflow: hidden; color: #78837c; font-size: 8px; white-space: nowrap; text-overflow: ellipsis; }
+.do-skill-foot > div { display: flex; flex: none; gap: 7px; }
+.do-skill-foot button { height: 34px; border: 1px solid #dce3de; border-radius: 10px; background: #fff; padding: 0 13px; color: #536158; font-size: 8.5px; font-weight: 800; cursor: pointer; }
+.do-skill-foot button:last-child { border-color: #214b39; background: #214b39; color: #fff; }
+.do-skill-foot button:disabled { border-color: #e1e4e1; background: #e1e4e1; color: #9da39f; cursor: default; }
+
 /* Project record and portfolio control stay above the persistent conversation. */
 .do-project-layer { position: fixed; z-index: 120; inset: 0; display: grid; place-items: center; background: rgba(20, 32, 25, .32); padding: 24px; backdrop-filter: blur(5px); animation: do-project-fade .16s ease-out; }
 @keyframes do-project-fade { from { opacity: 0; } }
@@ -863,8 +905,20 @@ button { color: inherit; }
   .do-codex-settings > div:first-child, .do-codex-setting-foot { grid-template-columns: 1fr; }
   .do-codex-activity article { grid-template-columns: 28px minmax(0, 1fr); }
   .do-codex-activity article > div:last-child { grid-column: 2; }
-  .do-project-layer, .do-command-layer { padding: 0; background: rgba(20, 32, 25, .2); }
-  .do-project-record, .do-command-center { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .do-project-layer, .do-command-layer, .do-skill-layer { padding: 0; background: rgba(20, 32, 25, .2); }
+  .do-project-record, .do-command-center, .do-skill-modal { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .do-skill-head { min-height: 76px; padding: 12px; }
+  .do-skill-title { grid-template-columns: 36px minmax(0, 1fr); }
+  .do-skill-title > span { width: 36px; height: 36px; }
+  .do-skill-title p { display: none; }
+  .do-skill-body { display: block; overflow-y: auto; }
+  .do-skill-readiness { border-right: 0; border-bottom: 1px solid #e0e6e1; padding: 12px; }
+  .do-skill-readiness > div { grid-template-columns: 1fr 1fr; margin-top: 12px; }
+  .do-skill-grid, .do-skill-mode { grid-template-columns: 1fr; }
+  .do-skill-form { overflow: visible; padding: 12px; }
+  .do-skill-foot { align-items: stretch; flex-direction: column; padding: 10px 12px max(10px, env(safe-area-inset-bottom)); }
+  .do-skill-foot > span { white-space: normal; }
+  .do-skill-foot > div { display: grid; grid-template-columns: 1fr 1fr; }
   .do-project-record-head { min-height: 64px; padding: 9px 10px; }
   .do-project-record-icon { width: 34px; height: 34px; }
   .do-project-record-title h1 { max-width: 42vw; font-size: 17px; }

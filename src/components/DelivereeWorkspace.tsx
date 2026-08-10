@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  WandSparkles,
   X,
 } from "lucide-react";
 import {
@@ -62,6 +63,13 @@ import {
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import { ProjectWizardSkill } from "./ProjectWizardSkill";
+import {
+  DELIVEREE_SKILLS,
+  isProjectWizardInvocation,
+  splitProjectWizardLines,
+  type ProjectWizardDraft,
+} from "../lib/delivereeSkills";
 
 type Conversation = {
   id: string;
@@ -87,7 +95,7 @@ type Message = {
   offline?: boolean;
 };
 
-type Panel = "today" | "projects" | "project" | "approvals" | null;
+type Panel = "today" | "projects" | "project" | "approvals" | "skills" | null;
 type CenterView = "conversation" | "items";
 
 function timestamp(value: any) {
@@ -321,6 +329,7 @@ export function DelivereeWorkspace() {
   const [cleanConfirmText, setCleanConfirmText] = useState("");
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
+  const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -655,6 +664,12 @@ export function DelivereeWorkspace() {
   const sendMessage = async (explicit?: string) => {
     const text = String(explicit || input).trim();
     if (!text || !user || !workspace || submitting) return;
+    if (isProjectWizardInvocation(text)) {
+      setInput("");
+      setActionMenuOpen(false);
+      setProjectWizardOpen(true);
+      return;
+    }
     setInput("");
     setActionMenuOpen(false);
     setSubmitting(true);
@@ -1049,6 +1064,107 @@ export function DelivereeWorkspace() {
     await updateDoc(doc(db, "tasks", taskId), { ...patch, updatedAt: serverTimestamp() });
   };
 
+  const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
+    if (!user || !workspace) return;
+    const successCriteria = splitProjectWizardLines(draft.successCriteriaText);
+    const targetDate = draft.noTargetDate ? "" : draft.targetDate;
+    const projectRef = await addDoc(collection(db, "projects"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: draft.title.trim(),
+      normalizedTitle: draft.title.trim().toLowerCase().replace(/\s+/g, " "),
+      description: draft.why.trim(),
+      outcome: draft.outcome.trim(),
+      objective: draft.outcome.trim(),
+      status: "planning",
+      health: "on_track",
+      methodology: draft.methodology,
+      projectManager: draft.owner.trim(),
+      targetDate,
+      dueDate: targetDate,
+      successCriteria,
+      definitionOfDone: draft.definitionOfDone.trim(),
+      createdFromSkill: "project_wizard",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    if (draft.firstMilestone.trim()) {
+      await addProjectMilestone(projectRef.id, draft.firstMilestone.trim());
+    }
+    await addProjectTask(projectRef.id, draft.firstAction.trim().slice(0, 500), "backlog", {
+      key: `${projectWorkKey({ title: draft.title })}-1`,
+      source: "project_wizard",
+      priority: "P1",
+      dueDate: targetDate || null,
+      workItemType: "task",
+      itemType: "task",
+      type: "task",
+      acceptanceCriteria: successCriteria.join("\n"),
+      definitionOfDone: draft.definitionOfDone.trim(),
+    });
+
+    const conversationRef = await addDoc(collection(db, "boldi_conversations"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: draft.title.trim(),
+      status: "active",
+      sourceContext: "project",
+      contextEntityId: projectRef.id,
+      conversationType: "project",
+      linkedProjectIds: [projectRef.id],
+      linkedTaskIds: [],
+      isChiefOfStaff: false,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setConversationId(conversationRef.id);
+    setMessages([]);
+    setProjectConsoleId(projectRef.id);
+    setPanel("project");
+    setCenterView("conversation");
+    navigate(`/work/projects/${projectRef.id}`);
+    setNotice(`${draft.title.trim()} created with Project Wizard. Its console is open.`);
+  };
+
+  const updateProjectFromWizard = async (projectId: string, draft: ProjectWizardDraft) => {
+    if (!user || !workspace) return;
+    const successCriteria = splitProjectWizardLines(draft.successCriteriaText);
+    const targetDate = draft.noTargetDate ? "" : draft.targetDate;
+    await updateProject(projectId, {
+      title: draft.title.trim(),
+      normalizedTitle: draft.title.trim().toLowerCase().replace(/\s+/g, " "),
+      description: draft.why.trim(),
+      outcome: draft.outcome.trim(),
+      objective: draft.outcome.trim(),
+      methodology: draft.methodology,
+      projectManager: draft.owner.trim(),
+      targetDate,
+      dueDate: targetDate,
+      successCriteria,
+      definitionOfDone: draft.definitionOfDone.trim(),
+      updatedFromSkill: "project_wizard",
+    });
+    if (draft.firstMilestone.trim()) await addProjectMilestone(projectId, draft.firstMilestone.trim());
+    await addProjectTask(projectId, draft.firstAction.trim().slice(0, 500), "backlog", {
+      source: "project_wizard",
+      priority: "P1",
+      dueDate: targetDate || null,
+      workItemType: "task",
+      itemType: "task",
+      type: "task",
+      acceptanceCriteria: successCriteria.join("\n"),
+      definitionOfDone: draft.definitionOfDone.trim(),
+    });
+    setProjectConsoleId(projectId);
+    setPanel("project");
+    setCenterView("conversation");
+    navigate(`/work/projects/${projectId}`);
+    setNotice(`${draft.title.trim()} updated with Project Wizard.`);
+  };
+
   const resetWorkspaceData = async () => {
     if (!user || !workspace || cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning) return;
     setCleaning(true);
@@ -1229,7 +1345,7 @@ export function DelivereeWorkspace() {
                 </div>
               ))}
               {activeProjects.length === 0 && (
-                <button className="do-empty-link" onClick={() => setComposer("Help me create a project for ")} type="button">Create your first project</button>
+                <button className="do-empty-link" onClick={() => setProjectWizardOpen(true)} type="button">Create your first project</button>
               )}
             </div>
           </div>
@@ -1303,6 +1419,7 @@ export function DelivereeWorkspace() {
                 <Folder size={15} /><span>Project console</span>
               </button>
             )}
+            <button className={`do-header-button ${panel === "skills" ? "is-active" : ""}`} onClick={() => setPanel(panel === "skills" ? null : "skills")} type="button"><WandSparkles size={15} /><span>Skills</span></button>
             <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
             <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Pendientes</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
           </div>
@@ -1399,7 +1516,8 @@ export function DelivereeWorkspace() {
             <div className="do-quick-actions">
               <button onClick={() => setComposer("Capture this as a task: ")} type="button"><Inbox size={15} /><span><strong>Capture</strong><small>Turn a thought into a clear task</small></span></button>
               <button onClick={() => sendMessage("Plan my day realistically using the 2 must-dos and up to 8 should-dos method.")} type="button"><CalendarDays size={15} /><span><strong>Plan today</strong><small>Choose work that fits the day</small></span></button>
-              <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>New project</strong><small>Define the outcome and first step</small></span></button>
+              <button onClick={() => { setActionMenuOpen(false); setProjectWizardOpen(true); }} type="button"><WandSparkles size={15} /><span><strong>Project Wizard</strong><small>Create or update a project safely</small></span></button>
+              <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>Freeform project note</strong><small>Talk it through before creating</small></span></button>
             </div>
           )}
           {isFocusedConversation && <div className="do-composer-context">{directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}<span>{currentContextLabel}</span><button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button></div>}
@@ -1451,8 +1569,8 @@ export function DelivereeWorkspace() {
       <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
         <div className="do-panel-head">
           <div>
-            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : "Pendientes"}</h2>
+            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : "CONTROL"}</span>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : "Pendientes"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
@@ -1527,6 +1645,29 @@ export function DelivereeWorkspace() {
             </>
           )}
 
+          {panel === "skills" && (
+            <>
+              <p className="do-panel-intro">Skills are reusable operating moves. You can invoke them from here, from the + menu, or by typing /project wizard.</p>
+              <div className="do-panel-list do-skill-list">
+                {DELIVEREE_SKILLS.map((skill) => (
+                  <button key={skill.id} onClick={() => { setPanel(null); setProjectWizardOpen(true); }} type="button">
+                    <WandSparkles size={14} />
+                    <span>
+                      <strong>{skill.title}</strong>
+                      <small>{skill.summary}</small>
+                    </span>
+                    <ChevronRight size={13} />
+                  </button>
+                ))}
+              </div>
+              <div className="do-panel-empty do-skill-next">
+                <Sparkles size={20} />
+                <strong>One skill first. Good.</strong>
+                <span>Project Wizard is the foundation. Later we can add PRD Builder, Sprint Planner, Risk Review, and Codex Handoff as real skills.</span>
+              </div>
+            </>
+          )}
+
           {panel === "approvals" && (
             <>
               <p className="do-panel-intro">Nothing enters your workspace until you say so.</p>
@@ -1594,6 +1735,15 @@ export function DelivereeWorkspace() {
           </section>
         </div>
       )}
+
+      <ProjectWizardSkill
+        activeProject={routeOrPrimaryProject}
+        isOpen={projectWizardOpen}
+        onClose={() => setProjectWizardOpen(false)}
+        onCreateProject={createProjectFromWizard}
+        onUpdateProject={updateProjectFromWizard}
+        projects={activeProjects}
+      />
 
 	    </div>
 	  );
