@@ -56,6 +56,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
+import { TextSizeControl } from "./TextSizeControl";
 import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { sidebarProjectGroups, sortProjectsByRecency, type WorkLane } from "../lib/projectPortfolio";
@@ -1757,6 +1758,10 @@ export function DelivereeWorkspace() {
           </button>
           {workspaceOpen && (
             <div className="do-account-menu">
+              <div className="do-account-menu-preference">
+                <span>Text size</span>
+                <TextSizeControl compact />
+              </div>
               <button onClick={() => { setPanel("workspace"); setWorkspaceOpen(false); }} type="button"><Users size={14} /> Workspace & team</button>
               <button onClick={() => { navigate("/settings"); setWorkspaceOpen(false); }} type="button"><Settings size={14} /> Settings</button>
               <button onClick={() => { setCleanSlateOpen(true); setWorkspaceOpen(false); }} type="button">Start clean</button>

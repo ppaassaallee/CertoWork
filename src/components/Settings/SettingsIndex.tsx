@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Users, Link as LinkIcon, Shield, Activity, Database, Zap, ChevronRight, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { TextSizeControl } from "../TextSizeControl";
 
 export function SettingsIndex() {
   const navigate = useNavigate();
@@ -31,6 +32,15 @@ export function SettingsIndex() {
           <p className="text-gray-500 text-sm mt-1">Manage workspace, architecture, and platform configuration.</p>
         </div>
       </header>
+
+      <section className="do-settings-appearance">
+        <div>
+          <span>Appearance</span>
+          <h2>Text size</h2>
+          <p>Choose how dense or readable Certo Work feels on this device.</p>
+        </div>
+        <TextSizeControl />
+      </section>
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
         {settingsNav.map((item) => (

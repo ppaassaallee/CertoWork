@@ -21,6 +21,16 @@
       content="Capture, plan, and move meaningful work in one conversation."
     />
     <title>Certo Work — Conversational Productivity</title>
+    <script>
+      (function () {
+        try {
+          var size = localStorage.getItem("certoWorkTextSize");
+          document.documentElement.dataset.certoTextSize = size === "1" || size === "3" ? size : "2";
+        } catch (error) {
+          document.documentElement.dataset.certoTextSize = "2";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

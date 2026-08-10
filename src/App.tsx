@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ArrowRight, Check, Loader2, LogIn, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
+import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 function SignIn() {
   const { signIn, authError } = useAuth();
@@ -96,6 +97,10 @@ function WorkspaceRecovery() {
 
 export default function App() {
   const { user, loading, workspace } = useAuth();
+
+  useEffect(() => {
+    applyCertoTextSize(getStoredCertoTextSize());
+  }, []);
 
   if (loading) {
     return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
