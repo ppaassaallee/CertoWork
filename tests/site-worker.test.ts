@@ -4,6 +4,7 @@ import test from "node:test";
 import worker, {
   assistantInstructions,
   firebaseAuthProxyUrl,
+  inferProjectTitleFromRequest,
   normalizeConversationMessages,
 } from "../worker/index.js";
 
@@ -237,4 +238,16 @@ test("the current pasted PRD and the latest prior PRD remain available for follo
   assert.equal(normalized[0].content.length, 16_000);
   assert.equal(normalized[2].content.length, prd.length);
   assert.equal(normalized.at(-1)?.content, "Add the PRD from my previous message to FieldOps");
+});
+
+test("create project requests keep the explicit project name instead of the generic command", () => {
+  assert.equal(
+    inferProjectTitleFromRequest("Please create a project called KruOps Field Operations and add the PRD."),
+    "KruOps Field Operations",
+  );
+  assert.equal(
+    inferProjectTitleFromRequest("crear un proyecto para Castillo Retail Pilot con Scrum"),
+    "Castillo Retail Pilot",
+  );
+  assert.equal(inferProjectTitleFromRequest("create a project"), "");
 });

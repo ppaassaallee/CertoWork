@@ -35,7 +35,7 @@ type Props = {
 
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
-const priorities = ["P1", "P2", "P3", "P4"];
+const priorities = ["1", "2", "3", "N/A"];
 const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "rank", label: "Manual order" },
   { value: "project", label: "Project" },
@@ -53,6 +53,11 @@ function title(item: any) {
 
 function projectTitle(project: any) {
   return project?.title || project?.name || "Untitled project";
+}
+
+function itemProjectTitle(item: any, projects: any[]) {
+  if (!item?.projectId) return "No project / errands";
+  return projectTitle(projects.find((project) => project.id === item.projectId));
 }
 
 function workItemKind(item: any): WorkItemKind {
@@ -88,11 +93,10 @@ function dateInputValue(value: any) {
 
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
-  if (["P1", "P2", "P3", "P4"].includes(normalized)) return normalized;
-  if (["1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "P1";
-  if (["2", "MEDIUM"].includes(normalized)) return "P2";
-  if (["3", "LOW"].includes(normalized)) return "P3";
-  return "";
+  if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
+  if (["2", "P2", "MEDIUM"].includes(normalized)) return "2";
+  if (["3", "P3", "LOW"].includes(normalized)) return "3";
+  return "N/A";
 }
 
 function canonicalStatus(item: any) {
@@ -120,8 +124,8 @@ function itemOrder(item: any, fallback = 0) {
 }
 
 function sortValue(item: any, sortBy: SortBy, projects: any[]) {
-  if (sortBy === "project") return projectTitle(projects.find((project) => project.id === item.projectId)).toLowerCase();
-  if (sortBy === "priority") return priorityValue(item.priority) || "P9";
+  if (sortBy === "project") return itemProjectTitle(item, projects).toLowerCase();
+  if (sortBy === "priority") return priorityValue(item.priority) === "N/A" ? "9" : priorityValue(item.priority);
   if (sortBy === "due") return dateInputValue(item.dueDate || item.targetDate) || "9999-12-31";
   if (sortBy === "status") return canonicalStatus(item);
   if (sortBy === "owner") return String(item.owner || item.assignee || "zz unassigned").toLowerCase();
@@ -198,7 +202,7 @@ export function WorkItemsCenter({
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
-  const [groupBy, setGroupBy] = useState<GroupBy>("hierarchy");
+  const [groupBy, setGroupBy] = useState<GroupBy>(activeProject ? "hierarchy" : "project");
   const [primarySort, setPrimarySort] = useState<SortBy>("project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
   const [newType, setNewType] = useState<WorkItemKind>("pbi");
@@ -208,12 +212,15 @@ export function WorkItemsCenter({
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState("in_progress");
-  const [bulkPriority, setBulkPriority] = useState("P2");
+  const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
 
   useEffect(() => {
     setProjectFilter(activeProject?.id || "all");
     setNewProjectId(activeProject?.id || "");
+    setGroupBy(activeProject ? "hierarchy" : "project");
+    setPrimarySort("project");
+    setSecondarySort("priority");
     onSelectItem(null);
   }, [activeProject?.id]);
 
@@ -223,10 +230,10 @@ export function WorkItemsCenter({
     () => [...new Set(tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean))].sort(),
     [tasks],
   );
-  const baseProjectId = projectFilter !== "all" ? projectFilter : activeProject?.id || "";
+  const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentOptions = useMemo(() => {
     const projectId = newProjectId || baseProjectId;
-    const sameProject = tasks.filter((item) => !projectId || item.projectId === projectId);
+    const sameProject = tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId);
     if (newType === "epic") return [];
     if (newType === "feature") return sameProject.filter((item) => workItemKind(item) === "epic");
     if (newType === "subtask") return sameProject.filter((item) => ["pbi", "story", "task", "bug"].includes(workItemKind(item)));
@@ -236,8 +243,8 @@ export function WorkItemsCenter({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return sortItems(tasks.filter((item) => {
-      const project = projects.find((candidate) => candidate.id === item.projectId);
-      const matchesProject = projectFilter === "all" || item.projectId === projectFilter;
+      const matchesProject = projectFilter === "all" ||
+        (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
       const matchesStatus = statusFilter === "all" ||
         (statusFilter === "open" ? !["done", "completed", "closed", "cancelled"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
       const matchesPriority = priorityFilter === "all" || priorityValue(item.priority) === priorityFilter;
@@ -247,18 +254,18 @@ export function WorkItemsCenter({
         (typeFilter === "pbi" && ["pbi", "story", "task", "bug"].includes(itemKind));
       const matchesOwner = ownerFilter === "all" || String(item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
-      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${projectTitle(project)}`.toLowerCase();
+      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)}`.toLowerCase();
       return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && (!needle || searchable.includes(needle));
     }), primarySort, secondarySort, projects);
   }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tasks, typeFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
-  const canCreate = Boolean(newTitle.trim() && (newProjectId || baseProjectId));
+  const canCreate = Boolean(newTitle.trim());
 
   const createItem = async () => {
     const projectId = newProjectId || baseProjectId;
-    if (!newTitle.trim() || !projectId) return;
+    if (!newTitle.trim()) return;
     const parent = tasks.find((item) => item.id === newParentId);
     const parentKind = parent ? workItemKind(parent) : null;
     await onAddTask(projectId, newTitle.trim(), "backlog", {
@@ -269,8 +276,8 @@ export function WorkItemsCenter({
       epicId: parentKind === "epic" ? newParentId : parent?.epicId || null,
       featureId: parentKind === "feature" ? newParentId : parent?.featureId || null,
       priority: null,
-      order: tasks.filter((item) => item.projectId === projectId).length,
-      rank: tasks.filter((item) => item.projectId === projectId).length,
+      order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
+      rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
     });
     setNewTitle("");
     setNewParentId("");
@@ -298,7 +305,6 @@ export function WorkItemsCenter({
 
   const renderRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
-    const project = projects.find((candidate) => candidate.id === item.projectId);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
     return (
       <article className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id}>
@@ -312,13 +318,12 @@ export function WorkItemsCenter({
         <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
           <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
           <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
-          <small>{projectTitle(project)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
+          <small>{itemProjectTitle(item, projects)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
         </button>
         <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>
-        <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value || null })} value={priorityValue(item.priority)}>
-          <option value="">-</option>
+        <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
           {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
         </select>
         <input aria-label={`Owner for ${title(item)}`} defaultValue={item.owner || item.assignee || ""} onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
@@ -376,8 +381,8 @@ export function WorkItemsCenter({
   const grouped = useMemo(() => {
     const keyFor = (item: any) => {
       if (groupBy === "status") return canonicalStatus(item);
-      if (groupBy === "priority") return priorityValue(item.priority) || "No priority";
-      if (groupBy === "project") return projectTitle(projects.find((project) => project.id === item.projectId));
+      if (groupBy === "priority") return priorityValue(item.priority);
+      if (groupBy === "project") return itemProjectTitle(item, projects);
       if (groupBy === "owner") return String(item.owner || item.assignee || "Unassigned");
       if (groupBy === "type") return workItemLabel(workItemKind(item));
       if (groupBy === "due") return dueBucket(item.dueDate || item.targetDate).replace(/_/g, " ");
@@ -426,7 +431,7 @@ export function WorkItemsCenter({
                 <button onClick={() => onSelectItem(item.id)} type="button">
                   <span>{workItemLabel(kind)}</span>
                   <strong>{title(item)}</strong>
-                  <small>{projectTitle(projects.find((project) => project.id === item.projectId))}</small>
+                  <small>{itemProjectTitle(item, projects)}</small>
                 </button>
                 <div className="do-gantt-track">
                   <div
@@ -463,8 +468,9 @@ export function WorkItemsCenter({
       </section>
 
       <section className="do-items-filters" aria-label="Work item filters">
-        <select aria-label="Project filter" onChange={(event) => { setProjectFilter(event.target.value); setNewProjectId(event.target.value === "all" ? activeProject?.id || "" : event.target.value); }} value={projectFilter}>
+        <select aria-label="Project filter" onChange={(event) => { setProjectFilter(event.target.value); setNewProjectId(event.target.value === "all" || event.target.value === "no_project" ? activeProject?.id || "" : event.target.value); }} value={projectFilter}>
           <option value="all">All projects</option>
+          <option value="no_project">No project / errands</option>
           {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
         </select>
         <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
@@ -508,9 +514,15 @@ export function WorkItemsCenter({
         </select>
       </section>
 
+      <section className="do-sort-presets" aria-label="Sorting presets">
+        <button className={groupBy === "project" && primarySort === "project" && secondarySort === "priority" ? "is-active" : ""} onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); }} type="button">Project → priority</button>
+        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); }} type="button">Priority → date</button>
+        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "project" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); }} type="button">Priority → project</button>
+      </section>
+
       <section className="do-items-create">
         <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
-          <option value="">{activeProject ? projectTitle(activeProject) : "Choose project"}</option>
+          <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
           {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
         </select>
         <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
@@ -530,7 +542,7 @@ export function WorkItemsCenter({
           <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
-          <button onClick={() => updateBulk({ priority: bulkPriority })} type="button">Apply priority</button>
+          <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
           <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
           <button onClick={() => updateBulk({ dueDate: bulkDueDate || null })} type="button">Apply date</button>
         </section>
@@ -541,7 +553,7 @@ export function WorkItemsCenter({
           <div className="do-items-summary">
             <span><strong>{filtered.length}</strong> shown</span>
             <span><strong>{filtered.filter((item) => canonicalStatus(item) === "blocked").length}</strong> blocked</span>
-            <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "P1").length}</strong> P1</span>
+            <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "1").length}</strong> priority 1</span>
             <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
           </div>
           {mode === "gantt" ? renderGantt() : groupBy === "hierarchy" ? renderHierarchy() : (
@@ -571,7 +583,7 @@ export function WorkItemsCenter({
               placeholder="Description, acceptance criteria, notes..."
             />
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
-            <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value || null })} value={priorityValue(selectedItem.priority)}><option value="">None</option>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
+            <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>

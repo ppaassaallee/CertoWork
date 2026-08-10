@@ -315,6 +315,8 @@ Product behavior:
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks across all work.
 - Use the supplied scoped records as the source of truth. When evidence is incomplete, state the exact assumption or missing field and continue with the useful parts that can be completed safely.
 - Treat tasks as tasks, not issues. Keep every proposed task concrete: a clear verb, finish condition, owner when known, and realistic timing.
+- Use only these priority values in proposed workspace changes: 1, 2, 3, or null for N/A. Do not use P1/P2/P3/P4.
+- If the user asks for an email reminder, daily digest, daily summary, or weekly summary, prepare the request or draft as an outbox_communication action. Never claim an email was sent unless an email delivery integration is explicitly present in evidence.
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
 - In Chief of Staff mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
@@ -408,7 +410,70 @@ export function normalizeConversationMessages(messages) {
   }));
 }
 
-function normalizeAssistantResult(result, citations, model) {
+const GENERIC_PROJECT_TITLES = new Set([
+  "create a project",
+  "crear un proyecto",
+  "new project",
+  "nuevo proyecto",
+  "project",
+  "proyecto",
+  "set up a project",
+  "help me create a project",
+]);
+
+function sanitizeProjectTitleCandidate(value) {
+  const cleaned = String(value || "")
+    .replace(/^[\s"'“”‘’`]+|[\s"'“”‘’`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+(?:and|with|para|por|con|so|that|where|que)\s+.*$/i, "")
+    .replace(/[.?!,;:]+$/g, "")
+    .trim();
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 90) return "";
+  if (GENERIC_PROJECT_TITLES.has(cleaned.toLowerCase())) return "";
+  return cleaned;
+}
+
+export function inferProjectTitleFromRequest(text = "") {
+  const source = String(text || "").replace(/\s+/g, " ").trim();
+  const patterns = [
+    /(?:project|proyecto)\s+(?:called|named|name[d]?|llamado|llamada|que se llame|con nombre)\s+["“'‘]?([^"”'’.;!?]+)/i,
+    /(?:create|crear|build|hacer|set up|setup|start|iniciar)\s+(?:a\s+|un\s+|una\s+)?(?:new\s+|nuevo\s+|nueva\s+)?(?:project|proyecto)\s+(?:for|para|about|sobre|de)\s+["“'‘]?([^"”'’.;!?]+)/i,
+    /(?:project|proyecto)\s*[:\-]\s*["“'‘]?([^"”'’.;!?]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    const title = sanitizeProjectTitleCandidate(match?.[1]);
+    if (title) return title;
+  }
+  return "";
+}
+
+function normalizePriority(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
+  if (["2", "P2", "MEDIUM"].includes(normalized)) return "2";
+  if (["3", "P3", "LOW"].includes(normalized)) return "3";
+  return null;
+}
+
+function normalizeActionProposedChange(action, latestUserMessage) {
+  const proposedChange = { ...(action?.proposedChange || {}) };
+  if (Object.prototype.hasOwnProperty.call(proposedChange, "priority")) {
+    proposedChange.priority = normalizePriority(proposedChange.priority);
+  }
+  if (String(action?.type || "") === "create_project") {
+    const currentTitle = sanitizeProjectTitleCandidate(proposedChange.title || proposedChange.name);
+    const inferredTitle = inferProjectTitleFromRequest(latestUserMessage);
+    const title = currentTitle || inferredTitle;
+    if (title) {
+      proposedChange.title = title;
+      proposedChange.name = title;
+    }
+  }
+  return proposedChange;
+}
+
+function normalizeAssistantResult(result, citations, model, latestUserMessage = "") {
   if (!result || typeof result.reply !== "string" || !result.reply.trim()) {
     throw new Error("OpenAI returned an invalid assistant response");
   }
@@ -430,13 +495,16 @@ function normalizeAssistantResult(result, citations, model) {
         ? result.actionPlan.riskLevel
         : "medium",
       safetyLevel: Math.max(1, Math.min(5, Number(result.actionPlan.safetyLevel) || 1)),
-      proposedActions: result.actionPlan.proposedActions.slice(0, 24).map((action) => ({
-        type: String(action.type || "create_task"),
-        proposedChange: action.proposedChange || {},
-        reason: String(action.reason || "Requested by the user"),
-        safetyLevel: Math.max(1, Math.min(5, Number(action.safetyLevel) || 1)),
-        confidence: Math.max(0, Math.min(1, Number(action.confidence) || 0.7)),
-      })),
+      proposedActions: result.actionPlan.proposedActions.slice(0, 24).map((action) => {
+        const type = String(action.type || "create_task");
+        return {
+          type,
+          proposedChange: normalizeActionProposedChange({ ...action, type }, latestUserMessage),
+          reason: String(action.reason || "Requested by the user"),
+          safetyLevel: Math.max(1, Math.min(5, Number(action.safetyLevel) || 1)),
+          confidence: Math.max(0, Math.min(1, Number(action.confidence) || 0.7)),
+        };
+      }),
     };
   }
   return normalized;
@@ -516,7 +584,7 @@ async function chat(request, env) {
       return json({ error: message, code: "OPENAI_REQUEST_FAILED" }, 502);
     }
     const result = parseJsonObject(extractOpenAIText(payload));
-    return json(normalizeAssistantResult(result, citations, model));
+    return json(normalizeAssistantResult(result, citations, model, latestUserMessage));
   } catch (error) {
     return json(
       {

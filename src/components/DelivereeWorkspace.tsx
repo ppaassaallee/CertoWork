@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  Archive,
   ArrowUp,
   BookOpen,
   Bot,
@@ -23,6 +24,7 @@ import {
   Loader2,
   Menu,
   MessageSquare,
+  Mail,
   Mic,
   MicOff,
   MoreHorizontal,
@@ -32,12 +34,14 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -98,7 +102,7 @@ type Message = {
   offline?: boolean;
 };
 
-type Panel = "today" | "projects" | "project" | "approvals" | "skills" | null;
+type Panel = "today" | "projects" | "project" | "approvals" | "skills" | "digest" | null;
 type CenterView = "conversation" | "items" | "notes";
 
 function timestamp(value: any) {
@@ -134,6 +138,26 @@ function entityTitle(entity: any) {
   return entity?.title || entity?.name || "Untitled";
 }
 
+function isGenericProjectTitle(value: any) {
+  return [
+    "create a project",
+    "crear un proyecto",
+    "new project",
+    "nuevo proyecto",
+    "project",
+    "proyecto",
+    "help me create a project",
+  ].includes(String(value || "").trim().toLowerCase());
+}
+
+function proposedTitle(proposed: any, fallback: any) {
+  const proposedValue = String(proposed?.title || proposed?.name || "").trim();
+  if (proposedValue && !isGenericProjectTitle(proposedValue)) return proposedValue;
+  const fallbackValue = String(fallback || "").trim();
+  if (fallbackValue && !isGenericProjectTitle(fallbackValue)) return fallbackValue;
+  return proposedValue || fallbackValue || "Untitled";
+}
+
 function projectWorkKey(project: any) {
   const explicit = String(project?.projectKey || project?.key || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (explicit) return explicit.slice(0, 10);
@@ -166,8 +190,10 @@ function dateKey(value: any) {
 
 function priorityLabel(value: any) {
   const normalized = String(value || "").toLowerCase();
-  if (["urgent", "critical", "p0", "p1", "high"].includes(normalized)) return "Priority";
-  return "Open";
+  if (["urgent", "critical", "p0", "p1", "high", "1"].includes(normalized)) return "Priority 1";
+  if (["p2", "medium", "2"].includes(normalized)) return "Priority 2";
+  if (["p3", "low", "3"].includes(normalized)) return "Priority 3";
+  return "N/A";
 }
 
 function reviewTypeForAction(type?: string) {
@@ -182,6 +208,7 @@ function reviewTypeForAction(type?: string) {
     update_task: "task_update",
     reschedule_task: "task_update",
     post_to_conversation: "conversation_message",
+    outbox_communication: "digest_request",
   };
   return types[String(type || "")] || "task";
 }
@@ -841,7 +868,9 @@ export function DelivereeWorkspace() {
         userId: user.uid,
         workspaceId: workspace.id,
         createdBy: user.uid,
-        title: action.proposedChange?.title || actionLabel(action.type),
+        title: reviewType === "project"
+          ? proposedTitle(action.proposedChange, actionLabel(action.type))
+          : action.proposedChange?.title || actionLabel(action.type),
         type: reviewType,
         why: action.reason || "Proposed in conversation",
         action: actionLabel(action.type),
@@ -919,6 +948,26 @@ export function DelivereeWorkspace() {
         await updateDoc(doc(db, "boldi_conversations", targetConversationId), { updatedAt: serverTimestamp() });
         convertedToType = "conversation";
         convertedToId = targetConversationId;
+      } else if (reviewType === "digest_request") {
+        const content = String(proposed.content || proposed.message || proposed.summary || "").trim();
+        const created = await addDoc(collection(db, "daily_briefs"), {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          type: proposed.digestType || proposed.cadence || "email_reminder",
+          title: candidate.title || proposed.subject || "Email reminder",
+          requestedChannel: "email",
+          email: proposed.email || user.email || "",
+          status: "draft",
+          deliveryStatus: "needs_email_service",
+          subject: proposed.subject || "",
+          content,
+          scope: proposed.scope || "workspace",
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        convertedToType = "daily_briefs";
+        convertedToId = created.id;
       } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
         const allowedFields = [
@@ -939,7 +988,9 @@ export function DelivereeWorkspace() {
           userId: user.uid,
           workspaceId: workspace.id,
           projectId,
-          title: candidate.title || proposed.title || "Untitled",
+          title: reviewType === "project"
+            ? proposedTitle(proposed, candidate.title)
+            : candidate.title || proposed.title || "Untitled",
           status: proposed.status || "open",
           createdBy: user.uid,
           createdAt: serverTimestamp(),
@@ -1032,6 +1083,43 @@ export function DelivereeWorkspace() {
     await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
   };
 
+  const archiveConversation = async (conversation: Conversation) => {
+    await updateDoc(doc(db, "boldi_conversations", conversation.id), {
+      status: "archived",
+      archivedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    if (conversationId === conversation.id) {
+      setConversationId(null);
+      setMessages([]);
+      navigate("/");
+    }
+    setNotice("Conversation archived. Its history is preserved.");
+  };
+
+  const deleteConversation = async (conversation: Conversation) => {
+    const confirmed = window.confirm(`Delete "${conversation.title || "this conversation"}" and its messages? This cannot be undone.`);
+    if (!confirmed || !user || !workspace) return;
+    const snapshot = await getDocs(query(
+      collection(db, "boldi_messages"),
+      where("userId", "==", user.uid),
+      where("workspaceId", "==", workspace.id),
+      where("conversationId", "==", conversation.id),
+    ));
+    for (let index = 0; index < snapshot.docs.length; index += 400) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, "boldi_conversations", conversation.id));
+    if (conversationId === conversation.id) {
+      setConversationId(null);
+      setMessages([]);
+      navigate("/");
+    }
+    setNotice("Conversation deleted.");
+  };
+
   const archiveProject = async (project: any) => {
     await updateProject(project.id, { status: "archived", archivedAt: serverTimestamp() });
     if (projectConsoleId === project.id) {
@@ -1042,12 +1130,63 @@ export function DelivereeWorkspace() {
     setNotice(`${entityTitle(project)} archived. Its history is preserved.`);
   };
 
+  const deleteProject = async (project: any) => {
+    const confirmed = window.confirm(`Delete "${entityTitle(project)}" and its tasks, milestones, risks, and documents? This cannot be undone.`);
+    if (!confirmed || !user || !workspace) return;
+    const childCollections = ["tasks", "milestones", "boldr_risks", "knowledge_items"];
+    for (const collectionName of childCollections) {
+      const snapshot = await getDocs(query(
+        collection(db, collectionName),
+        where("userId", "==", user.uid),
+        where("workspaceId", "==", workspace.id),
+        where("projectId", "==", project.id),
+      ));
+      for (let index = 0; index < snapshot.docs.length; index += 400) {
+        const batch = writeBatch(db);
+        snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+        await batch.commit();
+      }
+    }
+    await deleteDoc(doc(db, "projects", project.id));
+    if (projectConsoleId === project.id) {
+      setProjectConsoleId(null);
+      setPanel(null);
+    }
+    if (activeProject?.id === project.id) navigate("/");
+    setNotice(`${entityTitle(project)} deleted.`);
+  };
+
+  const saveDigestRequest = async (kind: "email_reminder" | "daily_digest" | "weekly_summary") => {
+    if (!user || !workspace) return;
+    const labels = {
+      email_reminder: "email reminder",
+      daily_digest: "daily digest",
+      weekly_summary: "weekly summary",
+    };
+    await addDoc(collection(db, "daily_briefs"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      type: kind,
+      title: labels[kind],
+      requestedChannel: "email",
+      email: user.email || "",
+      status: "draft",
+      deliveryStatus: "needs_email_service",
+      scope: kind === "weekly_summary" ? "week" : "day",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`${labels[kind]} request saved. Email delivery still needs an email service; DelivereeOS can draft it now.`);
+    setComposer(`Draft my ${labels[kind]} from the current workspace. Do not claim it was sent.`);
+  };
+
   const addProjectTask = async (projectId: string, title: string, status: WorkLane, patch: Record<string, unknown> = {}) => {
     if (!user || !workspace) return;
     const project = projects.find((item) => item.id === projectId);
-    const prefix = projectWorkKey(project);
+    const prefix = projectId ? projectWorkKey(project) : "TASK";
     const nextSequence = tasks
-      .filter((item) => item.projectId === projectId)
+      .filter((item) => projectId ? item.projectId === projectId : !item.projectId)
       .reduce((maximum, item) => {
         const match = String(item.key || item.workItemKey || "").match(/-(\d+)$/);
         return Math.max(maximum, match ? Number(match[1]) : 0);
@@ -1109,7 +1248,7 @@ export function DelivereeWorkspace() {
     await addProjectTask(projectRef.id, draft.firstAction.trim().slice(0, 500), "backlog", {
       key: `${projectWorkKey({ title: draft.title })}-1`,
       source: "project_wizard",
-      priority: "P1",
+      priority: "1",
       dueDate: targetDate || null,
       workItemType: "task",
       itemType: "task",
@@ -1163,7 +1302,7 @@ export function DelivereeWorkspace() {
     if (draft.firstMilestone.trim()) await addProjectMilestone(projectId, draft.firstMilestone.trim());
     await addProjectTask(projectId, draft.firstAction.trim().slice(0, 500), "backlog", {
       source: "project_wizard",
-      priority: "P1",
+      priority: "1",
       dueDate: targetDate || null,
       workItemType: "task",
       itemType: "task",
@@ -1352,6 +1491,8 @@ export function DelivereeWorkspace() {
                 <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
                   <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Star fill="currentColor" size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
                   <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
+                  <button aria-label={`Archive ${entityTitle(project)}`} className="do-project-icon" onClick={() => archiveProject(project)} type="button"><Archive size={11} /></button>
+                  <button aria-label={`Delete ${entityTitle(project)}`} className="do-project-icon is-danger" onClick={() => deleteProject(project)} type="button"><Trash2 size={11} /></button>
                 </div>
               ))}
               {sidebarProjects.recent.length > 0 && <span className="do-project-group-label">Recent</span>}
@@ -1359,6 +1500,8 @@ export function DelivereeWorkspace() {
                 <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
                   <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Folder size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
                   <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
+                  <button aria-label={`Archive ${entityTitle(project)}`} className="do-project-icon" onClick={() => archiveProject(project)} type="button"><Archive size={11} /></button>
+                  <button aria-label={`Delete ${entityTitle(project)}`} className="do-project-icon is-danger" onClick={() => deleteProject(project)} type="button"><Trash2 size={11} /></button>
                 </div>
               ))}
               {activeProjects.length === 0 && (
@@ -1374,26 +1517,29 @@ export function DelivereeWorkspace() {
             </div>
             {searchOpen && <input aria-label="Search conversations" autoFocus onChange={(event) => setSearch(event.target.value)} placeholder="Search" value={search} />}
             {filteredConversations.slice(0, chatsExpanded || search.trim() ? 50 : 5).map((conversation) => (
-              <button
-                className={conversation.id === conversationId ? "is-active" : ""}
-                key={conversation.id}
-                onClick={() => {
-                  setConversationId(conversation.id);
-                  const projectIds = conversationProjectIds(conversation);
-                  const taskIds = conversationTaskIds(conversation);
-                  navigate(projectIds.length === 1 && taskIds.length === 0 ? `/work/projects/${projectIds[0]}` : "/");
-                  setSidebarOpen(false);
-                }}
-                type="button"
-              >
-                {conversationProjectIds(conversation).length > 0
-                  ? <Folder size={13} />
-                  : conversationTaskIds(conversation).length > 0
-                    ? <ListTodo size={13} />
-                    : conversation.isChiefOfStaff ? <Sparkles size={13} /> : <MessageSquare size={13} />}
-                <span>{conversation.title || "New conversation"}</span>
-                <small>{conversationScopeLabel(conversation, projects, tasks)} · {timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
-              </button>
+              <div className={`do-conversation-row ${conversation.id === conversationId ? "is-active" : ""}`} key={conversation.id}>
+                <button
+                  className="do-conversation-main"
+                  onClick={() => {
+                    setConversationId(conversation.id);
+                    const projectIds = conversationProjectIds(conversation);
+                    const taskIds = conversationTaskIds(conversation);
+                    navigate(projectIds.length === 1 && taskIds.length === 0 ? `/work/projects/${projectIds[0]}` : "/");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  {conversationProjectIds(conversation).length > 0
+                    ? <Folder size={13} />
+                    : conversationTaskIds(conversation).length > 0
+                      ? <ListTodo size={13} />
+                      : conversation.isChiefOfStaff ? <Sparkles size={13} /> : <MessageSquare size={13} />}
+                  <span>{conversation.title || "New conversation"}</span>
+                  <small>{conversationScopeLabel(conversation, projects, tasks)} · {timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
+                </button>
+                <button aria-label={`Archive ${conversation.title || "conversation"}`} className="do-conversation-action" onClick={() => archiveConversation(conversation)} type="button"><Archive size={11} /></button>
+                {!conversation.isChiefOfStaff && <button aria-label={`Delete ${conversation.title || "conversation"}`} className="do-conversation-action is-danger" onClick={() => deleteConversation(conversation)} type="button"><Trash2 size={11} /></button>}
+              </div>
             ))}
             {!search.trim() && filteredConversations.length > 5 && (
               <button className="do-expand-chats" onClick={() => setChatsExpanded((expanded) => !expanded)} type="button"><ChevronDown className={chatsExpanded ? "is-up" : ""} size={13} /><span>{chatsExpanded ? "Show less" : `Show ${filteredConversations.length - 5} more`}</span></button>
@@ -1437,6 +1583,7 @@ export function DelivereeWorkspace() {
               </button>
             )}
             <button className={`do-header-button ${panel === "skills" ? "is-active" : ""}`} onClick={() => setPanel(panel === "skills" ? null : "skills")} type="button"><WandSparkles size={15} /><span>Skills</span></button>
+            <button className={`do-header-button ${panel === "digest" ? "is-active" : ""}`} onClick={() => setPanel(panel === "digest" ? null : "digest")} type="button"><Mail size={15} /><span>Digest</span></button>
             <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
             <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Pendientes</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
           </div>
@@ -1600,8 +1747,8 @@ export function DelivereeWorkspace() {
       <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
         <div className="do-panel-head">
           <div>
-            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : "Pendientes"}</h2>
+            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : panel === "digest" ? "EMAIL" : "CONTROL"}</span>
+            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : panel === "digest" ? "Digest & reminders" : "Pendientes"}</h2>
           </div>
           <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
         </div>
@@ -1695,6 +1842,34 @@ export function DelivereeWorkspace() {
                 <Sparkles size={20} />
                 <strong>One skill first. Good.</strong>
                 <span>Project Wizard is the foundation. Later we can add PRD Builder, Sprint Planner, Risk Review, and Codex Handoff as real skills.</span>
+              </div>
+            </>
+          )}
+
+          {panel === "digest" && (
+            <>
+              <p className="do-panel-intro">Ask DelivereeOS for reminders and summaries from the same flow. Email delivery is saved as a request until an email service is connected.</p>
+              <div className="do-panel-list">
+                <button onClick={() => saveDigestRequest("email_reminder")} type="button">
+                  <Mail size={14} />
+                  <span><strong>Email reminder</strong><small>Draft a reminder from current work and mark delivery as pending integration</small></span>
+                  <ChevronRight size={13} />
+                </button>
+                <button onClick={() => saveDigestRequest("daily_digest")} type="button">
+                  <CalendarDays size={14} />
+                  <span><strong>Daily digest</strong><small>Prepare today’s tasks, priorities, risks, and follow-ups</small></span>
+                  <ChevronRight size={13} />
+                </button>
+                <button onClick={() => saveDigestRequest("weekly_summary")} type="button">
+                  <ListTodo size={14} />
+                  <span><strong>Weekly summary</strong><small>Prepare a week-level digest by project, priority, and date</small></span>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+              <div className="do-panel-empty do-skill-next">
+                <ShieldCheck size={20} />
+                <strong>No fake sending.</strong>
+                <span>Requests are saved now. Actual automatic emails need a configured provider such as Gmail, SendGrid, Resend, or Postmark.</span>
               </div>
             </>
           )}
