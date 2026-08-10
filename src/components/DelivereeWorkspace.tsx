@@ -1441,9 +1441,9 @@ export function DelivereeWorkspace() {
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
             onUpdateTask={updateProjectTask}
-            projects={activeProjects}
+            projects={projects}
             selectedItemId={selectedWorkItemId}
-            tasks={routeOrPrimaryProject ? tasks.filter((item) => item.projectId === routeOrPrimaryProject.id) : openTasks}
+            tasks={tasks}
           />
         )}
       </main>

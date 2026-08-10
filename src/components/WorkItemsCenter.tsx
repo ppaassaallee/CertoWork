@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Circle,
+  CalendarRange,
   Folder,
   ListChecks,
   Plus,
@@ -16,9 +17,9 @@ import {
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
-type WorkItemsViewMode = "list" | "table";
+type WorkItemsViewMode = "list" | "table" | "gantt";
 type GroupBy = "hierarchy" | "status" | "priority" | "project" | "owner" | "type" | "due";
-type SortBy = "rank" | "priority" | "due" | "title" | "status";
+type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type";
 
 type Props = {
   activeProject: any | null;
@@ -32,9 +33,19 @@ type Props = {
   onOpenProjectConsole: (project: any) => void;
 };
 
-const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "task", "bug", "subtask"];
+const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["P1", "P2", "P3", "P4"];
+const sortOptions: Array<{ value: SortBy; label: string }> = [
+  { value: "rank", label: "Manual order" },
+  { value: "project", label: "Project" },
+  { value: "priority", label: "Priority" },
+  { value: "due", label: "Due date" },
+  { value: "status", label: "Status" },
+  { value: "owner", label: "Owner" },
+  { value: "type", label: "Type" },
+  { value: "title", label: "Title" },
+];
 
 function title(item: any) {
   return item?.title || item?.name || "Untitled";
@@ -56,7 +67,11 @@ function workItemKind(item: any): WorkItemKind {
 }
 
 function workItemLabel(kind: WorkItemKind) {
-  return kind === "pbi" ? "PBI" : kind.charAt(0).toUpperCase() + kind.slice(1);
+  if (kind === "pbi") return "PBI";
+  if (kind === "story") return "Story PBI";
+  if (kind === "bug") return "Bug PBI";
+  if (kind === "task") return "Task PBI";
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 function parentId(item: any) {
@@ -104,14 +119,42 @@ function itemOrder(item: any, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function sortItems(items: any[], sortBy: SortBy) {
+function sortValue(item: any, sortBy: SortBy, projects: any[]) {
+  if (sortBy === "project") return projectTitle(projects.find((project) => project.id === item.projectId)).toLowerCase();
+  if (sortBy === "priority") return priorityValue(item.priority) || "P9";
+  if (sortBy === "due") return dateInputValue(item.dueDate || item.targetDate) || "9999-12-31";
+  if (sortBy === "status") return canonicalStatus(item);
+  if (sortBy === "owner") return String(item.owner || item.assignee || "zz unassigned").toLowerCase();
+  if (sortBy === "type") return workItemKind(item);
+  if (sortBy === "title") return title(item).toLowerCase();
+  return String(itemOrder(item)).padStart(8, "0");
+}
+
+function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: any[]) {
   return [...items].sort((left, right) => {
-    if (sortBy === "priority") return priorityValue(left.priority).localeCompare(priorityValue(right.priority)) || title(left).localeCompare(title(right));
-    if (sortBy === "due") return dateInputValue(left.dueDate || left.targetDate).localeCompare(dateInputValue(right.dueDate || right.targetDate)) || title(left).localeCompare(title(right));
-    if (sortBy === "status") return canonicalStatus(left).localeCompare(canonicalStatus(right)) || title(left).localeCompare(title(right));
-    if (sortBy === "title") return title(left).localeCompare(title(right));
-    return itemOrder(left) - itemOrder(right) || priorityValue(left.priority).localeCompare(priorityValue(right.priority)) || title(left).localeCompare(title(right));
+    const first = sortValue(left, primary, projects).localeCompare(sortValue(right, primary, projects));
+    if (first) return first;
+    const second = primary === secondary ? 0 : sortValue(left, secondary, projects).localeCompare(sortValue(right, secondary, projects));
+    if (second) return second;
+    return title(left).localeCompare(title(right));
   });
+}
+
+function displayStatus(status: string) {
+  return status === "in_progress" ? "In progress" : status === "in_review" ? "In review" : status.replace(/_/g, " ");
+}
+
+function ganttDate(item: any, fallbackDays = 0) {
+  const raw = dateInputValue(item.startDate || item.plannedStartDate || item.sprintStartDate || item.dueDate || item.targetDate);
+  if (!raw) return null;
+  const date = new Date(`${raw}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  if (fallbackDays) date.setDate(date.getDate() + fallbackDays);
+  return date;
+}
+
+function dateLabel(date: Date) {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function InlineText({
@@ -156,11 +199,13 @@ export function WorkItemsCenter({
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [groupBy, setGroupBy] = useState<GroupBy>("hierarchy");
-  const [sortBy, setSortBy] = useState<SortBy>("rank");
+  const [primarySort, setPrimarySort] = useState<SortBy>("project");
+  const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
   const [newType, setNewType] = useState<WorkItemKind>("pbi");
   const [newProjectId, setNewProjectId] = useState(activeProject?.id || "");
   const [newParentId, setNewParentId] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("P2");
@@ -171,6 +216,8 @@ export function WorkItemsCenter({
     setNewProjectId(activeProject?.id || "");
     onSelectItem(null);
   }, [activeProject?.id]);
+
+  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, query]);
 
   const owners = useMemo(
     () => [...new Set(tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean))].sort(),
@@ -194,13 +241,16 @@ export function WorkItemsCenter({
       const matchesStatus = statusFilter === "all" ||
         (statusFilter === "open" ? !["done", "completed", "closed", "cancelled"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
       const matchesPriority = priorityFilter === "all" || priorityValue(item.priority) === priorityFilter;
-      const matchesType = typeFilter === "all" || workItemKind(item) === typeFilter;
+      const itemKind = workItemKind(item);
+      const matchesType = typeFilter === "all" ||
+        itemKind === typeFilter ||
+        (typeFilter === "pbi" && ["pbi", "story", "task", "bug"].includes(itemKind));
       const matchesOwner = ownerFilter === "all" || String(item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
       const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${projectTitle(project)}`.toLowerCase();
       return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && (!needle || searchable.includes(needle));
-    }), sortBy);
-  }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, sortBy, statusFilter, tasks, typeFilter]);
+    }), primarySort, secondarySort, projects);
+  }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tasks, typeFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
@@ -227,7 +277,7 @@ export function WorkItemsCenter({
   };
 
   const moveItem = async (item: any, peers: any[], direction: -1 | 1) => {
-    const ordered = sortItems(peers, "rank");
+    const ordered = sortItems(peers, "rank", "priority", projects);
     const index = ordered.findIndex((candidate) => candidate.id === item.id);
     const other = ordered[index + direction];
     if (!other) return;
@@ -265,7 +315,7 @@ export function WorkItemsCenter({
           <small>{projectTitle(project)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
         </button>
         <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
-          {workStatuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
+          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>
         <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value || null })} value={priorityValue(item.priority)}>
           <option value="">-</option>
@@ -340,6 +390,67 @@ export function WorkItemsCenter({
     }, {});
   }, [filtered, groupBy, projects]);
 
+  const toggleGroup = (group: string) => {
+    setCollapsedGroups((current) => current.includes(group)
+      ? current.filter((item) => item !== group)
+      : [...current, group]);
+  };
+
+  const renderGantt = () => {
+    const dated = filtered
+      .map((item) => {
+        const start = ganttDate(item);
+        const explicitEnd = ganttDate({ dueDate: item.dueDate || item.targetDate || item.endDate || item.plannedEndDate });
+        const end = explicitEnd || (start ? ganttDate(item, 3) : null);
+        return { item, start, end };
+      })
+      .filter((entry) => entry.start && entry.end) as Array<{ item: any; start: Date; end: Date }>;
+    const undated = filtered.filter((item) => !ganttDate(item));
+    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime())) : Date.now();
+    const maxTime = dated.length ? Math.max(...dated.map((entry) => entry.end.getTime())) : Date.now() + 30 * 86_400_000;
+    const span = Math.max(1, maxTime - minTime);
+    const markers = Array.from({ length: 5 }, (_, index) => new Date(minTime + (span * index) / 4));
+
+    return (
+      <div className="do-gantt">
+        <div className="do-gantt-axis">
+          {markers.map((marker) => <span key={marker.toISOString()}>{dateLabel(marker)}</span>)}
+        </div>
+        <div className="do-gantt-rows">
+          {dated.map(({ item, start, end }) => {
+            const kind = workItemKind(item);
+            const left = ((start.getTime() - minTime) / span) * 100;
+            const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
+            return (
+              <article className={`do-gantt-row is-${kind}`} key={item.id}>
+                <button onClick={() => onSelectItem(item.id)} type="button">
+                  <span>{workItemLabel(kind)}</span>
+                  <strong>{title(item)}</strong>
+                  <small>{projectTitle(projects.find((project) => project.id === item.projectId))}</small>
+                </button>
+                <div className="do-gantt-track">
+                  <div
+                    className="do-gantt-bar"
+                    style={{ "--gantt-left": `${left}%`, "--gantt-width": `${Math.min(width, 100 - left)}%` } as CSSProperties}
+                  >
+                    <span>{dateLabel(start)} - {dateLabel(end)}</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {dated.length === 0 && <div className="do-items-empty"><CalendarRange size={21} /><strong>No scheduled items yet.</strong><span>Add due dates or start dates to build the project timeline.</span></div>}
+        </div>
+        {undated.length > 0 && (
+          <section className="do-gantt-unscheduled">
+            <button onClick={() => toggleGroup("gantt-unscheduled")} type="button"><ChevronDown className={collapsedGroups.includes("gantt-unscheduled") ? "is-collapsed" : ""} size={13} /><strong>No date</strong><span>{undated.length}</span></button>
+            {!collapsedGroups.includes("gantt-unscheduled") && <div>{undated.slice(0, 20).map((item) => renderRow(item, undated))}</div>}
+          </section>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="do-items-center" data-testid="work-items-center">
       <section className="do-items-toolbar">
@@ -347,6 +458,7 @@ export function WorkItemsCenter({
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
           <button aria-label="Table view" className={mode === "table" ? "is-active" : ""} onClick={() => setMode("table")} type="button"><Table2 size={14} /></button>
+          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /></button>
         </div>
       </section>
 
@@ -358,7 +470,7 @@ export function WorkItemsCenter({
         <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
           <option value="open">Open</option>
           <option value="all">All statuses</option>
-          {workStatuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}
+          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>
         <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
           <option value="all">Any priority</option>
@@ -388,12 +500,11 @@ export function WorkItemsCenter({
           <option value="type">Type</option>
           <option value="due">Due date</option>
         </select>
-        <select aria-label="Sort by" onChange={(event) => setSortBy(event.target.value as SortBy)} value={sortBy}>
-          <option value="rank">Manual order</option>
-          <option value="priority">Priority</option>
-          <option value="due">Due date</option>
-          <option value="title">Title</option>
-          <option value="status">Status</option>
+        <select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>
+          {sortOptions.map((option) => <option key={option.value} value={option.value}>Sort: {option.label}</option>)}
+        </select>
+        <select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>
+          {sortOptions.map((option) => <option key={option.value} value={option.value}>Then: {option.label}</option>)}
         </select>
       </section>
 
@@ -416,7 +527,7 @@ export function WorkItemsCenter({
       {selectedBulkIds.length > 0 && (
         <section className="do-items-bulk" aria-label="Bulk actions">
           <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
-          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select>
+          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
           <button onClick={() => updateBulk({ priority: bulkPriority })} type="button">Apply priority</button>
@@ -433,12 +544,12 @@ export function WorkItemsCenter({
             <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "P1").length}</strong> P1</span>
             <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
           </div>
-          {groupBy === "hierarchy" ? renderHierarchy() : (
+          {mode === "gantt" ? renderGantt() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).map(([group, items]) => (
                 <section className="do-items-group" key={group}>
-                  <button type="button"><ChevronDown size={13} /><strong>{group}</strong><span>{items.length}</span></button>
-                  <div>{items.map((item) => renderRow(item, items))}</div>
+                  <button onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
+                  {!collapsedGroups.includes(group) && <div>{items.map((item) => renderRow(item, items))}</div>}
                 </section>
               ))}
               {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
@@ -459,7 +570,7 @@ export function WorkItemsCenter({
               onBlur={(event) => onUpdateTask(selectedItem.id, { description: event.target.value })}
               placeholder="Description, acceptance criteria, notes..."
             />
-            <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{status.replace(/_/g, " ")}</option>)}</select></label>
+            <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value || null })} value={priorityValue(selectedItem.priority)}><option value="">None</option>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>

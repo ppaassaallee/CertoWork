@@ -414,7 +414,7 @@ button { color: inherit; }
 .do-items-mode { display: flex; gap: 3px; border: 1px solid #dfe5e0; border-radius: 10px; background: #f2f5f2; padding: 2px; }
 .do-items-mode button { display: grid; width: 30px; height: 28px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #7a847e; cursor: pointer; }
 .do-items-mode button.is-active { background: #fff; color: #24513d; }
-.do-items-filters, .do-items-create { display: grid; grid-template-columns: repeat(8, minmax(92px, 1fr)); gap: 7px; border-bottom: 1px solid #edf0ed; padding: 9px 17px; }
+.do-items-filters, .do-items-create { display: grid; grid-template-columns: repeat(9, minmax(92px, 1fr)); gap: 7px; border-bottom: 1px solid #edf0ed; padding: 9px 17px; }
 .do-items-create { grid-template-columns: minmax(120px, .9fr) 92px minmax(150px, 1fr) minmax(210px, 1.6fr) auto; background: #f5f8f5; }
 .do-items-filters select, .do-items-create select, .do-items-create input, .do-items-row select, .do-items-row input, .do-items-bulk select, .do-items-bulk input, .do-item-detail input, .do-item-detail textarea, .do-item-detail select { min-width: 0; border: 1px solid #dce3de; border-radius: 8px; background: #fff; padding: 7px 8px; color: #3d4741; font-size: 8px; outline: none; }
 .do-items-create button, .do-items-bulk button, .do-item-detail-actions button { display: flex; height: 31px; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 9px; background: #214b39; padding: 0 10px; color: #fff; font-size: 8px; font-weight: 800; cursor: pointer; }
@@ -453,6 +453,8 @@ button { color: inherit; }
 .do-items-title small { overflow: hidden; color: #8b948e; font-size: 7px; white-space: nowrap; text-overflow: ellipsis; }
 .do-items-group { overflow: hidden; border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; }
 .do-items-group > button { display: flex; width: 100%; align-items: center; gap: 7px; border: 0; border-bottom: 1px solid #edf0ed; background: #f9fbf9; padding: 9px 10px; color: #52625a; text-align: left; }
+.do-items-group > button svg, .do-gantt-unscheduled > button svg { transition: transform .16s ease; }
+.do-items-group > button svg.is-collapsed, .do-gantt-unscheduled > button svg.is-collapsed { transform: rotate(-90deg); }
 .do-items-group > button strong { flex: 1; font-size: 9px; }
 .do-items-group > button span { border-radius: 9px; background: #edf3ef; padding: 3px 7px; font-size: 7px; }
 .do-items-empty { display: grid; justify-items: center; border: 1px dashed #d8ded9; border-radius: 12px; background: #fff; padding: 42px 18px; color: #688073; text-align: center; }
@@ -466,6 +468,31 @@ button { color: inherit; }
 .do-item-detail textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
 .do-item-detail label { display: grid; gap: 4px; color: #7d8781; font-size: 7.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .do-item-detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 4px; }
+
+.do-gantt { display: grid; gap: 9px; }
+.do-gantt-axis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; padding: 8px 10px; color: #87928b; font-size: 7px; font-weight: 800; text-transform: uppercase; }
+.do-gantt-axis span:not(:first-child) { text-align: center; }
+.do-gantt-axis span:last-child { text-align: right; }
+.do-gantt-rows { display: grid; gap: 6px; }
+.do-gantt-row { display: grid; grid-template-columns: minmax(170px, .45fr) minmax(230px, 1fr); gap: 9px; align-items: center; border: 1px solid #e1e7e2; border-radius: 12px; background: #fff; padding: 8px; }
+.do-gantt-row > button { display: grid; min-width: 0; gap: 3px; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
+.do-gantt-row > button span { width: fit-content; border-radius: 7px; background: #e9f1ec; padding: 2px 6px; color: #3e6b52; font-size: 6px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.do-gantt-row.is-story > button span { background: #eef3fa; color: #4b6988; }
+.do-gantt-row.is-bug > button span { background: #faece8; color: #a34d40; }
+.do-gantt-row.is-subtask > button span { background: #f4eff9; color: #73598b; }
+.do-gantt-row strong { overflow: hidden; color: #2e3832; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+.do-gantt-row small { overflow: hidden; color: #8b948e; font-size: 7px; white-space: nowrap; text-overflow: ellipsis; }
+.do-gantt-track { position: relative; height: 30px; overflow: hidden; border-radius: 10px; background: linear-gradient(90deg, #edf2ee 1px, transparent 1px) 0 0 / 25% 100%, #f7faf7; }
+.do-gantt-bar { position: absolute; top: 6px; left: var(--gantt-left); width: var(--gantt-width); min-width: 24px; height: 18px; overflow: hidden; border-radius: 9px; background: #24513d; color: #fff; box-shadow: 0 7px 16px rgba(36, 81, 61, .14); }
+.do-gantt-row.is-epic .do-gantt-bar { background: #315f48; }
+.do-gantt-row.is-feature .do-gantt-bar { background: #697235; }
+.do-gantt-row.is-bug .do-gantt-bar { background: #a34d40; }
+.do-gantt-row.is-subtask .do-gantt-bar { background: #73598b; }
+.do-gantt-bar span { display: block; overflow: hidden; padding: 3px 8px; font-size: 7px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+.do-gantt-unscheduled { overflow: hidden; border: 1px dashed #dfe6e1; border-radius: 12px; background: #fff; }
+.do-gantt-unscheduled > button { display: flex; width: 100%; align-items: center; gap: 7px; border: 0; border-bottom: 1px solid #edf0ed; background: #f9fbf9; padding: 9px 10px; color: #52625a; text-align: left; }
+.do-gantt-unscheduled > button strong { flex: 1; font-size: 9px; }
+.do-gantt-unscheduled > button span { border-radius: 9px; background: #edf3ef; padding: 3px 7px; font-size: 7px; }
 
 .do-codex-onboarding, .do-codex-connected { display: grid; gap: 10px; }
 .do-codex-intro, .do-codex-status-card, .do-codex-launch, .do-codex-settings, .do-codex-work-scope, .do-codex-activity { border: 1px solid #dfe5e0; border-radius: 14px; background: #fff; }
