@@ -1318,6 +1318,63 @@ Specifically answer:
     return approvedWords.some(w => t.includes(w));
   }
 
+  function normalizeProjectName(value: any): string {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function projectActionTitle(action: any): string {
+    const proposed = action?.proposedChange || {};
+    return String(proposed.title || proposed.name || proposed.projectTitle || proposed.projectName || action?.title || "");
+  }
+
+  function findExistingProjectForAction(action: any, workspaceContext: any): any | null {
+    const proposed = action?.proposedChange || {};
+    const projects = Array.isArray(workspaceContext?.projects) ? workspaceContext.projects : [];
+    const contextProjects = Array.isArray(workspaceContext?.contextProjects) ? workspaceContext.contextProjects : [];
+    const allProjects = [...projects, ...contextProjects].filter(Boolean);
+    const byId = String(proposed.projectId || proposed.id || workspaceContext?.activeProjectId || workspaceContext?.activeProject?.id || "");
+    if (byId) {
+      const direct = allProjects.find((project: any) => String(project.id || "") === byId);
+      if (direct) return direct;
+    }
+    const normalizedTitle = normalizeProjectName(projectActionTitle(action));
+    if (!normalizedTitle) return workspaceContext?.activeProject || null;
+    return allProjects.find((project: any) => {
+      const existingTitle = normalizeProjectName(project.title || project.name);
+      return existingTitle === normalizedTitle ||
+        existingTitle.includes(normalizedTitle) ||
+        normalizedTitle.includes(existingTitle);
+    }) || null;
+  }
+
+  function guardAssistantActionPlan(resultData: any, workspaceContext: any) {
+    const actions = resultData?.actionPlan?.proposedActions;
+    if (!Array.isArray(actions)) return resultData;
+    resultData.actionPlan.proposedActions = actions.map((action: any) => {
+      if (String(action?.type || "") !== "create_project") return action;
+      const existingProject = findExistingProjectForAction(action, workspaceContext);
+      if (!existingProject?.id) return action;
+      return {
+        ...action,
+        type: "update_project",
+        proposedChange: {
+          ...(action.proposedChange || {}),
+          projectId: existingProject.id,
+          id: existingProject.id,
+          title: (action.proposedChange?.title || existingProject.title || existingProject.name || "").trim(),
+        },
+        reason: `${action.reason || "Project already exists in this workspace."} Certo Work recognized an existing project and converted this from create_project to update_project.`,
+      };
+    });
+    return resultData;
+  }
+
   app.post("/api/boldi/chat", requireWorkspaceApiAuth, async (req, res) => {
     try {
       let { userId, workspaceId, messages, workspaceContext } = req.body;
@@ -1935,6 +1992,21 @@ Respond in a JSON format matching this schema:
         return tTitle.includes("client-b") || tTitle.includes("client b");
       }) || false;
 
+      const existingProjectsForPrompt = (workspaceContext?.projects || []).slice(0, 40).map((project: any) => ({
+        id: project.id,
+        title: project.title || project.name || "Untitled project",
+        status: project.status || "unknown",
+        outcome: project.outcome || project.objective || "",
+      }));
+      const activeProjectForPrompt = workspaceContext?.activeProject
+        ? {
+            id: workspaceContext.activeProject.id,
+            title: workspaceContext.activeProject.title || workspaceContext.activeProject.name || "Untitled project",
+            status: workspaceContext.activeProject.status || "unknown",
+            outcome: workspaceContext.activeProject.outcome || workspaceContext.activeProject.objective || "",
+          }
+        : null;
+
       const prompt = `You are ${assistantName}, a personal productivity strategist inspired by Carl Pullein’s COD, Time Sector System, Weekly Planning Matrix, 2+8 prioritization, and Perfect Week blueprint.
       You are running inside Alejandro's executive system, Gazelle, acting as his Personal Chief of Staff.
       
@@ -1955,10 +2027,23 @@ Respond in a JSON format matching this schema:
       - 2+8 Prioritization: Every day should hold at most 2 Must Dos (non-negotiable) and 8 Should Dos.
       - 8 Areas of Focus: Health & Fitness, Family & Relationships, Career / Core Work, Finances, Learning / Self-development, Purpose / Contribution, Spirituality / Inner Life, Lifestyle / Environment.
 
-      CURRENT WORKSPACE PHYSICS:
-      - Open active tasks load: ${totalActiveTasks} items.
-      - Active projects count: ${totalActiveProjects} items.
-      - Conflict: Tomorrow has a Client-B visit scheduled? ${clientBConflict ? "YES (Strict travel and energy conflict!)" : "NO"}.
+	      CURRENT WORKSPACE PHYSICS:
+	      - Open active tasks load: ${totalActiveTasks} items.
+	      - Active projects count: ${totalActiveProjects} items.
+	      - Conflict: Tomorrow has a Client-B visit scheduled? ${clientBConflict ? "YES (Strict travel and energy conflict!)" : "NO"}.
+
+	      EXISTING PROJECT REGISTRY:
+	      - Active project in this conversation: ${activeProjectForPrompt ? JSON.stringify(activeProjectForPrompt) : "none"}.
+	      - Existing workspace projects: ${JSON.stringify(existingProjectsForPrompt)}.
+	      - If the user is already inside a project, or the requested project title matches an existing project, NEVER propose "create_project".
+	      - For existing projects, use "update_project", "create_task", "update_task", "create_milestone", "create_risk", or "create_project_artifact" with the existing projectId.
+	      - Do not ask the user to create a project foundation again after the project already exists. Continue by completing missing fields, planning work, or adding reviewable items to the current project.
+
+	      WORK ITEM TAXONOMY:
+	      - Agile/Jira hierarchy belongs in "workItemType": "epic", "feature", "pbi", "story", "bug", "task", or "subtask".
+	      - GTD classification belongs in "actionType" and "gtdActionType": "next_action", "waiting_for", "someday", "reference", "decision", "delegated", or "follow_up".
+	      - Do not use "itemType" for GTD if you can use "actionType" and "gtdActionType".
+	      - Today / This week / Next week / This month / Next month / Later are computed from "dueDate"; do not propose manual time-sector changes unless the item has no due date and the user explicitly asks for Someday/Waiting/Reference.
 
       DETERMINISTIC JUDGMENT PREFLIGHT:
       ${JSON.stringify(workspaceContext?.judgment || { verdict: "not_run", signals: [] })}
@@ -2030,7 +2115,7 @@ Return one valid JSON object with this top-level contract:
     "riskLevel": "low | medium | high",
     "safetyLevel": 1,
     "proposedActions": [{
-      "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | outbox_communication",
+	            "type": "create_task | reschedule_task | update_task | create_decision | create_followup | kill_or_archive | create_project | update_project | create_milestone | update_milestone | create_risk | update_risk | create_project_artifact | outbox_communication",
       "proposedChange": {},
       "reason": "string",
       "safetyLevel": 1,
@@ -2100,7 +2185,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
                       items: {
                         type: Type.OBJECT,
                         properties: {
-                          type: { type: Type.STRING, description: "create_task, reschedule_task, update_task, create_decision, create_followup, kill_or_archive, create_project, outbox_communication" },
+	                          type: { type: Type.STRING, description: "create_task, reschedule_task, update_task, create_decision, create_followup, kill_or_archive, create_project, update_project, create_milestone, update_milestone, create_risk, update_risk, create_project_artifact, outbox_communication" },
                           proposedChange: { type: Type.OBJECT, description: "Arguments/properties to apply" },
                           reason: { type: Type.STRING, description: "Strategic justification" },
                           safetyLevel: { type: Type.INTEGER, description: "Safety level from 1 to 5" },
@@ -2141,10 +2226,11 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
         };
       }
 
-      if (citationsList.length > 0 && !resultData.citations) {
-        resultData.citations = citationsList;
-      }
-      resultData.provider = providerMetadata;
+	      if (citationsList.length > 0 && !resultData.citations) {
+	        resultData.citations = citationsList;
+	      }
+	      resultData = guardAssistantActionPlan(resultData, workspaceContext);
+	      resultData.provider = providerMetadata;
       res.json(resultData);
     } catch (e: any) {
       console.error("[Boldi Chat Error]", e);

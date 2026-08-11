@@ -38,16 +38,28 @@ type Props = {
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
-const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Someday", "Waiting", "No sector"];
-const bucketToSector: Record<string, string> = {
-  Today: "today",
-  "This week": "this_week",
-  "Next week": "next_week",
-  "This month": "this_month",
-  "Next month": "next_month",
-  Later: "later",
-  Someday: "someday",
+const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Next action", "Waiting", "Someday", "Reference", "No sector"];
+const gtdActionTypes = [
+  { value: "", label: "GTD: N/A" },
+  { value: "next_action", label: "Next action" },
+  { value: "waiting_for", label: "Waiting for" },
+  { value: "someday", label: "Someday" },
+  { value: "reference", label: "Reference" },
+  { value: "decision", label: "Decision" },
+  { value: "delegated", label: "Delegated" },
+  { value: "follow_up", label: "Follow-up" },
+];
+const dueBucketLabels: Record<string, string> = {
+  overdue: "Overdue",
+  today: "Today",
+  this_week: "This week",
+  next_week: "Next week",
+  this_month: "This month",
+  next_month: "Next month",
+  later: "Later",
+  unscheduled: "No sector",
 };
+const dueFilterOptions = ["overdue", "today", "this_week", "next_week", "this_month", "next_month", "later", "unscheduled"];
 const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "rank", label: "Manual order" },
   { value: "project", label: "Project" },
@@ -73,7 +85,9 @@ function itemProjectTitle(item: any, projects: any[]) {
 }
 
 function workItemKind(item: any): WorkItemKind {
-  const value = String(item?.workItemType || item?.itemType || item?.taskType || item?.issueType || item?.kind || "").toLowerCase();
+  const structuralValue = String(item?.workItemType || item?.taskType || item?.issueType || item?.kind || "").toLowerCase();
+  const legacyItemType = String(item?.itemType || "").toLowerCase();
+  const value = structuralValue || (workTypes.includes(legacyItemType as WorkItemKind) ? legacyItemType : "");
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
   if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
@@ -124,43 +138,81 @@ function dueBucket(value: any) {
   today.setHours(0, 0, 0, 0);
   const due = new Date(`${date}T00:00:00`);
   const days = Math.floor((due.getTime() - today.getTime()) / 86_400_000);
+  const sameMonth = due.getFullYear() === today.getFullYear() && due.getMonth() === today.getMonth();
+  const nextMonth = due.getFullYear() === today.getFullYear()
+    ? due.getMonth() === today.getMonth() + 1
+    : today.getMonth() === 11 && due.getFullYear() === today.getFullYear() + 1 && due.getMonth() === 0;
   if (days < 0) return "overdue";
-  if (days <= 7) return "next_7";
-  if (days <= 30) return "next_30";
+  if (days === 0) return "today";
+  if (days <= 7) return "this_week";
+  if (days <= 14) return "next_week";
+  if (sameMonth) return "this_month";
+  if (nextMonth || days <= 60) return "next_month";
   return "later";
 }
 
 function actionBoardBucket(item: any) {
   const globalStage = String(item?.globalStageId || "").toLowerCase();
-  const itemType = String(item?.itemType || "").toLowerCase();
-  if (globalStage === "waiting" || itemType === "waiting_for") return "Waiting";
-  if (globalStage === "someday" || itemType === "someday") return "Someday";
+  const bucket = dueBucket(item.dueDate || item.targetDate);
+  if (bucket !== "unscheduled") return dueBucketLabels[bucket] || "No sector";
+  const actionType = gtdActionValue(item);
+  if (globalStage === "waiting" || actionType === "waiting_for") return "Waiting";
+  if (globalStage === "someday" || actionType === "someday") return "Someday";
+  if (actionType === "reference") return "Reference";
+  if (actionType === "next_action") return "Next action";
 
   const explicitSector = normalizeTimeSector(item?.timeSector || item?.proposed?.timeSector);
   if (explicitSector) {
     return TIME_SECTOR_MODEL.find((sector) => sector.id === explicitSector)?.label || "No sector";
   }
 
-  const bucket = dueBucket(item.dueDate || item.targetDate);
-  if (bucket === "overdue") return "Overdue";
-  if (bucket === "next_7") return "This week";
-  if (bucket === "next_30") return "This month";
-  if (bucket === "later") return "Later";
   return "No sector";
 }
 
-function whenSelectValue(item: any) {
-  const explicit = normalizeTimeSector(item?.timeSector);
-  if (explicit) return explicit;
-  if (String(item?.globalStageId || "").toLowerCase() === "waiting") return "waiting";
-  return bucketToSector[actionBoardBucket(item)] || "";
+function gtdActionValue(item: any) {
+  const value = String(item?.gtdActionType || item?.actionType || "").toLowerCase();
+  if (gtdActionTypes.some((type) => type.value === value)) return value;
+  const legacy = String(item?.itemType || item?.globalStageId || "").toLowerCase();
+  if (gtdActionTypes.some((type) => type.value === legacy)) return legacy;
+  if (legacy === "waiting") return "waiting_for";
+  return "";
 }
 
-function actionBoardPatch(value: string) {
+function gtdActionLabel(item: any) {
+  return gtdActionTypes.find((type) => type.value === gtdActionValue(item))?.label.replace(/^GTD: /, "") || "N/A";
+}
+
+function gtdActionPatch(value: string) {
   return {
-    timeSector: value === "waiting" ? null : value || null,
-    globalStageId: value === "someday" ? "someday" : value === "waiting" ? "waiting" : null,
+    actionType: value || null,
+    gtdActionType: value || null,
+    globalStageId: value === "someday" ? "someday" : value === "waiting_for" ? "waiting" : null,
   };
+}
+
+function displayDueBucket(item: any) {
+  return actionBoardBucket(item);
+}
+
+function groupSortIndex(groupBy: GroupBy, label: string) {
+  if (groupBy === "actionBoard") {
+    const index = actionBoardBuckets.indexOf(label);
+    return index === -1 ? 999 : index;
+  }
+  if (groupBy === "priority") {
+    const index = priorities.indexOf(label);
+    return index === -1 ? 999 : index;
+  }
+  if (groupBy === "status") {
+    const index = workStatuses.indexOf(label);
+    return index === -1 ? 999 : index;
+  }
+  if (groupBy === "due") {
+    const key = Object.entries(dueBucketLabels).find(([, value]) => value === label)?.[0] || label;
+    const index = dueFilterOptions.indexOf(key);
+    return index === -1 ? 999 : index;
+  }
+  return 999;
 }
 
 function itemOrder(item: any, fallback = 0) {
@@ -378,11 +430,10 @@ export function WorkItemsCenter({
         <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
           {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
         </select>
-        <select aria-label={`When for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, actionBoardPatch(event.target.value))} value={whenSelectValue(item)}>
-          <option value="">No sector</option>
-          {TIME_SECTOR_MODEL.map((sector) => <option key={sector.id} value={sector.id}>{sector.label}</option>)}
-          <option value="waiting">Waiting</option>
+        <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
+          {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
         </select>
+        <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>
         <input aria-label={`Owner for ${title(item)}`} defaultValue={item.owner || item.assignee || ""} list="do-workspace-member-options" onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
         <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
@@ -443,7 +494,7 @@ export function WorkItemsCenter({
       if (groupBy === "project") return itemProjectTitle(item, projects);
       if (groupBy === "owner") return String(item.owner || item.assignee || "Unassigned");
       if (groupBy === "type") return workItemLabel(workItemKind(item));
-      if (groupBy === "due") return dueBucket(item.dueDate || item.targetDate).replace(/_/g, " ");
+      if (groupBy === "due") return dueBucketLabels[dueBucket(item.dueDate || item.targetDate)] || "No sector";
       return "Items";
     };
     return filtered.reduce<Record<string, any[]>>((acc, item) => {
@@ -459,11 +510,7 @@ export function WorkItemsCenter({
       : [...current, group]);
   };
 
-  const moveToActionBucket = async (item: any, bucket: string) => {
-    await onUpdateTask(item.id, actionBoardPatch(bucketToSector[bucket] || (bucket === "Waiting" ? "waiting" : "")));
-  };
-
-  const renderBoardCard = (item: any, columnKey: string) => {
+  const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
     const due = dateInputValue(item.dueDate || item.targetDate);
     return (
@@ -483,25 +530,31 @@ export function WorkItemsCenter({
         </div>
         <div className="do-kanban-card-foot">
           <span>{item.owner || item.assignee || "No owner"}</span>
-          <span>{due || "No date"}</span>
+          <span>{groupBy === "actionBoard" ? `${displayDueBucket(item)} · ${gtdActionLabel(item)}` : due || "No date"}</span>
         </div>
-        {groupBy === "actionBoard" && (
-          <select aria-label={`Move ${title(item)} on Action Board`} onChange={(event) => moveToActionBucket(item, event.target.value)} value={columnKey}>
-            {actionBoardBuckets.map((bucket) => <option key={bucket} value={bucket}>{bucket}</option>)}
-          </select>
-        )}
+        <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
+          {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
+        </select>
+        <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
     );
   };
 
   const renderKanban = () => {
-    const columns = groupBy === "actionBoard"
-      ? actionBoardBuckets.map((bucket) => ({ key: bucket, title: bucket, items: grouped[bucket] || [] }))
-      : workStatuses.map((status) => ({ key: status, title: displayStatus(status), items: filtered.filter((item) => canonicalStatus(item) === status) }));
-    const visibleColumns = columns.filter((column) => column.items.length > 0 || groupBy !== "actionBoard");
+    const columns = groupBy === "hierarchy"
+      ? workStatuses.map((status) => ({ key: status, title: displayStatus(status), items: filtered.filter((item) => canonicalStatus(item) === status) }))
+      : Object.entries(grouped)
+        .map(([key, items]) => ({ key, title: groupBy === "status" ? displayStatus(key) : key, items }))
+        .sort((left, right) => {
+          const leftIndex = groupSortIndex(groupBy, left.key);
+          const rightIndex = groupSortIndex(groupBy, right.key);
+          if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+          return left.title.localeCompare(right.title);
+        });
+    const visibleColumns = columns.filter((column) => column.items.length > 0 || groupBy === "hierarchy");
 
     return (
-      <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : ""}`}>
+      <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`}>
         {visibleColumns.map((column) => (
           <section className="do-kanban-column" key={column.key}>
             <header>
@@ -509,7 +562,7 @@ export function WorkItemsCenter({
               <span>{column.items.length}</span>
             </header>
             <div>
-              {column.items.map((item) => renderBoardCard(item, column.key))}
+              {column.items.map((item) => renderBoardCard(item))}
               {column.items.length === 0 && <p>No items</p>}
             </div>
           </section>
@@ -613,10 +666,7 @@ export function WorkItemsCenter({
         </select>
         <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
           <option value="all">Any date</option>
-          <option value="overdue">Overdue</option>
-          <option value="next_7">Next 7 days</option>
-          <option value="next_30">Next 30 days</option>
-          <option value="unscheduled">No date</option>
+          {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
         </select>
         <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
           <option value="hierarchy">Hierarchy</option>
@@ -682,8 +732,10 @@ export function WorkItemsCenter({
           {mode === "gantt" ? renderGantt() : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
-                if (groupBy !== "actionBoard") return left.localeCompare(right);
-                return actionBoardBuckets.indexOf(left) - actionBoardBuckets.indexOf(right);
+                const leftIndex = groupSortIndex(groupBy, left);
+                const rightIndex = groupSortIndex(groupBy, right);
+                if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+                return left.localeCompare(right);
               }).map(([group, items]) => (
                 <section className="do-items-group" key={group}>
                   <button onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
@@ -710,7 +762,8 @@ export function WorkItemsCenter({
             />
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
-            <label>When<select onChange={(event) => onUpdateTask(selectedItem.id, actionBoardPatch(event.target.value))} value={whenSelectValue(selectedItem)}><option value="">No sector</option>{TIME_SECTOR_MODEL.map((sector) => <option key={sector.id} value={sector.id}>{sector.label}</option>)}<option value="waiting">Waiting</option></select></label>
+            <label>GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
+            <label>Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
             <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} list="do-workspace-member-options" onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>

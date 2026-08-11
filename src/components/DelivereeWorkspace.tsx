@@ -228,6 +228,30 @@ function reviewTypeForAction(type?: string) {
   return types[String(type || "")] || "task";
 }
 
+function normalizedEntityName(value: any) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function findMatchingProject(projects: any[], proposed: any, fallbackProjectId = "") {
+  const explicitId = String(proposed?.projectId || proposed?.id || fallbackProjectId || "");
+  if (explicitId) {
+    const direct = projects.find((project) => project.id === explicitId);
+    if (direct) return direct;
+  }
+  const proposedTitle = normalizedEntityName(proposed?.title || proposed?.name || proposed?.projectTitle || proposed?.projectName);
+  if (!proposedTitle) return null;
+  return projects.find((project) => {
+    const title = normalizedEntityName(project.title || project.name);
+    return title === proposedTitle || title.includes(proposedTitle) || proposedTitle.includes(title);
+  }) || null;
+}
+
 function reviewTypeLabel(type?: string) {
   const labels: Record<string, string> = {
     project: "Project",
@@ -929,8 +953,13 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     for (const action of plan.proposedActions || []) {
-      const reviewType = reviewTypeForAction(action.type);
-      const projectId = action.proposedChange?.projectId || primaryProject?.id || "";
+      const proposedChange = action.proposedChange || {};
+      const duplicateProject = String(action.type || "") === "create_project"
+        ? findMatchingProject(projects, proposedChange, primaryProject?.id || "")
+        : null;
+      const actionType = duplicateProject ? "update_project" : action.type;
+      const reviewType = reviewTypeForAction(actionType);
+      const projectId = duplicateProject?.id || proposedChange.projectId || primaryProject?.id || "";
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -943,11 +972,14 @@ export function DelivereeWorkspace() {
         action: actionLabel(action.type),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
-          ...(action.proposedChange || {}),
+          ...proposedChange,
           projectId,
+          ...(duplicateProject ? { id: duplicateProject.id } : {}),
         },
         projectId,
-        source: plan.summary || "Certo Work conversation",
+        source: duplicateProject
+          ? `${plan.summary || "Certo Work conversation"} · Existing project recognized; converted create_project to update_project.`
+          : plan.summary || "Certo Work conversation",
         sourceType: "delivereeos",
         sourceId: planRef.id,
         status: "pending",
@@ -984,7 +1016,7 @@ export function DelivereeWorkspace() {
           ? "tasks"
           : reviewType === "milestone_update" ? "milestones" : "boldr_risks";
         const allowedFields = reviewType === "task_update"
-          ? ["title", "description", "status", "priority", "dueDate", "owner", "assignee", "assigneeId", "projectId", "timeSector", "definitionOfDone", "type", "workItemType", "itemType", "parentId", "epicId", "featureId", "sprintId", "acceptanceCriteria", "storyPoints", "estimateHours", "labels", "dependencyIds", "blocked", "blockedReason"]
+            ? ["title", "description", "status", "priority", "dueDate", "owner", "assignee", "assigneeId", "projectId", "timeSector", "actionType", "gtdActionType", "globalStageId", "definitionOfDone", "type", "workItemType", "itemType", "parentId", "epicId", "featureId", "sprintId", "acceptanceCriteria", "storyPoints", "estimateHours", "labels", "dependencyIds", "blocked", "blockedReason"]
           : reviewType === "milestone_update"
             ? ["title", "description", "status", "dueDate", "targetDate", "owner", "projectId"]
             : ["title", "description", "status", "severity", "owner", "mitigation", "projectId", "type"];
@@ -1048,6 +1080,36 @@ export function DelivereeWorkspace() {
         await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
         convertedToType = "project";
         convertedToId = projectId;
+      } else if (reviewType === "project") {
+        const existingProject = findMatchingProject(projects, proposed, projectId);
+        if (existingProject?.id) {
+          const allowedFields = [
+            "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
+            "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
+            "sponsor", "teamMembers", "definitionOfDone",
+          ];
+          const patch = Object.fromEntries(
+            allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+          );
+          await updateDoc(doc(db, "projects", existingProject.id), { ...patch, updatedAt: serverTimestamp() });
+          convertedToType = "project";
+          convertedToId = existingProject.id;
+        } else {
+          let payload: Record<string, unknown> = {
+            ...proposed,
+            userId: user.uid,
+            workspaceId: workspace.id,
+            title: proposedTitle(proposed, candidate.title),
+            status: proposed.status || "planning",
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          delete payload.projectId;
+          const created = await addDoc(collection(db, "projects"), payload);
+          convertedToType = "projects";
+          convertedToId = created.id;
+        }
       } else {
         let collectionName = "tasks";
         let payload: Record<string, unknown> = {
@@ -1064,11 +1126,7 @@ export function DelivereeWorkspace() {
           updatedAt: serverTimestamp(),
         };
 
-        if (reviewType === "project") {
-          collectionName = "projects";
-          payload = { ...payload, status: proposed.status || "planning" };
-          delete payload.projectId;
-        } else if (reviewType === "milestone") {
+        if (reviewType === "milestone") {
           collectionName = "milestones";
           payload = { ...payload, status: proposed.status || "not_started" };
         } else if (reviewType === "risk") {
