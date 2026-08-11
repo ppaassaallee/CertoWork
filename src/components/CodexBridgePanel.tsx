@@ -36,6 +36,7 @@ import {
   type CodexConnection,
   type CodexSyncMode,
 } from "../lib/codexBridge";
+import { REPOSITORY_VERSION_MODEL, VERSIONING_STRATEGIES } from "../lib/repositoryVersioning";
 
 const CODEX_PLUGIN_URL =
   "codex://plugins/delivereeos-bridge?marketplacePath=%2FUsers%2Falejandropascual%2F.agents%2Fplugins%2Fmarketplace.json";
@@ -78,6 +79,9 @@ export function CodexBridgePanel({
   const [connection, setConnection] = useState<CodexConnection | null>(null);
   const [repositoryRoot, setRepositoryRoot] = useState("");
   const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [defaultBranch, setDefaultBranch] = useState("main");
+  const [versioningStrategy, setVersioningStrategy] = useState("simple_semver");
+  const [releaseChannel, setReleaseChannel] = useState("development");
   const [codexTaskReference, setCodexTaskReference] = useState("");
   const [syncMode, setSyncMode] = useState<CodexSyncMode>("completion_and_notes");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -104,6 +108,9 @@ export function CodexBridgePanel({
         if (match) {
           setRepositoryRoot(match.repositoryRoot || "");
           setRepositoryUrl(match.repositoryUrl || "");
+          setDefaultBranch(match.defaultBranch || "main");
+          setVersioningStrategy(match.versioningStrategy || "simple_semver");
+          setReleaseChannel(match.releaseChannel || "development");
           setCodexTaskReference(match.codexTaskReference || "");
           setSyncMode(match.syncMode || "completion_and_notes");
           setSelectedIds(match.workItemIds || []);
@@ -145,6 +152,13 @@ export function CodexBridgePanel({
       status: project.status || "active",
       methodology: project.methodology || "scrum",
       sprintGoal: project.sprintGoal || "",
+      repository: {
+        root: nextConnection.repositoryRoot || "",
+        url: nextConnection.repositoryUrl || "",
+        defaultBranch: nextConnection.defaultBranch || "main",
+        versioningStrategy: nextConnection.versioningStrategy || "simple_semver",
+        releaseChannel: nextConnection.releaseChannel || "development",
+      },
     },
     conversation: {
       id: conversationId || nextConnection.conversationId || null,
@@ -208,6 +222,9 @@ export function CodexBridgePanel({
       handoffCode: createHandoffCode(),
       repositoryRoot: repositoryRoot.trim(),
       repositoryUrl: repositoryUrl.trim(),
+      defaultBranch: defaultBranch.trim() || "main",
+      versioningStrategy,
+      releaseChannel,
       codexTaskReference: codexTaskReference.trim(),
       syncMode,
       workItemIds: selectedIds,
@@ -246,6 +263,9 @@ export function CodexBridgePanel({
       ...connection,
       repositoryRoot: repositoryRoot.trim(),
       repositoryUrl: repositoryUrl.trim(),
+      defaultBranch: defaultBranch.trim() || "main",
+      versioningStrategy,
+      releaseChannel,
       codexTaskReference: codexTaskReference.trim(),
       syncMode,
       workItemIds: selectedIds,
@@ -256,6 +276,9 @@ export function CodexBridgePanel({
       await updateDoc(doc(db, CONNECTION_COLLECTION, connection.id), {
         repositoryRoot: next.repositoryRoot,
         repositoryUrl: next.repositoryUrl,
+        defaultBranch: next.defaultBranch,
+        versioningStrategy: next.versioningStrategy,
+        releaseChannel: next.releaseChannel,
         codexTaskReference: next.codexTaskReference,
         syncMode: next.syncMode,
         workItemIds: next.workItemIds,
@@ -467,7 +490,11 @@ export function CodexBridgePanel({
     [selectedIds, tasks],
   );
   const handoffBrief = connection
-    ? buildCodexHandoffBrief({ connection: { ...connection, repositoryRoot, repositoryUrl, syncMode }, project, workItems: serializedItems })
+    ? buildCodexHandoffBrief({
+      connection: { ...connection, repositoryRoot, repositoryUrl, defaultBranch, versioningStrategy, releaseChannel, syncMode },
+      project,
+      workItems: serializedItems,
+    })
     : "";
 
   if (!connection) {
@@ -482,6 +509,7 @@ export function CodexBridgePanel({
 
         <section className="do-codex-steps">
           <label><span><strong>1</strong> Repository</span><input onChange={(event) => setRepositoryRoot(event.target.value)} placeholder="/path/to/the/repository" value={repositoryRoot} /><input onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="Optional GitHub repository URL" value={repositoryUrl} /></label>
+          <div className="do-codex-step"><span><strong>1.5</strong> Version model</span><div className="do-codex-version-grid"><label><small>Default branch</small><input onChange={(event) => setDefaultBranch(event.target.value)} value={defaultBranch} /></label><label><small>Versioning</small><select onChange={(event) => setVersioningStrategy(event.target.value)} value={versioningStrategy}>{VERSIONING_STRATEGIES.map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.label}</option>)}</select></label><label><small>Channel</small><select onChange={(event) => setReleaseChannel(event.target.value)} value={releaseChannel}><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option><option value="internal">Internal</option></select></label></div></div>
           <div className="do-codex-step"><span><strong>2</strong> Work Codex may receive</span><div className="do-codex-work-list">{executableItems.map((item) => <label key={item.id}><input checked={selectedIds.includes(item.id)} onChange={() => setSelectedIds((values) => values.includes(item.id) ? values.filter((id) => id !== item.id) : [...values, item.id])} type="checkbox" /><span><b>{item.key || "PBI"}</b>{item.title || item.name}</span></label>)}{executableItems.length === 0 && <p>Create an executable PBI, story, task, or bug before linking Codex.</p>}</div></div>
           <div className="do-codex-step"><span><strong>3</strong> Update permission</span><label className="do-codex-radio"><input checked={syncMode === "completion_and_notes"} onChange={() => setSyncMode("completion_and_notes")} type="radio" /><span><b>Sync delivery automatically</b><small>Progress, completion, tests, and knowledge notes. Scope changes still wait for review.</small></span></label><label className="do-codex-radio"><input checked={syncMode === "review_every_change"} onChange={() => setSyncMode("review_every_change")} type="radio" /><span><b>Review every update</b><small>Codex sends drafts; you apply each one here.</small></span></label></div>
         </section>
@@ -508,8 +536,15 @@ export function CodexBridgePanel({
 
       <section className="do-codex-settings">
         <div><label><span>Repository folder</span><input onChange={(event) => setRepositoryRoot(event.target.value)} value={repositoryRoot} /></label><label><span>Repository URL</span><input onChange={(event) => setRepositoryUrl(event.target.value)} placeholder="Optional" value={repositoryUrl} /></label></div>
+        <div><label><span>Default branch</span><input onChange={(event) => setDefaultBranch(event.target.value)} value={defaultBranch} /></label><label><span>Release channel</span><select onChange={(event) => setReleaseChannel(event.target.value)} value={releaseChannel}><option value="development">Development</option><option value="staging">Staging</option><option value="production">Production</option><option value="internal">Internal</option></select></label></div>
+        <label><span>Versioning strategy</span><select onChange={(event) => setVersioningStrategy(event.target.value)} value={versioningStrategy}>{VERSIONING_STRATEGIES.map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.label} — {strategy.description}</option>)}</select></label>
         <label><span>Codex task URL or ID</span><input onChange={(event) => setCodexTaskReference(event.target.value)} placeholder="Optional—Codex may fill this through the bridge" value={codexTaskReference} /></label>
         <div className="do-codex-setting-foot"><select aria-label="Codex update permission" onChange={(event) => setSyncMode(event.target.value as CodexSyncMode)} value={syncMode}><option value="completion_and_notes">Sync delivery automatically</option><option value="review_every_change">Review every update</option></select><button disabled={busy !== ""} onClick={saveConnection} type="button"><RefreshCw className={busy === "sync" ? "spin" : ""} size={13} /> Sync context</button></div>
+      </section>
+
+      <section className="do-codex-version-model">
+        <header><div><span className="do-project-card-kicker">REPOSITORY & VERSION CONTROL</span><h4>Track delivery as repo → branch → build → release → deploy.</h4></div><small>{releaseChannel}</small></header>
+        <div>{REPOSITORY_VERSION_MODEL.map((step) => <article key={step.id}><strong>{step.label}</strong><span>{step.evidence}</span><small>{step.rule}</small></article>)}</div>
       </section>
 
       <section className="do-codex-work-scope">

@@ -328,6 +328,7 @@ export interface Task {
 
   // New metadata fields
   gtdContext?: 'office' | 'home' | 'computer' | 'phone' | 'meeting' | 'deep_work' | 'anywhere' | 'errands' | 'custom' | string | null;
+  timeSector?: 'today' | 'this_week' | 'next_week' | 'this_month' | 'next_month' | 'later' | 'someday' | string | null;
   tags?: string[];
   boldiActionPlanId?: string;
   updatedBy?: string;
@@ -356,6 +357,13 @@ export interface Task {
   linkedCommitIds?: string[];
   linkedBuildIds?: string[];
   linkedDeploymentIds?: string[];
+  repositoryId?: string | null;
+  branchName?: string | null;
+  targetBranch?: string | null;
+  targetVersion?: string | null;
+  releaseId?: string | null;
+  releaseVersion?: string | null;
+  environment?: string | null;
   blocked?: boolean;
   blockedReason?: string;
   source?: 'manual' | 'boldi' | 'import' | 'github' | 'hermes' | 'api' | 'codex';

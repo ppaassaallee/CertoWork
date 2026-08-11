@@ -40,6 +40,9 @@ test("the launch brief requires claim, evidence, and truthful delivery reporting
       handoffCode: "DOS-ABC1234567",
       repositoryRoot: "/work/kruops",
       repositoryUrl: "",
+      defaultBranch: "main",
+      versioningStrategy: "simple_semver",
+      releaseChannel: "staging",
       syncMode: "completion_and_notes",
     },
     project: { id: "kruops", title: "KruOps" },
@@ -48,6 +51,8 @@ test("the launch brief requires claim, evidence, and truthful delivery reporting
   assert.match(brief, /get_delivery_context/);
   assert.match(brief, /claim only/i);
   assert.match(brief, /tests/i);
+  assert.match(brief, /Repository and version contract/);
+  assert.match(brief, /Do not treat a commit as a release/);
   assert.match(brief, /Do not invent GitHub, build, deployment, test, or completion status/);
 });
 
@@ -63,13 +68,20 @@ test("completion events update the canonical work item and retain delivery evide
       filesChanged: ["src/auth.ts"],
       tests: ["auth callback test passed"],
       acceptanceEvidence: ["redirect preserved"],
+      branchName: "fix/auth-callback",
       commitSha: "abc123",
+      buildUrl: "https://ci.example/build/1",
+      releaseVersion: "v1.2.3",
+      rollbackPlan: "Redeploy v1.2.2",
     },
   });
   assert.equal(patch.status, "done");
   assert.equal(patch.codexStatus, "completed");
   assert.deepEqual(patch.deliveryEvidence.filesChanged, ["src/auth.ts"]);
+  assert.equal(patch.deliveryEvidence.branchName, "fix/auth-callback");
   assert.equal(patch.deliveryEvidence.commitSha, "abc123");
+  assert.equal(patch.deliveryEvidence.releaseVersion, "v1.2.3");
+  assert.equal(patch.deliveryEvidence.rollbackPlan, "Redeploy v1.2.2");
 });
 
 test("the MCP surface separates reads, scoped updates, completion, and new-scope review", () => {

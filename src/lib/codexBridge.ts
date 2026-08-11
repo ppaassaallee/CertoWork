@@ -1,3 +1,5 @@
+import { repositoryVersionContractText } from "./repositoryVersioning";
+
 export type CodexSyncMode = "completion_and_notes" | "review_every_change";
 
 export type CodexConnection = {
@@ -8,6 +10,10 @@ export type CodexConnection = {
   handoffCode: string;
   repositoryRoot?: string;
   repositoryUrl?: string;
+  repositoryProvider?: "github" | "gitlab" | "bitbucket" | "local" | "other" | string;
+  defaultBranch?: string;
+  versioningStrategy?: "simple_semver" | "date_based" | "sprint_release" | "manual" | string;
+  releaseChannel?: "development" | "staging" | "production" | "internal" | string;
   codexTaskReference?: string;
   syncMode: CodexSyncMode;
   workItemIds: string[];
@@ -73,6 +79,11 @@ export function serializeCodexWorkItem(item: any, selected: boolean, index = 0) 
     dependencyIds: Array.isArray(item.dependencyIds || item.dependencies)
       ? (item.dependencyIds || item.dependencies).slice(0, 50)
       : [],
+    repositoryId: item.repositoryId || null,
+    branchName: item.branchName || item.targetBranch || null,
+    targetVersion: item.targetVersion || item.releaseVersion || null,
+    releaseId: item.releaseId || null,
+    environment: item.environment || null,
     dueDate: timestampValue(item.dueDate),
     updatedAt: timestampValue(item.updatedAt),
     order: Number(item.order ?? item.rank ?? index),
@@ -85,7 +96,10 @@ export function buildCodexHandoffBrief({
   project,
   workItems,
 }: {
-  connection: Pick<CodexConnection, "handoffCode" | "repositoryRoot" | "repositoryUrl" | "syncMode">;
+  connection: Pick<
+    CodexConnection,
+    "handoffCode" | "repositoryRoot" | "repositoryUrl" | "syncMode" | "defaultBranch" | "versioningStrategy" | "releaseChannel"
+  >;
   project: any;
   workItems: any[];
 }) {
@@ -104,6 +118,9 @@ Handoff code: ${connection.handoffCode}
 Project: ${project.title || project.name || "Untitled project"}
 Project ID: ${project.id}
 Repository: ${repository}
+Default branch: ${connection.defaultBranch || "Not recorded"}
+Versioning: ${connection.versioningStrategy || "Not recorded"}
+Release channel: ${connection.releaseChannel || "Not recorded"}
 
 Start by using the Certo Work Bridge tools:
 1. Call get_delivery_context with handoffCode ${connection.handoffCode}.
@@ -120,7 +137,9 @@ Rules:
 - Do not invent GitHub, build, deployment, test, or completion status.
 - Preserve work-item IDs and hierarchy.
 - If information is missing, report a project gap and continue with the safe work that can be completed.
-- ${reviewMode}`;
+- ${reviewMode}
+
+${repositoryVersionContractText()}`;
 }
 
 export function codexEventTaskPatch(event: CodexBridgeEvent) {
@@ -144,8 +163,14 @@ export function codexEventTaskPatch(event: CodexBridgeEvent) {
         ? payload.acceptanceEvidence.slice(0, 100)
         : [],
       commitSha: payload.commitSha || null,
+      branchName: payload.branchName || null,
       pullRequestUrl: payload.pullRequestUrl || null,
+      buildUrl: payload.buildUrl || null,
+      releaseVersion: payload.releaseVersion || null,
+      releaseNotes: payload.releaseNotes || null,
       deploymentUrl: payload.deploymentUrl || null,
+      environment: payload.environment || null,
+      rollbackPlan: payload.rollbackPlan || null,
       blockers: Array.isArray(payload.blockers) ? payload.blockers.slice(0, 50) : [],
       remainingGaps: Array.isArray(payload.remainingGaps) ? payload.remainingGaps.slice(0, 50) : [],
     },
@@ -161,8 +186,13 @@ export function deliveryEvidenceDocument(event: CodexBridgeEvent, workItem: any,
     `Status: ${payload.status || (event.kind === "work_item_completed" ? "done" : "updated")}`,
     payload.summary ? `Summary: ${payload.summary}` : "",
     payload.commitSha ? `Commit: ${payload.commitSha}` : "",
+    payload.branchName ? `Branch: ${payload.branchName}` : "",
     payload.pullRequestUrl ? `Pull request: ${payload.pullRequestUrl}` : "",
+    payload.buildUrl ? `Build: ${payload.buildUrl}` : "",
+    payload.releaseVersion ? `Release: ${payload.releaseVersion}` : "",
     payload.deploymentUrl ? `Deployment: ${payload.deploymentUrl}` : "",
+    payload.environment ? `Environment: ${payload.environment}` : "",
+    payload.rollbackPlan ? `Rollback: ${payload.rollbackPlan}` : "",
     "",
     ...(Array.isArray(payload.filesChanged) && payload.filesChanged.length
       ? ["## Files changed", ...payload.filesChanged.map((value: string) => `- ${value}`), ""]
