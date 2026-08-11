@@ -9,16 +9,16 @@ import {
   CalendarRange,
   Folder,
   ListChecks,
+  Kanban,
   Plus,
   Search,
   SlidersHorizontal,
-  Table2,
 } from "lucide-react";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
-type WorkItemsViewMode = "list" | "table" | "gantt";
+type WorkItemsViewMode = "list" | "kanban" | "gantt";
 type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due";
 type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type";
 
@@ -39,6 +39,15 @@ const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "ta
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
 const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Someday", "Waiting", "No sector"];
+const bucketToSector: Record<string, string> = {
+  Today: "today",
+  "This week": "this_week",
+  "Next week": "next_week",
+  "This month": "this_month",
+  "Next month": "next_month",
+  Later: "later",
+  Someday: "someday",
+};
 const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "rank", label: "Manual order" },
   { value: "project", label: "Project" },
@@ -138,6 +147,20 @@ function actionBoardBucket(item: any) {
   if (bucket === "next_30") return "This month";
   if (bucket === "later") return "Later";
   return "No sector";
+}
+
+function whenSelectValue(item: any) {
+  const explicit = normalizeTimeSector(item?.timeSector);
+  if (explicit) return explicit;
+  if (String(item?.globalStageId || "").toLowerCase() === "waiting") return "waiting";
+  return bucketToSector[actionBoardBucket(item)] || "";
+}
+
+function actionBoardPatch(value: string) {
+  return {
+    timeSector: value === "waiting" ? null : value || null,
+    globalStageId: value === "someday" ? "someday" : value === "waiting" ? "waiting" : null,
+  };
 }
 
 function itemOrder(item: any, fallback = 0) {
@@ -355,7 +378,7 @@ export function WorkItemsCenter({
         <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
           {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
         </select>
-        <select aria-label={`When for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { timeSector: event.target.value === "waiting" ? null : event.target.value || null, globalStageId: event.target.value === "someday" ? "someday" : event.target.value === "waiting" ? "waiting" : item.globalStageId || null })} value={normalizeTimeSector(item.timeSector) || (String(item.globalStageId || "").toLowerCase() === "waiting" ? "waiting" : "")}>
+        <select aria-label={`When for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, actionBoardPatch(event.target.value))} value={whenSelectValue(item)}>
           <option value="">No sector</option>
           {TIME_SECTOR_MODEL.map((sector) => <option key={sector.id} value={sector.id}>{sector.label}</option>)}
           <option value="waiting">Waiting</option>
@@ -436,6 +459,66 @@ export function WorkItemsCenter({
       : [...current, group]);
   };
 
+  const moveToActionBucket = async (item: any, bucket: string) => {
+    await onUpdateTask(item.id, actionBoardPatch(bucketToSector[bucket] || (bucket === "Waiting" ? "waiting" : "")));
+  };
+
+  const renderBoardCard = (item: any, columnKey: string) => {
+    const kind = workItemKind(item);
+    const due = dateInputValue(item.dueDate || item.targetDate);
+    return (
+      <article className={`do-kanban-card is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id}>
+        <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
+          <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
+          <strong>{title(item)}</strong>
+          <small>{itemProjectTitle(item, projects)}</small>
+        </button>
+        <div className="do-kanban-card-meta">
+          <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
+            {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+          </select>
+          <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
+            {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+          </select>
+        </div>
+        <div className="do-kanban-card-foot">
+          <span>{item.owner || item.assignee || "No owner"}</span>
+          <span>{due || "No date"}</span>
+        </div>
+        {groupBy === "actionBoard" && (
+          <select aria-label={`Move ${title(item)} on Action Board`} onChange={(event) => moveToActionBucket(item, event.target.value)} value={columnKey}>
+            {actionBoardBuckets.map((bucket) => <option key={bucket} value={bucket}>{bucket}</option>)}
+          </select>
+        )}
+      </article>
+    );
+  };
+
+  const renderKanban = () => {
+    const columns = groupBy === "actionBoard"
+      ? actionBoardBuckets.map((bucket) => ({ key: bucket, title: bucket, items: grouped[bucket] || [] }))
+      : workStatuses.map((status) => ({ key: status, title: displayStatus(status), items: filtered.filter((item) => canonicalStatus(item) === status) }));
+    const visibleColumns = columns.filter((column) => column.items.length > 0 || groupBy !== "actionBoard");
+
+    return (
+      <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : ""}`}>
+        {visibleColumns.map((column) => (
+          <section className="do-kanban-column" key={column.key}>
+            <header>
+              <strong>{column.title}</strong>
+              <span>{column.items.length}</span>
+            </header>
+            <div>
+              {column.items.map((item) => renderBoardCard(item, column.key))}
+              {column.items.length === 0 && <p>No items</p>}
+            </div>
+          </section>
+        ))}
+        {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+      </div>
+    );
+  };
+
   const renderGantt = () => {
     const dated = filtered
       .map((item) => {
@@ -500,7 +583,7 @@ export function WorkItemsCenter({
         </datalist>
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
-          <button aria-label="Table view" className={mode === "table" ? "is-active" : ""} onClick={() => setMode("table")} type="button"><Table2 size={14} /></button>
+          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => setMode("kanban")} type="button"><Kanban size={14} /></button>
           <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /></button>
         </div>
       </section>
@@ -554,7 +637,7 @@ export function WorkItemsCenter({
       </section>
 
       <section className="do-sort-presets" aria-label="Sorting presets">
-        <button className={groupBy === "actionBoard" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); }} type="button">Action Board</button>
+        <button className={groupBy === "actionBoard" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); }} type="button">Action Board</button>
         <button className={groupBy === "project" && primarySort === "project" && secondarySort === "priority" ? "is-active" : ""} onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); }} type="button">Project → priority</button>
         <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); }} type="button">Priority → date</button>
         <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "project" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); }} type="button">Priority → project</button>
@@ -596,7 +679,7 @@ export function WorkItemsCenter({
             <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "1").length}</strong> priority 1</span>
             <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
           </div>
-          {mode === "gantt" ? renderGantt() : groupBy === "hierarchy" ? renderHierarchy() : (
+          {mode === "gantt" ? renderGantt() : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
                 if (groupBy !== "actionBoard") return left.localeCompare(right);
@@ -627,7 +710,7 @@ export function WorkItemsCenter({
             />
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
-            <label>When<select onChange={(event) => onUpdateTask(selectedItem.id, { timeSector: event.target.value === "waiting" ? null : event.target.value || null, globalStageId: event.target.value === "someday" ? "someday" : event.target.value === "waiting" ? "waiting" : selectedItem.globalStageId || null })} value={normalizeTimeSector(selectedItem.timeSector) || (String(selectedItem.globalStageId || "").toLowerCase() === "waiting" ? "waiting" : "")}><option value="">No sector</option>{TIME_SECTOR_MODEL.map((sector) => <option key={sector.id} value={sector.id}>{sector.label}</option>)}<option value="waiting">Waiting</option></select></label>
+            <label>When<select onChange={(event) => onUpdateTask(selectedItem.id, actionBoardPatch(event.target.value))} value={whenSelectValue(selectedItem)}><option value="">No sector</option>{TIME_SECTOR_MODEL.map((sector) => <option key={sector.id} value={sector.id}>{sector.label}</option>)}<option value="waiting">Waiting</option></select></label>
             <label>Owner<input defaultValue={selectedItem.owner || selectedItem.assignee || ""} list="do-workspace-member-options" onBlur={(event) => onUpdateTask(selectedItem.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} /></label>
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
