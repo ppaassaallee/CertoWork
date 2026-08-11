@@ -504,7 +504,7 @@ button { color: inherit; }
 .do-items-parent > header { border-bottom: 1px solid #edf0ed; padding: 8px 10px; color: #69756d; font-size: calc(8px * var(--cw-text-scale)); font-weight: 800; }
 .do-items-children { display: grid; gap: 5px; border-top: 1px solid #eef2ef; padding: 7px 7px 7px 23px; }
 .do-items-subtasks { display: grid; gap: 4px; margin-left: 28px; border-left: 2px solid #e9e0ef; padding-left: 8px; }
-.do-items-row { display: grid; grid-template-columns: 24px 35px minmax(190px, 1fr) 94px 64px minmax(92px, .7fr) 112px; align-items: center; gap: 6px; padding: 7px; }
+.do-items-row { display: grid; grid-template-columns: 24px 35px minmax(190px, 1fr) 94px 64px 92px minmax(92px, .7fr) 112px; align-items: center; gap: 6px; padding: 7px; }
 .do-items-row.is-selected { outline: 2px solid rgba(36, 81, 61, .16); outline-offset: -2px; background: #f5fbf7; }
 .do-items-row.is-epic { background: #f8fbf8; }
 .do-items-row.is-feature { border-radius: 10px; background: #fbfcfb; }

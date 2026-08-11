@@ -10,7 +10,7 @@ import {
   repositoryVersionContractText,
 } from "../src/lib/repositoryVersioning";
 
-test("GTD/COD model clarifies captured work before it enters execution", () => {
+test("Action Board model clarifies captured work before it enters execution", () => {
   const state = operatingStateForItem({
     title: "Call Jennifer about vendor contract",
     stageId: "capture",
@@ -21,7 +21,7 @@ test("GTD/COD model clarifies captured work before it enters execution", () => {
   assert.match(state.nextSystemPrompt, /outcome|next physical action|time sector/i);
 });
 
-test("GTD/COD model separates today execution from waiting and someday work", () => {
+test("Action Board model separates today execution from waiting and someday work", () => {
   const summary = summarizeOperatingModel([
     { title: "Ship release note", timeSector: "today", priority: 1 },
     { title: "Waiting for finance approval", globalStageId: "waiting", itemType: "waiting_for" },

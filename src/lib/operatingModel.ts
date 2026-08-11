@@ -1,4 +1,4 @@
-export type GtdCodPhase = "collect" | "clarify" | "organize" | "do" | "reflect";
+export type ActionBoardPhase = "capture" | "clarify" | "organize" | "execute" | "review";
 
 export type TimeSectorId =
   | "today"
@@ -9,15 +9,15 @@ export type TimeSectorId =
   | "later"
   | "someday";
 
-export const GTD_COD_PHASES: Array<{
-  id: GtdCodPhase;
+export const ACTION_BOARD_LIFECYCLE: Array<{
+  id: ActionBoardPhase;
   label: string;
   purpose: string;
   systemQuestion: string;
 }> = [
   {
-    id: "collect",
-    label: "Collect",
+    id: "capture",
+    label: "Capture",
     purpose: "Capture without interrupting flow.",
     systemQuestion: "What is this, in the user's words?",
   },
@@ -34,14 +34,14 @@ export const GTD_COD_PHASES: Array<{
     systemQuestion: "When should this receive attention?",
   },
   {
-    id: "do",
-    label: "Do",
+    id: "execute",
+    label: "Execute",
     purpose: "Execute only the work selected for today or the active planning session.",
     systemQuestion: "What should move now, without overloading the day?",
   },
   {
-    id: "reflect",
-    label: "Reflect",
+    id: "review",
+    label: "Review",
     purpose: "Review stuck, completed, postponed, or unclear work and update the system.",
     systemQuestion: "What changed, what is stale, and what should be moved?",
   },
@@ -86,7 +86,7 @@ export function normalizeTimeSector(value: unknown): TimeSectorId | null {
 }
 
 export function operatingStateForItem(item: any): {
-  phase: GtdCodPhase;
+  phase: ActionBoardPhase;
   timeSector: TimeSectorId | null;
   needsClarification: boolean;
   nextSystemPrompt: string;
@@ -99,7 +99,7 @@ export function operatingStateForItem(item: any): {
 
   if (status === "done" || stage === "done") {
     return {
-      phase: "reflect",
+      phase: "review",
       timeSector,
       needsClarification: false,
       nextSystemPrompt: "Record completion evidence, learnings, or whether follow-up is required.",
@@ -144,7 +144,7 @@ export function operatingStateForItem(item: any): {
 
   if (timeSector === "today" || Boolean(item?.isOneThing)) {
     return {
-      phase: "do",
+      phase: "execute",
       timeSector: "today",
       needsClarification: false,
       nextSystemPrompt: "Decide whether it is one of today's 2 must-dos, a should-do, or a could-do.",
@@ -164,10 +164,10 @@ export function operatingStateForItem(item: any): {
 export function summarizeOperatingModel(items: any[]) {
   const states = items.map(operatingStateForItem);
   return {
-    collectOrClarify: states.filter((state) => state.phase === "collect" || state.needsClarification).length,
-    today: states.filter((state) => state.phase === "do").length,
+    captureOrClarify: states.filter((state) => state.phase === "capture" || state.needsClarification).length,
+    today: states.filter((state) => state.phase === "execute").length,
     waiting: items.filter((item) => normalized(item?.globalStageId) === "waiting" || normalized(item?.itemType) === "waiting_for").length,
     someday: states.filter((state) => state.timeSector === "someday").length,
-    review: states.filter((state) => state.phase === "reflect").length,
+    review: states.filter((state) => state.phase === "review").length,
   };
 }
