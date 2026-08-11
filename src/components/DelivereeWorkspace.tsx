@@ -252,6 +252,29 @@ function findMatchingProject(projects: any[], proposed: any, fallbackProjectId =
   }) || null;
 }
 
+function isDuplicateProjectProposal(action: any, projects: any[], fallbackProject: any | null = null) {
+  if (String(action?.type || "") !== "create_project") return null;
+  return findMatchingProject(projects, action?.proposedChange || {}, fallbackProject?.id || "") || fallbackProject || null;
+}
+
+function proposalActionType(action: any, projects: any[], fallbackProject: any | null = null) {
+  return isDuplicateProjectProposal(action, projects, fallbackProject) ? "update_project" : String(action?.type || "");
+}
+
+function proposalActionTitle(action: any, projects: any[], fallbackProject: any | null = null) {
+  const existingProject = isDuplicateProjectProposal(action, projects, fallbackProject);
+  const proposedTitle = action?.proposedChange?.title || action?.proposedChange?.name || action?.reason || "Review details";
+  if (!existingProject) return proposedTitle;
+  return `Update existing project: ${existingProject.title || existingProject.name || proposedTitle}`;
+}
+
+function proposalChipLabel(chip: string, plan: any, projects: any[], fallbackProject: any | null = null) {
+  const hasDuplicateProject = plan?.proposedActions?.some((action: any) => isDuplicateProjectProposal(action, projects, fallbackProject));
+  if (!hasDuplicateProject) return chip;
+  if (/approve.*project.*creation|create.*project|project.*creation/i.test(chip)) return "Update existing project";
+  return chip;
+}
+
 function reviewTypeLabel(type?: string) {
   const labels: Record<string, string> = {
     project: "Project",
@@ -308,9 +331,13 @@ function UserMessage({ text }: { text: string }) {
 
 function ActionProposal({
   message,
+  projects,
+  activeProject,
   onStage,
 }: {
   message: Message;
+  projects: any[];
+  activeProject: any | null;
   onStage: (message: Message) => Promise<void>;
 }) {
   const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
@@ -331,8 +358,8 @@ function ActionProposal({
           <div className="do-proposal-item" key={`${action.type}-${index}`}>
             <span className="do-proposal-number">{index + 1}</span>
             <div>
-              <strong>{actionLabel(action.type)}</strong>
-              <p>{action.proposedChange?.title || action.reason || "Review details"}</p>
+              <strong>{actionLabel(proposalActionType(action, projects, activeProject))}</strong>
+              <p>{proposalActionTitle(action, projects, activeProject)}</p>
             </div>
           </div>
         ))}
@@ -965,11 +992,11 @@ export function DelivereeWorkspace() {
         workspaceId: workspace.id,
         createdBy: user.uid,
         title: reviewType === "project"
-          ? proposedTitle(action.proposedChange, actionLabel(action.type))
-          : action.proposedChange?.title || actionLabel(action.type),
+          ? proposedTitle(proposedChange, actionLabel(actionType))
+          : proposedChange?.title || actionLabel(actionType),
         type: reviewType,
         why: action.reason || "Proposed in conversation",
-        action: actionLabel(action.type),
+        action: actionLabel(actionType),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
           ...proposedChange,
@@ -1921,8 +1948,11 @@ export function DelivereeWorkspace() {
                           <div className="do-assistant-name">Certo Work {message.offline && <span>safe mode</span>}</div>
                           <RichText text={message.content} />
                           {message.citations && message.citations.length > 0 && <div className="do-citations">{message.citations.map((citation) => <span key={`${citation.type}-${citation.id}`}>{citation.title}</span>)}</div>}
-                          <ActionProposal message={message} onStage={stagePlan} />
-                          {message.suggestedChips && <div className="do-chips">{message.suggestedChips.map((chip) => <button key={chip} onClick={() => sendMessage(chip)} type="button">{chip}</button>)}</div>}
+                          <ActionProposal activeProject={primaryProject || activeProject || null} message={message} onStage={stagePlan} projects={projects} />
+                          {message.suggestedChips && <div className="do-chips">{message.suggestedChips.map((chip) => {
+                            const label = proposalChipLabel(chip, message.actionPlan, projects, primaryProject || activeProject || null);
+                            return <button key={chip} onClick={() => sendMessage(label)} type="button">{label}</button>;
+                          })}</div>}
                         </div>
                       </div>
                     )}
@@ -2257,18 +2287,30 @@ export function DelivereeWorkspace() {
             <>
               <p className="do-panel-intro">Nothing enters your workspace until you say so.</p>
               <div className="do-approval-list">
-                {reviewItems.map((item) => (
-                  <div className="do-approval-item" key={item.id}>
-                    <span className="do-kicker">{item.type || "change"}</span>
-                    <strong>{item.title}</strong>
-	                    <p>{item.why || item.action || "Proposed in conversation"}</p>
+                {reviewItems.map((item) => {
+                  const duplicateProject = String(item.type || "") === "project"
+                    ? findMatchingProject(projects, item.proposed || {}, item.projectId || primaryProject?.id || "")
+                    : null;
+                  const displayType = duplicateProject ? "project_update" : item.type || "change";
+                  const displayTitle = duplicateProject
+                    ? `Update existing project: ${duplicateProject.title || duplicateProject.name || item.title}`
+                    : item.title;
+                  const displayReason = duplicateProject
+                    ? "Certo Work recognized that this project already exists. Applying this will update the current project record, not create a duplicate."
+                    : item.why || item.action || "Proposed in conversation";
+                  return (
+                    <div className="do-approval-item" key={item.id}>
+                      <span className="do-kicker">{displayType}</span>
+                      <strong>{displayTitle}</strong>
+	                    <p>{displayReason}</p>
 	                    <div>
 	                      <button onClick={() => processReview(item, "dismiss")} type="button">Discard</button>
-	                      <button onClick={() => { setPanel(null); setComposer(`Edit this pending change before applying it: ${item.title}\n\n${item.why || item.action || ""}`); }} type="button">Edit</button>
+	                      <button onClick={() => { setPanel(null); setComposer(`Edit this pending change before applying it: ${displayTitle}\n\n${displayReason}`); }} type="button">Edit</button>
 	                      <button onClick={() => processReview(item, "approve")} type="button"><Check size={13} /> Apply</button>
 	                    </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
                 {reviewItems.length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>No pending changes.</strong><span>New suggestions will appear here before they change your workspace.</span></div>}
               </div>
             </>
