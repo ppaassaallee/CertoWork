@@ -44,6 +44,18 @@ import {
   type FinancePeriod,
   type FinancePeriodKind,
 } from "../lib/projectFinance";
+import {
+  DELIVERY_PHASES_BY_STAGE,
+  DELIVERY_STAGES,
+  deliveryPhase,
+  deliveryPhaseLabel,
+  deliveryPhaseLabels,
+  deliveryStageLabels,
+  normalizeDeliveryStage,
+  phasesForStage,
+  type DeliveryPhase,
+  type DeliveryStage,
+} from "../lib/projectDelivery";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 
@@ -2461,14 +2473,6 @@ export function ProjectConsolePanel({
   );
 }
 
-const DELIVERY_STAGES = [
-  "define",
-  "onboarding",
-  "build",
-  "deploy",
-  "operations",
-] as const;
-type DeliveryStage = (typeof DELIVERY_STAGES)[number];
 type PortfolioView = "dashboard" | "overview" | "economics";
 type ProjectSortKey =
   | "project"
@@ -2666,37 +2670,8 @@ const COST_TEMPLATES = [
   },
 ];
 
-const deliveryStageLabels: Record<DeliveryStage, string> = {
-  define: "Define",
-  onboarding: "Onboarding",
-  build: "Build",
-  deploy: "Deploy",
-  operations: "Operations",
-};
-
 function deliveryStage(project: any): DeliveryStage {
-  const value = String(
-    project?.deliveryStage || project?.phase || project?.status || "build",
-  )
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-  if (
-    value.includes("define") ||
-    value.includes("idea") ||
-    value.includes("diseno") ||
-    value.includes("propuesta") ||
-    value.includes("hold")
-  )
-    return "define";
-  if (value.includes("onboard")) return "onboarding";
-  if (
-    value.includes("deploy") ||
-    value.includes("preproduction") ||
-    value.includes("qa")
-  )
-    return "deploy";
-  if (value.includes("operat") || value.includes("prod")) return "operations";
-  return "build";
+  return normalizeDeliveryStage(project);
 }
 
 function moneyValue(value: any) {
@@ -2821,6 +2796,7 @@ function ProjectFinanceLedger({
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1);
   const [newYear, setNewYear] = useState(new Date().getFullYear());
   const [templateId, setTemplateId] = useState("none");
+  const today = new Date().toISOString().slice(0, 10);
   const monthOptions = Array.from({ length: 12 }, (_, index) => ({
     value: index + 1,
     label: new Date(2026, index, 1).toLocaleDateString(undefined, {
@@ -2900,9 +2876,11 @@ function ProjectFinanceLedger({
                   plannedRate: 0,
                   rate: 0,
                   accountingMonth:
-                    period.kind === "monthly" && period.year && period.month
+                    period.year && period.month
                       ? `${period.year}-${String(period.month).padStart(2, "0")}`
                       : "",
+                  transactionDate: today,
+                  financialStatus: "not_billed",
                   referenceNumber: "",
                   issueDate: "",
                   dueDate: "",
@@ -2936,7 +2914,9 @@ function ProjectFinanceLedger({
             actualQty: Number(row.actualQty || 0),
             plannedRate: Number(row.rate || 0),
             rate: Number(row.rate || 0),
-            accountingMonth: "",
+            accountingMonth: `${year}-${String(month).padStart(2, "0")}`,
+            transactionDate: today,
+            financialStatus: "not_billed",
             costStatus: "planned",
             paymentStatus: "planned",
             settledAmount: 0,
@@ -2955,8 +2935,8 @@ function ProjectFinanceLedger({
         id: financeId("period"),
         kind: newKind,
         label,
-        month: newKind === "monthly" ? month : undefined,
-        year: newKind === "monthly" ? year : undefined,
+        month,
+        year,
         status: "planned",
         currency: project.currency || "USD",
         billingStatus: "not_billed",
@@ -2985,7 +2965,9 @@ function ProjectFinanceLedger({
         actualQty: row.actualQty,
         plannedRate: row.rate,
         rate: row.rate,
-        accountingMonth: "",
+        accountingMonth: `${newYear}-${String(newMonth).padStart(2, "0")}`,
+        transactionDate: today,
+        financialStatus: "not_billed",
         costStatus: "planned",
         paymentStatus: "planned",
         settledAmount: 0,
@@ -2996,6 +2978,8 @@ function ProjectFinanceLedger({
         id: financeId("period"),
         kind: "build",
         label: "Build V1 · legacy baseline",
+        month: newMonth,
+        year: newYear,
         status: "active",
         currency: project.currency || "USD",
         billingStatus: "not_billed",
@@ -3084,7 +3068,7 @@ function ProjectFinanceLedger({
             <option value="monthly">Monthly operations</option>
           </select>
         </label>
-        {newKind === "build" ? (
+        {newKind === "build" && (
           <label>
             <span>Version or CR</span>
             <input
@@ -3093,36 +3077,35 @@ function ProjectFinanceLedger({
               value={newBuildLabel}
             />
           </label>
-        ) : (
-          <div className="do-finance-month-picker">
-            <label>
-              <span>Month</span>
-              <select
-                onChange={(event) => setNewMonth(Number(event.target.value))}
-                value={newMonth}
-              >
-                {monthOptions.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Year</span>
-              <select
-                onChange={(event) => setNewYear(Number(event.target.value))}
-                value={newYear}
-              >
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
         )}
+        <div className="do-finance-month-picker">
+          <label>
+            <span>Period month</span>
+            <select
+              onChange={(event) => setNewMonth(Number(event.target.value))}
+              value={newMonth}
+            >
+              {monthOptions.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Period year</span>
+            <select
+              onChange={(event) => setNewYear(Number(event.target.value))}
+              value={newYear}
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         {newKind === "build" && (
           <label>
             <span>Cost template</span>
@@ -3174,20 +3157,20 @@ function ProjectFinanceLedger({
                 <span>
                   <strong>{period.label}</strong>
                   <small>
+                    {monthOptions.find((month) => month.value === period.month)
+                      ?.label || "No month"}{" "}
+                    {period.year || ""} ·{" "}
                     {costEntries.length} cost line
                     {costEntries.length === 1 ? "" : "s"} ·{" "}
                     {revenueEntries.length} invoice line
                     {revenueEntries.length === 1 ? "" : "s"}
                     {" · "}
-                    {String(period.billingStatus || "not_billed").replace(
-                      /_/g,
-                      " ",
-                    )}
-                    {" · "}
-                    {String(period.collectionStatus || "unpaid").replace(
-                      /_/g,
-                      " ",
-                    )}
+                    {period.collectionStatus === "paid"
+                      ? "paid"
+                      : String(period.billingStatus || "not_billed").replace(
+                          /_/g,
+                          " ",
+                        )}
                   </small>
                 </span>
                 <span>
@@ -3207,7 +3190,7 @@ function ProjectFinanceLedger({
               </summary>
               <div className="do-finance-period-body">
                 <div className="do-finance-period-controls">
-                  {period.kind === "build" ? (
+                  {period.kind === "build" && (
                     <label>
                       <span>Build / CR</span>
                       <input
@@ -3219,62 +3202,69 @@ function ProjectFinanceLedger({
                         }
                       />
                     </label>
-                  ) : (
-                    <div className="do-finance-month-picker">
-                      <label>
-                        <span>Month</span>
-                        <select
-                          onChange={(event) => {
-                            const month = Number(event.target.value);
-                            updatePeriod(period.id, {
-                              month,
-                              label: new Date(
-                                period.year || new Date().getFullYear(),
-                                month - 1,
-                                1,
-                              ).toLocaleDateString(undefined, {
-                                month: "long",
-                                year: "numeric",
-                              }),
-                            });
-                          }}
-                          value={period.month || new Date().getMonth() + 1}
-                        >
-                          {monthOptions.map((month) => (
-                            <option key={month.value} value={month.value}>
-                              {month.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>Year</span>
-                        <select
-                          onChange={(event) => {
-                            const year = Number(event.target.value);
-                            updatePeriod(period.id, {
-                              year,
-                              label: new Date(
-                                year,
-                                (period.month || 1) - 1,
-                                1,
-                              ).toLocaleDateString(undefined, {
-                                month: "long",
-                                year: "numeric",
-                              }),
-                            });
-                          }}
-                          value={period.year || new Date().getFullYear()}
-                        >
-                          {yearOptions.map((year) => (
-                            <option key={year} value={year}>
-                              {year}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
                   )}
+                  <div className="do-finance-month-picker">
+                    <label>
+                      <span>Period month</span>
+                      <select
+                        onChange={(event) => {
+                          const month = Number(event.target.value);
+                          updatePeriod(period.id, {
+                            month,
+                            ...(period.kind === "monthly"
+                              ? {
+                                  label: new Date(
+                                    period.year || new Date().getFullYear(),
+                                    month - 1,
+                                    1,
+                                  ).toLocaleDateString(undefined, {
+                                    month: "long",
+                                    year: "numeric",
+                                  }),
+                                }
+                              : {}),
+                          });
+                        }}
+                        value={period.month || new Date().getMonth() + 1}
+                      >
+                        {monthOptions.map((month) => (
+                          <option key={month.value} value={month.value}>
+                            {month.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Period year</span>
+                      <select
+                        onChange={(event) => {
+                          const year = Number(event.target.value);
+                          updatePeriod(period.id, {
+                            year,
+                            ...(period.kind === "monthly"
+                              ? {
+                                  label: new Date(
+                                    year,
+                                    (period.month || 1) - 1,
+                                    1,
+                                  ).toLocaleDateString(undefined, {
+                                    month: "long",
+                                    year: "numeric",
+                                  }),
+                                }
+                              : {}),
+                          });
+                        }}
+                        value={period.year || new Date().getFullYear()}
+                      >
+                        {yearOptions.map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                   <label>
                     <span>Status</span>
                     <select
@@ -3305,37 +3295,32 @@ function ProjectFinanceLedger({
                     </select>
                   </label>
                   <label>
-                    <span>Billing</span>
+                    <span>Financial status</span>
                     <select
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const financialStatus = event.target.value;
                         updatePeriod(period.id, {
-                          billingStatus: event.target.value,
-                        })
+                          billingStatus: financialStatus,
+                          collectionStatus:
+                            financialStatus === "paid" ? "paid" : "unpaid",
+                        });
+                      }}
+                      value={
+                        period.collectionStatus === "paid"
+                          ? "paid"
+                          : period.billingStatus === "disputed"
+                            ? "disputed"
+                            : ["billed", "partially_billed", "draft"].includes(
+                                  String(period.billingStatus),
+                                )
+                              ? "billed"
+                              : "not_billed"
                       }
-                      value={period.billingStatus || "not_billed"}
                     >
                       <option value="not_billed">Not billed</option>
-                      <option value="draft">Draft</option>
-                      <option value="partially_billed">Partially billed</option>
                       <option value="billed">Billed</option>
-                      <option value="void">Void</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Payment</span>
-                    <select
-                      onChange={(event) =>
-                        updatePeriod(period.id, {
-                          collectionStatus: event.target.value,
-                        })
-                      }
-                      value={period.collectionStatus || "unpaid"}
-                    >
-                      <option value="unpaid">Unpaid</option>
-                      <option value="partial">Partially paid</option>
                       <option value="paid">Paid</option>
-                      <option value="overdue">Overdue</option>
-                      <option value="uncollectible">Uncollectible</option>
+                      <option value="disputed">Disputed</option>
                     </select>
                   </label>
                   {period.kind === "build" && onCreateCostTemplate && (
@@ -3394,7 +3379,8 @@ function ProjectFinanceLedger({
                   <div className="do-finance-entry-table is-costs">
                     <div className="do-finance-cost-head">
                       <span>Cost item</span>
-                      <span>Month</span>
+                      <span>Date</span>
+                      <span>Period</span>
                       <span>Category</span>
                       <span>Driver</span>
                       <span>Budget qty</span>
@@ -3418,6 +3404,16 @@ function ProjectFinanceLedger({
                             })
                           }
                         />
+                        <input
+                          aria-label={`Date for ${entry.description}`}
+                          onChange={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              transactionDate: event.target.value,
+                            })
+                          }
+                          type="date"
+                          value={entry.transactionDate || ""}
+                        />
                         <select
                           onChange={(event) =>
                             updateEntry(period.id, entry.id, {
@@ -3426,7 +3422,6 @@ function ProjectFinanceLedger({
                           }
                           value={entry.accountingMonth || ""}
                         >
-                          <option value="">Unscheduled</option>
                           {accountingMonthOptions.map((month) => (
                             <option key={month.value} value={month.value}>
                               {month.label}
@@ -3506,18 +3501,26 @@ function ProjectFinanceLedger({
                           ${financeAmount(entry).toLocaleString()}
                         </strong>
                         <select
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const financialStatus = event.target.value;
                             updateEntry(period.id, entry.id, {
-                              costStatus: event.target.value,
-                            })
-                          }
-                          value={entry.costStatus || "planned"}
+                              financialStatus,
+                              costStatus:
+                                financialStatus === "paid"
+                                  ? "paid"
+                                  : financialStatus === "billed"
+                                    ? "incurred"
+                                    : financialStatus === "disputed"
+                                      ? "disputed"
+                                      : "planned",
+                            });
+                          }}
+                          value={entry.financialStatus || "not_billed"}
                         >
-                          <option value="planned">Planned</option>
-                          <option value="committed">Committed</option>
-                          <option value="incurred">Incurred</option>
+                          <option value="not_billed">Not billed</option>
+                          <option value="billed">Billed</option>
                           <option value="paid">Paid</option>
-                          <option value="void">Void</option>
+                          <option value="disputed">Disputed</option>
                         </select>
                         <input
                           defaultValue={entry.settledAmount || 0}
@@ -3567,14 +3570,13 @@ function ProjectFinanceLedger({
                   <div className="do-finance-entry-table is-billing">
                     <div className="do-finance-billing-head">
                       <span>Invoice item</span>
-                      <span>Month</span>
+                      <span>Date</span>
+                      <span>Period</span>
                       <span>Budget revenue</span>
                       <span>Invoice amount</span>
                       <span>Invoice #</span>
-                      <span>Issued</span>
                       <span>Due</span>
-                      <span>Invoice status</span>
-                      <span>Payment</span>
+                      <span>Status</span>
                       <span>Collected</span>
                       <span>Paid date</span>
                       <span />
@@ -3590,6 +3592,17 @@ function ProjectFinanceLedger({
                             })
                           }
                         />
+                        <input
+                          aria-label={`Date for ${entry.description}`}
+                          onChange={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              transactionDate: event.target.value,
+                              issueDate: event.target.value,
+                            })
+                          }
+                          type="date"
+                          value={entry.transactionDate || entry.issueDate || ""}
+                        />
                         <select
                           onChange={(event) =>
                             updateEntry(period.id, entry.id, {
@@ -3598,7 +3611,6 @@ function ProjectFinanceLedger({
                           }
                           value={entry.accountingMonth || ""}
                         >
-                          <option value="">Select month</option>
                           {accountingMonthOptions.map((month) => (
                             <option key={month.value} value={month.value}>
                               {month.label}
@@ -3637,15 +3649,6 @@ function ProjectFinanceLedger({
                           placeholder="INV-001"
                         />
                         <input
-                          defaultValue={entry.issueDate}
-                          onBlur={(event) =>
-                            updateEntry(period.id, entry.id, {
-                              issueDate: event.target.value,
-                            })
-                          }
-                          type="date"
-                        />
-                        <input
                           defaultValue={entry.dueDate}
                           onBlur={(event) =>
                             updateEntry(period.id, entry.id, {
@@ -3655,31 +3658,28 @@ function ProjectFinanceLedger({
                           type="date"
                         />
                         <select
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            const financialStatus = event.target.value;
                             updateEntry(period.id, entry.id, {
-                              invoiceStatus: event.target.value,
-                            })
-                          }
-                          value={entry.invoiceStatus || "not_billed"}
+                              financialStatus,
+                              invoiceStatus:
+                                financialStatus === "not_billed"
+                                  ? "not_billed"
+                                  : financialStatus === "disputed"
+                                    ? "disputed"
+                                    : "invoiced",
+                              paymentStatus:
+                                financialStatus === "paid"
+                                  ? "paid"
+                                  : "unpaid",
+                            });
+                          }}
+                          value={entry.financialStatus || "not_billed"}
                         >
                           <option value="not_billed">Not billed</option>
-                          <option value="draft">Draft</option>
-                          <option value="invoiced">Invoiced</option>
-                          <option value="void">Void</option>
-                          <option value="uncollectible">Uncollectible</option>
-                        </select>
-                        <select
-                          onChange={(event) =>
-                            updateEntry(period.id, entry.id, {
-                              paymentStatus: event.target.value,
-                            })
-                          }
-                          value={entry.paymentStatus || "unpaid"}
-                        >
-                          <option value="unpaid">Unpaid</option>
-                          <option value="partial">Partial</option>
+                          <option value="billed">Billed</option>
                           <option value="paid">Paid</option>
-                          <option value="overdue">Overdue</option>
+                          <option value="disputed">Disputed</option>
                         </select>
                         <input
                           defaultValue={entry.settledAmount || 0}
@@ -3849,7 +3849,7 @@ function projectSortValue(
       2,
       "0",
     );
-  if (key === "phase") return String(project.phase || "").toLowerCase();
+  if (key === "phase") return deliveryPhaseLabel(project).toLowerCase();
   if (key === "status")
     return String(project.sourceStatus || project.status || "").toLowerCase();
   if (key === "health")
@@ -4002,13 +4002,11 @@ export function ProjectCommandCenter({
         .filter(Boolean),
     ),
   ].sort();
-  const phaseOptions = [
-    ...new Set(
-      realProjects
-        .map((project) => String(project.phase || "").trim())
-        .filter(Boolean),
-    ),
-  ].sort();
+  const phaseOptions: DeliveryPhase[] = (
+    stageFilter === "all"
+      ? Object.values(DELIVERY_PHASES_BY_STAGE).flat()
+      : phasesForStage(stageFilter)
+  ) as DeliveryPhase[];
   const filtered = portfolio.filter((project) => {
     const status = String(project.status || "planning").toLowerCase();
     const health = projectHealth(
@@ -4026,7 +4024,7 @@ export function ProjectCommandCenter({
     const matchesStage =
       stageFilter === "all" || deliveryStage(project) === stageFilter;
     const matchesPhase =
-      phaseFilter === "all" || String(project.phase || "") === phaseFilter;
+      phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
     const matchesHealth = healthFilter === "all" || health === healthFilter;
     const matchesTaxonomy =
       !taxonomyValue ||
@@ -4231,7 +4229,7 @@ export function ProjectCommandCenter({
           risks.filter((risk) => risk.projectId === project.id),
         );
         const summary = projectSummary(project, projectTasks);
-        return `<tr><td><strong>${escapeHtml(projectTitle(project))}</strong><small>${escapeHtml(project.projectKey || "")}</small></td><td>${escapeHtml(project.bpo || "Internal")}<small>${escapeHtml(project.client || "Internal")}</small></td><td>${escapeHtml(deliveryStageLabels[deliveryStage(project)])}</td><td>${escapeHtml(project.phase || "—")}<small>${escapeHtml(project.sourceStatus || project.status || "—")}</small></td><td><span class="health ${escapeHtml(health)}">${escapeHtml(projectHealthLabel(health))}</span></td><td>${summary.progress}%</td><td>${escapeHtml(projectDueDate(project))}</td><td>${escapeHtml(project.nextAction || "Define next step")}</td><td>${summary.actualHours}h / ${summary.plannedHours}h</td><td>$${summary.initial.toLocaleString()}<small>$${summary.recurring.toLocaleString()} / month</small></td></tr>`;
+        return `<tr><td><strong>${escapeHtml(projectTitle(project))}</strong><small>${escapeHtml(project.projectKey || "")}</small></td><td>${escapeHtml(project.bpo || "Internal")}<small>${escapeHtml(project.client || "Internal")}</small></td><td>${escapeHtml(deliveryStageLabels[deliveryStage(project)])}</td><td>${escapeHtml(deliveryPhaseLabel(project))}<small>${escapeHtml(project.sourceStatus || project.status || "—")}</small></td><td><span class="health ${escapeHtml(health)}">${escapeHtml(projectHealthLabel(health))}</span></td><td>${summary.progress}%</td><td>${escapeHtml(projectDueDate(project))}</td><td>${escapeHtml(project.nextAction || "Define next step")}</td><td>${summary.actualHours}h / ${summary.plannedHours}h</td><td>$${summary.initial.toLocaleString()}<small>$${summary.recurring.toLocaleString()} / month</small></td></tr>`;
       })
       .join("");
     printable.document.write(
@@ -4253,11 +4251,6 @@ export function ProjectCommandCenter({
       </datalist>
       <datalist id="do-client-master">
         {clientOptions.map((value) => (
-          <option key={value} value={value} />
-        ))}
-      </datalist>
-      <datalist id="do-phase-master">
-        {phaseOptions.map((value) => (
           <option key={value} value={value} />
         ))}
       </datalist>
@@ -4482,8 +4475,7 @@ export function ProjectCommandCenter({
                           <strong>{projectTitle(project)}</strong>
                           <small>
                             {project.client || "Internal"} ·{" "}
-                            {project.phase ||
-                              deliveryStageLabels[deliveryStage(project)]}
+                            {deliveryPhaseLabel(project)}
                           </small>
                         </span>
                         <time>{projectDueDate(project)}</time>
@@ -4677,7 +4669,18 @@ export function ProjectCommandCenter({
               <select
                 aria-label="Filter by delivery stage"
                 onChange={(event) =>
-                  setStageFilter(event.target.value as "all" | DeliveryStage)
+                  (() => {
+                    const next = event.target.value as "all" | DeliveryStage;
+                    setStageFilter(next);
+                    if (
+                      next !== "all" &&
+                      phaseFilter !== "all" &&
+                      !phasesForStage(next).includes(
+                        phaseFilter as DeliveryPhase,
+                      )
+                    )
+                      setPhaseFilter("all");
+                  })()
                 }
                 value={stageFilter}
               >
@@ -4699,7 +4702,7 @@ export function ProjectCommandCenter({
                 <option value="all">All phases</option>
                 {phaseOptions.map((phase) => (
                   <option key={phase} value={phase}>
-                    {phase}
+                    {deliveryPhaseLabels[phase]}
                   </option>
                 ))}
               </select>
@@ -4769,10 +4772,10 @@ export function ProjectCommandCenter({
               ) : (
                 <>
                   Edit cells directly · Stage is the Certo lifecycle; Phase is
-                  your client or delivery substage.{" "}
+                  a controlled delivery checkpoint.{" "}
                   <InfoTip
                     label="Portfolio fields"
-                    text="Stage is fixed to Define, Onboarding, Build, Deploy and Operations. Phase is a flexible substage. Health is automatic unless overridden. Progress is completed executable work unless manually set."
+                    text="Stage is fixed to Define, Onboarding, Build, Deploy and Operations. Each Stage has four standard Phases. Health is automatic unless overridden. Progress is completed executable work unless manually set."
                   />
                 </>
               )}
@@ -4806,7 +4809,7 @@ export function ProjectCommandCenter({
                   Phase{" "}
                   <InfoTip
                     label="Phase"
-                    text="Flexible substage inside the Stage, such as Discovery, Development, UAT or Hypercare."
+                    text="Standard checkpoint inside the selected Stage. The options change automatically when Stage changes."
                   />
                 </span>
                 <span>
@@ -4949,9 +4952,20 @@ export function ProjectCommandCenter({
                         className="do-stage-select"
                         disabled={Boolean(project.demo)}
                         onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            deliveryStage: event.target.value,
-                          })
+                          (() => {
+                            const nextStage = event.target
+                              .value as DeliveryStage;
+                            const currentPhase = deliveryPhase(project);
+                            const nextPhase = phasesForStage(nextStage).includes(
+                              currentPhase,
+                            )
+                              ? currentPhase
+                              : phasesForStage(nextStage)[0];
+                            onUpdateProject(project.id, {
+                              deliveryStage: nextStage,
+                              phase: nextPhase,
+                            });
+                          })()
                         }
                         value={deliveryStage(project)}
                       >
@@ -4961,18 +4975,22 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
-                      <input
+                      <select
                         aria-label={`Phase for ${projectTitle(project)}`}
-                        className="do-table-input"
-                        defaultValue={project.phase || ""}
-                        list="do-phase-master"
-                        onBlur={(event) =>
+                        className="do-table-select"
+                        onChange={(event) =>
                           onUpdateProject(project.id, {
-                            phase: event.target.value.trim(),
+                            phase: event.target.value,
                           })
                         }
-                        placeholder="Phase"
-                      />
+                        value={deliveryPhase(project)}
+                      >
+                        {phasesForStage(deliveryStage(project)).map((phase) => (
+                          <option key={phase} value={phase}>
+                            {deliveryPhaseLabels[phase]}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         aria-label={`Status for ${projectTitle(project)}`}
                         className="do-table-select"

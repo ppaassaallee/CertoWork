@@ -12,6 +12,8 @@ export type FinanceEntry = {
   plannedRate?: number;
   rate: number;
   accountingMonth?: string;
+  transactionDate?: string;
+  financialStatus?: string;
   referenceNumber?: string;
   issueDate?: string;
   dueDate?: string;
@@ -102,6 +104,26 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
                 ? `${period.year}-${String(period.month).padStart(2, "0")}`
                 : ""),
           ),
+          transactionDate: String(
+            entry.transactionDate ||
+              entry.issueDate ||
+              entry.settledDate ||
+              (period.year && period.month
+                ? `${period.year}-${String(period.month).padStart(2, "0")}-01`
+                : ""),
+          ),
+          financialStatus: String(
+            entry.financialStatus ||
+              (entry.paymentStatus === "paid"
+                ? "paid"
+                : entry.invoiceStatus === "disputed" ||
+                    entry.costStatus === "disputed"
+                  ? "disputed"
+                  : entry.invoiceStatus === "invoiced" ||
+                      entry.costStatus === "incurred"
+                    ? "billed"
+                    : "not_billed"),
+          ),
           referenceNumber: String(
             entry.referenceNumber || entry.invoiceNumber || "",
           ),
@@ -177,6 +199,9 @@ export function financeSummary(periods: FinancePeriod[]) {
     .filter(
       (entry) =>
         Boolean(entry.referenceNumber) ||
+        ["billed", "paid", "disputed"].includes(
+          String(entry.financialStatus),
+        ) ||
         ["invoiced", "open", "paid", "uncollectible"].includes(
           String(entry.invoiceStatus),
         ),

@@ -195,3 +195,35 @@ test("calendar-month billing keeps budget, invoice and collection separate", () 
   assert.equal(summary.collected, 5000);
   assert.equal(summary.outstanding, 6500);
 });
+
+test("every financial movement keeps an exact date, calendar period and simple status", () => {
+  const periods = normalizedFinancePeriods({
+    financePeriods: [
+      {
+        id: "build-v3",
+        kind: "build",
+        label: "Build V3",
+        month: 9,
+        year: 2026,
+        entries: [
+          {
+            id: "vendor-cost",
+            direction: "cost",
+            description: "Voice AI usage",
+            unit: "ai_minute",
+            actualQty: 1000,
+            rate: 0.08,
+            transactionDate: "2026-09-18",
+            financialStatus: "disputed",
+          },
+        ],
+      },
+    ],
+  });
+  const entry = periods[0].entries[0];
+  assert.equal(periods[0].month, 9);
+  assert.equal(periods[0].year, 2026);
+  assert.equal(entry.accountingMonth, "2026-09");
+  assert.equal(entry.transactionDate, "2026-09-18");
+  assert.equal(entry.financialStatus, "disputed");
+});
