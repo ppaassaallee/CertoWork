@@ -9,6 +9,8 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   BookOpen,
   Bot,
@@ -425,7 +427,8 @@ export function DelivereeWorkspace() {
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [centerView, setCenterView] = useState<CenterView>("conversation");
+  const [centerHistory, setCenterHistory] = useState<{ items: CenterView[]; index: number }>({ items: ["conversation"], index: 0 });
+  const centerView = centerHistory.items[centerHistory.index];
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [cleanSlateOpen, setCleanSlateOpen] = useState(false);
@@ -443,6 +446,16 @@ export function DelivereeWorkspace() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  const goCenterView = (next: CenterView) => {
+    setCenterHistory((current) => {
+      if (current.items[current.index] === next) return current;
+      const items = [...current.items.slice(0, current.index + 1), next];
+      return { items, index: items.length - 1 };
+    });
+  };
+  const goCenterBack = () => setCenterHistory((current) => ({ ...current, index: Math.max(0, current.index - 1) }));
+  const goCenterForward = () => setCenterHistory((current) => ({ ...current, index: Math.min(current.items.length - 1, current.index + 1) }));
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -1234,7 +1247,7 @@ export function DelivereeWorkspace() {
     selectProjectContext(project);
     setProjectConsoleId(project.id);
     setPanel(null);
-    setCenterView("project");
+    goCenterView("project");
   };
 
   const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
@@ -1622,7 +1635,7 @@ export function DelivereeWorkspace() {
     setMessages([]);
     setProjectConsoleId(projectRef.id);
     setPanel("project");
-    setCenterView("conversation");
+    goCenterView("conversation");
     navigate(`/work/projects/${projectRef.id}`);
     setNotice(`${draft.title.trim()} created with Project Wizard. Its console is open.`);
   };
@@ -1658,7 +1671,7 @@ export function DelivereeWorkspace() {
     });
     setProjectConsoleId(projectId);
     setPanel("project");
-    setCenterView("conversation");
+    goCenterView("conversation");
     navigate(`/work/projects/${projectId}`);
     setNotice(`${draft.title.trim()} updated with Project Wizard.`);
   };
@@ -1738,7 +1751,7 @@ export function DelivereeWorkspace() {
       setReviewItems([]);
       setSelectedWorkItemId(null);
       setPanel(null);
-      setCenterView("conversation");
+      goCenterView("conversation");
       setCleanSlateOpen(false);
       setCleanConfirmText("");
       navigate("/");
@@ -1830,7 +1843,7 @@ export function DelivereeWorkspace() {
           <div className="do-sidebar-section">
             <div className="do-section-head">
               <span>Projects</span>
-              <button aria-label="Open project command center" onClick={() => { setCenterView("portfolio"); setPanel(null); setSidebarOpen(false); }} type="button">Command center</button>
+              <button aria-label="Open project command center" onClick={() => { goCenterView("portfolio"); setPanel(null); setSidebarOpen(false); }} type="button">Command center</button>
             </div>
             <div className="do-project-list">
               {sidebarProjects.favorites.length > 0 && <span className="do-project-group-label"><Star size={10} /> Favorites</span>}
@@ -1928,7 +1941,7 @@ export function DelivereeWorkspace() {
                 onClick={() => {
                     setProjectConsoleId(routeOrPrimaryProject.id);
                     setPanel(null);
-                    setCenterView(centerView === "project" ? "conversation" : "project");
+                    goCenterView(centerView === "project" ? "conversation" : "project");
                 }}
                 type="button"
               >
@@ -1945,15 +1958,19 @@ export function DelivereeWorkspace() {
         {notice && <div className="do-notice" role="status"><CheckCircle2 size={15} /><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")} type="button"><X size={14} /></button></div>}
 
         <section className="do-center-bar" aria-label="Current work view">
+          <div className="do-center-navigation" aria-label="View history">
+            <button aria-label="Go back" disabled={centerHistory.index === 0} onClick={goCenterBack} type="button"><ArrowLeft size={14} /></button>
+            <button aria-label="Go forward" disabled={centerHistory.index === centerHistory.items.length - 1} onClick={goCenterForward} type="button"><ArrowRight size={14} /></button>
+          </div>
           <div className="do-breadcrumb">
             <span>{routeOrPrimaryProject ? entityTitle(routeOrPrimaryProject) : "Chief of Staff"}</span>
             {selectedWorkItem && <><ChevronRight size={12} /><strong>{entityTitle(selectedWorkItem)}</strong></>}
           </div>
           <div className="do-view-switch" role="tablist" aria-label="Central view">
-            <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => setCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
-            <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => setCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
-            <button aria-selected={centerView === "notes"} className={centerView === "notes" ? "is-active" : ""} onClick={() => setCenterView("notes")} role="tab" type="button"><BookOpen size={13} /> Notas</button>
-            <button aria-selected={centerView === "portfolio"} className={centerView === "portfolio" ? "is-active" : ""} onClick={() => { setCenterView("portfolio"); setPanel(null); }} role="tab" type="button"><LayoutGrid size={13} /> Portfolio</button>
+            <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => goCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
+            <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => goCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
+            <button aria-selected={centerView === "notes"} className={centerView === "notes" ? "is-active" : ""} onClick={() => goCenterView("notes")} role="tab" type="button"><BookOpen size={13} /> Notas</button>
+            <button aria-selected={centerView === "portfolio"} className={centerView === "portfolio" ? "is-active" : ""} onClick={() => { goCenterView("portfolio"); setPanel(null); }} role="tab" type="button"><LayoutGrid size={13} /> Portfolio</button>
           </div>
         </section>
 
@@ -2038,7 +2055,7 @@ export function DelivereeWorkspace() {
             <div className="do-quick-actions">
               <button onClick={() => setComposer("Capture this as a task: ")} type="button"><Inbox size={15} /><span><strong>Capture</strong><small>Turn a thought into a clear task</small></span></button>
               <button onClick={() => sendMessage("Plan my day realistically using the 2 must-dos and up to 8 should-dos method.")} type="button"><CalendarDays size={15} /><span><strong>Plan today</strong><small>Choose work that fits the day</small></span></button>
-              <button onClick={() => { setActionMenuOpen(false); setCenterView("notes"); }} type="button"><BookOpen size={15} /><span><strong>Open notes</strong><small>Notebook, section, notes and handwriting</small></span></button>
+              <button onClick={() => { setActionMenuOpen(false); goCenterView("notes"); }} type="button"><BookOpen size={15} /><span><strong>Open notes</strong><small>Notebook, section, notes and handwriting</small></span></button>
               <button onClick={() => { setActionMenuOpen(false); setProjectWizardOpen(true); }} type="button"><WandSparkles size={15} /><span><strong>Project Wizard</strong><small>Create or update a project safely</small></span></button>
               <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>Freeform project note</strong><small>Talk it through before creating</small></span></button>
             </div>
@@ -2077,7 +2094,7 @@ export function DelivereeWorkspace() {
             onAddTask={addProjectTask}
             onAsk={(prompt) => {
               setComposer(prompt);
-              setCenterView("conversation");
+              goCenterView("conversation");
             }}
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
@@ -2090,7 +2107,7 @@ export function DelivereeWorkspace() {
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
             onArchiveProject={archiveProject}
-            onClose={() => setCenterView("conversation")}
+            onClose={() => goCenterView("conversation")}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
             costTemplates={costTemplates}
@@ -2113,7 +2130,7 @@ export function DelivereeWorkspace() {
               onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
               onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
               onArchiveProject={archiveProject}
-              onAsk={(prompt) => { setComposer(prompt); setCenterView("conversation"); }}
+              onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
               onUpdateProject={updateProject}
               onUpdateTask={updateProjectTask}
               project={consoleProject}
@@ -2129,7 +2146,7 @@ export function DelivereeWorkspace() {
             knowledgeItems={knowledgeItems}
             onAsk={(prompt) => {
               setComposer(prompt);
-              setCenterView("conversation");
+              goCenterView("conversation");
             }}
             projects={projects}
             tasks={tasks}
@@ -2213,7 +2230,7 @@ export function DelivereeWorkspace() {
               </div>
               {routeOrPrimaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button"><Folder size={15} /> Open project console</button>}
               <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
-              <button className="do-panel-secondary" onClick={() => { setPanel(null); setCenterView("portfolio"); }} type="button">Project command center</button>
+              <button className="do-panel-secondary" onClick={() => { setPanel(null); goCenterView("portfolio"); }} type="button">Project command center</button>
             </>
           )}
 
