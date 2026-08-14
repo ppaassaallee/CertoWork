@@ -1,697 +1,497 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Target, TrendingUp, Compass, Plus, Loader2, CheckCircle2, AlertTriangle, Layers } from "lucide-react";
-import { useAuth } from "../lib/AuthContext";
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Gem,
+  Gift,
+  Link2,
+  Plus,
+  Sparkles,
+  Target,
+  Trophy,
+  Users,
+  X,
+} from "lucide-react";
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { StrategicGoal, KeyResult, StrategicInitiative } from "../types";
+import { useAuth } from "../lib/AuthContext";
+import type { WorkspaceMember } from "../lib/workspaceCollaboration";
+import {
+  canAwardBoost,
+  gemBalance,
+  linkedWorkProgress,
+  objectiveHealth,
+  objectiveProgress,
+  strategyCycleLabel,
+} from "../lib/strategyExecution";
 
-export function StrategyCenter() {
+type StrategyTab = "scoreboard" | "plan" | "rewards";
+type MeasureKind = "outcome" | "lead";
+
+function itemTitle(item: any) {
+  return String(item?.title || item?.name || "Untitled");
+}
+
+function workType(item: any) {
+  return String(item?.workItemType || item?.type || item?.itemType || "task").toLowerCase();
+}
+
+function memberLabel(member?: WorkspaceMember | null) {
+  return member?.displayName || member?.email || "Unassigned";
+}
+
+function quarterEnd(date = new Date()) {
+  const endMonth = Math.floor(date.getMonth() / 3) * 3 + 3;
+  return new Date(date.getFullYear(), endMonth, 0).toISOString().slice(0, 10);
+}
+
+function statusLabel(value: string) {
+  if (value === "done") return "Achieved";
+  if (value === "off_track") return "Off track";
+  if (value === "at_risk") return "At risk";
+  return "On track";
+}
+
+export function StrategyCenter({
+  goals,
+  keyResults,
+  records,
+  projects,
+  tasks,
+  workspaceMembers,
+  onAsk,
+}: {
+  goals: any[];
+  keyResults: any[];
+  records: any[];
+  projects: any[];
+  tasks: any[];
+  workspaceMembers: WorkspaceMember[];
+  onAsk: (prompt: string) => void;
+}) {
   const { user, workspace } = useAuth();
-  const [activeTab, setActiveTab] = useState<'goals' | 'initiatives' | 'alignment'>('goals');
-  const [goals, setGoals] = useState<StrategicGoal[]>([]);
-  const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
-  const [initiatives, setInitiatives] = useState<StrategicInitiative[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<StrategyTab>("scoreboard");
+  const [notice, setNotice] = useState("");
+  const [showObjectiveForm, setShowObjectiveForm] = useState(false);
+  const [objectiveTitle, setObjectiveTitle] = useState("");
+  const [objectiveDescription, setObjectiveDescription] = useState("");
+  const [objectiveType, setObjectiveType] = useState("committed");
+  const [objectiveCycle, setObjectiveCycle] = useState(strategyCycleLabel());
+  const [objectiveOwnerId, setObjectiveOwnerId] = useState("");
+  const [objectiveEnd, setObjectiveEnd] = useState(quarterEnd());
+  const [measureGoalId, setMeasureGoalId] = useState<string | null>(null);
+  const [measureKind, setMeasureKind] = useState<MeasureKind>("outcome");
+  const [measureTitle, setMeasureTitle] = useState("");
+  const [measureStart, setMeasureStart] = useState(0);
+  const [measureCurrent, setMeasureCurrent] = useState(0);
+  const [measureTarget, setMeasureTarget] = useState(100);
+  const [measureUnit, setMeasureUnit] = useState("%");
+  const [measureSource, setMeasureSource] = useState("manual");
+  const [weeklyDrafts, setWeeklyDrafts] = useState<Record<string, string>>({});
+  const [boostTarget, setBoostTarget] = useState("");
+  const [boostAmount, setBoostAmount] = useState(10);
+  const [boostReason, setBoostReason] = useState("");
+  const [prizeName, setPrizeName] = useState("");
+  const [prizeDescription, setPrizeDescription] = useState("");
+  const [prizeCost, setPrizeCost] = useState(50);
+  const [prizeStock, setPrizeStock] = useState(1);
+  const [redeemWallet, setRedeemWallet] = useState("");
 
-  // Form states
-  const [showAddGoal, setShowAddGoal] = useState(false);
-  const [goalTitle, setGoalTitle] = useState("");
-  const [goalDesc, setGoalDesc] = useState("");
-  const [goalType, setGoalType] = useState<StrategicGoal['type']>('wig');
-  const [goalPriority, setGoalPriority] = useState<StrategicGoal['priority']>('P1');
+  const activeGoals = useMemo(
+    () => goals.filter((goal) => !["archived", "deleted"].includes(String(goal.status))),
+    [goals],
+  );
+  const gemRecords = records.filter((record) =>
+    ["gem_boost", "gem_redemption"].includes(String(record.recordType)),
+  );
+  const prizes = records.filter(
+    (record) => record.recordType === "gem_prize" && record.status !== "archived",
+  );
+  const checkIns = records.filter((record) => record.recordType === "strategy_checkin");
+  const epics = tasks.filter((task) => workType(task) === "epic");
+  const measurableItems = tasks.filter((task) => ["epic", "pbi"].includes(workType(task)));
+  const walletTargets = [
+    ...projects.map((project) => ({
+      key: `project:${project.id}`,
+      id: project.id,
+      type: "project",
+      label: itemTitle(project),
+      project,
+    })),
+    ...epics.map((epic) => ({
+      key: `epic:${epic.id}`,
+      id: epic.id,
+      type: "epic",
+      label: itemTitle(epic),
+      project: projects.find((project) => project.id === epic.projectId),
+    })),
+  ];
+  const currentMember = workspaceMembers.find(
+    (member) =>
+      member.userId === user?.uid ||
+      String(member.email || "").toLowerCase() === String(user?.email || "").toLowerCase(),
+  );
+  const canManageRewards = ["owner", "admin"].includes(
+    String(currentMember?.role || "").toLowerCase(),
+  );
+  const awardableTargets = walletTargets.filter((target) =>
+    canAwardBoost(currentMember, target.project, user),
+  );
+  const redeemableTargets = walletTargets.filter(
+    (target) =>
+      gemBalance(gemRecords, target.id) > 0 &&
+      (canManageRewards || canAwardBoost(currentMember, target.project, user)),
+  );
+  const totalGems = walletTargets.reduce(
+    (sum, target) => sum + Math.max(0, gemBalance(gemRecords, target.id)),
+    0,
+  );
+  const objectiveScores = activeGoals.map((goal) =>
+    objectiveProgress(goal.id, keyResults, projects, tasks),
+  );
+  const averageScore = objectiveScores.length
+    ? Math.round(objectiveScores.reduce((sum, score) => sum + score, 0) / objectiveScores.length)
+    : 0;
+  const onTrackCount = activeGoals.filter((goal) => {
+    const progress = objectiveProgress(goal.id, keyResults, projects, tasks);
+    return ["on_track", "done"].includes(objectiveHealth(goal, progress));
+  }).length;
 
-  const [showAddInitiative, setShowAddInitiative] = useState(false);
-  const [initTitle, setInitTitle] = useState("");
-  const [initDesc, setInitDesc] = useState("");
-  const [selectedGoalId, setSelectedGoalId] = useState("");
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const createObjective = async () => {
+    if (!user || !workspace || !objectiveTitle.trim()) return;
+    await addDoc(collection(db, "strategic_goals"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: objectiveTitle.trim(),
+      description: objectiveDescription.trim(),
+      type: "strategic_objective",
+      objectiveType,
+      cycle: objectiveCycle.trim() || strategyCycleLabel(),
+      ownerId: objectiveOwnerId || null,
+      status: "active",
+      periodStart: new Date().toISOString().slice(0, 10),
+      periodEnd: objectiveEnd,
+      weeklyCommitment: "",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setObjectiveTitle("");
+    setObjectiveDescription("");
+    setShowObjectiveForm(false);
+    setNotice("Objective created. Add two to five outcome measures next.");
+  };
 
-  const [showAddKR, setShowAddKR] = useState<string | null>(null);
-  const [krTitle, setKrTitle] = useState("");
-  const [krTarget, setKrTarget] = useState(100);
-  const [krStart, setKrStart] = useState(0);
-  const [krType, setKrType] = useState<KeyResult['metricType']>('percent');
+  const createMeasure = async () => {
+    if (!user || !workspace || !measureGoalId) return;
+    const [sourceType, sourceId] = measureSource.split(":");
+    const source =
+      sourceType === "project"
+        ? projects.find((project) => project.id === sourceId)
+        : sourceType === "work_item"
+          ? tasks.find((task) => task.id === sourceId)
+          : null;
+    const title = measureTitle.trim() || (source ? itemTitle(source) : "");
+    if (!title) return;
+    const linked = Boolean(source);
+    await addDoc(collection(db, "key_results"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      strategicGoalId: measureGoalId,
+      title,
+      measureKind,
+      metricType: linked ? "percent" : "number",
+      startValue: linked ? 0 : Number(measureStart),
+      currentValue: linked ? 0 : Number(measureCurrent),
+      targetValue: linked ? 100 : Number(measureTarget),
+      unit: linked ? "%" : measureUnit.trim(),
+      cadence: measureKind === "lead" ? "weekly" : "monthly",
+      sourceType: linked ? sourceType : "manual",
+      sourceId: linked ? sourceId : null,
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setMeasureGoalId(null);
+    setMeasureTitle("");
+    setMeasureSource("manual");
+    setMeasureStart(0);
+    setMeasureCurrent(0);
+    setMeasureTarget(100);
+    setNotice(measureKind === "lead" ? "Lead measure linked." : "Outcome measure added.");
+  };
 
-  // Load Data
-  useEffect(() => {
+  const updateMeasure = async (measure: any, currentValue: number) => {
+    await updateDoc(doc(db, "key_results", measure.id), {
+      currentValue,
+      status: currentValue >= Number(measure.targetValue || 0) ? "achieved" : "active",
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const saveWeeklyPulse = async (goal: any) => {
     if (!user || !workspace) return;
-
-    const qGoals = query(collection(db, "strategic_goals"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id));
-    const unsubGoals = onSnapshot(qGoals, (snap) => {
-      const items: any[] = [];
-      snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setGoals(items);
+    const commitment = String(weeklyDrafts[goal.id] ?? goal.weeklyCommitment ?? "").trim();
+    if (!commitment) return;
+    await updateDoc(doc(db, "strategic_goals", goal.id), {
+      weeklyCommitment: commitment,
+      lastCheckInAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-
-    const qKRs = query(collection(db, "key_results"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id));
-    const unsubKRs = onSnapshot(qKRs, (snap) => {
-      const items: any[] = [];
-      snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setKeyResults(items);
+    await addDoc(collection(db, "strategic_initiatives"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      recordType: "strategy_checkin",
+      strategicGoalId: goal.id,
+      commitment,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
     });
-
-    const qInits = query(collection(db, "strategic_initiatives"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id));
-    const unsubInits = onSnapshot(qInits, (snap) => {
-      const items: any[] = [];
-      snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setInitiatives(items);
-    });
-
-    const qProj = query(collection(db, "projects"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id));
-    const unsubProj = onSnapshot(qProj, (snap) => {
-      const items: any[] = [];
-      snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setProjects(items);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubGoals();
-      unsubKRs();
-      unsubInits();
-      unsubProj();
-    };
-  }, [user, workspace]);
-
-  // Actions
-  const handleCreateGoal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !workspace || !goalTitle.trim()) return;
-
-    try {
-      await addDoc(collection(db, "strategic_goals"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        title: goalTitle.trim(),
-        description: goalDesc.trim(),
-        type: goalType,
-        status: "active",
-        priority: goalPriority,
-        periodStart: new Date().toISOString().split('T')[0],
-        periodEnd: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 90 days default
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      setGoalTitle("");
-      setGoalDesc("");
-      setShowAddGoal(false);
-    } catch (err) {
-      console.error(err);
-    }
+    setNotice("Weekly commitment recorded in the strategy pulse.");
   };
 
-  const handleCreateKR = async (goalId: string) => {
-    if (!user || !workspace || !krTitle.trim()) return;
-
-    try {
-      await addDoc(collection(db, "key_results"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        strategicGoalId: goalId,
-        title: krTitle.trim(),
-        metricType: krType,
-        startValue: Number(krStart),
-        targetValue: Number(krTarget),
-        currentValue: Number(krStart),
-        confidence: "medium",
-        status: "not_started",
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      setKrTitle("");
-      setKrTarget(100);
-      setKrStart(0);
-      setShowAddKR(null);
-    } catch (err) {
-      console.error(err);
+  const giveBoost = async () => {
+    if (!user || !workspace || !boostTarget || !boostReason.trim()) return;
+    const target = awardableTargets.find((item) => item.key === boostTarget);
+    if (!target) {
+      setNotice("Only a workspace leader, Project Manager or Sponsor can give this Boost.");
+      return;
     }
+    await addDoc(collection(db, "strategic_initiatives"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      recordType: "gem_boost",
+      walletType: target.type,
+      walletEntityId: target.id,
+      walletLabel: target.label,
+      amount: Number(boostAmount),
+      reason: boostReason.trim(),
+      giverId: user.uid,
+      giverName: memberLabel(currentMember),
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+    });
+    setBoostReason("");
+    setNotice(`${boostAmount} Gems added to ${target.label}.`);
   };
 
-  const handleCreateInitiative = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !workspace || !initTitle.trim() || !selectedGoalId) return;
-
-    try {
-      await addDoc(collection(db, "strategic_initiatives"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        strategicGoalId: selectedGoalId,
-        title: initTitle.trim(),
-        description: initDesc.trim(),
-        status: "active",
-        projectIds: selectedProjectIds,
-        health: "on_track",
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      setInitTitle("");
-      setInitDesc("");
-      setSelectedGoalId("");
-      setSelectedProjectIds([]);
-      setShowAddInitiative(false);
-    } catch (err) {
-      console.error(err);
-    }
+  const createPrize = async () => {
+    if (!user || !workspace || !canManageRewards || !prizeName.trim()) return;
+    await addDoc(collection(db, "strategic_initiatives"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      recordType: "gem_prize",
+      title: prizeName.trim(),
+      description: prizeDescription.trim(),
+      gemCost: Math.max(1, Number(prizeCost)),
+      stock: Math.max(0, Number(prizeStock)),
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setPrizeName("");
+    setPrizeDescription("");
+    setPrizeCost(50);
+    setPrizeStock(1);
+    setNotice("Prize added to the marketplace.");
   };
 
-  const handleUpdateKRValue = async (krId: string, currentVal: number, targetVal: number) => {
-    if (!user) return;
-    const finalVal = Math.min(Number(currentVal), Number(targetVal));
-    const status = finalVal >= targetVal ? 'achieved' : finalVal > 0 ? 'on_track' : 'not_started';
-    
-    try {
-      await updateDoc(doc(db, "key_results", krId), {
-        currentValue: finalVal,
-        status: status,
-        updatedAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.error(err);
+  const redeemPrize = async (prize: any) => {
+    if (!user || !workspace || !redeemWallet) {
+      setNotice("Choose the Project or Epic wallet that will redeem the prize.");
+      return;
     }
+    const target = redeemableTargets.find((item) => item.key === redeemWallet);
+    const balance = target ? gemBalance(gemRecords, target.id) : 0;
+    const cost = Number(prize.gemCost || 0);
+    if (!target || balance < cost || Number(prize.stock || 0) < 1) {
+      setNotice("That wallet does not have enough Gems, or the prize is out of stock.");
+      return;
+    }
+    const batch = writeBatch(db);
+    const redemptionRef = doc(collection(db, "strategic_initiatives"));
+    batch.set(redemptionRef, {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      recordType: "gem_redemption",
+      walletType: target.type,
+      walletEntityId: target.id,
+      walletLabel: target.label,
+      prizeId: prize.id,
+      prizeTitle: prize.title,
+      amount: -cost,
+      status: "requested",
+      requestedBy: user.uid,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+    });
+    batch.update(doc(db, "strategic_initiatives", prize.id), {
+      stock: Math.max(0, Number(prize.stock || 0) - 1),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    setNotice(`${prize.title} redeemed for ${target.label}.`);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFCFB]">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
-  // Stats
-  const northStars = goals.filter(g => g.type === 'north_star');
-  const wigs = goals.filter(g => g.type === 'wig');
-  const okrs = goals.filter(g => g.type === 'okr_objective');
+  const openMeasureForm = (goalId: string, kind: MeasureKind) => {
+    setMeasureGoalId(goalId);
+    setMeasureKind(kind);
+    setMeasureSource("manual");
+    setMeasureTitle("");
+  };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="max-w-4xl mx-auto p-6 space-y-8 pb-24"
-    >
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <section className="do-strategy" aria-label="Strategic planning">
+      <header className="do-strategy-head">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Strategy Center</h1>
-          <p className="text-sm text-neutral-500">Corporate alignment, Wildly Important Goals, and key deliverables dashboard.</p>
+          <span>STRATEGIC EXECUTION</span>
+          <h1>Strategy</h1>
+          <p>Choose the outcomes, track what predicts them, and commit weekly.</p>
         </div>
-        <div className="flex gap-2">
+        <div>
           <button
-            onClick={() => setShowAddGoal(true)}
-            className="flex items-center gap-1.5 bg-black hover:bg-neutral-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
+            className="is-secondary"
+            onClick={() =>
+              onAsk(
+                "Review our Strategy scoreboard. Tell me what is off track, which lead measure needs attention, and the most important commitment for this week.",
+              )
+            }
+            type="button"
           >
-            <Plus className="w-4 h-4" /> New Strategic Goal
+            <Sparkles size={14} /> Ask Certo
           </button>
-          <button
-            onClick={() => setShowAddInitiative(true)}
-            className="flex items-center gap-1.5 bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-800 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-          >
-            <Layers className="w-4 h-4" /> New Initiative
+          <button onClick={() => setShowObjectiveForm(true)} type="button">
+            <Plus size={14} /> New objective
           </button>
         </div>
       </header>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-neutral-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-red-50 text-red-600 rounded-xl">
-            <Compass className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">North Stars</div>
-            <div className="text-2xl font-extrabold text-neutral-900 mt-0.5">{northStars.length}</div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-neutral-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-rose-50 text-rose-600 rounded-xl">
-            <Target className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Active WIGs</div>
-            <div className="text-2xl font-extrabold text-neutral-900 mt-0.5">{wigs.length}</div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-neutral-100 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider">OKRs / Priorities</div>
-            <div className="text-2xl font-extrabold text-neutral-900 mt-0.5">{okrs.length}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-neutral-100 gap-4">
-        <button
-          onClick={() => setActiveTab('goals')}
-          className={`pb-3 text-sm font-semibold border-b-2 transition-all ${activeTab === 'goals' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-        >
-          WIGs & Strategic Goals
-        </button>
-        <button
-          onClick={() => setActiveTab('initiatives')}
-          className={`pb-3 text-sm font-semibold border-b-2 transition-all ${activeTab === 'initiatives' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-        >
-          Workflow Initiatives
-        </button>
-        <button
-          onClick={() => setActiveTab('alignment')}
-          className={`pb-3 text-sm font-semibold border-b-2 transition-all ${activeTab === 'alignment' ? 'border-neutral-950 text-neutral-950' : 'border-transparent text-neutral-400 hover:text-neutral-600'}`}
-        >
-          Corporate Alignment Screen
-        </button>
-      </div>
-
-      {/* Content Area */}
-      <div className="space-y-6">
-        <AnimatePresence mode="wait">
-          {/* GOALS TAB */}
-          {activeTab === 'goals' && (
-            <motion.div
-              key="goals"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
-              {goals.length === 0 ? (
-                <div className="bg-neutral-50 rounded-2xl p-8 border border-dashed border-neutral-200 text-center text-neutral-500">
-                  <Target className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-                  <div className="font-semibold text-neutral-800">Define your first Strategic Goal</div>
-                  <p className="text-xs mt-1 max-w-sm mx-auto">Establish critical, measurable variables driving your corporate success.</p>
-                  <button onClick={() => setShowAddGoal(true)} className="mt-4 bg-black text-white px-4 py-2 rounded-xl text-xs font-bold">Add Goal</button>
-                </div>
-              ) : (
-                goals.map(goal => {
-                  const goalKRs = keyResults.filter(kr => kr.strategicGoalId === goal.id);
-                  return (
-                    <div key={goal.id} className="bg-white rounded-2xl p-6 border border-neutral-100 shadow-sm space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide ${
-                              goal.type === 'wig' ? 'bg-rose-50 text-rose-600' :
-                              goal.type === 'north_star' ? 'bg-red-50 text-red-600' : 'bg-neutral-50 text-neutral-600'
-                            }`}>
-                              {goal.type.replace('_', ' ')}
-                            </span>
-                            <span className="text-xs font-bold text-neutral-400">{goal.priority} Priority</span>
-                          </div>
-                          <h3 className="text-lg font-bold text-neutral-800 mt-2">{goal.title}</h3>
-                          <p className="text-xs text-neutral-500 mt-1">{goal.description}</p>
-                        </div>
-                        <button
-                          onClick={() => setShowAddKR(showAddKR === goal.id ? null : goal.id)}
-                          className="text-xs font-bold text-neutral-500 hover:text-black flex items-center gap-1 px-2.5 py-1.5 bg-neutral-50 rounded-lg hover:bg-neutral-100 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Add Metric (KR)
-                        </button>
-                      </div>
-
-                      {/* Add KR Panel */}
-                      {showAddKR === goal.id && (
-                        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 mt-2 space-y-3">
-                          <h4 className="text-xs font-bold text-neutral-700">Add Key Result (KR)</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input
-                              type="text"
-                              placeholder="Key Result title (e.g. Increase revenue)"
-                              value={krTitle}
-                              onChange={(e) => setKrTitle(e.target.value)}
-                              className="text-xs p-2 bg-white rounded-lg border border-neutral-200 w-full"
-                            />
-                            <div className="flex gap-2">
-                              <input
-                                type="number"
-                                placeholder="Start value"
-                                value={krStart}
-                                onChange={(e) => setKrStart(Number(e.target.value))}
-                                className="text-xs p-2 bg-white rounded-lg border border-neutral-200 w-1/2"
-                              />
-                              <input
-                                type="number"
-                                placeholder="Target value"
-                                value={krTarget}
-                                onChange={(e) => setKrTarget(Number(e.target.value))}
-                                className="text-xs p-2 bg-white rounded-lg border border-neutral-200 w-1/2"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <select
-                              value={krType}
-                              onChange={(e: any) => setKrType(e.target.value)}
-                              className="text-xs p-1.5 bg-white border border-neutral-200 rounded-lg"
-                            >
-                              <option value="percent">Percentage (%)</option>
-                              <option value="number">Absolute Number</option>
-                              <option value="currency">Currency ($)</option>
-                            </select>
-                            <div className="flex gap-2">
-                              <button onClick={() => setShowAddKR(null)} className="text-xs px-3 py-1.5 border hover:bg-neutral-100 rounded-lg">Cancel</button>
-                              <button onClick={() => handleCreateKR(goal.id)} className="text-xs bg-black text-white px-3 py-1.5 rounded-lg font-bold">Add KR</button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Key Results Checklist */}
-                      {goalKRs.length > 0 ? (
-                        <div className="mt-4 space-y-3">
-                          <label className="text-[10px] font-bold text-neutral-400 tracking-widest uppercase">Measurable Key Results</label>
-                          <div className="space-y-2">
-                            {goalKRs.map(kr => {
-                              const progressPct = Math.round((kr.currentValue / kr.targetValue) * 100) || 0;
-                              return (
-                                <div key={kr.id} className="bg-neutral-50/50 p-3.5 rounded-xl border border-neutral-100 flex items-center justify-between gap-4">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-semibold text-neutral-800 truncate">{kr.title}</div>
-                                    <div className="mt-1.5 flex items-center gap-2">
-                                      <div className="h-1.5 w-32 bg-neutral-200 rounded-full overflow-hidden">
-                                        <div className="bg-black h-full" style={{ width: `${Math.min(100, progressPct)}%` }} />
-                                      </div>
-                                      <span className="text-[10px] font-bold text-neutral-500">
-                                        {kr.currentValue} / {kr.targetValue} ({progressPct}%)
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="number"
-                                      className="w-16 text-center text-xs p-1 bg-white border border-neutral-200 rounded-md"
-                                      value={kr.currentValue}
-                                      onChange={(e) => handleUpdateKRValue(kr.id, Number(e.target.value), kr.targetValue)}
-                                    />
-                                    {kr.status === 'achieved' && <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-neutral-400 italic">No Key Results linked yet. Add one above to measure performance.</p>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </motion.div>
-          )}
-
-          {/* INITIATIVES TAB */}
-          {activeTab === 'initiatives' && (
-            <motion.div
-              key="initiatives"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
-              {initiatives.length === 0 ? (
-                <div className="bg-neutral-50 rounded-2xl p-8 border border-dashed border-neutral-200 text-center text-neutral-500">
-                  <Layers className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-                  <div className="font-semibold text-neutral-800">Identify Strategic Initiatives</div>
-                  <p className="text-xs mt-1 max-w-sm mx-auto">Link multiple high-value projects into modular pipelines representing active company workflows.</p>
-                  <button onClick={() => setShowAddInitiative(true)} className="mt-4 bg-black text-white px-4 py-2 rounded-xl text-xs font-bold">Add Initiative</button>
-                </div>
-              ) : (
-                initiatives.map(ini => {
-                  const correlatedGoal = goals.find(g => g.id === ini.strategicGoalId);
-                  const linkedProjectsNum = ini.projectIds?.length || 0;
-                  return (
-                    <div key={ini.id} className="bg-white rounded-2xl p-5 border border-neutral-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md uppercase">
-                            Health: {ini.health.replace('_', ' ')}
-                          </span>
-                          {correlatedGoal && (
-                            <span className="text-[10px] text-neutral-400 flex items-center gap-1">
-                              <Target className="w-3.5 h-3.5 text-neutral-300" /> goal: {correlatedGoal.title}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-base font-bold text-neutral-800 mt-2">{ini.title}</h3>
-                        <p className="text-xs text-neutral-500 mt-1">{ini.description}</p>
-                      </div>
-                      <div className="flex items-center gap-6 self-start md:self-center">
-                        <div className="text-center">
-                          <div className="text-[10px] font-extrabold text-neutral-400 uppercase tracking-widest">Projects</div>
-                          <div className="text-xl font-bold text-neutral-800 mt-0.5">{linkedProjectsNum}</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-[10px] font-extrabold text-neutral-400 uppercase tracking-widest">Status</div>
-                          <span className="text-xs font-semibold px-2 py-1 bg-green-50 text-green-700 rounded-lg">{ini.status}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </motion.div>
-          )}
-
-          {/* ALIGNMENT TAB */}
-          {activeTab === 'alignment' && (
-            <motion.div
-              key="alignment"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6 bg-white p-6 rounded-2xl border border-neutral-100 shadow-sm"
-            >
-              <h2 className="text-base font-bold text-neutral-800 mb-2 flex items-center gap-2">
-                <Compass className="w-5 h-5 text-neutral-400" /> Strategic Drift Analysis
-              </h2>
-              <p className="text-xs text-neutral-500">Corporate projects must map back to an approved Strategic Goal. Projects operating without strategic backing generate drift risks.</p>
-              
-              <div className="mt-6 space-y-4">
-                {projects.map(proj => {
-                  const linkedInits = initiatives.filter(ini => ini.projectIds?.includes(proj.id));
-                  const isUnaligned = linkedInits.length === 0;
-                  return (
-                    <div key={proj.id} className="p-4 rounded-xl border border-neutral-100 flex items-center justify-between gap-4 bg-neutral-50/50">
-                      <div>
-                        <div className="text-sm font-bold text-neutral-800">{proj.title}</div>
-                        <div className="text-[10px] text-neutral-400 mt-1">Company: {proj.companyName || "N/A"} · Stage: {proj.stage || "Default"}</div>
-                      </div>
-                      <div>
-                        {isUnaligned ? (
-                          <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-100 rounded-lg text-[10px] font-extrabold uppercase tracking-wide">
-                            <AlertTriangle className="w-3.5 h-3.5" /> Drift Risk: Unaligned
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 border border-green-100 rounded-lg text-[10px] font-extrabold uppercase tracking-wide">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Aligned
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {projects.length === 0 && (
-                  <p className="text-xs text-neutral-400 italic text-center p-6 bg-neutral-50 rounded-xl">No corporate projects resolved yet.</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ADD GOAL MODAL */}
-      {showAddGoal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4"
-          >
-            <div className="font-extrabold text-lg text-neutral-800">Add Strategic Goal</div>
-            <form onSubmit={handleCreateGoal} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Goal Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Expand LATAM ARR"
-                  value={goalTitle}
-                  onChange={(e) => setGoalTitle(e.target.value)}
-                  className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl focus:ring-1 focus:ring-black outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Goal Description</label>
-                <textarea
-                  placeholder="Justify and describe details..."
-                  value={goalDesc}
-                  onChange={(e) => setGoalDesc(e.target.value)}
-                  className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl focus:ring-1 focus:ring-black outline-none h-20"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Category</label>
-                  <select
-                    value={goalType}
-                    onChange={(e: any) => setGoalType(e.target.value)}
-                    className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl outline-none"
-                  >
-                    <option value="wig">WIG (Wildly Important)</option>
-                    <option value="north_star">North Star Focus</option>
-                    <option value="okr_objective">OKR Objective</option>
-                    <option value="quarterly_priority">Quarterly Priority</option>
-                    <option value="weekly_outcome">Weekly Outcome</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Priority</label>
-                  <select
-                    value={goalPriority}
-                    onChange={(e: any) => setGoalPriority(e.target.value)}
-                    className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl outline-none"
-                  >
-                    <option value="P1">P1 (Immediate)</option>
-                    <option value="P2">P2 (Strategic)</option>
-                    <option value="P3">P3 (Secondary)</option>
-                    <option value="P4">P4 (Distraction)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddGoal(false)}
-                  className="text-xs px-4 py-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="text-xs px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold"
-                >
-                  Add Strategic goal
-                </button>
-              </div>
-            </form>
-          </motion.div>
+      {notice && (
+        <div className="do-strategy-notice" role="status">
+          <CheckCircle2 size={14} /> <span>{notice}</span>
+          <button aria-label="Dismiss" onClick={() => setNotice("")} type="button">
+            <X size={13} />
+          </button>
         </div>
       )}
 
-      {/* ADD INITIATIVE MODAL */}
-      {showAddInitiative && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-100 shadow-2xl space-y-4"
-          >
-            <div className="font-extrabold text-lg text-neutral-800">Add Strategic Initiative</div>
-            <form onSubmit={handleCreateInitiative} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Initiative Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Client Retention Workflow Optimization"
-                  value={initTitle}
-                  onChange={(e) => setInitTitle(e.target.value)}
-                  className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl focus:ring-1 focus:ring-black outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Description</label>
-                <textarea
-                  placeholder="Details of the operational workspace..."
-                  value={initDesc}
-                  onChange={(e) => setInitDesc(e.target.value)}
-                  className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl focus:ring-1 focus:ring-black outline-none h-16"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Strategic Goal Backing</label>
-                <select
-                  required
-                  value={selectedGoalId}
-                  onChange={(e) => setSelectedGoalId(e.target.value)}
-                  className="w-full text-xs p-3 bg-neutral-50 border border-neutral-200 mt-1 rounded-xl outline-none text-neutral-800"
-                >
-                  <option value="">Select correlated strategic objective...</option>
-                  {goals.map(g => (
-                    <option key={g.id} value={g.id}>{getStrategicGoalLabel(g.type)}: {g.title}</option>
-                  ))}
-                </select>
-              </div>
+      <div className="do-strategy-metrics">
+        <div><span>Active objectives</span><strong>{activeGoals.length}</strong><small>Keep the list intentionally short</small></div>
+        <div><span>On track</span><strong>{onTrackCount}</strong><small>{activeGoals.length - onTrackCount} need attention</small></div>
+        <div><span>Average score</span><strong>{averageScore}%</strong><small>Outcome measures only</small></div>
+        <div className="is-gems"><span>Gems in play</span><strong><Gem size={16} /> {totalGems}</strong><small>Across Projects and Epics</small></div>
+      </div>
 
-              <div>
-                <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1 block">Correlated Deals & Projects</label>
-                <div className="space-y-1.5 max-h-32 overflow-y-auto border border-neutral-100 p-2.5 rounded-xl bg-neutral-50">
-                  {projects.map(p => {
-                    const isChecked = selectedProjectIds.includes(p.id);
-                    return (
-                      <label key={p.id} className="flex items-center gap-2 text-xs font-medium text-neutral-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            if (isChecked) {
-                              setSelectedProjectIds(selectedProjectIds.filter(id => id !== p.id));
-                            } else {
-                              setSelectedProjectIds([...selectedProjectIds, p.id]);
-                            }
-                          }}
-                          className="rounded text-black"
-                        />
-                        {p.title}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
+      <nav className="do-strategy-tabs" aria-label="Strategy views">
+        <button className={tab === "scoreboard" ? "is-active" : ""} onClick={() => setTab("scoreboard")} type="button"><Trophy size={14} /> Scoreboard</button>
+        <button className={tab === "plan" ? "is-active" : ""} onClick={() => setTab("plan")} type="button"><Target size={14} /> Plan</button>
+        <button className={tab === "rewards" ? "is-active" : ""} onClick={() => setTab("rewards")} type="button"><Gift size={14} /> Gems & rewards</button>
+      </nav>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddInitiative(false)}
-                  className="text-xs px-4 py-2 bg-neutral-50 hover:bg-neutral-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="text-xs px-4 py-2 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold"
-                >
-                  Add Initiative
-                </button>
-              </div>
-            </form>
-          </motion.div>
+      {showObjectiveForm && (
+        <div className="do-strategy-builder">
+          <div className="do-strategy-builder-head"><div><strong>Create an objective</strong><small>One memorable outcome for a defined cycle.</small></div><button onClick={() => setShowObjectiveForm(false)} type="button"><X size={14} /></button></div>
+          <div className="do-strategy-form-grid">
+            <label className="is-wide"><span>Objective</span><input autoFocus onChange={(event) => setObjectiveTitle(event.target.value)} placeholder="What must be meaningfully different?" value={objectiveTitle} /></label>
+            <label><span>Cycle</span><input onChange={(event) => setObjectiveCycle(event.target.value)} value={objectiveCycle} /></label>
+            <label><span>Type</span><select onChange={(event) => setObjectiveType(event.target.value)} value={objectiveType}><option value="committed">Committed</option><option value="aspirational">Aspirational</option><option value="learning">Learning</option></select></label>
+            <label><span>Owner</span><select onChange={(event) => setObjectiveOwnerId(event.target.value)} value={objectiveOwnerId}><option value="">Unassigned</option>{workspaceMembers.map((member) => <option key={member.id} value={member.id}>{memberLabel(member)}</option>)}</select></label>
+            <label><span>Target date</span><input onChange={(event) => setObjectiveEnd(event.target.value)} type="date" value={objectiveEnd} /></label>
+            <label className="is-wide"><span>Why this matters</span><textarea onChange={(event) => setObjectiveDescription(event.target.value)} placeholder="Strategic context and intended outcome" rows={2} value={objectiveDescription} /></label>
+          </div>
+          <div className="do-strategy-builder-actions"><button className="is-secondary" onClick={() => setShowObjectiveForm(false)} type="button">Cancel</button><button disabled={!objectiveTitle.trim()} onClick={createObjective} type="button">Create objective</button></div>
         </div>
       )}
-    </motion.div>
+
+      {tab === "scoreboard" && (
+        <div className="do-scoreboard">
+          {activeGoals.map((goal) => {
+            const measures = keyResults.filter((measure) => measure.strategicGoalId === goal.id);
+            const outcomes = measures.filter((measure) => String(measure.measureKind || "outcome") === "outcome");
+            const leads = measures.filter((measure) => measure.measureKind === "lead");
+            const progress = objectiveProgress(goal.id, keyResults, projects, tasks);
+            const health = objectiveHealth(goal, progress);
+            const owner = workspaceMembers.find((member) => member.id === goal.ownerId);
+            const lastCheckIn = checkIns.filter((item) => item.strategicGoalId === goal.id).length;
+            return (
+              <article className="do-objective-card" key={goal.id}>
+                <header>
+                  <div className="do-objective-score" style={{ "--score": `${progress}%` } as any}><strong>{progress}</strong><small>%</small></div>
+                  <div><span>{goal.cycle || strategyCycleLabel()} · {String(goal.objectiveType || "committed").replace(/_/g, " ")}</span><h2>{itemTitle(goal)}</h2><p>{goal.description || "Add the strategic reason this outcome matters."}</p></div>
+                  <div className={`do-strategy-health is-${health}`}>{health === "on_track" || health === "done" ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}{statusLabel(health)}</div>
+                </header>
+                <div className="do-objective-meta"><span><Users size={13} /> {memberLabel(owner)}</span><span><CalendarDays size={13} /> {goal.periodEnd || "No target date"}</span><span>{lastCheckIn} weekly pulse{lastCheckIn === 1 ? "" : "s"}</span></div>
+                <div className="do-objective-grid">
+                  <section>
+                    <div className="do-measure-title"><strong>Outcome measures</strong><small>Did the result move?</small></div>
+                    {outcomes.map((measure) => <MeasureRow key={measure.id} measure={measure} projects={projects} tasks={tasks} onUpdate={updateMeasure} />)}
+                    {!outcomes.length && <button className="do-empty-measure" onClick={() => { setTab("plan"); openMeasureForm(goal.id, "outcome"); }} type="button"><Plus size={13} /> Add a measurable result</button>}
+                  </section>
+                  <section>
+                    <div className="do-measure-title"><strong>Lead measures</strong><small>Predictive and influenceable</small></div>
+                    {leads.map((measure) => <MeasureRow key={measure.id} measure={measure} projects={projects} tasks={tasks} onUpdate={updateMeasure} />)}
+                    {!leads.length && <button className="do-empty-measure" onClick={() => { setTab("plan"); openMeasureForm(goal.id, "lead"); }} type="button"><Link2 size={13} /> Link a Project, Epic or PBI</button>}
+                  </section>
+                </div>
+                <div className="do-weekly-pulse"><div><strong>This week</strong><small>One commitment that can move the scoreboard.</small></div><input onChange={(event) => setWeeklyDrafts((current) => ({ ...current, [goal.id]: event.target.value }))} placeholder="What will we move before the next check-in?" value={weeklyDrafts[goal.id] ?? goal.weeklyCommitment ?? ""} /><button onClick={() => saveWeeklyPulse(goal)} type="button">Check in</button></div>
+              </article>
+            );
+          })}
+          {!activeGoals.length && <EmptyStrategy onCreate={() => setShowObjectiveForm(true)} />}
+        </div>
+      )}
+
+      {tab === "plan" && (
+        <div className="do-strategy-plan">
+          <div className="do-strategy-guide"><strong>A strategy that can execute</strong><div><span>1</span><p><b>Objective</b>Memorable direction for one cycle.</p></div><div><span>2</span><p><b>Outcome measures</b>Two to five results with a start, target and deadline.</p></div><div><span>3</span><p><b>Lead measures</b>Weekly actions the team can influence—manual or linked work.</p></div><div><span>4</span><p><b>Weekly pulse</b>Review the score and make one next commitment.</p></div></div>
+          <div className="do-strategy-plan-list">
+            {activeGoals.map((goal) => {
+              const measures = keyResults.filter((measure) => measure.strategicGoalId === goal.id);
+              return <article key={goal.id}><header><div><span>{goal.cycle || strategyCycleLabel()}</span><h3>{itemTitle(goal)}</h3></div><strong>{objectiveProgress(goal.id, keyResults, projects, tasks)}%</strong></header><div className="do-plan-measures">{measures.map((measure) => <MeasureRow key={measure.id} measure={measure} projects={projects} tasks={tasks} onUpdate={updateMeasure} />)}</div><footer><button onClick={() => openMeasureForm(goal.id, "outcome")} type="button"><Plus size={12} /> Outcome measure</button><button onClick={() => openMeasureForm(goal.id, "lead")} type="button"><Link2 size={12} /> Lead measure</button></footer>{measureGoalId === goal.id && <MeasureBuilder kind={measureKind} title={measureTitle} setTitle={setMeasureTitle} source={measureSource} setSource={setMeasureSource} measurableItems={measurableItems} projects={projects} start={measureStart} setStart={setMeasureStart} current={measureCurrent} setCurrent={setMeasureCurrent} target={measureTarget} setTarget={setMeasureTarget} unit={measureUnit} setUnit={setMeasureUnit} onCancel={() => setMeasureGoalId(null)} onCreate={createMeasure} />}</article>;
+            })}
+            {!activeGoals.length && <EmptyStrategy onCreate={() => setShowObjectiveForm(true)} />}
+          </div>
+        </div>
+      )}
+
+      {tab === "rewards" && (
+        <div className="do-rewards">
+          <section className="do-wallets"><header><div><span>TEAM RECOGNITION</span><h2>Gem wallets</h2><p>Boost meaningful delivery. Gems belong to the Project or Epic—not to vanity activity.</p></div><Gem size={25} /></header><div>{walletTargets.filter((target) => gemBalance(gemRecords, target.id) > 0).map((target) => <button className={redeemWallet === target.key ? "is-active" : ""} key={target.key} onClick={() => setRedeemWallet(target.key)} type="button"><span>{target.type}</span><strong>{target.label}</strong><b><Gem size={13} /> {gemBalance(gemRecords, target.id)}</b></button>)}{!walletTargets.some((target) => gemBalance(gemRecords, target.id) > 0) && <p className="do-reward-empty">No Gems yet. A leader can give the first Boost below.</p>}</div></section>
+          <div className="do-reward-grid">
+            <section className="do-boost-card"><header><div><span>BOOST</span><h3>Recognize strategic progress</h3></div><Sparkles size={18} /></header>{awardableTargets.length ? <><label><span>Project or Epic</span><select onChange={(event) => setBoostTarget(event.target.value)} value={boostTarget}><option value="">Choose work</option>{awardableTargets.map((target) => <option key={target.key} value={target.key}>{target.type === "epic" ? "Epic" : "Project"} · {target.label}</option>)}</select></label><label><span>Gems</span><select onChange={(event) => setBoostAmount(Number(event.target.value))} value={boostAmount}><option value={5}>5 · Good move</option><option value={10}>10 · Strong delivery</option><option value={25}>25 · Breakthrough</option></select></label><label><span>Why it earned a Boost</span><textarea onChange={(event) => setBoostReason(event.target.value)} placeholder="Name the result or behavior worth repeating" rows={3} value={boostReason} /></label><button disabled={!boostTarget || !boostReason.trim()} onClick={giveBoost} type="button"><Gem size={13} /> Give Boost</button></> : <p className="do-reward-empty">Boosts can be given by workspace leaders or the Project Manager/Sponsor of the selected project.</p>}</section>
+            <section className="do-marketplace"><header><div><span>MARKETPLACE</span><h3>Redeem team rewards</h3></div><Gift size={18} /></header><label><span>Pay from</span><select onChange={(event) => setRedeemWallet(event.target.value)} value={redeemWallet}><option value="">Choose a Gem wallet</option>{redeemableTargets.map((target) => <option key={target.key} value={target.key}>{target.label} · {gemBalance(gemRecords, target.id)} Gems</option>)}</select></label><div className="do-prize-list">{prizes.map((prize) => <article key={prize.id}><div><strong>{prize.title}</strong><small>{prize.description || "Team reward"}</small></div><span><Gem size={12} /> {prize.gemCost}</span><small>{prize.stock} available</small><button disabled={!redeemWallet || Number(prize.stock || 0) < 1} onClick={() => redeemPrize(prize)} type="button">Redeem</button></article>)}{!prizes.length && <p className="do-reward-empty">No prizes yet. Workspace leaders can create the first one.</p>}</div></section>
+          </div>
+          {canManageRewards && <section className="do-prize-builder"><header><div><span>CATALOG MANAGEMENT</span><h3>Create a prize</h3></div></header><div><label><span>Name</span><input onChange={(event) => setPrizeName(event.target.value)} placeholder="Team lunch" value={prizeName} /></label><label><span>Gem cost</span><input min={1} onChange={(event) => setPrizeCost(Number(event.target.value))} type="number" value={prizeCost} /></label><label><span>Stock</span><input min={0} onChange={(event) => setPrizeStock(Number(event.target.value))} type="number" value={prizeStock} /></label><label className="is-wide"><span>Description / fulfillment</span><input onChange={(event) => setPrizeDescription(event.target.value)} placeholder="What the winner receives and how it is fulfilled" value={prizeDescription} /></label><button disabled={!prizeName.trim()} onClick={createPrize} type="button"><Plus size={13} /> Add prize</button></div></section>}
+          <section className="do-gem-ledger"><header><div><span>AUDIT TRAIL</span><h3>Recent Gem activity</h3></div></header>{gemRecords.slice().sort((left, right) => Number(right.createdAt?.seconds || 0) - Number(left.createdAt?.seconds || 0)).slice(0, 12).map((record) => <div key={record.id}><span className={Number(record.amount) < 0 ? "is-spend" : "is-earn"}>{Number(record.amount) > 0 ? "+" : ""}{record.amount}</span><p><strong>{record.walletLabel}</strong><small>{record.recordType === "gem_redemption" ? `Redeemed ${record.prizeTitle}` : record.reason}</small></p><time>{record.giverName || "Workspace"}</time></div>)}{!gemRecords.length && <p className="do-reward-empty">Boosts and redemptions will appear here. Balances are calculated from this ledger.</p>}</section>
+        </div>
+      )}
+    </section>
   );
 }
 
-function getStrategicGoalLabel(type: StrategicGoal['type']): string {
-  switch (type) {
-    case "north_star": return "North Star Focus";
-    case "wig": return "WIG (Wildly Important)";
-    case "okr_objective": return "OKR Objective";
-    case "quarterly_priority": return "Quarterly Focus";
-    case "weekly_outcome": return "Weekly Priority";
-  }
+function MeasureRow({ measure, projects, tasks, onUpdate }: { measure: any; projects: any[]; tasks: any[]; onUpdate: (measure: any, value: number) => void }) {
+  const progress = linkedWorkProgress(measure, projects, tasks);
+  const linked = measure.sourceType === "project" || measure.sourceType === "work_item";
+  const source = measure.sourceType === "project" ? projects.find((item) => item.id === measure.sourceId) : tasks.find((item) => item.id === measure.sourceId);
+  return <div className="do-measure-row"><div><span>{measure.measureKind === "lead" ? "LEAD" : "OUTCOME"}{linked ? ` · ${measure.sourceType === "project" ? "PROJECT" : workType(source).toUpperCase()}` : ""}</span><strong>{measure.title}</strong>{linked && <small><Link2 size={10} /> {itemTitle(source)}</small>}</div><div className="do-measure-value">{linked ? <strong>{progress}%</strong> : <><input aria-label={`Current value for ${measure.title}`} defaultValue={measure.currentValue ?? measure.startValue ?? 0} onBlur={(event) => onUpdate(measure, Number(event.target.value || 0))} type="number" /><span>/ {measure.targetValue}{measure.unit || ""}</span></>}</div><i><b style={{ width: `${progress}%` }} /></i></div>;
+}
+
+function MeasureBuilder({ kind, title, setTitle, source, setSource, measurableItems, projects, start, setStart, current, setCurrent, target, setTarget, unit, setUnit, onCancel, onCreate }: any) {
+  const linked = source !== "manual";
+  return <div className="do-measure-builder"><header><div><strong>{kind === "lead" ? "Add a lead measure" : "Add an outcome measure"}</strong><small>{kind === "lead" ? "Predictive, influenceable, and reviewed weekly." : "A measurable result, not a task."}</small></div><button onClick={onCancel} type="button"><X size={13} /></button></header>{kind === "lead" && <label><span>Source</span><select onChange={(event) => setSource(event.target.value)} value={source}><option value="manual">Manual measure</option><optgroup label="Projects">{projects.map((project: any) => <option key={project.id} value={`project:${project.id}`}>{itemTitle(project)}</option>)}</optgroup><optgroup label="Epics and PBIs">{measurableItems.map((item: any) => <option key={item.id} value={`work_item:${item.id}`}>{workType(item).toUpperCase()} · {itemTitle(item)}</option>)}</optgroup></select></label>}<label className="is-wide"><span>Name</span><input disabled={linked} onChange={(event) => setTitle(event.target.value)} placeholder={linked ? "Uses the linked work title" : kind === "lead" ? "Weekly demos completed" : "Increase adoption from 35% to 60%"} value={title} /></label>{!linked && <div className="do-measure-numbers"><label><span>Start</span><input onChange={(event) => setStart(Number(event.target.value))} type="number" value={start} /></label><label><span>Current</span><input onChange={(event) => setCurrent(Number(event.target.value))} type="number" value={current} /></label><label><span>Target</span><input onChange={(event) => setTarget(Number(event.target.value))} type="number" value={target} /></label><label><span>Unit</span><input onChange={(event) => setUnit(event.target.value)} value={unit} /></label></div>}<footer><button className="is-secondary" onClick={onCancel} type="button">Cancel</button><button disabled={!linked && !title.trim()} onClick={onCreate} type="button">Add measure</button></footer></div>;
+}
+
+function EmptyStrategy({ onCreate }: { onCreate: () => void }) {
+  return <div className="do-strategy-empty"><Target size={24} /><strong>No strategic objectives yet</strong><p>Start with one outcome that deserves exceptional focus this cycle.</p><button onClick={onCreate} type="button"><Plus size={13} /> Create objective</button><ArrowRight size={14} /></div>;
 }

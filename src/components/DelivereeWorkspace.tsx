@@ -37,6 +37,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Target,
   Trash2,
   Users,
   WandSparkles,
@@ -80,6 +81,7 @@ import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
+import { StrategyCenter } from "./StrategyCenter";
 import {
   DELIVEREE_SKILLS,
   isProjectWizardInvocation,
@@ -136,7 +138,13 @@ type Panel =
   | "digest"
   | "workspace"
   | null;
-type CenterView = "conversation" | "items" | "notes" | "portfolio" | "project";
+type CenterView =
+  | "conversation"
+  | "items"
+  | "notes"
+  | "strategy"
+  | "portfolio"
+  | "project";
 
 function timestamp(value: any) {
   if (value?.seconds)
@@ -514,6 +522,9 @@ export function DelivereeWorkspace() {
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
+  const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
+  const [strategicMeasures, setStrategicMeasures] = useState<any[]>([]);
+  const [strategicRecords, setStrategicRecords] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -617,6 +628,9 @@ export function DelivereeWorkspace() {
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
       makeQuery("cost_templates", setCostTemplates),
+      makeQuery("strategic_goals", setStrategicGoals),
+      makeQuery("key_results", setStrategicMeasures),
+      makeQuery("strategic_initiatives", setStrategicRecords),
       makeQuery("knowledge_items", setKnowledgeItems, false, true),
       makeQuery(
         "notebook_entries",
@@ -1190,7 +1204,7 @@ export function DelivereeWorkspace() {
         projects: scopedProjects,
         milestones: scopedMilestones,
         risks: scopedRisks,
-        goals: [],
+        goals: strategicGoals,
         events: [],
         dailyCapacityMinutes: 360,
         loaded: true,
@@ -1256,6 +1270,20 @@ export function DelivereeWorkspace() {
               name: team.name || "Team",
               memberEmails: team.memberEmails || [],
             })),
+            strategicMeasures: strategicMeasures.map((measure) => ({
+              id: measure.id,
+              strategicGoalId: measure.strategicGoalId,
+              title: measure.title,
+              measureKind: measure.measureKind || "outcome",
+              currentValue: measure.currentValue,
+              targetValue: measure.targetValue,
+              unit: measure.unit || "",
+              sourceType: measure.sourceType || "manual",
+              sourceId: measure.sourceId || null,
+            })),
+            strategyPulse: strategicRecords
+              .filter((record) => record.recordType === "strategy_checkin")
+              .slice(0, 12),
             pendingReviewCount: isFocusedConversation
               ? reviewItems.filter((item) =>
                   contextProjectIds.includes(
@@ -2906,6 +2934,18 @@ export function DelivereeWorkspace() {
               <BookOpen size={13} /> Notas
             </button>
             <button
+              aria-selected={centerView === "strategy"}
+              className={centerView === "strategy" ? "is-active" : ""}
+              onClick={() => {
+                goCenterView("strategy");
+                setPanel(null);
+              }}
+              role="tab"
+              type="button"
+            >
+              <Target size={13} /> Strategy
+            </button>
+            <button
               aria-selected={centerView === "portfolio"}
               className={centerView === "portfolio" ? "is-active" : ""}
               onClick={() => {
@@ -3276,6 +3316,19 @@ export function DelivereeWorkspace() {
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
+            tasks={tasks}
+            workspaceMembers={workspaceMembers}
+          />
+        ) : centerView === "strategy" ? (
+          <StrategyCenter
+            goals={strategicGoals}
+            keyResults={strategicMeasures}
+            onAsk={(prompt) => {
+              setComposer(prompt);
+              goCenterView("conversation");
+            }}
+            projects={projects}
+            records={strategicRecords}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />

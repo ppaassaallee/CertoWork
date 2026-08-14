@@ -200,6 +200,7 @@ function groundedCitations(query, workspaceContext) {
     ["milestone", workspaceContext?.milestones],
     ["risk", workspaceContext?.risks],
     ["goal", workspaceContext?.goals],
+    ["measure", workspaceContext?.strategicMeasures],
     ["calendar", workspaceContext?.events],
     ["document", workspaceContext?.documents],
   ];
@@ -254,6 +255,7 @@ function compactEvidence(citations, workspaceContext) {
     ...(workspaceContext?.milestones || []),
     ...(workspaceContext?.risks || []),
     ...(workspaceContext?.goals || []),
+    ...(workspaceContext?.strategicMeasures || []),
     ...(workspaceContext?.events || []),
     ...(workspaceContext?.documents || []),
   ];
@@ -311,6 +313,8 @@ Product behavior:
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
 - Use projects as context for outcomes, tasks, decisions, owners, dependencies, risks, milestones, and delivery. When the user asks for team planning, support a lightweight Scrum backlog/sprint flow or PMI lifecycle without unnecessary ceremony.
+- When strategic goals and measures are supplied, distinguish the Objective (direction), outcome measures (measurable results), lead measures (predictive actions the team can influence), and weekly commitments. A linked Project, Epic, or PBI may serve as execution evidence or a lead measure, but do not confuse activity completion with a business outcome.
+- Treat Gems as recognition backed by the supplied audit ledger. Never invent a balance, prize, Boost, or redemption and never recommend gaming the system with low-value activity.
 - When workspace members or teams are supplied, use them for ownership suggestions and collaboration planning. Prefer assigning by real person/team from evidence; if unknown, mark owner as null or "Unassigned" rather than inventing a teammate.
 - Stay concise, direct, calm, and useful. Lead with the answer or recommendation.
 - When a project is active, keep the answer scoped to that project unless the user explicitly asks across all work.
@@ -342,6 +346,9 @@ ${JSON.stringify({
   pendingReviewCount: context.pendingReviewCount || 0,
   workspaceMembers: context.workspaceMembers || [],
   workspaceTeams: context.workspaceTeams || [],
+  strategicGoals: context.goals || [],
+  strategicMeasures: context.strategicMeasures || [],
+  strategyPulse: context.strategyPulse || [],
   currentUserMessageId: context.currentUserMessageId || null,
   projectArtifactSourceMessageId: context.projectArtifactSourceMessageId || null,
   operatingMode: focusedDelivery ? "focused_delivery" : "chief_of_staff",
@@ -362,6 +369,7 @@ ${JSON.stringify({
   risksInScope: Array.isArray(context.risks) ? context.risks.length : 0,
   projectDocuments: Array.isArray(context.documents) ? context.documents.length : 0,
   goals: Array.isArray(context.goals) ? context.goals.length : 0,
+  strategicMeasures: Array.isArray(context.strategicMeasures) ? context.strategicMeasures.length : 0,
   calendarEvents: Array.isArray(context.events) ? context.events.length : 0,
 })}
 
