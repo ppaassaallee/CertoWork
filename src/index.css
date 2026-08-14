@@ -1248,6 +1248,10 @@ button { color: inherit; }
 .do-finance-summary strong { margin-top: 3px; color: #28533d; font: 650 calc(13px * var(--cw-text-scale)) "Manrope", sans-serif; }
 .do-finance-summary small { margin-top: 2px; color: #95a098; font-size: calc(6.3px * var(--cw-text-scale)); }
 .do-finance-summary .is-negative strong { color: #a45143; }
+.do-finance-capacity { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.do-finance-capacity > div { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 6px; border: 1px solid #dfe8e2; border-radius: 10px; background: #fbfdfb; padding: 8px 9px; }
+.do-finance-capacity span { width: 100%; color: #7f8f85; font-size: calc(6px * var(--cw-text-scale)); font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+.do-finance-capacity strong { border: 1px solid #e2ebe5; border-radius: 999px; background: #fff; padding: 4px 7px; color: #375c47; font-size: calc(6.7px * var(--cw-text-scale)); font-weight: 750; }
 .do-finance-add-period { display: grid; grid-template-columns: minmax(160px, .85fr) minmax(130px, .7fr) minmax(180px, 1fr) auto auto; align-items: end; gap: 7px; border: 1px solid #dfe9e2; border-radius: 11px; background: #f5f9f6; padding: 9px; }
 .do-finance-add-period label, .do-finance-period-controls label { display: grid; gap: 4px; min-width: 0; color: #6f8075; font-size: calc(6.5px * var(--cw-text-scale)); font-weight: 750; }
 .do-finance-add-period input, .do-finance-add-period select, .do-finance-period-controls input, .do-finance-period-controls select { min-width: 0; height: 33px; border: 1px solid #d7e2da; border-radius: 8px; background: #fff; padding: 0 9px; color: #405449; font-size: calc(7.5px * var(--cw-text-scale)); outline: none; }
@@ -1286,7 +1290,7 @@ button { color: inherit; }
 .do-finance-subledger > header strong { color: #304a3a; font-size: calc(8.5px * var(--cw-text-scale)); }
 .do-finance-subledger > header small { margin-top: 2px; color: #89968e; font-size: calc(6.5px * var(--cw-text-scale)); }
 .do-finance-subledger > header button { display: inline-flex; min-height: 30px; align-items: center; gap: 4px; border: 1px solid #cdded2; border-radius: 7px; background: #fff; padding: 5px 8px; color: #356149; font-size: calc(7px * var(--cw-text-scale)); font-weight: 750; cursor: pointer; }
-.do-finance-cost-head, .do-finance-cost-row { display: grid; min-width: 1690px; grid-template-columns: minmax(180px, 1.25fr) 110px 125px 115px 105px 82px 82px 88px 88px 90px 90px 100px 90px 32px; align-items: center; gap: 6px; padding: 7px 9px; }
+.do-finance-cost-head, .do-finance-cost-row { display: grid; min-width: 2300px; grid-template-columns: minmax(190px, 1.2fr) 150px 120px 140px 120px 130px 110px 125px 115px 105px 82px 82px 88px 88px 90px 90px 100px 90px 32px; align-items: center; gap: 6px; padding: 7px 9px; }
 .do-finance-billing-head, .do-finance-billing-row { display: grid; min-width: 1420px; grid-template-columns: minmax(180px, 1.2fr) 110px 125px 100px 100px 105px 105px 115px 100px 105px 32px; align-items: center; gap: 6px; padding: 7px 9px; }
 .do-finance-cost-head, .do-finance-billing-head { border-bottom: 1px solid #e7ece8; color: #8b978f; font-size: calc(5.8px * var(--cw-text-scale)); font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
 .do-finance-cost-row + .do-finance-cost-row, .do-finance-billing-row + .do-finance-billing-row { border-top: 1px solid #edf1ee; }
@@ -1642,6 +1646,7 @@ button { color: inherit; }
   .do-command-economics-head { display: grid; }
   .do-command-economics-total { justify-self: start; text-align: left; }
   .do-finance-summary, .do-finance-ledger.is-compact .do-finance-summary { grid-template-columns: 1fr 1fr; }
+  .do-finance-capacity { grid-template-columns: 1fr; }
   .do-finance-summary > div + div { border-left: 0; border-top: 1px solid #e7ece8; }
   .do-finance-add-period, .do-finance-period-controls { grid-template-columns: 1fr 1fr; }
   .do-finance-add-period button, .do-finance-period-controls button { width: 100%; }

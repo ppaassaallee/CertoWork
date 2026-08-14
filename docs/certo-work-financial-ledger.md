@@ -14,6 +14,9 @@ The project console treats delivery economics as an auditable ledger instead of 
 Every period can contain both cost and revenue movements. A movement records:
 
 - description and category;
+- cost type: direct cost, direct allocation cost, recurring cost, pass-through cost, internal cost, or revenue;
+- allocation stage: Define, Onboarding, Build, Deploy, Operations, Change Request, or Support;
+- service / solution, vendor, and assignee when applicable;
 - unit driver, planned quantity, actual quantity, and rate;
 - calculated planned and actual amount;
 - invoice, purchase-order, or bill reference;
@@ -23,6 +26,18 @@ Every period can contain both cost and revenue movements. A movement records:
 - amount and date paid or collected.
 
 Revenue, invoicing, and cash collection are distinct values. Registering a collection does not create a second revenue movement.
+
+## Allocation and capacity methodology
+
+The allocation model follows the source spreadsheet shape:
+
+- one row per project, cost type, stage, item, service / solution, unit of measure, budget rate, budget units, actual rate, actual units, vendor, and assignee;
+- hours represent delivery capacity and can be grouped by assignee or stage;
+- AI minutes, hits, transactions, MB, licenses, and fees represent usage or commercial cost drivers, but do not consume human capacity;
+- internal team time should use `Direct Allocation Cost` with an assignee;
+- vendor, platform, usage, and pass-through charges should use vendor and service fields even when no assignee is needed.
+
+This keeps capacity planning connected to the same source rows used for project economics: when a PM records 40 actual support hours for Operations, Certo Work can show both the cost impact and the capacity consumed.
 
 ## Financial state
 

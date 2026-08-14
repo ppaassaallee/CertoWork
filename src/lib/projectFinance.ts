@@ -6,11 +6,16 @@ export type FinanceEntry = {
   direction: FinanceDirection;
   description: string;
   category: string;
+  costType?: string;
+  allocationStage?: string;
+  serviceSolution?: string;
   unit: string;
   plannedQty: number;
   actualQty: number;
   plannedRate?: number;
   rate: number;
+  vendor?: string;
+  assignee?: string;
   accountingMonth?: string;
   transactionDate?: string;
   financialStatus?: string;
@@ -87,6 +92,13 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
             entry.description || entry.dimension || "Financial item",
           ),
           category: String(entry.category || inferredCategory(entry)),
+          costType: String(entry.costType || entry.type || "") || undefined,
+          allocationStage:
+            String(entry.allocationStage || entry.stage || entry.statge || "") ||
+            undefined,
+          serviceSolution:
+            String(entry.serviceSolution || entry.service || entry.solution || "") ||
+            undefined,
           unit: String(entry.unit || "fee"),
           plannedQty: Number(entry.plannedQty ?? entry.quantity ?? 0),
           actualQty: Number(entry.actualQty ?? entry.actualQuantity ?? 0),
@@ -95,9 +107,21 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
               entry.budgetRate ??
               entry.rate ??
               entry.unitRate ??
+              entry["Budget Unit Cost"] ??
               0,
           ),
-          rate: Number(entry.rate ?? entry.unitRate ?? 0),
+          rate: Number(
+            entry.rate ??
+              entry.unitRate ??
+              entry.actualRate ??
+              entry["Actual Unit Cost"] ??
+              entry.plannedRate ??
+              0,
+          ),
+          vendor: String(entry.vendor || "") || undefined,
+          assignee:
+            String(entry.assignee || entry.assigneeName || entry.owner || "") ||
+            undefined,
           accountingMonth: String(
             entry.accountingMonth ||
               (period.year && period.month
@@ -267,5 +291,86 @@ export function projectFinancialRollup(project: any) {
     latestMonthlyCost: latestMonthly
       ? latestMonthly.actualCost || latestMonthly.plannedCost
       : 0,
+  };
+}
+
+export function financeCapacityAllocations(periods: FinancePeriod[]) {
+  const hourEntries = periods
+    .flatMap((period) =>
+      period.entries.map((entry) => ({
+        ...entry,
+        periodKind: period.kind,
+        periodLabel: period.label,
+        periodMonth: period.month,
+        periodYear: period.year,
+      })),
+    )
+    .filter(
+      (entry) =>
+        entry.direction === "cost" &&
+        entry.unit === "hour" &&
+        entry.costStatus !== "void",
+    );
+
+  const byAssignee = new Map<
+    string,
+    { plannedHours: number; actualHours: number; plannedCost: number; actualCost: number }
+  >();
+  const byStage = new Map<
+    string,
+    { plannedHours: number; actualHours: number; plannedCost: number; actualCost: number }
+  >();
+
+  hourEntries.forEach((entry) => {
+    const assignee = entry.assignee || "Unassigned";
+    const stage = entry.allocationStage || entry.periodLabel || "Unstaged";
+    const plannedCost = financeAmount(entry, false);
+    const actualCost = financeAmount(entry);
+    const add = (
+      map: Map<
+        string,
+        { plannedHours: number; actualHours: number; plannedCost: number; actualCost: number }
+      >,
+      key: string,
+    ) => {
+      const current =
+        map.get(key) || {
+          plannedHours: 0,
+          actualHours: 0,
+          plannedCost: 0,
+          actualCost: 0,
+        };
+      map.set(key, {
+        plannedHours: current.plannedHours + Number(entry.plannedQty || 0),
+        actualHours: current.actualHours + Number(entry.actualQty || 0),
+        plannedCost: current.plannedCost + plannedCost,
+        actualCost: current.actualCost + actualCost,
+      });
+    };
+    add(byAssignee, assignee);
+    add(byStage, stage);
+  });
+
+  const sortDesc = (
+    rows: Array<{
+      name: string;
+      plannedHours: number;
+      actualHours: number;
+      plannedCost: number;
+      actualCost: number;
+    }>,
+  ) =>
+    rows.sort(
+      (left, right) =>
+        right.plannedHours + right.actualHours - (left.plannedHours + left.actualHours),
+    );
+
+  return {
+    byAssignee: sortDesc(
+      [...byAssignee.entries()].map(([name, value]) => ({ name, ...value })),
+    ),
+    byStage: sortDesc(
+      [...byStage.entries()].map(([name, value]) => ({ name, ...value })),
+    ),
   };
 }

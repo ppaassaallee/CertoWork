@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  financeCapacityAllocations,
   financeSummary,
   normalizedFinancePeriods,
   projectFinancialRollup,
@@ -226,4 +227,70 @@ test("every financial movement keeps an exact date, calendar period and simple s
   assert.equal(entry.accountingMonth, "2026-09");
   assert.equal(entry.transactionDate, "2026-09-18");
   assert.equal(entry.financialStatus, "disputed");
+});
+
+test("cost allocation lines preserve Excel-style drivers and feed capacity planning", () => {
+  const periods = normalizedFinancePeriods({
+    financePeriods: [
+      {
+        id: "build-allocation",
+        kind: "build",
+        label: "Build V1",
+        month: 9,
+        year: 2026,
+        entries: [
+          {
+            id: "internal-hours",
+            direction: "cost",
+            description: "Hours",
+            type: "Direct Allocation Cost",
+            stage: "Build",
+            service: "Agentic Project",
+            unit: "hour",
+            plannedQty: 100,
+            actualQty: 110,
+            plannedRate: 23,
+            actualRate: 23,
+            assignee: "Juan Perez",
+          },
+          {
+            id: "vendor-minutes",
+            direction: "cost",
+            description: "AI consumption for build phase",
+            costType: "Direct Cost",
+            allocationStage: "Build",
+            serviceSolution: "Agentic Project",
+            unit: "ai_minute",
+            plannedQty: 2300,
+            actualQty: 1200,
+            rate: 0.43,
+            vendor: "Retell AI",
+          },
+        ],
+      },
+    ],
+  });
+
+  const [hours, minutes] = periods[0].entries;
+  assert.equal(hours.costType, "Direct Allocation Cost");
+  assert.equal(hours.allocationStage, "Build");
+  assert.equal(hours.serviceSolution, "Agentic Project");
+  assert.equal(hours.assignee, "Juan Perez");
+  assert.equal(minutes.vendor, "Retell AI");
+
+  const capacity = financeCapacityAllocations(periods);
+  assert.deepEqual(capacity.byAssignee[0], {
+    name: "Juan Perez",
+    plannedHours: 100,
+    actualHours: 110,
+    plannedCost: 2300,
+    actualCost: 2530,
+  });
+  assert.deepEqual(capacity.byStage[0], {
+    name: "Build",
+    plannedHours: 100,
+    actualHours: 110,
+    plannedCost: 2300,
+    actualCost: 2530,
+  });
 });

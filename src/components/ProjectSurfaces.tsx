@@ -37,6 +37,7 @@ import {
 } from "../lib/projectPortfolio";
 import {
   financeAmount,
+  financeCapacityAllocations,
   financeId,
   financeSummary,
   normalizedFinancePeriods,
@@ -2574,7 +2575,78 @@ const costUnitLabels: Record<string, string> = {
   other: "Other",
 };
 
+const COST_TYPES = [
+  "Direct Cost",
+  "Direct Allocation Cost",
+  "Recurring Cost",
+  "Pass-through Cost",
+  "Internal Cost",
+  "Revenue",
+] as const;
+
+const ALLOCATION_STAGES = [
+  "Define",
+  "Onboarding",
+  "Build",
+  "Deploy",
+  "Operations",
+  "Change Request",
+  "Support",
+] as const;
+
 const COST_TEMPLATES = [
+  {
+    id: "cost-allocation-example",
+    name: "Cost allocation model",
+    description:
+      "Direct costs, allocated team hours, vendor usage and build consumption.",
+    rows: [
+      {
+        dimension: "External Developers Solution Architecture",
+        costType: "Direct Cost",
+        allocationStage: "Build",
+        serviceSolution: "Agentic Project",
+        unit: "hour",
+        plannedQty: 150,
+        actualQty: 0,
+        rate: 45,
+        vendor: "Vendor A",
+      },
+      {
+        dimension: "External Developers",
+        costType: "Direct Cost",
+        allocationStage: "Build",
+        serviceSolution: "Agentic Project",
+        unit: "hour",
+        plannedQty: 150,
+        actualQty: 0,
+        rate: 45,
+        vendor: "Vendor B",
+      },
+      {
+        dimension: "Internal allocation hours",
+        costType: "Direct Allocation Cost",
+        allocationStage: "Build",
+        serviceSolution: "Agentic Project",
+        unit: "hour",
+        plannedQty: 100,
+        actualQty: 0,
+        rate: 23,
+        assignee: "Unassigned",
+      },
+      {
+        dimension: "AI consumption for build phase",
+        costType: "Direct Cost",
+        allocationStage: "Build",
+        serviceSolution: "Agentic Project",
+        unit: "ai_minute",
+        plannedQty: 2300,
+        actualQty: 0,
+        rate: 0.43,
+        vendor: "Retell AI",
+      },
+    ],
+  },
   {
     id: "ai-voice-retell",
     name: "AI voice + delivery",
@@ -2818,6 +2890,7 @@ function ProjectFinanceLedger({
 }) {
   const periods = normalizedFinancePeriods(project);
   const summary = financeSummary(periods);
+  const capacityAllocations = financeCapacityAllocations(periods);
   const [newKind, setNewKind] = useState<FinancePeriodKind>("build");
   const [newBuildLabel, setNewBuildLabel] = useState("V1");
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1);
@@ -2897,11 +2970,20 @@ function ProjectFinanceLedger({
                   description:
                     direction === "cost" ? "New cost" : "New invoice",
                   category: direction === "cost" ? "development" : "revenue",
+                  costType: direction === "cost" ? "Direct Cost" : "Revenue",
+                  allocationStage:
+                    period.kind === "monthly"
+                      ? "Operations"
+                      : deliveryStageLabels[deliveryStage(project)],
+                  serviceSolution:
+                    project.serviceLine || project.technology || "Delivery",
                   unit: "fee",
                   plannedQty: 1,
                   actualQty: 1,
                   plannedRate: 0,
                   rate: 0,
+                  vendor: "",
+                  assignee: "",
                   accountingMonth:
                     period.year && period.month
                       ? `${period.year}-${String(period.month).padStart(2, "0")}`
@@ -2936,11 +3018,20 @@ function ProjectFinanceLedger({
             direction: "cost" as const,
             description: row.dimension || "Cost item",
             category: row.category || inferredCostCategory(row),
+            costType: row.costType || "Direct Cost",
+            allocationStage: row.allocationStage || deliveryStageLabels[deliveryStage(project)],
+            serviceSolution:
+              row.serviceSolution ||
+              project.serviceLine ||
+              project.technology ||
+              "Delivery",
             unit: row.unit || "hour",
             plannedQty: Number(row.plannedQty || 0),
             actualQty: Number(row.actualQty || 0),
             plannedRate: Number(row.rate || 0),
             rate: Number(row.rate || 0),
+            vendor: row.vendor || "",
+            assignee: row.assignee || "",
             accountingMonth: `${year}-${String(month).padStart(2, "0")}`,
             transactionDate: today,
             financialStatus: "not_billed",
@@ -2987,11 +3078,21 @@ function ProjectFinanceLedger({
         direction: "cost" as const,
         description: row.dimension,
         category: row.category,
+        costType: row.costType || "Direct Cost",
+        allocationStage:
+          row.allocationStage || deliveryStageLabels[deliveryStage(project)],
+        serviceSolution:
+          row.serviceSolution ||
+          project.serviceLine ||
+          project.technology ||
+          "Delivery",
         unit: row.unit,
         plannedQty: row.plannedQty,
         actualQty: row.actualQty,
         plannedRate: row.rate,
         rate: row.rate,
+        vendor: row.vendor || "",
+        assignee: row.assignee || "",
         accountingMonth: `${newYear}-${String(newMonth).padStart(2, "0")}`,
         transactionDate: today,
         financialStatus: "not_billed",
@@ -3029,10 +3130,15 @@ function ProjectFinanceLedger({
         .map((entry) => ({
           dimension: entry.description,
           category: entry.category,
+          costType: entry.costType || "Direct Cost",
+          allocationStage: entry.allocationStage || "Build",
+          serviceSolution: entry.serviceSolution || "Delivery",
           unit: entry.unit,
           plannedQty: entry.plannedQty,
           actualQty: 0,
           rate: entry.rate,
+          vendor: entry.vendor || "",
+          assignee: entry.assignee || "",
         })),
     });
   };
@@ -3044,10 +3150,15 @@ function ProjectFinanceLedger({
         .map((entry) => ({
           dimension: entry.description,
           category: entry.category,
+          costType: entry.costType || "Direct Cost",
+          allocationStage: entry.allocationStage || "Build",
+          serviceSolution: entry.serviceSolution || "Delivery",
           unit: entry.unit,
           plannedQty: entry.plannedQty,
           actualQty: 0,
           rate: entry.rate,
+          vendor: entry.vendor || "",
+          assignee: entry.assignee || "",
         })),
     });
   };
@@ -3079,6 +3190,33 @@ function ProjectFinanceLedger({
           <span>Margin</span>
           <strong>${summary.margin.toLocaleString()}</strong>
           <small>Revenue − actual cost</small>
+        </div>
+      </div>
+
+      <div className="do-finance-capacity">
+        <div>
+          <span>Capacity by assignee</span>
+          {capacityAllocations.byAssignee.length ? (
+            capacityAllocations.byAssignee.slice(0, 4).map((row) => (
+              <strong key={row.name}>
+                {row.name}: {row.actualHours}h / {row.plannedHours}h
+              </strong>
+            ))
+          ) : (
+            <strong>No assigned hours yet</strong>
+          )}
+        </div>
+        <div>
+          <span>Capacity by stage</span>
+          {capacityAllocations.byStage.length ? (
+            capacityAllocations.byStage.slice(0, 4).map((row) => (
+              <strong key={row.name}>
+                {row.name}: {row.actualHours}h / {row.plannedHours}h
+              </strong>
+            ))
+          ) : (
+            <strong>No staged hours yet</strong>
+          )}
         </div>
       </div>
 
@@ -3406,6 +3544,11 @@ function ProjectFinanceLedger({
                   <div className="do-finance-entry-table is-costs">
                     <div className="do-finance-cost-head">
                       <span>Cost item</span>
+                      <span>Type</span>
+                      <span>Stage</span>
+                      <span>Service</span>
+                      <span>Vendor</span>
+                      <span>Assignee</span>
                       <span>Date</span>
                       <span>Period</span>
                       <span>Category</span>
@@ -3430,6 +3573,61 @@ function ProjectFinanceLedger({
                                 event.target.value.trim() || "Cost item",
                             })
                           }
+                        />
+                        <select
+                          onChange={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              costType: event.target.value,
+                            })
+                          }
+                          value={entry.costType || "Direct Cost"}
+                        >
+                          {COST_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          onChange={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              allocationStage: event.target.value,
+                            })
+                          }
+                          value={entry.allocationStage || "Build"}
+                        >
+                          {ALLOCATION_STAGES.map((stage) => (
+                            <option key={stage} value={stage}>
+                              {stage}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          defaultValue={entry.serviceSolution || ""}
+                          onBlur={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              serviceSolution: event.target.value.trim(),
+                            })
+                          }
+                          placeholder="Service / solution"
+                        />
+                        <input
+                          defaultValue={entry.vendor || ""}
+                          onBlur={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              vendor: event.target.value.trim(),
+                            })
+                          }
+                          placeholder="Vendor"
+                        />
+                        <input
+                          defaultValue={entry.assignee || ""}
+                          onBlur={(event) =>
+                            updateEntry(period.id, entry.id, {
+                              assignee: event.target.value.trim(),
+                            })
+                          }
+                          placeholder="Assignee"
                         />
                         <input
                           aria-label={`Date for ${entry.description}`}
