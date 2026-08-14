@@ -42,6 +42,7 @@ import {
   financeSummary,
   normalizedFinancePeriods,
   projectFinancialRollup,
+  stripUndefinedValues,
   type FinanceDirection,
   type FinanceEntry,
   type FinancePeriod,
@@ -2921,7 +2922,9 @@ function ProjectFinanceLedger({
     ),
   ];
   const updatePeriods = (next: FinancePeriod[]) =>
-    onUpdateProject(project.id, { financePeriods: next });
+    onUpdateProject(project.id, {
+      financePeriods: stripUndefinedValues(next),
+    });
   const updatePeriod = (periodId: string, patch: Partial<FinancePeriod>) =>
     updatePeriods(
       periods.map((period) =>

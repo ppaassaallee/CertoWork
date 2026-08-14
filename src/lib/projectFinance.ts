@@ -51,6 +51,19 @@ export function financeId(prefix: string) {
   return `${prefix}-${suffix}`;
 }
 
+export function stripUndefinedValues<T>(value: T): T {
+  if (Array.isArray(value))
+    return value.map((item) => stripUndefinedValues(item)) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [key, stripUndefinedValues(entryValue)]),
+    ) as T;
+  }
+  return value;
+}
+
 function inferredCategory(entry: any) {
   const value =
     `${entry?.category || ""} ${entry?.description || entry?.dimension || ""}`.toLowerCase();

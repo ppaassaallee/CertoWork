@@ -6,6 +6,7 @@ import {
   financeSummary,
   normalizedFinancePeriods,
   projectFinancialRollup,
+  stripUndefinedValues,
 } from "../src/lib/projectFinance";
 
 const project = {
@@ -293,4 +294,32 @@ test("cost allocation lines preserve Excel-style drivers and feed capacity plann
     plannedCost: 2300,
     actualCost: 2530,
   });
+});
+
+test("financial periods are cleaned before Firestore storage", () => {
+  const cleaned = stripUndefinedValues([
+    {
+      id: "period",
+      sourceTemplateId: undefined,
+      entries: [
+        {
+          id: "entry",
+          invoiceStatus: undefined,
+          nested: { keep: "yes", remove: undefined },
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(cleaned, [
+    {
+      id: "period",
+      entries: [
+        {
+          id: "entry",
+          nested: { keep: "yes" },
+        },
+      ],
+    },
+  ]);
 });
