@@ -20,6 +20,7 @@ import {
   Circle,
   Folder,
   Inbox,
+  LayoutGrid,
   ListTodo,
   Loader2,
   Menu,
@@ -70,6 +71,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
+import { PROJECT_PIPELINE_SEED } from "../data/projectPipelineSeed";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
@@ -118,7 +120,7 @@ type Message = {
 };
 
 type Panel = "today" | "projects" | "project" | "approvals" | "skills" | "digest" | "workspace" | null;
-type CenterView = "conversation" | "items" | "notes";
+type CenterView = "conversation" | "items" | "notes" | "portfolio" | "project";
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
@@ -409,6 +411,7 @@ export function DelivereeWorkspace() {
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
+  const [pipelineImporting, setPipelineImporting] = useState(false);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -421,7 +424,6 @@ export function DelivereeWorkspace() {
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
-  const [commandCenterOpen, setCommandCenterOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [centerView, setCenterView] = useState<CenterView>("conversation");
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -1230,9 +1232,9 @@ export function DelivereeWorkspace() {
 
   const openProjectRecord = (project: any) => {
     selectProjectContext(project);
-    setCommandCenterOpen(false);
     setProjectConsoleId(project.id);
-    setPanel("project");
+    setPanel(null);
+    setCenterView("project");
   };
 
   const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
@@ -1257,6 +1259,38 @@ export function DelivereeWorkspace() {
   const updateCostTemplate = async (templateId: string, patch: Record<string, unknown>) => {
     await updateDoc(doc(db, "cost_templates", templateId), { ...patch, updatedAt: serverTimestamp() });
     setNotice("Cost template updated.");
+  };
+
+  const importPipelineProjects = async () => {
+    if (!user || !workspace || pipelineImporting) return;
+    setPipelineImporting(true);
+    try {
+      const existingKeys = new Set(projects.map((project) => String(project.importKey || normalizedEntityName(`${project.bpo || ""}|${project.client || ""}|${project.title || project.name || ""}|${project.technology || project.serviceLine || ""}`))));
+      const pending = PROJECT_PIPELINE_SEED.filter((project) => !existingKeys.has(project.importKey));
+      for (let index = 0; index < pending.length; index += 400) {
+        const batch = writeBatch(db);
+        pending.slice(index, index + 400).forEach((project) => {
+          const ref = doc(collection(db, "projects"));
+          batch.set(ref, {
+            ...project,
+            costBreakdown: [],
+            workspaceId: workspace.id,
+            userId: user.uid,
+            createdBy: user.uid,
+            importedFrom: "Pipeline_Proyecto_Dashboard_Ejecutivo.xlsx",
+            importedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+      setNotice(pending.length ? `${pending.length} proyectos cargados desde el pipeline ejecutivo.` : "El pipeline ya estaba cargado; no se duplicó ningún proyecto.");
+    } catch {
+      setNotice("No se pudo cargar el pipeline. Revisa la conexión e inténtalo de nuevo.");
+    } finally {
+      setPipelineImporting(false);
+    }
   };
 
   const updateWorkspaceProfile = async () => {
@@ -1653,6 +1687,7 @@ export function DelivereeWorkspace() {
       "delivery_reviews",
       "delivery_gates",
       "integration_configs",
+      "cost_templates",
       "strategic_goals",
       "key_results",
       "strategic_initiatives",
@@ -1795,7 +1830,7 @@ export function DelivereeWorkspace() {
           <div className="do-sidebar-section">
             <div className="do-section-head">
               <span>Projects</span>
-              <button aria-label="Open project command center" onClick={() => { setCommandCenterOpen(true); setSidebarOpen(false); }} type="button">Command center</button>
+              <button aria-label="Open project command center" onClick={() => { setCenterView("portfolio"); setPanel(null); setSidebarOpen(false); }} type="button">Command center</button>
             </div>
             <div className="do-project-list">
               {sidebarProjects.favorites.length > 0 && <span className="do-project-group-label"><Star size={10} /> Favorites</span>}
@@ -1889,10 +1924,11 @@ export function DelivereeWorkspace() {
           <div className="do-header-actions">
             {routeOrPrimaryProject && (
               <button
-                className={`do-header-button ${panel === "project" ? "is-active" : ""}`}
+                className={`do-header-button ${centerView === "project" ? "is-active" : ""}`}
                 onClick={() => {
-                  setProjectConsoleId(routeOrPrimaryProject.id);
-                  setPanel(panel === "project" ? null : "project");
+                    setProjectConsoleId(routeOrPrimaryProject.id);
+                    setPanel(null);
+                    setCenterView(centerView === "project" ? "conversation" : "project");
                 }}
                 type="button"
               >
@@ -1917,6 +1953,7 @@ export function DelivereeWorkspace() {
             <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => setCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
             <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => setCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
             <button aria-selected={centerView === "notes"} className={centerView === "notes" ? "is-active" : ""} onClick={() => setCenterView("notes")} role="tab" type="button"><BookOpen size={13} /> Notas</button>
+            <button aria-selected={centerView === "portfolio"} className={centerView === "portfolio" ? "is-active" : ""} onClick={() => { setCenterView("portfolio"); setPanel(null); }} role="tab" type="button"><LayoutGrid size={13} /> Portfolio</button>
           </div>
         </section>
 
@@ -2050,6 +2087,41 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
+        ) : centerView === "portfolio" ? (
+          <ProjectCommandCenter
+            onArchiveProject={archiveProject}
+            onClose={() => setCenterView("conversation")}
+            onOpenProject={openProjectRecord}
+            onUpdateProject={updateProject}
+            costTemplates={costTemplates}
+            onCreateCostTemplate={createCostTemplate}
+            onUpdateCostTemplate={updateCostTemplate}
+            onImportPipelineProjects={importPipelineProjects}
+            pipelineImporting={pipelineImporting}
+            pipelineProjectCount={PROJECT_PIPELINE_SEED.length}
+            projects={projects}
+            risks={risks}
+            tasks={tasks}
+          />
+        ) : centerView === "project" ? (
+          consoleProject ? (
+            <ProjectConsolePanel
+              conversationId={conversationId}
+              documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
+              milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
+              onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}
+              onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
+              onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
+              onArchiveProject={archiveProject}
+              onAsk={(prompt) => { setComposer(prompt); setCenterView("conversation"); }}
+              onUpdateProject={updateProject}
+              onUpdateTask={updateProjectTask}
+              project={consoleProject}
+              risks={risks.filter((item) => item.projectId === consoleProject.id)}
+              tasks={tasks.filter((item) => item.projectId === consoleProject.id)}
+              workspaceMembers={workspaceMembers}
+            />
+          ) : <div className="do-panel-empty"><Folder size={20} /><strong>No project selected.</strong><span>Choose a project from the portfolio.</span></div>
         ) : (
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
@@ -2141,7 +2213,7 @@ export function DelivereeWorkspace() {
               </div>
               {routeOrPrimaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button"><Folder size={15} /> Open project console</button>}
               <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
-              <button className="do-panel-secondary" onClick={() => { setPanel(null); setCommandCenterOpen(true); }} type="button">Project command center</button>
+              <button className="do-panel-secondary" onClick={() => { setPanel(null); setCenterView("portfolio"); }} type="button">Project command center</button>
             </>
           )}
 
@@ -2345,21 +2417,6 @@ export function DelivereeWorkspace() {
           <div className="do-panel-judgment"><ShieldCheck size={15} /><span><strong>{judgment.verdict === "stop" ? "A conflict needs attention" : "A planning signal"}</strong><small>{judgment.signals[0].detail}</small></span></div>
         )}
       </aside>
-
-      {commandCenterOpen && (
-        <ProjectCommandCenter
-          onArchiveProject={archiveProject}
-          onClose={() => setCommandCenterOpen(false)}
-          onOpenProject={openProjectRecord}
-          onUpdateProject={updateProject}
-          costTemplates={costTemplates}
-          onCreateCostTemplate={createCostTemplate}
-          onUpdateCostTemplate={updateCostTemplate}
-          projects={projects}
-          risks={risks}
-	          tasks={tasks}
-	        />
-	      )}
 
       {cleanSlateOpen && (
         <div aria-label="Start clean Certo Work" aria-modal="true" className="do-clean-layer" role="dialog">
