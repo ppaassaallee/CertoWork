@@ -760,28 +760,255 @@ export function ProjectConsolePanel({
   );
 }
 
-export function ProjectCommandCenter({ projects, tasks, risks, onClose, onUpdateProject, onArchiveProject, onOpenProject }: {
+const DELIVERY_STAGES = ["onboarding", "build", "deploy", "operations"] as const;
+type DeliveryStage = (typeof DELIVERY_STAGES)[number];
+type PortfolioView = "overview" | "economics";
+
+const COST_UNITS = ["hour", "ai_minute", "transaction", "hit", "mb", "fee", "license", "other"] as const;
+const costUnitLabels: Record<string, string> = {
+  hour: "Hour",
+  ai_minute: "AI voice minute",
+  transaction: "Transaction",
+  hit: "Hit / request",
+  mb: "MB",
+  fee: "Fee",
+  license: "License",
+  other: "Other",
+};
+
+const COST_TEMPLATES = [
+  {
+    id: "ai-voice-retell",
+    name: "AI voice + delivery",
+    description: "Development, implementation, support and voice minutes from a provider such as Retell.",
+    rows: [
+      { dimension: "Development", unit: "hour", plannedQty: 120, actualQty: 0, rate: 95 },
+      { dimension: "Implementation", unit: "hour", plannedQty: 48, actualQty: 0, rate: 85 },
+      { dimension: "Support", unit: "hour", plannedQty: 24, actualQty: 0, rate: 75 },
+      { dimension: "Retell voice", unit: "ai_minute", plannedQty: 4000, actualQty: 0, rate: 0.07 },
+      { dimension: "Platform fee", unit: "fee", plannedQty: 1, actualQty: 0, rate: 250 },
+    ],
+  },
+  {
+    id: "usage-based-platform",
+    name: "Usage-based platform",
+    description: "Mix of hours, transactions, hits and data transfer.",
+    rows: [
+      { dimension: "Development", unit: "hour", plannedQty: 80, actualQty: 0, rate: 95 },
+      { dimension: "Transactions", unit: "transaction", plannedQty: 10000, actualQty: 0, rate: 0.03 },
+      { dimension: "API calls", unit: "hit", plannedQty: 250000, actualQty: 0, rate: 0.002 },
+      { dimension: "Data transfer", unit: "mb", plannedQty: 50000, actualQty: 0, rate: 0.01 },
+      { dimension: "Support", unit: "hour", plannedQty: 18, actualQty: 0, rate: 75 },
+    ],
+  },
+  {
+    id: "managed-operations",
+    name: "Managed operations",
+    description: "Recurring support with implementation and fixed fees.",
+    rows: [
+      { dimension: "Implementation", unit: "hour", plannedQty: 36, actualQty: 0, rate: 85 },
+      { dimension: "Support", unit: "hour", plannedQty: 60, actualQty: 0, rate: 75 },
+      { dimension: "Monitoring fee", unit: "fee", plannedQty: 1, actualQty: 0, rate: 600 },
+      { dimension: "License", unit: "license", plannedQty: 1, actualQty: 0, rate: 300 },
+    ],
+  },
+];
+
+const deliveryStageLabels: Record<DeliveryStage, string> = {
+  onboarding: "Onboarding",
+  build: "Build",
+  deploy: "Deploy",
+  operations: "Operations",
+};
+
+const DEMO_PROJECTS = [
+  {
+    id: "demo-calltek-single-digits",
+    demo: true,
+    title: "Calltek · Single Digits · AI Tech Support",
+    projectKey: "CTK-001",
+    client: "Single Digits",
+    serviceLine: "AI Tech Support",
+    deliveryStage: "build",
+    status: "active",
+    health: "on_track",
+    methodology: "hybrid",
+    owner: "Delivery lead",
+    nextAction: "Complete QA acceptance pack",
+    progress: 62,
+    openItems: 8,
+    initialCost: 18500,
+    recurringMonthlyCost: 2400,
+    costTemplateId: "ai-voice-retell",
+    costBreakdown: [
+      { dimension: "Development", unit: "hour", plannedQty: 180, actualQty: 126, rate: 95 },
+      { dimension: "Implementation", unit: "hour", plannedQty: 64, actualQty: 42, rate: 85 },
+      { dimension: "Support", unit: "hour", plannedQty: 24, actualQty: 9, rate: 75 },
+      { dimension: "Retell voice", unit: "ai_minute", plannedQty: 4000, actualQty: 2860, rate: 0.07 },
+      { dimension: "Platform fee", unit: "fee", plannedQty: 1, actualQty: 1, rate: 250 },
+    ],
+  },
+  {
+    id: "demo-banrural-iptc",
+    demo: true,
+    title: "Banrural · IPTC Collections Agent",
+    projectKey: "BAN-014",
+    client: "Banrural",
+    serviceLine: "Conversational AI",
+    deliveryStage: "onboarding",
+    status: "planning",
+    health: "at_risk",
+    methodology: "pmi",
+    owner: "Client success",
+    nextAction: "Confirm security and data access owners",
+    progress: 24,
+    openItems: 12,
+    initialCost: 9200,
+    recurringMonthlyCost: 1750,
+    costTemplateId: "usage-based-platform",
+    costBreakdown: [
+      { dimension: "Development", unit: "hour", plannedQty: 72, actualQty: 18, rate: 95 },
+      { dimension: "Implementation", unit: "hour", plannedQty: 48, actualQty: 26, rate: 85 },
+      { dimension: "Support", unit: "hour", plannedQty: 12, actualQty: 4, rate: 75 },
+      { dimension: "Transactions", unit: "transaction", plannedQty: 10000, actualQty: 6700, rate: 0.03 },
+      { dimension: "API calls", unit: "hit", plannedQty: 250000, actualQty: 193000, rate: 0.002 },
+    ],
+  },
+  {
+    id: "demo-oxio-phase-3",
+    demo: true,
+    title: "OXIO · Phase 3",
+    projectKey: "OX-003",
+    client: "OXIO",
+    serviceLine: "Amazon Connect",
+    deliveryStage: "operations",
+    status: "active",
+    health: "blocked",
+    methodology: "scrum",
+    owner: "Support lead",
+    nextAction: "Resolve production incident and publish runbook",
+    progress: 78,
+    openItems: 5,
+    initialCost: 12600,
+    recurringMonthlyCost: 3850,
+    costTemplateId: "managed-operations",
+    costBreakdown: [
+      { dimension: "Development", unit: "hour", plannedQty: 96, actualQty: 91, rate: 95 },
+      { dimension: "Implementation", unit: "hour", plannedQty: 40, actualQty: 44, rate: 85 },
+      { dimension: "Support", unit: "hour", plannedQty: 80, actualQty: 68, rate: 75 },
+      { dimension: "Monitoring fee", unit: "fee", plannedQty: 1, actualQty: 1, rate: 600 },
+      { dimension: "License", unit: "license", plannedQty: 1, actualQty: 1, rate: 300 },
+    ],
+  },
+];
+
+function deliveryStage(project: any): DeliveryStage {
+  const value = String(project?.deliveryStage || project?.phase || "build").toLowerCase().replace(/[^a-z]/g, "");
+  if (value.includes("onboard")) return "onboarding";
+  if (value.includes("deploy") || value.includes("preproduction") || value.includes("qa")) return "deploy";
+  if (value.includes("operat") || value.includes("prod")) return "operations";
+  return "build";
+}
+
+function moneyValue(value: any) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function costRows(project: any) {
+  const rows = Array.isArray(project?.costBreakdown) ? project.costBreakdown : [];
+  if (rows.length) return rows.map((row: any) => ({
+    ...row,
+    unit: row.unit || "hour",
+    plannedQty: Number(row.plannedQty ?? row.plannedHours ?? 0),
+    actualQty: Number(row.actualQty ?? row.actualHours ?? 0),
+    rate: Number(row.rate || row.unitRate || 0),
+  }));
+  return [
+    { dimension: "Development", unit: "hour", plannedQty: Number(project?.developmentHoursPlanned || 0), actualQty: Number(project?.developmentHoursSpent || 0), rate: Number(project?.developmentHourlyRate || 0) },
+    { dimension: "Implementation", unit: "hour", plannedQty: Number(project?.implementationHoursPlanned || 0), actualQty: Number(project?.implementationHoursSpent || 0), rate: Number(project?.implementationHourlyRate || 0) },
+    { dimension: "Support", unit: "hour", plannedQty: Number(project?.supportHoursPlanned || 0), actualQty: Number(project?.supportHoursSpent || 0), rate: Number(project?.supportHourlyRate || 0) },
+  ];
+}
+
+function rowCost(row: any, actual = false) {
+  return Number(actual ? row?.actualQty ?? row?.actualHours ?? 0 : row?.plannedQty ?? row?.plannedHours ?? 0) * Number(row?.rate || 0);
+}
+
+function rowHours(row: any, actual = false) {
+  if (String(row?.unit || "hour") !== "hour") return 0;
+  return Number(actual ? row?.actualQty ?? row?.actualHours ?? 0 : row?.plannedQty ?? row?.plannedHours ?? 0);
+}
+
+function projectProgress(project: any, projectTasks: any[]) {
+  if (Number.isFinite(Number(project?.progress))) return Number(project.progress);
+  const done = projectTasks.filter((task) => taskWorkLane(task) === "done").length;
+  return projectTasks.length ? Math.round((done / projectTasks.length) * 100) : 0;
+}
+
+function projectSummary(project: any, projectTasks: any[]) {
+  const rows = costRows(project);
+  const plannedHours = rows.reduce((sum: number, row: any) => sum + rowHours(row), 0);
+  const actualHours = rows.reduce((sum: number, row: any) => sum + rowHours(row, true), 0);
+  const plannedLabor = rows.reduce((sum: number, row: any) => sum + rowCost(row), 0);
+  const actualLabor = rows.reduce((sum: number, row: any) => sum + rowCost(row, true), 0);
+  return {
+    plannedHours,
+    actualHours,
+    plannedLabor,
+    actualLabor,
+    initial: moneyValue(project.initialCost || project.costInitial || project.setupCost),
+    recurring: moneyValue(project.recurringMonthlyCost || project.monthlyRecurringCost || project.recurringCost),
+    openItems: Number.isFinite(Number(project.openItems)) ? Number(project.openItems) : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
+    progress: projectProgress(project, projectTasks),
+  };
+}
+
+export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [], onClose, onUpdateProject, onArchiveProject, onOpenProject, onCreateCostTemplate, onUpdateCostTemplate }: {
   projects: any[];
   tasks: any[];
   risks: any[];
+  costTemplates?: any[];
   onClose: () => void;
+  onCreateCostTemplate?: (template: any) => Promise<void> | void;
+  onUpdateCostTemplate?: (templateId: string, patch: Record<string, unknown>) => Promise<void> | void;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("active");
+  const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
+  const [healthFilter, setHealthFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<PortfolioView>("overview");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showDemo, setShowDemo] = useState(true);
+  const [templateName, setTemplateName] = useState("");
   const sorted = sortProjectsByRecency(projects);
-  const visible = sorted.filter((project) => {
+  const portfolio = [...(showDemo ? DEMO_PROJECTS : []), ...sorted];
+  const templates = [...COST_TEMPLATES, ...costTemplates.filter((template) => !COST_TEMPLATES.some((builtin) => builtin.id === template.id))];
+  const realProjects = sorted;
+  const filtered = portfolio.filter((project) => {
     const status = String(project.status || "planning").toLowerCase();
+    const health = projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id));
     const matchesFilter = filter === "all" || (filter === "active" ? !["completed", "archived", "done"].includes(status) : status === filter);
-    return matchesFilter && projectTitle(project).toLowerCase().includes(search.toLowerCase());
+    const matchesStage = stageFilter === "all" || deliveryStage(project) === stageFilter;
+    const matchesHealth = healthFilter === "all" || health === healthFilter;
+    const haystack = `${projectTitle(project)} ${project.client || ""} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
+    return matchesFilter && matchesStage && matchesHealth && haystack.includes(search.toLowerCase());
   });
-  const openProjects = sorted.filter((project) => !["completed", "archived", "done"].includes(String(project.status || "").toLowerCase()));
+  const openProjects = portfolio.filter((project) => !["completed", "archived", "done"].includes(String(project.status || "").toLowerCase()));
   const allAttention = openProjects.filter((project) => {
     const projectTasks = tasks.filter((task) => task.projectId === project.id);
     const projectRisks = risks.filter((risk) => risk.projectId === project.id);
     return projectHealth(project, projectTasks, projectRisks) !== "on_track";
   });
-  const attention = allAttention.slice(0, 3);
+  const attention = allAttention.filter((project) => !project.demo).slice(0, 3);
+  const allRows = portfolio.map((project) => projectSummary(project, tasks.filter((task) => task.projectId === project.id)));
+  const totals = allRows.reduce((acc, row) => ({
+    plannedHours: acc.plannedHours + Number(row.plannedHours || 0),
+    actualHours: acc.actualHours + Number(row.actualHours || 0),
+    initial: acc.initial + row.initial,
+    recurring: acc.recurring + row.recurring,
+  }), { plannedHours: 0, actualHours: 0, initial: 0, recurring: 0 });
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -789,15 +1016,48 @@ export function ProjectCommandCenter({ projects, tasks, risks, onClose, onUpdate
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
+  const updateCostRow = (project: any, index: number, patch: Record<string, unknown>) => {
+    const rows = costRows(project).map((row: any, rowIndex: number) => rowIndex === index ? { ...row, ...patch } : row);
+    onUpdateProject(project.id, { costBreakdown: rows });
+  };
+
+  const saveTemplate = async (project: any) => {
+    if (!templateName.trim() || !onCreateCostTemplate) return;
+    await onCreateCostTemplate({
+      name: templateName.trim(),
+      description: `Custom template based on ${projectTitle(project)}.`,
+      rows: costRows(project),
+    });
+    setTemplateName("");
+  };
+
+  const saveTemplateChanges = async (project: any) => {
+    const template = templates.find((item) => item.id === project.costTemplateId);
+    if (!template || COST_TEMPLATES.some((item) => item.id === template.id) || !onUpdateCostTemplate) return;
+    await onUpdateCostTemplate(template.id, { rows: costRows(project) });
+  };
+
+  const renderEconomics = (project: any, projectTasks: any[]) => {
+    const summary = projectSummary(project, projectTasks);
+    const rows = costRows(project);
+    return <div className="do-command-economics" key={`${project.id}-economics`}>
+      <div className="do-command-economics-head"><div><span className="do-project-card-kicker">ECONOMICS & CAPACITY</span><strong>{projectTitle(project)}</strong><small>{project.client || "Internal"} · {project.serviceLine || "Delivery"} · {summary.actualHours}h used of {summary.plannedHours}h planned</small></div><div className="do-command-economics-total"><span>Initial</span><strong>${summary.initial.toLocaleString()}</strong><span>Monthly recurring</span><strong>${summary.recurring.toLocaleString()}</strong></div></div>
+      <div className="do-cost-grid"><label>Delivery stage<select disabled={Boolean(project.demo)} onChange={(event) => onUpdateProject(project.id, { deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Next step<input disabled={Boolean(project.demo)} defaultValue={project.nextAction || ""} onBlur={(event) => onUpdateProject(project.id, { nextAction: event.target.value.trim() })} placeholder="Next concrete step" /></label><label>Initial cost<input disabled={Boolean(project.demo)} defaultValue={summary.initial || ""} onBlur={(event) => onUpdateProject(project.id, { initialCost: Number(event.target.value || 0) })} type="number" /></label><label>Monthly recurring<input disabled={Boolean(project.demo)} defaultValue={summary.recurring || ""} onBlur={(event) => onUpdateProject(project.id, { recurringMonthlyCost: Number(event.target.value || 0) })} type="number" /></label></div>
+      <div className="do-cost-template-bar"><label>Template<select disabled={Boolean(project.demo)} onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onUpdateProject(project.id, { costTemplateId: template.id, costBreakdown: template.rows }); }} value={project.costTemplateId || "custom"}><option value="custom">Custom / editable</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><span>{project.costTemplateId ? templates.find((template) => template.id === project.costTemplateId)?.description : "Choose a reusable cost model, then edit any line for this project."}</span><div className="do-cost-template-actions">{!project.demo && <><input aria-label="New cost template name" onChange={(event) => setTemplateName(event.target.value)} placeholder="New template name" value={templateName} /><button disabled={!templateName.trim() || !onCreateCostTemplate} onClick={() => saveTemplate(project)} type="button">Save as template</button>{project.costTemplateId && !COST_TEMPLATES.some((item) => item.id === project.costTemplateId) && <button disabled={!onUpdateCostTemplate} onClick={() => saveTemplateChanges(project)} type="button">Update template</button>}</>}</div></div>
+      <div className="do-cost-table"><div className="do-cost-table-head"><span>Dimension</span><span>Unit</span><span>Planned qty</span><span>Actual qty</span><span>Rate</span><span>Planned cost</span><span>Actual cost</span></div>{rows.map((row: any, index: number) => <div className="do-cost-row" key={`${project.id}-${row.dimension}-${index}`}><input disabled={Boolean(project.demo)} onBlur={(event) => updateCostRow(project, index, { dimension: event.target.value })} defaultValue={row.dimension} /><select disabled={Boolean(project.demo)} onChange={(event) => updateCostRow(project, index, { unit: event.target.value })} value={row.unit || "hour"}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{costUnitLabels[unit]}</option>)}</select><input disabled={Boolean(project.demo)} onBlur={(event) => updateCostRow(project, index, { plannedQty: Number(event.target.value || 0) })} defaultValue={row.plannedQty || 0} type="number" /><input disabled={Boolean(project.demo)} onBlur={(event) => updateCostRow(project, index, { actualQty: Number(event.target.value || 0) })} defaultValue={row.actualQty || 0} type="number" /><input disabled={Boolean(project.demo)} onBlur={(event) => updateCostRow(project, index, { rate: Number(event.target.value || 0) })} defaultValue={row.rate || 0} type="number" /><strong>${rowCost(row).toLocaleString()}</strong><strong>${rowCost(row, true).toLocaleString()}</strong></div>)}</div>
+      <div className="do-cost-note"><span>Variance</span><strong className={summary.actualLabor > summary.plannedLabor ? "is-negative" : ""}>${(summary.actualLabor - summary.plannedLabor).toLocaleString()}</strong><small>Labor cost is calculated from actual hours × rate. Add one row per team, service or phase when a project needs a deeper breakdown.</small></div>
+    </div>;
+  };
+
   return (
     <div aria-label="Project command center" aria-modal="true" className="do-project-layer do-command-layer" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="dialog">
       <section className="do-command-center" data-testid="project-command-center">
-        <header className="do-command-head"><div><span className="do-project-card-kicker">PORTFOLIO CONTROL</span><h1>Project command center</h1><p>Classify, prioritize and move delivery from one quiet place.</p></div><button aria-label="Close command center" onClick={onClose} type="button"><X size={19} /></button></header>
-        <div className="do-command-metrics"><div><strong>{openProjects.length}</strong><span>Open projects</span></div><div><strong>{openProjects.filter((project) => projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)) === "on_track").length}</strong><span>On track</span></div><div className="is-risk"><strong>{allAttention.length}</strong><span>Need attention</span></div><div><strong>{tasks.filter((task) => taskWorkLane(task) === "blocked").length}</strong><span>Blocked items</span></div></div>
+        <header className="do-command-head"><div><span className="do-project-card-kicker">DELIVERY CONTROL TOWER</span><h1>Project command center</h1><p>One tabular view for stage, health, next step, capacity and cost. Click a project to open its full console.</p></div><button aria-label="Close command center" onClick={onClose} type="button"><X size={19} /></button></header>
+        <div className="do-command-metrics"><div><strong>{realProjects.filter((project) => !["completed", "archived", "done"].includes(String(project.status || "").toLowerCase())).length}</strong><span>Open projects</span></div><div><strong>{realProjects.filter((project) => deliveryStage(project) === "operations").length}</strong><span>In operations</span></div><div className="is-risk"><strong>{realProjects.filter((project) => projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)) !== "on_track").length}</strong><span>Need attention</span></div><div><strong>{Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h</strong><span>Hours used / planned</span></div><div><strong>${Math.round(totals.recurring).toLocaleString()}</strong><span>Monthly recurring</span></div><div><strong>${Math.round(totals.initial).toLocaleString()}</strong><span>Initial investment</span></div></div>
         <div className="do-command-body">
           <section className="do-command-attention"><div className="do-command-section-head"><div><span className="do-project-card-kicker">MOST IMPORTANT NOW</span><h2>Topics requiring judgment</h2></div><AlertTriangle size={16} /></div>{attention.length ? <div>{attention.map((project) => { const health = projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)); return <button key={project.id} onClick={() => onOpenProject(project)} type="button"><span className={healthClass(health)}>{projectHealthLabel(health)}</span><strong>{projectTitle(project)}</strong><small>{tasks.filter((task) => task.projectId === project.id && taskWorkLane(task) === "blocked").length} blocked · {risks.filter((risk) => risk.projectId === project.id).length} risks</small><ArrowRight size={13} /></button>; })}</div> : <div className="do-command-calm"><CheckCircle2 size={17} /><span><strong>No project demands escalation.</strong><small>Review by exception; keep the team moving.</small></span></div>}</section>
-          <section className="do-command-portfolio"><div className="do-command-toolbar"><div className="do-command-filters">{["active", "planning", "paused", "completed", "archived", "all"].map((value) => <button className={filter === value ? "is-active" : ""} key={value} onClick={() => setFilter(value)} type="button">{value === "all" ? "All" : value === "active" ? "Open" : projectStatusLabel(value)}</button>)}</div><label><Search size={14} /><input aria-label="Search projects" onChange={(event) => setSearch(event.target.value)} placeholder="Search projects" value={search} /></label></div>
-            <div className="do-command-table"><div className="do-command-table-head"><span>Project</span><span>Method</span><span>Status</span><span>Health</span><span>Work</span><span /></div>{visible.map((project) => { const projectTasks = tasks.filter((task) => task.projectId === project.id); const projectRisks = risks.filter((risk) => risk.projectId === project.id); const health = projectHealth(project, projectTasks, projectRisks); const favorite = isProjectFavorite(project); return <article key={project.id}><div className="do-command-project-name"><button aria-label={favorite ? "Remove favorite" : "Favorite project"} className={favorite ? "is-favorite" : ""} onClick={() => onUpdateProject(project.id, { favorite: !favorite })} type="button"><Star fill={favorite ? "currentColor" : "none"} size={14} /></button><span><strong>{projectTitle(project)}</strong><small>{project.projectType || project.category || "Unclassified"}</small></span></div><span>{String(project.methodology || "Scrum").toUpperCase()}</span><ProjectStatusSelect onUpdate={(patch) => onUpdateProject(project.id, patch)} project={project} /><span className={`do-health-pill ${healthClass(health)}`}>{projectHealthLabel(health)}</span><span>{projectTasks.filter((task) => taskWorkLane(task) !== "done").length} open</span><div className="do-command-row-actions"><button onClick={() => onOpenProject(project)} type="button">Open</button>{archiveConfirmId === project.id ? <><button onClick={() => setArchiveConfirmId(null)} type="button">Cancel</button><button className="is-danger" onClick={() => onArchiveProject(project)} type="button">Confirm</button></> : <button aria-label={`Archive ${projectTitle(project)}`} onClick={() => setArchiveConfirmId(project.id)} type="button"><Archive size={13} /></button>}</div></article>; })}{visible.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div>
+          <section className="do-command-portfolio"><div className="do-command-toolbar"><div className="do-command-toolbar-left"><div className="do-command-filters">{["active", "planning", "paused", "completed", "archived", "all"].map((value) => <button className={filter === value ? "is-active" : ""} key={value} onClick={() => setFilter(value)} type="button">{value === "all" ? "All" : value === "active" ? "Open" : projectStatusLabel(value)}</button>)}</div><div className="do-command-view-toggle"><button className={view === "overview" ? "is-active" : ""} onClick={() => setView("overview")} type="button">Portfolio</button><button className={view === "economics" ? "is-active" : ""} onClick={() => setView("economics")} type="button">Hours & costs</button></div></div><label><Search size={14} /><input aria-label="Search projects" onChange={(event) => setSearch(event.target.value)} placeholder="Search project, client or service" value={search} /></label></div><div className="do-command-subtoolbar"><label>Stage<select aria-label="Filter by delivery stage" onChange={(event) => setStageFilter(event.target.value as "all" | DeliveryStage)} value={stageFilter}><option value="all">All stages</option>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Health<select aria-label="Filter by project health" onChange={(event) => setHealthFilter(event.target.value)} value={healthFilter}><option value="all">All health</option><option value="on_track">On track</option><option value="at_risk">At risk</option><option value="blocked">Blocked</option></select></label><button className={showDemo ? "is-demo-active" : ""} onClick={() => setShowDemo((current) => !current)} type="button"><Sparkles size={12} /> {showDemo ? "Hide 3 demo projects" : "Show 3 demo projects"}</button><span className="do-command-taxonomy-note">Taxonomy: client · service · delivery stage</span></div>
+            {view === "overview" ? <div className="do-command-table"><div className="do-command-table-head"><span>Project / taxonomy</span><span>Stage</span><span>Health</span><span>Progress</span><span>Next step</span><span>Hours</span><span>Economics</span><span /></div>{filtered.map((project) => { const projectTasks = tasks.filter((task) => task.projectId === project.id); const projectRisks = risks.filter((risk) => risk.projectId === project.id); const health = projectHealth(project, projectTasks, projectRisks); const summary = projectSummary(project, projectTasks); const favorite = isProjectFavorite(project); return <div className={`do-command-project-block ${project.demo ? "is-demo" : ""}`} key={project.id}><article><div className="do-command-project-name"><button aria-label={favorite ? "Remove favorite" : "Favorite project"} className={favorite ? "is-favorite" : ""} disabled={Boolean(project.demo)} onClick={() => onUpdateProject(project.id, { favorite: !favorite })} type="button"><Star fill={favorite ? "currentColor" : "none"} size={14} /></button><span><strong>{projectTitle(project)}</strong><small>{project.demo ? "DEMO · " : ""}{project.client || "Internal"} · {project.serviceLine || project.projectType || project.category || "Delivery"}</small></span></div><span className="do-stage-pill">{deliveryStageLabels[deliveryStage(project)]}</span><span className={`do-health-pill ${healthClass(health)}`}>{projectHealthLabel(health)}</span><span className="do-progress-cell"><b>{summary.progress}%</b><i><em style={{ width: `${summary.progress}%` }} /></i></span><span className="do-next-step">{project.nextAction || "Define next step"}</span><span>{summary.actualHours}h / {summary.plannedHours}h</span><span>${summary.initial.toLocaleString()}<small>${summary.recurring.toLocaleString()} / mo</small></span><div className="do-command-row-actions">{project.demo ? <button onClick={() => setExpandedId(expandedId === project.id ? null : project.id)} type="button">{expandedId === project.id ? "Hide" : "Preview"}</button> : <button onClick={() => onOpenProject(project)} type="button">Open</button>}{!project.demo && (archiveConfirmId === project.id ? <><button onClick={() => setArchiveConfirmId(null)} type="button">Cancel</button><button className="is-danger" onClick={() => onArchiveProject(project)} type="button">Confirm</button></> : <button aria-label={`Archive ${projectTitle(project)}`} onClick={() => setArchiveConfirmId(project.id)} type="button"><Archive size={13} /></button>)}</div></article>{expandedId === project.id && renderEconomics(project, projectTasks)}</div>; })}{filtered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div> : <div className="do-command-economics-list">{filtered.map((project) => renderEconomics(project, tasks.filter((task) => task.projectId === project.id)))}{filtered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div>}
           </section>
         </div>
       </section>

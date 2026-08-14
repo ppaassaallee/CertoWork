@@ -228,6 +228,26 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(candidateId) && resource.data.userId == request.auth.uid;
     }
 
+    // Workspace-shared cost models used by the delivery control tower.
+    match /cost_templates/{id} {
+      allow get, list: if isSignedIn() && isValidId(id)
+        && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().userId == request.auth.uid
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
+        && incoming().rows is list
+        && incoming().createdAt is timestamp
+        && incoming().workspaceId is string && isWorkspaceMember(incoming().workspaceId);
+      allow update: if isSignedIn() && isValidId(id)
+        && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)))
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
+        && incoming().rows is list;
+      allow delete: if isSignedIn() && isValidId(id)
+        && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+    }
+
     // Projects
     function isValidProject(data) {
         return data.keys().hasAll(['userId', 'title', 'status', 'createdAt'])

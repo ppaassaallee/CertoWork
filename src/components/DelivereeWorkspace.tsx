@@ -408,6 +408,7 @@ export function DelivereeWorkspace() {
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
+  const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -472,6 +473,7 @@ export function DelivereeWorkspace() {
       makeQuery("tasks", setTasks),
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
+      makeQuery("cost_templates", setCostTemplates),
       makeQuery("knowledge_items", setKnowledgeItems, false, true),
       makeQuery("notebook_entries", (items) => setNotebookEntries(items as NotebookEntry[]), false, true),
       makeQuery("review_candidates", (items) =>
@@ -1099,7 +1101,8 @@ export function DelivereeWorkspace() {
         const allowedFields = [
           "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
           "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
-          "sponsor", "teamMembers", "definitionOfDone",
+          "sponsor", "teamMembers", "definitionOfDone", "deliveryStage", "nextAction", "initialCost",
+          "recurringMonthlyCost", "costTemplateId", "costBreakdown",
         ];
         const patch = Object.fromEntries(
           allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
@@ -1113,7 +1116,8 @@ export function DelivereeWorkspace() {
           const allowedFields = [
             "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
             "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
-            "sponsor", "teamMembers", "definitionOfDone",
+            "sponsor", "teamMembers", "definitionOfDone", "deliveryStage", "nextAction", "initialCost",
+            "recurringMonthlyCost", "costTemplateId", "costBreakdown",
           ];
           const patch = Object.fromEntries(
             allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
@@ -1233,6 +1237,26 @@ export function DelivereeWorkspace() {
 
   const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
     await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+  };
+
+  const createCostTemplate = async (template: any) => {
+    if (!user || !workspace || !template?.name?.trim()) return;
+    await addDoc(collection(db, "cost_templates"), {
+      name: template.name.trim(),
+      description: String(template.description || "").trim(),
+      rows: Array.isArray(template.rows) ? template.rows : [],
+      userId: user.uid,
+      workspaceId: workspace.id,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice("Cost template saved for this workspace.");
+  };
+
+  const updateCostTemplate = async (templateId: string, patch: Record<string, unknown>) => {
+    await updateDoc(doc(db, "cost_templates", templateId), { ...patch, updatedAt: serverTimestamp() });
+    setNotice("Cost template updated.");
   };
 
   const updateWorkspaceProfile = async () => {
@@ -2328,6 +2352,9 @@ export function DelivereeWorkspace() {
           onClose={() => setCommandCenterOpen(false)}
           onOpenProject={openProjectRecord}
           onUpdateProject={updateProject}
+          costTemplates={costTemplates}
+          onCreateCostTemplate={createCostTemplate}
+          onUpdateCostTemplate={updateCostTemplate}
           projects={projects}
           risks={risks}
 	          tasks={tasks}
