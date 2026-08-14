@@ -62,7 +62,11 @@ import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
-import { sidebarProjectGroups, sortProjectsByRecency, type WorkLane } from "../lib/projectPortfolio";
+import {
+  sidebarProjectGroups,
+  sortProjectsByRecency,
+  type WorkLane,
+} from "../lib/projectPortfolio";
 import { buildProjectDocumentContext } from "../lib/projectContext";
 import {
   conversationIncludesProject,
@@ -82,7 +86,10 @@ import {
   splitProjectWizardLines,
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
-import { buildNotebookContext, type NotebookEntry } from "../lib/notebookContext";
+import {
+  buildNotebookContext,
+  type NotebookEntry,
+} from "../lib/notebookContext";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -120,11 +127,20 @@ type Message = {
   offline?: boolean;
 };
 
-type Panel = "today" | "projects" | "project" | "approvals" | "skills" | "digest" | "workspace" | null;
+type Panel =
+  | "today"
+  | "projects"
+  | "project"
+  | "approvals"
+  | "skills"
+  | "digest"
+  | "workspace"
+  | null;
 type CenterView = "conversation" | "items" | "notes" | "portfolio" | "project";
 
 function timestamp(value: any) {
-  if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
+  if (value?.seconds)
+    return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
   return typeof value === "number" ? value : 0;
 }
 
@@ -165,21 +181,31 @@ function isGenericProjectTitle(value: any) {
     "project",
     "proyecto",
     "help me create a project",
-  ].includes(String(value || "").trim().toLowerCase());
+  ].includes(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function proposedTitle(proposed: any, fallback: any) {
   const proposedValue = String(proposed?.title || proposed?.name || "").trim();
-  if (proposedValue && !isGenericProjectTitle(proposedValue)) return proposedValue;
+  if (proposedValue && !isGenericProjectTitle(proposedValue))
+    return proposedValue;
   const fallbackValue = String(fallback || "").trim();
-  if (fallbackValue && !isGenericProjectTitle(fallbackValue)) return fallbackValue;
+  if (fallbackValue && !isGenericProjectTitle(fallbackValue))
+    return fallbackValue;
   return proposedValue || fallbackValue || "Untitled";
 }
 
 function projectWorkKey(project: any) {
-  const explicit = String(project?.projectKey || project?.key || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const explicit = String(project?.projectKey || project?.key || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
   if (explicit) return explicit.slice(0, 10);
-  const words = String(project?.title || project?.name || "WORK").toUpperCase().match(/[A-Z0-9]+/g) || ["WORK"];
+  const words = String(project?.title || project?.name || "WORK")
+    .toUpperCase()
+    .match(/[A-Z0-9]+/g) || ["WORK"];
   const initials = words.map((word) => word[0]).join("");
   return (initials.length >= 2 ? initials : words[0].slice(0, 5)).slice(0, 6);
 }
@@ -208,7 +234,8 @@ function dateKey(value: any) {
 
 function priorityLabel(value: any) {
   const normalized = String(value || "").toLowerCase();
-  if (["urgent", "critical", "p0", "p1", "high", "1"].includes(normalized)) return "Priority 1";
+  if (["urgent", "critical", "p0", "p1", "high", "1"].includes(normalized))
+    return "Priority 1";
   if (["p2", "medium", "2"].includes(normalized)) return "Priority 2";
   if (["p3", "low", "3"].includes(normalized)) return "Priority 3";
   return "N/A";
@@ -241,40 +268,97 @@ function normalizedEntityName(value: any) {
     .replace(/\s+/g, " ");
 }
 
-function findMatchingProject(projects: any[], proposed: any, fallbackProjectId = "") {
-  const explicitId = String(proposed?.projectId || proposed?.id || fallbackProjectId || "");
+function findMatchingProject(
+  projects: any[],
+  proposed: any,
+  fallbackProjectId = "",
+) {
+  const explicitId = String(
+    proposed?.projectId || proposed?.id || fallbackProjectId || "",
+  );
   if (explicitId) {
     const direct = projects.find((project) => project.id === explicitId);
     if (direct) return direct;
   }
-  const proposedTitle = normalizedEntityName(proposed?.title || proposed?.name || proposed?.projectTitle || proposed?.projectName);
+  const proposedTitle = normalizedEntityName(
+    proposed?.title ||
+      proposed?.name ||
+      proposed?.projectTitle ||
+      proposed?.projectName,
+  );
   if (!proposedTitle) return null;
-  return projects.find((project) => {
-    const title = normalizedEntityName(project.title || project.name);
-    return title === proposedTitle || title.includes(proposedTitle) || proposedTitle.includes(title);
-  }) || null;
+  return (
+    projects.find((project) => {
+      const title = normalizedEntityName(project.title || project.name);
+      return (
+        title === proposedTitle ||
+        title.includes(proposedTitle) ||
+        proposedTitle.includes(title)
+      );
+    }) || null
+  );
 }
 
-function isDuplicateProjectProposal(action: any, projects: any[], fallbackProject: any | null = null) {
+function isDuplicateProjectProposal(
+  action: any,
+  projects: any[],
+  fallbackProject: any | null = null,
+) {
   if (String(action?.type || "") !== "create_project") return null;
-  return findMatchingProject(projects, action?.proposedChange || {}, fallbackProject?.id || "") || fallbackProject || null;
+  return (
+    findMatchingProject(
+      projects,
+      action?.proposedChange || {},
+      fallbackProject?.id || "",
+    ) ||
+    fallbackProject ||
+    null
+  );
 }
 
-function proposalActionType(action: any, projects: any[], fallbackProject: any | null = null) {
-  return isDuplicateProjectProposal(action, projects, fallbackProject) ? "update_project" : String(action?.type || "");
+function proposalActionType(
+  action: any,
+  projects: any[],
+  fallbackProject: any | null = null,
+) {
+  return isDuplicateProjectProposal(action, projects, fallbackProject)
+    ? "update_project"
+    : String(action?.type || "");
 }
 
-function proposalActionTitle(action: any, projects: any[], fallbackProject: any | null = null) {
-  const existingProject = isDuplicateProjectProposal(action, projects, fallbackProject);
-  const proposedTitle = action?.proposedChange?.title || action?.proposedChange?.name || action?.reason || "Review details";
+function proposalActionTitle(
+  action: any,
+  projects: any[],
+  fallbackProject: any | null = null,
+) {
+  const existingProject = isDuplicateProjectProposal(
+    action,
+    projects,
+    fallbackProject,
+  );
+  const proposedTitle =
+    action?.proposedChange?.title ||
+    action?.proposedChange?.name ||
+    action?.reason ||
+    "Review details";
   if (!existingProject) return proposedTitle;
   return `Update existing project: ${existingProject.title || existingProject.name || proposedTitle}`;
 }
 
-function proposalChipLabel(chip: string, plan: any, projects: any[], fallbackProject: any | null = null) {
-  const hasDuplicateProject = plan?.proposedActions?.some((action: any) => isDuplicateProjectProposal(action, projects, fallbackProject));
+function proposalChipLabel(
+  chip: string,
+  plan: any,
+  projects: any[],
+  fallbackProject: any | null = null,
+) {
+  const hasDuplicateProject = plan?.proposedActions?.some((action: any) =>
+    isDuplicateProjectProposal(action, projects, fallbackProject),
+  );
   if (!hasDuplicateProject) return chip;
-  if (/approve.*project.*creation|create.*project|project.*creation/i.test(chip)) return "Update existing project";
+  if (
+    /approve.*project.*creation|create.*project|project.*creation/i.test(chip)
+  )
+    return "Update existing project";
   return chip;
 }
 
@@ -318,13 +402,18 @@ function RichText({ text }: { text: string }) {
 function UserMessage({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
   const isDocument = text.length > 2_500;
-  const visible = isDocument && !expanded ? `${text.slice(0, 1_400).trimEnd()}…` : text;
+  const visible =
+    isDocument && !expanded ? `${text.slice(0, 1_400).trimEnd()}…` : text;
   return (
     <div className={`do-user-message ${isDocument ? "is-document" : ""}`}>
       {isDocument && (
         <div className="do-user-document-head">
-          <span>Long project input · {text.length.toLocaleString()} characters</span>
-          <button onClick={() => setExpanded((value) => !value)} type="button">{expanded ? "Collapse" : "Show full"}</button>
+          <span>
+            Long project input · {text.length.toLocaleString()} characters
+          </span>
+          <button onClick={() => setExpanded((value) => !value)} type="button">
+            {expanded ? "Collapse" : "Show full"}
+          </button>
         </div>
       )}
       <div>{visible}</div>
@@ -361,7 +450,11 @@ function ActionProposal({
           <div className="do-proposal-item" key={`${action.type}-${index}`}>
             <span className="do-proposal-number">{index + 1}</span>
             <div>
-              <strong>{actionLabel(proposalActionType(action, projects, activeProject))}</strong>
+              <strong>
+                {actionLabel(
+                  proposalActionType(action, projects, activeProject),
+                )}
+              </strong>
               <p>{proposalActionTitle(action, projects, activeProject)}</p>
             </div>
           </div>
@@ -394,7 +487,14 @@ function ActionProposal({
 }
 
 export function DelivereeWorkspace() {
-  const { user, workspace, workspaces, setWorkspace, reloadWorkspaces, logOut } = useAuth();
+  const {
+    user,
+    workspace,
+    workspaces,
+    setWorkspace,
+    reloadWorkspaces,
+    logOut,
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
@@ -408,7 +508,9 @@ export function DelivereeWorkspace() {
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
+    [],
+  );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
@@ -425,9 +527,14 @@ export function DelivereeWorkspace() {
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [centerHistory, setCenterHistory] = useState<{ items: CenterView[]; index: number }>({ items: ["conversation"], index: 0 });
+  const [centerHistory, setCenterHistory] = useState<{
+    items: CenterView[];
+    index: number;
+  }>({ items: ["conversation"], index: 0 });
   const centerView = centerHistory.items[centerHistory.index];
-  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
+    null,
+  );
   const [notice, setNotice] = useState("");
   const [cleanSlateOpen, setCleanSlateOpen] = useState(false);
   const [cleanConfirmText, setCleanConfirmText] = useState("");
@@ -437,7 +544,9 @@ export function DelivereeWorkspace() {
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">("member");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">(
+    "member",
+  );
   const [newTeamName, setNewTeamName] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -452,20 +561,39 @@ export function DelivereeWorkspace() {
       return { items, index: items.length - 1 };
     });
   };
-  const goCenterBack = () => setCenterHistory((current) => ({ ...current, index: Math.max(0, current.index - 1) }));
-  const goCenterForward = () => setCenterHistory((current) => ({ ...current, index: Math.min(current.items.length - 1, current.index + 1) }));
+  const goCenterBack = () =>
+    setCenterHistory((current) => ({
+      ...current,
+      index: Math.max(0, current.index - 1),
+    }));
+  const goCenterForward = () =>
+    setCenterHistory((current) => ({
+      ...current,
+      index: Math.min(current.items.length - 1, current.index + 1),
+    }));
 
   useEffect(() => {
     if (!user || !workspace) return;
     setWorkspaceNameDraft(workspace.name || "Workspace");
-    const makeQuery = (name: string, callback: (items: any[]) => void, activeOnly = false, personal = false) => {
+    const makeQuery = (
+      name: string,
+      callback: (items: any[]) => void,
+      activeOnly = false,
+      personal = false,
+    ) => {
       const clauses: any[] = personal
-        ? [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)]
+        ? [
+            where("userId", "==", user.uid),
+            where("workspaceId", "==", workspace.id),
+          ]
         : [where("workspaceId", "==", workspace.id)];
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-        (snapshot) => callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+        (snapshot) =>
+          callback(
+            snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+          ),
         () => callback([]),
       );
     };
@@ -474,7 +602,9 @@ export function DelivereeWorkspace() {
         "boldi_conversations",
         (items) => {
           const sorted = items.sort(
-            (left, right) => timestamp(right.updatedAt || right.createdAt) - timestamp(left.updatedAt || left.createdAt),
+            (left, right) =>
+              timestamp(right.updatedAt || right.createdAt) -
+              timestamp(left.updatedAt || left.createdAt),
           );
           setConversations(sorted);
           setConversationId((current) => current || sorted[0]?.id || null);
@@ -488,9 +618,20 @@ export function DelivereeWorkspace() {
       makeQuery("boldr_risks", setRisks),
       makeQuery("cost_templates", setCostTemplates),
       makeQuery("knowledge_items", setKnowledgeItems, false, true),
-      makeQuery("notebook_entries", (items) => setNotebookEntries(items as NotebookEntry[]), false, true),
-      makeQuery("review_candidates", (items) =>
-        setReviewItems(items.filter((item) => ["pending", "approved_for_review"].includes(item.status))),
+      makeQuery(
+        "notebook_entries",
+        (items) => setNotebookEntries(items as NotebookEntry[]),
+        false,
+        true,
+      ),
+      makeQuery(
+        "review_candidates",
+        (items) =>
+          setReviewItems(
+            items.filter((item) =>
+              ["pending", "approved_for_review"].includes(item.status),
+            ),
+          ),
         false,
         true,
       ),
@@ -502,22 +643,52 @@ export function DelivereeWorkspace() {
     if (!user || !workspace) return;
     const unsubscribers = [
       onSnapshot(
-        query(collection(db, "workspace_members"), where("workspaceId", "==", workspace.id)),
-        (snapshot) => setWorkspaceMembers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as WorkspaceMember))),
+        query(
+          collection(db, "workspace_members"),
+          where("workspaceId", "==", workspace.id),
+        ),
+        (snapshot) =>
+          setWorkspaceMembers(
+            snapshot.docs.map(
+              (item) => ({ id: item.id, ...item.data() }) as WorkspaceMember,
+            ),
+          ),
         () => setWorkspaceMembers([]),
       ),
       onSnapshot(
-        query(collection(db, "agent_groups"), where("workspaceId", "==", workspace.id)),
-        (snapshot) => setWorkspaceTeams(snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() } as WorkspaceTeam))
-          .filter((team: any) => team.groupType === "workspace_team" && team.status !== "archived")),
+        query(
+          collection(db, "agent_groups"),
+          where("workspaceId", "==", workspace.id),
+        ),
+        (snapshot) =>
+          setWorkspaceTeams(
+            snapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }) as WorkspaceTeam)
+              .filter(
+                (team: any) =>
+                  team.groupType === "workspace_team" &&
+                  team.status !== "archived",
+              ),
+          ),
         () => setWorkspaceTeams([]),
       ),
       onSnapshot(
-        query(collection(db, "agent_invites"), where("workspaceId", "==", workspace.id)),
-        (snapshot) => setWorkspaceInvites(snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }))
-          .filter((invite: any) => invite.inviteType === "workspace_member" && !["accepted", "revoked"].includes(String(invite.status || "").toLowerCase()))),
+        query(
+          collection(db, "agent_invites"),
+          where("workspaceId", "==", workspace.id),
+        ),
+        (snapshot) =>
+          setWorkspaceInvites(
+            snapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }))
+              .filter(
+                (invite: any) =>
+                  invite.inviteType === "workspace_member" &&
+                  !["accepted", "revoked"].includes(
+                    String(invite.status || "").toLowerCase(),
+                  ),
+              ),
+          ),
         () => setWorkspaceInvites([]),
       ),
     ];
@@ -540,7 +711,10 @@ export function DelivereeWorkspace() {
         setMessages(
           snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as Message)
-            .sort((left, right) => timestamp(left.createdAt) - timestamp(right.createdAt)),
+            .sort(
+              (left, right) =>
+                timestamp(left.createdAt) - timestamp(right.createdAt),
+            ),
         ),
       () => setMessages([]),
     );
@@ -552,11 +726,14 @@ export function DelivereeWorkspace() {
 
   useEffect(() => {
     if (lens.kind === "review") setPanel("approvals");
-    if (lens.kind === "work") setPanel(lens.section === "portfolio" ? "projects" : "today");
+    if (lens.kind === "work")
+      setPanel(lens.section === "portfolio" ? "projects" : "today");
   }, [lens.kind, lens.kind === "work" ? lens.section : null]);
 
   useEffect(() => {
-    const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const Recognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
     if (!Recognition) return;
     setVoiceSupported(true);
     const recognition = new Recognition();
@@ -567,86 +744,157 @@ export function DelivereeWorkspace() {
     recognition.onend = () => setIsListening(false);
     recognition.onerror = () => setIsListening(false);
     recognition.onresult = (event: any) => {
-      setInput(Array.from(event.results).map((result: any) => result[0].transcript).join(" "));
+      setInput(
+        Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join(" "),
+      );
     };
     recognitionRef.current = recognition;
     return () => recognition.abort();
   }, []);
 
   const activeProjects = useMemo(
-    () => sortProjectsByRecency(projects.filter((project) => !isClosed(project.status))),
+    () =>
+      sortProjectsByRecency(
+        projects.filter((project) => !isClosed(project.status)),
+      ),
     [projects],
   );
-  const sidebarProjects = useMemo(() => sidebarProjectGroups(projects), [projects]);
-  const openTasks = useMemo(() => tasks.filter((task) => !isClosed(task.status)), [tasks]);
+  const sidebarProjects = useMemo(
+    () => sidebarProjectGroups(projects),
+    [projects],
+  );
+  const openTasks = useMemo(
+    () => tasks.filter((task) => !isClosed(task.status)),
+    [tasks],
+  );
   const activeProject = useMemo(
-    () => (lens.kind === "project" ? projects.find((project) => project.id === lens.projectId) : null),
+    () =>
+      lens.kind === "project"
+        ? projects.find((project) => project.id === lens.projectId)
+        : null,
     [lens, projects],
   );
-  const currentConversation = conversations.find((conversation) => conversation.id === conversationId);
-  const impliedConversationScope = currentConversation || (activeProject
-    ? { linkedProjectIds: [activeProject.id], linkedTaskIds: [], conversationType: "project" as const }
-    : null);
-  const directContextProjectIds = conversationProjectIds(impliedConversationScope);
-  const conversationContextTaskIds = conversationTaskIds(impliedConversationScope);
+  const currentConversation = conversations.find(
+    (conversation) => conversation.id === conversationId,
+  );
+  const impliedConversationScope =
+    currentConversation ||
+    (activeProject
+      ? {
+          linkedProjectIds: [activeProject.id],
+          linkedTaskIds: [],
+          conversationType: "project" as const,
+        }
+      : null);
+  const directContextProjectIds = conversationProjectIds(
+    impliedConversationScope,
+  );
+  const conversationContextTaskIds = conversationTaskIds(
+    impliedConversationScope,
+  );
   const selectedWorkItem = selectedWorkItemId
-    ? (tasks.find((task) => task.id === selectedWorkItemId) || null)
+    ? tasks.find((task) => task.id === selectedWorkItemId) || null
     : null;
-  const contextTaskIds = [...new Set([
-    ...conversationContextTaskIds,
-    ...(selectedWorkItem ? [selectedWorkItem.id] : []),
-  ])];
-  const contextTasks = openTasks.filter((task) => contextTaskIds.includes(task.id));
-  const contextProjectIds = [...new Set([
-    ...directContextProjectIds,
-    ...(selectedWorkItem?.projectId ? [String(selectedWorkItem.projectId)] : []),
-    ...contextTasks.map((task) => String(task.projectId || "")).filter(Boolean),
-  ])];
-  const contextProjects = projects.filter((project) => contextProjectIds.includes(project.id));
-  const primaryProject = contextProjects.length === 1 ? contextProjects[0] : null;
+  const contextTaskIds = [
+    ...new Set([
+      ...conversationContextTaskIds,
+      ...(selectedWorkItem ? [selectedWorkItem.id] : []),
+    ]),
+  ];
+  const contextTasks = openTasks.filter((task) =>
+    contextTaskIds.includes(task.id),
+  );
+  const contextProjectIds = [
+    ...new Set([
+      ...directContextProjectIds,
+      ...(selectedWorkItem?.projectId
+        ? [String(selectedWorkItem.projectId)]
+        : []),
+      ...contextTasks
+        .map((task) => String(task.projectId || ""))
+        .filter(Boolean),
+    ]),
+  ];
+  const contextProjects = projects.filter((project) =>
+    contextProjectIds.includes(project.id),
+  );
+  const primaryProject =
+    contextProjects.length === 1 ? contextProjects[0] : null;
   const routeOrPrimaryProject = primaryProject || activeProject;
-  const isFocusedConversation = directContextProjectIds.length > 0 || contextTaskIds.length > 0;
+  const isFocusedConversation =
+    directContextProjectIds.length > 0 || contextTaskIds.length > 0;
   const projectTasks = useMemo(
-    () => openTasks.filter((task) => (
-      directContextProjectIds.includes(String(task.projectId || "")) || contextTaskIds.includes(task.id)
-    )),
+    () =>
+      openTasks.filter(
+        (task) =>
+          directContextProjectIds.includes(String(task.projectId || "")) ||
+          contextTaskIds.includes(task.id),
+      ),
     [contextTaskIds, directContextProjectIds, openTasks],
   );
   const consoleProject = useMemo(
-    () => projects.find((project) => project.id === projectConsoleId) || routeOrPrimaryProject || null,
+    () =>
+      projects.find((project) => project.id === projectConsoleId) ||
+      routeOrPrimaryProject ||
+      null,
     [projectConsoleId, projects, routeOrPrimaryProject],
   );
   const projectDocuments = useMemo(
-    () => knowledgeItems.filter((item) => contextProjectIds.includes(item.projectId) && item.status !== "archived"),
+    () =>
+      knowledgeItems.filter(
+        (item) =>
+          contextProjectIds.includes(item.projectId) &&
+          item.status !== "archived",
+      ),
     [contextProjectIds, knowledgeItems],
   );
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
     () =>
       openTasks
-        .filter((task) => dateKey(task.dueDate) === todayKey || String(task.timeSector || "").toLowerCase() === "today")
-        .sort((left, right) => String(left.priority || "z").localeCompare(String(right.priority || "z"))),
+        .filter(
+          (task) =>
+            dateKey(task.dueDate) === todayKey ||
+            String(task.timeSector || "").toLowerCase() === "today",
+        )
+        .sort((left, right) =>
+          String(left.priority || "z").localeCompare(
+            String(right.priority || "z"),
+          ),
+        ),
     [openTasks, todayKey],
   );
-  const visibleMessages = messages.filter((message) => message.role !== "system");
+  const visibleMessages = messages.filter(
+    (message) => message.role !== "system",
+  );
   const contextualMessages = visibleMessages;
   const currentContextLabel = selectedWorkItem
     ? entityTitle(selectedWorkItem)
     : conversationScopeLabel(impliedConversationScope, projects, tasks);
   const filteredConversations = conversations.filter((conversation) =>
-    String(conversation.title || "").toLowerCase().includes(search.toLowerCase()),
+    String(conversation.title || "")
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   );
 
   useEffect(() => {
     if (!activeProject) return;
     setConversationId((currentId) => {
-      const current = conversations.find((conversation) => conversation.id === currentId);
-      if (conversationIncludesProject(current, activeProject.id)) return currentId;
-      return conversations.find((conversation) => (
-        conversationProjectIds(conversation).length === 1 &&
-        conversationTaskIds(conversation).length === 0 &&
-        conversationIncludesProject(conversation, activeProject.id)
-      ))?.id || null;
+      const current = conversations.find(
+        (conversation) => conversation.id === currentId,
+      );
+      if (conversationIncludesProject(current, activeProject.id))
+        return currentId;
+      return (
+        conversations.find(
+          (conversation) =>
+            conversationProjectIds(conversation).length === 1 &&
+            conversationTaskIds(conversation).length === 0 &&
+            conversationIncludesProject(conversation, activeProject.id),
+        )?.id || null
+      );
     });
   }, [activeProject, conversations]);
 
@@ -693,7 +941,9 @@ export function DelivereeWorkspace() {
       navigate(activeProject ? `/work/projects/${activeProject.id}` : "/");
       requestAnimationFrame(() => composerRef.current?.focus());
     } catch {
-      setNotice("A new conversation could not be created. Check workspace access and try again.");
+      setNotice(
+        "A new conversation could not be created. Check workspace access and try again.",
+      );
     } finally {
       setCreatingConversation(false);
     }
@@ -735,18 +985,35 @@ export function DelivereeWorkspace() {
 
   const openChiefOfStaff = async () => {
     if (!user || !workspace) return;
-    const existing = conversations.find((conversation) => conversation.isChiefOfStaff) ||
-      conversations.find((conversation) => conversationProjectIds(conversation).length === 0 && conversationTaskIds(conversation).length === 0);
+    const existing =
+      conversations.find((conversation) => conversation.isChiefOfStaff) ||
+      conversations.find(
+        (conversation) =>
+          conversationProjectIds(conversation).length === 0 &&
+          conversationTaskIds(conversation).length === 0,
+      );
     if (existing) {
-      if (!existing.isChiefOfStaff || existing.conversationType !== "chief_of_staff") {
+      if (
+        !existing.isChiefOfStaff ||
+        existing.conversationType !== "chief_of_staff"
+      ) {
         await updateDoc(doc(db, "boldi_conversations", existing.id), {
           conversationType: "chief_of_staff",
           isChiefOfStaff: true,
           updatedAt: serverTimestamp(),
         });
-        setConversations((current) => current.map((conversation) => conversation.id === existing.id
-          ? { ...conversation, conversationType: "chief_of_staff", isChiefOfStaff: true, updatedAt: Date.now() }
-          : conversation));
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === existing.id
+              ? {
+                  ...conversation,
+                  conversationType: "chief_of_staff",
+                  isChiefOfStaff: true,
+                  updatedAt: Date.now(),
+                }
+              : conversation,
+          ),
+        );
       }
       setConversationId(existing.id);
       navigate("/");
@@ -774,35 +1041,68 @@ export function DelivereeWorkspace() {
     setSidebarOpen(false);
   };
 
-  const updateConversationContext = async (projectIds: string[], taskIds: string[], asChiefOfStaff = false) => {
+  const updateConversationContext = async (
+    projectIds: string[],
+    taskIds: string[],
+    asChiefOfStaff = false,
+  ) => {
     if (!user || !workspace) return;
     const targetId = await ensureConversation("New conversation");
     const normalizedProjects = [...new Set(projectIds)].filter(Boolean);
     const normalizedTasks = [...new Set(taskIds)].filter(Boolean);
-    const derivedScopeType = conversationScopeType(normalizedProjects, normalizedTasks);
-    const scopeType: ConversationScopeType = asChiefOfStaff && normalizedProjects.length === 0 && normalizedTasks.length === 0
-      ? "chief_of_staff"
-      : derivedScopeType;
+    const derivedScopeType = conversationScopeType(
+      normalizedProjects,
+      normalizedTasks,
+    );
+    const scopeType: ConversationScopeType =
+      asChiefOfStaff &&
+      normalizedProjects.length === 0 &&
+      normalizedTasks.length === 0
+        ? "chief_of_staff"
+        : derivedScopeType;
     await updateDoc(doc(db, "boldi_conversations", targetId), {
-      sourceContext: scopeType.includes("project") || scopeType === "mixed" ? "project" : scopeType.includes("task") ? "task" : "home",
-      contextEntityId: normalizedProjects.length === 1 && normalizedTasks.length === 0 ? normalizedProjects[0] : null,
+      sourceContext:
+        scopeType.includes("project") || scopeType === "mixed"
+          ? "project"
+          : scopeType.includes("task")
+            ? "task"
+            : "home",
+      contextEntityId:
+        normalizedProjects.length === 1 && normalizedTasks.length === 0
+          ? normalizedProjects[0]
+          : null,
       conversationType: scopeType,
       linkedProjectIds: normalizedProjects,
       linkedTaskIds: normalizedTasks,
       isChiefOfStaff: scopeType === "chief_of_staff",
       updatedAt: serverTimestamp(),
     });
-    setConversations((current) => current.map((conversation) => conversation.id === targetId ? {
-      ...conversation,
-      sourceContext: scopeType.includes("project") || scopeType === "mixed" ? "project" : scopeType.includes("task") ? "task" : "home",
-      contextEntityId: normalizedProjects.length === 1 && normalizedTasks.length === 0 ? normalizedProjects[0] : null,
-      conversationType: scopeType,
-      linkedProjectIds: normalizedProjects,
-      linkedTaskIds: normalizedTasks,
-      isChiefOfStaff: scopeType === "chief_of_staff",
-      updatedAt: Date.now(),
-    } : conversation));
-    if (normalizedProjects.length === 1 && normalizedTasks.length === 0) navigate(`/work/projects/${normalizedProjects[0]}`);
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === targetId
+          ? {
+              ...conversation,
+              sourceContext:
+                scopeType.includes("project") || scopeType === "mixed"
+                  ? "project"
+                  : scopeType.includes("task")
+                    ? "task"
+                    : "home",
+              contextEntityId:
+                normalizedProjects.length === 1 && normalizedTasks.length === 0
+                  ? normalizedProjects[0]
+                  : null,
+              conversationType: scopeType,
+              linkedProjectIds: normalizedProjects,
+              linkedTaskIds: normalizedTasks,
+              isChiefOfStaff: scopeType === "chief_of_staff",
+              updatedAt: Date.now(),
+            }
+          : conversation,
+      ),
+    );
+    if (normalizedProjects.length === 1 && normalizedTasks.length === 0)
+      navigate(`/work/projects/${normalizedProjects[0]}`);
     else navigate("/");
   };
 
@@ -829,7 +1129,10 @@ export function DelivereeWorkspace() {
     setStreamed("");
     setNotice("");
     const localId = `local-${Date.now()}`;
-    setMessages((current) => [...current, { id: localId, role: "user", content: text, createdAt: Date.now() }]);
+    setMessages((current) => [
+      ...current,
+      { id: localId, role: "user", content: text, createdAt: Date.now() },
+    ]);
     let activeConversationId: string | null = conversationId;
     try {
       activeConversationId = await ensureConversation(text);
@@ -840,31 +1143,44 @@ export function DelivereeWorkspace() {
         role: "user",
         content: text,
         inputType: "text",
-        contextType: conversationScopeType(directContextProjectIds, contextTaskIds),
+        contextType: conversationScopeType(
+          directContextProjectIds,
+          contextTaskIds,
+        ),
         contextEntityId: primaryProject?.id || null,
         createdAt: serverTimestamp(),
       });
 
-      const operatingScope = isFocusedConversation ? "focused_delivery" : "chief_of_staff";
-      const scopedTasks = isFocusedConversation
-        ? projectTasks
-        : openTasks;
-      const scopedProjects = isFocusedConversation ? contextProjects : activeProjects;
+      const operatingScope = isFocusedConversation
+        ? "focused_delivery"
+        : "chief_of_staff";
+      const scopedTasks = isFocusedConversation ? projectTasks : openTasks;
+      const scopedProjects = isFocusedConversation
+        ? contextProjects
+        : activeProjects;
       const scopedMilestones = isFocusedConversation
-        ? milestones.filter((item) => contextProjectIds.includes(item.projectId))
+        ? milestones.filter((item) =>
+            contextProjectIds.includes(item.projectId),
+          )
         : milestones;
       const scopedRisks = isFocusedConversation
         ? risks.filter((item) => contextProjectIds.includes(item.projectId))
         : risks;
       const scopedTodayTasks = isFocusedConversation
-        ? todayTasks.filter((task) => scopedTasks.some((scopedTask) => scopedTask.id === task.id))
+        ? todayTasks.filter((task) =>
+            scopedTasks.some((scopedTask) => scopedTask.id === task.id),
+          )
         : todayTasks;
       const previousLongProjectMessage = [...contextualMessages]
         .reverse()
-        .find((message) => message.role === "user" && message.content.trim().length >= 2_500);
-      const projectArtifactSourceMessageId = text.length >= 2_500
-        ? userMessageRef.id
-        : previousLongProjectMessage?.id || userMessageRef.id;
+        .find(
+          (message) =>
+            message.role === "user" && message.content.trim().length >= 2_500,
+        );
+      const projectArtifactSourceMessageId =
+        text.length >= 2_500
+          ? userMessageRef.id
+          : previousLongProjectMessage?.id || userMessageRef.id;
       const notebookDocuments = buildNotebookContext(notebookEntries, text, {
         activeProjectId: primaryProject?.id || activeProject?.id || null,
         limit: isFocusedConversation ? 4 : 6,
@@ -878,7 +1194,9 @@ export function DelivereeWorkspace() {
         events: [],
         dailyCapacityMinutes: 360,
         loaded: true,
-        scope: (isFocusedConversation ? "project_delivery" : "chief_of_staff") as "chief_of_staff" | "project_delivery",
+        scope: (isFocusedConversation
+          ? "project_delivery"
+          : "chief_of_staff") as "chief_of_staff" | "project_delivery",
         activeProjectId: primaryProject?.id || null,
       };
       const nextJudgment = evaluateJudgment(text, workspaceSnapshot);
@@ -886,13 +1204,19 @@ export function DelivereeWorkspace() {
       const token = await user.getIdToken();
       const response = await fetch("/api/boldi/chat", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           userId: user.uid,
           workspaceId: workspace.id,
           conversationId: activeConversationId,
           messages: [
-            ...contextualMessages.map((message) => ({ role: message.role, content: message.content })),
+            ...contextualMessages.map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
             { role: "user", content: text },
           ],
           workspaceContext: {
@@ -902,16 +1226,23 @@ export function DelivereeWorkspace() {
             activeProject: primaryProject,
             contextProjects,
             contextTasks,
-            conversationType: conversationScopeType(directContextProjectIds, contextTaskIds),
-            conversationDirectory: conversations.slice(0, 30).map((conversation) => ({
-              id: conversation.id,
-              title: conversation.title || "New conversation",
-              scope: conversationScopeLabel(conversation, projects, tasks),
-              conversationType: conversation.conversationType || conversationScopeType(
-                conversationProjectIds(conversation),
-                conversationTaskIds(conversation),
-              ),
-            })),
+            conversationType: conversationScopeType(
+              directContextProjectIds,
+              contextTaskIds,
+            ),
+            conversationDirectory: conversations
+              .slice(0, 30)
+              .map((conversation) => ({
+                id: conversation.id,
+                title: conversation.title || "New conversation",
+                scope: conversationScopeLabel(conversation, projects, tasks),
+                conversationType:
+                  conversation.conversationType ||
+                  conversationScopeType(
+                    conversationProjectIds(conversation),
+                    conversationTaskIds(conversation),
+                  ),
+              })),
             todayTaskCount: scopedTodayTasks.length,
             workspaceMembers: workspaceMembers.map((member) => ({
               id: member.id,
@@ -926,12 +1257,18 @@ export function DelivereeWorkspace() {
               memberEmails: team.memberEmails || [],
             })),
             pendingReviewCount: isFocusedConversation
-              ? reviewItems.filter((item) => contextProjectIds.includes(item.projectId || item.proposed?.projectId)).length
+              ? reviewItems.filter((item) =>
+                  contextProjectIds.includes(
+                    item.projectId || item.proposed?.projectId,
+                  ),
+                ).length
               : reviewItems.length,
             currentUserMessageId: userMessageRef.id,
             projectArtifactSourceMessageId,
             documents: [
-              ...(isFocusedConversation ? buildProjectDocumentContext(projectDocuments, text) : []),
+              ...(isFocusedConversation
+                ? buildProjectDocumentContext(projectDocuments, text)
+                : []),
               ...notebookDocuments,
             ],
             notebookNotes: notebookDocuments,
@@ -941,8 +1278,13 @@ export function DelivereeWorkspace() {
         }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "The AI service is temporarily unavailable.");
-      const reply = result.reply || "I reviewed the workspace, but there is no response to display.";
+      if (!response.ok)
+        throw new Error(
+          result.error || "The AI service is temporarily unavailable.",
+        );
+      const reply =
+        result.reply ||
+        "I reviewed the workspace, but there is no response to display.";
       await streamReply(reply);
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
@@ -960,7 +1302,10 @@ export function DelivereeWorkspace() {
       });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
-          title: contextualMessages.length === 0 ? text.slice(0, 64) : currentConversation?.title || text.slice(0, 64),
+          title:
+            contextualMessages.length === 0
+              ? text.slice(0, 64)
+              : currentConversation?.title || text.slice(0, 64),
           updatedAt: serverTimestamp(),
         });
       }
@@ -970,7 +1315,13 @@ export function DelivereeWorkspace() {
       setMessages((current) => [
         ...current.filter((message) => message.id !== localId),
         { id: localId, role: "user", content: text, createdAt: Date.now() },
-        { id: `error-${Date.now()}`, role: "assistant", content: reply, createdAt: Date.now(), offline: true },
+        {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: reply,
+          createdAt: Date.now(),
+          offline: true,
+        },
       ]);
     } finally {
       setStreamed("");
@@ -996,19 +1347,29 @@ export function DelivereeWorkspace() {
     });
     for (const action of plan.proposedActions || []) {
       const proposedChange = action.proposedChange || {};
-      const duplicateProject = String(action.type || "") === "create_project"
-        ? findMatchingProject(projects, proposedChange, primaryProject?.id || "")
-        : null;
+      const duplicateProject =
+        String(action.type || "") === "create_project"
+          ? findMatchingProject(
+              projects,
+              proposedChange,
+              primaryProject?.id || "",
+            )
+          : null;
       const actionType = duplicateProject ? "update_project" : action.type;
       const reviewType = reviewTypeForAction(actionType);
-      const projectId = duplicateProject?.id || proposedChange.projectId || primaryProject?.id || "";
+      const projectId =
+        duplicateProject?.id ||
+        proposedChange.projectId ||
+        primaryProject?.id ||
+        "";
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
         createdBy: user.uid,
-        title: reviewType === "project"
-          ? proposedTitle(proposedChange, actionLabel(actionType))
-          : proposedChange?.title || actionLabel(actionType),
+        title:
+          reviewType === "project"
+            ? proposedTitle(proposedChange, actionLabel(actionType))
+            : proposedChange?.title || actionLabel(actionType),
         type: reviewType,
         why: action.reason || "Proposed in conversation",
         action: actionLabel(actionType),
@@ -1033,7 +1394,10 @@ export function DelivereeWorkspace() {
     setPanel("approvals");
   };
 
-  const processReview = async (candidate: any, decision: "approve" | "dismiss") => {
+  const processReview = async (
+    candidate: any,
+    decision: "approve" | "dismiss",
+  ) => {
     if (!user || !workspace) return;
     try {
       if (decision === "dismiss") {
@@ -1046,34 +1410,105 @@ export function DelivereeWorkspace() {
       }
       const proposed = candidate.proposed || {};
       const reviewType = String(candidate.type || "task");
-      const projectId = proposed.projectId || candidate.projectId || primaryProject?.id || "";
+      const projectId =
+        proposed.projectId || candidate.projectId || primaryProject?.id || "";
       let convertedToType = reviewType;
       let convertedToId = "";
 
-      if (["task_update", "milestone_update", "risk_update"].includes(reviewType)) {
+      if (
+        ["task_update", "milestone_update", "risk_update"].includes(reviewType)
+      ) {
         const targetId = String(
-          proposed.taskId || proposed.milestoneId || proposed.riskId || proposed.id || "",
+          proposed.taskId ||
+            proposed.milestoneId ||
+            proposed.riskId ||
+            proposed.id ||
+            "",
         );
-        const collectionName = reviewType === "task_update"
-          ? "tasks"
-          : reviewType === "milestone_update" ? "milestones" : "boldr_risks";
-        const allowedFields = reviewType === "task_update"
-            ? ["title", "description", "status", "priority", "dueDate", "owner", "assignee", "assigneeId", "projectId", "timeSector", "actionType", "gtdActionType", "globalStageId", "definitionOfDone", "type", "workItemType", "itemType", "parentId", "epicId", "featureId", "sprintId", "acceptanceCriteria", "storyPoints", "estimateHours", "labels", "dependencyIds", "blocked", "blockedReason"]
-          : reviewType === "milestone_update"
-            ? ["title", "description", "status", "dueDate", "targetDate", "owner", "projectId"]
-            : ["title", "description", "status", "severity", "owner", "mitigation", "projectId", "type"];
+        const collectionName =
+          reviewType === "task_update"
+            ? "tasks"
+            : reviewType === "milestone_update"
+              ? "milestones"
+              : "boldr_risks";
+        const allowedFields =
+          reviewType === "task_update"
+            ? [
+                "title",
+                "description",
+                "status",
+                "priority",
+                "dueDate",
+                "owner",
+                "assignee",
+                "assigneeId",
+                "projectId",
+                "timeSector",
+                "actionType",
+                "gtdActionType",
+                "globalStageId",
+                "definitionOfDone",
+                "type",
+                "workItemType",
+                "itemType",
+                "parentId",
+                "epicId",
+                "featureId",
+                "sprintId",
+                "acceptanceCriteria",
+                "storyPoints",
+                "estimateHours",
+                "labels",
+                "dependencyIds",
+                "blocked",
+                "blockedReason",
+              ]
+            : reviewType === "milestone_update"
+              ? [
+                  "title",
+                  "description",
+                  "status",
+                  "dueDate",
+                  "targetDate",
+                  "owner",
+                  "projectId",
+                ]
+              : [
+                  "title",
+                  "description",
+                  "status",
+                  "severity",
+                  "owner",
+                  "mitigation",
+                  "projectId",
+                  "type",
+                ];
         if (!targetId) throw new Error("The item to update is required");
         const patch = Object.fromEntries(
-          allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+          allowedFields
+            .filter((field) => proposed[field] !== undefined)
+            .map((field) => [field, proposed[field]]),
         );
-        await updateDoc(doc(db, collectionName, targetId), { ...patch, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, collectionName, targetId), {
+          ...patch,
+          updatedAt: serverTimestamp(),
+        });
         convertedToType = collectionName;
         convertedToId = targetId;
       } else if (reviewType === "conversation_message") {
-        const targetConversationId = String(proposed.targetConversationId || "");
-        const targetConversation = conversations.find((conversation) => conversation.id === targetConversationId);
-        const content = String(proposed.content || proposed.message || proposed.summary || "").trim();
-        if (!targetConversation || !content) throw new Error("A valid target conversation and message are required");
+        const targetConversationId = String(
+          proposed.targetConversationId || "",
+        );
+        const targetConversation = conversations.find(
+          (conversation) => conversation.id === targetConversationId,
+        );
+        const content = String(
+          proposed.content || proposed.message || proposed.summary || "",
+        ).trim();
+        if (!targetConversation || !content)
+          throw new Error(
+            "A valid target conversation and message are required",
+          );
         await addDoc(collection(db, "boldi_messages"), {
           userId: user.uid,
           workspaceId: workspace.id,
@@ -1086,11 +1521,15 @@ export function DelivereeWorkspace() {
           contextEntityId: targetConversation.contextEntityId || null,
           createdAt: serverTimestamp(),
         });
-        await updateDoc(doc(db, "boldi_conversations", targetConversationId), { updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "boldi_conversations", targetConversationId), {
+          updatedAt: serverTimestamp(),
+        });
         convertedToType = "conversation";
         convertedToId = targetConversationId;
       } else if (reviewType === "digest_request") {
-        const content = String(proposed.content || proposed.message || proposed.summary || "").trim();
+        const content = String(
+          proposed.content || proposed.message || proposed.summary || "",
+        ).trim();
         const created = await addDoc(collection(db, "daily_briefs"), {
           userId: user.uid,
           workspaceId: workspace.id,
@@ -1112,30 +1551,82 @@ export function DelivereeWorkspace() {
       } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
         const allowedFields = [
-          "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
-          "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
-          "sponsor", "teamMembers", "definitionOfDone", "deliveryStage", "nextAction", "initialCost",
-          "recurringMonthlyCost", "costTemplateId", "costBreakdown",
+          "title",
+          "outcome",
+          "objective",
+          "description",
+          "status",
+          "methodology",
+          "targetDate",
+          "dueDate",
+          "priority",
+          "projectType",
+          "category",
+          "health",
+          "sprintGoal",
+          "projectManager",
+          "sponsor",
+          "teamMembers",
+          "definitionOfDone",
+          "deliveryStage",
+          "nextAction",
+          "initialCost",
+          "recurringMonthlyCost",
+          "costTemplateId",
+          "costBreakdown",
         ];
         const patch = Object.fromEntries(
-          allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+          allowedFields
+            .filter((field) => proposed[field] !== undefined)
+            .map((field) => [field, proposed[field]]),
         );
-        await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, "projects", projectId), {
+          ...patch,
+          updatedAt: serverTimestamp(),
+        });
         convertedToType = "project";
         convertedToId = projectId;
       } else if (reviewType === "project") {
-        const existingProject = findMatchingProject(projects, proposed, projectId);
+        const existingProject = findMatchingProject(
+          projects,
+          proposed,
+          projectId,
+        );
         if (existingProject?.id) {
           const allowedFields = [
-            "title", "outcome", "objective", "description", "status", "methodology", "targetDate",
-            "dueDate", "priority", "projectType", "category", "health", "sprintGoal", "projectManager",
-            "sponsor", "teamMembers", "definitionOfDone", "deliveryStage", "nextAction", "initialCost",
-            "recurringMonthlyCost", "costTemplateId", "costBreakdown",
+            "title",
+            "outcome",
+            "objective",
+            "description",
+            "status",
+            "methodology",
+            "targetDate",
+            "dueDate",
+            "priority",
+            "projectType",
+            "category",
+            "health",
+            "sprintGoal",
+            "projectManager",
+            "sponsor",
+            "teamMembers",
+            "definitionOfDone",
+            "deliveryStage",
+            "nextAction",
+            "initialCost",
+            "recurringMonthlyCost",
+            "costTemplateId",
+            "costBreakdown",
           ];
           const patch = Object.fromEntries(
-            allowedFields.filter((field) => proposed[field] !== undefined).map((field) => [field, proposed[field]]),
+            allowedFields
+              .filter((field) => proposed[field] !== undefined)
+              .map((field) => [field, proposed[field]]),
           );
-          await updateDoc(doc(db, "projects", existingProject.id), { ...patch, updatedAt: serverTimestamp() });
+          await updateDoc(doc(db, "projects", existingProject.id), {
+            ...patch,
+            updatedAt: serverTimestamp(),
+          });
           convertedToType = "project";
           convertedToId = existingProject.id;
         } else {
@@ -1161,9 +1652,10 @@ export function DelivereeWorkspace() {
           userId: user.uid,
           workspaceId: workspace.id,
           projectId,
-          title: reviewType === "project"
-            ? proposedTitle(proposed, candidate.title)
-            : candidate.title || proposed.title || "Untitled",
+          title:
+            reviewType === "project"
+              ? proposedTitle(proposed, candidate.title)
+              : candidate.title || proposed.title || "Untitled",
           status: proposed.status || "open",
           createdBy: user.uid,
           createdAt: serverTimestamp(),
@@ -1185,8 +1677,13 @@ export function DelivereeWorkspace() {
           collectionName = "knowledge_items";
           let sourceContent = String(proposed.content || proposed.body || "");
           if (proposed.sourceMessageId) {
-            const sourceMessage = await getDoc(doc(db, "boldi_messages", String(proposed.sourceMessageId)));
-            if (sourceMessage.exists()) sourceContent = String(sourceMessage.data().content || sourceContent);
+            const sourceMessage = await getDoc(
+              doc(db, "boldi_messages", String(proposed.sourceMessageId)),
+            );
+            if (sourceMessage.exists())
+              sourceContent = String(
+                sourceMessage.data().content || sourceContent,
+              );
           }
           payload = {
             ...payload,
@@ -1216,9 +1713,13 @@ export function DelivereeWorkspace() {
         convertedToId,
         updatedAt: serverTimestamp(),
       });
-      setNotice(`${reviewTypeLabel(reviewType)} ${reviewType === "project_update" ? "updated" : "created"}.`);
+      setNotice(
+        `${reviewTypeLabel(reviewType)} ${reviewType === "project_update" ? "updated" : "created"}.`,
+      );
     } catch {
-      setNotice("That pending change could not be processed. It is still waiting for you.");
+      setNotice(
+        "That pending change could not be processed. It is still waiting for you.",
+      );
     }
   };
 
@@ -1230,11 +1731,12 @@ export function DelivereeWorkspace() {
   };
 
   const selectProjectContext = (project: any) => {
-    const projectConversation = conversations.find((conversation) => (
-      conversationProjectIds(conversation).length === 1 &&
-      conversationTaskIds(conversation).length === 0 &&
-      conversationIncludesProject(conversation, project.id)
-    ));
+    const projectConversation = conversations.find(
+      (conversation) =>
+        conversationProjectIds(conversation).length === 1 &&
+        conversationTaskIds(conversation).length === 0 &&
+        conversationIncludesProject(conversation, project.id),
+    );
     setConversationId(projectConversation?.id || null);
     navigate(`/work/projects/${project.id}`);
     setPanel(null);
@@ -1248,8 +1750,14 @@ export function DelivereeWorkspace() {
     goCenterView("project");
   };
 
-  const updateProject = async (projectId: string, patch: Record<string, unknown>) => {
-    await updateDoc(doc(db, "projects", projectId), { ...patch, updatedAt: serverTimestamp() });
+  const updateProject = async (
+    projectId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    await updateDoc(doc(db, "projects", projectId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
   };
 
   const createCostTemplate = async (template: any) => {
@@ -1267,8 +1775,14 @@ export function DelivereeWorkspace() {
     setNotice("Cost template saved for this workspace.");
   };
 
-  const updateCostTemplate = async (templateId: string, patch: Record<string, unknown>) => {
-    await updateDoc(doc(db, "cost_templates", templateId), { ...patch, updatedAt: serverTimestamp() });
+  const updateCostTemplate = async (
+    templateId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    await updateDoc(doc(db, "cost_templates", templateId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
     setNotice("Cost template updated.");
   };
 
@@ -1285,7 +1799,9 @@ export function DelivereeWorkspace() {
   const createWorkspace = async () => {
     if (!user || !newWorkspaceName.trim()) return;
     if (!canCreateWorkspace(workspaces.length)) {
-      setNotice(`You can have up to ${WORKSPACE_LIMIT} workspaces in this version.`);
+      setNotice(
+        `You can have up to ${WORKSPACE_LIMIT} workspaces in this version.`,
+      );
       return;
     }
     const workspaceRef = doc(collection(db, "workspaces"));
@@ -1301,18 +1817,21 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     };
     await setDoc(workspaceRef, workspacePayload);
-    await setDoc(doc(db, "workspace_members", `${workspaceRef.id}_${user.uid}`), {
-      id: `${workspaceRef.id}_${user.uid}`,
-      workspaceId: workspaceRef.id,
-      userId: user.uid,
-      email,
-      emailLower,
-      displayName: user.displayName || "",
-      role: "owner",
-      status: "active",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(
+      doc(db, "workspace_members", `${workspaceRef.id}_${user.uid}`),
+      {
+        id: `${workspaceRef.id}_${user.uid}`,
+        workspaceId: workspaceRef.id,
+        userId: user.uid,
+        email,
+        emailLower,
+        displayName: user.displayName || "",
+        role: "owner",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
     setNewWorkspaceName("");
     await reloadWorkspaces();
     setWorkspace({ id: workspaceRef.id, ...workspacePayload });
@@ -1325,26 +1844,35 @@ export function DelivereeWorkspace() {
       setNotice("Add a valid email to invite someone.");
       return;
     }
-    const currentMembers = [...new Set([...(workspace.members || []).map((item) => String(item).toLowerCase()), email])];
+    const currentMembers = [
+      ...new Set([
+        ...(workspace.members || []).map((item) => String(item).toLowerCase()),
+        email,
+      ]),
+    ];
     await updateDoc(doc(db, "workspaces", workspace.id), {
       members: currentMembers,
       roles: { ...(workspace.roles || {}), [email]: inviteRole },
       updatedAt: serverTimestamp(),
     });
     const pendingMemberId = `${workspace.id}_invite_${email.replace(/[^a-z0-9]/g, "_")}`;
-    await setDoc(doc(db, "workspace_members", pendingMemberId), {
-      id: pendingMemberId,
-      workspaceId: workspace.id,
-      userId: `pending:${email}`,
-      email,
-      emailLower: email,
-      displayName: email,
-      role: inviteRole,
-      status: "invited",
-      invitedBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(
+      doc(db, "workspace_members", pendingMemberId),
+      {
+        id: pendingMemberId,
+        workspaceId: workspace.id,
+        userId: `pending:${email}`,
+        email,
+        emailLower: email,
+        displayName: email,
+        role: inviteRole,
+        status: "invited",
+        invitedBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
     await addDoc(collection(db, "agent_invites"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -1360,7 +1888,9 @@ export function DelivereeWorkspace() {
     });
     setInviteEmail("");
     await reloadWorkspaces();
-    setNotice(`Invite prepared for ${email}. They will join this workspace after signing in with that email.`);
+    setNotice(
+      `Invite prepared for ${email}. They will join this workspace after signing in with that email.`,
+    );
   };
 
   const createWorkspaceTeam = async () => {
@@ -1381,18 +1911,28 @@ export function DelivereeWorkspace() {
     setNotice("Team created.");
   };
 
-  const toggleTeamMember = async (team: WorkspaceTeam, member: WorkspaceMember) => {
+  const toggleTeamMember = async (
+    team: WorkspaceTeam,
+    member: WorkspaceMember,
+  ) => {
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
     if (!email) return;
-    const current = (team.memberEmails || []).map((item) => normalizeInviteEmail(item));
-    const next = current.includes(email) ? current.filter((item) => item !== email) : [...current, email];
+    const current = (team.memberEmails || []).map((item) =>
+      normalizeInviteEmail(item),
+    );
+    const next = current.includes(email)
+      ? current.filter((item) => item !== email)
+      : [...current, email];
     await updateDoc(doc(db, "agent_groups", team.id), {
       memberEmails: next,
       updatedAt: serverTimestamp(),
     });
   };
 
-  const updateMemberRole = async (member: WorkspaceMember, role: "admin" | "member" | "viewer") => {
+  const updateMemberRole = async (
+    member: WorkspaceMember,
+    role: "admin" | "member" | "viewer",
+  ) => {
     if (!workspace || !member.id) return;
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
     await updateDoc(doc(db, "workspace_members", member.id), {
@@ -1423,17 +1963,23 @@ export function DelivereeWorkspace() {
   };
 
   const deleteConversation = async (conversation: Conversation) => {
-    const confirmed = window.confirm(`Delete "${conversation.title || "this conversation"}" and its messages? This cannot be undone.`);
+    const confirmed = window.confirm(
+      `Delete "${conversation.title || "this conversation"}" and its messages? This cannot be undone.`,
+    );
     if (!confirmed || !user || !workspace) return;
-    const snapshot = await getDocs(query(
-      collection(db, "boldi_messages"),
-      where("userId", "==", user.uid),
-      where("workspaceId", "==", workspace.id),
-      where("conversationId", "==", conversation.id),
-    ));
+    const snapshot = await getDocs(
+      query(
+        collection(db, "boldi_messages"),
+        where("userId", "==", user.uid),
+        where("workspaceId", "==", workspace.id),
+        where("conversationId", "==", conversation.id),
+      ),
+    );
     for (let index = 0; index < snapshot.docs.length; index += 400) {
       const batch = writeBatch(db);
-      snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+      snapshot.docs
+        .slice(index, index + 400)
+        .forEach((item) => batch.delete(item.ref));
       await batch.commit();
     }
     await deleteDoc(doc(db, "boldi_conversations", conversation.id));
@@ -1446,7 +1992,11 @@ export function DelivereeWorkspace() {
   };
 
   const archiveProject = async (project: any) => {
-    await updateProject(project.id, { status: "archived", previousStatus: project.status || "active", archivedAt: serverTimestamp() });
+    await updateProject(project.id, {
+      status: "archived",
+      previousStatus: project.status || "active",
+      archivedAt: serverTimestamp(),
+    });
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
@@ -1456,31 +2006,53 @@ export function DelivereeWorkspace() {
   };
 
   const deleteProject = async (project: any) => {
-    const confirmed = window.confirm(`Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`);
+    const confirmed = window.confirm(
+      `Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`,
+    );
     if (!confirmed || !user || !workspace) return;
     const deletedAt = new Date();
     const purgeAfter = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
-    await updateProject(project.id, { status: "deleted", previousStatus: project.status || "active", deletedAt, purgeAfter, archivedAt: null });
+    await updateProject(project.id, {
+      status: "deleted",
+      previousStatus: project.status || "active",
+      deletedAt,
+      purgeAfter,
+      archivedAt: null,
+    });
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
       goCenterView("portfolio");
     }
     if (activeProject?.id === project.id) navigate("/");
-    setNotice(`${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`);
+    setNotice(
+      `${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
+    );
   };
 
   const restoreProject = async (project: any) => {
-    const purgeDate = project.purgeAfter?.toDate ? project.purgeAfter.toDate() : project.purgeAfter ? new Date(project.purgeAfter) : null;
+    const purgeDate = project.purgeAfter?.toDate
+      ? project.purgeAfter.toDate()
+      : project.purgeAfter
+        ? new Date(project.purgeAfter)
+        : null;
     if (purgeDate && purgeDate.getTime() < Date.now()) {
       setNotice("The 30-day restoration period has expired.");
       return;
     }
-    await updateProject(project.id, { status: project.previousStatus || "active", deletedAt: null, purgeAfter: null, archivedAt: null, restoredAt: serverTimestamp() });
+    await updateProject(project.id, {
+      status: project.previousStatus || "active",
+      deletedAt: null,
+      purgeAfter: null,
+      archivedAt: null,
+      restoredAt: serverTimestamp(),
+    });
     setNotice(`${entityTitle(project)} restored.`);
   };
 
-  const saveDigestRequest = async (kind: "email_reminder" | "daily_digest" | "weekly_summary") => {
+  const saveDigestRequest = async (
+    kind: "email_reminder" | "daily_digest" | "weekly_summary",
+  ) => {
     if (!user || !workspace) return;
     const labels = {
       email_reminder: "email reminder",
@@ -1501,21 +2073,37 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    setNotice(`${labels[kind]} request saved. Email delivery still needs an email service; Certo Work can draft it now.`);
-    setComposer(`Draft my ${labels[kind]} from the current workspace. Do not claim it was sent.`);
+    setNotice(
+      `${labels[kind]} request saved. Email delivery still needs an email service; Certo Work can draft it now.`,
+    );
+    setComposer(
+      `Draft my ${labels[kind]} from the current workspace. Do not claim it was sent.`,
+    );
   };
 
-  const addProjectTask = async (projectId: string, title: string, status: WorkLane, patch: Record<string, unknown> = {}) => {
+  const addProjectTask = async (
+    projectId: string,
+    title: string,
+    status: WorkLane,
+    patch: Record<string, unknown> = {},
+  ) => {
     if (!user || !workspace) return;
     const project = projects.find((item) => item.id === projectId);
     const prefix = projectId ? projectWorkKey(project) : "TASK";
-    const nextSequence = tasks
-      .filter((item) => projectId ? item.projectId === projectId : !item.projectId)
-      .reduce((maximum, item) => {
-        const match = String(item.key || item.workItemKey || "").match(/-(\d+)$/);
-        return Math.max(maximum, match ? Number(match[1]) : 0);
-      }, 0) + 1;
-    const canonicalType = String(patch.workItemType || patch.type || patch.itemType || "task").toLowerCase();
+    const nextSequence =
+      tasks
+        .filter((item) =>
+          projectId ? item.projectId === projectId : !item.projectId,
+        )
+        .reduce((maximum, item) => {
+          const match = String(item.key || item.workItemKey || "").match(
+            /-(\d+)$/,
+          );
+          return Math.max(maximum, match ? Number(match[1]) : 0);
+        }, 0) + 1;
+    const canonicalType = String(
+      patch.workItemType || patch.type || patch.itemType || "task",
+    ).toLowerCase();
     await addDoc(collection(db, "tasks"), {
       ...patch,
       userId: user.uid,
@@ -1536,8 +2124,14 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const updateProjectTask = async (taskId: string, patch: Record<string, unknown>) => {
-    await updateDoc(doc(db, "tasks", taskId), { ...patch, updatedAt: serverTimestamp() });
+  const updateProjectTask = async (
+    taskId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    await updateDoc(doc(db, "tasks", taskId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
   };
 
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
@@ -1569,43 +2163,56 @@ export function DelivereeWorkspace() {
     if (draft.firstMilestone.trim()) {
       await addProjectMilestone(projectRef.id, draft.firstMilestone.trim());
     }
-    await addProjectTask(projectRef.id, draft.firstAction.trim().slice(0, 500), "backlog", {
-      key: `${projectWorkKey({ title: draft.title })}-1`,
-      source: "project_wizard",
-      priority: "1",
-      dueDate: targetDate || null,
-      workItemType: "task",
-      itemType: "task",
-      type: "task",
-      acceptanceCriteria: successCriteria.join("\n"),
-      definitionOfDone: draft.definitionOfDone.trim(),
-    });
+    await addProjectTask(
+      projectRef.id,
+      draft.firstAction.trim().slice(0, 500),
+      "backlog",
+      {
+        key: `${projectWorkKey({ title: draft.title })}-1`,
+        source: "project_wizard",
+        priority: "1",
+        dueDate: targetDate || null,
+        workItemType: "task",
+        itemType: "task",
+        type: "task",
+        acceptanceCriteria: successCriteria.join("\n"),
+        definitionOfDone: draft.definitionOfDone.trim(),
+      },
+    );
 
-    const conversationRef = await addDoc(collection(db, "boldi_conversations"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      title: draft.title.trim(),
-      status: "active",
-      sourceContext: "project",
-      contextEntityId: projectRef.id,
-      conversationType: "project",
-      linkedProjectIds: [projectRef.id],
-      linkedTaskIds: [],
-      isChiefOfStaff: false,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    const conversationRef = await addDoc(
+      collection(db, "boldi_conversations"),
+      {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        title: draft.title.trim(),
+        status: "active",
+        sourceContext: "project",
+        contextEntityId: projectRef.id,
+        conversationType: "project",
+        linkedProjectIds: [projectRef.id],
+        linkedTaskIds: [],
+        isChiefOfStaff: false,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
     setConversationId(conversationRef.id);
     setMessages([]);
     setProjectConsoleId(projectRef.id);
     setPanel("project");
     goCenterView("conversation");
     navigate(`/work/projects/${projectRef.id}`);
-    setNotice(`${draft.title.trim()} created with Project Wizard. Its console is open.`);
+    setNotice(
+      `${draft.title.trim()} created with Project Wizard. Its console is open.`,
+    );
   };
 
-  const updateProjectFromWizard = async (projectId: string, draft: ProjectWizardDraft) => {
+  const updateProjectFromWizard = async (
+    projectId: string,
+    draft: ProjectWizardDraft,
+  ) => {
     if (!user || !workspace) return;
     const successCriteria = splitProjectWizardLines(draft.successCriteriaText);
     const targetDate = draft.noTargetDate ? "" : draft.targetDate;
@@ -1623,17 +2230,23 @@ export function DelivereeWorkspace() {
       definitionOfDone: draft.definitionOfDone.trim(),
       updatedFromSkill: "project_wizard",
     });
-    if (draft.firstMilestone.trim()) await addProjectMilestone(projectId, draft.firstMilestone.trim());
-    await addProjectTask(projectId, draft.firstAction.trim().slice(0, 500), "backlog", {
-      source: "project_wizard",
-      priority: "1",
-      dueDate: targetDate || null,
-      workItemType: "task",
-      itemType: "task",
-      type: "task",
-      acceptanceCriteria: successCriteria.join("\n"),
-      definitionOfDone: draft.definitionOfDone.trim(),
-    });
+    if (draft.firstMilestone.trim())
+      await addProjectMilestone(projectId, draft.firstMilestone.trim());
+    await addProjectTask(
+      projectId,
+      draft.firstAction.trim().slice(0, 500),
+      "backlog",
+      {
+        source: "project_wizard",
+        priority: "1",
+        dueDate: targetDate || null,
+        workItemType: "task",
+        itemType: "task",
+        type: "task",
+        acceptanceCriteria: successCriteria.join("\n"),
+        definitionOfDone: draft.definitionOfDone.trim(),
+      },
+    );
     setProjectConsoleId(projectId);
     setPanel("project");
     goCenterView("conversation");
@@ -1642,7 +2255,13 @@ export function DelivereeWorkspace() {
   };
 
   const resetWorkspaceData = async () => {
-    if (!user || !workspace || cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning) return;
+    if (
+      !user ||
+      !workspace ||
+      cleanConfirmText.trim().toUpperCase() !== "CLEAR" ||
+      cleaning
+    )
+      return;
     setCleaning(true);
     setNotice("");
     const collectionsToClear = [
@@ -1701,7 +2320,9 @@ export function DelivereeWorkspace() {
         );
         for (let index = 0; index < snapshot.docs.length; index += 400) {
           const batch = writeBatch(db);
-          snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+          snapshot.docs
+            .slice(index, index + 400)
+            .forEach((item) => batch.delete(item.ref));
           await batch.commit();
         }
       }
@@ -1720,9 +2341,13 @@ export function DelivereeWorkspace() {
       setCleanSlateOpen(false);
       setCleanConfirmText("");
       navigate("/");
-      setNotice("Clean Certo Work is ready. No projects, items, tags, or pending changes remain in this workspace.");
+      setNotice(
+        "Clean Certo Work is ready. No projects, items, tags, or pending changes remain in this workspace.",
+      );
     } catch {
-      setNotice("I could not finish the clean reset. Please try again after the workspace finishes syncing.");
+      setNotice(
+        "I could not finish the clean reset. Please try again after the workspace finishes syncing.",
+      );
     } finally {
       setCleaning(false);
     }
@@ -1743,7 +2368,11 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const addProjectRisk = async (projectId: string, title: string, patch: Record<string, unknown> = {}) => {
+  const addProjectRisk = async (
+    projectId: string,
+    title: string,
+    patch: Record<string, unknown> = {},
+  ) => {
     if (!user || !workspace) return;
     await addDoc(collection(db, "boldr_risks"), {
       userId: user.uid,
@@ -1784,24 +2413,63 @@ export function DelivereeWorkspace() {
         type="button"
       />
 
-      <aside className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`} data-testid="primary-sidebar">
+      <aside
+        className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`}
+        data-testid="primary-sidebar"
+      >
         <div className="do-brand-row">
-          <button className="do-brand" onClick={() => { navigate("/"); setSidebarOpen(false); }} type="button">
+          <button
+            className="do-brand"
+            onClick={() => {
+              navigate("/");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
             <span className="do-logo">C</span>
-            <span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span>
+            <span>
+              <strong>Certo Work</strong>
+              <small>Think. Choose. Move.</small>
+            </span>
           </button>
-          <button aria-label="Close navigation" className="do-mobile-close" onClick={() => setSidebarOpen(false)} type="button"><X size={16} /></button>
+          <button
+            aria-label="Close navigation"
+            className="do-mobile-close"
+            onClick={() => setSidebarOpen(false)}
+            type="button"
+          >
+            <X size={16} />
+          </button>
         </div>
 
-        <button className="do-new-conversation" data-testid="new-conversation" disabled={creatingConversation} onClick={createConversation} type="button">
-          {creatingConversation ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}
+        <button
+          className="do-new-conversation"
+          data-testid="new-conversation"
+          disabled={creatingConversation}
+          onClick={createConversation}
+          type="button"
+        >
+          {creatingConversation ? (
+            <Loader2 className="spin" size={15} />
+          ) : (
+            <Plus size={15} />
+          )}
           {creatingConversation ? "Starting…" : "New conversation"}
           <kbd>⌘K</kbd>
         </button>
 
-        <button className="do-chief-conversation" onClick={openChiefOfStaff} type="button">
-          <span><Sparkles size={14} /></span>
-          <div><strong>Chief of Staff</strong><small>Coordinate across all work</small></div>
+        <button
+          className="do-chief-conversation"
+          onClick={openChiefOfStaff}
+          type="button"
+        >
+          <span>
+            <Sparkles size={14} />
+          </span>
+          <div>
+            <strong>Chief of Staff</strong>
+            <small>Coordinate across all work</small>
+          </div>
           <ChevronRight size={13} />
         </button>
 
@@ -1809,29 +2477,121 @@ export function DelivereeWorkspace() {
           <div className="do-sidebar-section">
             <div className="do-section-head">
               <span>Projects</span>
-              <button aria-label="Open project command center" onClick={() => { goCenterView("portfolio"); setPanel(null); setSidebarOpen(false); }} type="button">Command center</button>
+              <button
+                aria-label="Open project command center"
+                onClick={() => {
+                  goCenterView("portfolio");
+                  setPanel(null);
+                  setSidebarOpen(false);
+                }}
+                type="button"
+              >
+                Command center
+              </button>
             </div>
             <div className="do-project-list">
-              {sidebarProjects.favorites.length > 0 && <span className="do-project-group-label"><Star size={10} /> Favorites</span>}
+              {sidebarProjects.favorites.length > 0 && (
+                <span className="do-project-group-label">
+                  <Star size={10} /> Favorites
+                </span>
+              )}
               {sidebarProjects.favorites.map((project) => (
-                <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
-                  <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Star fill="currentColor" size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
-                  <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
-                  <button aria-label={`Archive ${entityTitle(project)}`} className="do-project-icon" onClick={() => archiveProject(project)} type="button"><Archive size={11} /></button>
-                  <button aria-label={`Delete ${entityTitle(project)}`} className="do-project-icon is-danger" onClick={() => deleteProject(project)} type="button"><Trash2 size={11} /></button>
+                <div
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  key={project.id}
+                >
+                  <button
+                    className="do-project-context"
+                    onClick={() => selectProjectContext(project)}
+                    type="button"
+                  >
+                    <Star fill="currentColor" size={12} />
+                    <span>{entityTitle(project)}</span>
+                    <small>
+                      {openTasks.filter((task) => task.projectId === project.id)
+                        .length || ""}
+                    </small>
+                  </button>
+                  <button
+                    className="do-project-open"
+                    data-testid={`open-project-${project.id}`}
+                    onClick={() => openProjectRecord(project)}
+                    type="button"
+                  >
+                    Open
+                  </button>
+                  <button
+                    aria-label={`Archive ${entityTitle(project)}`}
+                    className="do-project-icon"
+                    onClick={() => archiveProject(project)}
+                    type="button"
+                  >
+                    <Archive size={11} />
+                  </button>
+                  <button
+                    aria-label={`Delete ${entityTitle(project)}`}
+                    className="do-project-icon is-danger"
+                    onClick={() => deleteProject(project)}
+                    type="button"
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </div>
               ))}
-              {sidebarProjects.recent.length > 0 && <span className="do-project-group-label">Recent</span>}
+              {sidebarProjects.recent.length > 0 && (
+                <span className="do-project-group-label">Recent</span>
+              )}
               {sidebarProjects.recent.map((project) => (
-                <div className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`} key={project.id}>
-                  <button className="do-project-context" onClick={() => selectProjectContext(project)} type="button"><Folder size={12} /><span>{entityTitle(project)}</span><small>{openTasks.filter((task) => task.projectId === project.id).length || ""}</small></button>
-                  <button className="do-project-open" data-testid={`open-project-${project.id}`} onClick={() => openProjectRecord(project)} type="button">Open</button>
-                  <button aria-label={`Archive ${entityTitle(project)}`} className="do-project-icon" onClick={() => archiveProject(project)} type="button"><Archive size={11} /></button>
-                  <button aria-label={`Delete ${entityTitle(project)}`} className="do-project-icon is-danger" onClick={() => deleteProject(project)} type="button"><Trash2 size={11} /></button>
+                <div
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  key={project.id}
+                >
+                  <button
+                    className="do-project-context"
+                    onClick={() => selectProjectContext(project)}
+                    type="button"
+                  >
+                    <Folder size={12} />
+                    <span>{entityTitle(project)}</span>
+                    <small>
+                      {openTasks.filter((task) => task.projectId === project.id)
+                        .length || ""}
+                    </small>
+                  </button>
+                  <button
+                    className="do-project-open"
+                    data-testid={`open-project-${project.id}`}
+                    onClick={() => openProjectRecord(project)}
+                    type="button"
+                  >
+                    Open
+                  </button>
+                  <button
+                    aria-label={`Archive ${entityTitle(project)}`}
+                    className="do-project-icon"
+                    onClick={() => archiveProject(project)}
+                    type="button"
+                  >
+                    <Archive size={11} />
+                  </button>
+                  <button
+                    aria-label={`Delete ${entityTitle(project)}`}
+                    className="do-project-icon is-danger"
+                    onClick={() => deleteProject(project)}
+                    type="button"
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </div>
               ))}
               {activeProjects.length === 0 && (
-                <button className="do-empty-link" onClick={() => setProjectWizardOpen(true)} type="button">Create your first project</button>
+                <button
+                  className="do-empty-link"
+                  onClick={() => setProjectWizardOpen(true)}
+                  type="button"
+                >
+                  Create your first project
+                </button>
               )}
             </div>
           </div>
@@ -1839,44 +2599,114 @@ export function DelivereeWorkspace() {
           <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
               <span>Conversations</span>
-              <button aria-label="Search conversations" onClick={() => setSearchOpen((open) => !open)} type="button"><Search size={13} /></button>
+              <button
+                aria-label="Search conversations"
+                onClick={() => setSearchOpen((open) => !open)}
+                type="button"
+              >
+                <Search size={13} />
+              </button>
             </div>
-            {searchOpen && <input aria-label="Search conversations" autoFocus onChange={(event) => setSearch(event.target.value)} placeholder="Search" value={search} />}
-            {filteredConversations.slice(0, chatsExpanded || search.trim() ? 50 : 5).map((conversation) => (
-              <div className={`do-conversation-row ${conversation.id === conversationId ? "is-active" : ""}`} key={conversation.id}>
-                <button
-                  className="do-conversation-main"
-                  onClick={() => {
-                    setConversationId(conversation.id);
-                    const projectIds = conversationProjectIds(conversation);
-                    const taskIds = conversationTaskIds(conversation);
-                    navigate(projectIds.length === 1 && taskIds.length === 0 ? `/work/projects/${projectIds[0]}` : "/");
-                    setSidebarOpen(false);
-                  }}
-                  type="button"
+            {searchOpen && (
+              <input
+                aria-label="Search conversations"
+                autoFocus
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search"
+                value={search}
+              />
+            )}
+            {filteredConversations
+              .slice(0, chatsExpanded || search.trim() ? 50 : 5)
+              .map((conversation) => (
+                <div
+                  className={`do-conversation-row ${conversation.id === conversationId ? "is-active" : ""}`}
+                  key={conversation.id}
                 >
-                  {conversationProjectIds(conversation).length > 0
-                    ? <Folder size={13} />
-                    : conversationTaskIds(conversation).length > 0
-                      ? <ListTodo size={13} />
-                      : conversation.isChiefOfStaff ? <Sparkles size={13} /> : <MessageSquare size={13} />}
-                  <span>{conversation.title || "New conversation"}</span>
-                  <small>{conversationScopeLabel(conversation, projects, tasks)} · {timeAgo(conversation.updatedAt || conversation.createdAt)}</small>
-                </button>
-                <button aria-label={`Archive ${conversation.title || "conversation"}`} className="do-conversation-action" onClick={() => archiveConversation(conversation)} type="button"><Archive size={11} /></button>
-                {!conversation.isChiefOfStaff && <button aria-label={`Delete ${conversation.title || "conversation"}`} className="do-conversation-action is-danger" onClick={() => deleteConversation(conversation)} type="button"><Trash2 size={11} /></button>}
-              </div>
-            ))}
+                  <button
+                    className="do-conversation-main"
+                    onClick={() => {
+                      setConversationId(conversation.id);
+                      const projectIds = conversationProjectIds(conversation);
+                      const taskIds = conversationTaskIds(conversation);
+                      navigate(
+                        projectIds.length === 1 && taskIds.length === 0
+                          ? `/work/projects/${projectIds[0]}`
+                          : "/",
+                      );
+                      setSidebarOpen(false);
+                    }}
+                    type="button"
+                  >
+                    {conversationProjectIds(conversation).length > 0 ? (
+                      <Folder size={13} />
+                    ) : conversationTaskIds(conversation).length > 0 ? (
+                      <ListTodo size={13} />
+                    ) : conversation.isChiefOfStaff ? (
+                      <Sparkles size={13} />
+                    ) : (
+                      <MessageSquare size={13} />
+                    )}
+                    <span>{conversation.title || "New conversation"}</span>
+                    <small>
+                      {conversationScopeLabel(conversation, projects, tasks)} ·{" "}
+                      {timeAgo(
+                        conversation.updatedAt || conversation.createdAt,
+                      )}
+                    </small>
+                  </button>
+                  <button
+                    aria-label={`Archive ${conversation.title || "conversation"}`}
+                    className="do-conversation-action"
+                    onClick={() => archiveConversation(conversation)}
+                    type="button"
+                  >
+                    <Archive size={11} />
+                  </button>
+                  {!conversation.isChiefOfStaff && (
+                    <button
+                      aria-label={`Delete ${conversation.title || "conversation"}`}
+                      className="do-conversation-action is-danger"
+                      onClick={() => deleteConversation(conversation)}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
             {!search.trim() && filteredConversations.length > 5 && (
-              <button className="do-expand-chats" onClick={() => setChatsExpanded((expanded) => !expanded)} type="button"><ChevronDown className={chatsExpanded ? "is-up" : ""} size={13} /><span>{chatsExpanded ? "Show less" : `Show ${filteredConversations.length - 5} more`}</span></button>
+              <button
+                className="do-expand-chats"
+                onClick={() => setChatsExpanded((expanded) => !expanded)}
+                type="button"
+              >
+                <ChevronDown
+                  className={chatsExpanded ? "is-up" : ""}
+                  size={13}
+                />
+                <span>
+                  {chatsExpanded
+                    ? "Show less"
+                    : `Show ${filteredConversations.length - 5} more`}
+                </span>
+              </button>
             )}
           </div>
         </div>
 
         <div className="do-account">
-          <button onClick={() => setWorkspaceOpen((open) => !open)} type="button">
-            <span className="do-avatar">{initials(user?.displayName, user?.email)}</span>
-            <span><strong>{workspace?.name || "Certo Work"}</strong><small>{user?.email}</small></span>
+          <button
+            onClick={() => setWorkspaceOpen((open) => !open)}
+            type="button"
+          >
+            <span className="do-avatar">
+              {initials(user?.displayName, user?.email)}
+            </span>
+            <span>
+              <strong>{workspace?.name || "Certo Work"}</strong>
+              <small>{user?.email}</small>
+            </span>
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
@@ -1885,10 +2715,36 @@ export function DelivereeWorkspace() {
                 <span>Text size</span>
                 <TextSizeControl compact />
               </div>
-              <button onClick={() => { setPanel("workspace"); setWorkspaceOpen(false); }} type="button"><Users size={14} /> Workspace & team</button>
-              <button onClick={() => { navigate("/settings"); setWorkspaceOpen(false); }} type="button"><Settings size={14} /> Settings</button>
-              <button onClick={() => { setCleanSlateOpen(true); setWorkspaceOpen(false); }} type="button">Start clean</button>
-              <button onClick={logOut} type="button">Sign out</button>
+              <button
+                onClick={() => {
+                  setPanel("workspace");
+                  setWorkspaceOpen(false);
+                }}
+                type="button"
+              >
+                <Users size={14} /> Workspace & team
+              </button>
+              <button
+                onClick={() => {
+                  navigate("/settings");
+                  setWorkspaceOpen(false);
+                }}
+                type="button"
+              >
+                <Settings size={14} /> Settings
+              </button>
+              <button
+                onClick={() => {
+                  setCleanSlateOpen(true);
+                  setWorkspaceOpen(false);
+                }}
+                type="button"
+              >
+                Start clean
+              </button>
+              <button onClick={logOut} type="button">
+                Sign out
+              </button>
             </div>
           )}
         </div>
@@ -1896,163 +2752,516 @@ export function DelivereeWorkspace() {
 
       <main className="do-main">
         <header className="do-header">
-          <button aria-label="Open navigation" className="do-icon-button do-menu-button" onClick={() => setSidebarOpen(true)} type="button"><Menu size={18} /></button>
-          <button className="do-context-title" onClick={() => setPanel("projects")} type="button">
-            <span>{currentContextLabel}</span><ChevronRight size={13} />
+          <button
+            aria-label="Open navigation"
+            className="do-icon-button do-menu-button"
+            onClick={() => setSidebarOpen(true)}
+            type="button"
+          >
+            <Menu size={18} />
+          </button>
+          <button
+            className="do-context-title"
+            onClick={() => setPanel("projects")}
+            type="button"
+          >
+            <span>{currentContextLabel}</span>
+            <ChevronRight size={13} />
           </button>
           <div className="do-header-actions">
             {routeOrPrimaryProject && (
               <button
                 className={`do-header-button ${centerView === "project" ? "is-active" : ""}`}
                 onClick={() => {
-                    setProjectConsoleId(routeOrPrimaryProject.id);
-                    setPanel(null);
-                    goCenterView(centerView === "project" ? "conversation" : "project");
+                  setProjectConsoleId(routeOrPrimaryProject.id);
+                  setPanel(null);
+                  goCenterView(
+                    centerView === "project" ? "conversation" : "project",
+                  );
                 }}
                 type="button"
               >
-                <Folder size={15} /><span>Project console</span>
+                <Folder size={15} />
+                <span>Project console</span>
               </button>
             )}
-            <button className={`do-header-button ${panel === "skills" ? "is-active" : ""}`} onClick={() => setPanel(panel === "skills" ? null : "skills")} type="button"><WandSparkles size={15} /><span>Skills</span></button>
-            <button className={`do-header-button ${panel === "digest" ? "is-active" : ""}`} onClick={() => setPanel(panel === "digest" ? null : "digest")} type="button"><Mail size={15} /><span>Digest</span></button>
-            <button className="do-header-button" onClick={() => setPanel("today")} type="button"><ListTodo size={15} /><span>Today</span>{todayTasks.length > 0 && <small>{todayTasks.length}</small>}</button>
-            <button className="do-header-button" onClick={() => setPanel("approvals")} type="button"><ShieldCheck size={15} /><span>Pendientes</span>{reviewItems.length > 0 && <small className="is-attention">{reviewItems.length}</small>}</button>
+            <button
+              className={`do-header-button ${panel === "skills" ? "is-active" : ""}`}
+              onClick={() => setPanel(panel === "skills" ? null : "skills")}
+              type="button"
+            >
+              <WandSparkles size={15} />
+              <span>Skills</span>
+            </button>
+            <button
+              className={`do-header-button ${panel === "digest" ? "is-active" : ""}`}
+              onClick={() => setPanel(panel === "digest" ? null : "digest")}
+              type="button"
+            >
+              <Mail size={15} />
+              <span>Digest</span>
+            </button>
+            <button
+              className="do-header-button"
+              onClick={() => setPanel("today")}
+              type="button"
+            >
+              <ListTodo size={15} />
+              <span>Today</span>
+              {todayTasks.length > 0 && <small>{todayTasks.length}</small>}
+            </button>
+            <button
+              className="do-header-button"
+              onClick={() => setPanel("approvals")}
+              type="button"
+            >
+              <ShieldCheck size={15} />
+              <span>Pendientes</span>
+              {reviewItems.length > 0 && (
+                <small className="is-attention">{reviewItems.length}</small>
+              )}
+            </button>
           </div>
         </header>
 
-        {notice && <div className="do-notice" role="status"><CheckCircle2 size={15} /><span>{notice}</span><button aria-label="Dismiss notification" onClick={() => setNotice("")} type="button"><X size={14} /></button></div>}
+        {notice && (
+          <div className="do-notice" role="status">
+            <CheckCircle2 size={15} />
+            <span>{notice}</span>
+            <button
+              aria-label="Dismiss notification"
+              onClick={() => setNotice("")}
+              type="button"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
-        <section className="do-center-bar" aria-label="Current work view">
+        <section
+          className={`do-center-bar ${centerView === "portfolio" ? "is-portfolio" : ""}`}
+          aria-label="Current work view"
+        >
           <div className="do-center-navigation" aria-label="View history">
-            <button aria-label="Go back" disabled={centerHistory.index === 0} onClick={goCenterBack} type="button"><ArrowLeft size={14} /></button>
-            <button aria-label="Go forward" disabled={centerHistory.index === centerHistory.items.length - 1} onClick={goCenterForward} type="button"><ArrowRight size={14} /></button>
+            <button
+              aria-label="Go back"
+              disabled={centerHistory.index === 0}
+              onClick={goCenterBack}
+              type="button"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <button
+              aria-label="Go forward"
+              disabled={centerHistory.index === centerHistory.items.length - 1}
+              onClick={goCenterForward}
+              type="button"
+            >
+              <ArrowRight size={14} />
+            </button>
           </div>
           <div className="do-breadcrumb">
-            <span>{routeOrPrimaryProject ? entityTitle(routeOrPrimaryProject) : "Chief of Staff"}</span>
-            {selectedWorkItem && <><ChevronRight size={12} /><strong>{entityTitle(selectedWorkItem)}</strong></>}
+            <span>
+              {routeOrPrimaryProject
+                ? entityTitle(routeOrPrimaryProject)
+                : "Chief of Staff"}
+            </span>
+            {selectedWorkItem && (
+              <>
+                <ChevronRight size={12} />
+                <strong>{entityTitle(selectedWorkItem)}</strong>
+              </>
+            )}
           </div>
-          <div className="do-view-switch" role="tablist" aria-label="Central view">
-            <button aria-selected={centerView === "conversation"} className={centerView === "conversation" ? "is-active" : ""} onClick={() => goCenterView("conversation")} role="tab" type="button"><MessageSquare size={13} /> Conversación</button>
-            <button aria-selected={centerView === "items"} className={centerView === "items" ? "is-active" : ""} onClick={() => goCenterView("items")} role="tab" type="button"><ListTodo size={13} /> Ítems</button>
-            <button aria-selected={centerView === "notes"} className={centerView === "notes" ? "is-active" : ""} onClick={() => goCenterView("notes")} role="tab" type="button"><BookOpen size={13} /> Notas</button>
-            <button aria-selected={centerView === "portfolio"} className={centerView === "portfolio" ? "is-active" : ""} onClick={() => { goCenterView("portfolio"); setPanel(null); }} role="tab" type="button"><LayoutGrid size={13} /> Portfolio</button>
+          <div
+            className="do-view-switch"
+            role="tablist"
+            aria-label="Central view"
+          >
+            <button
+              aria-selected={centerView === "conversation"}
+              className={centerView === "conversation" ? "is-active" : ""}
+              onClick={() => goCenterView("conversation")}
+              role="tab"
+              type="button"
+            >
+              <MessageSquare size={13} /> Conversación
+            </button>
+            <button
+              aria-selected={centerView === "items"}
+              className={centerView === "items" ? "is-active" : ""}
+              onClick={() => goCenterView("items")}
+              role="tab"
+              type="button"
+            >
+              <ListTodo size={13} /> Ítems
+            </button>
+            <button
+              aria-selected={centerView === "notes"}
+              className={centerView === "notes" ? "is-active" : ""}
+              onClick={() => goCenterView("notes")}
+              role="tab"
+              type="button"
+            >
+              <BookOpen size={13} /> Notas
+            </button>
+            <button
+              aria-selected={centerView === "portfolio"}
+              className={centerView === "portfolio" ? "is-active" : ""}
+              onClick={() => {
+                goCenterView("portfolio");
+                setPanel(null);
+              }}
+              role="tab"
+              type="button"
+            >
+              <LayoutGrid size={13} /> Portfolio
+            </button>
           </div>
         </section>
 
         {centerView === "conversation" ? (
           <>
-        <div className="do-thread-viewport">
-          <div className="do-thread">
-            {contextualMessages.length === 0 && !submitting ? (
-              <section className="do-opening">
-                <div className="do-welcome">
-                  <span className="do-orb"><Sparkles size={21} /></span>
-                  {isFocusedConversation && <span className="do-context-eyebrow">FOCUSED · {currentContextLabel}</span>}
-                  <h1>{isFocusedConversation ? "What should move next?" : `What matters now, ${displayName(user?.displayName, user?.email)}?`}</h1>
-                  <p>{routeOrPrimaryProject ? routeOrPrimaryProject.outcome || routeOrPrimaryProject.description || `${projectTasks.length} open tasks in this context.` : isFocusedConversation ? `${projectTasks.length} open items are connected to this conversation.` : "Capture anything. Make a plan. Finish the right work."}</p>
-                </div>
+            <div className="do-thread-viewport">
+              <div className="do-thread">
+                {contextualMessages.length === 0 && !submitting ? (
+                  <section className="do-opening">
+                    <div className="do-welcome">
+                      <span className="do-orb">
+                        <Sparkles size={21} />
+                      </span>
+                      {isFocusedConversation && (
+                        <span className="do-context-eyebrow">
+                          FOCUSED · {currentContextLabel}
+                        </span>
+                      )}
+                      <h1>
+                        {isFocusedConversation
+                          ? "What should move next?"
+                          : `What matters now, ${displayName(user?.displayName, user?.email)}?`}
+                      </h1>
+                      <p>
+                        {routeOrPrimaryProject
+                          ? routeOrPrimaryProject.outcome ||
+                            routeOrPrimaryProject.description ||
+                            `${projectTasks.length} open tasks in this context.`
+                          : isFocusedConversation
+                            ? `${projectTasks.length} open items are connected to this conversation.`
+                            : "Capture anything. Make a plan. Finish the right work."}
+                      </p>
+                    </div>
 
-                {!isFocusedConversation && (
-                  <button className="do-daily-pulse" onClick={() => sendMessage("Give me a realistic plan for today using my current work.")} type="button">
-                    <span><CalendarDays size={15} /> Today</span>
-                    <strong>{todayTasks.length ? `${todayTasks.length} tasks need attention` : "Your day is open"}</strong>
-                    <ChevronRight size={15} />
-                  </button>
-                )}
+                    {!isFocusedConversation && (
+                      <button
+                        className="do-daily-pulse"
+                        onClick={() =>
+                          sendMessage(
+                            "Give me a realistic plan for today using my current work.",
+                          )
+                        }
+                        type="button"
+                      >
+                        <span>
+                          <CalendarDays size={15} /> Today
+                        </span>
+                        <strong>
+                          {todayTasks.length
+                            ? `${todayTasks.length} tasks need attention`
+                            : "Your day is open"}
+                        </strong>
+                        <ChevronRight size={15} />
+                      </button>
+                    )}
 
-                {isFocusedConversation && (
-                  <div className="do-project-pulse">
-                    <span>{projectTasks.length} open in context</span>
-                    <span>{currentContextLabel}</span>
-                    {routeOrPrimaryProject && <button onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button">Project console</button>}
-                  </div>
-                )}
-
-                <div className="do-prompt-list">
-                  {openingPrompts.map((prompt) => <button key={prompt} onClick={() => sendMessage(prompt)} type="button"><span>{prompt}</span><ArrowUp size={14} /></button>)}
-                </div>
-              </section>
-            ) : (
-              <>
-                {isFocusedConversation && (
-                  <div className="do-inline-context">
-                    {directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}
-                    <strong>{currentContextLabel}</strong>
-                    <span>{projectTasks.length} open</span>
-                    <button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button>
-                  </div>
-                )}
-                {contextualMessages.map((message) => (
-                  <article className={`do-message is-${message.role}`} key={message.id}>
-                    {message.role === "user" ? <UserMessage text={message.content} /> : (
-                      <div className="do-assistant-message">
-                        <div className="do-assistant-mark"><Bot size={16} /></div>
-                        <div className="do-assistant-content">
-                          <div className="do-assistant-name">Certo Work {message.offline && <span>safe mode</span>}</div>
-                          <RichText text={message.content} />
-                          {message.citations && message.citations.length > 0 && <div className="do-citations">{message.citations.map((citation) => <span key={`${citation.type}-${citation.id}`}>{citation.title}</span>)}</div>}
-                          <ActionProposal activeProject={primaryProject || activeProject || null} message={message} onStage={stagePlan} projects={projects} />
-                          {message.suggestedChips && <div className="do-chips">{message.suggestedChips.map((chip) => {
-                            const label = proposalChipLabel(chip, message.actionPlan, projects, primaryProject || activeProject || null);
-                            return <button key={chip} onClick={() => sendMessage(label)} type="button">{label}</button>;
-                          })}</div>}
-                        </div>
+                    {isFocusedConversation && (
+                      <div className="do-project-pulse">
+                        <span>{projectTasks.length} open in context</span>
+                        <span>{currentContextLabel}</span>
+                        {routeOrPrimaryProject && (
+                          <button
+                            onClick={() =>
+                              openProjectRecord(routeOrPrimaryProject)
+                            }
+                            type="button"
+                          >
+                            Project console
+                          </button>
+                        )}
                       </div>
                     )}
-                  </article>
-                ))}
-                {(submitting || streamed) && (
-                  <article className="do-message is-assistant">
-                    <div className="do-assistant-message">
-                      <div className="do-assistant-mark"><Bot size={16} /></div>
-                      <div className="do-assistant-content">{streamed ? <RichText text={streamed} /> : <div className="do-thinking"><span /><span /><span /></div>}</div>
-                    </div>
-                  </article>
-                )}
-              </>
-            )}
-            <div ref={endRef} />
-          </div>
-        </div>
 
-        <div className="do-composer-wrap">
-          {actionMenuOpen && (
-            <div className="do-quick-actions">
-              <button onClick={() => setComposer("Capture this as a task: ")} type="button"><Inbox size={15} /><span><strong>Capture</strong><small>Turn a thought into a clear task</small></span></button>
-              <button onClick={() => sendMessage("Plan my day realistically using the 2 must-dos and up to 8 should-dos method.")} type="button"><CalendarDays size={15} /><span><strong>Plan today</strong><small>Choose work that fits the day</small></span></button>
-              <button onClick={() => { setActionMenuOpen(false); goCenterView("notes"); }} type="button"><BookOpen size={15} /><span><strong>Open notes</strong><small>Notebook, section, notes and handwriting</small></span></button>
-              <button onClick={() => { setActionMenuOpen(false); setProjectWizardOpen(true); }} type="button"><WandSparkles size={15} /><span><strong>Project Wizard</strong><small>Create or update a project safely</small></span></button>
-              <button onClick={() => setComposer("Help me create a project for ")} type="button"><Folder size={15} /><span><strong>Freeform project note</strong><small>Talk it through before creating</small></span></button>
-            </div>
-          )}
-          {isFocusedConversation && <div className="do-composer-context">{directContextProjectIds.length > 0 ? <Folder size={12} /> : <ListTodo size={12} />}<span>{currentContextLabel}</span><button aria-label="Edit conversation context" onClick={() => setPanel("projects")} type="button"><ChevronDown size={12} /></button></div>}
-          <div className="do-composer">
-            <textarea
-              aria-label="Message Certo Work"
-              data-testid="message-composer"
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder={isFocusedConversation ? `Ask about ${currentContextLabel}…` : "Ask, capture, or plan…"}
-              ref={composerRef}
-              rows={1}
-              value={input}
-            />
-            <div className="do-composer-foot">
-              <div>
-                <button aria-label="Open quick actions" className={actionMenuOpen ? "is-active" : ""} onClick={() => setActionMenuOpen((open) => !open)} type="button"><Plus size={16} /></button>
-                {voiceSupported && <button aria-label={isListening ? "Stop listening" : "Start voice input"} className={isListening ? "is-listening" : ""} onClick={() => isListening ? recognitionRef.current?.stop() : recognitionRef.current?.start()} type="button">{isListening ? <MicOff size={16} /> : <Mic size={16} />}</button>}
+                    <div className="do-prompt-list">
+                      {openingPrompts.map((prompt) => (
+                        <button
+                          key={prompt}
+                          onClick={() => sendMessage(prompt)}
+                          type="button"
+                        >
+                          <span>{prompt}</span>
+                          <ArrowUp size={14} />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : (
+                  <>
+                    {isFocusedConversation && (
+                      <div className="do-inline-context">
+                        {directContextProjectIds.length > 0 ? (
+                          <Folder size={12} />
+                        ) : (
+                          <ListTodo size={12} />
+                        )}
+                        <strong>{currentContextLabel}</strong>
+                        <span>{projectTasks.length} open</span>
+                        <button
+                          aria-label="Edit conversation context"
+                          onClick={() => setPanel("projects")}
+                          type="button"
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                      </div>
+                    )}
+                    {contextualMessages.map((message) => (
+                      <article
+                        className={`do-message is-${message.role}`}
+                        key={message.id}
+                      >
+                        {message.role === "user" ? (
+                          <UserMessage text={message.content} />
+                        ) : (
+                          <div className="do-assistant-message">
+                            <div className="do-assistant-mark">
+                              <Bot size={16} />
+                            </div>
+                            <div className="do-assistant-content">
+                              <div className="do-assistant-name">
+                                Certo Work{" "}
+                                {message.offline && <span>safe mode</span>}
+                              </div>
+                              <RichText text={message.content} />
+                              {message.citations &&
+                                message.citations.length > 0 && (
+                                  <div className="do-citations">
+                                    {message.citations.map((citation) => (
+                                      <span
+                                        key={`${citation.type}-${citation.id}`}
+                                      >
+                                        {citation.title}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              <ActionProposal
+                                activeProject={
+                                  primaryProject || activeProject || null
+                                }
+                                message={message}
+                                onStage={stagePlan}
+                                projects={projects}
+                              />
+                              {message.suggestedChips && (
+                                <div className="do-chips">
+                                  {message.suggestedChips.map((chip) => {
+                                    const label = proposalChipLabel(
+                                      chip,
+                                      message.actionPlan,
+                                      projects,
+                                      primaryProject || activeProject || null,
+                                    );
+                                    return (
+                                      <button
+                                        key={chip}
+                                        onClick={() => sendMessage(label)}
+                                        type="button"
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                    {(submitting || streamed) && (
+                      <article className="do-message is-assistant">
+                        <div className="do-assistant-message">
+                          <div className="do-assistant-mark">
+                            <Bot size={16} />
+                          </div>
+                          <div className="do-assistant-content">
+                            {streamed ? (
+                              <RichText text={streamed} />
+                            ) : (
+                              <div className="do-thinking">
+                                <span />
+                                <span />
+                                <span />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    )}
+                  </>
+                )}
+                <div ref={endRef} />
               </div>
-              <button aria-label="Send message" className="do-send" disabled={!input.trim() || submitting} onClick={() => sendMessage()} type="button">{submitting ? <Loader2 className="spin" size={16} /> : <ArrowUp size={17} />}</button>
             </div>
-          </div>
-          <p className="do-composer-note">You stay in control. Suggested changes remain pending until approved.</p>
-        </div>
+
+            <div className="do-composer-wrap">
+              {actionMenuOpen && (
+                <div className="do-quick-actions">
+                  <button
+                    onClick={() => setComposer("Capture this as a task: ")}
+                    type="button"
+                  >
+                    <Inbox size={15} />
+                    <span>
+                      <strong>Capture</strong>
+                      <small>Turn a thought into a clear task</small>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() =>
+                      sendMessage(
+                        "Plan my day realistically using the 2 must-dos and up to 8 should-dos method.",
+                      )
+                    }
+                    type="button"
+                  >
+                    <CalendarDays size={15} />
+                    <span>
+                      <strong>Plan today</strong>
+                      <small>Choose work that fits the day</small>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      goCenterView("notes");
+                    }}
+                    type="button"
+                  >
+                    <BookOpen size={15} />
+                    <span>
+                      <strong>Open notes</strong>
+                      <small>Notebook, section, notes and handwriting</small>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setProjectWizardOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <WandSparkles size={15} />
+                    <span>
+                      <strong>Project Wizard</strong>
+                      <small>Create or update a project safely</small>
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setComposer("Help me create a project for ")}
+                    type="button"
+                  >
+                    <Folder size={15} />
+                    <span>
+                      <strong>Freeform project note</strong>
+                      <small>Talk it through before creating</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+              {isFocusedConversation && (
+                <div className="do-composer-context">
+                  {directContextProjectIds.length > 0 ? (
+                    <Folder size={12} />
+                  ) : (
+                    <ListTodo size={12} />
+                  )}
+                  <span>{currentContextLabel}</span>
+                  <button
+                    aria-label="Edit conversation context"
+                    onClick={() => setPanel("projects")}
+                    type="button"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                </div>
+              )}
+              <div className="do-composer">
+                <textarea
+                  aria-label="Message Certo Work"
+                  data-testid="message-composer"
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event: KeyboardEvent<HTMLTextAreaElement>) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder={
+                    isFocusedConversation
+                      ? `Ask about ${currentContextLabel}…`
+                      : "Ask, capture, or plan…"
+                  }
+                  ref={composerRef}
+                  rows={1}
+                  value={input}
+                />
+                <div className="do-composer-foot">
+                  <div>
+                    <button
+                      aria-label="Open quick actions"
+                      className={actionMenuOpen ? "is-active" : ""}
+                      onClick={() => setActionMenuOpen((open) => !open)}
+                      type="button"
+                    >
+                      <Plus size={16} />
+                    </button>
+                    {voiceSupported && (
+                      <button
+                        aria-label={
+                          isListening ? "Stop listening" : "Start voice input"
+                        }
+                        className={isListening ? "is-listening" : ""}
+                        onClick={() =>
+                          isListening
+                            ? recognitionRef.current?.stop()
+                            : recognitionRef.current?.start()
+                        }
+                        type="button"
+                      >
+                        {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    aria-label="Send message"
+                    className="do-send"
+                    disabled={!input.trim() || submitting}
+                    onClick={() => sendMessage()}
+                    type="button"
+                  >
+                    {submitting ? (
+                      <Loader2 className="spin" size={16} />
+                    ) : (
+                      <ArrowUp size={17} />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="do-composer-note">
+                You stay in control. Suggested changes remain pending until
+                approved.
+              </p>
+            </div>
           </>
         ) : centerView === "items" ? (
           <WorkItemsCenter
@@ -2076,7 +3285,10 @@ export function DelivereeWorkspace() {
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
             onClose={() => goCenterView("conversation")}
-            onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
+            onAsk={(prompt) => {
+              setComposer(prompt);
+              goCenterView("conversation");
+            }}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
             costTemplates={costTemplates}
@@ -2085,30 +3297,54 @@ export function DelivereeWorkspace() {
             projects={projects}
             risks={risks}
             tasks={tasks}
+            workspaceMembers={workspaceMembers}
           />
         ) : centerView === "project" ? (
           consoleProject ? (
             <ProjectConsolePanel
               conversationId={conversationId}
               costTemplates={costTemplates}
-              documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
-              milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
-              onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
-              onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
+              documents={knowledgeItems.filter(
+                (item) =>
+                  item.projectId === consoleProject.id &&
+                  item.status !== "archived",
+              )}
+              milestones={milestones.filter(
+                (item) => item.projectId === consoleProject.id,
+              )}
+              onAddRisk={(title, patch) =>
+                addProjectRisk(consoleProject.id, title, patch)
+              }
+              onAddTask={(title, status, patch) =>
+                addProjectTask(consoleProject.id, title, status, patch)
+              }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
-              onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
+              onAsk={(prompt) => {
+                setComposer(prompt);
+                goCenterView("conversation");
+              }}
               onUpdateProject={updateProject}
               onUpdateCostTemplate={updateCostTemplate}
               onUpdateTask={updateProjectTask}
               project={consoleProject}
-              risks={risks.filter((item) => item.projectId === consoleProject.id)}
-              tasks={tasks.filter((item) => item.projectId === consoleProject.id)}
+              risks={risks.filter(
+                (item) => item.projectId === consoleProject.id,
+              )}
+              tasks={tasks.filter(
+                (item) => item.projectId === consoleProject.id,
+              )}
               workspaceMembers={workspaceMembers}
             />
-          ) : <div className="do-panel-empty"><Folder size={20} /><strong>No project selected.</strong><span>Choose a project from the portfolio.</span></div>
+          ) : (
+            <div className="do-panel-empty">
+              <Folder size={20} />
+              <strong>No project selected.</strong>
+              <span>Choose a project from the portfolio.</span>
+            </div>
+          )
         ) : (
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
@@ -2124,25 +3360,72 @@ export function DelivereeWorkspace() {
         )}
       </main>
 
-      <aside className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`} aria-hidden={!panel}>
+      <aside
+        className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`}
+        aria-hidden={!panel}
+      >
         <div className="do-panel-head">
           <div>
-            <span>{panel === "today" ? "FOCUS" : panel === "projects" ? "CONTEXT" : panel === "project" ? "PROJECT" : panel === "skills" ? "SKILLS" : panel === "digest" ? "EMAIL" : panel === "workspace" ? "ADMIN" : "CONTROL"}</span>
-            <h2>{panel === "today" ? "Today" : panel === "projects" ? "Conversation context" : panel === "project" ? "Project console" : panel === "skills" ? "Skills" : panel === "digest" ? "Digest & reminders" : panel === "workspace" ? "Workspace & team" : "Pendientes"}</h2>
+            <span>
+              {panel === "today"
+                ? "FOCUS"
+                : panel === "projects"
+                  ? "CONTEXT"
+                  : panel === "project"
+                    ? "PROJECT"
+                    : panel === "skills"
+                      ? "SKILLS"
+                      : panel === "digest"
+                        ? "EMAIL"
+                        : panel === "workspace"
+                          ? "ADMIN"
+                          : "CONTROL"}
+            </span>
+            <h2>
+              {panel === "today"
+                ? "Today"
+                : panel === "projects"
+                  ? "Conversation context"
+                  : panel === "project"
+                    ? "Project console"
+                    : panel === "skills"
+                      ? "Skills"
+                      : panel === "digest"
+                        ? "Digest & reminders"
+                        : panel === "workspace"
+                          ? "Workspace & team"
+                          : "Pendientes"}
+            </h2>
           </div>
-          <button aria-label="Close panel" onClick={() => setPanel(null)} type="button"><X size={17} /></button>
+          <button
+            aria-label="Close panel"
+            onClick={() => setPanel(null)}
+            type="button"
+          >
+            <X size={17} />
+          </button>
         </div>
 
         <div className="do-panel-body">
-          {panel === "project" && (
-            consoleProject ? (
+          {panel === "project" &&
+            (consoleProject ? (
               <ProjectConsolePanel
                 conversationId={conversationId}
                 costTemplates={costTemplates}
-                documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
-                milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
-                onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
-                onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
+                documents={knowledgeItems.filter(
+                  (item) =>
+                    item.projectId === consoleProject.id &&
+                    item.status !== "archived",
+                )}
+                milestones={milestones.filter(
+                  (item) => item.projectId === consoleProject.id,
+                )}
+                onAddRisk={(title, patch) =>
+                  addProjectRisk(consoleProject.id, title, patch)
+                }
+                onAddTask={(title, status, patch) =>
+                  addProjectTask(consoleProject.id, title, status, patch)
+                }
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onDeleteProject={deleteProject}
@@ -2152,68 +3435,238 @@ export function DelivereeWorkspace() {
                 onUpdateCostTemplate={updateCostTemplate}
                 onUpdateTask={updateProjectTask}
                 project={consoleProject}
-                risks={risks.filter((item) => item.projectId === consoleProject.id)}
-                tasks={tasks.filter((item) => item.projectId === consoleProject.id)}
+                risks={risks.filter(
+                  (item) => item.projectId === consoleProject.id,
+                )}
+                tasks={tasks.filter(
+                  (item) => item.projectId === consoleProject.id,
+                )}
                 workspaceMembers={workspaceMembers}
               />
             ) : (
-              <div className="do-panel-empty"><Folder size={20} /><strong>No project selected.</strong><span>Choose a project from the sidebar, then open its console.</span></div>
-            )
-          )}
+              <div className="do-panel-empty">
+                <Folder size={20} />
+                <strong>No project selected.</strong>
+                <span>
+                  Choose a project from the sidebar, then open its console.
+                </span>
+              </div>
+            ))}
 
           {panel === "today" && (
             <>
-              <p className="do-panel-intro">Only the work that may need your attention now.</p>
+              <p className="do-panel-intro">
+                Only the work that may need your attention now.
+              </p>
               <div className="do-panel-list">
-                {(isFocusedConversation ? projectTasks : todayTasks).slice(0, 10).map((task) => (
-                  <button key={task.id} onClick={() => setComposer(`Help me move this task forward: ${entityTitle(task)}`)} type="button">
-                    <Circle size={13} />
-                    <span><strong>{entityTitle(task)}</strong><small>{priorityLabel(task.priority)}{task.projectId ? ` · ${entityTitle(projects.find((project) => project.id === task.projectId))}` : ""}</small></span>
-                    <ChevronRight size={13} />
-                  </button>
-                ))}
-                {(isFocusedConversation ? projectTasks : todayTasks).length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>Nothing urgent here.</strong><span>Use the conversation to decide what deserves focus.</span></div>}
+                {(isFocusedConversation ? projectTasks : todayTasks)
+                  .slice(0, 10)
+                  .map((task) => (
+                    <button
+                      key={task.id}
+                      onClick={() =>
+                        setComposer(
+                          `Help me move this task forward: ${entityTitle(task)}`,
+                        )
+                      }
+                      type="button"
+                    >
+                      <Circle size={13} />
+                      <span>
+                        <strong>{entityTitle(task)}</strong>
+                        <small>
+                          {priorityLabel(task.priority)}
+                          {task.projectId
+                            ? ` · ${entityTitle(projects.find((project) => project.id === task.projectId))}`
+                            : ""}
+                        </small>
+                      </span>
+                      <ChevronRight size={13} />
+                    </button>
+                  ))}
+                {(isFocusedConversation ? projectTasks : todayTasks).length ===
+                  0 && (
+                  <div className="do-panel-empty">
+                    <CheckCircle2 size={20} />
+                    <strong>Nothing urgent here.</strong>
+                    <span>
+                      Use the conversation to decide what deserves focus.
+                    </span>
+                  </div>
+                )}
               </div>
-              <button className="do-panel-primary" onClick={() => sendMessage("Plan my day realistically using my current work and available capacity.")} type="button"><Sparkles size={15} /> Plan with Certo Work</button>
+              <button
+                className="do-panel-primary"
+                onClick={() =>
+                  sendMessage(
+                    "Plan my day realistically using my current work and available capacity.",
+                  )
+                }
+                type="button"
+              >
+                <Sparkles size={15} /> Plan with Certo Work
+              </button>
             </>
           )}
 
           {panel === "projects" && (
             <>
-              <p className="do-panel-intro">A conversation can stay general or focus on one or several projects and tasks.</p>
+              <p className="do-panel-intro">
+                A conversation can stay general or focus on one or several
+                projects and tasks.
+              </p>
               <div className="do-panel-list do-context-options">
-                <button className={!isFocusedConversation ? "is-selected" : ""} onClick={() => updateConversationContext([], [], true)} type="button">
-                  <Sparkles size={14} /><span><strong>Chief of Staff · general</strong><small>Coordinate and manage anything in the workspace</small></span>{!isFocusedConversation ? <Check size={13} /> : <ChevronRight size={13} />}
+                <button
+                  className={!isFocusedConversation ? "is-selected" : ""}
+                  onClick={() => updateConversationContext([], [], true)}
+                  type="button"
+                >
+                  <Sparkles size={14} />
+                  <span>
+                    <strong>Chief of Staff · general</strong>
+                    <small>
+                      Coordinate and manage anything in the workspace
+                    </small>
+                  </span>
+                  {!isFocusedConversation ? (
+                    <Check size={13} />
+                  ) : (
+                    <ChevronRight size={13} />
+                  )}
                 </button>
                 <span className="do-context-section-label">Projects</span>
                 {activeProjects.map((project) => {
-                  const count = openTasks.filter((task) => task.projectId === project.id).length;
+                  const count = openTasks.filter(
+                    (task) => task.projectId === project.id,
+                  ).length;
                   const selected = directContextProjectIds.includes(project.id);
-                  return <button className={selected ? "is-selected" : ""} key={project.id} onClick={() => updateConversationContext(selected ? directContextProjectIds.filter((id) => id !== project.id) : [...directContextProjectIds, project.id], contextTaskIds)} type="button"><Folder size={14} /><span><strong>{entityTitle(project)}</strong><small>{count} open task{count === 1 ? "" : "s"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
+                  return (
+                    <button
+                      className={selected ? "is-selected" : ""}
+                      key={project.id}
+                      onClick={() =>
+                        updateConversationContext(
+                          selected
+                            ? directContextProjectIds.filter(
+                                (id) => id !== project.id,
+                              )
+                            : [...directContextProjectIds, project.id],
+                          contextTaskIds,
+                        )
+                      }
+                      type="button"
+                    >
+                      <Folder size={14} />
+                      <span>
+                        <strong>{entityTitle(project)}</strong>
+                        <small>
+                          {count} open task{count === 1 ? "" : "s"}
+                        </small>
+                      </span>
+                      {selected ? <Check size={13} /> : <Plus size={13} />}
+                    </button>
+                  );
                 })}
                 <span className="do-context-section-label">Tasks</span>
-                <input aria-label="Find tasks for this conversation" onChange={(event) => setContextTaskSearch(event.target.value)} placeholder="Find a task" value={contextTaskSearch} />
+                <input
+                  aria-label="Find tasks for this conversation"
+                  onChange={(event) => setContextTaskSearch(event.target.value)}
+                  placeholder="Find a task"
+                  value={contextTaskSearch}
+                />
                 {openTasks
-                  .filter((task) => !contextTaskSearch.trim() || `${entityTitle(task)} ${entityTitle(projects.find((project) => project.id === task.projectId))}`.toLowerCase().includes(contextTaskSearch.toLowerCase()))
-                  .sort((left, right) => Number(contextTaskIds.includes(right.id)) - Number(contextTaskIds.includes(left.id)))
+                  .filter(
+                    (task) =>
+                      !contextTaskSearch.trim() ||
+                      `${entityTitle(task)} ${entityTitle(projects.find((project) => project.id === task.projectId))}`
+                        .toLowerCase()
+                        .includes(contextTaskSearch.toLowerCase()),
+                  )
+                  .sort(
+                    (left, right) =>
+                      Number(contextTaskIds.includes(right.id)) -
+                      Number(contextTaskIds.includes(left.id)),
+                  )
                   .slice(0, 15)
                   .map((task) => {
                     const selected = contextTaskIds.includes(task.id);
-                    return <button className={selected ? "is-selected" : ""} key={task.id} onClick={() => updateConversationContext(directContextProjectIds, selected ? contextTaskIds.filter((id) => id !== task.id) : [...contextTaskIds, task.id])} type="button"><ListTodo size={14} /><span><strong>{entityTitle(task)}</strong><small>{task.projectId ? entityTitle(projects.find((project) => project.id === task.projectId)) : "No project"}</small></span>{selected ? <Check size={13} /> : <Plus size={13} />}</button>;
+                    return (
+                      <button
+                        className={selected ? "is-selected" : ""}
+                        key={task.id}
+                        onClick={() =>
+                          updateConversationContext(
+                            directContextProjectIds,
+                            selected
+                              ? contextTaskIds.filter((id) => id !== task.id)
+                              : [...contextTaskIds, task.id],
+                          )
+                        }
+                        type="button"
+                      >
+                        <ListTodo size={14} />
+                        <span>
+                          <strong>{entityTitle(task)}</strong>
+                          <small>
+                            {task.projectId
+                              ? entityTitle(
+                                  projects.find(
+                                    (project) => project.id === task.projectId,
+                                  ),
+                                )
+                              : "No project"}
+                          </small>
+                        </span>
+                        {selected ? <Check size={13} /> : <Plus size={13} />}
+                      </button>
+                    );
                   })}
               </div>
-              {routeOrPrimaryProject && <button className="do-panel-primary" onClick={() => openProjectRecord(routeOrPrimaryProject)} type="button"><Folder size={15} /> Open project console</button>}
-              <button className="do-panel-primary" onClick={() => setPanel(null)} type="button"><Check size={15} /> Done</button>
-              <button className="do-panel-secondary" onClick={() => { setPanel(null); goCenterView("portfolio"); }} type="button">Project command center</button>
+              {routeOrPrimaryProject && (
+                <button
+                  className="do-panel-primary"
+                  onClick={() => openProjectRecord(routeOrPrimaryProject)}
+                  type="button"
+                >
+                  <Folder size={15} /> Open project console
+                </button>
+              )}
+              <button
+                className="do-panel-primary"
+                onClick={() => setPanel(null)}
+                type="button"
+              >
+                <Check size={15} /> Done
+              </button>
+              <button
+                className="do-panel-secondary"
+                onClick={() => {
+                  setPanel(null);
+                  goCenterView("portfolio");
+                }}
+                type="button"
+              >
+                Project command center
+              </button>
             </>
           )}
 
           {panel === "skills" && (
             <>
-              <p className="do-panel-intro">Skills are reusable operating moves. You can invoke them from here, from the + menu, or by typing /project wizard.</p>
+              <p className="do-panel-intro">
+                Skills are reusable operating moves. You can invoke them from
+                here, from the + menu, or by typing /project wizard.
+              </p>
               <div className="do-panel-list do-skill-list">
                 {DELIVEREE_SKILLS.map((skill) => (
-                  <button key={skill.id} onClick={() => { setPanel(null); setProjectWizardOpen(true); }} type="button">
+                  <button
+                    key={skill.id}
+                    onClick={() => {
+                      setPanel(null);
+                      setProjectWizardOpen(true);
+                    }}
+                    type="button"
+                  >
                     <WandSparkles size={14} />
                     <span>
                       <strong>{skill.title}</strong>
@@ -2226,42 +3679,84 @@ export function DelivereeWorkspace() {
               <div className="do-panel-empty do-skill-next">
                 <Sparkles size={20} />
                 <strong>One skill first. Good.</strong>
-                <span>Project Wizard is the foundation. Later we can add PRD Builder, Sprint Planner, Risk Review, and Codex Handoff as real skills.</span>
+                <span>
+                  Project Wizard is the foundation. Later we can add PRD
+                  Builder, Sprint Planner, Risk Review, and Codex Handoff as
+                  real skills.
+                </span>
               </div>
             </>
           )}
 
           {panel === "digest" && (
             <>
-              <p className="do-panel-intro">Ask Certo Work for reminders and summaries from the same flow. Email delivery is saved as a request until an email service is connected.</p>
+              <p className="do-panel-intro">
+                Ask Certo Work for reminders and summaries from the same flow.
+                Email delivery is saved as a request until an email service is
+                connected.
+              </p>
               <div className="do-panel-list">
-                <button onClick={() => saveDigestRequest("email_reminder")} type="button">
+                <button
+                  onClick={() => saveDigestRequest("email_reminder")}
+                  type="button"
+                >
                   <Mail size={14} />
-                  <span><strong>Email reminder</strong><small>Draft a reminder from current work and mark delivery as pending integration</small></span>
+                  <span>
+                    <strong>Email reminder</strong>
+                    <small>
+                      Draft a reminder from current work and mark delivery as
+                      pending integration
+                    </small>
+                  </span>
                   <ChevronRight size={13} />
                 </button>
-                <button onClick={() => saveDigestRequest("daily_digest")} type="button">
+                <button
+                  onClick={() => saveDigestRequest("daily_digest")}
+                  type="button"
+                >
                   <CalendarDays size={14} />
-                  <span><strong>Daily digest</strong><small>Prepare today’s tasks, priorities, risks, and follow-ups</small></span>
+                  <span>
+                    <strong>Daily digest</strong>
+                    <small>
+                      Prepare today’s tasks, priorities, risks, and follow-ups
+                    </small>
+                  </span>
                   <ChevronRight size={13} />
                 </button>
-                <button onClick={() => saveDigestRequest("weekly_summary")} type="button">
+                <button
+                  onClick={() => saveDigestRequest("weekly_summary")}
+                  type="button"
+                >
                   <ListTodo size={14} />
-                  <span><strong>Weekly summary</strong><small>Prepare a week-level digest by project, priority, and date</small></span>
+                  <span>
+                    <strong>Weekly summary</strong>
+                    <small>
+                      Prepare a week-level digest by project, priority, and date
+                    </small>
+                  </span>
                   <ChevronRight size={13} />
                 </button>
               </div>
               <div className="do-panel-empty do-skill-next">
                 <ShieldCheck size={20} />
                 <strong>No fake sending.</strong>
-                <span>Requests are saved now. Actual automatic emails need a configured provider such as Gmail, SendGrid, Resend, or Postmark.</span>
+                <span>
+                  Requests are saved now. Actual automatic emails need a
+                  configured provider such as Gmail, SendGrid, Resend, or
+                  Postmark.
+                </span>
               </div>
             </>
           )}
 
           {panel === "workspace" && (
             <>
-              <p className="do-panel-intro">Workspaces separate companies, teams, or operating contexts. This version supports up to {WORKSPACE_LIMIT}; conversations stay personal, while projects and tasks live inside the selected workspace.</p>
+              <p className="do-panel-intro">
+                Workspaces separate companies, teams, or operating contexts.
+                This version supports up to {WORKSPACE_LIMIT}; conversations
+                stay personal, while projects and tasks live inside the selected
+                workspace.
+              </p>
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -2270,28 +3765,79 @@ export function DelivereeWorkspace() {
                 </div>
                 <label>
                   Workspace name
-                  <input onChange={(event) => setWorkspaceNameDraft(event.target.value)} onKeyDown={(event) => event.key === "Enter" && updateWorkspaceProfile()} value={workspaceNameDraft} />
+                  <input
+                    onChange={(event) =>
+                      setWorkspaceNameDraft(event.target.value)
+                    }
+                    onKeyDown={(event) =>
+                      event.key === "Enter" && updateWorkspaceProfile()
+                    }
+                    value={workspaceNameDraft}
+                  />
                 </label>
-                <button onClick={updateWorkspaceProfile} type="button">Save workspace</button>
+                <button onClick={updateWorkspaceProfile} type="button">
+                  Save workspace
+                </button>
               </section>
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Switch</span>
-                  <strong>{workspaces.length}/{WORKSPACE_LIMIT} workspaces</strong>
+                  <strong>
+                    {workspaces.length}/{WORKSPACE_LIMIT} workspaces
+                  </strong>
                 </div>
                 <div className="do-workspace-switcher-list">
                   {workspaces.map((item) => (
-                    <button className={item.id === workspace?.id ? "is-active" : ""} key={item.id} onClick={() => item.id !== workspace?.id && setWorkspace(item)} type="button">
+                    <button
+                      className={item.id === workspace?.id ? "is-active" : ""}
+                      key={item.id}
+                      onClick={() =>
+                        item.id !== workspace?.id && setWorkspace(item)
+                      }
+                      type="button"
+                    >
                       <span className="do-avatar">{initials(item.name)}</span>
-                      <span><strong>{item.name}</strong><small>{item.ownerId === user?.uid ? "Owner" : "Member"}</small></span>
-                      {item.id === workspace?.id ? <Check size={13} /> : <ChevronRight size={13} />}
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>
+                          {item.ownerId === user?.uid ? "Owner" : "Member"}
+                        </small>
+                      </span>
+                      {item.id === workspace?.id ? (
+                        <Check size={13} />
+                      ) : (
+                        <ChevronRight size={13} />
+                      )}
                     </button>
                   ))}
                 </div>
                 <div className="do-workspace-create-row">
-                  <input disabled={!canCreateWorkspace(workspaces.length)} onChange={(event) => setNewWorkspaceName(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createWorkspace()} placeholder={canCreateWorkspace(workspaces.length) ? "New workspace name" : "Workspace limit reached"} value={newWorkspaceName} />
-                  <button disabled={!newWorkspaceName.trim() || !canCreateWorkspace(workspaces.length)} onClick={createWorkspace} type="button"><Plus size={13} /> Create</button>
+                  <input
+                    disabled={!canCreateWorkspace(workspaces.length)}
+                    onChange={(event) =>
+                      setNewWorkspaceName(event.target.value)
+                    }
+                    onKeyDown={(event) =>
+                      event.key === "Enter" && createWorkspace()
+                    }
+                    placeholder={
+                      canCreateWorkspace(workspaces.length)
+                        ? "New workspace name"
+                        : "Workspace limit reached"
+                    }
+                    value={newWorkspaceName}
+                  />
+                  <button
+                    disabled={
+                      !newWorkspaceName.trim() ||
+                      !canCreateWorkspace(workspaces.length)
+                    }
+                    onClick={createWorkspace}
+                    type="button"
+                  >
+                    <Plus size={13} /> Create
+                  </button>
                 </div>
               </section>
 
@@ -2301,14 +3847,44 @@ export function DelivereeWorkspace() {
                   <strong>Access control</strong>
                 </div>
                 <div className="do-workspace-create-row">
-                  <input onChange={(event) => setInviteEmail(event.target.value)} onKeyDown={(event) => event.key === "Enter" && inviteWorkspaceMember()} placeholder="person@company.com" value={inviteEmail} />
-                  <select aria-label="Invite role" onChange={(event) => setInviteRole(event.target.value as "admin" | "member" | "viewer")} value={inviteRole}>
-                    {WORKSPACE_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                  <input
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    onKeyDown={(event) =>
+                      event.key === "Enter" && inviteWorkspaceMember()
+                    }
+                    placeholder="person@company.com"
+                    value={inviteEmail}
+                  />
+                  <select
+                    aria-label="Invite role"
+                    onChange={(event) =>
+                      setInviteRole(
+                        event.target.value as "admin" | "member" | "viewer",
+                      )
+                    }
+                    value={inviteRole}
+                  >
+                    {WORKSPACE_ROLES.map((role) => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
                   </select>
-                  <button disabled={!inviteEmail.trim()} onClick={inviteWorkspaceMember} type="button">Invite</button>
+                  <button
+                    disabled={!inviteEmail.trim()}
+                    onClick={inviteWorkspaceMember}
+                    type="button"
+                  >
+                    Invite
+                  </button>
                 </div>
                 <div className="do-role-help">
-                  {WORKSPACE_ROLES.map((role) => <span key={role.value}><strong>{role.label}</strong>{role.help}</span>)}
+                  {WORKSPACE_ROLES.map((role) => (
+                    <span key={role.value}>
+                      <strong>{role.label}</strong>
+                      {role.help}
+                    </span>
+                  ))}
                 </div>
               </section>
 
@@ -2319,25 +3895,69 @@ export function DelivereeWorkspace() {
                 </div>
                 <div className="do-member-list">
                   {workspaceMembers.map((member) => {
-                    const isOwner = String(member.role || "").toLowerCase() === "owner" || member.userId === workspace?.ownerId;
+                    const isOwner =
+                      String(member.role || "").toLowerCase() === "owner" ||
+                      member.userId === workspace?.ownerId;
                     return (
                       <article key={member.id}>
-                        <span className="do-avatar">{initials(member.displayName, member.email || member.emailLower)}</span>
-                        <div><strong>{memberLabel(member)}</strong><small>{member.email || member.emailLower || "No email"} · {String(member.status || "active")}</small></div>
-                        {isOwner ? <em>Owner</em> : (
-                          <select aria-label={`Role for ${memberLabel(member)}`} onChange={(event) => updateMemberRole(member, event.target.value as "admin" | "member" | "viewer")} value={String(member.role || "member")}>
-                            {WORKSPACE_ROLES.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                        <span className="do-avatar">
+                          {initials(
+                            member.displayName,
+                            member.email || member.emailLower,
+                          )}
+                        </span>
+                        <div>
+                          <strong>{memberLabel(member)}</strong>
+                          <small>
+                            {member.email || member.emailLower || "No email"} ·{" "}
+                            {String(member.status || "active")}
+                          </small>
+                        </div>
+                        {isOwner ? (
+                          <em>Owner</em>
+                        ) : (
+                          <select
+                            aria-label={`Role for ${memberLabel(member)}`}
+                            onChange={(event) =>
+                              updateMemberRole(
+                                member,
+                                event.target.value as
+                                  | "admin"
+                                  | "member"
+                                  | "viewer",
+                              )
+                            }
+                            value={String(member.role || "member")}
+                          >
+                            {WORKSPACE_ROLES.map((role) => (
+                              <option key={role.value} value={role.value}>
+                                {role.label}
+                              </option>
+                            ))}
                           </select>
                         )}
                       </article>
                     );
                   })}
-                  {workspaceMembers.length === 0 && <div className="do-panel-empty"><Users size={20} /><strong>No members yet.</strong><span>Invite your team to assign work and collaborate by workspace.</span></div>}
+                  {workspaceMembers.length === 0 && (
+                    <div className="do-panel-empty">
+                      <Users size={20} />
+                      <strong>No members yet.</strong>
+                      <span>
+                        Invite your team to assign work and collaborate by
+                        workspace.
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {workspaceInvites.length > 0 && (
                   <div className="do-pending-invites">
                     <span className="do-kicker">Pending invites</span>
-                    {workspaceInvites.map((invite) => <small key={invite.id}>{invite.email} · {roleLabel(invite.role)}</small>)}
+                    {workspaceInvites.map((invite) => (
+                      <small key={invite.id}>
+                        {invite.email} · {roleLabel(invite.role)}
+                      </small>
+                    ))}
                   </div>
                 )}
               </section>
@@ -2348,20 +3968,54 @@ export function DelivereeWorkspace() {
                   <strong>{workspaceTeams.length} teams</strong>
                 </div>
                 <div className="do-workspace-create-row">
-                  <input onChange={(event) => setNewTeamName(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createWorkspaceTeam()} placeholder="Engineering, Ops, Leadership…" value={newTeamName} />
-                  <button disabled={!newTeamName.trim()} onClick={createWorkspaceTeam} type="button"><Plus size={13} /> Team</button>
+                  <input
+                    onChange={(event) => setNewTeamName(event.target.value)}
+                    onKeyDown={(event) =>
+                      event.key === "Enter" && createWorkspaceTeam()
+                    }
+                    placeholder="Engineering, Ops, Leadership…"
+                    value={newTeamName}
+                  />
+                  <button
+                    disabled={!newTeamName.trim()}
+                    onClick={createWorkspaceTeam}
+                    type="button"
+                  >
+                    <Plus size={13} /> Team
+                  </button>
                 </div>
                 <div className="do-team-list">
                   {workspaceTeams.map((team) => (
                     <article key={team.id}>
                       <strong>{team.name || "Team"}</strong>
-                      <small>{(team.memberEmails || []).length} member{(team.memberEmails || []).length === 1 ? "" : "s"}</small>
+                      <small>
+                        {(team.memberEmails || []).length} member
+                        {(team.memberEmails || []).length === 1 ? "" : "s"}
+                      </small>
                       <div>
-                        {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => {
-                          const email = normalizeInviteEmail(member.email || member.emailLower || "");
-                          const selected = (team.memberEmails || []).map((item) => normalizeInviteEmail(item)).includes(email);
-                          return <button className={selected ? "is-selected" : ""} key={`${team.id}-${member.id}`} onClick={() => toggleTeamMember(team, member)} type="button">{memberAssignmentValue(member) || "Member"}</button>;
-                        })}
+                        {workspaceMembers
+                          .filter(
+                            (member) =>
+                              String(member.status || "active") !== "removed",
+                          )
+                          .map((member) => {
+                            const email = normalizeInviteEmail(
+                              member.email || member.emailLower || "",
+                            );
+                            const selected = (team.memberEmails || [])
+                              .map((item) => normalizeInviteEmail(item))
+                              .includes(email);
+                            return (
+                              <button
+                                className={selected ? "is-selected" : ""}
+                                key={`${team.id}-${member.id}`}
+                                onClick={() => toggleTeamMember(team, member)}
+                                type="button"
+                              >
+                                {memberAssignmentValue(member) || "Member"}
+                              </button>
+                            );
+                          })}
                       </div>
                     </article>
                   ))}
@@ -2372,13 +4026,22 @@ export function DelivereeWorkspace() {
 
           {panel === "approvals" && (
             <>
-              <p className="do-panel-intro">Nothing enters your workspace until you say so.</p>
+              <p className="do-panel-intro">
+                Nothing enters your workspace until you say so.
+              </p>
               <div className="do-approval-list">
                 {reviewItems.map((item) => {
-                  const duplicateProject = String(item.type || "") === "project"
-                    ? findMatchingProject(projects, item.proposed || {}, item.projectId || primaryProject?.id || "")
-                    : null;
-                  const displayType = duplicateProject ? "project_update" : item.type || "change";
+                  const duplicateProject =
+                    String(item.type || "") === "project"
+                      ? findMatchingProject(
+                          projects,
+                          item.proposed || {},
+                          item.projectId || primaryProject?.id || "",
+                        )
+                      : null;
+                  const displayType = duplicateProject
+                    ? "project_update"
+                    : item.type || "change";
                   const displayTitle = duplicateProject
                     ? `Update existing project: ${duplicateProject.title || duplicateProject.name || item.title}`
                     : item.title;
@@ -2389,50 +4052,124 @@ export function DelivereeWorkspace() {
                     <div className="do-approval-item" key={item.id}>
                       <span className="do-kicker">{displayType}</span>
                       <strong>{displayTitle}</strong>
-	                    <p>{displayReason}</p>
-	                    <div>
-	                      <button onClick={() => processReview(item, "dismiss")} type="button">Discard</button>
-	                      <button onClick={() => { setPanel(null); setComposer(`Edit this pending change before applying it: ${displayTitle}\n\n${displayReason}`); }} type="button">Edit</button>
-	                      <button onClick={() => processReview(item, "approve")} type="button"><Check size={13} /> Apply</button>
-	                    </div>
+                      <p>{displayReason}</p>
+                      <div>
+                        <button
+                          onClick={() => processReview(item, "dismiss")}
+                          type="button"
+                        >
+                          Discard
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPanel(null);
+                            setComposer(
+                              `Edit this pending change before applying it: ${displayTitle}\n\n${displayReason}`,
+                            );
+                          }}
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => processReview(item, "approve")}
+                          type="button"
+                        >
+                          <Check size={13} /> Apply
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
-                {reviewItems.length === 0 && <div className="do-panel-empty"><CheckCircle2 size={20} /><strong>No pending changes.</strong><span>New suggestions will appear here before they change your workspace.</span></div>}
+                {reviewItems.length === 0 && (
+                  <div className="do-panel-empty">
+                    <CheckCircle2 size={20} />
+                    <strong>No pending changes.</strong>
+                    <span>
+                      New suggestions will appear here before they change your
+                      workspace.
+                    </span>
+                  </div>
+                )}
               </div>
             </>
           )}
         </div>
 
         {judgment && panel === "today" && judgment.signals.length > 0 && (
-          <div className="do-panel-judgment"><ShieldCheck size={15} /><span><strong>{judgment.verdict === "stop" ? "A conflict needs attention" : "A planning signal"}</strong><small>{judgment.signals[0].detail}</small></span></div>
+          <div className="do-panel-judgment">
+            <ShieldCheck size={15} />
+            <span>
+              <strong>
+                {judgment.verdict === "stop"
+                  ? "A conflict needs attention"
+                  : "A planning signal"}
+              </strong>
+              <small>{judgment.signals[0].detail}</small>
+            </span>
+          </div>
         )}
       </aside>
 
       {cleanSlateOpen && (
-        <div aria-label="Start clean Certo Work" aria-modal="true" className="do-clean-layer" role="dialog">
+        <div
+          aria-label="Start clean Certo Work"
+          aria-modal="true"
+          className="do-clean-layer"
+          role="dialog"
+        >
           <section className="do-clean-modal">
             <header>
               <span className="do-kicker">Clean start</span>
               <h2>Reset Certo Work content</h2>
-              <button aria-label="Close clean start" onClick={() => setCleanSlateOpen(false)} type="button"><X size={17} /></button>
+              <button
+                aria-label="Close clean start"
+                onClick={() => setCleanSlateOpen(false)}
+                type="button"
+              >
+                <X size={17} />
+              </button>
             </header>
             <p>
-              This clears your current Certo Work records: projects, work items, tags, conversations, knowledge, pending changes, habits, workouts, reports, and delivery records. Your sign-in stays active.
+              This clears your current Certo Work records: projects, work items,
+              tags, conversations, knowledge, pending changes, habits, workouts,
+              reports, and delivery records. Your sign-in stays active.
             </p>
             <div className="do-clean-counts">
-              <span><strong>{projects.length}</strong> projects</span>
-              <span><strong>{tasks.length}</strong> items</span>
-              <span><strong>{conversations.length}</strong> conversations</span>
-              <span><strong>{reviewItems.length}</strong> pending</span>
+              <span>
+                <strong>{projects.length}</strong> projects
+              </span>
+              <span>
+                <strong>{tasks.length}</strong> items
+              </span>
+              <span>
+                <strong>{conversations.length}</strong> conversations
+              </span>
+              <span>
+                <strong>{reviewItems.length}</strong> pending
+              </span>
             </div>
             <label>
               Type CLEAR to confirm
-              <input autoFocus onChange={(event) => setCleanConfirmText(event.target.value)} value={cleanConfirmText} />
+              <input
+                autoFocus
+                onChange={(event) => setCleanConfirmText(event.target.value)}
+                value={cleanConfirmText}
+              />
             </label>
             <footer>
-              <button onClick={() => setCleanSlateOpen(false)} type="button">Cancel</button>
-              <button disabled={cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning} onClick={resetWorkspaceData} type="button">{cleaning ? "Clearing..." : "Start clean"}</button>
+              <button onClick={() => setCleanSlateOpen(false)} type="button">
+                Cancel
+              </button>
+              <button
+                disabled={
+                  cleanConfirmText.trim().toUpperCase() !== "CLEAR" || cleaning
+                }
+                onClick={resetWorkspaceData}
+                type="button"
+              >
+                {cleaning ? "Clearing..." : "Start clean"}
+              </button>
             </footer>
           </section>
         </div>
@@ -2446,7 +4183,6 @@ export function DelivereeWorkspace() {
         onUpdateProject={updateProjectFromWizard}
         projects={activeProjects}
       />
-
-	    </div>
-	  );
-	}
+    </div>
+  );
+}

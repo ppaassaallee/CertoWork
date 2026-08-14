@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { financeSummary, normalizedFinancePeriods, projectFinancialRollup } from "../src/lib/projectFinance";
+import {
+  financeSummary,
+  normalizedFinancePeriods,
+  projectFinancialRollup,
+} from "../src/lib/projectFinance";
 
 const project = {
   id: "project-1",
@@ -13,8 +17,31 @@ const project = {
       status: "closed",
       currency: "USD",
       entries: [
-        { id: "dev", direction: "cost", description: "Development", category: "development", unit: "hour", plannedQty: 100, actualQty: 110, rate: 50, paymentStatus: "paid", settledAmount: 5500 },
-        { id: "invoice", direction: "revenue", description: "Build invoice", category: "revenue", unit: "fee", plannedQty: 1, actualQty: 1, rate: 10000, referenceNumber: "INV-001", paymentStatus: "partial", settledAmount: 4000 },
+        {
+          id: "dev",
+          direction: "cost",
+          description: "Development",
+          category: "development",
+          unit: "hour",
+          plannedQty: 100,
+          actualQty: 110,
+          rate: 50,
+          paymentStatus: "paid",
+          settledAmount: 5500,
+        },
+        {
+          id: "invoice",
+          direction: "revenue",
+          description: "Build invoice",
+          category: "revenue",
+          unit: "fee",
+          plannedQty: 1,
+          actualQty: 1,
+          rate: 10000,
+          referenceNumber: "INV-001",
+          paymentStatus: "partial",
+          settledAmount: 4000,
+        },
       ],
     },
     {
@@ -24,7 +51,17 @@ const project = {
       status: "active",
       currency: "USD",
       entries: [
-        { id: "cr-dev", direction: "cost", description: "Change request", category: "development", unit: "hour", plannedQty: 20, actualQty: 10, rate: 60, paymentStatus: "incurred" },
+        {
+          id: "cr-dev",
+          direction: "cost",
+          description: "Change request",
+          category: "development",
+          unit: "hour",
+          plannedQty: 20,
+          actualQty: 10,
+          rate: 60,
+          paymentStatus: "incurred",
+        },
       ],
     },
     {
@@ -36,7 +73,17 @@ const project = {
       status: "closed",
       currency: "USD",
       entries: [
-        { id: "support-july", direction: "cost", description: "Support", category: "support", unit: "hour", plannedQty: 20, actualQty: 18, rate: 40, paymentStatus: "paid" },
+        {
+          id: "support-july",
+          direction: "cost",
+          description: "Support",
+          category: "support",
+          unit: "hour",
+          plannedQty: 20,
+          actualQty: 18,
+          rate: 40,
+          paymentStatus: "paid",
+        },
       ],
     },
     {
@@ -48,7 +95,17 @@ const project = {
       status: "active",
       currency: "USD",
       entries: [
-        { id: "support-aug", direction: "cost", description: "Support", category: "support", unit: "hour", plannedQty: 25, actualQty: 20, rate: 40, paymentStatus: "incurred" },
+        {
+          id: "support-aug",
+          direction: "cost",
+          description: "Support",
+          category: "support",
+          unit: "hour",
+          plannedQty: 25,
+          actualQty: 20,
+          rate: 40,
+          paymentStatus: "incurred",
+        },
       ],
     },
   ],
@@ -74,11 +131,24 @@ test("portfolio uses all build costs and only the latest monthly period", () => 
 
 test("void financial movements do not affect audited totals", () => {
   const periods = normalizedFinancePeriods({
-    financePeriods: [{
-      id: "build-v1",
-      kind: "build",
-      entries: [{ id: "void-invoice", direction: "revenue", unit: "fee", plannedQty: 1, actualQty: 1, rate: 5000, paymentStatus: "void", settledAmount: 5000 }],
-    }],
+    financePeriods: [
+      {
+        id: "build-v1",
+        kind: "build",
+        entries: [
+          {
+            id: "void-invoice",
+            direction: "revenue",
+            unit: "fee",
+            plannedQty: 1,
+            actualQty: 1,
+            rate: 5000,
+            paymentStatus: "void",
+            settledAmount: 5000,
+          },
+        ],
+      },
+    ],
   });
   assert.deepEqual(financeSummary(periods), {
     actualCost: 0,
@@ -90,4 +160,38 @@ test("void financial movements do not affect audited totals", () => {
     outstanding: 0,
     margin: 0,
   });
+});
+
+test("calendar-month billing keeps budget, invoice and collection separate", () => {
+  const periods = normalizedFinancePeriods({
+    financePeriods: [
+      {
+        id: "build-v2",
+        kind: "build",
+        label: "Build V2",
+        entries: [
+          {
+            id: "installment-1",
+            direction: "revenue",
+            description: "Build installment",
+            unit: "fee",
+            accountingMonth: "2026-09",
+            plannedQty: 1,
+            actualQty: 1,
+            plannedRate: 12000,
+            rate: 11500,
+            invoiceStatus: "invoiced",
+            paymentStatus: "partial",
+            settledAmount: 5000,
+          },
+        ],
+      },
+    ],
+  });
+  const summary = financeSummary(periods);
+  assert.equal(periods[0].entries[0].accountingMonth, "2026-09");
+  assert.equal(summary.plannedRevenue, 12000);
+  assert.equal(summary.invoiced, 11500);
+  assert.equal(summary.collected, 5000);
+  assert.equal(summary.outstanding, 6500);
 });
