@@ -33,6 +33,17 @@ import {
   taskWorkLane,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import {
+  financeAmount,
+  financeId,
+  financeSummary,
+  normalizedFinancePeriods,
+  projectFinancialRollup,
+  type FinanceDirection,
+  type FinanceEntry,
+  type FinancePeriod,
+  type FinancePeriodKind,
+} from "../lib/projectFinance";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 
@@ -393,6 +404,7 @@ export function ProjectConsolePanel({
   risks,
   documents,
   workspaceMembers = [],
+  costTemplates = [],
   conversationId,
   onAsk,
   onUpdateProject,
@@ -402,6 +414,8 @@ export function ProjectConsolePanel({
   onAddTask,
   onUpdateTask,
   onAddRisk,
+  onCreateCostTemplate,
+  onUpdateCostTemplate,
 }: {
   project: any;
   tasks: any[];
@@ -409,6 +423,7 @@ export function ProjectConsolePanel({
   risks: any[];
   documents: any[];
   workspaceMembers?: AssignmentMember[];
+  costTemplates?: any[];
   conversationId?: string | null;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
@@ -418,6 +433,8 @@ export function ProjectConsolePanel({
   onAddTask: (title: string, status: WorkLane, patch?: ProjectPatch) => Promise<void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
   onAddRisk: (title: string, patch?: ProjectPatch) => Promise<void> | void;
+  onCreateCostTemplate?: (template: any) => Promise<void> | void;
+  onUpdateCostTemplate?: (templateId: string, patch: Record<string, unknown>) => Promise<void> | void;
 }) {
   const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "team" | "costs" | "docs" | "codex">("brief");
   const [taskTitle, setTaskTitle] = useState("");
@@ -463,14 +480,6 @@ export function ProjectConsolePanel({
   }, [project.id]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
-  const consoleCostRows = costRows(project);
-  const consoleCostSummary = projectSummary(project, tasks);
-  const consolePlannedCost = consoleCostRows.reduce((sum: number, row: any) => sum + rowCost(row), 0);
-  const consoleActualCost = consoleCostRows.reduce((sum: number, row: any) => sum + rowCost(row, true), 0);
-  const consoleCostVariance = consoleActualCost - consolePlannedCost;
-  const updateConsoleCostRow = (index: number, patch: ProjectPatch) => update({ costBreakdown: consoleCostRows.map((row: any, rowIndex: number) => rowIndex === index ? { ...row, ...patch } : row) });
-  const addConsoleCostRow = () => update({ costBreakdown: [...consoleCostRows, { dimension: "New cost driver", category: "development", unit: "hour", cadence: "initial", plannedQty: 0, actualQty: 0, rate: 0 }] });
-  const removeConsoleCostRow = (index: number) => update({ costBreakdown: consoleCostRows.filter((_: any, rowIndex: number) => rowIndex !== index) });
   const submitTask = async () => {
     if (!taskTitle.trim()) return;
     await onAddTask(taskTitle.trim(), "backlog");
@@ -766,19 +775,8 @@ export function ProjectConsolePanel({
 
       {tab === "costs" && (
         <div className="do-console-section">
-          <div className="do-section-title"><div><span className="do-project-card-kicker">PROJECT ECONOMICS</span><h4>Hours, investment and recurring cost</h4></div><InfoTip label="Project costs" text="Track planned versus actual quantities for development, implementation, support and usage-based vendors. Rate × quantity calculates cost." /></div>
-          <div className="do-cost-summary-grid">
-            <div><span>Development & support hours</span><strong>{consoleCostSummary.actualHours}h / {consoleCostSummary.plannedHours}h</strong><small>Actual / planned</small></div>
-            <div><span>Labor cost</span><strong>${consoleCostSummary.actualLabor.toLocaleString()} / ${consoleCostSummary.plannedLabor.toLocaleString()}</strong><small>Actual / planned</small></div>
-            <label><span>Initial investment <InfoTip label="Initial investment" text="One-time setup, discovery, development and implementation cost." /></span><input defaultValue={consoleCostSummary.initial || ""} onBlur={(event) => update({ initialCost: Number(event.target.value || 0) })} type="number" /></label>
-            <label><span>Monthly recurring <InfoTip label="Recurring cost" text="Expected monthly operating, support, license and usage cost." /></span><input defaultValue={consoleCostSummary.recurring || ""} onBlur={(event) => update({ recurringMonthlyCost: Number(event.target.value || 0) })} type="number" /></label>
-          </div>
-          <div className="do-console-cost-table">
-            <div className="do-console-cost-head"><span>Cost driver</span><span>Category</span><span>Cadence</span><span>Unit</span><span>Planned</span><span>Actual</span><span>Rate</span><span>Planned cost</span><span>Actual cost</span><span /></div>
-            {consoleCostRows.map((row: any, index: number) => <div className="do-console-cost-row" key={`${row.dimension}-${index}`}><input defaultValue={row.dimension} onBlur={(event) => updateConsoleCostRow(index, { dimension: event.target.value.trim() || "Cost driver" })} /><select onChange={(event) => updateConsoleCostRow(index, { category: event.target.value })} value={row.category || "development"}><option value="development">Development</option><option value="implementation">Implementation</option><option value="support">Support</option><option value="vendor">Vendor</option><option value="license">License</option><option value="infrastructure">Infrastructure</option><option value="other">Other</option></select><select onChange={(event) => updateConsoleCostRow(index, { cadence: event.target.value })} value={row.cadence || "initial"}><option value="initial">Initial</option><option value="recurring">Recurring</option><option value="usage">Usage</option></select><select onChange={(event) => updateConsoleCostRow(index, { unit: event.target.value })} value={row.unit || "hour"}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{costUnitLabels[unit]}</option>)}</select><input defaultValue={row.plannedQty || 0} onBlur={(event) => updateConsoleCostRow(index, { plannedQty: Number(event.target.value || 0) })} type="number" /><input defaultValue={row.actualQty || 0} onBlur={(event) => updateConsoleCostRow(index, { actualQty: Number(event.target.value || 0) })} type="number" /><input defaultValue={row.rate || 0} onBlur={(event) => updateConsoleCostRow(index, { rate: Number(event.target.value || 0) })} type="number" /><strong>${rowCost(row).toLocaleString()}</strong><strong>${rowCost(row, true).toLocaleString()}</strong><button aria-label={`Remove ${row.dimension}`} onClick={() => removeConsoleCostRow(index)} type="button"><X size={12} /></button></div>)}
-          </div>
-          <div className="do-cost-audit-summary"><div><span>Total planned</span><strong>${consolePlannedCost.toLocaleString()}</strong></div><div><span>Total actual</span><strong>${consoleActualCost.toLocaleString()}</strong></div><div className={consoleCostVariance > 0 ? "is-over" : ""}><span>Variance</span><strong>{consoleCostVariance > 0 ? "+" : ""}${consoleCostVariance.toLocaleString()}</strong></div><div><span>Audit coverage</span><strong>{consoleCostRows.length} driver{consoleCostRows.length === 1 ? "" : "s"}</strong></div><InfoTip label="Cost audit" text="Variance compares actual quantity × rate with planned quantity × rate across every cost driver. Positive variance means the project is over the current plan." /></div>
-          <button className="do-add-cost-row" onClick={addConsoleCostRow} type="button"><Plus size={13} /> Add cost driver</button>
+          <div className="do-section-title"><div><span className="do-project-card-kicker">PROJECT FINANCIAL LEDGER</span><h4>Builds, monthly operations, revenue and collections</h4></div><InfoTip label="Project finances" text="Create a separate period for each build or change request and for each operating month. Record costs and revenue in the same period, while invoices and collections retain independent status." /></div>
+          <ProjectFinanceLedger project={project} templates={costTemplates} onCreateCostTemplate={onCreateCostTemplate} onUpdateCostTemplate={onUpdateCostTemplate} onUpdateProject={onUpdateProject} />
         </div>
       )}
 
@@ -970,6 +968,181 @@ function rowHours(row: any, actual = false) {
   return Number(actual ? row?.actualQty ?? row?.actualHours ?? 0 : row?.plannedQty ?? row?.plannedHours ?? 0);
 }
 
+function ProjectFinanceLedger({
+  project,
+  templates = [],
+  onUpdateProject,
+  onCreateCostTemplate,
+  onUpdateCostTemplate,
+  compact = false,
+}: {
+  project: any;
+  templates?: any[];
+  onUpdateProject: SharedProjectActions["onUpdateProject"];
+  onCreateCostTemplate?: (template: any) => Promise<void> | void;
+  onUpdateCostTemplate?: (templateId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  compact?: boolean;
+}) {
+  const periods = normalizedFinancePeriods(project);
+  const summary = financeSummary(periods);
+  const [newKind, setNewKind] = useState<FinancePeriodKind>("build");
+  const [newBuildLabel, setNewBuildLabel] = useState("V1");
+  const [newMonth, setNewMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [templateId, setTemplateId] = useState("none");
+  const availableTemplates = [...COST_TEMPLATES, ...templates.filter((template) => !COST_TEMPLATES.some((builtin) => builtin.id === template.id))];
+  const updatePeriods = (next: FinancePeriod[]) => onUpdateProject(project.id, { financePeriods: next });
+  const updatePeriod = (periodId: string, patch: Partial<FinancePeriod>) => updatePeriods(periods.map((period) => period.id === periodId ? { ...period, ...patch } : period));
+  const updateEntry = (periodId: string, entryId: string, patch: Partial<FinanceEntry>) => updatePeriods(periods.map((period) => period.id === periodId ? { ...period, entries: period.entries.map((entry) => entry.id === entryId ? { ...entry, ...patch } : entry) } : period));
+  const removeEntry = (periodId: string, entryId: string) => updatePeriods(periods.map((period) => period.id === periodId ? { ...period, entries: period.entries.filter((entry) => entry.id !== entryId) } : period));
+  const addEntry = (periodId: string, direction: FinanceDirection) => updatePeriods(periods.map((period) => period.id === periodId ? {
+    ...period,
+    entries: [...period.entries, {
+      id: financeId("entry"),
+      direction,
+      description: direction === "cost" ? "New cost" : "New invoice",
+      category: direction === "cost" ? "development" : "revenue",
+      unit: "fee",
+      plannedQty: 1,
+      actualQty: 1,
+      rate: 0,
+      referenceNumber: "",
+      issueDate: "",
+      dueDate: "",
+      paymentStatus: "planned",
+      settledAmount: 0,
+      settledDate: "",
+    }],
+  } : period));
+  const addPeriod = () => {
+    const [year, month] = newMonth.split("-").map(Number);
+    const selectedTemplate = availableTemplates.find((template) => template.id === templateId);
+    const entries = newKind === "build" && selectedTemplate ? selectedTemplate.rows.map((row: any) => ({
+      id: financeId("entry"),
+      direction: "cost" as const,
+      description: row.dimension || "Cost item",
+      category: row.category || inferredCostCategory(row),
+      unit: row.unit || "hour",
+      plannedQty: Number(row.plannedQty || 0),
+      actualQty: Number(row.actualQty || 0),
+      rate: Number(row.rate || 0),
+      paymentStatus: "planned",
+      settledAmount: 0,
+    })) : [];
+    const label = newKind === "monthly"
+      ? new Date(year, Math.max(0, month - 1), 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+      : `Build ${newBuildLabel.trim() || `V${periods.filter((period) => period.kind === "build").length + 1}`}`;
+    updatePeriods([...periods, {
+      id: financeId("period"),
+      kind: newKind,
+      label,
+      month: newKind === "monthly" ? month : undefined,
+      year: newKind === "monthly" ? year : undefined,
+      status: "planned",
+      currency: project.currency || "USD",
+      sourceTemplateId: selectedTemplate && !COST_TEMPLATES.some((template) => template.id === selectedTemplate.id) ? selectedTemplate.id : undefined,
+      entries,
+    }]);
+  };
+  const migrateLegacy = () => {
+    const entries = costRows(project).filter((row: any) => row.plannedQty || row.actualQty || row.rate).map((row: any) => ({
+      id: financeId("entry"),
+      direction: "cost" as const,
+      description: row.dimension,
+      category: row.category,
+      unit: row.unit,
+      plannedQty: row.plannedQty,
+      actualQty: row.actualQty,
+      rate: row.rate,
+      paymentStatus: "planned",
+      settledAmount: 0,
+    }));
+    if (!entries.length) return;
+    updatePeriods([{ id: financeId("period"), kind: "build", label: "Build V1 · legacy baseline", status: "active", currency: project.currency || "USD", entries }]);
+  };
+  const savePeriodTemplate = async (period: FinancePeriod) => {
+    if (!onCreateCostTemplate) return;
+    const name = window.prompt("Template name", `${projectTitle(project)} · ${period.label}`)?.trim();
+    if (!name) return;
+    await onCreateCostTemplate({
+      name,
+      description: `Financial cost template from ${projectTitle(project)} · ${period.label}.`,
+      rows: period.entries.filter((entry) => entry.direction === "cost").map((entry) => ({ dimension: entry.description, category: entry.category, unit: entry.unit, plannedQty: entry.plannedQty, actualQty: 0, rate: entry.rate })),
+    });
+  };
+  const updatePeriodTemplate = async (period: FinancePeriod) => {
+    if (!period.sourceTemplateId || !onUpdateCostTemplate) return;
+    await onUpdateCostTemplate(period.sourceTemplateId, {
+      rows: period.entries.filter((entry) => entry.direction === "cost").map((entry) => ({ dimension: entry.description, category: entry.category, unit: entry.unit, plannedQty: entry.plannedQty, actualQty: 0, rate: entry.rate })),
+    });
+  };
+
+  return (
+    <section className={`do-finance-ledger ${compact ? "is-compact" : ""}`}>
+      <div className="do-finance-summary">
+        <div><span>Actual cost</span><strong>${summary.actualCost.toLocaleString()}</strong><small>${summary.plannedCost.toLocaleString()} planned</small></div>
+        <div><span>Revenue</span><strong>${summary.actualRevenue.toLocaleString()}</strong><small>${summary.plannedRevenue.toLocaleString()} planned</small></div>
+        <div><span>Invoiced</span><strong>${summary.invoiced.toLocaleString()}</strong><small>Issued receivables</small></div>
+        <div><span>Collected</span><strong>${summary.collected.toLocaleString()}</strong><small>${summary.outstanding.toLocaleString()} outstanding</small></div>
+        <div className={summary.margin < 0 ? "is-negative" : ""}><span>Margin</span><strong>${summary.margin.toLocaleString()}</strong><small>Revenue − actual cost</small></div>
+      </div>
+
+      <div className="do-finance-add-period">
+        <label><span>New period</span><select onChange={(event) => setNewKind(event.target.value as FinancePeriodKind)} value={newKind}><option value="build">Build / change request</option><option value="monthly">Monthly operations</option></select></label>
+        {newKind === "build" ? <label><span>Version or CR</span><input onChange={(event) => setNewBuildLabel(event.target.value)} placeholder="V1, V2, CR1…" value={newBuildLabel} /></label> : <label><span>Month</span><input onChange={(event) => setNewMonth(event.target.value)} type="month" value={newMonth} /></label>}
+        {newKind === "build" && <label><span>Cost template</span><select onChange={(event) => setTemplateId(event.target.value)} value={templateId}><option value="none">Start empty</option>{availableTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>}
+        <button onClick={addPeriod} type="button"><Plus size={13} /> Add period</button>
+        {periods.length === 0 && costRows(project).some((row: any) => row.plannedQty || row.actualQty || row.rate) && <button className="is-secondary" onClick={migrateLegacy} type="button">Convert current baseline to Build V1</button>}
+      </div>
+
+      <div className="do-finance-periods">
+        {periods.map((period, periodIndex) => {
+          const periodSummary = financeSummary([period]);
+          const monthValue = period.year && period.month ? `${period.year}-${String(period.month).padStart(2, "0")}` : "";
+          return <details key={period.id} open={!compact && periodIndex === 0}>
+            <summary><span className={`do-finance-kind is-${period.kind}`}>{period.kind === "build" ? "BUILD" : "MONTH"}</span><span><strong>{period.label}</strong><small>{period.entries.length} movement{period.entries.length === 1 ? "" : "s"} · {period.currency}</small></span><span><strong>${periodSummary.actualCost.toLocaleString()}</strong><small>Cost</small></span><span><strong>${periodSummary.actualRevenue.toLocaleString()}</strong><small>Revenue</small></span><span><strong>${periodSummary.outstanding.toLocaleString()}</strong><small>Outstanding</small></span></summary>
+            <div className="do-finance-period-body">
+              <div className="do-finance-period-controls">
+                {period.kind === "build" ? <label><span>Build / CR</span><input defaultValue={period.label.replace(/^Build\s+/i, "")} onBlur={(event) => updatePeriod(period.id, { label: `Build ${event.target.value.trim() || "V1"}` })} /></label> : <label><span>Month</span><input defaultValue={monthValue} onBlur={(event) => { const [year, month] = event.target.value.split("-").map(Number); if (year && month) updatePeriod(period.id, { year, month, label: new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" }) }); }} type="month" /></label>}
+                <label><span>Status</span><select onChange={(event) => updatePeriod(period.id, { status: event.target.value })} value={period.status}><option value="planned">Planned</option><option value="active">Active</option><option value="closed">Closed</option></select></label>
+                <label><span>Currency</span><select onChange={(event) => updatePeriod(period.id, { currency: event.target.value })} value={period.currency}><option value="USD">USD</option><option value="GTQ">GTQ</option><option value="PEN">PEN</option><option value="EUR">EUR</option></select></label>
+                {period.kind === "build" && onCreateCostTemplate && <button className="is-secondary" onClick={() => savePeriodTemplate(period)} type="button">Save as template</button>}
+                {period.kind === "build" && period.sourceTemplateId && onUpdateCostTemplate && <button className="is-secondary" onClick={() => updatePeriodTemplate(period)} type="button">Update template</button>}
+                <button className="is-danger" onClick={() => window.confirm(`Delete ${period.label} and all its financial movements?`) && updatePeriods(periods.filter((candidate) => candidate.id !== period.id))} type="button">Delete period</button>
+              </div>
+              <div className="do-finance-entry-table">
+                <div className="do-finance-entry-head"><span>Type</span><span>Description</span><span>Category</span><span>Unit</span><span>Plan qty</span><span>Actual qty</span><span>Rate</span><span>Actual</span><span>Invoice / ref</span><span>Issue date</span><span>Due date</span><span>Status</span><span>Paid / collected</span><span>Settlement date</span><span /></div>
+                {period.entries.map((entry) => {
+                  const statusOptions = entry.direction === "revenue" ? ["planned", "draft", "issued", "partial", "paid", "overdue", "void"] : ["planned", "committed", "incurred", "paid", "void"];
+                  return <div className="do-finance-entry-row" key={entry.id}>
+                    <select onChange={(event) => updateEntry(period.id, entry.id, { direction: event.target.value as FinanceDirection, paymentStatus: "planned" })} value={entry.direction}><option value="cost">Cost</option><option value="revenue">Revenue</option></select>
+                    <input defaultValue={entry.description} onBlur={(event) => updateEntry(period.id, entry.id, { description: event.target.value.trim() || "Financial item" })} />
+                    <select onChange={(event) => updateEntry(period.id, entry.id, { category: event.target.value })} value={entry.category}><option value="development">Development</option><option value="implementation">Implementation</option><option value="support">Support</option><option value="vendor">Vendor</option><option value="license">License</option><option value="infrastructure">Infrastructure</option><option value="revenue">Revenue</option><option value="other">Other</option></select>
+                    <select onChange={(event) => updateEntry(period.id, entry.id, { unit: event.target.value })} value={entry.unit}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{costUnitLabels[unit]}</option>)}</select>
+                    <input defaultValue={entry.plannedQty} onBlur={(event) => updateEntry(period.id, entry.id, { plannedQty: Number(event.target.value || 0) })} type="number" />
+                    <input defaultValue={entry.actualQty} onBlur={(event) => updateEntry(period.id, entry.id, { actualQty: Number(event.target.value || 0) })} type="number" />
+                    <input defaultValue={entry.rate} onBlur={(event) => updateEntry(period.id, entry.id, { rate: Number(event.target.value || 0) })} type="number" />
+                    <strong>${financeAmount(entry).toLocaleString()}</strong>
+                    <input defaultValue={entry.referenceNumber} onBlur={(event) => updateEntry(period.id, entry.id, { referenceNumber: event.target.value.trim() })} placeholder={entry.direction === "revenue" ? "INV-001" : "PO / bill"} />
+                    <input defaultValue={entry.issueDate} onBlur={(event) => updateEntry(period.id, entry.id, { issueDate: event.target.value })} type="date" />
+                    <input defaultValue={entry.dueDate} onBlur={(event) => updateEntry(period.id, entry.id, { dueDate: event.target.value })} type="date" />
+                    <select onChange={(event) => updateEntry(period.id, entry.id, { paymentStatus: event.target.value })} value={entry.paymentStatus || "planned"}>{statusOptions.map((status) => <option key={status} value={status}>{status.replace("_", " ")}</option>)}</select>
+                    <input defaultValue={entry.settledAmount || 0} onBlur={(event) => updateEntry(period.id, entry.id, { settledAmount: Number(event.target.value || 0) })} type="number" />
+                    <input defaultValue={entry.settledDate} onBlur={(event) => updateEntry(period.id, entry.id, { settledDate: event.target.value })} type="date" />
+                    <button aria-label={`Remove ${entry.description}`} onClick={() => window.confirm(`Remove ${entry.description}?`) && removeEntry(period.id, entry.id)} type="button"><X size={12} /></button>
+                  </div>;
+                })}
+                {period.entries.length === 0 && <div className="do-finance-empty">No financial movements yet. Add the first cost or invoice.</div>}
+              </div>
+              <div className="do-finance-entry-actions"><button onClick={() => addEntry(period.id, "cost")} type="button"><Plus size={12} /> Add cost</button><button onClick={() => addEntry(period.id, "revenue")} type="button"><Plus size={12} /> Add revenue / invoice</button><span>Invoice status and collected amount are tracked separately so cash collection never duplicates revenue.</span></div>
+            </div>
+          </details>;
+        })}
+        {periods.length === 0 && <EmptyState icon={<FileText size={18} />} title="No financial periods yet" text="Create Build V1, a change request, or the first operating month." />}
+      </div>
+    </section>
+  );
+}
+
 function projectProgress(project: any, projectTasks: any[]) {
   if (Number.isFinite(Number(project?.progress))) return Number(project.progress);
   const done = projectTasks.filter((task) => taskWorkLane(task) === "done").length;
@@ -977,6 +1150,19 @@ function projectProgress(project: any, projectTasks: any[]) {
 }
 
 function projectSummary(project: any, projectTasks: any[]) {
+  const financial = projectFinancialRollup(project);
+  if (financial.periods.length) {
+    return {
+      plannedHours: financial.plannedHours,
+      actualHours: financial.actualHours,
+      plannedLabor: financial.plannedCost,
+      actualLabor: financial.actualCost,
+      initial: financial.buildCost,
+      recurring: financial.latestMonthlyCost,
+      openItems: Number.isFinite(Number(project.openItems)) ? Number(project.openItems) : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
+      progress: projectProgress(project, projectTasks),
+    };
+  }
   const rows = costRows(project);
   const plannedHours = rows.reduce((sum: number, row: any) => sum + rowHours(row), 0);
   const actualHours = rows.reduce((sum: number, row: any) => sum + rowHours(row, true), 0);
@@ -1052,10 +1238,8 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [templateName, setTemplateName] = useState("");
   const sorted = sortProjectsByRecency(projects);
   const portfolio = sorted;
-  const templates = [...COST_TEMPLATES, ...costTemplates.filter((template) => !COST_TEMPLATES.some((builtin) => builtin.id === template.id))];
   const realProjects = sorted;
   const filtered = portfolio.filter((project) => {
     const status = String(project.status || "planning").toLowerCase();
@@ -1109,36 +1293,16 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
-  const updateCostRow = (project: any, index: number, patch: Record<string, unknown>) => {
-    const rows = costRows(project).map((row: any, rowIndex: number) => rowIndex === index ? { ...row, ...patch } : row);
-    onUpdateProject(project.id, { costBreakdown: rows });
-  };
-
-  const saveTemplate = async (project: any) => {
-    if (!templateName.trim() || !onCreateCostTemplate) return;
-    await onCreateCostTemplate({
-      name: templateName.trim(),
-      description: `Custom template based on ${projectTitle(project)}.`,
-      rows: costRows(project),
-    });
-    setTemplateName("");
-  };
-
-  const saveTemplateChanges = async (project: any) => {
-    const template = templates.find((item) => item.id === project.costTemplateId);
-    if (!template || COST_TEMPLATES.some((item) => item.id === template.id) || !onUpdateCostTemplate) return;
-    await onUpdateCostTemplate(template.id, { rows: costRows(project) });
-  };
-
   const renderEconomics = (project: any, projectTasks: any[]) => {
     const summary = projectSummary(project, projectTasks);
-    const rows = costRows(project);
+    const periods = normalizedFinancePeriods(project);
+    const ledgerSummary = financeSummary(periods);
+    const buildCount = periods.filter((period) => period.kind === "build").length;
+    const monthCount = periods.filter((period) => period.kind === "monthly").length;
     return <div className="do-command-economics" key={`${project.id}-economics`}>
-      <div className="do-command-economics-head"><div><span className="do-project-card-kicker">ECONOMICS & CAPACITY</span><strong>{projectTitle(project)}</strong><small>{project.client || "Internal"} · {project.serviceLine || "Delivery"} · {summary.actualHours}h used of {summary.plannedHours}h planned</small></div><div className="do-command-economics-total"><span>Initial</span><strong>${summary.initial.toLocaleString()}</strong><span>Monthly recurring</span><strong>${summary.recurring.toLocaleString()}</strong></div></div>
-      <div className="do-cost-grid"><label>Delivery stage<select onChange={(event) => onUpdateProject(project.id, { deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Next step<input defaultValue={project.nextAction || ""} onBlur={(event) => onUpdateProject(project.id, { nextAction: event.target.value.trim() })} placeholder="Next concrete step" /></label><label>Initial cost<input defaultValue={summary.initial || ""} onBlur={(event) => onUpdateProject(project.id, { initialCost: Number(event.target.value || 0) })} type="number" /></label><label>Monthly recurring<input defaultValue={summary.recurring || ""} onBlur={(event) => onUpdateProject(project.id, { recurringMonthlyCost: Number(event.target.value || 0) })} type="number" /></label></div>
-      <div className="do-cost-template-bar"><label>Template<select onChange={(event) => { const template = templates.find((item) => item.id === event.target.value); if (template) onUpdateProject(project.id, { costTemplateId: template.id, costBreakdown: template.rows }); }} value={project.costTemplateId || "custom"}><option value="custom">Custom / editable</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><span>{project.costTemplateId ? templates.find((template) => template.id === project.costTemplateId)?.description : "Choose a reusable cost model, then edit any line for this project."}</span><div className="do-cost-template-actions"><input aria-label="New cost template name" onChange={(event) => setTemplateName(event.target.value)} placeholder="New template name" value={templateName} /><button disabled={!templateName.trim() || !onCreateCostTemplate} onClick={() => saveTemplate(project)} type="button">Save as template</button>{project.costTemplateId && !COST_TEMPLATES.some((item) => item.id === project.costTemplateId) && <button disabled={!onUpdateCostTemplate} onClick={() => saveTemplateChanges(project)} type="button">Update template</button>}</div></div>
-      <div className="do-cost-table"><div className="do-cost-table-head"><span>Dimension</span><span>Unit</span><span>Planned qty</span><span>Actual qty</span><span>Rate</span><span>Planned cost</span><span>Actual cost</span></div>{rows.map((row: any, index: number) => <div className="do-cost-row" key={`${project.id}-${row.dimension}-${index}`}><input onBlur={(event) => updateCostRow(project, index, { dimension: event.target.value })} defaultValue={row.dimension} /><select onChange={(event) => updateCostRow(project, index, { unit: event.target.value })} value={row.unit || "hour"}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{costUnitLabels[unit]}</option>)}</select><input onBlur={(event) => updateCostRow(project, index, { plannedQty: Number(event.target.value || 0) })} defaultValue={row.plannedQty || 0} type="number" /><input onBlur={(event) => updateCostRow(project, index, { actualQty: Number(event.target.value || 0) })} defaultValue={row.actualQty || 0} type="number" /><input onBlur={(event) => updateCostRow(project, index, { rate: Number(event.target.value || 0) })} defaultValue={row.rate || 0} type="number" /><strong>${rowCost(row).toLocaleString()}</strong><strong>${rowCost(row, true).toLocaleString()}</strong></div>)}</div>
-      <div className="do-cost-note"><span>Variance</span><strong className={summary.actualLabor > summary.plannedLabor ? "is-negative" : ""}>${(summary.actualLabor - summary.plannedLabor).toLocaleString()}</strong><small>Labor cost is calculated from actual hours × rate. Add one row per team, service or phase when a project needs a deeper breakdown.</small></div>
+      <div className="do-command-economics-head"><div><span className="do-project-card-kicker">PROJECT FINANCIAL LEDGER</span><strong>{projectTitle(project)}</strong><small>{project.client || "Internal"} · {buildCount} build/CR period{buildCount === 1 ? "" : "s"} · {monthCount} operating month{monthCount === 1 ? "" : "s"} · {summary.actualHours}h used of {summary.plannedHours}h planned</small></div><div className="do-command-economics-total"><span>Cost</span><strong>${ledgerSummary.actualCost.toLocaleString()}</strong><span>Revenue</span><strong>${ledgerSummary.actualRevenue.toLocaleString()}</strong><span>Outstanding</span><strong>${ledgerSummary.outstanding.toLocaleString()}</strong></div></div>
+      <div className="do-cost-grid"><label>Delivery stage<select onChange={(event) => onUpdateProject(project.id, { deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Next step<input defaultValue={project.nextAction || ""} onBlur={(event) => onUpdateProject(project.id, { nextAction: event.target.value.trim() })} placeholder="Next concrete step" /></label></div>
+      <ProjectFinanceLedger compact project={project} templates={costTemplates} onCreateCostTemplate={onCreateCostTemplate} onUpdateCostTemplate={onUpdateCostTemplate} onUpdateProject={onUpdateProject} />
     </div>;
   };
 

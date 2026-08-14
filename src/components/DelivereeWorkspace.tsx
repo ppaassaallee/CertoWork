@@ -2090,15 +2090,18 @@ export function DelivereeWorkspace() {
           consoleProject ? (
             <ProjectConsolePanel
               conversationId={conversationId}
+              costTemplates={costTemplates}
               documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
               milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
               onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
               onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
               onArchiveProject={archiveProject}
+              onCreateCostTemplate={createCostTemplate}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
               onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
               onUpdateProject={updateProject}
+              onUpdateCostTemplate={updateCostTemplate}
               onUpdateTask={updateProjectTask}
               project={consoleProject}
               risks={risks.filter((item) => item.projectId === consoleProject.id)}
@@ -2135,15 +2138,18 @@ export function DelivereeWorkspace() {
             consoleProject ? (
               <ProjectConsolePanel
                 conversationId={conversationId}
+                costTemplates={costTemplates}
                 documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
                 milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
                 onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
                 onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
                 onArchiveProject={archiveProject}
+                onCreateCostTemplate={createCostTemplate}
                 onDeleteProject={deleteProject}
                 onRestoreProject={restoreProject}
                 onAsk={setComposer}
                 onUpdateProject={updateProject}
+                onUpdateCostTemplate={updateCostTemplate}
                 onUpdateTask={updateProjectTask}
                 project={consoleProject}
                 risks={risks.filter((item) => item.projectId === consoleProject.id)}

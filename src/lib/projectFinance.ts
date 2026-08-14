@@ -1,0 +1,127 @@
+export type FinancePeriodKind = "build" | "monthly";
+export type FinanceDirection = "cost" | "revenue";
+
+export type FinanceEntry = {
+  id: string;
+  direction: FinanceDirection;
+  description: string;
+  category: string;
+  unit: string;
+  plannedQty: number;
+  actualQty: number;
+  rate: number;
+  referenceNumber?: string;
+  issueDate?: string;
+  dueDate?: string;
+  paymentStatus?: string;
+  settledAmount?: number;
+  settledDate?: string;
+};
+
+export type FinancePeriod = {
+  id: string;
+  kind: FinancePeriodKind;
+  label: string;
+  month?: number;
+  year?: number;
+  status: string;
+  currency: string;
+  sourceTemplateId?: string;
+  entries: FinanceEntry[];
+};
+
+export function financeId(prefix: string) {
+  const suffix = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
+function inferredCategory(entry: any) {
+  const value = `${entry?.category || ""} ${entry?.description || entry?.dimension || ""}`.toLowerCase();
+  if (value.includes("support")) return "support";
+  if (value.includes("implement")) return "implementation";
+  if (value.includes("license")) return "license";
+  if (value.includes("infra") || value.includes("hosting") || value.includes("cloud")) return "infrastructure";
+  if (value.includes("vendor")) return "vendor";
+  if (value.includes("revenue") || value.includes("invoice")) return "revenue";
+  return "development";
+}
+
+export function normalizedFinancePeriods(project: any): FinancePeriod[] {
+  if (!Array.isArray(project?.financePeriods)) return [];
+  return project.financePeriods.map((period: any) => ({
+    id: String(period.id || financeId("period")),
+    kind: period.kind === "monthly" ? "monthly" : "build",
+    label: String(period.label || (period.kind === "monthly" ? "Monthly operations" : "Build V1")),
+    month: Number(period.month || 0) || undefined,
+    year: Number(period.year || 0) || undefined,
+    status: String(period.status || "planned"),
+    currency: String(period.currency || project.currency || "USD"),
+    sourceTemplateId: String(period.sourceTemplateId || "") || undefined,
+    entries: Array.isArray(period.entries) ? period.entries.map((entry: any) => ({
+      id: String(entry.id || financeId("entry")),
+      direction: entry.direction === "revenue" ? "revenue" : "cost",
+      description: String(entry.description || entry.dimension || "Financial item"),
+      category: String(entry.category || inferredCategory(entry)),
+      unit: String(entry.unit || "fee"),
+      plannedQty: Number(entry.plannedQty ?? entry.quantity ?? 0),
+      actualQty: Number(entry.actualQty ?? entry.actualQuantity ?? 0),
+      rate: Number(entry.rate ?? entry.unitRate ?? 0),
+      referenceNumber: String(entry.referenceNumber || entry.invoiceNumber || ""),
+      issueDate: String(entry.issueDate || ""),
+      dueDate: String(entry.dueDate || ""),
+      paymentStatus: String(entry.paymentStatus || "planned"),
+      settledAmount: Number(entry.settledAmount ?? entry.paidAmount ?? 0),
+      settledDate: String(entry.settledDate || entry.paidDate || ""),
+    })) : [],
+  }));
+}
+
+export function financeAmount(entry: FinanceEntry, actual = true) {
+  const quantity = actual ? entry.actualQty : entry.plannedQty;
+  return Number(quantity || 0) * Number(entry.rate || 0);
+}
+
+export function financeSummary(periods: FinancePeriod[]) {
+  const entries = periods.flatMap((period) => period.entries);
+  const active = entries.filter((entry) => entry.paymentStatus !== "void");
+  const costs = active.filter((entry) => entry.direction === "cost");
+  const revenue = active.filter((entry) => entry.direction === "revenue");
+  const actualCost = costs.reduce((sum, entry) => sum + financeAmount(entry), 0);
+  const plannedCost = costs.reduce((sum, entry) => sum + financeAmount(entry, false), 0);
+  const actualRevenue = revenue.reduce((sum, entry) => sum + financeAmount(entry), 0);
+  const plannedRevenue = revenue.reduce((sum, entry) => sum + financeAmount(entry, false), 0);
+  const invoiced = revenue
+    .filter((entry) => Boolean(entry.referenceNumber) || ["issued", "partial", "paid", "overdue"].includes(String(entry.paymentStatus)))
+    .reduce((sum, entry) => sum + financeAmount(entry), 0);
+  const collected = revenue.reduce((sum, entry) => sum + Number(entry.settledAmount || 0), 0);
+  return {
+    actualCost,
+    plannedCost,
+    actualRevenue,
+    plannedRevenue,
+    invoiced,
+    collected,
+    outstanding: Math.max(0, invoiced - collected),
+    margin: actualRevenue - actualCost,
+  };
+}
+
+export function projectFinancialRollup(project: any) {
+  const periods = normalizedFinancePeriods(project);
+  const allCostEntries = periods.flatMap((period) => period.entries).filter((entry) => entry.direction === "cost" && entry.paymentStatus !== "void");
+  const hourEntries = allCostEntries.filter((entry) => entry.unit === "hour");
+  const buildSummary = financeSummary(periods.filter((period) => period.kind === "build"));
+  const monthlyPeriods = periods
+    .filter((period) => period.kind === "monthly")
+    .sort((left, right) => ((right.year || 0) * 100 + (right.month || 0)) - ((left.year || 0) * 100 + (left.month || 0)));
+  const latestMonthly = monthlyPeriods[0] ? financeSummary([monthlyPeriods[0]]) : null;
+  return {
+    periods,
+    plannedHours: hourEntries.reduce((sum, entry) => sum + Number(entry.plannedQty || 0), 0),
+    actualHours: hourEntries.reduce((sum, entry) => sum + Number(entry.actualQty || 0), 0),
+    plannedCost: allCostEntries.reduce((sum, entry) => sum + financeAmount(entry, false), 0),
+    actualCost: allCostEntries.reduce((sum, entry) => sum + financeAmount(entry), 0),
+    buildCost: buildSummary.actualCost || buildSummary.plannedCost,
+    latestMonthlyCost: latestMonthly ? latestMonthly.actualCost || latestMonthly.plannedCost : 0,
+  };
+}
