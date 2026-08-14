@@ -73,7 +73,6 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
-import { PROJECT_PIPELINE_SEED } from "../data/projectPipelineSeed";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
@@ -413,7 +412,6 @@ export function DelivereeWorkspace() {
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
-  const [pipelineImporting, setPipelineImporting] = useState(false);
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -1274,38 +1272,6 @@ export function DelivereeWorkspace() {
     setNotice("Cost template updated.");
   };
 
-  const importPipelineProjects = async () => {
-    if (!user || !workspace || pipelineImporting) return;
-    setPipelineImporting(true);
-    try {
-      const existingKeys = new Set(projects.map((project) => String(project.importKey || normalizedEntityName(`${project.bpo || ""}|${project.client || ""}|${project.title || project.name || ""}|${project.technology || project.serviceLine || ""}`))));
-      const pending = PROJECT_PIPELINE_SEED.filter((project) => !existingKeys.has(project.importKey));
-      for (let index = 0; index < pending.length; index += 400) {
-        const batch = writeBatch(db);
-        pending.slice(index, index + 400).forEach((project) => {
-          const ref = doc(collection(db, "projects"));
-          batch.set(ref, {
-            ...project,
-            costBreakdown: [],
-            workspaceId: workspace.id,
-            userId: user.uid,
-            createdBy: user.uid,
-            importedFrom: "Pipeline_Proyecto_Dashboard_Ejecutivo.xlsx",
-            importedAt: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        });
-        await batch.commit();
-      }
-      setNotice(pending.length ? `${pending.length} proyectos cargados desde el pipeline ejecutivo.` : "El pipeline ya estaba cargado; no se duplicó ningún proyecto.");
-    } catch {
-      setNotice("No se pudo cargar el pipeline. Revisa la conexión e inténtalo de nuevo.");
-    } finally {
-      setPipelineImporting(false);
-    }
-  };
-
   const updateWorkspaceProfile = async () => {
     if (!workspace || !workspaceNameDraft.trim()) return;
     await updateDoc(doc(db, "workspaces", workspace.id), {
@@ -2110,14 +2076,12 @@ export function DelivereeWorkspace() {
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
             onClose={() => goCenterView("conversation")}
+            onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
             costTemplates={costTemplates}
             onCreateCostTemplate={createCostTemplate}
             onUpdateCostTemplate={updateCostTemplate}
-            onImportPipelineProjects={importPipelineProjects}
-            pipelineImporting={pipelineImporting}
-            pipelineProjectCount={PROJECT_PIPELINE_SEED.length}
             projects={projects}
             risks={risks}
             tasks={tasks}
