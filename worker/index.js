@@ -521,6 +521,90 @@ function normalizeAssistantResult(result, citations, model, latestUserMessage = 
   return normalized;
 }
 
+export function rewriteInstructions(fieldKind, context = {}) {
+  const rules = {
+    objective_title:
+      "Write one memorable strategic outcome in plain language. Keep it under 180 characters and do not turn it into a task list.",
+    objective_description:
+      "Clarify why the objective matters, the intended change, and the strategic boundary in one short paragraph.",
+    measure_title:
+      "Write one precise measurable result or influenceable lead measure. Preserve every supplied number and unit.",
+    work_item_title:
+      "Write a concise delivery title beginning with a strong action verb. Keep the original scope and under 160 characters.",
+    work_item_description:
+      "Write a practical delivery description with context, expected result, and finish condition. Keep it concise.",
+    project_outcome:
+      "Write one clear project outcome that describes the future state and how the team will recognize success.",
+    project_description:
+      "Write a concise project description covering purpose, scope, users or stakeholders, and delivery boundary.",
+  };
+  return `You are Certo Work's inline writing assistant. Improve only the supplied field.
+
+Non-negotiable rules:
+- Preserve the source language unless the user clearly mixes languages intentionally.
+- Preserve all facts, names, dates, amounts, metrics, commitments and scope.
+- Never invent missing details, owners, deadlines, targets, benefits or evidence.
+- Remove filler, ambiguity and repetition. Use direct, professional language.
+- Return exactly one JSON object with one key: {"text":"improved text"}.
+- Do not explain the rewrite and do not use Markdown.
+
+Field requirement:
+${rules[fieldKind] || rules.project_description}
+
+Relevant context (use only to disambiguate, never to add new claims):
+${JSON.stringify(context)}`;
+}
+
+async function rewriteField(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId) {
+    return json({ error: "userId and workspaceId are required" }, 400);
+  }
+  const source = String(body.text || "").trim();
+  if (!source) return json({ error: "Text is required" }, 400);
+  if (source.length > 12_000) return json({ error: "Text is too long to rewrite inline" }, 400);
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  if (!env.OPENAI_API_KEY) {
+    return json({ error: "OpenAI is not configured for this Certo Work deployment yet.", code: "OPENAI_NOT_CONFIGURED" }, 503);
+  }
+  const model = env.OPENAI_MODEL || "gpt-5.6-sol";
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        instructions: rewriteInstructions(String(body.fieldKind || "project_description"), body.context || {}),
+        input: [{ role: "user", content: source }],
+        text: { format: { type: "json_object" } },
+        store: false,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      return json({ error: payload?.error?.message || `OpenAI request failed (${response.status})`, code: "OPENAI_REQUEST_FAILED" }, 502);
+    }
+    const result = parseJsonObject(extractOpenAIText(payload));
+    const text = String(result?.text || "").trim();
+    if (!text) throw new Error("OpenAI returned an empty rewrite");
+    return json({ text, provider: { provider: "openai", model } });
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "The writing assistant is temporarily unavailable", code: "REWRITE_UNAVAILABLE" }, 502);
+  }
+}
+
 async function chat(request, env) {
   let body;
   try {
@@ -707,6 +791,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/boldi/chat") {
       return chat(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/certo/rewrite") {
+      return rewriteField(request, env);
     }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {

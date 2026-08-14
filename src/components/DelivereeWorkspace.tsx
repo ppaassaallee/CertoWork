@@ -31,6 +31,8 @@ import {
   Mic,
   MicOff,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -82,6 +84,12 @@ import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
+import {
+  buildProjectTemplate,
+  instantiateTemplateItems,
+  type TemplateRole,
+} from "../lib/projectTemplates";
+import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
   isProjectWizardInvocation,
@@ -522,6 +530,7 @@ export function DelivereeWorkspace() {
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
+  const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
   const [strategicMeasures, setStrategicMeasures] = useState<any[]>([]);
   const [strategicRecords, setStrategicRecords] = useState<any[]>([]);
@@ -530,6 +539,11 @@ export function DelivereeWorkspace() {
   const [streamed, setStreamed] = useState("");
   const [judgment, setJudgment] = useState<JudgmentAssessment | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() =>
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("certo-sidebar-collapsed") === "true"
+      : false,
+  );
   const [panel, setPanel] = useState<Panel>(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -628,6 +642,11 @@ export function DelivereeWorkspace() {
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
       makeQuery("cost_templates", setCostTemplates),
+      makeQuery("agent_templates", (items) =>
+        setProjectTemplates(
+          items.filter((item) => item.templateType === "project"),
+        ),
+      ),
       makeQuery("strategic_goals", setStrategicGoals),
       makeQuery("key_results", setStrategicMeasures),
       makeQuery("strategic_initiatives", setStrategicRecords),
@@ -652,6 +671,13 @@ export function DelivereeWorkspace() {
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [user, workspace]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "certo-sidebar-collapsed",
+      String(sidebarCollapsed),
+    );
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -1814,6 +1840,169 @@ export function DelivereeWorkspace() {
     setNotice("Cost template updated.");
   };
 
+  const createProjectTemplate = async (
+    sourceProjectId: string,
+    name: string,
+    description: string,
+  ) => {
+    if (!user || !workspace) return;
+    const source = projects.find((project) => project.id === sourceProjectId);
+    if (!source || !name.trim()) return;
+    const template = buildProjectTemplate(source, tasks, name, description);
+    await addDoc(collection(db, "agent_templates"), {
+      ...template,
+      userId: user.uid,
+      workspaceId: workspace.id,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`${name.trim()} saved to the workspace template library.`);
+  };
+
+  const deleteProjectTemplate = async (templateId: string) => {
+    if (!templateId) return;
+    await deleteDoc(doc(db, "agent_templates", templateId));
+    setNotice("Project template deleted.");
+  };
+
+  const applyProjectTemplate = async (
+    template: any,
+    application: TemplateApplication,
+  ) => {
+    if (!user || !workspace || !application.title.trim()) return;
+    const member = (id: string) =>
+      workspaceMembers.find((candidate) => candidate.id === id);
+    const roleAssignment = (id: string) => {
+      const selected = member(id);
+      return selected
+        ? { id: selected.id, name: memberLabel(selected) }
+        : undefined;
+    };
+    const roleAssignments: Partial<
+      Record<TemplateRole, { id: string; name: string }>
+    > = {
+      project_manager: roleAssignment(application.projectManagerId),
+      product_owner: roleAssignment(application.productOwnerId),
+      sponsor: roleAssignment(application.sponsorId),
+    };
+    const instantiatedItems = instantiateTemplateItems(
+      template,
+      application.startDate,
+      roleAssignments,
+    );
+    const projectRef = doc(collection(db, "projects"));
+    const conversationRef = doc(collection(db, "boldi_conversations"));
+    const taskRefs = new Map<string, ReturnType<typeof doc>>();
+    const taskByKey = new Map<string, any>();
+    instantiatedItems.forEach((item: any) => {
+      taskRefs.set(item.templateKey, doc(collection(db, "tasks")));
+      taskByKey.set(item.templateKey, item);
+    });
+    const projectManager = roleAssignments.project_manager;
+    const productOwner = roleAssignments.product_owner;
+    const sponsor = roleAssignments.sponsor;
+    const dueDates = instantiatedItems
+      .map((item: any) => item.dueDate)
+      .filter(Boolean)
+      .sort();
+    const batch = writeBatch(db);
+    batch.set(projectRef, {
+      ...(template.projectDefaults || {}),
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: application.title.trim(),
+      name: application.title.trim(),
+      normalizedTitle: application.title.trim().toLowerCase().replace(/\s+/g, " "),
+      projectKey: `${projectWorkKey({ title: application.title })}-${projectRef.id.slice(0, 4).toUpperCase()}`,
+      client: application.client || "Internal",
+      bpo: application.bpo || "Internal",
+      status: "planning",
+      startDate: application.startDate,
+      plannedStartDate: application.startDate,
+      targetDate: dueDates[dueDates.length - 1] || null,
+      dueDate: dueDates[dueDates.length - 1] || null,
+      projectManagerId: projectManager?.id || null,
+      projectManager: projectManager?.name || "",
+      productOwnerId: productOwner?.id || null,
+      productOwner: productOwner?.name || "",
+      sponsorId: sponsor?.id || null,
+      sponsor: sponsor?.name || "",
+      sponsorIds: sponsor?.id ? [sponsor.id] : [],
+      sponsors: sponsor?.name ? [sponsor.name] : [],
+      sourceTemplateId: template.id,
+      sourceTemplateName: template.name,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    instantiatedItems.forEach((item: any, index: number) => {
+      const taskRef = taskRefs.get(item.templateKey)!;
+      const parentRef = item.parentTemplateKey
+        ? taskRefs.get(item.parentTemplateKey)
+        : null;
+      const parentTemplate = item.parentTemplateKey
+        ? taskByKey.get(item.parentTemplateKey)
+        : null;
+      const parentKind = String(parentTemplate?.workItemType || "");
+      const canonicalType = String(item.workItemType || "pbi").toLowerCase();
+      batch.set(taskRef, {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        projectId: projectRef.id,
+        title: item.title,
+        normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
+        description: item.description || "",
+        key: `${projectWorkKey({ title: application.title })}-${index + 1}`,
+        type: canonicalType,
+        workItemType: canonicalType,
+        itemType: canonicalType,
+        parentId: parentRef?.id || null,
+        epicId: parentKind === "epic" ? parentRef?.id || null : null,
+        featureId: parentKind === "feature" ? parentRef?.id || null : null,
+        priority: item.priority || null,
+        status: "backlog",
+        startDate: item.startDate || null,
+        dueDate: item.dueDate || null,
+        assigneeIds: item.assigneeIds || [],
+        assignees: item.assignees || [],
+        owner: item.owner || "",
+        order: Number(item.order ?? index),
+        rank: Number(item.order ?? index),
+        source: "project_template",
+        sourceTemplateId: template.id,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    batch.set(conversationRef, {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: application.title.trim(),
+      status: "active",
+      sourceContext: "project",
+      contextEntityId: projectRef.id,
+      conversationType: "project",
+      linkedProjectIds: [projectRef.id],
+      linkedTaskIds: [],
+      isChiefOfStaff: false,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    setConversationId(conversationRef.id);
+    setMessages([]);
+    setProjectConsoleId(projectRef.id);
+    setPanel(null);
+    goCenterView("project");
+    navigate(`/work/projects/${projectRef.id}`);
+    setNotice(
+      `${application.title.trim()} created from ${template.name} with ${instantiatedItems.length} work items.`,
+    );
+  };
+
   const updateWorkspaceProfile = async () => {
     if (!workspace || !workspaceNameDraft.trim()) return;
     await updateDoc(doc(db, "workspaces", workspace.id), {
@@ -2313,6 +2502,7 @@ export function DelivereeWorkspace() {
       "delivery_gates",
       "integration_configs",
       "cost_templates",
+      "agent_templates",
       "strategic_goals",
       "key_results",
       "strategic_initiatives",
@@ -2430,7 +2620,7 @@ export function DelivereeWorkspace() {
       ];
 
   return (
-    <div className="do-shell">
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -2461,6 +2651,15 @@ export function DelivereeWorkspace() {
             </span>
           </button>
           <button
+            aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            className="do-sidebar-collapse"
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+            type="button"
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
+          <button
             aria-label="Close navigation"
             className="do-mobile-close"
             onClick={() => setSidebarOpen(false)}
@@ -2482,7 +2681,7 @@ export function DelivereeWorkspace() {
           ) : (
             <Plus size={15} />
           )}
-          {creatingConversation ? "Starting…" : "New conversation"}
+          <span>{creatingConversation ? "Starting…" : "New conversation"}</span>
           <kbd>⌘K</kbd>
         </button>
 
@@ -3344,10 +3543,14 @@ export function DelivereeWorkspace() {
             }}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
+            onApplyProjectTemplate={applyProjectTemplate}
+            onCreateProjectTemplate={createProjectTemplate}
+            onDeleteProjectTemplate={deleteProjectTemplate}
             costTemplates={costTemplates}
             onCreateCostTemplate={createCostTemplate}
             onUpdateCostTemplate={updateCostTemplate}
             projects={projects}
+            projectTemplates={projectTemplates}
             risks={risks}
             tasks={tasks}
             workspaceMembers={workspaceMembers}

@@ -6,6 +6,7 @@ import worker, {
   firebaseAuthProxyUrl,
   inferProjectTitleFromRequest,
   normalizeConversationMessages,
+  rewriteInstructions,
 } from "../worker/index.js";
 
 function environment(overrides: Record<string, unknown> = {}) {
@@ -173,6 +174,26 @@ test("Boldi compatibility route rejects unauthenticated requests", async () => {
         userId: "user-1",
         workspaceId: "workspace-1",
         messages: [{ role: "user", content: "Plan my week" }],
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
+test("inline AI rewriting preserves facts and rejects anonymous requests", async () => {
+  const instructions = rewriteInstructions("work_item_title", { project: "KruOps" });
+  assert.match(instructions, /Preserve all facts, names, dates, amounts, metrics/);
+  assert.match(instructions, /strong action verb/);
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/certo/rewrite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        fieldKind: "work_item_title",
+        text: "fix login",
       }),
     }),
     environment(),

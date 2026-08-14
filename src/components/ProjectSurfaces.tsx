@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
+  ArrowLeft,
   ArrowDown,
   ArrowRight,
   ArrowUp,
   CalendarDays,
   CheckCircle2,
   Circle,
+  Copy,
   FileText,
   Flag,
   FolderKanban,
@@ -58,6 +60,11 @@ import {
 } from "../lib/projectDelivery";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { AiRewriteButton, type RewriteFieldKind } from "./AiRewriteButton";
+import {
+  ProjectTemplatesPanel,
+  type TemplateApplication,
+} from "./ProjectTemplatesPanel";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -97,21 +104,26 @@ function EditableField({
   placeholder,
   multiline = false,
   onCommit,
+  aiKind,
+  aiContext,
 }: {
   label: string;
   value?: string;
   placeholder: string;
   multiline?: boolean;
   onCommit: (value: string) => void;
+  aiKind?: RewriteFieldKind;
+  aiContext?: Record<string, unknown>;
 }) {
   const [draft, setDraft] = useState(value || "");
+  useEffect(() => setDraft(value || ""), [value]);
   const commit = () => {
     const next = draft.trim();
     if (next !== String(value || "").trim()) onCommit(next);
   };
   return (
     <label className={`do-project-field ${multiline ? "is-multiline" : ""}`}>
-      <span>{label}</span>
+      <span className="do-field-label"><span>{label}</span>{aiKind && <AiRewriteButton context={aiContext} fieldKind={aiKind} onRewrite={(next) => { setDraft(next); onCommit(next); }} text={draft} />}</span>
       {multiline ? (
         <textarea
           onBlur={commit}
@@ -487,6 +499,8 @@ export function ProjectRecordModal({
               <section className="do-project-card do-project-card-large">
                 <span className="do-project-card-kicker">DIRECTION</span>
                 <EditableField
+                  aiContext={{ project: projectTitle(project), description: project.description || "" }}
+                  aiKind="project_outcome"
                   label="Outcome"
                   multiline
                   onCommit={(outcome) => update({ outcome })}
@@ -494,6 +508,8 @@ export function ProjectRecordModal({
                   value={project.outcome || project.objective}
                 />
                 <EditableField
+                  aiContext={{ project: projectTitle(project), outcome: project.outcome || project.objective || "" }}
+                  aiKind="project_description"
                   label="Why it matters"
                   multiline
                   onCommit={(description) => update({ description })}
@@ -1575,11 +1591,22 @@ export function ProjectConsolePanel({
       {tab === "brief" && (
         <div className="do-console-section">
           <EditableField
+            aiContext={{ project: projectTitle(project), description: project.description || "" }}
+            aiKind="project_outcome"
             label="Outcome"
             multiline
             onCommit={(outcome) => update({ outcome })}
             placeholder="What will be observably true when this project is done?"
             value={project.outcome || project.objective}
+          />
+          <EditableField
+            aiContext={{ project: projectTitle(project), outcome: project.outcome || project.objective || "" }}
+            aiKind="project_description"
+            label="Project description"
+            multiline
+            onCommit={(description) => update({ description })}
+            placeholder="Purpose, scope, stakeholders and delivery boundary."
+            value={project.description}
           />
           <div className="do-console-insights">
             <article>
@@ -3946,6 +3973,7 @@ export function ProjectCommandCenter({
   risks,
   workspaceMembers = [],
   costTemplates = [],
+  projectTemplates = [],
   onClose,
   onAsk,
   onUpdateProject,
@@ -3955,18 +3983,32 @@ export function ProjectCommandCenter({
   onOpenProject,
   onCreateCostTemplate,
   onUpdateCostTemplate,
+  onCreateProjectTemplate,
+  onDeleteProjectTemplate,
+  onApplyProjectTemplate,
 }: {
   projects: any[];
   tasks: any[];
   risks: any[];
   workspaceMembers?: AssignmentMember[];
   costTemplates?: any[];
+  projectTemplates?: any[];
   onClose: () => void;
   onAsk?: (prompt: string) => void;
   onCreateCostTemplate?: (template: any) => Promise<void> | void;
   onUpdateCostTemplate?: (
     templateId: string,
     patch: Record<string, unknown>,
+  ) => Promise<void> | void;
+  onCreateProjectTemplate?: (
+    sourceProjectId: string,
+    name: string,
+    description: string,
+  ) => Promise<void> | void;
+  onDeleteProjectTemplate?: (templateId: string) => Promise<void> | void;
+  onApplyProjectTemplate?: (
+    template: any,
+    application: TemplateApplication,
   ) => Promise<void> | void;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("all");
@@ -3982,6 +4024,8 @@ export function ProjectCommandCenter({
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const sorted = sortProjectsByRecency(projects);
   const portfolio = sorted;
   const realProjects = sorted;
@@ -4261,6 +4305,13 @@ export function ProjectCommandCenter({
         </div>
         <div className="do-command-head-actions">
           <button
+            className={templatesOpen ? "is-active" : ""}
+            onClick={() => setTemplatesOpen((open) => !open)}
+            type="button"
+          >
+            <Copy size={14} /> Templates
+          </button>
+          <button
             className={view === "dashboard" ? "is-active" : ""}
             onClick={() => setView("dashboard")}
             type="button"
@@ -4276,6 +4327,17 @@ export function ProjectCommandCenter({
           </button>
         </div>
       </header>
+      {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
+        <ProjectTemplatesPanel
+          onApply={onApplyProjectTemplate}
+          onClose={() => setTemplatesOpen(false)}
+          onCreate={onCreateProjectTemplate}
+          onDelete={onDeleteProjectTemplate}
+          projects={projects}
+          templates={projectTemplates}
+          workspaceMembers={workspaceMembers}
+        />
+      )}
       <div className="do-command-metrics">
         <div>
           <strong>
@@ -4755,6 +4817,12 @@ export function ProjectCommandCenter({
             <button onClick={exportPortfolioPdf} type="button">
               <FileText size={12} /> Export PDF
             </button>
+            {view === "overview" && (
+              <div className="do-table-scroll-buttons" aria-label="Move portfolio table horizontally">
+                <button aria-label="Move table left" onClick={() => tableScrollRef.current?.scrollBy({ left: -520, behavior: "smooth" })} type="button"><ArrowLeft size={12} /></button>
+                <button aria-label="Move table right" onClick={() => tableScrollRef.current?.scrollBy({ left: 520, behavior: "smooth" })} type="button"><ArrowRight size={12} /></button>
+              </div>
+            )}
             <span className="do-command-taxonomy-note">
               {taxonomyValue ? (
                 <button
@@ -4782,6 +4850,7 @@ export function ProjectCommandCenter({
             </span>
           </div>
           {view === "overview" ? (
+            <div className="do-command-table-scroll" ref={tableScrollRef}>
             <div className="do-command-table">
               <div className="do-command-table-head">
                 <span>
@@ -5227,6 +5296,7 @@ export function ProjectCommandCenter({
                   text="Change the filter or create a project through the conversation."
                 />
               )}
+            </div>
             </div>
           ) : (
             <div className="do-command-economics-list">

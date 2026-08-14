@@ -17,6 +17,7 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { InfoTip, MultiAssigneePicker } from "./ProjectControls";
+import { AiRewriteButton } from "./AiRewriteButton";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt";
@@ -313,6 +314,7 @@ export function WorkItemsCenter({
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
+  const [detailDescription, setDetailDescription] = useState("");
 
   useEffect(() => {
     setProjectFilter(activeProject?.id || "all");
@@ -367,6 +369,12 @@ export function WorkItemsCenter({
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
   const canCreate = Boolean(newTitle.trim());
+
+  useEffect(() => {
+    setDetailDescription(
+      String(selectedItem?.description || selectedItem?.definitionOfDone || ""),
+    );
+  }, [selectedItem?.id, selectedItem?.description, selectedItem?.definitionOfDone]);
 
   const createItem = async () => {
     const projectId = newProjectId || baseProjectId;
@@ -713,7 +721,7 @@ export function WorkItemsCenter({
           <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
           {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
         </select>
-        <input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} />
+        <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
         <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
       </section>
 
@@ -761,13 +769,14 @@ export function WorkItemsCenter({
               <span>{workItemLabel(workItemKind(selectedItem))}</span>
               <button aria-label="Close item detail" onClick={() => onSelectItem(null)} type="button">×</button>
             </div>
-            <InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} />
-            <textarea
+            <div className="do-ai-inline-field"><InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} /><AiRewriteButton context={{ itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={(next) => onUpdateTask(selectedItem.id, { title: next })} text={title(selectedItem)} /></div>
+            <div className="do-ai-description-field"><textarea
               aria-label="Selected item description"
-              defaultValue={selectedItem.description || selectedItem.definitionOfDone || ""}
-              onBlur={(event) => onUpdateTask(selectedItem.id, { description: event.target.value })}
+              onBlur={() => detailDescription !== String(selectedItem.description || selectedItem.definitionOfDone || "") && onUpdateTask(selectedItem.id, { description: detailDescription })}
+              onChange={(event) => setDetailDescription(event.target.value)}
               placeholder="Description, acceptance criteria, notes..."
-            />
+              value={detailDescription}
+            /><AiRewriteButton context={{ itemTitle: title(selectedItem), itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_description" onRewrite={(next) => { setDetailDescription(next); return onUpdateTask(selectedItem.id, { description: next }); }} text={detailDescription} /></div>
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label>GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
