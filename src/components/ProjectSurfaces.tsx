@@ -34,6 +34,7 @@ import {
   type WorkLane,
 } from "../lib/projectPortfolio";
 import { CodexBridgePanel } from "./CodexBridgePanel";
+import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = { id: string; displayName?: string; email?: string; emailLower?: string; status?: string };
@@ -42,6 +43,8 @@ type SharedProjectActions = {
   onUpdateProject: (projectId: string, patch: ProjectPatch) => Promise<void> | void;
   onArchiveProject: (project: any) => Promise<void> | void;
   onOpenProject: (project: any) => void;
+  onDeleteProject?: (project: any) => Promise<void> | void;
+  onRestoreProject?: (project: any) => Promise<void> | void;
 };
 
 function projectTitle(project: any) {
@@ -394,9 +397,10 @@ export function ProjectConsolePanel({
   onAsk,
   onUpdateProject,
   onArchiveProject,
+  onDeleteProject,
+  onRestoreProject,
   onAddTask,
   onUpdateTask,
-  onAddMilestone,
   onAddRisk,
 }: {
   project: any;
@@ -409,19 +413,21 @@ export function ProjectConsolePanel({
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
+  onDeleteProject?: SharedProjectActions["onDeleteProject"];
+  onRestoreProject?: SharedProjectActions["onRestoreProject"];
   onAddTask: (title: string, status: WorkLane, patch?: ProjectPatch) => Promise<void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
-  onAddMilestone: (title: string) => Promise<void> | void;
-  onAddRisk: (title: string) => Promise<void> | void;
+  onAddRisk: (title: string, patch?: ProjectPatch) => Promise<void> | void;
 }) {
-  const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "docs" | "codex">("brief");
+  const [tab, setTab] = useState<"brief" | "backlog" | "plan" | "work" | "risks" | "team" | "costs" | "docs" | "codex">("brief");
   const [taskTitle, setTaskTitle] = useState("");
   const [workTitle, setWorkTitle] = useState("");
   const [workType, setWorkType] = useState<WorkItemKind>("pbi");
   const [workParentId, setWorkParentId] = useState("");
-  const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
+  const [riskSeverity, setRiskSeverity] = useState("medium");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const assignmentOptions = useMemo(() => [...new Set([
     ...workspaceMembers
       .filter((member) => String(member.status || "active") !== "removed")
@@ -447,13 +453,21 @@ export function ProjectConsolePanel({
     const subtasks = sortWorkItems(tasks.filter((task) => workItemKind(task) === "subtask"));
     return { epics, features, pbis, subtasks };
   }, [tasks]);
+  const activeMembers = workspaceMembers.filter((member) => String(member.status || "active") !== "removed");
+  const roleOptions = activeMembers.map((member) => ({ id: member.id, name: memberName(member) }));
 
   useEffect(() => {
     setTab("brief");
     setArchiveConfirm(false);
+    setDeleteConfirm(false);
   }, [project.id]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
+  const consoleCostRows = costRows(project);
+  const consoleCostSummary = projectSummary(project, tasks);
+  const updateConsoleCostRow = (index: number, patch: ProjectPatch) => update({ costBreakdown: consoleCostRows.map((row: any, rowIndex: number) => rowIndex === index ? { ...row, ...patch } : row) });
+  const addConsoleCostRow = () => update({ costBreakdown: [...consoleCostRows, { dimension: "New cost driver", category: "development", unit: "hour", cadence: "initial", plannedQty: 0, actualQty: 0, rate: 0 }] });
+  const removeConsoleCostRow = (index: number) => update({ costBreakdown: consoleCostRows.filter((_: any, rowIndex: number) => rowIndex !== index) });
   const submitTask = async () => {
     if (!taskTitle.trim()) return;
     await onAddTask(taskTitle.trim(), "backlog");
@@ -487,8 +501,16 @@ export function ProjectConsolePanel({
     await onUpdateTask(item.id, { order: otherOrder, rank: otherOrder });
     await onUpdateTask(other.id, { order: currentOrder, rank: currentOrder });
   };
-  const nextMilestone = openMilestones[0];
-  const nextRisk = risks.find((risk) => String(risk.status || "open").toLowerCase() !== "closed") || blockedTasks[0];
+  const datedEpics = hierarchy.epics
+    .filter((epic) => taskWorkLane(epic) !== "done")
+    .sort((left, right) => String(left.dueDate || left.targetDate || "9999-12-31").localeCompare(String(right.dueDate || right.targetDate || "9999-12-31")));
+  const nextMilestone = datedEpics[0] || openMilestones[0] || openTasks
+    .filter((item) => item.dueDate || item.targetDate)
+    .sort((left, right) => String(left.dueDate || left.targetDate).localeCompare(String(right.dueDate || right.targetDate)))[0];
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const nextRisk = [...risks]
+    .filter((risk) => !["closed", "resolved", "accepted"].includes(String(risk.status || "open").toLowerCase()))
+    .sort((left, right) => (severityOrder[String(left.severity || "medium").toLowerCase()] ?? 2) - (severityOrder[String(right.severity || "medium").toLowerCase()] ?? 2))[0] || blockedTasks[0];
   const parentOptions = workType === "epic"
     ? []
     : workType === "feature"
@@ -496,6 +518,13 @@ export function ProjectConsolePanel({
       : workType === "subtask"
         ? hierarchy.pbis
         : [...hierarchy.features, ...hierarchy.epics];
+  const tabHelp: Partial<Record<typeof tab, string>> = {
+    backlog: "Hierarchy and prioritization: Epic → Feature → PBI → Subtask.",
+    work: "Execution board. Use it to move active items through Backlog, Doing, Blocked and Done.",
+    team: "Project governance roles and the people allowed to own delivery work.",
+    costs: "Planned and actual hours, initial investment, recurring costs and unit-based cost drivers.",
+    risks: "Risk register, severity and the signals used to calculate project health.",
+  };
   const renderWorkItemRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     return (
@@ -524,7 +553,7 @@ export function ProjectConsolePanel({
           <option value="3">3</option>
           <option value="N/A">N/A</option>
         </select>
-        <input aria-label={`Owner for ${projectTitle(item)}`} defaultValue={item.owner || item.assignee || ""} list="do-project-member-options" onBlur={(event) => onUpdateTask(item.id, { owner: event.target.value.trim(), assignee: event.target.value.trim() })} placeholder="Owner" />
+        <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />
         <input aria-label={`Due date for ${projectTitle(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
       </article>
     );
@@ -547,21 +576,22 @@ export function ProjectConsolePanel({
       <div className="do-console-hero">
         <div>
           <span className="do-project-card-kicker">PROJECT CONSOLE</span>
-          <h3>{projectTitle(project)}</h3>
+          <InlineEdit ariaLabel="Project name" onCommit={(title) => title && update({ title, name: title })} placeholder="Project name" value={projectTitle(project)} />
           <p>{project.outcome || project.objective || project.description || "Define the outcome so every conversation and work item points to the same finish line."}</p>
         </div>
         <button aria-label={isProjectFavorite(project) ? "Remove from favorites" : "Add to favorites"} className={isProjectFavorite(project) ? "is-favorite" : ""} onClick={() => update({ favorite: !isProjectFavorite(project) })} type="button"><Star fill={isProjectFavorite(project) ? "currentColor" : "none"} size={15} /></button>
       </div>
 
       <div className="do-console-metrics">
-        <div><strong>{openTasks.length}</strong><span>Open</span></div>
-        <div><strong>{openMilestones.length}</strong><span>Milestones</span></div>
-        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}><strong>{blockedTasks.length + risks.length}</strong><span>Risks</span></div>
-        <div className={healthClass(currentHealth)}><strong>{projectHealthLabel(currentHealth)}</strong><span>Health</span></div>
+        <div><strong>{openTasks.length}</strong><span>Open <InfoTip label="Open work" text="All PBIs, tasks, bugs and subtasks that are not completed or cancelled." /></span></div>
+        <div><strong>{hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length}</strong><span>Open Epics <InfoTip label="Epics" text="The major outcomes that automatically act as delivery checkpoints." /></span></div>
+        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}><strong>{blockedTasks.length + risks.length}</strong><span>Signals <InfoTip label="Risk signals" text="Open risks plus blocked work items. Severity determines their effect on project health." /></span></div>
+        <div className={healthClass(currentHealth)}><strong>{projectHealthLabel(currentHealth)}</strong><span>Health <InfoTip label="Project health" text="Calculated from blocked work, risk severity, overdue delivery dates and any manual override." /></span></div>
       </div>
 
       <div className="do-console-controls">
         <ProjectStatusSelect onUpdate={update} project={project} />
+        <label className="do-inline-control"><span>Stage <InfoTip label="Delivery stage" text="Define clarifies the project; Onboarding aligns client and team; Build creates it; Deploy releases it; Operations runs and supports it." /></span><select aria-label="Project delivery stage" onChange={(event) => update({ deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label>
         <select aria-label="Project method" onChange={(event) => update({ methodology: event.target.value })} value={methodology}>
           <option value="scrum">Scrum</option>
           <option value="pmi">PMI</option>
@@ -572,9 +602,9 @@ export function ProjectConsolePanel({
 
       <nav className="do-console-tabs" aria-label="Project console sections">
         {([
-          ["brief", "Brief"], ["backlog", "Backlog"], ["plan", "Plan"], ["work", "Flow"], ["risks", "Risks"], ["docs", "Docs"], ["codex", "Codex"],
+          ["brief", "Brief"], ["backlog", "Backlog"], ["plan", "Plan"], ["work", "Board"], ["team", "Team"], ["costs", "Costs"], ["risks", "Risks"], ["docs", "Docs"], ["codex", "Codex"],
         ] as const).map(([value, label]) => (
-          <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button">{label}</button>
+          <button className={tab === value ? "is-active" : ""} key={value} onClick={() => setTab(value)} type="button"><span>{label}</span>{tabHelp[value] && <InfoTip label={label} text={tabHelp[value] || ""} />}</button>
         ))}
       </nav>
 
@@ -582,8 +612,8 @@ export function ProjectConsolePanel({
         <div className="do-console-section">
           <EditableField label="Outcome" multiline onCommit={(outcome) => update({ outcome })} placeholder="What will be observably true when this project is done?" value={project.outcome || project.objective} />
           <div className="do-console-insights">
-            <article><span>Next milestone</span><strong>{nextMilestone?.title || nextMilestone?.name || "No milestone set"}</strong><small>{nextMilestone?.dueDate || nextMilestone?.targetDate || "Add the next delivery point."}</small></article>
-            <article><span>Main risk</span><strong>{nextRisk?.title || nextRisk?.description || "No active risk recorded"}</strong><small>{nextRisk?.mitigation || nextRisk?.response || nextRisk?.assignee || "Keep the risk register honest."}</small></article>
+            <article><span>Next delivery point <InfoTip label="Next delivery point" text="Automatically uses the nearest open Epic due date, then falls back to a legacy milestone or dated item." /></span><strong>{nextMilestone?.title || nextMilestone?.name || "No dated Epic yet"}</strong><small>{nextMilestone?.dueDate || nextMilestone?.targetDate || "Add a due date to the next Epic in Backlog."}</small><button onClick={() => setTab("backlog")} type="button">{nextMilestone ? "Open backlog" : "Create or date an Epic"}</button></article>
+            <article><span>Main risk <InfoTip label="Main risk" text="Automatically selects the highest-severity open risk; blocked work is used when no risk is recorded." /></span><strong>{nextRisk?.title || nextRisk?.description || "No active risk recorded"}</strong><small>{nextRisk ? `${String(nextRisk.severity || "medium").toUpperCase()} · ${nextRisk.mitigation || nextRisk.response || nextRisk.assignee || "Response needs definition"}` : "Add a risk with severity and response."}</small><button onClick={() => setTab("risks")} type="button">{nextRisk ? "Open risk register" : "Add a risk"}</button></article>
           </div>
           <div className="do-console-ask-grid">
             <button onClick={() => onAsk(`Create the next coherent implementation batch for ${projectTitle(project)} with owners, dependencies, acceptance evidence, and requirement IDs.`)} type="button"><Sparkles size={13} /> Build next batch</button>
@@ -689,11 +719,12 @@ export function ProjectConsolePanel({
       {tab === "plan" && (
         <div className="do-console-section">
           <EditableField label={methodology === "pmi" ? "Delivery governance" : "Sprint goal"} multiline onCommit={(sprintGoal) => update({ sprintGoal })} placeholder={methodology === "pmi" ? "Scope, approvals, controls, and closeout criteria." : "What should this sprint prove or deliver?"} value={project.sprintGoal || project.deliveryGovernance} />
+          <div className="do-section-title"><div><span className="do-project-card-kicker">AUTO-GENERATED CHECKPOINTS</span><h4>Epic delivery plan</h4></div><InfoTip label="Epic checkpoints" text="Every open Epic becomes a delivery checkpoint. Add its owner and due date in Backlog; the Brief updates automatically." /></div>
           <div className="do-console-list">
-            {milestones.map((milestone) => <article key={milestone.id}><Flag size={13} /><span><strong>{milestone.title || milestone.name}</strong><small>{milestone.dueDate || milestone.targetDate || "No date"} · {milestone.status || "not started"}</small></span></article>)}
-            {milestones.length === 0 && <EmptyState icon={<Flag size={18} />} title="No milestones yet" text="Add one meaningful delivery point." />}
+            {hierarchy.epics.map((epic) => <article key={epic.id}><Flag size={13} /><span><strong>{epic.title || epic.name}</strong><small>{epic.dueDate || epic.targetDate || "No due date"} · {canonicalWorkStatus(epic)}</small></span><button onClick={() => setTab("backlog")} type="button">Edit</button></article>)}
+            {hierarchy.epics.length === 0 && <EmptyState icon={<Flag size={18} />} title="No Epics yet" text="Create the first Epic in Backlog; it will automatically appear here as a delivery checkpoint." />}
           </div>
-          <div className="do-project-inline-add"><input onChange={(event) => setMilestoneTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && milestoneTitle.trim()) { await onAddMilestone(milestoneTitle.trim()); setMilestoneTitle(""); } }} placeholder="Add milestone..." value={milestoneTitle} /><button disabled={!milestoneTitle.trim()} onClick={async () => { await onAddMilestone(milestoneTitle.trim()); setMilestoneTitle(""); }} type="button"><Plus size={13} /> Add</button></div>
+          {milestones.length > 0 && <details className="do-legacy-milestones"><summary>{milestones.length} legacy milestone{milestones.length === 1 ? "" : "s"}</summary><div>{milestones.map((milestone) => <span key={milestone.id}>{milestone.title || milestone.name}</span>)}</div></details>}
         </div>
       )}
 
@@ -714,15 +745,48 @@ export function ProjectConsolePanel({
         </div>
       )}
 
+      {tab === "team" && (
+        <div className="do-console-section">
+          <div className="do-section-title"><div><span className="do-project-card-kicker">PROJECT GOVERNANCE</span><h4>Accountability and delivery team</h4></div><InfoTip label="Project roles" text="The Project Manager owns delivery, the Product Owner owns value and backlog decisions, and Sponsors provide authority, funding and escalation support." /></div>
+          <div className="do-project-role-grid">
+            <label><span>Project Manager <InfoTip label="Project Manager" text="Owns delivery plan, coordination, dependencies, status and escalation." /></span><select onChange={(event) => update({ projectManagerId: event.target.value || null, projectManager: roleOptions.find((option) => option.id === event.target.value)?.name || "" })} value={project.projectManagerId || ""}><option value="">Unassigned</option>{roleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+            <label><span>Product Owner <InfoTip label="Product Owner" text="Owns desired outcomes, backlog priority and acceptance decisions." /></span><select onChange={(event) => update({ productOwnerId: event.target.value || null, productOwner: roleOptions.find((option) => option.id === event.target.value)?.name || "" })} value={project.productOwnerId || ""}><option value="">Unassigned</option>{roleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+            <label><span>Delivery / Tech Lead <InfoTip label="Delivery lead" text="Owns technical execution, engineering quality and implementation readiness." /></span><select onChange={(event) => update({ deliveryLeadId: event.target.value || null, deliveryLead: roleOptions.find((option) => option.id === event.target.value)?.name || "" })} value={project.deliveryLeadId || ""}><option value="">Unassigned</option>{roleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+            <label><span>Client Lead <InfoTip label="Client lead" text="Primary client-side owner for decisions, access and acceptance." /></span><select onChange={(event) => update({ clientLeadId: event.target.value || null, clientLead: roleOptions.find((option) => option.id === event.target.value)?.name || "" })} value={project.clientLeadId || ""}><option value="">Unassigned</option>{roleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+          </div>
+          <div className="do-project-team-pickers">
+            <section><span>Sponsors <InfoTip label="Sponsors" text="One or more executives who provide mandate, funding and escalation decisions." /></span><MultiAssigneePicker label="Sponsors" members={workspaceMembers} onChange={(sponsorIds, sponsors) => update({ sponsorIds, sponsors, sponsor: sponsors[0] || "" })} selectedIds={Array.isArray(project.sponsorIds) ? project.sponsorIds : []} selectedNames={Array.isArray(project.sponsors) ? project.sponsors : [project.sponsor].filter(Boolean)} /></section>
+            <section><span>Project team <InfoTip label="Project team" text="People who may be assigned to Epics, Features, PBIs, tasks, bugs or subtasks." /></span><MultiAssigneePicker label="Project team" members={workspaceMembers} onChange={(teamMemberIds, teamMembers) => update({ teamMemberIds, teamMembers })} selectedIds={Array.isArray(project.teamMemberIds) ? project.teamMemberIds : []} selectedNames={Array.isArray(project.teamMembers) ? project.teamMembers : []} /></section>
+          </div>
+        </div>
+      )}
+
+      {tab === "costs" && (
+        <div className="do-console-section">
+          <div className="do-section-title"><div><span className="do-project-card-kicker">PROJECT ECONOMICS</span><h4>Hours, investment and recurring cost</h4></div><InfoTip label="Project costs" text="Track planned versus actual quantities for development, implementation, support and usage-based vendors. Rate × quantity calculates cost." /></div>
+          <div className="do-cost-summary-grid">
+            <div><span>Development & support hours</span><strong>{consoleCostSummary.actualHours}h / {consoleCostSummary.plannedHours}h</strong><small>Actual / planned</small></div>
+            <div><span>Labor cost</span><strong>${consoleCostSummary.actualLabor.toLocaleString()} / ${consoleCostSummary.plannedLabor.toLocaleString()}</strong><small>Actual / planned</small></div>
+            <label><span>Initial investment <InfoTip label="Initial investment" text="One-time setup, discovery, development and implementation cost." /></span><input defaultValue={consoleCostSummary.initial || ""} onBlur={(event) => update({ initialCost: Number(event.target.value || 0) })} type="number" /></label>
+            <label><span>Monthly recurring <InfoTip label="Recurring cost" text="Expected monthly operating, support, license and usage cost." /></span><input defaultValue={consoleCostSummary.recurring || ""} onBlur={(event) => update({ recurringMonthlyCost: Number(event.target.value || 0) })} type="number" /></label>
+          </div>
+          <div className="do-console-cost-table">
+            <div className="do-console-cost-head"><span>Cost driver</span><span>Category</span><span>Cadence</span><span>Unit</span><span>Planned</span><span>Actual</span><span>Rate</span><span>Planned cost</span><span>Actual cost</span><span /></div>
+            {consoleCostRows.map((row: any, index: number) => <div className="do-console-cost-row" key={`${row.dimension}-${index}`}><input defaultValue={row.dimension} onBlur={(event) => updateConsoleCostRow(index, { dimension: event.target.value.trim() || "Cost driver" })} /><select onChange={(event) => updateConsoleCostRow(index, { category: event.target.value })} value={row.category || "development"}><option value="development">Development</option><option value="implementation">Implementation</option><option value="support">Support</option><option value="vendor">Vendor</option><option value="license">License</option><option value="infrastructure">Infrastructure</option><option value="other">Other</option></select><select onChange={(event) => updateConsoleCostRow(index, { cadence: event.target.value })} value={row.cadence || "initial"}><option value="initial">Initial</option><option value="recurring">Recurring</option><option value="usage">Usage</option></select><select onChange={(event) => updateConsoleCostRow(index, { unit: event.target.value })} value={row.unit || "hour"}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{costUnitLabels[unit]}</option>)}</select><input defaultValue={row.plannedQty || 0} onBlur={(event) => updateConsoleCostRow(index, { plannedQty: Number(event.target.value || 0) })} type="number" /><input defaultValue={row.actualQty || 0} onBlur={(event) => updateConsoleCostRow(index, { actualQty: Number(event.target.value || 0) })} type="number" /><input defaultValue={row.rate || 0} onBlur={(event) => updateConsoleCostRow(index, { rate: Number(event.target.value || 0) })} type="number" /><strong>${rowCost(row).toLocaleString()}</strong><strong>${rowCost(row, true).toLocaleString()}</strong><button aria-label={`Remove ${row.dimension}`} onClick={() => removeConsoleCostRow(index)} type="button"><X size={12} /></button></div>)}
+          </div>
+          <button className="do-add-cost-row" onClick={addConsoleCostRow} type="button"><Plus size={13} /> Add cost driver</button>
+        </div>
+      )}
+
       {tab === "risks" && (
         <div className="do-console-section">
-          <label className="do-console-health"><span>Project health</span><select aria-label="Project health" onChange={(event) => update({ health: event.target.value })} value={currentHealth}>{PROJECT_HEALTH.map((health) => <option key={health} value={health}>{projectHealthLabel(health)}</option>)}</select></label>
+          <div className="do-health-explainer"><div><span className="do-project-card-kicker">PROJECT HEALTH</span><h4>{projectHealthLabel(currentHealth)}</h4><p>Auto health checks blocked items, open risk severity and overdue project dates. Use a manual override only when the delivery lead has evidence the automatic signal is wrong.</p></div><label><span>Mode <InfoTip label="Health mode" text="Auto is recommended. A manual override stays in effect until you return this field to Auto." /></span><select aria-label="Project health mode" onChange={(event) => update({ healthOverride: event.target.value === "auto" ? null : event.target.value })} value={project.healthOverride || "auto"}><option value="auto">Auto · {projectHealthLabel(currentHealth)}</option>{PROJECT_HEALTH.map((health) => <option key={health} value={health}>Override · {projectHealthLabel(health)}</option>)}</select></label></div>
           <div className="do-console-list">
-            {risks.map((risk) => <article key={risk.id}><AlertTriangle size={13} /><span><strong>{risk.title || risk.description}</strong><small>{risk.response || risk.mitigation || risk.owner || "Response needs definition"}</small></span></article>)}
+            {risks.map((risk) => <article key={risk.id}><AlertTriangle size={13} /><span><strong>{risk.title || risk.description}</strong><small>{String(risk.severity || "medium").toUpperCase()} · {risk.response || risk.mitigation || risk.owner || "Response needs definition"}</small></span></article>)}
             {blockedTasks.map((task) => <article key={`task-${task.id}`}><Circle size={13} /><span><strong>{task.title}</strong><small>Blocked work item · {task.assignee || "Unassigned"}</small></span></article>)}
             {risks.length === 0 && blockedTasks.length === 0 && <EmptyState icon={<CheckCircle2 size={18} />} title="No open risks" text="Add risks early, while they are still manageable." />}
           </div>
-          <div className="do-project-inline-add"><input onChange={(event) => setRiskTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && riskTitle.trim()) { await onAddRisk(riskTitle.trim()); setRiskTitle(""); } }} placeholder="Add risk or assumption..." value={riskTitle} /><button disabled={!riskTitle.trim()} onClick={async () => { await onAddRisk(riskTitle.trim()); setRiskTitle(""); }} type="button"><Plus size={13} /> Add</button></div>
+          <div className="do-project-inline-add do-risk-add"><select aria-label="New risk severity" onChange={(event) => setRiskSeverity(event.target.value)} value={riskSeverity}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select><input onChange={(event) => setRiskTitle(event.target.value)} onKeyDown={async (event) => { if (event.key === "Enter" && riskTitle.trim()) { await onAddRisk(riskTitle.trim(), { severity: riskSeverity }); setRiskTitle(""); } }} placeholder="Add risk or assumption..." value={riskTitle} /><button disabled={!riskTitle.trim()} onClick={async () => { await onAddRisk(riskTitle.trim(), { severity: riskSeverity }); setRiskTitle(""); }} type="button"><Plus size={13} /> Add</button></div>
         </div>
       )}
 
@@ -748,14 +812,10 @@ export function ProjectConsolePanel({
       )}
 
       <div className="do-console-danger">
-        {archiveConfirm ? (
-          <>
-            <button onClick={() => setArchiveConfirm(false)} type="button">Cancel</button>
-            <button onClick={() => onArchiveProject(project)} type="button">Archive</button>
-          </>
-        ) : (
-          <button onClick={() => setArchiveConfirm(true)} type="button"><Archive size={13} /> Archive project</button>
-        )}
+        {String(project.status || "").toLowerCase() === "deleted" && onRestoreProject ? <button onClick={() => onRestoreProject(project)} type="button">Restore project</button> : <>
+          {archiveConfirm ? <><button onClick={() => setArchiveConfirm(false)} type="button">Cancel</button><button onClick={() => onArchiveProject(project)} type="button">Confirm archive</button></> : <button onClick={() => setArchiveConfirm(true)} type="button"><Archive size={13} /> Archive</button>}
+          {onDeleteProject && (deleteConfirm ? <><button onClick={() => setDeleteConfirm(false)} type="button">Cancel</button><button onClick={() => onDeleteProject(project)} type="button">Move to deleted</button></> : <button onClick={() => setDeleteConfirm(true)} type="button"><X size={13} /> Delete · restore for 30 days</button>)}
+        </>}
       </div>
     </section>
   );
@@ -764,6 +824,20 @@ export function ProjectConsolePanel({
 const DELIVERY_STAGES = ["define", "onboarding", "build", "deploy", "operations"] as const;
 type DeliveryStage = (typeof DELIVERY_STAGES)[number];
 type PortfolioView = "dashboard" | "overview" | "economics";
+type ProjectSortKey = "project" | "bpo_client" | "stage" | "phase_status" | "health" | "progress" | "due" | "next_step" | "hours" | "economics";
+
+const projectSortOptions: Array<{ value: ProjectSortKey; label: string }> = [
+  { value: "project", label: "Project / taxonomy" },
+  { value: "bpo_client", label: "BPO / client" },
+  { value: "stage", label: "Stage" },
+  { value: "phase_status", label: "Phase / status" },
+  { value: "health", label: "Health" },
+  { value: "progress", label: "Progress" },
+  { value: "due", label: "Due" },
+  { value: "next_step", label: "Next step" },
+  { value: "hours", label: "Hours" },
+  { value: "economics", label: "Economics" },
+];
 
 const COST_UNITS = ["hour", "ai_minute", "transaction", "hit", "mb", "fee", "license", "other"] as const;
 const costUnitLabels: Record<string, string> = {
@@ -918,19 +992,38 @@ function moneyValue(value: any) {
   return Number.isFinite(amount) ? amount : 0;
 }
 
+function inferredCostCategory(row: any) {
+  const value = String(row?.dimension || "").toLowerCase();
+  if (value.includes("support")) return "support";
+  if (value.includes("implement")) return "implementation";
+  if (value.includes("develop")) return "development";
+  if (value.includes("license")) return "license";
+  if (["ai_minute", "transaction", "hit", "mb"].includes(String(row?.unit || ""))) return "vendor";
+  return "other";
+}
+
+function inferredCostCadence(row: any) {
+  const value = String(row?.dimension || "").toLowerCase();
+  if (["ai_minute", "transaction", "hit", "mb"].includes(String(row?.unit || ""))) return "usage";
+  if (value.includes("support") || value.includes("license") || value.includes("monitor")) return "recurring";
+  return "initial";
+}
+
 function costRows(project: any) {
   const rows = Array.isArray(project?.costBreakdown) ? project.costBreakdown : [];
   if (rows.length) return rows.map((row: any) => ({
     ...row,
+    category: row.category || inferredCostCategory(row),
+    cadence: row.cadence || inferredCostCadence(row),
     unit: row.unit || "hour",
     plannedQty: Number(row.plannedQty ?? row.plannedHours ?? 0),
     actualQty: Number(row.actualQty ?? row.actualHours ?? 0),
     rate: Number(row.rate || row.unitRate || 0),
   }));
   return [
-    { dimension: "Development", unit: "hour", plannedQty: Number(project?.developmentHoursPlanned || 0), actualQty: Number(project?.developmentHoursSpent || 0), rate: Number(project?.developmentHourlyRate || 0) },
-    { dimension: "Implementation", unit: "hour", plannedQty: Number(project?.implementationHoursPlanned || 0), actualQty: Number(project?.implementationHoursSpent || 0), rate: Number(project?.implementationHourlyRate || 0) },
-    { dimension: "Support", unit: "hour", plannedQty: Number(project?.supportHoursPlanned || 0), actualQty: Number(project?.supportHoursSpent || 0), rate: Number(project?.supportHourlyRate || 0) },
+    { dimension: "Development", category: "development", cadence: "initial", unit: "hour", plannedQty: Number(project?.developmentHoursPlanned || 0), actualQty: Number(project?.developmentHoursSpent || 0), rate: Number(project?.developmentHourlyRate || 0) },
+    { dimension: "Implementation", category: "implementation", cadence: "initial", unit: "hour", plannedQty: Number(project?.implementationHoursPlanned || 0), actualQty: Number(project?.implementationHoursSpent || 0), rate: Number(project?.implementationHourlyRate || 0) },
+    { dimension: "Support", category: "support", cadence: "recurring", unit: "hour", plannedQty: Number(project?.supportHoursPlanned || 0), actualQty: Number(project?.supportHoursSpent || 0), rate: Number(project?.supportHourlyRate || 0) },
   ];
 }
 
@@ -955,13 +1048,17 @@ function projectSummary(project: any, projectTasks: any[]) {
   const actualHours = rows.reduce((sum: number, row: any) => sum + rowHours(row, true), 0);
   const plannedLabor = rows.reduce((sum: number, row: any) => sum + rowCost(row), 0);
   const actualLabor = rows.reduce((sum: number, row: any) => sum + rowCost(row, true), 0);
+  const rowInitial = rows.filter((row: any) => String(row.cadence || "initial") === "initial").reduce((sum: number, row: any) => sum + rowCost(row), 0);
+  const rowRecurring = rows.filter((row: any) => ["recurring", "usage"].includes(String(row.cadence || ""))).reduce((sum: number, row: any) => sum + rowCost(row), 0);
+  const explicitInitial = moneyValue(project.initialCost || project.costInitial || project.setupCost);
+  const explicitRecurring = moneyValue(project.recurringMonthlyCost || project.monthlyRecurringCost || project.recurringCost);
   return {
     plannedHours,
     actualHours,
     plannedLabor,
     actualLabor,
-    initial: moneyValue(project.initialCost || project.costInitial || project.setupCost),
-    recurring: moneyValue(project.recurringMonthlyCost || project.monthlyRecurringCost || project.recurringCost),
+    initial: explicitInitial || rowInitial,
+    recurring: explicitRecurring || rowRecurring,
     openItems: Number.isFinite(Number(project.openItems)) ? Number(project.openItems) : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
     progress: projectProgress(project, projectTasks),
   };
@@ -971,7 +1068,26 @@ function projectDueDate(project: any) {
   return String(project?.revisedDueDate || project?.dueDate || project?.targetDate || project?.originalDueDate || "").slice(0, 10) || "No date";
 }
 
-export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [], onClose, onUpdateProject, onArchiveProject, onOpenProject, onCreateCostTemplate, onUpdateCostTemplate, onImportPipelineProjects, pipelineImporting = false, pipelineProjectCount = 0 }: {
+function projectSortValue(project: any, key: ProjectSortKey, tasks: any[], risks: any[]) {
+  const projectTasks = tasks.filter((task) => task.projectId === project.id);
+  const summary = projectSummary(project, projectTasks);
+  if (key === "bpo_client") return `${project.bpo || ""}|${project.client || ""}`.toLowerCase();
+  if (key === "stage") return String(DELIVERY_STAGES.indexOf(deliveryStage(project))).padStart(2, "0");
+  if (key === "phase_status") return `${project.phase || ""}|${project.sourceStatus || project.status || ""}`.toLowerCase();
+  if (key === "health") return String({ blocked: 0, at_risk: 1, on_track: 2 }[projectHealth(project, projectTasks, risks.filter((risk) => risk.projectId === project.id))] ?? 3);
+  if (key === "progress") return String(1000 - summary.progress).padStart(4, "0");
+  if (key === "due") return projectDueDate(project) === "No date" ? "9999-12-31" : projectDueDate(project);
+  if (key === "next_step") return String(project.nextAction || "zzzz").toLowerCase();
+  if (key === "hours") return String(1_000_000 - summary.plannedHours).padStart(8, "0");
+  if (key === "economics") return String(1_000_000_000 - summary.initial - summary.recurring * 12).padStart(12, "0");
+  return `${projectTitle(project)}|${project.projectKey || ""}`.toLowerCase();
+}
+
+function escapeHtml(value: any) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[character] || character));
+}
+
+export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [], onClose, onUpdateProject, onArchiveProject, onDeleteProject, onRestoreProject, onOpenProject, onCreateCostTemplate, onUpdateCostTemplate, onImportPipelineProjects, pipelineImporting = false, pipelineProjectCount = 0 }: {
   projects: any[];
   tasks: any[];
   risks: any[];
@@ -988,6 +1104,8 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
   const [healthFilter, setHealthFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [view, setView] = useState<PortfolioView>("dashboard");
+  const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
+  const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showDemo, setShowDemo] = useState(false);
@@ -1000,13 +1118,22 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
   const filtered = portfolio.filter((project) => {
     const status = String(project.status || "planning").toLowerCase();
     const health = projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id));
-    const matchesFilter = filter === "all" || (filter === "active" ? !["completed", "archived", "done"].includes(status) : status === filter);
+    const matchesFilter = filter === "all" || (filter === "active" ? !["completed", "archived", "done", "deleted", "cancelled"].includes(status) : status === filter);
     const matchesStage = stageFilter === "all" || deliveryStage(project) === stageFilter;
     const matchesHealth = healthFilter === "all" || health === healthFilter;
     const haystack = `${projectTitle(project)} ${project.client || ""} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
     return matchesFilter && matchesStage && matchesHealth && haystack.includes(search.toLowerCase());
   });
-  const openProjects = portfolio.filter((project) => !["completed", "archived", "done"].includes(String(project.status || "").toLowerCase()));
+  const sortedFiltered = [...filtered].sort((left, right) => {
+    const primary = projectSortValue(left, primarySort, tasks, risks).localeCompare(projectSortValue(right, primarySort, tasks, risks));
+    if (primary) return primary;
+    if (primarySort !== secondarySort) {
+      const secondary = projectSortValue(left, secondarySort, tasks, risks).localeCompare(projectSortValue(right, secondarySort, tasks, risks));
+      if (secondary) return secondary;
+    }
+    return projectTitle(left).localeCompare(projectTitle(right));
+  });
+  const openProjects = portfolio.filter((project) => !["completed", "archived", "done", "deleted", "cancelled"].includes(String(project.status || "").toLowerCase()));
   const allAttention = openProjects.filter((project) => {
     const projectTasks = tasks.filter((task) => task.projectId === project.id);
     const projectRisks = risks.filter((risk) => risk.projectId === project.id);
@@ -1072,10 +1199,23 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
     </div>;
   };
 
+  const exportPortfolioPdf = () => {
+    const printable = window.open("", "_blank", "width=1200,height=800");
+    if (!printable) return;
+    const rows = sortedFiltered.map((project) => {
+      const projectTasks = tasks.filter((task) => task.projectId === project.id);
+      const health = projectHealth(project, projectTasks, risks.filter((risk) => risk.projectId === project.id));
+      const summary = projectSummary(project, projectTasks);
+      return `<tr><td><strong>${escapeHtml(projectTitle(project))}</strong><small>${escapeHtml(project.projectKey || "")}</small></td><td>${escapeHtml(project.bpo || "Internal")}<small>${escapeHtml(project.client || "Internal")}</small></td><td>${escapeHtml(deliveryStageLabels[deliveryStage(project)])}</td><td>${escapeHtml(project.phase || "—")}<small>${escapeHtml(project.sourceStatus || project.status || "—")}</small></td><td><span class="health ${escapeHtml(health)}">${escapeHtml(projectHealthLabel(health))}</span></td><td>${summary.progress}%</td><td>${escapeHtml(projectDueDate(project))}</td><td>${escapeHtml(project.nextAction || "Define next step")}</td><td>${summary.actualHours}h / ${summary.plannedHours}h</td><td>$${summary.initial.toLocaleString()}<small>$${summary.recurring.toLocaleString()} / month</small></td></tr>`;
+    }).join("");
+    printable.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Certo Work · ${escapeHtml(filter === "all" ? "Portfolio" : projectStatusLabel(filter))}</title><style>@page{size:A3 landscape;margin:14mm}*{box-sizing:border-box}body{margin:0;color:#25372d;font:12px Inter,Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #244f3a}h1{margin:4px 0;font-size:28px;letter-spacing:-1px}.kicker{color:#52735f;font-size:10px;font-weight:800;letter-spacing:1.4px}.meta{text-align:right;color:#718078}table{width:100%;border-collapse:collapse;table-layout:fixed}th{padding:9px 7px;border-bottom:1px solid #bbc9bf;color:#6d7b72;font-size:9px;text-align:left;text-transform:uppercase}td{padding:10px 7px;border-bottom:1px solid #e1e7e2;vertical-align:top;word-wrap:break-word}td:first-child{width:16%}td:nth-child(8){width:17%}strong,small{display:block}small{margin-top:3px;color:#859188;font-size:9px}.health{display:inline-block;border-radius:999px;background:#e6f0e9;padding:4px 7px;color:#356b4c;font-weight:700}.health.at_risk{background:#f5ecd9;color:#98651f}.health.blocked{background:#f4e1dd;color:#a24e40}footer{margin-top:15px;color:#829088;font-size:9px}</style></head><body><header><div><div class="kicker">CERTO WORK · PROJECT PORTFOLIO</div><h1>${escapeHtml(filter === "all" ? "All projects" : projectStatusLabel(filter))}</h1><div>${sortedFiltered.length} projects · sorted by ${escapeHtml(projectSortOptions.find((option) => option.value === primarySort)?.label)} then ${escapeHtml(projectSortOptions.find((option) => option.value === secondarySort)?.label)}</div></div><div class="meta">Generated ${escapeHtml(new Date().toLocaleString())}<br/>Current filtered view</div></header><table><thead><tr><th>Project</th><th>BPO / Client</th><th>Stage</th><th>Phase / Status</th><th>Health</th><th>Progress</th><th>Due</th><th>Next step</th><th>Hours</th><th>Economics</th></tr></thead><tbody>${rows}</tbody></table><footer>Health reflects the current Certo Work signals and any manual override. Use the browser print dialog to save this report as PDF.</footer><script>window.onload=()=>setTimeout(()=>window.print(),250);</script></body></html>`);
+    printable.document.close();
+  };
+
   return (
     <section aria-label="Project command center" className="do-command-center do-command-center-embedded" data-testid="project-command-center">
         <header className="do-command-head"><div><span className="do-project-card-kicker">DELIVERY CONTROL TOWER</span><h1>Project command center</h1><p>One central view for stage, health, next step, capacity and cost. Click a project to open its full console.</p></div><div className="do-command-head-actions"><button className={view === "dashboard" ? "is-active" : ""} onClick={() => setView("dashboard")} type="button"><LayoutGrid size={14} /> Dashboard</button>{onImportPipelineProjects && <button className={importedCount >= pipelineProjectCount && pipelineProjectCount > 0 ? "is-complete" : ""} disabled={pipelineImporting || (importedCount >= pipelineProjectCount && pipelineProjectCount > 0)} onClick={onImportPipelineProjects} type="button"><span>{pipelineImporting ? "Loading…" : importedCount >= pipelineProjectCount && pipelineProjectCount > 0 ? `Excel loaded · ${importedCount}/${pipelineProjectCount}` : `Load ${pipelineProjectCount || "Excel"} projects`}</span></button>}<button aria-label="Close command center" onClick={onClose} type="button"><X size={19} /></button></div></header>
-        <div className="do-command-metrics"><div><strong>{realProjects.filter((project) => !["completed", "archived", "done"].includes(String(project.status || "").toLowerCase())).length} / {realProjects.length}</strong><span>Open / total projects</span></div><div><strong>{realProjects.filter((project) => deliveryStage(project) === "operations").length}</strong><span>In operations</span></div><div className="is-risk"><strong>{realProjects.filter((project) => projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)) !== "on_track").length}</strong><span>Need attention</span></div><div><strong>{Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h</strong><span>Hours used / planned</span></div><div><strong>${Math.round(totals.recurring).toLocaleString()}</strong><span>Monthly recurring</span></div><div><strong>${Math.round(totals.initial).toLocaleString()}</strong><span>Initial investment</span></div></div>
+        <div className="do-command-metrics"><div><strong>{realProjects.filter((project) => !["completed", "archived", "done", "deleted", "cancelled"].includes(String(project.status || "").toLowerCase())).length} / {realProjects.length}</strong><span>Open / total projects</span></div><div><strong>{realProjects.filter((project) => deliveryStage(project) === "operations").length}</strong><span>In operations</span></div><div className="is-risk"><strong>{realProjects.filter((project) => projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)) !== "on_track").length}</strong><span>Need attention</span></div><div><strong>{Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h</strong><span>Hours used / planned</span></div><div><strong>${Math.round(totals.recurring).toLocaleString()}</strong><span>Monthly recurring</span></div><div><strong>${Math.round(totals.initial).toLocaleString()}</strong><span>Initial investment</span></div></div>
         <div className={`do-command-body do-command-body-${view}`}>
           {view === "dashboard" && <section className="do-portfolio-dashboard">
             <div className="do-portfolio-dashboard-grid">
@@ -1087,8 +1227,8 @@ export function ProjectCommandCenter({ projects, tasks, risks, costTemplates = [
             <div className="do-portfolio-source-note"><FileText size={14} /><span><strong>Source columns mapped:</strong> BPO, client, project, technology, original and revised due date, phase, status and point of contact.</span><span><strong>{importedCount}/{pipelineProjectCount || importedCount}</strong> Excel records imported · <strong>{realProjects.length}</strong> total projects including pre-existing records.</span></div>
           </section>}
           <section className="do-command-attention"><div className="do-command-section-head"><div><span className="do-project-card-kicker">MOST IMPORTANT NOW</span><h2>Topics requiring judgment</h2></div><AlertTriangle size={16} /></div>{attention.length ? <div>{attention.map((project) => { const health = projectHealth(project, tasks.filter((task) => task.projectId === project.id), risks.filter((risk) => risk.projectId === project.id)); return <button key={project.id} onClick={() => onOpenProject(project)} type="button"><span className={healthClass(health)}>{projectHealthLabel(health)}</span><strong>{projectTitle(project)}</strong><small>{tasks.filter((task) => task.projectId === project.id && taskWorkLane(task) === "blocked").length} blocked · {risks.filter((risk) => risk.projectId === project.id).length} risks</small><ArrowRight size={13} /></button>; })}</div> : <div className="do-command-calm"><CheckCircle2 size={17} /><span><strong>No project demands escalation.</strong><small>Review by exception; keep the team moving.</small></span></div>}</section>
-          <section className="do-command-portfolio"><div className="do-command-toolbar"><div className="do-command-toolbar-left"><div className="do-command-filters">{["active", "planning", "paused", "completed", "archived", "all"].map((value) => <button className={filter === value ? "is-active" : ""} key={value} onClick={() => setFilter(value)} type="button">{value === "all" ? "All" : value === "active" ? "Open" : projectStatusLabel(value)}</button>)}</div><div className="do-command-view-toggle"><button className={view === "overview" ? "is-active" : ""} onClick={() => setView("overview")} type="button">Portfolio</button><button className={view === "economics" ? "is-active" : ""} onClick={() => setView("economics")} type="button">Hours & costs</button></div></div><label><Search size={14} /><input aria-label="Search projects" onChange={(event) => setSearch(event.target.value)} placeholder="Search project, client or service" value={search} /></label></div><div className="do-command-subtoolbar"><label>Stage<select aria-label="Filter by delivery stage" onChange={(event) => setStageFilter(event.target.value as "all" | DeliveryStage)} value={stageFilter}><option value="all">All stages</option>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Health<select aria-label="Filter by project health" onChange={(event) => setHealthFilter(event.target.value)} value={healthFilter}><option value="all">All health</option><option value="on_track">On track</option><option value="at_risk">At risk</option><option value="blocked">Blocked</option></select></label><button className={showDemo ? "is-demo-active" : ""} onClick={() => setShowDemo((current) => !current)} type="button"><Sparkles size={12} /> {showDemo ? "Hide 3 demo projects" : "Show 3 demo projects"}</button><span className="do-command-taxonomy-note">Taxonomy: client · service · delivery stage</span></div>
-            {view === "overview" ? <div className="do-command-table"><div className="do-command-table-head"><span>Project / taxonomy</span><span>BPO / client</span><span>Stage</span><span>Phase / status</span><span>Health</span><span>Progress</span><span>Due</span><span>Next step</span><span>Hours</span><span>Economics</span><span /></div>{filtered.map((project) => { const projectTasks = tasks.filter((task) => task.projectId === project.id); const projectRisks = risks.filter((risk) => risk.projectId === project.id); const health = projectHealth(project, projectTasks, projectRisks); const summary = projectSummary(project, projectTasks); const favorite = isProjectFavorite(project); return <div className={`do-command-project-block ${project.demo ? "is-demo" : ""}`} key={project.id}><article><div className="do-command-project-name"><button aria-label={favorite ? "Remove favorite" : "Favorite project"} className={favorite ? "is-favorite" : ""} disabled={Boolean(project.demo)} onClick={() => onUpdateProject(project.id, { favorite: !favorite })} type="button"><Star fill={favorite ? "currentColor" : "none"} size={14} /></button><span><strong>{projectTitle(project)}</strong><small>{project.demo ? "DEMO · " : ""}{project.client || "Internal"} · {project.serviceLine || project.projectType || project.category || "Delivery"}</small></span></div><span className="do-command-meta-cell"><strong>{project.bpo || "Internal"}</strong><small>{project.client || "Internal"}</small></span><select aria-label={`Stage for ${projectTitle(project)}`} className="do-stage-select" disabled={Boolean(project.demo)} onChange={(event) => onUpdateProject(project.id, { deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select><span className="do-command-meta-cell"><strong>{project.phase || "—"}</strong><small>{project.sourceStatus || project.status || "—"}</small></span><span className={`do-health-pill ${healthClass(health)}`}>{projectHealthLabel(health)}</span><span className="do-progress-cell"><b>{summary.progress}%</b><i><em style={{ width: `${summary.progress}%` }} /></i></span><span className="do-command-due-cell">{projectDueDate(project)}</span><span className="do-next-step">{project.nextAction || "Define next step"}</span><span>{summary.actualHours}h / {summary.plannedHours}h</span><span>${summary.initial.toLocaleString()}<small>${summary.recurring.toLocaleString()} / mo</small></span><div className="do-command-row-actions">{project.demo ? <button onClick={() => setExpandedId(expandedId === project.id ? null : project.id)} type="button">{expandedId === project.id ? "Hide" : "Preview"}</button> : <button onClick={() => onOpenProject(project)} type="button">Open</button>}{!project.demo && (archiveConfirmId === project.id ? <><button onClick={() => setArchiveConfirmId(null)} type="button">Cancel</button><button className="is-danger" onClick={() => onArchiveProject(project)} type="button">Confirm</button></> : <button aria-label={`Archive ${projectTitle(project)}`} onClick={() => setArchiveConfirmId(project.id)} type="button"><Archive size={13} /></button>)}</div></article>{expandedId === project.id && renderEconomics(project, projectTasks)}</div>; })}{filtered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div> : <div className="do-command-economics-list">{filtered.map((project) => renderEconomics(project, tasks.filter((task) => task.projectId === project.id)))}{filtered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div>}
+          <section className="do-command-portfolio"><div className="do-command-toolbar"><div className="do-command-toolbar-left"><div className="do-command-filters">{["active", "planning", "paused", "completed", "archived", "deleted", "all"].map((value) => <button className={filter === value ? "is-active" : ""} key={value} onClick={() => setFilter(value)} type="button">{value === "all" ? "All" : value === "active" ? "Open" : projectStatusLabel(value)}</button>)}</div><div className="do-command-view-toggle"><button className={view === "overview" ? "is-active" : ""} onClick={() => setView("overview")} type="button">Portfolio</button><button className={view === "economics" ? "is-active" : ""} onClick={() => setView("economics")} type="button">Hours & costs</button></div></div><label><Search size={14} /><input aria-label="Search projects" onChange={(event) => setSearch(event.target.value)} placeholder="Search project, client or service" value={search} /></label></div><div className="do-command-subtoolbar"><label>Stage<select aria-label="Filter by delivery stage" onChange={(event) => setStageFilter(event.target.value as "all" | DeliveryStage)} value={stageFilter}><option value="all">All stages</option>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select></label><label>Health<select aria-label="Filter by project health" onChange={(event) => setHealthFilter(event.target.value)} value={healthFilter}><option value="all">All health</option><option value="on_track">On track</option><option value="at_risk">At risk</option><option value="blocked">Blocked</option></select></label><label>Sort<select aria-label="Primary project sort" onChange={(event) => setPrimarySort(event.target.value as ProjectSortKey)} value={primarySort}>{projectSortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label>Then<select aria-label="Secondary project sort" onChange={(event) => setSecondarySort(event.target.value as ProjectSortKey)} value={secondarySort}>{projectSortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button onClick={exportPortfolioPdf} type="button"><FileText size={12} /> Export PDF</button><button className={showDemo ? "is-demo-active" : ""} onClick={() => setShowDemo((current) => !current)} type="button"><Sparkles size={12} /> {showDemo ? "Hide 3 demo projects" : "Show 3 demo projects"}</button><span className="do-command-taxonomy-note">Two-level sort · current filter exports to PDF <InfoTip label="Portfolio controls" text="Filter the portfolio, choose a primary and secondary sort, then export exactly that view as a print-ready PDF." /></span></div>
+            {view === "overview" ? <div className="do-command-table"><div className="do-command-table-head"><span>Project / taxonomy <InfoTip label="Project / taxonomy" text="Editable project identity and its stable reference key or service taxonomy." /></span><span>BPO / client <InfoTip label="BPO / client" text="The delivery organization and the client receiving the outcome." /></span><span>Stage <InfoTip label="Stage" text="Define, Onboarding, Build, Deploy or Operations. Change it directly in each row." /></span><span>Phase / status <InfoTip label="Phase / status" text="The source phase and operational record status from the project data." /></span><span>Health <InfoTip label="Health" text="Calculated from blocked items, risk severity, overdue dates and manual override." /></span><span>Progress <InfoTip label="Progress" text="Completed executable work as a percentage of all executable project items." /></span><span>Due <InfoTip label="Due date" text="Revised delivery date when available; otherwise the target or original date." /></span><span>Next step <InfoTip label="Next step" text="The single concrete action that should move the project forward next." /></span><span>Hours <InfoTip label="Hours" text="Actual versus planned development, implementation and support hours." /></span><span>Economics <InfoTip label="Economics" text="Initial investment and expected monthly recurring cost." /></span><span /></div>{sortedFiltered.map((project) => { const projectTasks = tasks.filter((task) => task.projectId === project.id); const projectRisks = risks.filter((risk) => risk.projectId === project.id); const health = projectHealth(project, projectTasks, projectRisks); const summary = projectSummary(project, projectTasks); const favorite = isProjectFavorite(project); return <div className={`do-command-project-block ${project.demo ? "is-demo" : ""}`} key={project.id}><article><div className="do-command-project-name"><button aria-label={favorite ? "Remove favorite" : "Favorite project"} className={favorite ? "is-favorite" : ""} disabled={Boolean(project.demo)} onClick={() => onUpdateProject(project.id, { favorite: !favorite })} type="button"><Star fill={favorite ? "currentColor" : "none"} size={14} /></button><span><strong>{projectTitle(project)}</strong><small>{project.demo ? "DEMO · " : ""}{project.client || "Internal"} · {project.serviceLine || project.projectType || project.category || "Delivery"}</small></span></div><span className="do-command-meta-cell"><strong>{project.bpo || "Internal"}</strong><small>{project.client || "Internal"}</small></span><select aria-label={`Stage for ${projectTitle(project)}`} className="do-stage-select" disabled={Boolean(project.demo)} onChange={(event) => onUpdateProject(project.id, { deliveryStage: event.target.value })} value={deliveryStage(project)}>{DELIVERY_STAGES.map((stage) => <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>)}</select><span className="do-command-meta-cell"><strong>{project.phase || "—"}</strong><small>{project.sourceStatus || project.status || "—"}</small></span><span className={`do-health-pill ${healthClass(health)}`}>{projectHealthLabel(health)}</span><span className="do-progress-cell"><b>{summary.progress}%</b><i><em style={{ width: `${summary.progress}%` }} /></i></span><span className="do-command-due-cell">{projectDueDate(project)}</span><span className="do-next-step">{project.nextAction || "Define next step"}</span><span>{summary.actualHours}h / {summary.plannedHours}h</span><span>${summary.initial.toLocaleString()}<small>${summary.recurring.toLocaleString()} / mo</small></span><div className="do-command-row-actions">{project.demo ? <button onClick={() => setExpandedId(expandedId === project.id ? null : project.id)} type="button">{expandedId === project.id ? "Hide" : "Preview"}</button> : ["deleted", "archived"].includes(String(project.status || "").toLowerCase()) ? <button disabled={!onRestoreProject} onClick={() => onRestoreProject?.(project)} type="button">Restore</button> : <button onClick={() => onOpenProject(project)} type="button">Open</button>}{!project.demo && !["deleted", "archived"].includes(String(project.status || "").toLowerCase()) && (archiveConfirmId === project.id ? <><button onClick={() => setArchiveConfirmId(null)} type="button">Cancel</button><button className="is-danger" onClick={() => onArchiveProject(project)} type="button">Confirm</button></> : <button aria-label={`Archive ${projectTitle(project)}`} onClick={() => setArchiveConfirmId(project.id)} type="button"><Archive size={13} /></button>)}{!project.demo && !["deleted", "archived"].includes(String(project.status || "").toLowerCase()) && onDeleteProject && <button aria-label={`Delete ${projectTitle(project)}`} onClick={() => onDeleteProject(project)} type="button"><X size={13} /></button>}</div></article>{expandedId === project.id && renderEconomics(project, projectTasks)}</div>; })}{sortedFiltered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div> : <div className="do-command-economics-list">{sortedFiltered.map((project) => renderEconomics(project, tasks.filter((task) => task.projectId === project.id)))}{sortedFiltered.length === 0 && <EmptyState icon={<LayoutGrid size={20} />} title="No projects in this view" text="Change the filter or create a project through the conversation." />}</div>}
           </section>
         </div>
     </section>

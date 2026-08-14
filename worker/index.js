@@ -441,7 +441,7 @@ export function inferProjectTitleFromRequest(text = "") {
   const patterns = [
     /(?:project|proyecto)\s+(?:called|named|name[d]?|llamado|llamada|que se llame|con nombre)\s+["“'‘]?([^"”'’.;!?]+)/i,
     /(?:create|crear|build|hacer|set up|setup|start|iniciar)\s+(?:a\s+|un\s+|una\s+)?(?:new\s+|nuevo\s+|nueva\s+)?(?:project|proyecto)\s+(?:for|para|about|sobre|de)\s+["“'‘]?([^"”'’.;!?]+)/i,
-    /(?:project|proyecto)\s*[:\-]\s*["“'‘]?([^"”'’.;!?]+)/i,
+    /(?:project|proyecto)\s*[:-]\s*["“'‘]?([^"”'’.;!?]+)/i,
   ];
   for (const pattern of patterns) {
     const match = source.match(pattern);

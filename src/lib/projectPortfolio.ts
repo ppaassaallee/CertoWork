@@ -33,7 +33,7 @@ export function isProjectFavorite(project: any) {
 }
 
 export function isProjectClosed(project: any) {
-  return ["completed", "done", "closed", "archived", "cancelled"].includes(
+  return ["completed", "done", "closed", "archived", "cancelled", "deleted"].includes(
     String(project?.status || "").toLowerCase(),
   );
 }
@@ -56,18 +56,25 @@ export function projectStatusLabel(status: string | undefined) {
     completed: "Completed",
     done: "Completed",
     archived: "Archived",
+    deleted: "Deleted",
   };
   return labels[String(status || "planning").toLowerCase()] || "Planning";
 }
 
 export function projectHealth(project: any, projectTasks: any[] = [], projectRisks: any[] = []): ProjectHealth {
-  const explicit = String(project?.health || project?.healthStatus || "").toLowerCase();
+  const explicit = String(project?.healthOverride || (!project?.importedFrom ? project?.health || project?.healthStatus : "") || "").toLowerCase();
   if (explicit === "blocked") return "blocked";
   if (["at_risk", "at risk", "risk"].includes(explicit)) return "at_risk";
+  if (["on_track", "on track", "healthy"].includes(explicit)) return "on_track";
   if (projectTasks.some((task) => String(task.status || "").toLowerCase() === "blocked")) return "blocked";
-  if (projectRisks.some((risk) => !["closed", "resolved", "accepted"].includes(String(risk.status || "open").toLowerCase()))) {
+  const openRisks = projectRisks.filter((risk) => !["closed", "resolved", "accepted"].includes(String(risk.status || "open").toLowerCase()));
+  if (openRisks.some((risk) => String(risk.severity || "medium").toLowerCase() === "critical")) return "blocked";
+  if (openRisks.length) {
     return "at_risk";
   }
+  const dueValue = project?.revisedDueDate || project?.dueDate || project?.targetDate || project?.originalDueDate;
+  const dueTime = typeof dueValue === "string" ? Date.parse(dueValue) : dueValue?.toMillis?.() || (dueValue?.seconds ? dueValue.seconds * 1000 : 0);
+  if (dueTime && dueTime < Date.now() && !["completed", "done", "closed", "archived", "cancelled", "deleted"].includes(String(project?.status || "").toLowerCase())) return "at_risk";
   return "on_track";
 }
 

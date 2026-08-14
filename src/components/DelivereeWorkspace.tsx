@@ -1480,7 +1480,7 @@ export function DelivereeWorkspace() {
   };
 
   const archiveProject = async (project: any) => {
-    await updateProject(project.id, { status: "archived", archivedAt: serverTimestamp() });
+    await updateProject(project.id, { status: "archived", previousStatus: project.status || "active", archivedAt: serverTimestamp() });
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
@@ -1490,29 +1490,28 @@ export function DelivereeWorkspace() {
   };
 
   const deleteProject = async (project: any) => {
-    const confirmed = window.confirm(`Delete "${entityTitle(project)}" and its tasks, milestones, risks, and documents? This cannot be undone.`);
+    const confirmed = window.confirm(`Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`);
     if (!confirmed || !user || !workspace) return;
-    const childCollections = ["tasks", "milestones", "boldr_risks", "knowledge_items"];
-    for (const collectionName of childCollections) {
-      const snapshot = await getDocs(query(
-        collection(db, collectionName),
-        where("userId", "==", user.uid),
-        where("workspaceId", "==", workspace.id),
-        where("projectId", "==", project.id),
-      ));
-      for (let index = 0; index < snapshot.docs.length; index += 400) {
-        const batch = writeBatch(db);
-        snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
-        await batch.commit();
-      }
-    }
-    await deleteDoc(doc(db, "projects", project.id));
+    const deletedAt = new Date();
+    const purgeAfter = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+    await updateProject(project.id, { status: "deleted", previousStatus: project.status || "active", deletedAt, purgeAfter, archivedAt: null });
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
+      goCenterView("portfolio");
     }
     if (activeProject?.id === project.id) navigate("/");
-    setNotice(`${entityTitle(project)} deleted.`);
+    setNotice(`${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`);
+  };
+
+  const restoreProject = async (project: any) => {
+    const purgeDate = project.purgeAfter?.toDate ? project.purgeAfter.toDate() : project.purgeAfter ? new Date(project.purgeAfter) : null;
+    if (purgeDate && purgeDate.getTime() < Date.now()) {
+      setNotice("The 30-day restoration period has expired.");
+      return;
+    }
+    await updateProject(project.id, { status: project.previousStatus || "active", deletedAt: null, purgeAfter: null, archivedAt: null, restoredAt: serverTimestamp() });
+    setNotice(`${entityTitle(project)} restored.`);
   };
 
   const saveDigestRequest = async (kind: "email_reminder" | "daily_digest" | "weekly_summary") => {
@@ -1778,7 +1777,7 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const addProjectRisk = async (projectId: string, title: string) => {
+  const addProjectRisk = async (projectId: string, title: string, patch: Record<string, unknown> = {}) => {
     if (!user || !workspace) return;
     await addDoc(collection(db, "boldr_risks"), {
       userId: user.uid,
@@ -1786,8 +1785,9 @@ export function DelivereeWorkspace() {
       projectId,
       title,
       type: "project_risk",
-      severity: "medium",
+      severity: patch.severity || "medium",
       status: "open",
+      ...patch,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2107,6 +2107,8 @@ export function DelivereeWorkspace() {
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
             onArchiveProject={archiveProject}
+            onDeleteProject={deleteProject}
+            onRestoreProject={restoreProject}
             onClose={() => goCenterView("conversation")}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
@@ -2126,10 +2128,11 @@ export function DelivereeWorkspace() {
               conversationId={conversationId}
               documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
               milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
-              onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}
-              onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
+              onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
               onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
               onArchiveProject={archiveProject}
+              onDeleteProject={deleteProject}
+              onRestoreProject={restoreProject}
               onAsk={(prompt) => { setComposer(prompt); goCenterView("conversation"); }}
               onUpdateProject={updateProject}
               onUpdateTask={updateProjectTask}
@@ -2170,10 +2173,11 @@ export function DelivereeWorkspace() {
                 conversationId={conversationId}
                 documents={knowledgeItems.filter((item) => item.projectId === consoleProject.id && item.status !== "archived")}
                 milestones={milestones.filter((item) => item.projectId === consoleProject.id)}
-                onAddMilestone={(title) => addProjectMilestone(consoleProject.id, title)}
-                onAddRisk={(title) => addProjectRisk(consoleProject.id, title)}
+                onAddRisk={(title, patch) => addProjectRisk(consoleProject.id, title, patch)}
                 onAddTask={(title, status, patch) => addProjectTask(consoleProject.id, title, status, patch)}
                 onArchiveProject={archiveProject}
+                onDeleteProject={deleteProject}
+                onRestoreProject={restoreProject}
                 onAsk={setComposer}
                 onUpdateProject={updateProject}
                 onUpdateTask={updateProjectTask}

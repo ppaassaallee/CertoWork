@@ -31,6 +31,10 @@ test("does not hide a just-created project behind insertion order", () => {
 test("derives project health and Jira-like work lanes from real records", () => {
   assert.equal(projectHealth({}, [{ status: "blocked" }], []), "blocked");
   assert.equal(projectHealth({}, [], [{ status: "open" }]), "at_risk");
+  assert.equal(projectHealth({}, [], [{ status: "open", severity: "critical" }]), "blocked");
+  assert.equal(projectHealth({ status: "active", dueDate: "2020-01-01" }, [], []), "at_risk");
+  assert.equal(projectHealth({ healthOverride: "on_track", dueDate: "2020-01-01" }, [{ status: "blocked" }], []), "on_track");
+  assert.equal(projectHealth({ importedFrom: "pipeline", health: "on_track" }, [{ status: "blocked" }], []), "blocked");
   assert.equal(taskWorkLane({ status: "in_progress" }), "in_progress");
   assert.equal(taskWorkLane({ status: "open" }), "backlog");
 });
