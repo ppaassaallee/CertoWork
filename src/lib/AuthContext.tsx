@@ -2,14 +2,18 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import {
   User,
   browserLocalPersistence,
+  createUserWithEmailAndPassword,
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendEmailVerification,
   sendPasswordResetEmail,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updateProfile,
 } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -40,6 +44,9 @@ interface AuthContextType {
   workspaceError: string;
   authError: string;
   signIn: (method?: 'popup' | 'redirect') => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  requestBetaAccess: (name: string, email: string, password: string) => Promise<void>;
+  resetPasswordForEmail: (email: string) => Promise<void>;
   logOut: () => Promise<void>;
   reloadWorkspaces: () => Promise<void>;
   sendPasswordReset: () => Promise<void>;
@@ -55,6 +62,9 @@ const AuthContext = createContext<AuthContextType>({
   workspaceError: '',
   authError: '',
   signIn: async () => {},
+  signInWithEmail: async () => {},
+  requestBetaAccess: async () => {},
+  resetPasswordForEmail: async () => {},
   logOut: async () => {},
   reloadWorkspaces: async () => {},
   sendPasswordReset: async () => {},
@@ -216,6 +226,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!lookupSucceeded) {
           throw new Error('Workspace lookups did not complete');
         }
+        const isEmailPasswordAccount = u.providerData.some((provider) => provider.providerId === "password");
+        if (isEmailPasswordAccount) {
+          const requestSnap = await withTimeout(getDoc(doc(db, 'access_requests', u.uid)), 5_000, 'Access request lookup');
+          const requestStatus = requestSnap.exists() ? String(requestSnap.data().status || 'pending') : 'pending';
+          if (requestStatus !== 'approved') {
+            setWorkspaceState(null);
+            setWorkspaces([]);
+            setWorkspaceError("Your Certo Work access request is waiting for workspace approval.");
+            return;
+          }
+        }
         const newRef = doc(collection(db, 'workspaces'));
         const newWs = {
           name: "Personal Focus",
@@ -348,6 +369,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    setAuthError('');
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (reason) {
+      const message = authErrorMessage(reason);
+      setAuthError(message);
+      throw new Error(message);
+    }
+  };
+
+  const requestBetaAccess = async (name: string, email: string, password: string) => {
+    setAuthError('');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      const credential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      if (cleanName) {
+        await updateProfile(credential.user, { displayName: cleanName });
+      }
+      await setDoc(doc(db, 'access_requests', credential.user.uid), {
+        id: credential.user.uid,
+        userId: credential.user.uid,
+        email: cleanEmail,
+        emailLower: cleanEmail,
+        displayName: cleanName,
+        status: 'pending',
+        provider: 'password',
+        requestedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      await sendEmailVerification(credential.user).catch(() => undefined);
+      await signOut(auth);
+    } catch (reason) {
+      const message = authErrorMessage(reason);
+      setAuthError(message);
+      throw new Error(message);
+    }
+  };
+
+  const resetPasswordForEmail = async (email: string) => {
+    setAuthError('');
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (reason) {
+      const message = authErrorMessage(reason);
+      setAuthError(message);
+      throw new Error(message);
+    }
+  };
+
   const logOut = async () => {
     await signOut(auth);
   };
@@ -358,7 +432,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, authError, signIn, logOut, reloadWorkspaces, sendPasswordReset }}>
+    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, authError, signIn, signInWithEmail, requestBetaAccess, resetPasswordForEmail, logOut, reloadWorkspaces, sendPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

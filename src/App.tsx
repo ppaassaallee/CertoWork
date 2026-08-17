@@ -6,11 +6,15 @@ import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 function SignIn() {
-  const { signIn, authError } = useAuth();
+  const { signIn, signInWithEmail, requestBetaAccess, resetPasswordForEmail, authError } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [mode, setMode] = useState<"choice" | "signin" | "access" | "reset">("choice");
+  const [name, setName] = useState("");
   const [accessEmail, setAccessEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [accessRequested, setAccessRequested] = useState(false);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
   const handleSignIn = async (method: 'popup' | 'redirect' = 'popup') => {
@@ -28,6 +32,58 @@ function SignIn() {
     }
   };
 
+  const handleEmailSignIn = async () => {
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      await signInWithEmail(accessEmail, password);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Sign-in could not be completed.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBetaAccess = async () => {
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      await requestBetaAccess(name, accessEmail, password);
+      setAccessRequested(true);
+      setNotice("Request received. Check your email to verify your address while a workspace owner approves access.");
+      setPassword("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Access request could not be created.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      await resetPasswordForEmail(accessEmail);
+      setNotice("If this email has a Certo Work account, a reset link has been sent.");
+    } catch {
+      // Keep the response account-enumeration safe.
+      setNotice("If this email has a Certo Work account, a reset link has been sent.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetPanel = (nextMode: typeof mode) => {
+    setMode(nextMode);
+    setError("");
+    setNotice("");
+    setAccessRequested(false);
+    setPassword("");
+  };
+
   return (
     <main className="do-signin">
       <div className="do-signin-bg" aria-hidden="true" />
@@ -35,8 +91,8 @@ function SignIn() {
       <header>
         <div className="do-brand"><span className="do-logo">C</span><span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span></div>
         <nav aria-label="Certo Work access">
-          <button disabled={submitting} onClick={() => handleSignIn('popup')} type="button">Login</button>
-          <a href="#request-access">Request access</a>
+          <button disabled={submitting} onClick={() => resetPanel("signin")} type="button">Sign in</button>
+          <button disabled={submitting} onClick={() => resetPanel("access")} type="button">Beta access</button>
         </nav>
       </header>
       <div className="do-signin-hero">
@@ -45,18 +101,18 @@ function SignIn() {
           <h1 id="signin-title">Run the work.<br />Not the noise.</h1>
           <p>Certo Work gives teams one calm place to capture decisions, plan delivery, track costs, and move projects forward—with approval before anything changes.</p>
           <div className="do-signin-actions">
-            <button className="do-signin-button" disabled={submitting} onClick={() => handleSignIn('popup')} type="button">
-              {submitting ? <Loader2 className="spin" size={17} /> : <LogIn size={17} />}
-              {redirecting ? "Opening secure sign-in…" : "Login with Google"}
+            <button className="do-signin-button" disabled={submitting} onClick={() => resetPanel("signin")} type="button">
+              <LogIn size={17} />
+              Sign in
               <ArrowRight size={16} />
             </button>
             <button
               className="do-signin-secondary"
               disabled={submitting}
-              onClick={() => handleSignIn('redirect')}
+              onClick={() => resetPanel("access")}
               type="button"
             >
-              Full-page login
+              Request beta access
             </button>
           </div>
           {(authError || error) && <p className="do-signin-error" role="alert">{authError || error}</p>}
@@ -69,9 +125,72 @@ function SignIn() {
 
         <section className="do-access-card" id="request-access" aria-labelledby="access-title">
           <span><ShieldCheck size={14} /> Private beta</span>
-          <h2 id="access-title">Request access</h2>
-          <p>Sign up requests stay pending until a workspace owner approves you.</p>
-          {accessRequested ? (
+          {mode === "choice" && (
+            <>
+              <h2 id="access-title">Private workspace</h2>
+              <p>Sign in if you already have access, or request beta access with any email provider.</p>
+              <div className="do-access-choice">
+                <button className="do-signin-button" onClick={() => resetPanel("signin")} type="button">
+                  <LogIn size={15} /> Sign in
+                </button>
+                <button className="do-signin-secondary" onClick={() => resetPanel("access")} type="button">
+                  <Mail size={15} /> Request beta
+                </button>
+              </div>
+            </>
+          )}
+          {mode === "signin" && (
+            <>
+              <h2 id="access-title">Sign in</h2>
+              <p>Use your email and password, or continue with Google if that is how your account was created.</p>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleEmailSignIn();
+                }}
+              >
+                <label>
+                  Email
+                  <input
+                    autoComplete="email"
+                    onChange={(event) => setAccessEmail(event.target.value)}
+                    placeholder="name@company.com"
+                    required
+                    type="email"
+                    value={accessEmail}
+                  />
+                </label>
+                <label>
+                  Password
+                  <input
+                    autoComplete="current-password"
+                    minLength={6}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="••••••••"
+                    required
+                    type="password"
+                    value={password}
+                  />
+                </label>
+                <button disabled={submitting} type="submit">
+                  {submitting ? <Loader2 className="spin" size={15} /> : <LogIn size={15} />}
+                  Sign in
+                </button>
+              </form>
+              <button className="do-signin-alternate" disabled={submitting} onClick={() => handleSignIn("popup")} type="button">
+                {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
+              </button>
+              <button className="do-signin-alternate" disabled={submitting} onClick={() => resetPanel("reset")} type="button">
+                Forgot password?
+              </button>
+              <small className="do-access-note">Need access first? <button onClick={() => resetPanel("access")} type="button">Request beta access</button></small>
+            </>
+          )}
+          {mode === "access" && (
+            <>
+              <h2 id="access-title">Request beta access</h2>
+              <p>Create your login with any email. Your account stays pending until a workspace owner approves or invites you.</p>
+              {accessRequested ? (
             <div className="do-access-pending" role="status">
               <Sparkles size={16} />
               <strong>Request received</strong>
@@ -81,9 +200,20 @@ function SignIn() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                setAccessRequested(true);
+                void handleBetaAccess();
               }}
             >
+              <label>
+                Name
+                <input
+                  autoComplete="name"
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Your name"
+                  required
+                  type="text"
+                  value={name}
+                />
+              </label>
               <label>
                 Work email
                 <input
@@ -95,10 +225,57 @@ function SignIn() {
                   value={accessEmail}
                 />
               </label>
-              <button type="submit"><Mail size={15} /> Sign up</button>
+              <label>
+                Password
+                <input
+                  autoComplete="new-password"
+                  minLength={6}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="At least 6 characters"
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+              <button disabled={submitting} type="submit">
+                {submitting ? <Loader2 className="spin" size={15} /> : <Mail size={15} />}
+                Request access
+              </button>
             </form>
           )}
-          <small className="do-access-note">Already invited? Use Google login with the same email.</small>
+              <small className="do-access-note">Already approved? <button onClick={() => resetPanel("signin")} type="button">Sign in instead</button></small>
+            </>
+          )}
+          {mode === "reset" && (
+            <>
+              <h2 id="access-title">Reset password</h2>
+              <p>Enter the email you used for Certo Work. We’ll send a secure reset link.</p>
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleResetPassword();
+                }}
+              >
+                <label>
+                  Email
+                  <input
+                    autoComplete="email"
+                    onChange={(event) => setAccessEmail(event.target.value)}
+                    placeholder="name@company.com"
+                    required
+                    type="email"
+                    value={accessEmail}
+                  />
+                </label>
+                <button disabled={submitting} type="submit">
+                  {submitting ? <Loader2 className="spin" size={15} /> : <Mail size={15} />}
+                  Send reset link
+                </button>
+              </form>
+              <small className="do-access-note"><button onClick={() => resetPanel("signin")} type="button">Back to sign in</button></small>
+            </>
+          )}
+          {notice && <p className="do-signin-notice" role="status">{notice}</p>}
         </section>
       </div>
       <footer>

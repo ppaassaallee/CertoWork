@@ -19,3 +19,9 @@ test("explains delayed popup completion instead of leaving a spinner", () => {
 test("reports an unauthorized deployment domain precisely", () => {
   assert.match(authErrorMessage({ code: "auth/unauthorized-domain" }), /not authorized/i);
 });
+
+test("gives useful email and password account guidance", () => {
+  assert.match(authErrorMessage({ code: "auth/email-already-in-use" }), /already has an account/i);
+  assert.match(authErrorMessage({ code: "auth/weak-password" }), /stronger password/i);
+  assert.match(authErrorMessage({ code: "auth/invalid-credential" }), /email or password/i);
+});

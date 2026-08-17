@@ -27,11 +27,23 @@ export function authErrorMessage(reason: unknown) {
     case "operation-not-supported-in-this-environment":
       return "This browser is blocking the secure session. Allow site storage or use a regular browser window.";
     case "network-request-failed":
-      return "Google could not be reached. Check your connection and try again.";
+      return "The sign-in service could not be reached. Check your connection and try again.";
     case "account-exists-with-different-credential":
       return "This email already uses a different sign-in method.";
+    case "email-already-in-use":
+      return "This email already has an account. Use Sign in or reset your password.";
+    case "invalid-email":
+      return "Enter a valid email address.";
+    case "invalid-credential":
+    case "wrong-password":
+    case "user-not-found":
+      return "The email or password is not correct.";
+    case "weak-password":
+      return "Use a stronger password with at least 6 characters.";
+    case "too-many-requests":
+      return "Too many attempts. Wait a moment, then try again or reset your password.";
     default:
-      return "Google sign-in could not be completed. Try again or use full-page sign-in.";
+      return "Sign-in could not be completed. Try again or reset your password.";
   }
 }
 
