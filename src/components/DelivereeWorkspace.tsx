@@ -101,6 +101,11 @@ import type { NotebookEntry } from "../lib/notebookContext";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
 import { sendBoldiChat } from "../lib/conversationClient";
 import {
+  assistantFallbackReply,
+  conversationTitleForMessage,
+  streamConversationReply,
+} from "../lib/conversationSession";
+import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
   canCreateWorkspace,
@@ -145,6 +150,7 @@ type Panel =
   | "skills"
   | "digest"
   | "workspace"
+  | "settings"
   | null;
 type CenterView =
   | "conversation"
@@ -152,8 +158,7 @@ type CenterView =
   | "notes"
   | "strategy"
   | "portfolio"
-  | "project"
-  | "settings";
+  | "project";
 
 function timestamp(value: any) {
   if (value?.seconds)
@@ -557,7 +562,7 @@ export function DelivereeWorkspace() {
   const [centerHistory, setCenterHistory] = useState<{
     items: CenterView[];
     index: number;
-  }>({ items: ["conversation"], index: 0 });
+  }>({ items: ["items"], index: 0 });
   const centerView = centerHistory.items[centerHistory.index];
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
@@ -773,9 +778,10 @@ export function DelivereeWorkspace() {
       setPanel(lens.section === "portfolio" ? "projects" : "today");
     if (lens.kind === "settings") {
       setPanel(null);
-      goCenterView("settings");
+      goCenterView("items");
+      navigate("/", { replace: true });
     }
-  }, [lens.kind, lens.kind === "work" ? lens.section : null]);
+  }, [lens.kind, lens.kind === "work" ? lens.section : null, navigate]);
 
   useEffect(() => {
     const Recognition =
@@ -1153,14 +1159,6 @@ export function DelivereeWorkspace() {
     else navigate("/");
   };
 
-  const streamReply = async (text: string) => {
-    const size = Math.max(8, Math.ceil(text.length / 70));
-    for (let index = 0; index < text.length; index += size) {
-      setStreamed(text.slice(0, index + size));
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
-    }
-  };
-
   const sendMessage = async (explicit?: string) => {
     const text = String(explicit || input).trim();
     if (!text || !user || !workspace || submitting) return;
@@ -1244,7 +1242,7 @@ export function DelivereeWorkspace() {
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
-      await streamReply(reply);
+      await streamConversationReply(reply, setStreamed);
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -1261,16 +1259,17 @@ export function DelivereeWorkspace() {
       });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
-          title:
-            contextualMessages.length === 0
-              ? text.slice(0, 64)
-              : currentConversation?.title || text.slice(0, 64),
+          title: conversationTitleForMessage(
+            text,
+            contextualMessages.length,
+            currentConversation?.title,
+          ),
           updatedAt: serverTimestamp(),
         });
       }
     } catch (error) {
-      const reply = `I couldn't complete that request: ${error instanceof Error ? error.message : "the service is unavailable"}\n\nNothing was changed.`;
-      await streamReply(reply);
+      const reply = assistantFallbackReply(error);
+      await streamConversationReply(reply, setStreamed);
       setMessages((current) => [
         ...current.filter((message) => message.id !== localId),
         { id: localId, role: "user", content: text, createdAt: Date.now() },
@@ -2969,7 +2968,7 @@ export function DelivereeWorkspace() {
               </button>
               <button
                 onClick={() => {
-                  navigate("/settings");
+                  setPanel("settings");
                   setWorkspaceOpen(false);
                 }}
                 type="button"
@@ -3171,18 +3170,6 @@ export function DelivereeWorkspace() {
               type="button"
             >
               <LayoutGrid size={13} /> Portfolio
-            </button>
-            <button
-              aria-selected={centerView === "settings"}
-              className={centerView === "settings" ? "is-active" : ""}
-              onClick={() => {
-                goCenterView("settings");
-                setPanel(null);
-              }}
-              role="tab"
-              type="button"
-            >
-              <Settings size={13} /> Settings
             </button>
           </div>
         </section>
@@ -3561,15 +3548,6 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
-        ) : centerView === "settings" ? (
-          <ControlledListsSettings
-            categories={categories}
-            onBack={() => goCenterView("conversation")}
-            onCreateOption={createControlledOption}
-            onRenameOption={renameControlledOption}
-            projects={projects}
-            tasks={tasks}
-          />
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
             onArchiveProject={archiveProject}
@@ -3691,6 +3669,8 @@ export function DelivereeWorkspace() {
                         ? "Digest & reminders"
                         : panel === "workspace"
                           ? "Workspace & team"
+                          : panel === "settings"
+                            ? "Settings"
                           : "Pendientes"}
             </h2>
           </div>
@@ -4044,6 +4024,30 @@ export function DelivereeWorkspace() {
                 </span>
               </div>
             </>
+          )}
+
+          {panel === "settings" && (
+            <div className="do-panel-settings">
+              <section className="do-settings-appearance">
+                <div>
+                  <span>Appearance</span>
+                  <h2>Text size</h2>
+                  <p>
+                    Choose how dense or readable Certo Work feels on this
+                    device.
+                  </p>
+                </div>
+                <TextSizeControl />
+              </section>
+              <ControlledListsSettings
+                categories={categories}
+                onBack={() => setPanel(null)}
+                onCreateOption={createControlledOption}
+                onRenameOption={renameControlledOption}
+                projects={projects}
+                tasks={tasks}
+              />
+            </div>
           )}
 
           {panel === "workspace" && (

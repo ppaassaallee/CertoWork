@@ -121,13 +121,14 @@ export function ControlledListsSettings({
         </button>
         <div>
           <span>
-            <Settings2 size={14} /> SETTINGS
+            <Settings2 size={14} /> USER SETTINGS
           </span>
           <h1>Controlled lists</h1>
           <p>
             Maintain the dropdown values that classify projects, backlog items
-            and portfolio reporting. Values cannot be deleted from here; rename
-            them to preserve history.
+            and portfolio reporting. Editable master data can be added or
+            renamed here. Values are not deleted from here so historical records
+            remain readable.
           </p>
         </div>
       </header>
@@ -201,9 +202,10 @@ export function ControlledListsSettings({
             <Lock size={13} /> Locked workflow lists
           </span>
           <p>
-            These lists drive automation, health logic, schedule filters and
-            reporting. They are shown here so the team knows the standards, but
-            they are intentionally not deletable or free-text editable.
+            These are still locked at runtime because they drive automation,
+            project health, dashboards, filters and reports. They can be changed
+            safely only through a versioned release/migration; for flexible
+            classification use Tags or Delivery/Client Entity.
           </p>
         </div>
         <div>
