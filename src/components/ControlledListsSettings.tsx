@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Lock, Plus, Settings2 } from "lucide-react";
 import {
   controlledListLabels,
@@ -45,26 +45,37 @@ function EditableOptionRow({
 }) {
   const [draft, setDraft] = useState(option.name);
   const isMaster = Boolean(option.id);
+  const cleaned = draft.trim();
+  const changed = cleaned && cleaned !== option.name;
+  const commitRename = () => {
+    if (changed) onRename(group, option, cleaned);
+    else setDraft(option.name);
+  };
+  useEffect(() => {
+    setDraft(option.name);
+  }, [option.name]);
   return (
     <div className="do-controlled-option">
       <input
         aria-label={`${controlledListLabels[group]} option`}
         onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
-        onBlur={() => {
-          const cleaned = draft.trim();
-          if (cleaned && cleaned !== option.name)
-            onRename(group, option, cleaned);
-          else setDraft(option.name);
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commitRename();
+          if (event.key === "Escape") setDraft(option.name);
         }}
+        onBlur={() => !changed && setDraft(option.name)}
         title={isMaster ? "Rename this list value" : "Rename this discovered value and add it to the master list"}
         value={draft}
       />
-      {isMaster ? (
+      {changed ? (
+        <button className="is-primary" onMouseDown={(event) => event.preventDefault()} onClick={commitRename} type="button">
+          Save
+        </button>
+      ) : isMaster ? (
         <span>Master</span>
       ) : (
         <button onClick={() => onPromote(group, option.name)} type="button">
-          Add to list
+          Add to master
         </button>
       )}
     </div>

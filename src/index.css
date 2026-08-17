@@ -1198,6 +1198,7 @@ button { color: inherit; }
 .do-controlled-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; margin-bottom: 12px; }
 .do-controlled-add input, .do-controlled-option input { min-width: 0; border: 1px solid #dce6df; border-radius: 10px; background: #fbfdfb; color: #26382e; padding: 9px 10px; font-size: calc(10px * var(--cw-text-scale)); }
 .do-controlled-add button, .do-controlled-option button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #dce6df; border-radius: 10px; background: #eef7f1; color: #27533c; padding: 9px 10px; font-size: calc(9px * var(--cw-text-scale)); font-weight: 850; }
+.do-controlled-option button.is-primary { border-color: #214b39; background: #214b39; color: #fff; }
 .do-controlled-options { display: grid; gap: 7px; }
 .do-controlled-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; }
 .do-controlled-option span { color: #94a09a; font-size: calc(8px * var(--cw-text-scale)); white-space: nowrap; }
