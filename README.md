@@ -2,9 +2,36 @@
 
 Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Chief of Staff layer.
 
-## Codex Sites deployment
+## Production hosting
 
-Production is hosted by Codex Sites. The edge adapter in `worker/index.js`
+`certo.work` should be served from an owned production host, not from ChatGPT
+Sites. The repo includes `wrangler.jsonc` so the same Vite application and
+Cloudflare-compatible Worker API can run on Cloudflare Workers Static Assets.
+
+Use ChatGPT Sites only as a preview/demo environment. If `certo.work` points to
+ChatGPT Sites, visitors will see the “Continue with ChatGPT” access gate before
+the app. For a real product URL, deploy to Cloudflare and point DNS there.
+
+Cloudflare production deploy:
+
+1. Configure secrets:
+   - `npx wrangler secret put OPENAI_API_KEY`
+2. Build and deploy:
+   - `npm run deploy:cloudflare`
+3. Add custom domains in Cloudflare Workers:
+   - `certo.work`
+   - `www.certo.work`
+4. Add these domains to Firebase Authentication authorized domains:
+   - `certo.work`
+   - `www.certo.work`
+   - the generated `*.workers.dev` preview hostname, if used
+
+See [docs/REAL_PRODUCTION_HOSTING.md](docs/REAL_PRODUCTION_HOSTING.md) for the
+full cutover plan.
+
+## ChatGPT Sites preview
+
+The preview environment can be hosted by Codex Sites. The edge adapter in `worker/index.js`
 serves the Vite application, preserves client-side routes, and keeps
 `/api/boldi/chat` compatible. Google AI Studio is disabled in this runtime;
 OpenAI is the only AI provider, with deterministic offline-safe behavior when
