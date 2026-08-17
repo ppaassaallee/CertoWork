@@ -106,6 +106,7 @@ import {
   conversationTitleForMessage,
   streamConversationReply,
 } from "../lib/conversationSession";
+import { sendWorkspaceInviteEmail } from "../lib/emailClient";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -2285,7 +2286,7 @@ export function DelivereeWorkspace() {
       },
       { merge: true },
     );
-    await addDoc(collection(db, "agent_invites"), {
+    const inviteRef = await addDoc(collection(db, "agent_invites"), {
       userId: user.uid,
       workspaceId: workspace.id,
       email,
@@ -2298,10 +2299,43 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    let emailSent = false;
+    let emailWarning = "";
+    try {
+      const token = await user.getIdToken();
+      const result = await sendWorkspaceInviteEmail({
+        token,
+        userId: user.uid,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name || "Certo Work",
+        toEmail: email,
+        role: inviteRole,
+        inviterName: user.displayName,
+        inviterEmail: user.email,
+      });
+      emailSent = Boolean(result.sent);
+      if (!emailSent) emailWarning = result.error || "Brevo is not configured yet.";
+      await updateDoc(doc(db, "agent_invites", inviteRef.id), {
+        emailDeliveryStatus: emailSent ? "sent" : "not_sent",
+        emailDeliveryError: emailSent ? "" : emailWarning,
+        emailSentAt: emailSent ? serverTimestamp() : null,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      emailWarning =
+        error instanceof Error ? error.message : "Invite email could not be sent.";
+      await updateDoc(doc(db, "agent_invites", inviteRef.id), {
+        emailDeliveryStatus: "failed",
+        emailDeliveryError: emailWarning,
+        updatedAt: serverTimestamp(),
+      });
+    }
     setInviteEmail("");
     await reloadWorkspaces();
     setNotice(
-      `Invite saved for ${email}. No email was sent yet; copy the login link or message from Pending invites and send it manually.`,
+      emailSent
+        ? `Invite sent to ${email}. They should sign in with that exact email.`
+        : `Invite saved for ${email}, but no email was sent yet: ${emailWarning}. Copy the message from Pending invites and send it manually.`,
     );
   };
 
@@ -4641,6 +4675,9 @@ export function DelivereeWorkspace() {
                       <div className="do-pending-invite-row" key={invite.id}>
                         <small>
                           {invite.email} · {roleLabel(invite.role)}
+                          {invite.emailDeliveryStatus
+                            ? ` · email ${String(invite.emailDeliveryStatus).replace(/_/g, " ")}`
+                            : ""}
                         </small>
                         <button
                           onClick={() => copyInviteMessage(invite)}

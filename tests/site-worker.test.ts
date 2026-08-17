@@ -72,6 +72,25 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
   assert.equal(body.gemini.configured, false);
   assert.match(body.gemini.description, /not used/i);
   assert.equal(body.activeAIProvider.configured, false);
+  assert.equal(body.email.configured, false);
+});
+
+test("workspace invite email route requires authentication", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/email/invite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        workspaceName: "Certo Work",
+        toEmail: "team@example.com",
+        role: "member",
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
 });
 
 test("Sites worker exposes the signed-in platform identity for the migration path", async () => {

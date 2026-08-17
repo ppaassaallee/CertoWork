@@ -13,6 +13,7 @@ const FIREBASE_AUTH_ORIGIN = "https://gen-lang-client-0277783597.firebaseapp.com
 const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
 const MAX_MESSAGES = 40;
 
@@ -696,6 +697,7 @@ async function chat(request, env) {
 
 function capabilities(env) {
   const openAIConfigured = Boolean(env.OPENAI_API_KEY);
+  const brevoConfigured = Boolean(env.BREVO_API_KEY);
   return {
     openai: {
       configured: openAIConfigured,
@@ -715,6 +717,13 @@ function capabilities(env) {
       configured: true,
       description: "Existing Firebase authentication, data, routes, and IDs are preserved.",
     },
+    email: {
+      configured: brevoConfigured,
+      provider: brevoConfigured ? "brevo" : "none",
+      description: brevoConfigured
+        ? `Transactional email is active through Brevo as ${env.CERTO_EMAIL_FROM || "the configured sender"}.`
+        : "Add BREVO_API_KEY and a verified sender to send workspace invitations and notifications.",
+    },
     hubspot: {
       configured: false,
       description: "No live HubSpot connection is configured.",
@@ -724,6 +733,121 @@ function capabilities(env) {
       description: "No live Google Drive connection is configured.",
     },
   };
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function inviteEmailContent(body, origin) {
+  const inviteUrl = `${origin}/`;
+  const workspaceName = String(body.workspaceName || "Certo Work").trim();
+  const toEmail = String(body.toEmail || "").trim().toLowerCase();
+  const role = String(body.role || "member").trim();
+  const inviterName = String(body.inviterName || body.inviterEmail || "Your workspace admin").trim();
+  const subject = `${inviterName} invited you to ${workspaceName} in Certo Work`;
+  const textContent = [
+    `You have been invited to ${workspaceName} in Certo Work.`,
+    "",
+    `Open ${inviteUrl}`,
+    `Use this exact email: ${toEmail}`,
+    `Role: ${role}`,
+    "",
+    "If you do not have an account yet, choose Request beta access and create your password with that same email.",
+    "If you already have an account, choose Sign in.",
+    "",
+    "— Certo Work",
+  ].join("\n");
+  const htmlContent = `<!doctype html>
+<html>
+  <body style="margin:0;background:#f7faf7;font-family:Inter,Arial,sans-serif;color:#23352b;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="border:1px solid #dfe8e1;border-radius:22px;background:#ffffff;padding:28px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#587061;">Certo Work</div>
+        <h1 style="margin:18px 0 10px;font-size:28px;line-height:1.05;letter-spacing:-.04em;color:#143d2e;">You’ve been invited to ${escapeHtml(workspaceName)}.</h1>
+        <p style="margin:0 0 18px;color:#5d6d63;line-height:1.6;">${escapeHtml(inviterName)} invited you to collaborate in Certo Work.</p>
+        <div style="border-radius:16px;background:#eef7f1;padding:14px 16px;margin:18px 0;color:#244b39;">
+          <strong>Use this exact email:</strong><br />
+          <span>${escapeHtml(toEmail)}</span><br />
+          <small>Role: ${escapeHtml(role)}</small>
+        </div>
+        <a href="${inviteUrl}" style="display:inline-block;border-radius:999px;background:#214b39;color:#ffffff;padding:13px 18px;text-decoration:none;font-weight:800;">Open Certo Work</a>
+        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">If you do not have an account yet, choose <strong>Request beta access</strong> and create your password with the same email. If you already have an account, choose <strong>Sign in</strong>.</p>
+      </div>
+    </div>
+  </body>
+</html>`;
+  return { subject, textContent, htmlContent, inviteUrl };
+}
+
+async function sendBrevoTransactionalEmail(env, message) {
+  if (!env.BREVO_API_KEY) {
+    return { sent: false, configured: false, error: "BREVO_API_KEY is not configured" };
+  }
+  const response = await fetch(BREVO_TRANSACTIONAL_EMAIL_URL, {
+    method: "POST",
+    headers: {
+      "api-key": env.BREVO_API_KEY,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(message),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      sent: false,
+      configured: true,
+      error: payload?.message || `Brevo request failed (${response.status})`,
+      status: response.status,
+    };
+  }
+  return { sent: true, configured: true, messageId: payload?.messageId };
+}
+
+async function sendInviteEmail(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId || !body.toEmail) {
+    return json({ error: "userId, workspaceId and toEmail are required" }, 400);
+  }
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  const toEmail = String(body.toEmail || "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(toEmail)) {
+    return json({ error: "A valid recipient email is required" }, 400);
+  }
+  const origin = new URL(request.url).origin;
+  const content = inviteEmailContent({ ...body, toEmail }, origin);
+  const senderEmail = env.CERTO_EMAIL_FROM || "support@certo.work";
+  const senderName = env.CERTO_EMAIL_FROM_NAME || "Certo Work";
+  const replyToEmail = env.CERTO_EMAIL_REPLY_TO || senderEmail;
+  const result = await sendBrevoTransactionalEmail(env, {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: toEmail, name: String(body.toName || body.toEmail || "").trim() }],
+    replyTo: { email: replyToEmail, name: senderName },
+    subject: content.subject,
+    htmlContent: content.htmlContent,
+    textContent: content.textContent,
+    tags: ["workspace-invite"],
+    params: {
+      workspaceId: body.workspaceId,
+      role: body.role || "member",
+    },
+  });
+  return json({ ...result, inviteUrl: content.inviteUrl });
 }
 
 async function serveAsset(request, env) {
@@ -794,6 +918,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/certo/rewrite") {
       return rewriteField(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/email/invite") {
+      return sendInviteEmail(request, env);
     }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {
