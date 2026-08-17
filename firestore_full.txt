@@ -322,12 +322,15 @@ service cloud.firestore {
     // Categories
     function isValidCategory(data) {
        return data.keys().hasAll(['userId', 'name', 'createdAt'])
-        && data.keys().hasOnly(['userId', 'name', 'createdAt', 'color', 'workspaceId'])
+        && data.keys().hasOnly(['userId', 'name', 'createdAt', 'color', 'workspaceId', 'group', 'createdBy', 'updatedAt'])
         && data.userId is string && data.userId == request.auth.uid
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.createdAt is timestamp
         && (!('color' in data) || data.color is string)
-        && (!('workspaceId' in data) || data.workspaceId is string);
+        && (!('workspaceId' in data) || data.workspaceId is string)
+        && (!('group' in data) || data.group is string)
+        && (!('createdBy' in data) || data.createdBy is string)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
     match /categories/{categoryId} {
       allow get: if isSignedIn() && isValidId(categoryId) && (resource == null || resource.data.userId == request.auth.uid);
@@ -335,7 +338,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(categoryId) && isValidCategory(incoming());
       allow update: if isSignedIn() && isValidId(categoryId) && resource.data.userId == request.auth.uid
                     && isValidCategory(incoming())
-                    && incoming().diff(resource.data).affectedKeys().hasOnly(['name', 'color'])
+                    && incoming().diff(resource.data).affectedKeys().hasOnly(['name', 'color', 'group', 'updatedAt'])
                     && incoming().userId == resource.data.userId
                     && incoming().createdAt == resource.data.createdAt;
       allow delete: if isSignedIn() && isValidId(categoryId) && resource.data.userId == request.auth.uid;
@@ -548,4 +551,3 @@ service cloud.firestore {
     }
   }
 }
-

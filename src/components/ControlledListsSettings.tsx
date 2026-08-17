@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Lock, Plus, Settings2 } from "lucide-react";
+import { ArrowLeft, Bug, Lock, Plus, Settings2, Trash2 } from "lucide-react";
 import {
   controlledListLabels,
   controlledOptions,
@@ -9,6 +9,11 @@ import {
   type ControlledListGroup,
   type ControlledListOption,
 } from "../lib/controlledLists";
+import {
+  clearClientExceptionTraces,
+  readClientExceptionTraces,
+  type ClientExceptionTrace,
+} from "../lib/clientExceptions";
 
 function discoveredValuesForGroup(
   group: ControlledListGroup,
@@ -33,6 +38,7 @@ function EditableOptionRow({
   option,
   onPromote,
   onRename,
+  onDelete,
 }: {
   group: ControlledListGroup;
   option: ControlledListOption;
@@ -42,6 +48,7 @@ function EditableOptionRow({
     option: ControlledListOption,
     name: string,
   ) => void;
+  onDelete: (group: ControlledListGroup, option: ControlledListOption) => void;
 }) {
   const [draft, setDraft] = useState(option.name);
   const isMaster = Boolean(option.id);
@@ -78,6 +85,16 @@ function EditableOptionRow({
           Add to master
         </button>
       )}
+      {!changed && (
+        <button
+          className="is-danger"
+          onClick={() => onDelete(group, option)}
+          title={`Remove ${option.name} from this list and clear matching records`}
+          type="button"
+        >
+          <Trash2 size={12} /> Remove
+        </button>
+      )}
     </div>
   );
 }
@@ -89,6 +106,7 @@ export function ControlledListsSettings({
   onBack,
   onCreateOption,
   onRenameOption,
+  onDeleteOption,
 }: {
   categories: any[];
   projects: any[];
@@ -103,8 +121,20 @@ export function ControlledListsSettings({
     option: ControlledListOption,
     name: string,
   ) => Promise<void> | void;
+  onDeleteOption: (
+    group: "delivery_entity" | "client_entity" | "tag",
+    option: ControlledListOption,
+  ) => Promise<void> | void;
 }) {
   const [newValues, setNewValues] = useState<Record<string, string>>({});
+  const [traces, setTraces] = useState<ClientExceptionTrace[]>(() =>
+    readClientExceptionTraces(),
+  );
+  useEffect(() => {
+    const refresh = () => setTraces(readClientExceptionTraces());
+    window.addEventListener("certo-client-exception", refresh);
+    return () => window.removeEventListener("certo-client-exception", refresh);
+  }, []);
   const sections = useMemo(
     () =>
       editableControlledGroups.map((group) => ({
@@ -199,6 +229,12 @@ export function ControlledListsSettings({
                       name,
                     )
                   }
+                  onDelete={(nextGroup, item) =>
+                    onDeleteOption(
+                      nextGroup as "delivery_entity" | "client_entity" | "tag",
+                      item,
+                    )
+                  }
                   option={option}
                 />
               ))}
@@ -233,6 +269,40 @@ export function ControlledListsSettings({
           ))}
         </div>
       </section>
+
+      <details className="do-controlled-diagnostics">
+        <summary>
+          <Bug size={13} /> Exception trace
+        </summary>
+        <div>
+          <p>
+            Recent client-side errors for controlled lists and settings. Use
+            this when a value appears to save and then comes back.
+          </p>
+          <div className="do-controlled-diagnostics-actions">
+            <button onClick={() => setTraces(readClientExceptionTraces())} type="button">
+              Refresh
+            </button>
+            <button
+              onClick={() => {
+                clearClientExceptionTraces();
+                setTraces([]);
+              }}
+              type="button"
+            >
+              Clear
+            </button>
+          </div>
+          {traces.slice(0, 8).map((trace) => (
+            <article key={trace.id}>
+              <strong>{trace.area} · {trace.action}</strong>
+              <span>{new Date(trace.createdAt).toLocaleString()}</span>
+              <code>{trace.message}</code>
+            </article>
+          ))}
+          {traces.length === 0 && <small>No exceptions recorded on this device.</small>}
+        </div>
+      </details>
     </section>
   );
 }

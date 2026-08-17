@@ -90,6 +90,7 @@ import {
   type TemplateRole,
 } from "../lib/projectTemplates";
 import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
+import { recordClientException } from "../lib/clientExceptions";
 import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
@@ -1743,23 +1744,32 @@ export function DelivereeWorkspace() {
           cleaned.toLowerCase(),
     );
     if (exists) return group === "tag" ? existing?.id || cleaned : cleaned;
-    const created = await addDoc(collection(db, "categories"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      name: cleaned,
-      group,
-      color:
-        group === "delivery_entity"
-          ? "#315f46"
-          : group === "client_entity"
-            ? "#4b6988"
-            : "#7b5ea7",
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
-    return group === "tag" ? created.id : cleaned;
+    try {
+      const created = await addDoc(collection(db, "categories"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        name: cleaned,
+        group,
+        color:
+          group === "delivery_entity"
+            ? "#315f46"
+            : group === "client_entity"
+              ? "#4b6988"
+              : "#7b5ea7",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
+      return group === "tag" ? created.id : cleaned;
+    } catch (reason) {
+      recordClientException("controlled_lists", "create", reason, {
+        group,
+        name: cleaned,
+      });
+      setNotice(`Could not add ${cleaned}. Open Exception trace in Settings for details.`);
+      return "";
+    }
   };
 
   const renameControlledOption = async (
@@ -1771,107 +1781,199 @@ export function DelivereeWorkspace() {
     const previous = String(option.name || "").trim();
     const next = name.trim();
     if (!previous || !next || previous === next) return;
-    const batch = writeBatch(db);
-    if (option.id) {
-      batch.update(doc(db, "categories", option.id), {
-        name: next,
-        updatedAt: serverTimestamp(),
+    try {
+      const batch = writeBatch(db);
+      if (option.id) {
+        batch.update(doc(db, "categories", option.id), {
+          name: next,
+        });
+      } else {
+        const existing = categories.find(
+          (category) =>
+            categoryGroup(category) === group &&
+            String(category.name || "").trim().toLowerCase() ===
+              next.toLowerCase(),
+        );
+        if (!existing) {
+          const categoryRef = doc(collection(db, "categories"));
+          batch.set(categoryRef, {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            name: next,
+            group,
+            color:
+              group === "delivery_entity"
+                ? "#315f46"
+                : group === "client_entity"
+                  ? "#4b6988"
+                  : "#7b5ea7",
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+      if (group === "delivery_entity") {
+        projects
+          .filter(
+            (project) =>
+              String(project.deliveryEntity || "").trim() === previous ||
+              String(project.bpo || "").trim() === previous,
+          )
+          .forEach((project) =>
+            batch.update(doc(db, "projects", project.id), {
+              deliveryEntity: next,
+              bpo: next,
+              updatedAt: serverTimestamp(),
+            }),
+          );
+        tasks
+          .filter(
+            (task) =>
+              String(task.deliveryEntity || "").trim() === previous ||
+              String(task.bpo || "").trim() === previous,
+          )
+          .forEach((task) =>
+            batch.update(doc(db, "tasks", task.id), {
+              deliveryEntity: next,
+              bpo: next,
+              updatedAt: serverTimestamp(),
+            }),
+          );
+      }
+      if (group === "client_entity") {
+        projects
+          .filter(
+            (project) =>
+              String(project.clientEntity || "").trim() === previous ||
+              String(project.client || "").trim() === previous,
+          )
+          .forEach((project) =>
+            batch.update(doc(db, "projects", project.id), {
+              clientEntity: next,
+              client: next,
+              updatedAt: serverTimestamp(),
+            }),
+          );
+        tasks
+          .filter(
+            (task) =>
+              String(task.clientEntity || "").trim() === previous ||
+              String(task.client || "").trim() === previous,
+          )
+          .forEach((task) =>
+            batch.update(doc(db, "tasks", task.id), {
+              clientEntity: next,
+              client: next,
+              updatedAt: serverTimestamp(),
+            }),
+          );
+      }
+      if (group === "tag") {
+        const matchingTag = categories.find(
+          (category) =>
+            categoryGroup(category) === "tag" &&
+            String(category.name || "").trim() === previous,
+        );
+        if (matchingTag?.id && !option.id) {
+          batch.update(doc(db, "categories", matchingTag.id), {
+            name: next,
+          });
+        }
+      }
+      await batch.commit();
+      setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
+    } catch (reason) {
+      recordClientException("controlled_lists", "rename", reason, {
+        group,
+        previous,
+        next,
+        optionId: option.id || null,
       });
-    } else {
-      const existing = categories.find(
-        (category) =>
-          categoryGroup(category) === group &&
-          String(category.name || "").trim().toLowerCase() ===
-            next.toLowerCase(),
-      );
-      if (!existing) {
-        const categoryRef = doc(collection(db, "categories"));
-        batch.set(categoryRef, {
-          userId: user.uid,
-          workspaceId: workspace.id,
-          name: next,
-          group,
-          color:
-            group === "delivery_entity"
-              ? "#315f46"
-              : group === "client_entity"
-                ? "#4b6988"
-                : "#7b5ea7",
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+      setNotice(`Could not rename ${previous}. Open Exception trace in Settings for details.`);
+    }
+  };
+
+  const deleteControlledOption = async (
+    group: "delivery_entity" | "client_entity" | "tag",
+    option: ControlledListOption,
+  ) => {
+    if (!user || !workspace) return;
+    const previous = String(option.name || "").trim();
+    if (!previous) return;
+    const confirmed = window.confirm(
+      `Remove "${previous}" from ${group.replace(/_/g, " ")}? Existing projects/items using it will be moved to Internal so it does not reappear.`,
+    );
+    if (!confirmed) return;
+    try {
+      const batch = writeBatch(db);
+      if (option.id) batch.delete(doc(db, "categories", option.id));
+      if (group === "delivery_entity") {
+        projects
+          .filter(
+            (project) =>
+              String(project.deliveryEntity || "").trim() === previous ||
+              String(project.bpo || "").trim() === previous,
+          )
+          .forEach((project) =>
+            batch.update(doc(db, "projects", project.id), {
+              deliveryEntity: "Internal",
+              bpo: "Internal",
+              updatedAt: serverTimestamp(),
+            }),
+          );
+        tasks
+          .filter(
+            (task) =>
+              String(task.deliveryEntity || "").trim() === previous ||
+              String(task.bpo || "").trim() === previous,
+          )
+          .forEach((task) =>
+            batch.update(doc(db, "tasks", task.id), {
+              deliveryEntity: "Internal",
+              bpo: "Internal",
+              updatedAt: serverTimestamp(),
+            }),
+          );
       }
-    }
-    if (group === "delivery_entity") {
-      projects
-        .filter(
-          (project) =>
-            String(project.deliveryEntity || project.bpo || "").trim() ===
-            previous,
-        )
-        .forEach((project) =>
-          batch.update(doc(db, "projects", project.id), {
-            deliveryEntity: next,
-            bpo: next,
-            updatedAt: serverTimestamp(),
-          }),
-        );
-      tasks
-        .filter(
-          (task) =>
-            String(task.deliveryEntity || task.bpo || "").trim() === previous,
-        )
-        .forEach((task) =>
-          batch.update(doc(db, "tasks", task.id), {
-            deliveryEntity: next,
-            bpo: next,
-            updatedAt: serverTimestamp(),
-          }),
-        );
-    }
-    if (group === "client_entity") {
-      projects
-        .filter(
-          (project) =>
-            String(project.clientEntity || project.client || "").trim() ===
-            previous,
-        )
-        .forEach((project) =>
-          batch.update(doc(db, "projects", project.id), {
-            clientEntity: next,
-            client: next,
-            updatedAt: serverTimestamp(),
-          }),
-        );
-      tasks
-        .filter(
-          (task) =>
-            String(task.clientEntity || task.client || "").trim() === previous,
-        )
-        .forEach((task) =>
-          batch.update(doc(db, "tasks", task.id), {
-            clientEntity: next,
-            client: next,
-            updatedAt: serverTimestamp(),
-          }),
-        );
-    }
-    if (group === "tag") {
-      const matchingTag = categories.find(
-        (category) =>
-          categoryGroup(category) === "tag" &&
-          String(category.name || "").trim() === previous,
-      );
-      if (matchingTag?.id && !option.id) {
-        batch.update(doc(db, "categories", matchingTag.id), {
-          name: next,
-          updatedAt: serverTimestamp(),
-        });
+      if (group === "client_entity") {
+        projects
+          .filter(
+            (project) =>
+              String(project.clientEntity || "").trim() === previous ||
+              String(project.client || "").trim() === previous,
+          )
+          .forEach((project) =>
+            batch.update(doc(db, "projects", project.id), {
+              clientEntity: "Internal",
+              client: "Internal",
+              updatedAt: serverTimestamp(),
+            }),
+          );
+        tasks
+          .filter(
+            (task) =>
+              String(task.clientEntity || "").trim() === previous ||
+              String(task.client || "").trim() === previous,
+          )
+          .forEach((task) =>
+            batch.update(doc(db, "tasks", task.id), {
+              clientEntity: "Internal",
+              client: "Internal",
+              updatedAt: serverTimestamp(),
+            }),
+          );
       }
+      await batch.commit();
+      setNotice(`${previous} removed. Matching projects/items were moved to Internal.`);
+    } catch (reason) {
+      recordClientException("controlled_lists", "delete", reason, {
+        group,
+        previous,
+        optionId: option.id || null,
+      });
+      setNotice(`Could not remove ${previous}. Open Exception trace in Settings for details.`);
     }
-    await batch.commit();
-    setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
   };
 
   const createCostTemplate = async (template: any) => {
@@ -4125,6 +4227,7 @@ export function DelivereeWorkspace() {
                 categories={categories}
                 onBack={() => setPanel(null)}
                 onCreateOption={createControlledOption}
+                onDeleteOption={deleteControlledOption}
                 onRenameOption={renameControlledOption}
                 projects={projects}
                 tasks={tasks}
