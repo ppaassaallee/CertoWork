@@ -1,7 +1,7 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 
 /**
- * Certo Work production edge entry point for Codex Sites.
+ * Certo Work production edge entry point for Cloudflare-compatible Workers.
  *
  * The existing Express server remains available for local/legacy operation.
  * This adapter provides the production SPA shell and the conversation-first
@@ -701,7 +701,7 @@ function capabilities(env) {
       configured: openAIConfigured,
       description: openAIConfigured
         ? `OpenAI is active through ${env.OPENAI_MODEL || "gpt-5.6-sol"}.`
-        : "Add OPENAI_API_KEY in Codex Sites to activate AI responses.",
+        : "Add OPENAI_API_KEY in the deployment environment to activate AI responses.",
     },
     gemini: {
       configured: false,

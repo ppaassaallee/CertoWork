@@ -3,6 +3,8 @@
   "name": "certo-work",
   "main": "worker/index.js",
   "compatibility_date": "2026-08-17",
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
@@ -13,6 +15,18 @@
       "/mcp/*"
     ]
   },
+  "routes": [
+    {
+      "pattern": "certo.work",
+      "zone_name": "certo.work",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.certo.work",
+      "zone_name": "certo.work",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "BOLDI_AI_PROVIDER": "openai",
     "OPENAI_MODEL": "gpt-5.6-sol",
