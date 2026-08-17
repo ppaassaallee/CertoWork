@@ -204,6 +204,11 @@ function initials(name?: string | null, email?: string | null) {
     .toUpperCase();
 }
 
+function inviteMessage(invite: any) {
+  const email = invite.email || invite.emailLower || "your invited email";
+  return `You have been invited to Certo Work. Open https://certo.work and sign in or request beta access using this exact email: ${email}`;
+}
+
 function displayName(name?: string | null, email?: string | null) {
   return name?.trim().split(/\s+/)[0] || email?.split("@")[0] || "there";
 }
@@ -2296,8 +2301,18 @@ export function DelivereeWorkspace() {
     setInviteEmail("");
     await reloadWorkspaces();
     setNotice(
-      `Invite prepared for ${email}. They will join this workspace after signing in with that email.`,
+      `Invite saved for ${email}. No email was sent yet; copy the login link or message from Pending invites and send it manually.`,
     );
+  };
+
+  const copyInviteMessage = async (invite: any) => {
+    const message = inviteMessage(invite);
+    try {
+      await navigator.clipboard.writeText(message);
+      setNotice(`Invite message copied for ${invite.email || invite.emailLower}.`);
+    } catch {
+      setNotice(message);
+    }
   };
 
   const requestPasswordReset = async () => {
@@ -4623,9 +4638,17 @@ export function DelivereeWorkspace() {
                   <div className="do-pending-invites">
                     <span className="do-kicker">Pending invites</span>
                     {workspaceInvites.map((invite) => (
-                      <small key={invite.id}>
-                        {invite.email} · {roleLabel(invite.role)}
-                      </small>
+                      <div className="do-pending-invite-row" key={invite.id}>
+                        <small>
+                          {invite.email} · {roleLabel(invite.role)}
+                        </small>
+                        <button
+                          onClick={() => copyInviteMessage(invite)}
+                          type="button"
+                        >
+                          Copy message
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

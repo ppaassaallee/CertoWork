@@ -137,6 +137,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("Failed to load member workspaces:", eMember instanceof Error ? eMember.message : eMember);
       }
 
+      // Accept workspace invites that were granted by email. New users cannot
+      // always read pending workspace_members documents before becoming active
+      // members, but they can discover workspaces whose members array already
+      // contains their verified sign-in email.
+      if (u.email) {
+        try {
+          const emailLower = u.email.toLowerCase();
+          const qEmailWorkspaces = query(collection(db, 'workspaces'), where('members', 'array-contains', emailLower));
+          const snapEmailWorkspaces = await withTimeout(getDocs(qEmailWorkspaces), 7_000, 'Workspace email invite lookup');
+          lookupSucceeded = true;
+          const invitePromises = snapEmailWorkspaces.docs.map(async (wsDoc) => {
+            const ws = { id: wsDoc.id, ...wsDoc.data() } as Workspace;
+            wsMap.set(wsDoc.id, ws);
+            const memberId = `${wsDoc.id}_${u.uid}`;
+            await withTimeout(setDoc(doc(db, 'workspace_members', memberId), {
+              id: memberId,
+              workspaceId: wsDoc.id,
+              userId: u.uid,
+              email: u.email || "",
+              emailLower,
+              displayName: u.displayName || "",
+              role: (ws as any).roles?.[emailLower] || "member",
+              status: "active",
+              acceptedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            }, { merge: true }), 5_000, `Accept email invite ${wsDoc.id}`);
+          });
+          await Promise.allSettled(invitePromises);
+        } catch (eEmailInvite) {
+          console.error("Failed to load email-invited workspaces:", eEmailInvite instanceof Error ? eEmailInvite.message : eEmailInvite);
+        }
+      }
+
       // Accept pending email invitations automatically once the invited person signs in.
       if (u.email) {
         try {
