@@ -109,6 +109,7 @@ import {
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
+  activeMemberId,
   canChangePasswordForProvider,
   canCreateWorkspace,
   createInviteCode,
@@ -145,6 +146,18 @@ type Message = {
   suggestedChips?: string[];
   actionPlan?: any;
   offline?: boolean;
+};
+
+type AccessRequest = {
+  id: string;
+  userId?: string;
+  email?: string;
+  emailLower?: string;
+  displayName?: string;
+  status?: string;
+  provider?: string;
+  requestedAt?: any;
+  updatedAt?: any;
 };
 
 type Panel =
@@ -542,6 +555,7 @@ export function DelivereeWorkspace() {
   );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
@@ -744,6 +758,20 @@ export function DelivereeWorkspace() {
               ),
           ),
         () => setWorkspaceInvites([]),
+      ),
+      onSnapshot(
+        query(collection(db, "access_requests"), where("status", "==", "pending")),
+        (snapshot) =>
+          setAccessRequests(
+            snapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
+              .sort(
+                (left, right) =>
+                  timestamp(right.requestedAt || right.updatedAt) -
+                  timestamp(left.requestedAt || left.updatedAt),
+              ),
+          ),
+        () => setAccessRequests([]),
       ),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -2342,6 +2370,68 @@ export function DelivereeWorkspace() {
     }
   };
 
+  const approveAccessRequest = async (
+    request: AccessRequest,
+    role: "admin" | "member" | "viewer" = "member",
+  ) => {
+    if (!user || !workspace) return;
+    const email = normalizeInviteEmail(request.email || request.emailLower || "");
+    const requestUserId = request.userId || request.id;
+    if (!email || !requestUserId) {
+      setNotice("This access request is missing an email or user id.");
+      return;
+    }
+    const currentMembers = [
+      ...new Set([
+        ...(workspace.members || []).map((item) => String(item).toLowerCase()),
+        email,
+      ]),
+    ];
+    await updateDoc(doc(db, "workspaces", workspace.id), {
+      members: currentMembers,
+      roles: { ...(workspace.roles || {}), [email]: role },
+      updatedAt: serverTimestamp(),
+    });
+    await setDoc(
+      doc(db, "workspace_members", activeMemberId(workspace.id, requestUserId)),
+      {
+        id: activeMemberId(workspace.id, requestUserId),
+        workspaceId: workspace.id,
+        userId: requestUserId,
+        email,
+        emailLower: email,
+        displayName: request.displayName || email,
+        role,
+        status: "active",
+        approvedBy: user.uid,
+        approvedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    await updateDoc(doc(db, "access_requests", request.id), {
+      status: "approved",
+      approvedBy: user.uid,
+      approvedWorkspaceId: workspace.id,
+      approvedRole: role,
+      updatedAt: serverTimestamp(),
+    });
+    await reloadWorkspaces();
+    setNotice(`${email} approved for ${workspace.name || "this workspace"}.`);
+  };
+
+  const rejectAccessRequest = async (request: AccessRequest) => {
+    if (!user) return;
+    await updateDoc(doc(db, "access_requests", request.id), {
+      status: "rejected",
+      rejectedBy: user.uid,
+      rejectedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`${request.email || request.emailLower || "Request"} rejected.`);
+  };
+
   const archiveConversation = async (conversation: Conversation) => {
     await updateDoc(doc(db, "boldi_conversations", conversation.id), {
       status: "archived",
@@ -3127,6 +3217,9 @@ export function DelivereeWorkspace() {
                 type="button"
               >
                 <Users size={14} /> Workspace & team
+                {accessRequests.length > 0 && (
+                  <em className="do-menu-badge">{accessRequests.length}</em>
+                )}
               </button>
               <button
                 onClick={() => {
@@ -4371,6 +4464,96 @@ export function DelivereeWorkspace() {
                       {role.help}
                     </span>
                   ))}
+                </div>
+              </section>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Beta access</span>
+                  <strong>
+                    {accessRequests.length} pending request
+                    {accessRequests.length === 1 ? "" : "s"}
+                  </strong>
+                </div>
+                <p className="do-panel-intro">
+                  People who request beta access by email appear here. Approve
+                  only the users you want to join the current workspace.
+                </p>
+                <div className="do-member-list do-access-request-list">
+                  {accessRequests.map((request) => (
+                    <article key={request.id}>
+                      <span className="do-avatar">
+                        {initials(
+                          request.displayName,
+                          request.email || request.emailLower,
+                        )}
+                      </span>
+                      <div>
+                        <strong>
+                          {request.displayName ||
+                            request.email ||
+                            request.emailLower ||
+                            "Pending user"}
+                        </strong>
+                        <small>
+                          {request.email || request.emailLower || "No email"} ·{" "}
+                          {request.provider || "email/password"} ·{" "}
+                          {timeAgo(request.requestedAt || request.updatedAt)}
+                        </small>
+                      </div>
+                      <select
+                        aria-label={`Approval role for ${request.email || "request"}`}
+                        defaultValue="member"
+                        onChange={(event) => {
+                          const value = event.target.value as
+                            | "admin"
+                            | "member"
+                            | "viewer";
+                          event.currentTarget.dataset.role = value;
+                        }}
+                      >
+                        {WORKSPACE_ROLES.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="do-access-request-actions">
+                        <button
+                          onClick={(event) => {
+                            const role =
+                              (event.currentTarget.parentElement
+                                ?.previousElementSibling as HTMLSelectElement | null)
+                                ?.value || "member";
+                            approveAccessRequest(
+                              request,
+                              role as "admin" | "member" | "viewer",
+                            );
+                          }}
+                          type="button"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="is-danger"
+                          onClick={() => rejectAccessRequest(request)}
+                          type="button"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                  {accessRequests.length === 0 && (
+                    <div className="do-panel-empty">
+                      <ShieldCheck size={20} />
+                      <strong>No pending beta requests.</strong>
+                      <span>
+                        New email/password requests will appear here for
+                        approval.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </section>
 

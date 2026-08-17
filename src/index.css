@@ -210,6 +210,7 @@ button { color: inherit; }
 .do-account small { margin-top: 2px; color: #919893; font-size: calc(7.5px * var(--cw-text-scale)); }
 .do-account-menu { position: absolute; z-index: 80; bottom: 55px; left: 10px; display: grid; width: 210px; gap: 2px; border: 1px solid #dfe4df; border-radius: 11px; background: #fff; padding: 5px; box-shadow: 0 16px 38px rgba(25, 38, 30, .15); }
 .do-account-menu button { display: flex; align-items: center; gap: 7px; border: 0; border-radius: 7px; background: none; padding: 8px; color: #515a54; font-size: calc(9px * var(--cw-text-scale)); cursor: pointer; }
+.do-account-menu button .do-menu-badge { display: inline-grid; min-width: 18px; height: 18px; margin-left: auto; place-items: center; border-radius: 999px; background: #d86d4d; color: #fff; font-size: calc(7px * var(--cw-text-scale)); font-style: normal; font-weight: 900; }
 .do-account-menu button:hover { background: #f2f4f2; }
 .do-account-menu-preference { display: grid; gap: 6px; border-bottom: 1px solid #eef1ee; padding: 7px 6px 9px; }
 .do-account-menu-preference > span { color: #7b8680; font-size: calc(7px * var(--cw-text-scale)); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
@@ -243,12 +244,16 @@ button { color: inherit; }
 .do-role-help strong { margin-right: 5px; color: #42564a; }
 .do-member-list, .do-team-list { display: grid; gap: 6px; }
 .do-member-list article { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px; align-items: center; border: 1px solid #edf0ed; border-radius: 11px; padding: 8px; }
+.do-access-request-list article { grid-template-columns: 28px minmax(0, 1fr) 88px auto; }
 .do-member-list article > div { min-width: 0; }
 .do-member-list strong, .do-member-list small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .do-member-list strong { color: #2f3d35; font-size: calc(9px * var(--cw-text-scale)); }
 .do-member-list small { margin-top: 2px; color: #8d9791; font-size: calc(7px * var(--cw-text-scale)); }
 .do-member-list em { color: #335b45; font-size: calc(7.5px * var(--cw-text-scale)); font-style: normal; font-weight: 800; }
 .do-member-list select { width: 88px; padding: 6px 7px; font-size: calc(7.5px * var(--cw-text-scale)); }
+.do-access-request-actions { display: flex; gap: 5px; }
+.do-access-request-actions button { border: 0; border-radius: 8px; background: #214b39; padding: 7px 8px; color: #fff; font-size: calc(7.5px * var(--cw-text-scale)); font-weight: 850; cursor: pointer; }
+.do-access-request-actions button.is-danger { background: #fff0ed; color: #9f4739; }
 .do-pending-invites { display: grid; gap: 4px; border-top: 1px solid #edf0ed; padding-top: 9px; }
 .do-team-list article { display: grid; gap: 7px; border: 1px solid #edf0ed; border-radius: 11px; padding: 9px; }
 .do-team-list strong { color: #293b31; font-size: calc(9.5px * var(--cw-text-scale)); }
