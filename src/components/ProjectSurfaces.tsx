@@ -152,6 +152,31 @@ function columnsStorageKey(scope: string) {
   return `certo-${scope}-view-config`;
 }
 
+function columnWidthsStorageKey(scope: string) {
+  return `certo-${scope}-column-widths`;
+}
+
+function widthFromTemplate(value: string) {
+  const match = value.match(/(\d+)px/);
+  return match ? Number(match[1]) : 120;
+}
+
+function defaultColumnPixels<T extends string>(widths: Record<T, string>) {
+  return Object.fromEntries(
+    Object.entries(widths).map(([key, value]) => [
+      key,
+      widthFromTemplate(String(value)),
+    ]),
+  ) as Record<T, number>;
+}
+
+const defaultPortfolioColumnPixels =
+  defaultColumnPixels(portfolioColumnWidths);
+
+function clampColumnWidth(value: number) {
+  return Math.max(72, Math.min(420, Math.round(value)));
+}
+
 function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
   return value?.length ? value : fallback;
 }
@@ -4374,7 +4399,11 @@ export function ProjectCommandCenter({
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [viewName, setViewName] = useState("");
   const [savedViews, setSavedViews] = useState<
-    Array<{ name: string; columns: PortfolioColumnKey[] }>
+    Array<{
+      name: string;
+      columns: PortfolioColumnKey[];
+      widths?: Partial<Record<PortfolioColumnKey, number>>;
+    }>
   >(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -4399,6 +4428,23 @@ export function ProjectCommandCenter({
       }
     },
   );
+  const [columnWidths, setColumnWidths] = useState<
+    Record<PortfolioColumnKey, number>
+  >(() => {
+    if (typeof window === "undefined") return defaultPortfolioColumnPixels;
+    try {
+      return {
+        ...defaultPortfolioColumnPixels,
+        ...JSON.parse(
+          window.localStorage.getItem(
+            columnWidthsStorageKey("portfolio-current"),
+          ) || "{}",
+        ),
+      };
+    } catch {
+      return defaultPortfolioColumnPixels;
+    }
+  });
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const sorted = sortProjectsByRecency(projects);
   const portfolio = sorted;
@@ -4432,8 +4478,28 @@ export function ProjectCommandCenter({
   const columnSet = new Set(visibleColumns);
   const portfolioGridStyle = {
     gridTemplateColumns: visibleColumns
-      .map((column) => portfolioColumnWidths[column])
+      .map((column) => `${columnWidths[column] || defaultPortfolioColumnPixels[column]}px`)
       .join(" "),
+  };
+  const updateColumnWidth = (
+    column: PortfolioColumnKey,
+    value: number,
+  ) => {
+    setColumnWidths((current) => {
+      const next = { ...current, [column]: clampColumnWidth(value) };
+      window.localStorage.setItem(
+        columnWidthsStorageKey("portfolio-current"),
+        JSON.stringify(next),
+      );
+      return next;
+    });
+  };
+  const resetColumnWidths = () => {
+    setColumnWidths(defaultPortfolioColumnPixels);
+    window.localStorage.setItem(
+      columnWidthsStorageKey("portfolio-current"),
+      JSON.stringify(defaultPortfolioColumnPixels),
+    );
   };
   const toggleColumn = (column: PortfolioColumnKey) => {
     setVisibleColumns((current) => {
@@ -4454,7 +4520,7 @@ export function ProjectCommandCenter({
     if (!name) return;
     const next = [
       ...savedViews.filter((candidate) => candidate.name !== name),
-      { name, columns: visibleColumns },
+      { name, columns: visibleColumns, widths: columnWidths },
     ];
     setSavedViews(next);
     window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
@@ -4464,6 +4530,14 @@ export function ProjectCommandCenter({
     const saved = savedViews.find((candidate) => candidate.name === name);
     if (!saved) return;
     setVisibleColumns(selectedColumns(saved.columns, defaultPortfolioColumns));
+    if (saved.widths) {
+      const nextWidths = { ...defaultPortfolioColumnPixels, ...saved.widths };
+      setColumnWidths(nextWidths);
+      window.localStorage.setItem(
+        columnWidthsStorageKey("portfolio-current"),
+        JSON.stringify(nextWidths),
+      );
+    }
     window.localStorage.setItem(
       columnsStorageKey("portfolio-current"),
       JSON.stringify(saved.columns),
@@ -5332,6 +5406,39 @@ export function ProjectCommandCenter({
                           type="checkbox"
                         />
                         {portfolioColumnLabels[column]}
+                      </label>
+                    ))}
+                </div>
+                <div className="do-column-widths">
+                  <div>
+                    <strong>Column widths</strong>
+                    <button onClick={resetColumnWidths} type="button">
+                      Reset
+                    </button>
+                  </div>
+                  {visibleColumns
+                    .filter((column) => column !== "actions")
+                    .map((column) => (
+                      <label key={`width-${column}`}>
+                        <span>{portfolioColumnLabels[column]}</span>
+                        <input
+                          aria-label={`${portfolioColumnLabels[column]} width`}
+                          max={420}
+                          min={72}
+                          onChange={(event) =>
+                            updateColumnWidth(column, Number(event.target.value))
+                          }
+                          type="range"
+                          value={
+                            columnWidths[column] ||
+                            defaultPortfolioColumnPixels[column]
+                          }
+                        />
+                        <small>
+                          {columnWidths[column] ||
+                            defaultPortfolioColumnPixels[column]}
+                          px
+                        </small>
                       </label>
                     ))}
                 </div>

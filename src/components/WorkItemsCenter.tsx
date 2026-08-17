@@ -133,6 +133,26 @@ function viewStorageKey(scope: string) {
   return `certo-${scope}-view-config`;
 }
 
+function viewWidthsStorageKey(scope: string) {
+  return `certo-${scope}-column-widths`;
+}
+
+function widthFromTemplate(value: string) {
+  const match = value.match(/(\d+)px/);
+  return match ? Number(match[1]) : 120;
+}
+
+const defaultItemColumnPixels = Object.fromEntries(
+  Object.entries(itemColumnWidths).map(([key, value]) => [
+    key,
+    widthFromTemplate(value),
+  ]),
+) as Record<ItemColumnKey, number>;
+
+function clampColumnWidth(value: number) {
+  return Math.max(72, Math.min(420, Math.round(value)));
+}
+
 function title(item: any) {
   return item?.title || item?.name || "Untitled";
 }
@@ -467,7 +487,11 @@ export function WorkItemsCenter({
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
   const [savedItemViews, setSavedItemViews] = useState<
-    Array<{ name: string; columns: ItemColumnKey[] }>
+    Array<{
+      name: string;
+      columns: ItemColumnKey[];
+      widths?: Partial<Record<ItemColumnKey, number>>;
+    }>
   >(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -491,9 +515,46 @@ export function WorkItemsCenter({
       }
     },
   );
+  const [itemColumnPixels, setItemColumnPixels] = useState<
+    Record<ItemColumnKey, number>
+  >(() => {
+    if (typeof window === "undefined") return defaultItemColumnPixels;
+    try {
+      return {
+        ...defaultItemColumnPixels,
+        ...JSON.parse(
+          window.localStorage.getItem(viewWidthsStorageKey("items-current")) ||
+            "{}",
+        ),
+      };
+    } catch {
+      return defaultItemColumnPixels;
+    }
+  });
   const itemColumnSet = new Set(visibleItemColumns);
   const itemGridStyle = {
-    gridTemplateColumns: `24px 35px ${visibleItemColumns.map((column) => itemColumnWidths[column]).join(" ")}`,
+    gridTemplateColumns: `24px 35px ${visibleItemColumns
+      .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
+      .join(" ")}`,
+  };
+
+  const updateItemColumnWidth = (column: ItemColumnKey, value: number) => {
+    setItemColumnPixels((current) => {
+      const next = { ...current, [column]: clampColumnWidth(value) };
+      window.localStorage.setItem(
+        viewWidthsStorageKey("items-current"),
+        JSON.stringify(next),
+      );
+      return next;
+    });
+  };
+
+  const resetItemColumnWidths = () => {
+    setItemColumnPixels(defaultItemColumnPixels);
+    window.localStorage.setItem(
+      viewWidthsStorageKey("items-current"),
+      JSON.stringify(defaultItemColumnPixels),
+    );
   };
 
   const toggleItemColumn = (column: ItemColumnKey) => {
@@ -513,7 +574,7 @@ export function WorkItemsCenter({
     if (!name) return;
     const next = [
       ...savedItemViews.filter((candidate) => candidate.name !== name),
-      { name, columns: visibleItemColumns },
+      { name, columns: visibleItemColumns, widths: itemColumnPixels },
     ];
     setSavedItemViews(next);
     window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
@@ -523,6 +584,14 @@ export function WorkItemsCenter({
     const saved = savedItemViews.find((candidate) => candidate.name === name);
     if (!saved) return;
     setVisibleItemColumns(saved.columns);
+    if (saved.widths) {
+      const nextWidths = { ...defaultItemColumnPixels, ...saved.widths };
+      setItemColumnPixels(nextWidths);
+      window.localStorage.setItem(
+        viewWidthsStorageKey("items-current"),
+        JSON.stringify(nextWidths),
+      );
+    }
     window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(saved.columns));
   };
   const deleteItemView = (name: string) => {
@@ -1014,6 +1083,35 @@ export function WorkItemsCenter({
               <label key={column}>
                 <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
                 {itemColumnLabels[column]}
+              </label>
+            ))}
+          </div>
+          <div className="do-column-widths">
+            <div>
+              <strong>Column widths</strong>
+              <button onClick={resetItemColumnWidths} type="button">
+                Reset
+              </button>
+            </div>
+            {visibleItemColumns.map((column) => (
+              <label key={`item-width-${column}`}>
+                <span>{itemColumnLabels[column]}</span>
+                <input
+                  aria-label={`${itemColumnLabels[column]} width`}
+                  max={420}
+                  min={72}
+                  onChange={(event) =>
+                    updateItemColumnWidth(column, Number(event.target.value))
+                  }
+                  type="range"
+                  value={
+                    itemColumnPixels[column] || defaultItemColumnPixels[column]
+                  }
+                />
+                <small>
+                  {itemColumnPixels[column] || defaultItemColumnPixels[column]}
+                  px
+                </small>
               </label>
             ))}
           </div>
