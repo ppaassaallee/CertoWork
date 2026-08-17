@@ -108,11 +108,15 @@ import {
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
+  canChangePasswordForProvider,
   canCreateWorkspace,
   createInviteCode,
   memberAssignmentValue,
   memberLabel,
+  memberStatusLabel,
   normalizeInviteEmail,
+  passwordProviderMessage,
+  pendingMemberId,
   roleLabel,
   type WorkspaceMember,
   type WorkspaceTeam,
@@ -515,6 +519,7 @@ export function DelivereeWorkspace() {
     workspaces,
     setWorkspace,
     reloadWorkspaces,
+    sendPasswordReset,
     logOut,
   } = useAuth();
   const location = useLocation();
@@ -2087,11 +2092,11 @@ export function DelivereeWorkspace() {
       roles: { ...(workspace.roles || {}), [email]: inviteRole },
       updatedAt: serverTimestamp(),
     });
-    const pendingMemberId = `${workspace.id}_invite_${email.replace(/[^a-z0-9]/g, "_")}`;
+    const pendingId = pendingMemberId(workspace.id, email);
     await setDoc(
-      doc(db, "workspace_members", pendingMemberId),
+      doc(db, "workspace_members", pendingId),
       {
-        id: pendingMemberId,
+        id: pendingId,
         workspaceId: workspace.id,
         userId: `pending:${email}`,
         email,
@@ -2123,6 +2128,21 @@ export function DelivereeWorkspace() {
     setNotice(
       `Invite prepared for ${email}. They will join this workspace after signing in with that email.`,
     );
+  };
+
+  const requestPasswordReset = async () => {
+    if (!user?.email) {
+      setNotice("No email is available for this signed-in account.");
+      return;
+    }
+    try {
+      await sendPasswordReset();
+      setNotice(`Password reset email sent to ${user.email}.`);
+    } catch {
+      setNotice(
+        "Password reset could not be sent. If you sign in with Google, change the password in your Google Account settings.",
+      );
+    }
   };
 
   const createWorkspaceTeam = async () => {
@@ -4028,6 +4048,28 @@ export function DelivereeWorkspace() {
 
           {panel === "settings" && (
             <div className="do-panel-settings">
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Account security</span>
+                  <strong>{user?.email || "Signed-in account"}</strong>
+                </div>
+                <p className="do-panel-intro">
+                  {passwordProviderMessage(
+                    user?.providerData.map((provider) => provider.providerId),
+                  )}
+                </p>
+                <button
+                  disabled={
+                    !canChangePasswordForProvider(
+                      user?.providerData.map((provider) => provider.providerId),
+                    )
+                  }
+                  onClick={requestPasswordReset}
+                  type="button"
+                >
+                  Send password reset
+                </button>
+              </section>
               <section className="do-settings-appearance">
                 <div>
                   <span>Appearance</span>
@@ -4211,7 +4253,7 @@ export function DelivereeWorkspace() {
                           <strong>{memberLabel(member)}</strong>
                           <small>
                             {member.email || member.emailLower || "No email"} ·{" "}
-                            {String(member.status || "active")}
+                            {memberStatusLabel(member.status)}
                           </small>
                         </div>
                         {isOwner ? (

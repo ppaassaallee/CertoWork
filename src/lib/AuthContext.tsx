@@ -5,6 +5,7 @@ import {
   getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithPopup,
   signInWithRedirect,
@@ -41,6 +42,7 @@ interface AuthContextType {
   signIn: (method?: 'popup' | 'redirect') => Promise<void>;
   logOut: () => Promise<void>;
   reloadWorkspaces: () => Promise<void>;
+  sendPasswordReset: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -54,7 +56,8 @@ const AuthContext = createContext<AuthContextType>({
   authError: '',
   signIn: async () => {},
   logOut: async () => {},
-  reloadWorkspaces: async () => {}
+  reloadWorkspaces: async () => {},
+  sendPasswordReset: async () => {},
 });
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -349,8 +352,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   };
 
+  const sendPasswordReset = async () => {
+    if (!user?.email) throw new Error("No email is available for this account.");
+    await sendPasswordResetEmail(auth, user.email);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, authError, signIn, logOut, reloadWorkspaces }}>
+    <AuthContext.Provider value={{ user, workspace, workspaces, setWorkspace, loading, workspaceLoading, workspaceError, authError, signIn, logOut, reloadWorkspaces, sendPasswordReset }}>
       {children}
     </AuthContext.Provider>
   );

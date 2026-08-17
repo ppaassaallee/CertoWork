@@ -3,9 +3,14 @@ import test from "node:test";
 
 import {
   WORKSPACE_LIMIT,
+  activeMemberId,
   canCreateWorkspace,
+  canChangePasswordForProvider,
   memberAssignmentValue,
+  memberStatusLabel,
   normalizeInviteEmail,
+  passwordProviderMessage,
+  pendingMemberId,
   roleLabel,
 } from "../src/lib/workspaceCollaboration";
 
@@ -22,4 +27,22 @@ test("workspace invite emails and assignment labels are stable", () => {
   assert.equal(memberAssignmentValue({ email: "ana@example.com" }), "ana@example.com");
   assert.equal(roleLabel("admin"), "Admin");
   assert.equal(roleLabel("unknown"), "Member");
+});
+
+test("workspace member ids and statuses are deterministic", () => {
+  assert.equal(activeMemberId("ws-1", "user-1"), "ws-1_user-1");
+  assert.equal(
+    pendingMemberId("ws-1", "  New.Person+Ops@Boldr.AI "),
+    "ws-1_invite_new_person_ops_boldr_ai",
+  );
+  assert.equal(memberStatusLabel("invited"), "Invited");
+  assert.equal(memberStatusLabel("accepted"), "Accepted");
+  assert.equal(memberStatusLabel(""), "Active");
+});
+
+test("password change guidance follows the sign-in provider", () => {
+  assert.equal(canChangePasswordForProvider(["password"]), true);
+  assert.equal(canChangePasswordForProvider(["google.com"]), false);
+  assert.match(passwordProviderMessage(["password"]), /reset link/i);
+  assert.match(passwordProviderMessage(["google.com"]), /Google Account/i);
 });
