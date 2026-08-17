@@ -63,14 +63,13 @@ import {
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
-import { evaluateJudgment, type JudgmentAssessment } from "../lib/judgment";
+import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import {
   sidebarProjectGroups,
   sortProjectsByRecency,
   type WorkLane,
 } from "../lib/projectPortfolio";
-import { buildProjectDocumentContext } from "../lib/projectContext";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -98,10 +97,9 @@ import {
   splitProjectWizardLines,
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
-import {
-  buildNotebookContext,
-  type NotebookEntry,
-} from "../lib/notebookContext";
+import type { NotebookEntry } from "../lib/notebookContext";
+import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
+import { sendBoldiChat } from "../lib/conversationClient";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -1200,151 +1198,49 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
       });
 
-      const operatingScope = isFocusedConversation
-        ? "focused_delivery"
-        : "chief_of_staff";
-      const scopedTasks = isFocusedConversation ? projectTasks : openTasks;
-      const scopedProjects = isFocusedConversation
-        ? contextProjects
-        : activeProjects;
-      const scopedMilestones = isFocusedConversation
-        ? milestones.filter((item) =>
-            contextProjectIds.includes(item.projectId),
-          )
-        : milestones;
-      const scopedRisks = isFocusedConversation
-        ? risks.filter((item) => contextProjectIds.includes(item.projectId))
-        : risks;
-      const scopedTodayTasks = isFocusedConversation
-        ? todayTasks.filter((task) =>
-            scopedTasks.some((scopedTask) => scopedTask.id === task.id),
-          )
-        : todayTasks;
-      const previousLongProjectMessage = [...contextualMessages]
-        .reverse()
-        .find(
-          (message) =>
-            message.role === "user" && message.content.trim().length >= 2_500,
-        );
-      const projectArtifactSourceMessageId =
-        text.length >= 2_500
-          ? userMessageRef.id
-          : previousLongProjectMessage?.id || userMessageRef.id;
-      const notebookDocuments = buildNotebookContext(notebookEntries, text, {
-        activeProjectId: primaryProject?.id || activeProject?.id || null,
-        limit: isFocusedConversation ? 4 : 6,
+      const requestContext = buildConversationRequestContext({
+        text,
+        currentUserMessageId: userMessageRef.id,
+        contextualMessages,
+        isFocusedConversation,
+        primaryProject,
+        activeProject,
+        directContextProjectIds,
+        contextTaskIds,
+        contextProjectIds,
+        contextProjects,
+        contextTasks,
+        projectTasks,
+        openTasks,
+        activeProjects,
+        milestones,
+        risks,
+        todayTasks,
+        projects,
+        tasks,
+        conversations,
+        reviewItems,
+        strategicGoals,
+        strategicMeasures,
+        strategicRecords,
+        workspaceMembers,
+        workspaceTeams,
+        projectDocuments,
+        notebookEntries,
+        userId: user.uid,
+        workspaceId: workspace.id,
       });
-      const workspaceSnapshot = {
-        tasks: scopedTasks,
-        projects: scopedProjects,
-        milestones: scopedMilestones,
-        risks: scopedRisks,
-        goals: strategicGoals,
-        events: [],
-        dailyCapacityMinutes: 360,
-        loaded: true,
-        scope: (isFocusedConversation
-          ? "project_delivery"
-          : "chief_of_staff") as "chief_of_staff" | "project_delivery",
-        activeProjectId: primaryProject?.id || null,
-      };
-      const nextJudgment = evaluateJudgment(text, workspaceSnapshot);
+      const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);
       const token = await user.getIdToken();
-      const response = await fetch("/api/boldi/chat", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user.uid,
-          workspaceId: workspace.id,
-          conversationId: activeConversationId,
-          messages: [
-            ...contextualMessages.map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-            { role: "user", content: text },
-          ],
-          workspaceContext: {
-            ...workspaceSnapshot,
-            judgment: nextJudgment,
-            mode: operatingScope,
-            activeProject: primaryProject,
-            contextProjects,
-            contextTasks,
-            conversationType: conversationScopeType(
-              directContextProjectIds,
-              contextTaskIds,
-            ),
-            conversationDirectory: conversations
-              .slice(0, 30)
-              .map((conversation) => ({
-                id: conversation.id,
-                title: conversation.title || "New conversation",
-                scope: conversationScopeLabel(conversation, projects, tasks),
-                conversationType:
-                  conversation.conversationType ||
-                  conversationScopeType(
-                    conversationProjectIds(conversation),
-                    conversationTaskIds(conversation),
-                  ),
-              })),
-            todayTaskCount: scopedTodayTasks.length,
-            workspaceMembers: workspaceMembers.map((member) => ({
-              id: member.id,
-              email: member.email || member.emailLower || "",
-              displayName: member.displayName || "",
-              role: member.role || "member",
-              status: member.status || "active",
-            })),
-            workspaceTeams: workspaceTeams.map((team) => ({
-              id: team.id,
-              name: team.name || "Team",
-              memberEmails: team.memberEmails || [],
-            })),
-            strategicMeasures: strategicMeasures.map((measure) => ({
-              id: measure.id,
-              strategicGoalId: measure.strategicGoalId,
-              title: measure.title,
-              measureKind: measure.measureKind || "outcome",
-              currentValue: measure.currentValue,
-              targetValue: measure.targetValue,
-              unit: measure.unit || "",
-              sourceType: measure.sourceType || "manual",
-              sourceId: measure.sourceId || null,
-            })),
-            strategyPulse: strategicRecords
-              .filter((record) => record.recordType === "strategy_checkin")
-              .slice(0, 12),
-            pendingReviewCount: isFocusedConversation
-              ? reviewItems.filter((item) =>
-                  contextProjectIds.includes(
-                    item.projectId || item.proposed?.projectId,
-                  ),
-                ).length
-              : reviewItems.length,
-            currentUserMessageId: userMessageRef.id,
-            projectArtifactSourceMessageId,
-            documents: [
-              ...(isFocusedConversation
-                ? buildProjectDocumentContext(projectDocuments, text)
-                : []),
-              ...notebookDocuments,
-            ],
-            notebookNotes: notebookDocuments,
-            userId: user.uid,
-            workspaceId: workspace.id,
-          },
-        }),
+      const result = await sendBoldiChat({
+        token,
+        userId: user.uid,
+        workspaceId: workspace.id,
+        conversationId: activeConversationId,
+        messages: requestContext.messages,
+        workspaceContext: requestContext.workspaceContext,
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok)
-        throw new Error(
-          result.error || "The AI service is temporarily unavailable.",
-        );
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
