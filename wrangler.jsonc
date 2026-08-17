@@ -20,11 +20,6 @@
       "pattern": "certo.work",
       "zone_name": "certo.work",
       "custom_domain": true
-    },
-    {
-      "pattern": "www.certo.work",
-      "zone_name": "certo.work",
-      "custom_domain": true
     }
   ],
   "vars": {

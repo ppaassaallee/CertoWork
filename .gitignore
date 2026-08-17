@@ -7,5 +7,5 @@ outputs/
 !.env.example
 .DS_Store
 .wrangler/
+.codex-trash/
 *.tsbuildinfo
-
