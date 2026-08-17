@@ -17,8 +17,10 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { controlledOptionNames } from "../lib/controlledLists";
 import { InfoTip, MultiAssigneePicker } from "./ProjectControls";
 import { AiRewriteButton } from "./AiRewriteButton";
+import { ControlledSelect } from "./ControlledSelect";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt";
@@ -47,6 +49,7 @@ type Props = {
   onAsk: (prompt: string) => void;
   onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
 };
 
@@ -374,11 +377,13 @@ function ItemTagPicker({
   record,
   tags,
   onChange,
+  onCreateTag,
   label = "Tags",
 }: {
   record: any;
   tags: TagLike[];
   onChange: (patch: Record<string, unknown>) => void;
+  onCreateTag?: (name: string) => Promise<string | void> | string | void;
   label?: string;
 }) {
   const ids = tagIds(record);
@@ -394,6 +399,17 @@ function ItemTagPicker({
         aria-label={label}
         onChange={(event) => {
           if (!event.target.value) return;
+          if (event.target.value === "__create_tag__") {
+            const name = window.prompt("Create tag");
+            const cleaned = String(name || "").trim();
+            event.target.value = "";
+            if (!cleaned) return;
+            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
+              const id = String(createdId || cleaned).trim();
+              if (id) onChange(toggleTagId(record, id));
+            });
+            return;
+          }
           onChange(toggleTagId(record, event.target.value));
           event.target.value = "";
         }}
@@ -406,6 +422,7 @@ function ItemTagPicker({
             {tag.name || tag.id}
           </option>
         ))}
+        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
       </select>
     </div>
   );
@@ -422,6 +439,7 @@ export function WorkItemsCenter({
   onAsk,
   onAddTask,
   onUpdateTask,
+  onCreateControlledOption,
   onOpenProjectConsole,
 }: Props) {
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
@@ -533,6 +551,22 @@ export function WorkItemsCenter({
     ])].sort(),
     [tasks, workspaceMembers],
   );
+  const deliveryEntityOptions = useMemo(
+    () =>
+      controlledOptionNames(tags, "delivery_entity", [
+        ...projects.map((project) => project.deliveryEntity || project.bpo),
+        ...tasks.map((item) => item.deliveryEntity || item.bpo),
+      ]),
+    [projects, tags, tasks],
+  );
+  const clientEntityOptions = useMemo(
+    () =>
+      controlledOptionNames(tags, "client_entity", [
+        ...projects.map((project) => project.clientEntity || project.client),
+        ...tasks.map((item) => item.clientEntity || item.client),
+      ]),
+    [projects, tags, tasks],
+  );
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentOptions = useMemo(() => {
     const projectId = newProjectId || baseProjectId;
@@ -641,9 +675,9 @@ export function WorkItemsCenter({
           <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
           <small>{itemProjectTitle(item, projects)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
         </button>}
-        {itemColumnSet.has("delivery_entity") && <InlineText ariaLabel={`Delivery Entity for ${title(item)}`} onCommit={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} value={deliveryEntity(item, projects)} />}
-        {itemColumnSet.has("client_entity") && <InlineText ariaLabel={`Client Entity for ${title(item)}`} onCommit={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} value={clientEntity(item, projects)} />}
-        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
+        {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
+        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
         {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>}
@@ -1034,9 +1068,9 @@ export function WorkItemsCenter({
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label>GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label>Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
-            <label>Delivery Entity<InlineText ariaLabel="Selected item delivery entity" onCommit={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} value={deliveryEntity(selectedItem, projects)} /></label>
-            <label>Client Entity<InlineText ariaLabel="Selected item client entity" onCommit={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} value={clientEntity(selectedItem, projects)} /></label>
-            <label>Tags<ItemTagPicker label="Selected item tags" onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
+            <label>Delivery Entity<ControlledSelect ariaLabel="Selected item delivery entity" onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(selectedItem, projects)} /></label>
+            <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
+            <label>Tags<ItemTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"

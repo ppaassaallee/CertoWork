@@ -84,11 +84,13 @@ import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
+import { ControlledListsSettings } from "./ControlledListsSettings";
 import {
   buildProjectTemplate,
   instantiateTemplateItems,
   type TemplateRole,
 } from "../lib/projectTemplates";
+import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
 import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
@@ -152,7 +154,8 @@ type CenterView =
   | "notes"
   | "strategy"
   | "portfolio"
-  | "project";
+  | "project"
+  | "settings";
 
 function timestamp(value: any) {
   if (value?.seconds)
@@ -770,6 +773,10 @@ export function DelivereeWorkspace() {
     if (lens.kind === "review") setPanel("approvals");
     if (lens.kind === "work")
       setPanel(lens.section === "portfolio" ? "projects" : "today");
+    if (lens.kind === "settings") {
+      setPanel(null);
+      goCenterView("settings");
+    }
   }, [lens.kind, lens.kind === "work" ? lens.section : null]);
 
   useEffect(() => {
@@ -1814,6 +1821,117 @@ export function DelivereeWorkspace() {
       ...patch,
       updatedAt: serverTimestamp(),
     });
+  };
+
+  const createControlledOption = async (
+    group: "delivery_entity" | "client_entity" | "tag",
+    name: string,
+  ) => {
+    if (!user || !workspace) return name;
+    const cleaned = name.trim();
+    if (!cleaned) return "";
+    const exists = categories.some(
+      (category) =>
+        categoryGroup(category) === group &&
+        String(category.name || "").trim().toLowerCase() ===
+          cleaned.toLowerCase(),
+    );
+    const existing = categories.find(
+      (category) =>
+        categoryGroup(category) === group &&
+        String(category.name || "").trim().toLowerCase() ===
+          cleaned.toLowerCase(),
+    );
+    if (exists) return group === "tag" ? existing?.id || cleaned : cleaned;
+    const created = await addDoc(collection(db, "categories"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      name: cleaned,
+      group,
+      color:
+        group === "delivery_entity"
+          ? "#315f46"
+          : group === "client_entity"
+            ? "#4b6988"
+            : "#7b5ea7",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
+    return group === "tag" ? created.id : cleaned;
+  };
+
+  const renameControlledOption = async (
+    group: "delivery_entity" | "client_entity" | "tag",
+    option: ControlledListOption,
+    name: string,
+  ) => {
+    if (!user || !workspace || !option.id) return;
+    const previous = String(option.name || "").trim();
+    const next = name.trim();
+    if (!previous || !next || previous === next) return;
+    const batch = writeBatch(db);
+    batch.update(doc(db, "categories", option.id), {
+      name: next,
+      updatedAt: serverTimestamp(),
+    });
+    if (group === "delivery_entity") {
+      projects
+        .filter(
+          (project) =>
+            String(project.deliveryEntity || project.bpo || "").trim() ===
+            previous,
+        )
+        .forEach((project) =>
+          batch.update(doc(db, "projects", project.id), {
+            deliveryEntity: next,
+            bpo: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      tasks
+        .filter(
+          (task) =>
+            String(task.deliveryEntity || task.bpo || "").trim() === previous,
+        )
+        .forEach((task) =>
+          batch.update(doc(db, "tasks", task.id), {
+            deliveryEntity: next,
+            bpo: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+    }
+    if (group === "client_entity") {
+      projects
+        .filter(
+          (project) =>
+            String(project.clientEntity || project.client || "").trim() ===
+            previous,
+        )
+        .forEach((project) =>
+          batch.update(doc(db, "projects", project.id), {
+            clientEntity: next,
+            client: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      tasks
+        .filter(
+          (task) =>
+            String(task.clientEntity || task.client || "").trim() === previous,
+        )
+        .forEach((task) =>
+          batch.update(doc(db, "tasks", task.id), {
+            clientEntity: next,
+            client: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+    }
+    await batch.commit();
+    setNotice(`${previous} renamed to ${next}.`);
   };
 
   const createCostTemplate = async (template: any) => {
@@ -3158,6 +3276,18 @@ export function DelivereeWorkspace() {
             >
               <LayoutGrid size={13} /> Portfolio
             </button>
+            <button
+              aria-selected={centerView === "settings"}
+              className={centerView === "settings" ? "is-active" : ""}
+              onClick={() => {
+                goCenterView("settings");
+                setPanel(null);
+              }}
+              role="tab"
+              type="button"
+            >
+              <Settings size={13} /> Settings
+            </button>
           </div>
         </section>
 
@@ -3514,6 +3644,7 @@ export function DelivereeWorkspace() {
             }}
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
+            onCreateControlledOption={createControlledOption}
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
@@ -3534,6 +3665,15 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
+        ) : centerView === "settings" ? (
+          <ControlledListsSettings
+            categories={categories}
+            onBack={() => goCenterView("conversation")}
+            onCreateOption={createControlledOption}
+            onRenameOption={renameControlledOption}
+            projects={projects}
+            tasks={tasks}
+          />
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
             onArchiveProject={archiveProject}
@@ -3544,6 +3684,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onCreateControlledOption={createControlledOption}
             onOpenProject={openProjectRecord}
             onUpdateProject={updateProject}
             onApplyProjectTemplate={applyProjectTemplate}

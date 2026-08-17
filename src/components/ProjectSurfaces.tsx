@@ -69,6 +69,8 @@ import {
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { controlledOptionNames } from "../lib/controlledLists";
+import { ControlledSelect } from "./ControlledSelect";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -158,11 +160,13 @@ function TagPicker({
   record,
   tags,
   onChange,
+  onCreateTag,
   label = "Tags",
 }: {
   record: any;
   tags: TagLike[];
   onChange: (patch: Record<string, unknown>) => void;
+  onCreateTag?: (name: string) => Promise<string | void> | string | void;
   label?: string;
 }) {
   const ids = tagIds(record);
@@ -178,6 +182,17 @@ function TagPicker({
         aria-label={label}
         onChange={(event) => {
           if (!event.target.value) return;
+          if (event.target.value === "__create_tag__") {
+            const name = window.prompt("Create tag");
+            const cleaned = String(name || "").trim();
+            event.target.value = "";
+            if (!cleaned) return;
+            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
+              const id = String(createdId || cleaned).trim();
+              if (id) onChange(toggleTagId(record, id));
+            });
+            return;
+          }
           onChange(toggleTagId(record, event.target.value));
           event.target.value = "";
         }}
@@ -190,6 +205,7 @@ function TagPicker({
             {tag.name || tag.id}
           </option>
         ))}
+        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
       </select>
     </div>
   );
@@ -4310,6 +4326,7 @@ export function ProjectCommandCenter({
   onCreateProjectTemplate,
   onDeleteProjectTemplate,
   onApplyProjectTemplate,
+  onCreateControlledOption,
 }: {
   projects: any[];
   tasks: any[];
@@ -4335,6 +4352,10 @@ export function ProjectCommandCenter({
     template: any,
     application: TemplateApplication,
   ) => Promise<void> | void;
+  onCreateControlledOption?: (
+    group: "delivery_entity" | "client_entity" | "tag",
+    name: string,
+  ) => Promise<string | void> | string | void;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
@@ -4385,24 +4406,24 @@ export function ProjectCommandCenter({
   const activeMemberOptions = workspaceMembers
     .filter((member) => String(member.status || "active") !== "removed")
     .map((member) => ({ id: member.id, name: memberName(member) }));
-  const bpoOptions = [
-    ...new Set(
-      realProjects
-        .map((project) =>
-          String(project.deliveryEntity || project.bpo || "").trim(),
-        )
-        .filter(Boolean),
-    ),
-  ].sort();
-  const clientOptions = [
-    ...new Set(
-      realProjects
-        .map((project) =>
-          String(project.clientEntity || project.client || "").trim(),
-        )
-        .filter(Boolean),
-    ),
-  ].sort();
+  const discoveredDeliveryEntities = [
+    ...realProjects.map((project) => project.deliveryEntity || project.bpo),
+    ...tasks.map((task) => task.deliveryEntity || task.bpo),
+  ].map((value) => String(value || "").trim());
+  const discoveredClientEntities = [
+    ...realProjects.map((project) => project.clientEntity || project.client),
+    ...tasks.map((task) => task.clientEntity || task.client),
+  ].map((value) => String(value || "").trim());
+  const bpoOptions = controlledOptionNames(
+    tags,
+    "delivery_entity",
+    discoveredDeliveryEntities,
+  );
+  const clientOptions = controlledOptionNames(
+    tags,
+    "client_entity",
+    discoveredClientEntities,
+  );
   const phaseOptions: DeliveryPhase[] = (
     stageFilter === "all"
       ? Object.values(DELIVERY_PHASES_BY_STAGE).flat()
@@ -5482,44 +5503,51 @@ export function ProjectCommandCenter({
                         </span>
                       </div>}
                       {columnSet.has("delivery_entity") && <div className="do-master-data-cell">
-                        <input
-                          aria-label={`Delivery Entity for ${projectTitle(project)}`}
-                          defaultValue={
+                        <ControlledSelect
+                          ariaLabel={`Delivery Entity for ${projectTitle(project)}`}
+                          value={
                             project.deliveryEntity || project.bpo || "Internal"
                           }
-                          list="do-bpo-master"
-                          onBlur={(event) =>
+                          options={bpoOptions}
+                          onAddOption={(name) =>
+                            onCreateControlledOption?.("delivery_entity", name)
+                          }
+                          onChange={(value) =>
                             onUpdateProject(project.id, {
                               deliveryEntity:
-                                event.target.value.trim() || "Internal",
-                              bpo: event.target.value.trim() || "Internal",
+                                value.trim() || "Internal",
+                              bpo: value.trim() || "Internal",
                             })
                           }
-                          placeholder="Delivery Entity"
                         />
                       </div>}
                       {columnSet.has("client_entity") && <div className="do-master-data-cell">
-                        <input
-                          aria-label={`Client Entity for ${projectTitle(project)}`}
-                          defaultValue={
+                        <ControlledSelect
+                          ariaLabel={`Client Entity for ${projectTitle(project)}`}
+                          value={
                             project.clientEntity ||
                             project.client ||
                             "Internal"
                           }
-                          list="do-client-master"
-                          onBlur={(event) =>
+                          options={clientOptions}
+                          onAddOption={(name) =>
+                            onCreateControlledOption?.("client_entity", name)
+                          }
+                          onChange={(value) =>
                             onUpdateProject(project.id, {
                               clientEntity:
-                                event.target.value.trim() || "Internal",
-                              client: event.target.value.trim() || "Internal",
+                                value.trim() || "Internal",
+                              client: value.trim() || "Internal",
                             })
                           }
-                          placeholder="Client Entity"
                         />
                       </div>}
                       {columnSet.has("tags") && (
                         <TagPicker
                           label={`Tags for ${projectTitle(project)}`}
+                          onCreateTag={(name) =>
+                            onCreateControlledOption?.("tag", name)
+                          }
                           onChange={(patch) => onUpdateProject(project.id, patch)}
                           record={project}
                           tags={tags}
