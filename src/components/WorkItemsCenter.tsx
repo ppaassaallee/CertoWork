@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Square,
 } from "lucide-react";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
@@ -25,6 +26,26 @@ type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "sub
 type WorkItemsViewMode = "list" | "kanban" | "gantt";
 type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag";
 type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity";
+type ItemViewFilters = {
+  mode: WorkItemsViewMode;
+  projectFilter: string;
+  statusFilter: string;
+  priorityFilter: string;
+  typeFilter: string;
+  ownerFilter: string;
+  dateFilter: string;
+  tagFilter: string;
+  groupBy: GroupBy;
+  primarySort: SortBy;
+  secondarySort: SortBy;
+  query: string;
+};
+type ItemSavedView = {
+  name: string;
+  columns: ItemColumnKey[];
+  widths?: Partial<Record<ItemColumnKey, number>>;
+  filters?: Partial<ItemViewFilters>;
+};
 type ItemColumnKey =
   | "title"
   | "delivery_entity"
@@ -486,13 +507,7 @@ export function WorkItemsCenter({
   const [bulkDueDate, setBulkDueDate] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
-  const [savedItemViews, setSavedItemViews] = useState<
-    Array<{
-      name: string;
-      columns: ItemColumnKey[];
-      widths?: Partial<Record<ItemColumnKey, number>>;
-    }>
-  >(() => {
+  const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       return JSON.parse(window.localStorage.getItem(viewStorageKey("items")) || "[]");
@@ -533,9 +548,23 @@ export function WorkItemsCenter({
   });
   const itemColumnSet = new Set(visibleItemColumns);
   const itemGridStyle = {
-    gridTemplateColumns: `24px 35px ${visibleItemColumns
+    gridTemplateColumns: `24px 24px 35px ${visibleItemColumns
       .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
       .join(" ")}`,
+  };
+  const currentItemViewFilters: ItemViewFilters = {
+    mode,
+    projectFilter,
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+    ownerFilter,
+    dateFilter,
+    tagFilter,
+    groupBy,
+    primarySort,
+    secondarySort,
+    query,
   };
 
   const updateItemColumnWidth = (column: ItemColumnKey, value: number) => {
@@ -574,7 +603,12 @@ export function WorkItemsCenter({
     if (!name) return;
     const next = [
       ...savedItemViews.filter((candidate) => candidate.name !== name),
-      { name, columns: visibleItemColumns, widths: itemColumnPixels },
+      {
+        name,
+        columns: visibleItemColumns,
+        widths: itemColumnPixels,
+        filters: currentItemViewFilters,
+      },
     ];
     setSavedItemViews(next);
     window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
@@ -591,6 +625,20 @@ export function WorkItemsCenter({
         viewWidthsStorageKey("items-current"),
         JSON.stringify(nextWidths),
       );
+    }
+    if (saved.filters) {
+      setMode(saved.filters.mode || "list");
+      setProjectFilter(saved.filters.projectFilter || activeProject?.id || "all");
+      setStatusFilter(saved.filters.statusFilter || "open");
+      setPriorityFilter(saved.filters.priorityFilter || "all");
+      setTypeFilter(saved.filters.typeFilter || "all");
+      setOwnerFilter(saved.filters.ownerFilter || "all");
+      setDateFilter(saved.filters.dateFilter || "all");
+      setTagFilter(saved.filters.tagFilter || "all");
+      setGroupBy(saved.filters.groupBy || (activeProject ? "hierarchy" : "project"));
+      setPrimarySort(saved.filters.primarySort || "project");
+      setSecondarySort(saved.filters.secondarySort || "priority");
+      setQuery(saved.filters.query || "");
     }
     window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(saved.columns));
   };
@@ -653,7 +701,7 @@ export function WorkItemsCenter({
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
       const matchesStatus = statusFilter === "all" ||
-        (statusFilter === "open" ? !["done", "completed", "closed", "cancelled"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
+        (statusFilter === "open" ? !["done", "completed", "closed", "cancelled", "archived", "deleted"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
       const matchesPriority = priorityFilter === "all" || priorityValue(item.priority) === priorityFilter;
       const itemKind = workItemKind(item);
       const matchesType = typeFilter === "all" ||
@@ -738,12 +786,21 @@ export function WorkItemsCenter({
     setSelectedBulkIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
 
+  const toggleDone = (item: any) => {
+    const isDone = canonicalStatus(item) === "done";
+    onUpdateTask(item.id, {
+      status: isDone ? "backlog" : "done",
+      completedAt: isDone ? null : new Date().toISOString(),
+    });
+  };
+
   const renderRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
+    const isDone = canonicalStatus(item) === "done";
     return (
       <article
-        className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        className={`do-items-row is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
         onDragOver={(event) => {
@@ -759,8 +816,11 @@ export function WorkItemsCenter({
         }}
         style={itemGridStyle}
       >
-        <button aria-label={`Select ${title(item)}`} className="do-items-check" onClick={() => toggleBulk(item.id)} type="button">
-          {selectedBulkIds.includes(item.id) ? <Check size={12} /> : <Circle size={12} />}
+        <button aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`} className={`do-items-check ${isDone ? "is-done" : ""}`} onClick={() => toggleDone(item)} title={isDone ? "Reopen item" : "Mark item done"} type="button">
+          {isDone ? <Check size={12} /> : <Circle size={12} />}
+        </button>
+        <button aria-label={`Select ${title(item)} for bulk editing`} className={`do-items-select ${selectedBulkIds.includes(item.id) ? "is-selected" : ""}`} onClick={() => toggleBulk(item.id)} title="Select for bulk editing" type="button">
+          {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
         </button>
         <button
           aria-label={`Drag to reorder ${title(item)}`}
@@ -1019,7 +1079,7 @@ export function WorkItemsCenter({
           {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
         </select>
         <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-          <option value="open">Open</option>
+          <option value="open">Open · hide done</option>
           <option value="all">All statuses</option>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>

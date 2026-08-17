@@ -2685,6 +2685,25 @@ type PortfolioDimension =
   | "health"
   | "service"
   | "owner";
+type PortfolioViewFilters = {
+  filter: string;
+  stageFilter: "all" | DeliveryStage;
+  phaseFilter: string;
+  healthFilter: string;
+  tagFilter: string;
+  taxonomyDimension: PortfolioDimension;
+  taxonomyValue: string | null;
+  search: string;
+  view: PortfolioView;
+  primarySort: ProjectSortKey;
+  secondarySort: ProjectSortKey;
+};
+type PortfolioSavedView = {
+  name: string;
+  columns: PortfolioColumnKey[];
+  widths?: Partial<Record<PortfolioColumnKey, number>>;
+  filters?: Partial<PortfolioViewFilters>;
+};
 
 const projectSortOptions: Array<{ value: ProjectSortKey; label: string }> = [
   { value: "project", label: "Project / taxonomy" },
@@ -4382,7 +4401,7 @@ export function ProjectCommandCenter({
     name: string,
   ) => Promise<string | void> | string | void;
 } & SharedProjectActions) {
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("active");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -4398,13 +4417,7 @@ export function ProjectCommandCenter({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [viewName, setViewName] = useState("");
-  const [savedViews, setSavedViews] = useState<
-    Array<{
-      name: string;
-      columns: PortfolioColumnKey[];
-      widths?: Partial<Record<PortfolioColumnKey, number>>;
-    }>
-  >(() => {
+  const [savedViews, setSavedViews] = useState<PortfolioSavedView[]>(() => {
     if (typeof window === "undefined") return [];
     try {
       return JSON.parse(
@@ -4476,6 +4489,19 @@ export function ProjectCommandCenter({
       : phasesForStage(stageFilter)
   ) as DeliveryPhase[];
   const columnSet = new Set(visibleColumns);
+  const currentPortfolioViewFilters: PortfolioViewFilters = {
+    filter,
+    stageFilter,
+    phaseFilter,
+    healthFilter,
+    tagFilter,
+    taxonomyDimension,
+    taxonomyValue,
+    search,
+    view,
+    primarySort,
+    secondarySort,
+  };
   const portfolioGridStyle = {
     gridTemplateColumns: visibleColumns
       .map((column) => `${columnWidths[column] || defaultPortfolioColumnPixels[column]}px`)
@@ -4520,7 +4546,12 @@ export function ProjectCommandCenter({
     if (!name) return;
     const next = [
       ...savedViews.filter((candidate) => candidate.name !== name),
-      { name, columns: visibleColumns, widths: columnWidths },
+      {
+        name,
+        columns: visibleColumns,
+        widths: columnWidths,
+        filters: currentPortfolioViewFilters,
+      },
     ];
     setSavedViews(next);
     window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
@@ -4537,6 +4568,19 @@ export function ProjectCommandCenter({
         columnWidthsStorageKey("portfolio-current"),
         JSON.stringify(nextWidths),
       );
+    }
+    if (saved.filters) {
+      setFilter(saved.filters.filter || "active");
+      setStageFilter(saved.filters.stageFilter || "all");
+      setPhaseFilter(saved.filters.phaseFilter || "all");
+      setHealthFilter(saved.filters.healthFilter || "all");
+      setTagFilter(saved.filters.tagFilter || "all");
+      setTaxonomyDimension(saved.filters.taxonomyDimension || "bpo");
+      setTaxonomyValue(saved.filters.taxonomyValue || null);
+      setSearch(saved.filters.search || "");
+      setView(saved.filters.view || "overview");
+      setPrimarySort(saved.filters.primarySort || "stage");
+      setSecondarySort(saved.filters.secondarySort || "due");
     }
     window.localStorage.setItem(
       columnsStorageKey("portfolio-current"),
