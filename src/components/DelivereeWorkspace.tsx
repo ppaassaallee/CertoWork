@@ -1767,15 +1767,42 @@ export function DelivereeWorkspace() {
     option: ControlledListOption,
     name: string,
   ) => {
-    if (!user || !workspace || !option.id) return;
+    if (!user || !workspace) return;
     const previous = String(option.name || "").trim();
     const next = name.trim();
     if (!previous || !next || previous === next) return;
     const batch = writeBatch(db);
-    batch.update(doc(db, "categories", option.id), {
-      name: next,
-      updatedAt: serverTimestamp(),
-    });
+    if (option.id) {
+      batch.update(doc(db, "categories", option.id), {
+        name: next,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const existing = categories.find(
+        (category) =>
+          categoryGroup(category) === group &&
+          String(category.name || "").trim().toLowerCase() ===
+            next.toLowerCase(),
+      );
+      if (!existing) {
+        const categoryRef = doc(collection(db, "categories"));
+        batch.set(categoryRef, {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          name: next,
+          group,
+          color:
+            group === "delivery_entity"
+              ? "#315f46"
+              : group === "client_entity"
+                ? "#4b6988"
+                : "#7b5ea7",
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
     if (group === "delivery_entity") {
       projects
         .filter(
@@ -1830,8 +1857,21 @@ export function DelivereeWorkspace() {
           }),
         );
     }
+    if (group === "tag") {
+      const matchingTag = categories.find(
+        (category) =>
+          categoryGroup(category) === "tag" &&
+          String(category.name || "").trim() === previous,
+      );
+      if (matchingTag?.id && !option.id) {
+        batch.update(doc(db, "categories", matchingTag.id), {
+          name: next,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
     await batch.commit();
-    setNotice(`${previous} renamed to ${next}.`);
+    setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
   };
 
   const createCostTemplate = async (template: any) => {

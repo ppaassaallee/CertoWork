@@ -44,23 +44,24 @@ function EditableOptionRow({
   ) => void;
 }) {
   const [draft, setDraft] = useState(option.name);
+  const isMaster = Boolean(option.id);
   return (
     <div className="do-controlled-option">
       <input
         aria-label={`${controlledListLabels[group]} option`}
-        disabled={!option.id}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
         onBlur={() => {
           const cleaned = draft.trim();
-          if (option.id && cleaned && cleaned !== option.name)
+          if (cleaned && cleaned !== option.name)
             onRename(group, option, cleaned);
           else setDraft(option.name);
         }}
+        title={isMaster ? "Rename this list value" : "Rename this discovered value and add it to the master list"}
         value={draft}
       />
-      {option.id ? (
-        <span>Rename only</span>
+      {isMaster ? (
+        <span>Master</span>
       ) : (
         <button onClick={() => onPromote(group, option.name)} type="button">
           Add to list
