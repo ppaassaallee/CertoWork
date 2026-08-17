@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Plus,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Target,
@@ -67,6 +68,7 @@ import {
   ProjectTemplatesPanel,
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
+import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -76,6 +78,122 @@ type AssignmentMember = {
   emailLower?: string;
   status?: string;
 };
+
+type PortfolioColumnKey =
+  | "project"
+  | "delivery_entity"
+  | "client_entity"
+  | "tags"
+  | "stage"
+  | "phase"
+  | "status"
+  | "health"
+  | "progress"
+  | "due"
+  | "solution_architect"
+  | "project_manager"
+  | "economics"
+  | "actions";
+
+const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
+  project: "Project",
+  delivery_entity: "Delivery Entity",
+  client_entity: "Client Entity",
+  tags: "Tags",
+  stage: "Stage",
+  phase: "Phase",
+  status: "Status",
+  health: "Health",
+  progress: "Progress",
+  due: "Due",
+  solution_architect: "Solution Architect",
+  project_manager: "Project Manager",
+  economics: "Economics",
+  actions: "",
+};
+
+const defaultPortfolioColumns: PortfolioColumnKey[] = [
+  "project",
+  "delivery_entity",
+  "client_entity",
+  "tags",
+  "stage",
+  "phase",
+  "status",
+  "health",
+  "progress",
+  "due",
+  "solution_architect",
+  "project_manager",
+  "economics",
+  "actions",
+];
+
+const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
+  project: "minmax(230px, 1.45fr)",
+  delivery_entity: "minmax(150px, .9fr)",
+  client_entity: "minmax(150px, .9fr)",
+  tags: "minmax(150px, .9fr)",
+  stage: "105px",
+  phase: "120px",
+  status: "105px",
+  health: "120px",
+  progress: "100px",
+  due: "130px",
+  solution_architect: "155px",
+  project_manager: "155px",
+  economics: "120px",
+  actions: "135px",
+};
+
+function columnsStorageKey(scope: string) {
+  return `certo-${scope}-view-config`;
+}
+
+function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
+  return value?.length ? value : fallback;
+}
+
+function TagPicker({
+  record,
+  tags,
+  onChange,
+  label = "Tags",
+}: {
+  record: any;
+  tags: TagLike[];
+  onChange: (patch: Record<string, unknown>) => void;
+  label?: string;
+}) {
+  const ids = tagIds(record);
+  return (
+    <div className="do-tag-picker">
+      <div>
+        {tagLabels(record, tags).slice(0, 3).map((name) => (
+          <span key={name}>{name}</span>
+        ))}
+        {ids.length === 0 && <small>No tags</small>}
+      </div>
+      <select
+        aria-label={label}
+        onChange={(event) => {
+          if (!event.target.value) return;
+          onChange(toggleTagId(record, event.target.value));
+          event.target.value = "";
+        }}
+        value=""
+      >
+        <option value="">+ Tag</option>
+        {tags.map((tag) => (
+          <option key={tag.id} value={tag.id}>
+            {ids.includes(tag.id) ? "Remove " : "Add "}
+            {tag.name || tag.id}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 type SharedProjectActions = {
   onUpdateProject: (
@@ -2505,7 +2623,8 @@ export function ProjectConsolePanel({
 type PortfolioView = "dashboard" | "overview" | "economics";
 type ProjectSortKey =
   | "project"
-  | "bpo_client"
+  | "delivery_entity"
+  | "client_entity"
   | "stage"
   | "phase"
   | "status"
@@ -2528,7 +2647,8 @@ type PortfolioDimension =
 
 const projectSortOptions: Array<{ value: ProjectSortKey; label: string }> = [
   { value: "project", label: "Project / taxonomy" },
-  { value: "bpo_client", label: "BPO / client" },
+  { value: "delivery_entity", label: "Delivery Entity" },
+  { value: "client_entity", label: "Client Entity" },
   { value: "stage", label: "Stage" },
   { value: "phase", label: "Phase" },
   { value: "status", label: "Status" },
@@ -2546,8 +2666,8 @@ const portfolioDimensionOptions: Array<{
   value: PortfolioDimension;
   label: string;
 }> = [
-  { value: "bpo", label: "BPO" },
-  { value: "client", label: "Client" },
+  { value: "bpo", label: "Delivery Entity" },
+  { value: "client", label: "Client Entity" },
   { value: "stage", label: "Delivery stage" },
   { value: "status", label: "Status" },
   { value: "health", label: "Health" },
@@ -4070,8 +4190,10 @@ function projectSortValue(
 ) {
   const projectTasks = tasks.filter((task) => task.projectId === project.id);
   const summary = projectSummary(project, projectTasks);
-  if (key === "bpo_client")
-    return `${project.bpo || ""}|${project.client || ""}`.toLowerCase();
+  if (key === "delivery_entity")
+    return String(project.deliveryEntity || project.bpo || "").toLowerCase();
+  if (key === "client_entity")
+    return String(project.clientEntity || project.client || "").toLowerCase();
   if (key === "stage")
     return String(DELIVERY_STAGES.indexOf(deliveryStage(project))).padStart(
       2,
@@ -4120,9 +4242,9 @@ function portfolioDimensionValue(
   risks: any[],
 ) {
   if (dimension === "bpo")
-    return String(project.bpo || "Internal").trim() || "Internal";
+    return String(project.deliveryEntity || project.bpo || "Internal").trim() || "Internal";
   if (dimension === "client")
-    return String(project.client || "Internal").trim() || "Internal";
+    return String(project.clientEntity || project.client || "Internal").trim() || "Internal";
   if (dimension === "stage") return deliveryStageLabels[deliveryStage(project)];
   if (dimension === "status")
     return projectStatusLabel(String(project.status || "planning"));
@@ -4173,6 +4295,7 @@ export function ProjectCommandCenter({
   tasks,
   risks,
   workspaceMembers = [],
+  tags = [],
   costTemplates = [],
   projectTemplates = [],
   onClose,
@@ -4192,6 +4315,7 @@ export function ProjectCommandCenter({
   tasks: any[];
   risks: any[];
   workspaceMembers?: AssignmentMember[];
+  tags?: TagLike[];
   costTemplates?: any[];
   projectTemplates?: any[];
   onClose: () => void;
@@ -4216,6 +4340,7 @@ export function ProjectCommandCenter({
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [taxonomyDimension, setTaxonomyDimension] =
     useState<PortfolioDimension>("bpo");
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
@@ -4226,6 +4351,33 @@ export function ProjectCommandCenter({
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [viewName, setViewName] = useState("");
+  const [savedViews, setSavedViews] = useState<
+    Array<{ name: string; columns: PortfolioColumnKey[] }>
+  >(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(
+        window.localStorage.getItem(columnsStorageKey("portfolio")) || "[]",
+      );
+    } catch {
+      return [];
+    }
+  });
+  const [visibleColumns, setVisibleColumns] = useState<PortfolioColumnKey[]>(
+    () => {
+      if (typeof window === "undefined") return defaultPortfolioColumns;
+      try {
+        const stored = JSON.parse(
+          window.localStorage.getItem(columnsStorageKey("portfolio-current")) ||
+            "null",
+        );
+        return selectedColumns(stored, defaultPortfolioColumns);
+      } catch {
+        return defaultPortfolioColumns;
+      }
+    },
+  );
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const sorted = sortProjectsByRecency(projects);
   const portfolio = sorted;
@@ -4236,14 +4388,18 @@ export function ProjectCommandCenter({
   const bpoOptions = [
     ...new Set(
       realProjects
-        .map((project) => String(project.bpo || "").trim())
+        .map((project) =>
+          String(project.deliveryEntity || project.bpo || "").trim(),
+        )
         .filter(Boolean),
     ),
   ].sort();
   const clientOptions = [
     ...new Set(
       realProjects
-        .map((project) => String(project.client || "").trim())
+        .map((project) =>
+          String(project.clientEntity || project.client || "").trim(),
+        )
         .filter(Boolean),
     ),
   ].sort();
@@ -4252,6 +4408,51 @@ export function ProjectCommandCenter({
       ? Object.values(DELIVERY_PHASES_BY_STAGE).flat()
       : phasesForStage(stageFilter)
   ) as DeliveryPhase[];
+  const columnSet = new Set(visibleColumns);
+  const portfolioGridStyle = {
+    gridTemplateColumns: visibleColumns
+      .map((column) => portfolioColumnWidths[column])
+      .join(" "),
+  };
+  const toggleColumn = (column: PortfolioColumnKey) => {
+    setVisibleColumns((current) => {
+      const next = current.includes(column)
+        ? current.filter((candidate) => candidate !== column)
+        : defaultPortfolioColumns.filter((candidate) =>
+            [...current, column].includes(candidate),
+          );
+      window.localStorage.setItem(
+        columnsStorageKey("portfolio-current"),
+        JSON.stringify(next),
+      );
+      return next;
+    });
+  };
+  const saveCurrentView = () => {
+    const name = viewName.trim();
+    if (!name) return;
+    const next = [
+      ...savedViews.filter((candidate) => candidate.name !== name),
+      { name, columns: visibleColumns },
+    ];
+    setSavedViews(next);
+    window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
+    setViewName("");
+  };
+  const applySavedView = (name: string) => {
+    const saved = savedViews.find((candidate) => candidate.name === name);
+    if (!saved) return;
+    setVisibleColumns(selectedColumns(saved.columns, defaultPortfolioColumns));
+    window.localStorage.setItem(
+      columnsStorageKey("portfolio-current"),
+      JSON.stringify(saved.columns),
+    );
+  };
+  const deleteSavedView = (name: string) => {
+    const next = savedViews.filter((candidate) => candidate.name !== name);
+    setSavedViews(next);
+    window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
+  };
   const filtered = portfolio.filter((project) => {
     const status = String(project.status || "planning").toLowerCase();
     const health = projectHealth(
@@ -4271,16 +4472,18 @@ export function ProjectCommandCenter({
     const matchesPhase =
       phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
     const matchesHealth = healthFilter === "all" || health === healthFilter;
+    const matchesProjectTag = matchesTag(project, tagFilter);
     const matchesTaxonomy =
       !taxonomyValue ||
       portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
         taxonomyValue;
     const haystack =
-      `${projectTitle(project)} ${project.client || ""} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
+      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
     return (
       matchesFilter &&
       matchesStage &&
       matchesHealth &&
+      matchesProjectTag &&
       matchesPhase &&
       matchesTaxonomy &&
       haystack.includes(search.toLowerCase())
@@ -4984,6 +5187,21 @@ export function ProjectCommandCenter({
               </select>
             </label>
             <label>
+              Tag
+              <select
+                aria-label="Filter projects by tag"
+                onChange={(event) => setTagFilter(event.target.value)}
+                value={tagFilter}
+              >
+                <option value="all">All tags</option>
+                {tags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name || tag.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Sort
               <select
                 aria-label="Primary project sort"
@@ -5050,88 +5268,158 @@ export function ProjectCommandCenter({
               )}
             </span>
           </div>
+          {view === "overview" && (
+            <details className="do-view-manager">
+              <summary>
+                <SlidersHorizontal size={13} /> Views & columns
+              </summary>
+              <div className="do-view-manager-body">
+                <label>
+                  Saved views
+                  <select
+                    aria-label="Apply saved portfolio view"
+                    onChange={(event) => applySavedView(event.target.value)}
+                    value=""
+                  >
+                    <option value="">Choose saved view</option>
+                    {savedViews.map((saved) => (
+                      <option key={saved.name} value={saved.name}>
+                        {saved.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  New view name
+                  <input
+                    onChange={(event) => setViewName(event.target.value)}
+                    placeholder="PM weekly view"
+                    value={viewName}
+                  />
+                </label>
+                <button onClick={saveCurrentView} type="button">
+                  Save current view
+                </button>
+                <div className="do-column-picker">
+                  {defaultPortfolioColumns
+                    .filter((column) => column !== "project" && column !== "actions")
+                    .map((column) => (
+                      <label key={column}>
+                        <input
+                          checked={visibleColumns.includes(column)}
+                          onChange={() => toggleColumn(column)}
+                          type="checkbox"
+                        />
+                        {portfolioColumnLabels[column]}
+                      </label>
+                    ))}
+                </div>
+                {savedViews.length > 0 && (
+                  <div className="do-saved-view-list">
+                    {savedViews.map((saved) => (
+                      <button
+                        key={saved.name}
+                        onClick={() => deleteSavedView(saved.name)}
+                        type="button"
+                      >
+                        Delete {saved.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
           {view === "overview" ? (
             <div className="do-command-table-scroll" ref={tableScrollRef}>
             <div className="do-command-table">
-              <div className="do-command-table-head">
-                <span>
+              <div className="do-command-table-head" style={portfolioGridStyle}>
+                {columnSet.has("project") && <span>
                   Project{" "}
                   <InfoTip
                     label="Project"
                     text="Edit the name directly. The stable project key remains underneath."
                   />
-                </span>
-                <span>
-                  BPO / client{" "}
+                </span>}
+                {columnSet.has("delivery_entity") && <span>
+                  Delivery Entity{" "}
                   <InfoTip
-                    label="BPO / client"
-                    text="Choose an existing BPO or client from the current master list, or type a new value."
+                    label="Delivery Entity"
+                    text="Who delivers the work: BPO, internal team, vendor, or operating unit."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("client_entity") && <span>
+                  Client Entity{" "}
+                  <InfoTip
+                    label="Client Entity"
+                    text="Who receives or pays for the work. Choose from existing clients or type a new one."
+                  />
+                </span>}
+                {columnSet.has("tags") && <span>Tags</span>}
+                {columnSet.has("stage") && <span>
                   Stage{" "}
                   <InfoTip
                     label="Stage"
                     text="Fixed Certo lifecycle: Define, Onboarding, Build, Deploy or Operations."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("phase") && <span>
                   Phase{" "}
                   <InfoTip
                     label="Phase"
                     text="Standard checkpoint inside the selected Stage. The options change automatically when Stage changes."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("status") && <span>
                   Status{" "}
                   <InfoTip
                     label="Status"
                     text="Administrative record state: Planning, Active, Paused, Completed or Archived."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("health") && <span>
                   Health{" "}
                   <InfoTip
                     label="Health"
                     text="Auto checks blocked work, critical or open risks and overdue dates. Select a value to override it."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("progress") && <span>
                   Progress{" "}
                   <InfoTip
                     label="Progress"
                     text="Auto equals completed executable items divided by all executable items. Enter a percentage to override it."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("due") && <span>
                   Due{" "}
                   <InfoTip
                     label="Due date"
                     text="Editable delivery date. A revised date is used when one exists."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("solution_architect") && <span>
                   Solution Architect{" "}
                   <InfoTip
                     label="Solution Architect"
                     text="Accountable for solution design and technical coherence."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("project_manager") && <span>
                   Project Manager{" "}
                   <InfoTip
                     label="Project Manager"
                     text="Accountable for delivery planning, coordination, status and escalation."
                   />
-                </span>
-                <span>
+                </span>}
+                {columnSet.has("economics") && <span>
                   Economics{" "}
                   <InfoTip
                     label="Economics"
                     text="Build cost and the latest calendar-month operating cost."
                   />
-                </span>
-                <span />
+                </span>}
+                {columnSet.has("actions") && <span />}
               </div>
               {sortedFiltered.map((project) => {
                 const projectTasks = tasks.filter(
@@ -5152,8 +5440,8 @@ export function ProjectCommandCenter({
                     className={`do-command-project-block ${project.demo ? "is-demo" : ""}`}
                     key={project.id}
                   >
-                    <article>
-                      <div className="do-command-project-name">
+                    <article style={portfolioGridStyle}>
+                      {columnSet.has("project") && <div className="do-command-project-name">
                         <button
                           aria-label={
                             favorite ? "Remove favorite" : "Favorite project"
@@ -5192,31 +5480,52 @@ export function ProjectCommandCenter({
                               "Delivery"}
                           </small>
                         </span>
-                      </div>
-                      <div className="do-master-data-cell">
+                      </div>}
+                      {columnSet.has("delivery_entity") && <div className="do-master-data-cell">
                         <input
-                          aria-label={`BPO for ${projectTitle(project)}`}
-                          defaultValue={project.bpo || "Internal"}
+                          aria-label={`Delivery Entity for ${projectTitle(project)}`}
+                          defaultValue={
+                            project.deliveryEntity || project.bpo || "Internal"
+                          }
                           list="do-bpo-master"
                           onBlur={(event) =>
                             onUpdateProject(project.id, {
+                              deliveryEntity:
+                                event.target.value.trim() || "Internal",
                               bpo: event.target.value.trim() || "Internal",
                             })
                           }
-                          placeholder="BPO"
+                          placeholder="Delivery Entity"
                         />
+                      </div>}
+                      {columnSet.has("client_entity") && <div className="do-master-data-cell">
                         <input
-                          aria-label={`Client for ${projectTitle(project)}`}
-                          defaultValue={project.client || "Internal"}
+                          aria-label={`Client Entity for ${projectTitle(project)}`}
+                          defaultValue={
+                            project.clientEntity ||
+                            project.client ||
+                            "Internal"
+                          }
                           list="do-client-master"
                           onBlur={(event) =>
                             onUpdateProject(project.id, {
+                              clientEntity:
+                                event.target.value.trim() || "Internal",
                               client: event.target.value.trim() || "Internal",
                             })
                           }
-                          placeholder="Client"
+                          placeholder="Client Entity"
                         />
-                      </div>
+                      </div>}
+                      {columnSet.has("tags") && (
+                        <TagPicker
+                          label={`Tags for ${projectTitle(project)}`}
+                          onChange={(patch) => onUpdateProject(project.id, patch)}
+                          record={project}
+                          tags={tags}
+                        />
+                      )}
+                      {columnSet.has("stage") && (
                       <select
                         aria-label={`Stage for ${projectTitle(project)}`}
                         className="do-stage-select"
@@ -5245,6 +5554,8 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
+                      )}
+                      {columnSet.has("phase") && (
                       <select
                         aria-label={`Phase for ${projectTitle(project)}`}
                         className="do-table-select"
@@ -5261,6 +5572,8 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
+                      )}
+                      {columnSet.has("status") && (
                       <select
                         aria-label={`Status for ${projectTitle(project)}`}
                         className="do-table-select"
@@ -5292,6 +5605,8 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
+                      )}
+                      {columnSet.has("health") && (
                       <select
                         aria-label={`Health for ${projectTitle(project)}`}
                         className={`do-health-select ${healthClass(health)}`}
@@ -5312,7 +5627,8 @@ export function ProjectCommandCenter({
                         <option value="at_risk">At risk</option>
                         <option value="blocked">Blocked</option>
                       </select>
-                      <div className="do-progress-edit">
+                      )}
+                      {columnSet.has("progress") && <div className="do-progress-edit">
                         <input
                           aria-label={`Progress for ${projectTitle(project)}`}
                           defaultValue={summary.progress}
@@ -5341,7 +5657,8 @@ export function ProjectCommandCenter({
                             Auto
                           </button>
                         )}
-                      </div>
+                      </div>}
+                      {columnSet.has("due") && (
                       <input
                         aria-label={`Due date for ${projectTitle(project)}`}
                         className="do-table-input"
@@ -5357,6 +5674,8 @@ export function ProjectCommandCenter({
                         }
                         type="date"
                       />
+                      )}
+                      {columnSet.has("solution_architect") && (
                       <select
                         aria-label={`Solution Architect for ${projectTitle(project)}`}
                         className="do-table-select"
@@ -5380,6 +5699,8 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
+                      )}
+                      {columnSet.has("project_manager") && (
                       <select
                         aria-label={`Project Manager for ${projectTitle(project)}`}
                         className="do-table-select"
@@ -5405,12 +5726,16 @@ export function ProjectCommandCenter({
                           </option>
                         ))}
                       </select>
+                      )}
+                      {columnSet.has("economics") && (
                       <span>
                         ${summary.initial.toLocaleString()}
                         <small>
                           ${summary.recurring.toLocaleString()} / mo
                         </small>
                       </span>
+                      )}
+                      {columnSet.has("actions") && (
                       <div className="do-command-row-actions">
                         {project.demo ? (
                           <button
@@ -5481,9 +5806,10 @@ export function ProjectCommandCenter({
                               type="button"
                             >
                               <X size={13} />
-                            </button>
-                          )}
+                          </button>
+                        )}
                       </div>
+                      )}
                     </article>
                     {expandedId === project.id &&
                       renderEconomics(project, projectTasks)}

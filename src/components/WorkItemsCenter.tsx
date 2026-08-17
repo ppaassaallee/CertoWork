@@ -16,18 +16,31 @@ import {
 } from "lucide-react";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
+import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { InfoTip, MultiAssigneePicker } from "./ProjectControls";
 import { AiRewriteButton } from "./AiRewriteButton";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt";
-type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due";
-type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type";
+type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag";
+type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity";
+type ItemColumnKey =
+  | "title"
+  | "delivery_entity"
+  | "client_entity"
+  | "tags"
+  | "status"
+  | "priority"
+  | "gtd"
+  | "bucket"
+  | "assignees"
+  | "due";
 
 type Props = {
   activeProject: any | null;
   projects: any[];
   tasks: any[];
+  tags?: TagLike[];
   workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string }>;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
@@ -65,6 +78,8 @@ const dueFilterOptions = ["overdue", "today", "this_week", "next_week", "this_mo
 const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "rank", label: "Manual order" },
   { value: "project", label: "Project" },
+  { value: "delivery_entity", label: "Delivery Entity" },
+  { value: "client_entity", label: "Client Entity" },
   { value: "priority", label: "Priority" },
   { value: "due", label: "Due date" },
   { value: "status", label: "Status" },
@@ -72,6 +87,49 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "type", label: "Type" },
   { value: "title", label: "Title" },
 ];
+
+const defaultItemColumns: ItemColumnKey[] = [
+  "title",
+  "delivery_entity",
+  "client_entity",
+  "tags",
+  "status",
+  "priority",
+  "gtd",
+  "bucket",
+  "assignees",
+  "due",
+];
+
+const itemColumnLabels: Record<ItemColumnKey, string> = {
+  title: "Item",
+  delivery_entity: "Delivery Entity",
+  client_entity: "Client Entity",
+  tags: "Tags",
+  status: "Status",
+  priority: "Priority",
+  gtd: "GTD",
+  bucket: "Action Board",
+  assignees: "Assignees",
+  due: "Due",
+};
+
+const itemColumnWidths: Record<ItemColumnKey, string> = {
+  title: "minmax(210px, 1.25fr)",
+  delivery_entity: "minmax(145px, .75fr)",
+  client_entity: "minmax(145px, .75fr)",
+  tags: "minmax(130px, .7fr)",
+  status: "94px",
+  priority: "64px",
+  gtd: "104px",
+  bucket: "92px",
+  assignees: "minmax(112px, .75fr)",
+  due: "112px",
+};
+
+function viewStorageKey(scope: string) {
+  return `certo-${scope}-view-config`;
+}
 
 function title(item: any) {
   return item?.title || item?.name || "Untitled";
@@ -84,6 +142,32 @@ function projectTitle(project: any) {
 function itemProjectTitle(item: any, projects: any[]) {
   if (!item?.projectId) return "No project / errands";
   return projectTitle(projects.find((project) => project.id === item.projectId));
+}
+
+function itemProject(item: any, projects: any[]) {
+  return projects.find((project) => project.id === item?.projectId);
+}
+
+function deliveryEntity(item: any, projects: any[]) {
+  const project = itemProject(item, projects);
+  return String(
+    item?.deliveryEntity ||
+      item?.bpo ||
+      project?.deliveryEntity ||
+      project?.bpo ||
+      "Internal",
+  );
+}
+
+function clientEntity(item: any, projects: any[]) {
+  const project = itemProject(item, projects);
+  return String(
+    item?.clientEntity ||
+      item?.client ||
+      project?.clientEntity ||
+      project?.client ||
+      "Internal",
+  );
 }
 
 function workItemKind(item: any): WorkItemKind {
@@ -224,6 +308,10 @@ function itemOrder(item: any, fallback = 0) {
 
 function sortValue(item: any, sortBy: SortBy, projects: any[]) {
   if (sortBy === "project") return itemProjectTitle(item, projects).toLowerCase();
+  if (sortBy === "delivery_entity")
+    return deliveryEntity(item, projects).toLowerCase();
+  if (sortBy === "client_entity")
+    return clientEntity(item, projects).toLowerCase();
   if (sortBy === "priority") return priorityValue(item.priority) === "N/A" ? "9" : priorityValue(item.priority);
   if (sortBy === "due") return dateInputValue(item.dueDate || item.targetDate) || "9999-12-31";
   if (sortBy === "status") return canonicalStatus(item);
@@ -282,10 +370,52 @@ function InlineText({
   );
 }
 
+function ItemTagPicker({
+  record,
+  tags,
+  onChange,
+  label = "Tags",
+}: {
+  record: any;
+  tags: TagLike[];
+  onChange: (patch: Record<string, unknown>) => void;
+  label?: string;
+}) {
+  const ids = tagIds(record);
+  return (
+    <div className="do-tag-picker">
+      <div>
+        {tagLabels(record, tags).slice(0, 3).map((name) => (
+          <span key={name}>{name}</span>
+        ))}
+        {ids.length === 0 && <small>No tags</small>}
+      </div>
+      <select
+        aria-label={label}
+        onChange={(event) => {
+          if (!event.target.value) return;
+          onChange(toggleTagId(record, event.target.value));
+          event.target.value = "";
+        }}
+        value=""
+      >
+        <option value="">+ Tag</option>
+        {tags.map((tag) => (
+          <option key={tag.id} value={tag.id}>
+            {ids.includes(tag.id) ? "Remove " : "Add "}
+            {tag.name || tag.id}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
+  tags = [],
   workspaceMembers = [],
   selectedItemId,
   onSelectItem,
@@ -302,6 +432,7 @@ export function WorkItemsCenter({
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [groupBy, setGroupBy] = useState<GroupBy>(activeProject ? "hierarchy" : "project");
   const [primarySort, setPrimarySort] = useState<SortBy>("project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
@@ -315,6 +446,71 @@ export function WorkItemsCenter({
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
+  const [itemViewName, setItemViewName] = useState("");
+  const [savedItemViews, setSavedItemViews] = useState<
+    Array<{ name: string; columns: ItemColumnKey[] }>
+  >(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem(viewStorageKey("items")) || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [visibleItemColumns, setVisibleItemColumns] = useState<ItemColumnKey[]>(
+    () => {
+      if (typeof window === "undefined") return defaultItemColumns;
+      try {
+        const stored = JSON.parse(
+          window.localStorage.getItem(viewStorageKey("items-current")) || "null",
+        );
+        return Array.isArray(stored) && stored.length
+          ? stored
+          : defaultItemColumns;
+      } catch {
+        return defaultItemColumns;
+      }
+    },
+  );
+  const itemColumnSet = new Set(visibleItemColumns);
+  const itemGridStyle = {
+    gridTemplateColumns: `24px 35px ${visibleItemColumns.map((column) => itemColumnWidths[column]).join(" ")}`,
+  };
+
+  const toggleItemColumn = (column: ItemColumnKey) => {
+    if (column === "title") return;
+    setVisibleItemColumns((current) => {
+      const next = current.includes(column)
+        ? current.filter((candidate) => candidate !== column)
+        : defaultItemColumns.filter((candidate) =>
+            [...current, column].includes(candidate),
+          );
+      window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(next));
+      return next;
+    });
+  };
+  const saveItemView = () => {
+    const name = itemViewName.trim();
+    if (!name) return;
+    const next = [
+      ...savedItemViews.filter((candidate) => candidate.name !== name),
+      { name, columns: visibleItemColumns },
+    ];
+    setSavedItemViews(next);
+    window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
+    setItemViewName("");
+  };
+  const applyItemView = (name: string) => {
+    const saved = savedItemViews.find((candidate) => candidate.name === name);
+    if (!saved) return;
+    setVisibleItemColumns(saved.columns);
+    window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(saved.columns));
+  };
+  const deleteItemView = (name: string) => {
+    const next = savedItemViews.filter((candidate) => candidate.name !== name);
+    setSavedItemViews(next);
+    window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
+  };
 
   useEffect(() => {
     setProjectFilter(activeProject?.id || "all");
@@ -325,7 +521,7 @@ export function WorkItemsCenter({
     onSelectItem(null);
   }, [activeProject?.id]);
 
-  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, query]);
+  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, query]);
 
   const owners = useMemo(
     () => [...new Set([
@@ -361,10 +557,11 @@ export function WorkItemsCenter({
         (typeFilter === "pbi" && ["pbi", "story", "task", "bug"].includes(itemKind));
       const matchesOwner = ownerFilter === "all" || String(item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
-      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)}`.toLowerCase();
-      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && (!needle || searchable.includes(needle));
+      const matchesItemTag = matchesTag(item, tagFilter);
+      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
+      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && (!needle || searchable.includes(needle));
     }), primarySort, secondarySort, projects);
-  }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tasks, typeFilter]);
+  }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tagFilter, tags, tasks, typeFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
@@ -379,6 +576,13 @@ export function WorkItemsCenter({
   const createItem = async () => {
     const projectId = newProjectId || baseProjectId;
     if (!newTitle.trim()) return;
+    const project = projects.find((candidate) => candidate.id === projectId);
+    const inheritedDeliveryEntity = String(
+      project?.deliveryEntity || project?.bpo || "",
+    );
+    const inheritedClientEntity = String(
+      project?.clientEntity || project?.client || "",
+    );
     const parent = tasks.find((item) => item.id === newParentId);
     const parentKind = parent ? workItemKind(parent) : null;
     await onAddTask(projectId, newTitle.trim(), "backlog", {
@@ -388,6 +592,10 @@ export function WorkItemsCenter({
       parentId: newParentId || null,
       epicId: parentKind === "epic" ? newParentId : parent?.epicId || null,
       featureId: parentKind === "feature" ? newParentId : parent?.featureId || null,
+      deliveryEntity: inheritedDeliveryEntity,
+      bpo: inheritedDeliveryEntity,
+      clientEntity: inheritedClientEntity,
+      client: inheritedClientEntity,
       priority: null,
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
@@ -420,7 +628,7 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
     return (
-      <article className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id}>
+      <article className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id} style={itemGridStyle}>
         <button aria-label={`Select ${title(item)}`} className="do-items-check" onClick={() => toggleBulk(item.id)} type="button">
           {selectedBulkIds.includes(item.id) ? <Check size={12} /> : <Circle size={12} />}
         </button>
@@ -428,23 +636,26 @@ export function WorkItemsCenter({
           <button aria-label={`Move ${title(item)} up`} onClick={() => moveItem(item, peers, -1)} type="button"><ArrowUp size={12} /></button>
           <button aria-label={`Move ${title(item)} down`} onClick={() => moveItem(item, peers, 1)} type="button"><ArrowDown size={12} /></button>
         </div>
-        <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
+        {itemColumnSet.has("title") && <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
           <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
           <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
           <small>{itemProjectTitle(item, projects)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
-        </button>
-        <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
+        </button>}
+        {itemColumnSet.has("delivery_entity") && <InlineText ariaLabel={`Delivery Entity for ${title(item)}`} onCommit={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} value={deliveryEntity(item, projects)} />}
+        {itemColumnSet.has("client_entity") && <InlineText ariaLabel={`Client Entity for ${title(item)}`} onCommit={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} value={clientEntity(item, projects)} />}
+        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-        </select>
-        <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
+        </select>}
+        {itemColumnSet.has("priority") && <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
           {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>
-        <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
+        </select>}
+        {itemColumnSet.has("gtd") && <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
           {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
-        </select>
-        <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>
-        <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />
-        <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
+        </select>}
+        {itemColumnSet.has("bucket") && <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>}
+        {itemColumnSet.has("assignees") && <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />}
+        {itemColumnSet.has("due") && <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />}
       </article>
     );
   };
@@ -504,6 +715,7 @@ export function WorkItemsCenter({
       if (groupBy === "owner") return String(item.owner || item.assignee || "Unassigned");
       if (groupBy === "type") return workItemLabel(workItemKind(item));
       if (groupBy === "due") return dueBucketLabels[dueBucket(item.dueDate || item.targetDate)] || "No sector";
+      if (groupBy === "tag") return tagLabels(item, tags)[0] || "No tag";
       return "Items";
     };
     return filtered.reduce<Record<string, any[]>>((acc, item) => {
@@ -511,7 +723,7 @@ export function WorkItemsCenter({
       acc[key] = [...(acc[key] || []), item];
       return acc;
     }, {});
-  }, [filtered, groupBy, projects]);
+  }, [filtered, groupBy, projects, tags]);
 
   const toggleGroup = (group: string) => {
     setCollapsedGroups((current) => current.includes(group)
@@ -683,6 +895,10 @@ export function WorkItemsCenter({
           <option value="all">Any date</option>
           {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
         </select>
+        <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
+          <option value="all">Any tag</option>
+          {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+        </select>
         <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
           <option value="hierarchy">Hierarchy</option>
           <option value="actionBoard">Action Board</option>
@@ -691,6 +907,7 @@ export function WorkItemsCenter({
           <option value="project">Project</option>
           <option value="owner">Owner</option>
           <option value="type">Type</option>
+          <option value="tag">Tag</option>
           <option value="due">Due date</option>
         </select>
         <select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>
@@ -700,6 +917,42 @@ export function WorkItemsCenter({
           {sortOptions.map((option) => <option key={option.value} value={option.value}>Then: {option.label}</option>)}
         </select>
       </section>
+      <details className="do-view-manager">
+        <summary>
+          <SlidersHorizontal size={13} /> Item views & columns
+        </summary>
+        <div className="do-view-manager-body">
+          <label>
+            Saved views
+            <select aria-label="Apply saved item view" onChange={(event) => applyItemView(event.target.value)} value="">
+              <option value="">Choose saved view</option>
+              {savedItemViews.map((saved) => <option key={saved.name} value={saved.name}>{saved.name}</option>)}
+            </select>
+          </label>
+          <label>
+            New view name
+            <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
+          </label>
+          <button onClick={saveItemView} type="button">Save current view</button>
+          <div className="do-column-picker">
+            {defaultItemColumns.filter((column) => column !== "title").map((column) => (
+              <label key={column}>
+                <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
+                {itemColumnLabels[column]}
+              </label>
+            ))}
+          </div>
+          {savedItemViews.length > 0 && (
+            <div className="do-saved-view-list">
+              {savedItemViews.map((saved) => (
+                <button key={saved.name} onClick={() => deleteItemView(saved.name)} type="button">
+                  Delete {saved.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
       <div className="do-items-helpbar"><span>Group, then sort twice <InfoTip label="Two-level sorting" text="Group controls the visible sections. Primary sort orders items first; secondary sort breaks ties inside that order." /></span><span>Board <InfoTip label="Board view" text="A visual execution view for moving work through status. Backlog remains the source for hierarchy and planning." /></span><span>Assignees <InfoTip label="Multiple assignees" text="Select one or many workspace members. The first selected person is retained as the primary owner for compatibility." /></span></div>
 
       <section className="do-sort-presets" aria-label="Sorting presets">
@@ -781,6 +1034,9 @@ export function WorkItemsCenter({
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label>GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label>Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
+            <label>Delivery Entity<InlineText ariaLabel="Selected item delivery entity" onCommit={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} value={deliveryEntity(selectedItem, projects)} /></label>
+            <label>Client Entity<InlineText ariaLabel="Selected item client entity" onCommit={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} value={clientEntity(selectedItem, projects)} /></label>
+            <label>Tags<ItemTagPicker label="Selected item tags" onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"

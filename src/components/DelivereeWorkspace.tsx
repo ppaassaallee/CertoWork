@@ -522,6 +522,7 @@ export function DelivereeWorkspace() {
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
@@ -641,6 +642,7 @@ export function DelivereeWorkspace() {
       makeQuery("tasks", setTasks),
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
+      makeQuery("categories", setCategories),
       makeQuery("cost_templates", setCostTemplates),
       makeQuery("agent_templates", (items) =>
         setProjectTemplates(
@@ -3515,6 +3517,7 @@ export function DelivereeWorkspace() {
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
+            tags={categories}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
@@ -3552,6 +3555,7 @@ export function DelivereeWorkspace() {
             projects={projects}
             projectTemplates={projectTemplates}
             risks={risks}
+            tags={categories}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
