@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
   Check,
   ChevronDown,
   Circle,
   CalendarRange,
   Folder,
+  GripVertical,
   ListChecks,
   Kanban,
   Plus,
@@ -460,6 +459,8 @@ export function WorkItemsCenter({
   const [newTitle, setNewTitle] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
@@ -638,15 +639,25 @@ export function WorkItemsCenter({
     setNewParentId("");
   };
 
-  const moveItem = async (item: any, peers: any[], direction: -1 | 1) => {
+  const reorderItem = async (
+    draggedId: string | null,
+    targetId: string,
+    peers: any[],
+  ) => {
+    if (!draggedId || draggedId === targetId) return;
     const ordered = sortItems(peers, "rank", "priority", projects);
-    const index = ordered.findIndex((candidate) => candidate.id === item.id);
-    const other = ordered[index + direction];
-    if (!other) return;
-    const currentOrder = itemOrder(item, index);
-    const otherOrder = itemOrder(other, index + direction);
-    await onUpdateTask(item.id, { order: otherOrder, rank: otherOrder });
-    await onUpdateTask(other.id, { order: currentOrder, rank: currentOrder });
+    const from = ordered.findIndex((candidate) => candidate.id === draggedId);
+    const to = ordered.findIndex((candidate) => candidate.id === targetId);
+    if (from === -1 || to === -1) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    await Promise.all(
+      ordered.map((candidate, index) => {
+        const currentOrder = itemOrder(candidate, index);
+        if (currentOrder === index) return Promise.resolve();
+        return onUpdateTask(candidate.id, { order: index, rank: index });
+      }),
+    );
   };
 
   const updateBulk = async (patch: Record<string, unknown>) => {
@@ -662,14 +673,44 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
     return (
-      <article className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id} style={itemGridStyle}>
+      <article
+        className={`do-items-row is-${kind} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        key={item.id}
+        onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
+        onDragOver={(event) => {
+          if (!draggedItemId || draggedItemId === item.id) return;
+          event.preventDefault();
+          setDragOverItemId(item.id);
+        }}
+        onDrop={async (event) => {
+          event.preventDefault();
+          await reorderItem(draggedItemId, item.id, peers);
+          setDraggedItemId(null);
+          setDragOverItemId(null);
+        }}
+        style={itemGridStyle}
+      >
         <button aria-label={`Select ${title(item)}`} className="do-items-check" onClick={() => toggleBulk(item.id)} type="button">
           {selectedBulkIds.includes(item.id) ? <Check size={12} /> : <Circle size={12} />}
         </button>
-        <div className="do-items-rank">
-          <button aria-label={`Move ${title(item)} up`} onClick={() => moveItem(item, peers, -1)} type="button"><ArrowUp size={12} /></button>
-          <button aria-label={`Move ${title(item)} down`} onClick={() => moveItem(item, peers, 1)} type="button"><ArrowDown size={12} /></button>
-        </div>
+        <button
+          aria-label={`Drag to reorder ${title(item)}`}
+          className="do-items-drag-handle"
+          draggable
+          onDragEnd={() => {
+            setDraggedItemId(null);
+            setDragOverItemId(null);
+          }}
+          onDragStart={(event) => {
+            setDraggedItemId(item.id);
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", item.id);
+          }}
+          title="Drag to reorder"
+          type="button"
+        >
+          <GripVertical size={14} />
+        </button>
         {itemColumnSet.has("title") && <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
           <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
           <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />

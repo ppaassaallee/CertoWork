@@ -580,10 +580,12 @@ button { color: inherit; }
 .do-items-row.is-epic { background: #f8fbf8; }
 .do-items-row.is-feature { border-radius: 10px; background: #fbfcfb; }
 .do-items-row.is-pbi, .do-items-row.is-story, .do-items-row.is-task, .do-items-row.is-bug, .do-items-row.is-subtask { border-radius: 10px; background: #fff; }
-.do-items-check, .do-items-rank button { display: grid; place-items: center; border: 1px solid #dfe5e0; border-radius: 7px; background: #fff; color: #6a7a70; cursor: pointer; }
+.do-items-check, .do-items-drag-handle { display: grid; place-items: center; border: 1px solid #dfe5e0; border-radius: 7px; background: #fff; color: #6a7a70; cursor: pointer; }
 .do-items-check { width: 22px; height: 24px; }
-.do-items-rank { display: flex; gap: 2px; }
-.do-items-rank button { width: 16px; height: 24px; }
+.do-items-drag-handle { width: 26px; height: 28px; cursor: grab; }
+.do-items-drag-handle:active { cursor: grabbing; }
+.do-items-row.is-dragging { opacity: .48; }
+.do-items-row.is-drag-over { outline: 2px solid rgba(36, 81, 61, .24); outline-offset: -2px; background: #eef8f2; }
 .do-items-title { display: grid; min-width: 0; gap: 3px; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .do-items-title > span { width: fit-content; border-radius: 7px; background: #e9f1ec; padding: 2px 6px; color: #3e6b52; font-size: calc(6px * var(--cw-text-scale)); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .do-items-row.is-feature .do-items-title > span { background: #eef1e9; color: #687235; }
