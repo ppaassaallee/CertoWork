@@ -1872,24 +1872,27 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      if (group === "tag") {
-        setCategories((current) =>
-          current.some((category) => category.id === created.id)
-            ? current
-            : [
-                ...current,
-                {
-                  id: created.id,
-                  userId: user.uid,
-                  workspaceId: workspace.id,
-                  name: cleaned,
-                  group,
-                  color: "#7b5ea7",
-                  createdBy: user.uid,
-                },
-              ],
-        );
-      }
+      setCategories((current) =>
+        current.some((category) => category.id === created.id)
+          ? current
+          : [
+              ...current,
+              {
+                id: created.id,
+                userId: user.uid,
+                workspaceId: workspace.id,
+                name: cleaned,
+                group,
+                color:
+                  group === "delivery_entity"
+                    ? "#315f46"
+                    : group === "client_entity"
+                      ? "#4b6988"
+                      : "#7b5ea7",
+                createdBy: user.uid,
+              },
+            ],
+      );
       setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
       return group === "tag" ? created.id : cleaned;
     } catch (reason) {
@@ -1913,9 +1916,11 @@ export function DelivereeWorkspace() {
     if (!previous || !next || previous === next) return;
     try {
       const batch = writeBatch(db);
+      let createdCategoryId: string | null = null;
       if (option.id) {
         batch.update(doc(db, "categories", option.id), {
           name: next,
+          updatedAt: serverTimestamp(),
         });
       } else {
         const existing = categories.find(
@@ -1926,6 +1931,7 @@ export function DelivereeWorkspace() {
         );
         if (!existing) {
           const categoryRef = doc(collection(db, "categories"));
+          createdCategoryId = categoryRef.id;
           batch.set(categoryRef, {
             userId: user.uid,
             workspaceId: workspace.id,
@@ -2012,6 +2018,76 @@ export function DelivereeWorkspace() {
         }
       }
       await batch.commit();
+      setCategories((current) => {
+        const updated = current.map((category) =>
+          categoryGroup(category) === group &&
+          (category.id === option.id ||
+            String(category.name || "").trim().toLowerCase() ===
+              previous.toLowerCase())
+            ? { ...category, name: next }
+            : category,
+        );
+        const existsAfterUpdate = updated.some(
+          (category) =>
+            categoryGroup(category) === group &&
+            String(category.name || "").trim().toLowerCase() ===
+              next.toLowerCase(),
+        );
+        if (existsAfterUpdate) return updated;
+        return [
+          ...updated,
+          {
+            id: createdCategoryId || `local-${group}-${next}`,
+            userId: user.uid,
+            workspaceId: workspace.id,
+            name: next,
+            group,
+            color:
+              group === "delivery_entity"
+                ? "#315f46"
+                : group === "client_entity"
+                  ? "#4b6988"
+                  : "#7b5ea7",
+            createdBy: user.uid,
+          },
+        ];
+      });
+      if (group === "delivery_entity") {
+        setProjects((current) =>
+          current.map((project) =>
+            String(project.deliveryEntity || "").trim() === previous ||
+            String(project.bpo || "").trim() === previous
+              ? { ...project, deliveryEntity: next, bpo: next }
+              : project,
+          ),
+        );
+        setTasks((current) =>
+          current.map((task) =>
+            String(task.deliveryEntity || "").trim() === previous ||
+            String(task.bpo || "").trim() === previous
+              ? { ...task, deliveryEntity: next, bpo: next }
+              : task,
+          ),
+        );
+      }
+      if (group === "client_entity") {
+        setProjects((current) =>
+          current.map((project) =>
+            String(project.clientEntity || "").trim() === previous ||
+            String(project.client || "").trim() === previous
+              ? { ...project, clientEntity: next, client: next }
+              : project,
+          ),
+        );
+        setTasks((current) =>
+          current.map((task) =>
+            String(task.clientEntity || "").trim() === previous ||
+            String(task.client || "").trim() === previous
+              ? { ...task, clientEntity: next, client: next }
+              : task,
+          ),
+        );
+      }
       setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
     } catch (reason) {
       recordClientException("controlled_lists", "rename", reason, {
@@ -2160,6 +2236,81 @@ export function DelivereeWorkspace() {
         });
       }
       await batch.commit();
+      setCategories((current) =>
+        current.filter(
+          (category) =>
+            !(
+              categoryGroup(category) === group &&
+              (matchingCategoryIds.includes(category.id) ||
+                String(category.name || "").trim().toLowerCase() ===
+                  previous.toLowerCase())
+            ),
+        ),
+      );
+      if (group === "delivery_entity") {
+        setProjects((current) =>
+          current.map((project) =>
+            String(project.deliveryEntity || "").trim() === previous ||
+            String(project.bpo || "").trim() === previous
+              ? { ...project, deliveryEntity: "Internal", bpo: "Internal" }
+              : project,
+          ),
+        );
+        setTasks((current) =>
+          current.map((task) =>
+            String(task.deliveryEntity || "").trim() === previous ||
+            String(task.bpo || "").trim() === previous
+              ? { ...task, deliveryEntity: "Internal", bpo: "Internal" }
+              : task,
+          ),
+        );
+      }
+      if (group === "client_entity") {
+        setProjects((current) =>
+          current.map((project) =>
+            String(project.clientEntity || "").trim() === previous ||
+            String(project.client || "").trim() === previous
+              ? { ...project, clientEntity: "Internal", client: "Internal" }
+              : project,
+          ),
+        );
+        setTasks((current) =>
+          current.map((task) =>
+            String(task.clientEntity || "").trim() === previous ||
+            String(task.client || "").trim() === previous
+              ? { ...task, clientEntity: "Internal", client: "Internal" }
+              : task,
+          ),
+        );
+      }
+      if (group === "tag") {
+        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean);
+        const cleanRecordTags = (record: any) => {
+          const next = [
+            ...new Set(
+              [
+                ...(Array.isArray(record.tagIds) ? record.tagIds : []),
+                ...(Array.isArray(record.tags) ? record.tags : []),
+                ...(Array.isArray(record.labels) ? record.labels : []),
+              ]
+                .map((value) => String(value || "").trim())
+                .filter(
+                  (value) =>
+                    value &&
+                    !removedKeys.some(
+                      (removed) =>
+                        removed.toLowerCase() === value.toLowerCase(),
+                    ),
+                ),
+            ),
+          ];
+          return { ...record, tagIds: next, tags: next, labels: next };
+        };
+        setProjects((current) => current.map(cleanRecordTags));
+        setTasks((current) => current.map(cleanRecordTags));
+      }
       setNotice(
         group === "tag"
           ? `${previous} removed. Matching project/item tags were cleared.`

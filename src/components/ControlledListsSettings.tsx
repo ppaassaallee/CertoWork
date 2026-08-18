@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bug, Lock, Plus, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, Bug, Lock, Plus, Settings2, X } from "lucide-react";
 import {
   controlledListLabels,
   controlledOptions,
@@ -49,13 +49,11 @@ function discoveredValuesForGroup(
 function EditableOptionRow({
   group,
   option,
-  onPromote,
   onRename,
   onDelete,
 }: {
   group: ControlledListGroup;
   option: ControlledListOption;
-  onPromote: (group: ControlledListGroup, name: string) => void;
   onRename: (
     group: ControlledListGroup,
     option: ControlledListOption,
@@ -64,50 +62,55 @@ function EditableOptionRow({
   onDelete: (group: ControlledListGroup, option: ControlledListOption) => void;
 }) {
   const [draft, setDraft] = useState(option.name);
-  const isMaster = Boolean(option.id);
+  const [editing, setEditing] = useState(false);
   const cleaned = draft.trim();
   const changed = cleaned && cleaned !== option.name;
   const commitRename = () => {
     if (changed) onRename(group, option, cleaned);
     else setDraft(option.name);
+    setEditing(false);
   };
   useEffect(() => {
     setDraft(option.name);
   }, [option.name]);
   return (
-    <div className="do-controlled-option">
-      <input
-        aria-label={`${controlledListLabels[group]} option`}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commitRename();
-          if (event.key === "Escape") setDraft(option.name);
-        }}
-        onBlur={() => !changed && setDraft(option.name)}
-        title={isMaster ? "Rename this list value" : "Rename this discovered value and add it to the master list"}
-        value={draft}
-      />
-      {changed ? (
-        <button className="is-primary" onMouseDown={(event) => event.preventDefault()} onClick={commitRename} type="button">
-          Save
-        </button>
-      ) : isMaster ? (
-        <span>Master</span>
+    <div
+      className={`do-controlled-chip ${option.source === "discovered" ? "is-discovered" : ""}`}
+      title="Double-click to edit. Press Enter to save."
+    >
+      {editing ? (
+        <input
+          aria-label={`${controlledListLabels[group]} option`}
+          autoFocus
+          onBlur={commitRename}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") commitRename();
+            if (event.key === "Escape") {
+              setDraft(option.name);
+              setEditing(false);
+            }
+          }}
+          value={draft}
+        />
       ) : (
-        <button onClick={() => onPromote(group, option.name)} type="button">
-          Add to master
-        </button>
-      )}
-      {!changed && (
         <button
-          className="is-danger"
-          onClick={() => onDelete(group, option)}
-          title={`Remove ${option.name} from this list and clear matching records`}
+          className="do-controlled-chip-name"
+          onDoubleClick={() => setEditing(true)}
           type="button"
         >
-          <Trash2 size={12} /> Remove
+          {option.name}
         </button>
       )}
+      <button
+        aria-label={`Remove ${option.name}`}
+        className="do-controlled-chip-remove"
+        onClick={() => onDelete(group, option)}
+        title={`Remove ${option.name} from this list and clear matching records`}
+        type="button"
+      >
+        <X size={12} />
+      </button>
     </div>
   );
 }
@@ -181,9 +184,8 @@ export function ControlledListsSettings({
           <h1>Controlled lists</h1>
           <p>
             Maintain the dropdown values that classify projects, backlog items
-            and portfolio reporting. Editable master data can be added or
-            renamed here. Values are not deleted from here so historical records
-            remain readable.
+            and portfolio reporting. Add with +, double-click a chip to rename,
+            or use × to remove and clean matching records.
           </p>
         </div>
       </header>
@@ -216,12 +218,13 @@ export function ControlledListsSettings({
                 value={newValues[group] || ""}
               />
               <button
+                aria-label={`Add ${controlledListLabels[group]}`}
                 onClick={() =>
                   addValue(group as "delivery_entity" | "client_entity" | "tag")
                 }
                 type="button"
               >
-                <Plus size={13} /> Add
+                <Plus size={13} />
               </button>
             </div>
             <div className="do-controlled-options">
@@ -229,12 +232,6 @@ export function ControlledListsSettings({
                 <EditableOptionRow
                   group={group}
                   key={`${group}-${option.id || option.name}`}
-                  onPromote={(nextGroup, name) =>
-                    onCreateOption(
-                      nextGroup as "delivery_entity" | "client_entity" | "tag",
-                      name,
-                    )
-                  }
                   onRename={(nextGroup, item, name) =>
                     onRenameOption(
                       nextGroup as "delivery_entity" | "client_entity" | "tag",
