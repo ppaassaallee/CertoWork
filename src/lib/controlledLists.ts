@@ -115,9 +115,11 @@ export function controlledOptions(
       source: "master" as const,
     }))
     .filter((option) => option.name);
-  const masterNames = new Set(master.map((option) => option.name));
+  const masterKeys = new Set(
+    master.flatMap((option) => [option.name, option.id || ""]),
+  );
   const discovered = unique(discoveredValues)
-    .filter((name) => !masterNames.has(name))
+    .filter((name) => !masterKeys.has(name))
     .map((name) => ({
       name,
       group,

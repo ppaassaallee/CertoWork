@@ -1872,6 +1872,24 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      if (group === "tag") {
+        setCategories((current) =>
+          current.some((category) => category.id === created.id)
+            ? current
+            : [
+                ...current,
+                {
+                  id: created.id,
+                  userId: user.uid,
+                  workspaceId: workspace.id,
+                  name: cleaned,
+                  group,
+                  color: "#7b5ea7",
+                  createdBy: user.uid,
+                },
+              ],
+        );
+      }
       setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
       return group === "tag" ? created.id : cleaned;
     } catch (reason) {
@@ -2014,12 +2032,26 @@ export function DelivereeWorkspace() {
     const previous = String(option.name || "").trim();
     if (!previous) return;
     const confirmed = window.confirm(
-      `Remove "${previous}" from ${group.replace(/_/g, " ")}? Existing projects/items using it will be moved to Internal so it does not reappear.`,
+      group === "tag"
+        ? `Remove "${previous}" from tags? Matching projects/items will have this tag cleared.`
+        : `Remove "${previous}" from ${group.replace(/_/g, " ")}? Existing projects/items using it will be moved to Internal so it does not reappear.`,
     );
     if (!confirmed) return;
     try {
       const batch = writeBatch(db);
-      if (option.id) batch.delete(doc(db, "categories", option.id));
+      const matchingCategoryIds = categories
+        .filter(
+          (category) =>
+            categoryGroup(category) === group &&
+            (category.id === option.id ||
+              String(category.name || "").trim().toLowerCase() ===
+                previous.toLowerCase()),
+        )
+        .map((category) => category.id)
+        .filter(Boolean);
+      matchingCategoryIds.forEach((categoryId) =>
+        batch.delete(doc(db, "categories", categoryId)),
+      );
       if (group === "delivery_entity") {
         projects
           .filter(
@@ -2076,8 +2108,63 @@ export function DelivereeWorkspace() {
             }),
           );
       }
+      if (group === "tag") {
+        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean);
+        const withoutRemoved = (record: any) => [
+          ...new Set(
+            [
+              ...(Array.isArray(record.tagIds) ? record.tagIds : []),
+              ...(Array.isArray(record.tags) ? record.tags : []),
+              ...(Array.isArray(record.labels) ? record.labels : []),
+            ]
+              .map((value) => String(value || "").trim())
+              .filter(
+                (value) =>
+                  value &&
+                  !removedKeys.some(
+                    (removed) =>
+                      removed.toLowerCase() === value.toLowerCase(),
+                  ),
+              ),
+          ),
+        ];
+        const hasRemovedTag = (record: any) => {
+          const values = [
+            ...(Array.isArray(record.tagIds) ? record.tagIds : []),
+            ...(Array.isArray(record.tags) ? record.tags : []),
+            ...(Array.isArray(record.labels) ? record.labels : []),
+          ].map((value) => String(value || "").trim().toLowerCase());
+          return removedKeys.some((removed) =>
+            values.includes(removed.toLowerCase()),
+          );
+        };
+        projects.filter(hasRemovedTag).forEach((project) => {
+          const next = withoutRemoved(project);
+          batch.update(doc(db, "projects", project.id), {
+            tagIds: next,
+            tags: next,
+            labels: next,
+            updatedAt: serverTimestamp(),
+          });
+        });
+        tasks.filter(hasRemovedTag).forEach((task) => {
+          const next = withoutRemoved(task);
+          batch.update(doc(db, "tasks", task.id), {
+            tagIds: next,
+            tags: next,
+            labels: next,
+            updatedAt: serverTimestamp(),
+          });
+        });
+      }
       await batch.commit();
-      setNotice(`${previous} removed. Matching projects/items were moved to Internal.`);
+      setNotice(
+        group === "tag"
+          ? `${previous} removed. Matching project/item tags were cleared.`
+          : `${previous} removed. Matching projects/items were moved to Internal.`,
+      );
     } catch (reason) {
       recordClientException("controlled_lists", "delete", reason, {
         group,

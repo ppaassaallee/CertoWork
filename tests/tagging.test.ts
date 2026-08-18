@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { controlledOptions } from "../src/lib/controlledLists";
 import { matchesTag, tagIds, tagLabels, toggleTagId } from "../src/lib/tagging";
 
 test("tag helpers support current and legacy tag fields", () => {
@@ -27,4 +28,25 @@ test("tag helpers label and toggle tags without duplicates", () => {
     "finance",
   ]);
   assert.deepEqual(toggleTagId(record, "urgent").tagIds, []);
+});
+
+test("tag labels never expose raw Firestore ids when a readable label exists", () => {
+  const tags = [{ id: "rFCg1CMv6hv6t7XG2Wr7", name: "Product" }];
+  assert.deepEqual(
+    tagLabels({ tagIds: ["rFCg1CMv6hv6t7XG2Wr7"] }, tags),
+    ["Product"],
+  );
+  assert.deepEqual(
+    tagLabels({ tagIds: ["unknownFirestoreLikeId123"] }, tags),
+    ["Unresolved tag"],
+  );
+});
+
+test("controlled tag lists do not duplicate discovered ids for existing masters", () => {
+  const options = controlledOptions(
+    [{ id: "rFCg1CMv6hv6t7XG2Wr7", name: "Product", group: "tag" }],
+    "tag",
+    ["rFCg1CMv6hv6t7XG2Wr7"],
+  );
+  assert.deepEqual(options.map((option) => option.name), ["Product"]);
 });

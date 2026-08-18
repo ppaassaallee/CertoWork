@@ -873,6 +873,17 @@ export function WorkItemsCenter({
     );
   };
 
+  const renderColumnHeader = () => (
+    <div className="do-items-column-head" style={itemGridStyle}>
+      <span />
+      <span />
+      <span />
+      {visibleItemColumns.map((column) => (
+        <strong key={column}>{itemColumnLabels[column]}</strong>
+      ))}
+    </div>
+  );
+
   const renderHierarchy = () => {
     const epics = filtered.filter((item) => workItemKind(item) === "epic");
     const features = filtered.filter((item) => workItemKind(item) === "feature");
@@ -1265,6 +1276,7 @@ export function WorkItemsCenter({
             <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "1").length}</strong> priority 1</span>
             <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
           </div>
+          {mode === "list" && renderColumnHeader()}
           {mode === "gantt" ? renderGantt() : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {

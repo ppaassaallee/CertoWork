@@ -26,7 +26,17 @@ export function tagIds(record: any): string[] {
 
 export function tagLabels(record: any, tags: TagLike[]): string[] {
   const ids = tagIds(record);
-  return ids.map((id) => tags.find((tag) => tag.id === id)?.name || id);
+  return ids.map((id) => {
+    const exact = tags.find((tag) => tag.id === id);
+    if (exact) return tagName(exact);
+    const byName = tags.find(
+      (tag) => tagName(tag).toLowerCase() === id.toLowerCase(),
+    );
+    if (byName) return tagName(byName);
+    return id.length >= 16 && /^[A-Za-z0-9_-]+$/.test(id)
+      ? "Unresolved tag"
+      : id;
+  });
 }
 
 export function matchesTag(record: any, tagId: string) {

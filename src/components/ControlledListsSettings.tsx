@@ -30,6 +30,19 @@ function discoveredValuesForGroup(
       ...projects.map((project) => project.clientEntity || project.client),
       ...tasks.map((task) => task.clientEntity || task.client),
     ].map((value) => String(value || "").trim());
+  if (group === "tag")
+    return [
+      ...projects.flatMap((project) => [
+        ...(Array.isArray(project.tagIds) ? project.tagIds : []),
+        ...(Array.isArray(project.tags) ? project.tags : []),
+        ...(Array.isArray(project.labels) ? project.labels : []),
+      ]),
+      ...tasks.flatMap((task) => [
+        ...(Array.isArray(task.tagIds) ? task.tagIds : []),
+        ...(Array.isArray(task.tags) ? task.tags : []),
+        ...(Array.isArray(task.labels) ? task.labels : []),
+      ]),
+    ].map((value) => String(value || "").trim());
   return [];
 }
 
