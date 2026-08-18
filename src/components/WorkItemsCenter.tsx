@@ -507,6 +507,10 @@ export function WorkItemsCenter({
   const [bulkDueDate, setBulkDueDate] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
+  const [chromeCollapsed, setChromeCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("certo-items-focus-list") === "true";
+  });
   const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -548,7 +552,7 @@ export function WorkItemsCenter({
   });
   const itemColumnSet = new Set(visibleItemColumns);
   const itemGridStyle = {
-    gridTemplateColumns: `24px 24px 35px ${visibleItemColumns
+    gridTemplateColumns: `20px 20px 28px ${visibleItemColumns
       .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
       .join(" ")}`,
   };
@@ -658,6 +662,11 @@ export function WorkItemsCenter({
   }, [activeProject?.id]);
 
   useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, query]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("certo-items-focus-list", String(chromeCollapsed));
+  }, [chromeCollapsed]);
 
   const owners = useMemo(
     () => [...new Set([
@@ -1058,20 +1067,44 @@ export function WorkItemsCenter({
     );
   };
 
+  const activeControlCount = [
+    query.trim(),
+    projectFilter !== (activeProject?.id || "all"),
+    statusFilter !== "open",
+    priorityFilter !== "all",
+    typeFilter !== "all",
+    ownerFilter !== "all",
+    dateFilter !== "all",
+    tagFilter !== "all",
+  ].filter(Boolean).length;
+  const activeControlLabel = `${activeControlCount} filter${activeControlCount === 1 ? "" : "s"}`;
+
   return (
-    <div className="do-items-center" data-testid="work-items-center">
-      <section className="do-items-toolbar">
-        <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>
+    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""}`} data-testid="work-items-center">
+      <section className={`do-items-toolbar ${chromeCollapsed ? "is-compact" : ""}`}>
+        {!chromeCollapsed && <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>}
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
+        {chromeCollapsed && (
+          <div className="do-items-focus-status">
+            <strong>{filtered.length} items</strong>
+            <span>{groupBy === "actionBoard" ? "Action Board" : groupBy}</span>
+            <span>{activeControlLabel}</span>
+          </div>
+        )}
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
           <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => setMode("kanban")} type="button"><Kanban size={14} /></button>
           <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /></button>
         </div>
+        <button className="do-items-focus-toggle" onClick={() => setChromeCollapsed((current) => !current)} type="button">
+          <SlidersHorizontal size={13} />
+          {chromeCollapsed ? "Show controls" : "Focus list"}
+        </button>
       </section>
 
+      {!chromeCollapsed && <>
       <section className="do-items-filters" aria-label="Work item filters">
         <select aria-label="Project filter" onChange={(event) => { setProjectFilter(event.target.value); setNewProjectId(event.target.value === "all" || event.target.value === "no_project" ? activeProject?.id || "" : event.target.value); }} value={projectFilter}>
           <option value="all">All projects</option>
@@ -1210,6 +1243,7 @@ export function WorkItemsCenter({
         <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
         <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
       </section>
+      </>}
 
       {selectedBulkIds.length > 0 && (
         <section className="do-items-bulk" aria-label="Bulk actions">
