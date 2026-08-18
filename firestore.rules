@@ -61,6 +61,12 @@ service cloud.firestore {
         );
     }
 
+    function isWorkspaceOwner(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+    }
+
     function hasExplicitUserAccess(data) {
       return (
         ('visibleToUserIds' in data) &&
@@ -111,6 +117,7 @@ service cloud.firestore {
         data.userId == request.auth.uid ||
         (('createdBy' in data) && data.createdBy == request.auth.uid) ||
         (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        (('workspaceId' in data) && isWorkspaceOwner(data.workspaceId)) ||
         (('assigneeId' in data) && data.assigneeId == request.auth.uid) ||
         hasExplicitUserAccess(data) ||
         (

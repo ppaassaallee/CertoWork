@@ -711,18 +711,21 @@ export function DelivereeWorkspace() {
           ],
           setProjects,
         );
-    const taskUnsubscribers = mergeQueries(
-      "tasks",
-      [
-        [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-        [where("createdBy", "==", user.uid), where("workspaceId", "==", workspace.id)],
-        [where("visibleToUserIds", "array-contains", user.uid)],
-        [where("visibleToEmails", "array-contains", emailLower)],
-        [where("assigneeIds", "array-contains", memberId)],
-        [where("accessMemberIds", "array-contains", memberId)],
-      ],
-      setTasks,
-    );
+    const taskUnsubscribers =
+      workspace.ownerId === user.uid
+        ? [makeQuery("tasks", setTasks)]
+        : mergeQueries(
+            "tasks",
+            [
+              [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+              [where("createdBy", "==", user.uid), where("workspaceId", "==", workspace.id)],
+              [where("visibleToUserIds", "array-contains", user.uid)],
+              [where("visibleToEmails", "array-contains", emailLower)],
+              [where("assigneeIds", "array-contains", memberId)],
+              [where("accessMemberIds", "array-contains", memberId)],
+            ],
+            setTasks,
+          );
     const unsubscribers = [
       makeQuery(
         "boldi_conversations",
