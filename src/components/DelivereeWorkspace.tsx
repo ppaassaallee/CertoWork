@@ -91,6 +91,13 @@ import {
 } from "../lib/projectTemplates";
 import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
 import { recordClientException } from "../lib/clientExceptions";
+import {
+  activeWorkspaceMemberId as accessMemberId,
+  buildOwnedAccessPatch,
+  buildTaskAccessPatch,
+  isPortfolioViewerEmail,
+  normalizeAccessEmail,
+} from "../lib/accessControl";
 import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
@@ -633,6 +640,40 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!user || !workspace) return;
     setWorkspaceNameDraft(workspace.name || "Workspace");
+    const emailLower = normalizeAccessEmail(user.email);
+    const memberId = accessMemberId(workspace.id, user.uid);
+    const canSeeWorkspacePortfolio =
+      workspace.ownerId === user.uid || isPortfolioViewerEmail(emailLower);
+    const mergeQueries = (
+      name: string,
+      queryClauses: any[][],
+      callback: (items: any[]) => void,
+    ) => {
+      const buckets = new Map<number, any[]>();
+      const publish = () => {
+        const merged = new Map<string, any>();
+        [...buckets.values()].flat().forEach((item) => {
+          if (item?.workspaceId === workspace.id) merged.set(item.id, item);
+        });
+        callback([...merged.values()]);
+      };
+      return queryClauses.map((clauses, index) =>
+        onSnapshot(
+          query(collection(db, name), ...clauses),
+          (snapshot) => {
+            buckets.set(
+              index,
+              snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+            );
+            publish();
+          },
+          () => {
+            buckets.set(index, []);
+            publish();
+          },
+        ),
+      );
+    };
     const makeQuery = (
       name: string,
       callback: (items: any[]) => void,
@@ -655,6 +696,33 @@ export function DelivereeWorkspace() {
         () => callback([]),
       );
     };
+    const projectUnsubscribers = canSeeWorkspacePortfolio
+      ? [makeQuery("projects", setProjects)]
+      : mergeQueries(
+          "projects",
+          [
+            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+            [where("visibleToUserIds", "array-contains", user.uid)],
+            [where("visibleToEmails", "array-contains", emailLower)],
+            [where("teamMemberIds", "array-contains", memberId)],
+            [where("sponsorIds", "array-contains", memberId)],
+            [where("projectManagerId", "==", memberId), where("workspaceId", "==", workspace.id)],
+            [where("productOwnerId", "==", memberId), where("workspaceId", "==", workspace.id)],
+          ],
+          setProjects,
+        );
+    const taskUnsubscribers = mergeQueries(
+      "tasks",
+      [
+        [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+        [where("createdBy", "==", user.uid), where("workspaceId", "==", workspace.id)],
+        [where("visibleToUserIds", "array-contains", user.uid)],
+        [where("visibleToEmails", "array-contains", emailLower)],
+        [where("assigneeIds", "array-contains", memberId)],
+        [where("accessMemberIds", "array-contains", memberId)],
+      ],
+      setTasks,
+    );
     const unsubscribers = [
       makeQuery(
         "boldi_conversations",
@@ -670,8 +738,8 @@ export function DelivereeWorkspace() {
         true,
         true,
       ),
-      makeQuery("projects", setProjects),
-      makeQuery("tasks", setTasks),
+      ...projectUnsubscribers,
+      ...taskUnsubscribers,
       makeQuery("milestones", setMilestones),
       makeQuery("boldr_risks", setRisks),
       makeQuery("categories", setCategories),
@@ -1632,6 +1700,7 @@ export function DelivereeWorkspace() {
             ...proposed,
             userId: user.uid,
             workspaceId: workspace.id,
+            ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
             title: proposedTitle(proposed, candidate.title),
             status: proposed.status || "planning",
             createdBy: user.uid,
@@ -1650,6 +1719,12 @@ export function DelivereeWorkspace() {
           userId: user.uid,
           workspaceId: workspace.id,
           projectId,
+          ...buildTaskAccessPatch({
+            task: proposed,
+            workspaceId: workspace.id,
+            userId: user.uid,
+            email: user.email,
+          }),
           title:
             reviewType === "project"
               ? proposedTitle(proposed, candidate.title)
@@ -2107,6 +2182,7 @@ export function DelivereeWorkspace() {
       ...(template.projectDefaults || {}),
       userId: user.uid,
       workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
       title: application.title.trim(),
       name: application.title.trim(),
       normalizedTitle: application.title.trim().toLowerCase().replace(/\s+/g, " "),
@@ -2146,6 +2222,12 @@ export function DelivereeWorkspace() {
         userId: user.uid,
         workspaceId: workspace.id,
         projectId: projectRef.id,
+        ...buildTaskAccessPatch({
+          task: item,
+          workspaceId: workspace.id,
+          userId: user.uid,
+          email: user.email,
+        }),
         title: item.title,
         normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
         description: item.description || "",
@@ -2642,6 +2724,12 @@ export function DelivereeWorkspace() {
       userId: user.uid,
       workspaceId: workspace.id,
       projectId,
+      ...buildTaskAccessPatch({
+        task: patch,
+        workspaceId: workspace.id,
+        userId: user.uid,
+        email: user.email,
+      }),
       title,
       normalizedTitle: title.trim().toLowerCase().replace(/\s+/g, " "),
       key: String(patch.key || `${prefix}-${nextSequence}`),
@@ -2661,8 +2749,16 @@ export function DelivereeWorkspace() {
     taskId: string,
     patch: Record<string, unknown>,
   ) => {
+    const current = tasks.find((item) => item.id === taskId) || {};
+    const next = { ...current, ...patch };
     await updateDoc(doc(db, "tasks", taskId), {
       ...patch,
+      ...buildTaskAccessPatch({
+        task: next,
+        workspaceId: workspace?.id || String(next.workspaceId || ""),
+        userId: user?.uid || String(next.userId || ""),
+        email: user?.email || "",
+      }),
       updatedAt: serverTimestamp(),
     });
   };
@@ -2674,6 +2770,7 @@ export function DelivereeWorkspace() {
     const projectRef = await addDoc(collection(db, "projects"), {
       userId: user.uid,
       workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
       title: draft.title.trim(),
       normalizedTitle: draft.title.trim().toLowerCase().replace(/\s+/g, " "),
       description: draft.why.trim(),

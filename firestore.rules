@@ -34,6 +34,104 @@ service cloud.firestore {
         && get(memberDoc(workspaceId)).data.status == "active";
     }
 
+    function activeWorkspaceMemberId(workspaceId) {
+      return workspaceId + "_" + request.auth.uid;
+    }
+
+    function isPortfolioViewerEmail() {
+      return request.auth.token.email != null
+        && request.auth.token.email in [
+          "cesar.a@getboldr.ai",
+          "cesar.ar@alliedglobal.com",
+          "rafael.f@getboldr.ai",
+          "rafael.f@alliedglobal.com"
+        ];
+    }
+
+    function isWorkspaceAdmin(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid ||
+          (
+            exists(memberDoc(workspaceId)) &&
+            get(memberDoc(workspaceId)).data.status == "active" &&
+            get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+          )
+        );
+    }
+
+    function hasExplicitUserAccess(data) {
+      return (
+        ('visibleToUserIds' in data) &&
+        data.visibleToUserIds is list &&
+        request.auth.uid in data.visibleToUserIds
+      ) || (
+        request.auth.token.email != null &&
+        ('visibleToEmails' in data) &&
+        data.visibleToEmails is list &&
+        request.auth.token.email in data.visibleToEmails
+      );
+    }
+
+    function hasProjectRoleAccess(data) {
+      return ('workspaceId' in data) && data.workspaceId is string && (
+        (('projectManagerId' in data) && data.projectManagerId == activeWorkspaceMemberId(data.workspaceId)) ||
+        (('productOwnerId' in data) && data.productOwnerId == activeWorkspaceMemberId(data.workspaceId)) ||
+        (('sponsorId' in data) && data.sponsorId == activeWorkspaceMemberId(data.workspaceId)) ||
+        (('sponsorIds' in data) && data.sponsorIds is list && activeWorkspaceMemberId(data.workspaceId) in data.sponsorIds) ||
+        (('teamMemberIds' in data) && data.teamMemberIds is list && activeWorkspaceMemberId(data.workspaceId) in data.teamMemberIds)
+      );
+    }
+
+    function canReadProject(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        (('createdBy' in data) && data.createdBy == request.auth.uid) ||
+        (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        hasExplicitUserAccess(data) ||
+        hasProjectRoleAccess(data) ||
+        (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewerEmail())
+      );
+    }
+
+    function canWriteProject(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        (('createdBy' in data) && data.createdBy == request.auth.uid) ||
+        (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        hasProjectRoleAccess(data) ||
+        (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId))
+      );
+    }
+
+    function canReadTask(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        (('createdBy' in data) && data.createdBy == request.auth.uid) ||
+        (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        (('assigneeId' in data) && data.assigneeId == request.auth.uid) ||
+        hasExplicitUserAccess(data) ||
+        (
+          ('workspaceId' in data) &&
+          ('assigneeIds' in data) &&
+          data.assigneeIds is list &&
+          activeWorkspaceMemberId(data.workspaceId) in data.assigneeIds
+        ) ||
+        (
+          ('workspaceId' in data) &&
+          ('accessMemberIds' in data) &&
+          data.accessMemberIds is list &&
+          activeWorkspaceMemberId(data.workspaceId) in data.accessMemberIds
+        )
+      );
+    }
+
+    function canWriteTask(data) {
+      return canReadTask(data);
+    }
+
     // Playbooks
     function isValidPlaybook(data) {
         return data.keys().hasAll(['userId', 'title', 'createdAt'])
@@ -251,16 +349,16 @@ service cloud.firestore {
     // Projects
     function isValidProject(data) {
         return data.keys().hasAll(['userId', 'title', 'status', 'createdAt'])
-        && data.userId is string && data.userId == request.auth.uid
+        && data.userId is string
         && data.title is string && data.status is string
         && data.createdAt is timestamp;
     }
     match /projects/{id} {
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow delete: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(id) && isValidProject(incoming()) && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
-      allow update: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))) && isValidProject(incoming()) 
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadProject(resource.data));
+      allow delete: if isSignedIn() && isValidId(id) && canWriteProject(resource.data);
+      allow list: if isSignedIn() && canReadProject(resource.data);
+      allow create: if isSignedIn() && isValidId(id) && isValidProject(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow update: if isSignedIn() && isValidId(id) && canWriteProject(resource.data) && isValidProject(incoming()) 
                      && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
     }
 
@@ -444,20 +542,20 @@ service cloud.firestore {
     // Tasks
     function isValidTask(data) {
        return data.keys().hasAll(['userId', 'title', 'status', 'createdAt'])
-        && data.userId is string && data.userId == request.auth.uid
+        && data.userId is string
         && data.title is string && data.title.size() <= 500
         && data.status is string && data.status.size() <= 64
         && data.createdAt is timestamp;
     }
     match /tasks/{taskId} {
-      allow get: if isSignedIn() && isValidId(taskId) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
-      allow update: if isSignedIn() && isValidId(taskId) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)))
+      allow get: if isSignedIn() && isValidId(taskId) && (resource == null || canReadTask(resource.data));
+      allow list: if isSignedIn() && canReadTask(resource.data);
+      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow update: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
                     && isValidTask(incoming())
                     && incoming().userId == resource.data.userId
                     && incoming().createdAt == resource.data.createdAt;
-      allow delete: if isSignedIn() && isValidId(taskId) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data);
     }
 
     // New Modules: Habits, Workouts, Analytics
