@@ -18,14 +18,15 @@ import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
+import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker } from "./ProjectControls";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt";
-type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag";
-type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity";
+type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag" | "work_category" | "product_phase";
+type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity" | "work_category" | "product_phase";
 type ItemViewFilters = {
   mode: WorkItemsViewMode;
   projectFilter: string;
@@ -35,6 +36,8 @@ type ItemViewFilters = {
   ownerFilter: string;
   dateFilter: string;
   tagFilter: string;
+  workCategoryFilter: string;
+  productPhaseFilter: string;
   groupBy: GroupBy;
   primarySort: SortBy;
   secondarySort: SortBy;
@@ -51,6 +54,8 @@ type ItemColumnKey =
   | "delivery_entity"
   | "client_entity"
   | "tags"
+  | "work_category"
+  | "product_phase"
   | "status"
   | "priority"
   | "gtd"
@@ -103,6 +108,8 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "project", label: "Project" },
   { value: "delivery_entity", label: "Delivery Entity" },
   { value: "client_entity", label: "Client Entity" },
+  { value: "work_category", label: "Work Category" },
+  { value: "product_phase", label: "Product Phase" },
   { value: "priority", label: "Priority" },
   { value: "due", label: "Due date" },
   { value: "status", label: "Status" },
@@ -116,6 +123,8 @@ const defaultItemColumns: ItemColumnKey[] = [
   "delivery_entity",
   "client_entity",
   "tags",
+  "work_category",
+  "product_phase",
   "status",
   "priority",
   "gtd",
@@ -129,6 +138,8 @@ const itemColumnLabels: Record<ItemColumnKey, string> = {
   delivery_entity: "Delivery Entity",
   client_entity: "Client Entity",
   tags: "Tags",
+  work_category: "Work Category",
+  product_phase: "Product Phase",
   status: "Status",
   priority: "Priority",
   gtd: "GTD",
@@ -142,6 +153,8 @@ const itemColumnWidths: Record<ItemColumnKey, string> = {
   delivery_entity: "minmax(145px, .75fr)",
   client_entity: "minmax(145px, .75fr)",
   tags: "minmax(130px, .7fr)",
+  work_category: "minmax(140px, .75fr)",
+  product_phase: "minmax(110px, .6fr)",
   status: "94px",
   priority: "64px",
   gtd: "104px",
@@ -172,6 +185,14 @@ const defaultItemColumnPixels = Object.fromEntries(
 
 function clampColumnWidth(value: number) {
   return Math.max(72, Math.min(420, Math.round(value)));
+}
+
+function selectedItemColumns(value: ItemColumnKey[] | null) {
+  const current = value?.length ? [...value] : [...defaultItemColumns];
+  (["work_category", "product_phase"] as ItemColumnKey[]).forEach((column) => {
+    if (!current.includes(column)) current.push(column);
+  });
+  return defaultItemColumns.filter((column) => current.includes(column));
 }
 
 function title(item: any) {
@@ -211,6 +232,14 @@ function clientEntity(item: any, projects: any[]) {
       project?.client ||
       "Internal",
   );
+}
+
+function itemWorkCategory(item: any, projects: any[]) {
+  return workCategory(item, itemProject(item, projects));
+}
+
+function itemProductPhase(item: any, projects: any[]) {
+  return productPhase(item, itemProject(item, projects));
 }
 
 function workItemKind(item: any): WorkItemKind {
@@ -355,6 +384,10 @@ function sortValue(item: any, sortBy: SortBy, projects: any[]) {
     return deliveryEntity(item, projects).toLowerCase();
   if (sortBy === "client_entity")
     return clientEntity(item, projects).toLowerCase();
+  if (sortBy === "work_category")
+    return itemWorkCategory(item, projects).toLowerCase();
+  if (sortBy === "product_phase")
+    return itemProductPhase(item, projects).toLowerCase();
   if (sortBy === "priority") return priorityValue(item.priority) === "N/A" ? "9" : priorityValue(item.priority);
   if (sortBy === "due") return dateInputValue(item.dueDate || item.targetDate) || "9999-12-31";
   if (sortBy === "status") return canonicalStatus(item);
@@ -491,6 +524,8 @@ export function WorkItemsCenter({
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [workCategoryFilter, setWorkCategoryFilter] = useState("all");
+  const [productPhaseFilter, setProductPhaseFilter] = useState("all");
   const [groupBy, setGroupBy] = useState<GroupBy>(activeProject ? "hierarchy" : "project");
   const [primarySort, setPrimarySort] = useState<SortBy>("project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
@@ -526,9 +561,7 @@ export function WorkItemsCenter({
         const stored = JSON.parse(
           window.localStorage.getItem(viewStorageKey("items-current")) || "null",
         );
-        return Array.isArray(stored) && stored.length
-          ? stored
-          : defaultItemColumns;
+        return selectedItemColumns(Array.isArray(stored) && stored.length ? stored : null);
       } catch {
         return defaultItemColumns;
       }
@@ -565,6 +598,8 @@ export function WorkItemsCenter({
     ownerFilter,
     dateFilter,
     tagFilter,
+    workCategoryFilter,
+    productPhaseFilter,
     groupBy,
     primarySort,
     secondarySort,
@@ -621,7 +656,7 @@ export function WorkItemsCenter({
   const applyItemView = (name: string) => {
     const saved = savedItemViews.find((candidate) => candidate.name === name);
     if (!saved) return;
-    setVisibleItemColumns(saved.columns);
+    setVisibleItemColumns(selectedItemColumns(saved.columns));
     if (saved.widths) {
       const nextWidths = { ...defaultItemColumnPixels, ...saved.widths };
       setItemColumnPixels(nextWidths);
@@ -639,6 +674,8 @@ export function WorkItemsCenter({
       setOwnerFilter(saved.filters.ownerFilter || "all");
       setDateFilter(saved.filters.dateFilter || "all");
       setTagFilter(saved.filters.tagFilter || "all");
+      setWorkCategoryFilter(saved.filters.workCategoryFilter || "all");
+      setProductPhaseFilter(saved.filters.productPhaseFilter || "all");
       setGroupBy(saved.filters.groupBy || (activeProject ? "hierarchy" : "project"));
       setPrimarySort(saved.filters.primarySort || "project");
       setSecondarySort(saved.filters.secondarySort || "priority");
@@ -661,7 +698,7 @@ export function WorkItemsCenter({
     onSelectItem(null);
   }, [activeProject?.id]);
 
-  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, query]);
+  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, workCategoryFilter, productPhaseFilter, query]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -719,10 +756,12 @@ export function WorkItemsCenter({
       const matchesOwner = ownerFilter === "all" || String(item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
       const matchesItemTag = matchesTag(item, tagFilter);
-      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
-      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && (!needle || searchable.includes(needle));
+      const matchesWorkCategory = workCategoryFilter === "all" || itemWorkCategory(item, projects) === workCategoryFilter;
+      const matchesProductPhase = productPhaseFilter === "all" || itemProductPhase(item, projects) === productPhaseFilter;
+      const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${itemWorkCategory(item, projects)} ${itemProductPhase(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
+      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && (!needle || searchable.includes(needle));
     }), primarySort, secondarySort, projects);
-  }, [dateFilter, ownerFilter, priorityFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tagFilter, tags, tasks, typeFilter]);
+  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
@@ -757,6 +796,8 @@ export function WorkItemsCenter({
       bpo: inheritedDeliveryEntity,
       clientEntity: inheritedClientEntity,
       client: inheritedClientEntity,
+      workCategory: project ? workCategory(project) : "Personal / Errand",
+      productPhase: project ? productPhase(project) : "Explore",
       priority: null,
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
@@ -857,6 +898,12 @@ export function WorkItemsCenter({
         {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
         {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
         {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
+          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>}
+        {itemColumnSet.has("product_phase") && <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
+          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+        </select>}
         {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>}
@@ -938,6 +985,8 @@ export function WorkItemsCenter({
       if (groupBy === "project") return itemProjectTitle(item, projects);
       if (groupBy === "owner") return String(item.owner || item.assignee || "Unassigned");
       if (groupBy === "type") return workItemLabel(workItemKind(item));
+      if (groupBy === "work_category") return itemWorkCategory(item, projects);
+      if (groupBy === "product_phase") return itemProductPhase(item, projects);
       if (groupBy === "due") return dueBucketLabels[dueBucket(item.dueDate || item.targetDate)] || "No sector";
       if (groupBy === "tag") return tagLabels(item, tags)[0] || "No tag";
       return "Items";
@@ -1147,6 +1196,14 @@ export function WorkItemsCenter({
           <option value="all">Any tag</option>
           {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
         </select>
+        <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
+          <option value="all">Any category</option>
+          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+        </select>
+        <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
+          <option value="all">Any product phase</option>
+          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+        </select>
         <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
           <option value="hierarchy">Hierarchy</option>
           <option value="actionBoard">Action Board</option>
@@ -1155,6 +1212,8 @@ export function WorkItemsCenter({
           <option value="project">Project</option>
           <option value="owner">Owner</option>
           <option value="type">Type</option>
+          <option value="work_category">Work Category</option>
+          <option value="product_phase">Product Phase</option>
           <option value="tag">Tag</option>
           <option value="due">Due date</option>
         </select>
@@ -1315,6 +1374,8 @@ export function WorkItemsCenter({
             <label>Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
             <label>Delivery Entity<ControlledSelect ariaLabel="Selected item delivery entity" onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(selectedItem, projects)} /></label>
             <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
+            <label>Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+            <label>Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
             <label>Tags<ItemTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker

@@ -70,6 +70,7 @@ import {
 } from "./ProjectTemplatesPanel";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
+import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
 
 type ProjectPatch = Record<string, unknown>;
@@ -86,6 +87,8 @@ type PortfolioColumnKey =
   | "delivery_entity"
   | "client_entity"
   | "tags"
+  | "work_category"
+  | "product_phase"
   | "stage"
   | "phase"
   | "status"
@@ -102,6 +105,8 @@ const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   delivery_entity: "Delivery Entity",
   client_entity: "Client Entity",
   tags: "Tags",
+  work_category: "Work Category",
+  product_phase: "Product Phase",
   stage: "Stage",
   phase: "Phase",
   status: "Status",
@@ -119,6 +124,8 @@ const defaultPortfolioColumns: PortfolioColumnKey[] = [
   "delivery_entity",
   "client_entity",
   "tags",
+  "work_category",
+  "product_phase",
   "stage",
   "phase",
   "status",
@@ -136,6 +143,8 @@ const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
   delivery_entity: "minmax(150px, .9fr)",
   client_entity: "minmax(150px, .9fr)",
   tags: "minmax(150px, .9fr)",
+  work_category: "minmax(160px, .9fr)",
+  product_phase: "125px",
   stage: "105px",
   phase: "120px",
   status: "105px",
@@ -178,7 +187,11 @@ function clampColumnWidth(value: number) {
 }
 
 function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
-  return value?.length ? value : fallback;
+  const current = value?.length ? [...value] : [...fallback];
+  (["work_category", "product_phase"] as T[]).forEach((column) => {
+    if (fallback.includes(column) && !current.includes(column)) current.push(column);
+  });
+  return fallback.filter((column) => current.includes(column));
 }
 
 function TagPicker({
@@ -699,6 +712,46 @@ export function ProjectRecordModal({
                   placeholder="Product, client, operations…"
                   value={project.projectType || project.category}
                 />
+                <label className="do-project-field">
+                  <span>Work Category</span>
+                  <select
+                    onChange={(event) =>
+                      update({
+                        workCategory: event.target.value,
+                        portfolioCategory: event.target.value,
+                        projectType:
+                          event.target.value === "Product Development"
+                            ? "product"
+                            : project.projectType,
+                      })
+                    }
+                    value={workCategory(project)}
+                  >
+                    {WORK_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="do-project-field">
+                  <span>Product Phase</span>
+                  <select
+                    onChange={(event) =>
+                      update({
+                        productPhase: event.target.value,
+                        roadmapPhase: event.target.value,
+                      })
+                    }
+                    value={productPhase(project)}
+                  >
+                    {PRODUCT_PHASES.map((phase) => (
+                      <option key={phase} value={phase}>
+                        {phase}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <EditableField
                   label="Priority"
                   onCommit={(priority) => update({ priority })}
@@ -2666,6 +2719,8 @@ type ProjectSortKey =
   | "project"
   | "delivery_entity"
   | "client_entity"
+  | "work_category"
+  | "product_phase"
   | "stage"
   | "phase"
   | "status"
@@ -2680,6 +2735,8 @@ type ProjectSortKey =
 type PortfolioDimension =
   | "bpo"
   | "client"
+  | "work_category"
+  | "product_phase"
   | "stage"
   | "status"
   | "health"
@@ -2691,6 +2748,8 @@ type PortfolioViewFilters = {
   phaseFilter: string;
   healthFilter: string;
   tagFilter: string;
+  workCategoryFilter: string;
+  productPhaseFilter: string;
   taxonomyDimension: PortfolioDimension;
   taxonomyValue: string | null;
   search: string;
@@ -2709,6 +2768,8 @@ const projectSortOptions: Array<{ value: ProjectSortKey; label: string }> = [
   { value: "project", label: "Project / taxonomy" },
   { value: "delivery_entity", label: "Delivery Entity" },
   { value: "client_entity", label: "Client Entity" },
+  { value: "work_category", label: "Work Category" },
+  { value: "product_phase", label: "Product Phase" },
   { value: "stage", label: "Stage" },
   { value: "phase", label: "Phase" },
   { value: "status", label: "Status" },
@@ -2728,6 +2789,8 @@ const portfolioDimensionOptions: Array<{
 }> = [
   { value: "bpo", label: "Delivery Entity" },
   { value: "client", label: "Client Entity" },
+  { value: "work_category", label: "Work Category" },
+  { value: "product_phase", label: "Product Phase" },
   { value: "stage", label: "Delivery stage" },
   { value: "status", label: "Status" },
   { value: "health", label: "Health" },
@@ -4254,6 +4317,8 @@ function projectSortValue(
     return String(project.deliveryEntity || project.bpo || "").toLowerCase();
   if (key === "client_entity")
     return String(project.clientEntity || project.client || "").toLowerCase();
+  if (key === "work_category") return workCategory(project).toLowerCase();
+  if (key === "product_phase") return productPhase(project).toLowerCase();
   if (key === "stage")
     return String(DELIVERY_STAGES.indexOf(deliveryStage(project))).padStart(
       2,
@@ -4305,6 +4370,8 @@ function portfolioDimensionValue(
     return String(project.deliveryEntity || project.bpo || "Internal").trim() || "Internal";
   if (dimension === "client")
     return String(project.clientEntity || project.client || "Internal").trim() || "Internal";
+  if (dimension === "work_category") return workCategory(project);
+  if (dimension === "product_phase") return productPhase(project);
   if (dimension === "stage") return deliveryStageLabels[deliveryStage(project)];
   if (dimension === "status")
     return projectStatusLabel(String(project.status || "planning"));
@@ -4406,6 +4473,8 @@ export function ProjectCommandCenter({
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [workCategoryFilter, setWorkCategoryFilter] = useState("all");
+  const [productPhaseFilter, setProductPhaseFilter] = useState("all");
   const [taxonomyDimension, setTaxonomyDimension] =
     useState<PortfolioDimension>("bpo");
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
@@ -4495,6 +4564,8 @@ export function ProjectCommandCenter({
     phaseFilter,
     healthFilter,
     tagFilter,
+    workCategoryFilter,
+    productPhaseFilter,
     taxonomyDimension,
     taxonomyValue,
     search,
@@ -4560,7 +4631,8 @@ export function ProjectCommandCenter({
   const applySavedView = (name: string) => {
     const saved = savedViews.find((candidate) => candidate.name === name);
     if (!saved) return;
-    setVisibleColumns(selectedColumns(saved.columns, defaultPortfolioColumns));
+    const nextColumns = selectedColumns(saved.columns, defaultPortfolioColumns);
+    setVisibleColumns(nextColumns);
     if (saved.widths) {
       const nextWidths = { ...defaultPortfolioColumnPixels, ...saved.widths };
       setColumnWidths(nextWidths);
@@ -4575,6 +4647,8 @@ export function ProjectCommandCenter({
       setPhaseFilter(saved.filters.phaseFilter || "all");
       setHealthFilter(saved.filters.healthFilter || "all");
       setTagFilter(saved.filters.tagFilter || "all");
+      setWorkCategoryFilter(saved.filters.workCategoryFilter || "all");
+      setProductPhaseFilter(saved.filters.productPhaseFilter || "all");
       setTaxonomyDimension(saved.filters.taxonomyDimension || "bpo");
       setTaxonomyValue(saved.filters.taxonomyValue || null);
       setSearch(saved.filters.search || "");
@@ -4584,7 +4658,7 @@ export function ProjectCommandCenter({
     }
     window.localStorage.setItem(
       columnsStorageKey("portfolio-current"),
-      JSON.stringify(saved.columns),
+      JSON.stringify(nextColumns),
     );
   };
   const deleteSavedView = (name: string) => {
@@ -4612,17 +4686,23 @@ export function ProjectCommandCenter({
       phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
     const matchesHealth = healthFilter === "all" || health === healthFilter;
     const matchesProjectTag = matchesTag(project, tagFilter);
+    const matchesWorkCategory =
+      workCategoryFilter === "all" || workCategory(project) === workCategoryFilter;
+    const matchesProductPhase =
+      productPhaseFilter === "all" || productPhase(project) === productPhaseFilter;
     const matchesTaxonomy =
       !taxonomyValue ||
       portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
         taxonomyValue;
     const haystack =
-      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
+      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${workCategory(project)} ${productPhase(project)} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
     return (
       matchesFilter &&
       matchesStage &&
       matchesHealth &&
       matchesProjectTag &&
+      matchesWorkCategory &&
+      matchesProductPhase &&
       matchesPhase &&
       matchesTaxonomy &&
       haystack.includes(search.toLowerCase())
@@ -5341,6 +5421,36 @@ export function ProjectCommandCenter({
               </select>
             </label>
             <label>
+              Category
+              <select
+                aria-label="Filter projects by work category"
+                onChange={(event) => setWorkCategoryFilter(event.target.value)}
+                value={workCategoryFilter}
+              >
+                <option value="all">All categories</option>
+                {WORK_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Product Phase
+              <select
+                aria-label="Filter projects by product phase"
+                onChange={(event) => setProductPhaseFilter(event.target.value)}
+                value={productPhaseFilter}
+              >
+                <option value="all">All product phases</option>
+                {PRODUCT_PHASES.map((phase) => (
+                  <option key={phase} value={phase}>
+                    {phase}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Sort
               <select
                 aria-label="Primary project sort"
@@ -5528,6 +5638,20 @@ export function ProjectCommandCenter({
                   />
                 </span>}
                 {columnSet.has("tags") && <span>Tags</span>}
+                {columnSet.has("work_category") && <span>
+                  Work Category{" "}
+                  <InfoTip
+                    label="Work Category"
+                    text="Classifies the work without changing the delivery lifecycle. Use Product Development for products, platforms, apps or internal software you are building."
+                  />
+                </span>}
+                {columnSet.has("product_phase") && <span>
+                  Product Phase{" "}
+                  <InfoTip
+                    label="Product Phase"
+                    text="Product-specific maturity: Explore, Shape, Build, Beta, Launch or Grow. It stays separate from delivery Stage and Phase."
+                  />
+                </span>}
                 {columnSet.has("stage") && <span>
                   Stage{" "}
                   <InfoTip
@@ -5703,6 +5827,48 @@ export function ProjectCommandCenter({
                           record={project}
                           tags={tags}
                         />
+                      )}
+                      {columnSet.has("work_category") && (
+                      <select
+                        aria-label={`Work Category for ${projectTitle(project)}`}
+                        className="do-table-select"
+                        onChange={(event) =>
+                          onUpdateProject(project.id, {
+                            workCategory: event.target.value,
+                            portfolioCategory: event.target.value,
+                            projectType:
+                              event.target.value === "Product Development"
+                                ? "product"
+                                : project.projectType,
+                          })
+                        }
+                        value={workCategory(project)}
+                      >
+                        {WORK_CATEGORIES.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                      )}
+                      {columnSet.has("product_phase") && (
+                      <select
+                        aria-label={`Product Phase for ${projectTitle(project)}`}
+                        className="do-table-select"
+                        onChange={(event) =>
+                          onUpdateProject(project.id, {
+                            productPhase: event.target.value,
+                            roadmapPhase: event.target.value,
+                          })
+                        }
+                        value={productPhase(project)}
+                      >
+                        {PRODUCT_PHASES.map((phase) => (
+                          <option key={phase} value={phase}>
+                            {phase}
+                          </option>
+                        ))}
+                      </select>
                       )}
                       {columnSet.has("stage") && (
                       <select
