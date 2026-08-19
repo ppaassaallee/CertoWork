@@ -4000,7 +4000,11 @@ export function DelivereeWorkspace() {
                       <h1>
                         {isFocusedConversation
                           ? "What should move next?"
-                          : `What matters now, ${displayName(memberLabel(currentWorkspaceMember || { displayName: user?.displayName }))}?`}
+                          : `What matters now, ${displayName(
+                              currentWorkspaceMember
+                                ? memberLabel(currentWorkspaceMember)
+                                : user?.displayName,
+                            )}?`}
                       </h1>
                       <p>
                         {routeOrPrimaryProject
