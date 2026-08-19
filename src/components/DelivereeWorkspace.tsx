@@ -41,10 +41,12 @@ import {
   Star,
   Target,
   Trash2,
+  UserMinus,
   Users,
   WandSparkles,
   X,
 } from "lucide-react";
+import { updateProfile } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -61,6 +63,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { AliasProfileEditor } from "./ProjectControls";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -120,14 +123,23 @@ import {
   activeMemberId,
   canChangePasswordForProvider,
   canCreateWorkspace,
+  canManageWorkspaceMembers,
   createInviteCode,
+  isAssignableMember,
+  isWorkspaceOwnerRole,
   memberAssignmentValue,
+  memberAvatar,
+  memberHasAlias,
   memberLabel,
   memberStatusLabel,
+  membershipPublicPatch,
+  normalizeAlias,
   normalizeInviteEmail,
+  normalizeMemberEmoji,
   passwordProviderMessage,
   pendingMemberId,
   roleLabel,
+  suggestedAlias,
   type WorkspaceMember,
   type WorkspaceTeam,
 } from "../lib/workspaceCollaboration";
@@ -202,8 +214,8 @@ function timeAgo(value: any) {
   return `${Math.floor(hours / 24)}d`;
 }
 
-function initials(name?: string | null, email?: string | null) {
-  const source = name?.trim() || email?.split("@")[0] || "D";
+function initials(name?: string | null) {
+  const source = name?.trim() || "D";
   return source
     .split(/\s+/)
     .slice(0, 2)
@@ -217,8 +229,8 @@ function inviteMessage(invite: any) {
   return `You have been invited to Certo Work. Open https://certo.work and sign in or request beta access using this exact email: ${email}`;
 }
 
-function displayName(name?: string | null, email?: string | null) {
-  return name?.trim().split(/\s+/)[0] || email?.split("@")[0] || "there";
+function displayName(name?: string | null) {
+  return name?.trim().split(/\s+/)[0] || "there";
 }
 
 function entityTitle(entity: any) {
@@ -612,6 +624,8 @@ export function DelivereeWorkspace() {
   const [inviteRole, setInviteRole] = useState<"admin" | "member" | "viewer">(
     "member",
   );
+  const [aliasDraft, setAliasDraft] = useState("");
+  const [emojiDraft, setEmojiDraft] = useState("🙂");
   const [newTeamName, setNewTeamName] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -1030,6 +1044,37 @@ export function DelivereeWorkspace() {
         ),
     [openTasks, todayKey],
   );
+  const currentWorkspaceMember = useMemo(
+    () =>
+      workspaceMembers.find(
+        (member) =>
+          member.userId === user?.uid && isAssignableMember(member),
+      ) || null,
+    [workspaceMembers, user?.uid],
+  );
+  const needsAlias = Boolean(
+    user && workspace && currentWorkspaceMember && !memberHasAlias(currentWorkspaceMember),
+  );
+  const canManageMembers = canManageWorkspaceMembers(
+    currentWorkspaceMember?.role,
+    workspace?.ownerId === user?.uid,
+  );
+
+  useEffect(() => {
+    if (!currentWorkspaceMember && !user) return;
+    setAliasDraft(
+      suggestedAlias(currentWorkspaceMember || {}, user?.displayName),
+    );
+    setEmojiDraft(
+      currentWorkspaceMember ? memberAvatar(currentWorkspaceMember) : "🙂",
+    );
+  }, [
+    currentWorkspaceMember?.id,
+    currentWorkspaceMember?.alias,
+    currentWorkspaceMember?.emoji,
+    currentWorkspaceMember?.displayName,
+    user?.displayName,
+  ]);
   const visibleMessages = messages.filter(
     (message) => message.role !== "system",
   );
@@ -2562,6 +2607,7 @@ export function DelivereeWorkspace() {
         email,
         emailLower,
         displayName: user.displayName || "",
+        ...membershipPublicPatch({ displayName: user.displayName }),
         role: "owner",
         status: "active",
         createdAt: serverTimestamp(),
@@ -2600,7 +2646,7 @@ export function DelivereeWorkspace() {
         userId: `pending:${email}`,
         email,
         emailLower: email,
-        displayName: email,
+        ...membershipPublicPatch({}),
         role: inviteRole,
         status: "invited",
         invitedBy: user.uid,
@@ -2666,7 +2712,7 @@ export function DelivereeWorkspace() {
     const message = inviteMessage(invite);
     try {
       await navigator.clipboard.writeText(message);
-      setNotice(`Invite message copied for ${invite.email || invite.emailLower}.`);
+      setNotice(`Invite message copied.`);
     } catch {
       setNotice(message);
     }
@@ -2742,6 +2788,126 @@ export function DelivereeWorkspace() {
     }
   };
 
+  const saveAliasProfile = async () => {
+    if (!user || !workspace) return;
+    const alias = normalizeAlias(aliasDraft);
+    if (!alias) {
+      setNotice("Choose a public alias. Emails stay private and are never shown.");
+      return;
+    }
+    const emoji = normalizeMemberEmoji(emojiDraft);
+    const memberId =
+      currentWorkspaceMember?.id || activeMemberId(workspace.id, user.uid);
+    await setDoc(
+      doc(db, "workspace_members", memberId),
+      {
+        id: memberId,
+        workspaceId: workspace.id,
+        userId: user.uid,
+        email: user.email || "",
+        emailLower: (user.email || "").toLowerCase(),
+        alias,
+        emoji,
+        displayName: alias,
+        status: currentWorkspaceMember?.status || "active",
+        role:
+          currentWorkspaceMember?.role ||
+          (workspace.ownerId === user.uid ? "owner" : "member"),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+    try {
+      await updateProfile(user, { displayName: alias });
+    } catch {
+      // Alias is stored on the workspace member even if Auth profile update fails.
+    }
+    setNotice("Alias saved. Teammates will only see this name and icon.");
+  };
+
+  const removeWorkspaceMember = async (member: WorkspaceMember) => {
+    if (!workspace || !user) return;
+    if (!canManageMembers) {
+      setNotice("Only the workspace owner or an admin can remove people.");
+      return;
+    }
+    if (member.userId === user.uid || isWorkspaceOwnerRole(member.role) || member.userId === workspace.ownerId) {
+      setNotice("The workspace owner cannot be removed.");
+      return;
+    }
+    const label = memberLabel(member);
+    const confirmed = window.confirm(`Remove ${label} from this workspace?`);
+    if (!confirmed) return;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    await updateDoc(doc(db, "workspace_members", member.id), {
+      status: "removed",
+      removedBy: user.uid,
+      removedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    if (email) {
+      const roles = { ...(workspace.roles || {}) };
+      delete roles[email];
+      await updateDoc(doc(db, "workspaces", workspace.id), {
+        members: (workspace.members || []).filter(
+          (item) => String(item).toLowerCase() !== email,
+        ),
+        roles,
+        updatedAt: serverTimestamp(),
+      });
+      const matchingInvites = workspaceInvites.filter(
+        (invite) =>
+          normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
+      );
+      for (const invite of matchingInvites) {
+        await updateDoc(doc(db, "agent_invites", invite.id), {
+          status: "revoked",
+          revokedBy: user.uid,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await reloadWorkspaces();
+    }
+    setNotice(`${label} removed from the workspace.`);
+  };
+
+  const revokeWorkspaceInvite = async (invite: any) => {
+    if (!workspace || !user || !canManageMembers) return;
+    await updateDoc(doc(db, "agent_invites", invite.id), {
+      status: "revoked",
+      revokedBy: user.uid,
+      updatedAt: serverTimestamp(),
+    });
+    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
+    const pending = workspaceMembers.find(
+      (member) =>
+        pendingMemberId(workspace.id, member.email || member.emailLower || "") ===
+          pendingMemberId(workspace.id, email) ||
+        (normalizeInviteEmail(member.email || member.emailLower || "") === email &&
+          String(member.status || "") === "invited"),
+    );
+    if (pending) {
+      await updateDoc(doc(db, "workspace_members", pending.id), {
+        status: "removed",
+        removedBy: user.uid,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    if (email) {
+      const roles = { ...(workspace.roles || {}) };
+      delete roles[email];
+      await updateDoc(doc(db, "workspaces", workspace.id), {
+        members: (workspace.members || []).filter(
+          (item) => String(item).toLowerCase() !== email,
+        ),
+        roles,
+        updatedAt: serverTimestamp(),
+      });
+      await reloadWorkspaces();
+    }
+    setNotice("Invite revoked.");
+  };
+
   const approveAccessRequest = async (
     request: AccessRequest,
     role: "admin" | "member" | "viewer" = "member",
@@ -2772,7 +2938,7 @@ export function DelivereeWorkspace() {
         userId: requestUserId,
         email,
         emailLower: email,
-        displayName: request.displayName || email,
+        ...membershipPublicPatch({ displayName: request.displayName }),
         role,
         status: "active",
         approvedBy: user.uid,
@@ -2790,7 +2956,7 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     await reloadWorkspaces();
-    setNotice(`${email} approved for ${workspace.name || "this workspace"}.`);
+    setNotice(`${normalizeAlias(request.displayName) || "Teammate"} approved for ${workspace.name || "this workspace"}.`);
   };
 
   const rejectAccessRequest = async (request: AccessRequest) => {
@@ -3582,11 +3748,11 @@ export function DelivereeWorkspace() {
             type="button"
           >
             <span className="do-avatar">
-              {initials(user?.displayName, user?.email)}
+              {memberAvatar(currentWorkspaceMember || {})}
             </span>
             <span>
               <strong>{workspace?.name || "Certo Work"}</strong>
-              <small>{user?.email}</small>
+              <small>{memberLabel(currentWorkspaceMember || { status: "active" })}</small>
             </span>
             <MoreHorizontal size={15} />
           </button>
@@ -3834,7 +4000,11 @@ export function DelivereeWorkspace() {
                       <h1>
                         {isFocusedConversation
                           ? "What should move next?"
-                          : `What matters now, ${displayName(user?.displayName, user?.email)}?`}
+                          : `What matters now, ${displayName(
+                              currentWorkspaceMember
+                                ? memberLabel(currentWorkspaceMember)
+                                : user?.displayName,
+                            )}?`}
                       </h1>
                       <p>
                         {routeOrPrimaryProject
@@ -4672,6 +4842,28 @@ export function DelivereeWorkspace() {
             <div className="do-panel-settings">
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Public profile</span>
+                  <strong>Alias and icon</strong>
+                </div>
+                <p className="do-panel-intro">
+                  Teammates only see your alias and emoji. Your email stays private.
+                </p>
+                <AliasProfileEditor
+                  alias={aliasDraft}
+                  emoji={emojiDraft}
+                  onAliasChange={setAliasDraft}
+                  onEmojiChange={setEmojiDraft}
+                />
+                <button
+                  disabled={!normalizeAlias(aliasDraft)}
+                  onClick={saveAliasProfile}
+                  type="button"
+                >
+                  Save alias
+                </button>
+              </section>
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
                   <span className="do-kicker">Account security</span>
                   <strong>{user?.email || "Signed-in account"}</strong>
                 </div>
@@ -4721,8 +4913,32 @@ export function DelivereeWorkspace() {
                 Workspaces separate companies, teams, or operating contexts.
                 This version supports up to {WORKSPACE_LIMIT}; conversations
                 stay personal, while projects and tasks live inside the selected
-                workspace.
+                workspace. People are shown by alias only.
               </p>
+
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Your profile</span>
+                  <strong>Alias required</strong>
+                </div>
+                <p className="do-panel-intro">
+                  Set the name and icon teammates will see when they assign work.
+                  Email is never shown in the workspace.
+                </p>
+                <AliasProfileEditor
+                  alias={aliasDraft}
+                  emoji={emojiDraft}
+                  onAliasChange={setAliasDraft}
+                  onEmojiChange={setEmojiDraft}
+                />
+                <button
+                  disabled={!normalizeAlias(aliasDraft)}
+                  onClick={saveAliasProfile}
+                  type="button"
+                >
+                  Save alias
+                </button>
+              </section>
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -4870,20 +5086,15 @@ export function DelivereeWorkspace() {
                   {accessRequests.map((request) => (
                     <article key={request.id}>
                       <span className="do-avatar">
-                        {initials(
-                          request.displayName,
-                          request.email || request.emailLower,
-                        )}
+                        {request.displayName?.trim()
+                          ? initials(request.displayName)
+                          : "?"}
                       </span>
                       <div>
                         <strong>
-                          {request.displayName ||
-                            request.email ||
-                            request.emailLower ||
-                            "Pending user"}
+                          {normalizeAlias(request.displayName) || "Pending user"}
                         </strong>
                         <small>
-                          {request.email || request.emailLower || "No email"} ·{" "}
                           {request.provider || "email/password"} ·{" "}
                           {timeAgo(request.requestedAt || request.updatedAt)}
                         </small>
@@ -4950,23 +5161,22 @@ export function DelivereeWorkspace() {
                   <strong>{workspaceMembers.length} people</strong>
                 </div>
                 <div className="do-member-list">
-                  {workspaceMembers.map((member) => {
+                  {workspaceMembers
+                    .filter((member) => isAssignableMember(member))
+                    .map((member) => {
                     const isOwner =
-                      String(member.role || "").toLowerCase() === "owner" ||
+                      isWorkspaceOwnerRole(member.role) ||
                       member.userId === workspace?.ownerId;
                     return (
                       <article key={member.id}>
-                        <span className="do-avatar">
-                          {initials(
-                            member.displayName,
-                            member.email || member.emailLower,
-                          )}
+                        <span className="do-member-avatar">
+                          {memberAvatar(member)}
                         </span>
                         <div>
                           <strong>{memberLabel(member)}</strong>
                           <small>
-                            {member.email || member.emailLower || "No email"} ·{" "}
                             {memberStatusLabel(member.status)}
+                            {member.userId === user?.uid ? " · You" : ""}
                           </small>
                         </div>
                         {isOwner ? (
@@ -4992,6 +5202,15 @@ export function DelivereeWorkspace() {
                             ))}
                           </select>
                         )}
+                        {!isOwner && canManageMembers && (
+                          <button
+                            className="do-member-remove"
+                            onClick={() => removeWorkspaceMember(member)}
+                            type="button"
+                          >
+                            <UserMinus size={13} /> Remove
+                          </button>
+                        )}
                       </article>
                     );
                   })}
@@ -5012,7 +5231,7 @@ export function DelivereeWorkspace() {
                     {workspaceInvites.map((invite) => (
                       <div className="do-pending-invite-row" key={invite.id}>
                         <small>
-                          {invite.email} · {roleLabel(invite.role)}
+                          Pending invite · {roleLabel(invite.role)}
                           {invite.emailDeliveryStatus
                             ? ` · email ${String(invite.emailDeliveryStatus).replace(/_/g, " ")}`
                             : ""}
@@ -5023,6 +5242,15 @@ export function DelivereeWorkspace() {
                         >
                           Copy message
                         </button>
+                        {canManageMembers && (
+                          <button
+                            className="do-member-remove"
+                            onClick={() => revokeWorkspaceInvite(invite)}
+                            type="button"
+                          >
+                            Revoke
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -5250,6 +5478,33 @@ export function DelivereeWorkspace() {
         onUpdateProject={updateProjectFromWizard}
         projects={activeProjects}
       />
+
+      {needsAlias && (
+        <div className="do-alias-gate" role="dialog" aria-modal="true" aria-label="Choose a public alias">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveAliasProfile();
+            }}
+          >
+            <span className="do-kicker">Required</span>
+            <h2>Choose a public alias</h2>
+            <p>
+              Teammates assign work using your alias and icon. Your email stays
+              private and will not be shown in Certo Work.
+            </p>
+            <AliasProfileEditor
+              alias={aliasDraft}
+              emoji={emojiDraft}
+              onAliasChange={setAliasDraft}
+              onEmojiChange={setEmojiDraft}
+            />
+            <button disabled={!normalizeAlias(aliasDraft)} type="submit">
+              Save alias and continue
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

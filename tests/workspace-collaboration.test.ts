@@ -6,8 +6,16 @@ import {
   activeMemberId,
   canCreateWorkspace,
   canChangePasswordForProvider,
+  canManageWorkspaceMembers,
+  looksLikeEmail,
   memberAssignmentValue,
+  memberAvatar,
+  memberHasAlias,
+  memberMatchesSelection,
+  memberPublicLabel,
   memberStatusLabel,
+  membershipPublicPatch,
+  normalizeAlias,
   normalizeInviteEmail,
   passwordProviderMessage,
   pendingMemberId,
@@ -21,12 +29,42 @@ test("workspace creation is capped at three workspaces", () => {
   assert.equal(canCreateWorkspace(3), false);
 });
 
-test("workspace invite emails and assignment labels are stable", () => {
+test("workspace invite emails and assignment labels stay private", () => {
   assert.equal(normalizeInviteEmail("  Team.Member@Boldr.AI "), "team.member@boldr.ai");
+  assert.equal(looksLikeEmail("ana@example.com"), true);
+  assert.equal(normalizeAlias("ana@example.com"), "");
   assert.equal(memberAssignmentValue({ displayName: "Ana Ops", email: "ana@example.com" }), "Ana Ops");
-  assert.equal(memberAssignmentValue({ email: "ana@example.com" }), "ana@example.com");
+  assert.equal(memberPublicLabel({ email: "ana@example.com" }), "Needs alias");
+  assert.equal(memberPublicLabel({ alias: "Ana Ops", email: "ana@example.com" }), "Ana Ops");
+  assert.equal(memberHasAlias({ displayName: "ana@example.com" }), false);
+  assert.equal(memberAvatar({ emoji: "🦊" }), "🦊");
   assert.equal(roleLabel("admin"), "Admin");
   assert.equal(roleLabel("unknown"), "Member");
+  assert.equal(canManageWorkspaceMembers("admin"), true);
+  assert.equal(canManageWorkspaceMembers("member"), false);
+});
+
+test("assignment matching uses ids without exposing email", () => {
+  const member = {
+    id: "ws_user-1",
+    userId: "user-1",
+    alias: "Ana",
+    email: "ana@example.com",
+  };
+  assert.equal(memberMatchesSelection(member, ["user-1"], []), true);
+  assert.equal(memberMatchesSelection(member, [], ["ana@example.com"]), true);
+  assert.equal(memberMatchesSelection(member, [], ["Ana"]), true);
+});
+
+test("membership public patch never stores email as alias", () => {
+  const patch = membershipPublicPatch({ displayName: "person@company.com", emoji: "🚀" });
+  assert.equal(patch.alias, undefined);
+  assert.equal(patch.emoji, "🚀");
+  assert.deepEqual(membershipPublicPatch({ alias: "Certo", emoji: "🎯" }), {
+    emoji: "🎯",
+    alias: "Certo",
+    displayName: "Certo",
+  });
 });
 
 test("workspace member ids and statuses are deterministic", () => {

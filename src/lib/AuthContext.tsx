@@ -23,6 +23,12 @@ import {
   authErrorMessage,
   withAuthTimeout,
 } from './authFlow';
+import { looksLikeEmail, membershipPublicPatch } from './workspaceCollaboration';
+
+function publicAuthName(displayName?: string | null) {
+  const name = String(displayName || "").trim();
+  return looksLikeEmail(name) ? "" : name;
+}
 
 export interface Workspace {
   id: string;
@@ -157,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               userId: u.uid,
               email: u.email || "",
               emailLower,
-              displayName: u.displayName || "",
+              ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
               role: (ws as any).roles?.[emailLower] || "member",
               status: "active",
               acceptedAt: serverTimestamp(),
@@ -194,7 +200,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 userId: u.uid,
                 email: u.email || "",
                 emailLower,
-                displayName: u.displayName || "",
+                ...membershipPublicPatch({
+                  alias: mData.alias,
+                  emoji: mData.emoji,
+                  displayName: publicAuthName(mData.displayName || u.displayName),
+                }),
                 role: mData.role || "member",
                 status: "active",
                 invitedBy: mData.invitedBy || "",
@@ -245,10 +255,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               userId: u.uid,
               email: u.email || "",
               emailLower: (u.email || "").toLowerCase(),
-              displayName: u.displayName || "",
               role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
               status: "active",
-              createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {
@@ -290,7 +298,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userId: u.uid,
           email: u.email || "",
           emailLower: (u.email || "").toLowerCase(),
-          displayName: u.displayName || "",
+          ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
           role: "owner",
           status: "active",
           createdAt: serverTimestamp(),

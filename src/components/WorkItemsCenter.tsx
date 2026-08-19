@@ -19,7 +19,8 @@ import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
-import { InfoTip, MultiAssigneePicker } from "./ProjectControls";
+import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 
@@ -709,9 +710,9 @@ export function WorkItemsCenter({
     () => [...new Set([
       ...workspaceMembers
         .filter((member) => String(member.status || "active") !== "removed")
-        .map((member) => String(member.displayName || member.email || member.emailLower || "").trim())
-        .filter(Boolean),
-      ...tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter(Boolean),
+        .map((member) => memberName(member))
+        .filter((name) => name && name !== "Needs alias" && !looksLikeEmail(name)),
+      ...tasks.map((item) => String(item.owner || item.assignee || "").trim()).filter((name) => name && !looksLikeEmail(name)),
     ])].sort(),
     [tasks, workspaceMembers],
   );
