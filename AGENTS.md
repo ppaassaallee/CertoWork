@@ -103,3 +103,19 @@ Classify each item into:
 - Delete / ignore
 
 Never overload the user. Simplify, prioritize, and protect focus.
+
+## Cursor Cloud specific instructions
+
+This repo is the **Certo Work** web app (Vite + React SPA served by an Express dev server), not the "Gazelle" persona described above. See `README.md` and `package.json` scripts for the canonical commands.
+
+### Services / commands
+- Package manager is **pnpm** (`pnpm-lock.yaml`). A stray `package-lock.json` also exists — ignore it and use pnpm.
+- Dev server: `pnpm dev` runs `tsx server.ts` (Express + Vite in middleware mode) on `http://localhost:3000`. It serves the SPA and the `/api/*` routes. Do NOT run `vite` directly; the app expects the Express host.
+- Lint: `pnpm lint` · Tests: `pnpm test` (Node's built-in test runner via `tsx --test tests/*.test.ts`) · Build: `pnpm build` (`tsc -b` then `vite build`).
+- During `pnpm install` a "Ignored build scripts: esbuild/@google/genai/protobufjs…" warning is expected and harmless — build, tests, and dev server all work without approving them. Do not run the interactive `pnpm approve-builds`.
+
+### Runtime / auth notes
+- Firebase and OpenAI are **optional in dev**; the app is offline-safe. The server boots even with no secrets: Firebase Admin initializes with `projectId` only, and AI responses fall back to deterministic behavior when `OPENAI_API_KEY` is unset.
+- The **frontend talks directly to a live Firebase project** using the public config in `firebase-applet-config.json` (client SDK, not an emulator). Firestore data therefore persists to that real project.
+- Auth gotcha for manual testing: **Google sign-in auto-provisions a "Personal Focus" workspace**, but **email/password accounts are gated** behind an `access_requests` approval. `access_requests` has no rule in `firestore.rules`, so it is deny-by-default — a fresh email account gets stuck on the "We couldn't open your workspace" recovery screen. Workaround (no Google needed): create/sign in an email/password user via the Identity Toolkit REST API, then pre-create a `workspaces` doc with `ownerId=<uid>` via the Firestore REST API (allowed by the rules). `loadWorkspaces` then finds the owned workspace and skips the gate, loading the full app.
+- A provisioned demo account exists for this: `certo-demo@example.com` / `CertoDemo123!` (owns a "Personal Focus" workspace). New email accounts trigger a one-time alias/emoji onboarding step before the workspace renders.
