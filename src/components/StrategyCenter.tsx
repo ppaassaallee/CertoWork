@@ -24,7 +24,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
-import type { WorkspaceMember } from "../lib/workspaceCollaboration";
+import { memberLabel as publicMemberLabel, type WorkspaceMember } from "../lib/workspaceCollaboration";
 import { AiRewriteButton } from "./AiRewriteButton";
 import {
   canAwardBoost,
@@ -47,7 +47,7 @@ function workType(item: any) {
 }
 
 function memberLabel(member?: WorkspaceMember | null) {
-  return member?.displayName || member?.email || "Unassigned";
+  return member ? publicMemberLabel(member) : "Unassigned";
 }
 
 function quarterEnd(date = new Date()) {
