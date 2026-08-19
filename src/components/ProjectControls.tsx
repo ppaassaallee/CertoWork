@@ -1,15 +1,24 @@
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { Info, Users } from "lucide-react";
+import {
+  DEFAULT_MEMBER_EMOJI,
+  MEMBER_EMOJI_CHOICES,
+  isAssignableMember,
+  memberAssignmentValue,
+  memberAvatar,
+  memberMatchesSelection,
+  memberPublicLabel,
+  type WorkspaceMember,
+} from "../lib/workspaceCollaboration";
 
-export type AssignableMember = {
-  id: string;
-  displayName?: string;
-  email?: string;
-  emailLower?: string;
-  status?: string;
-};
+export type AssignableMember = Pick<
+  WorkspaceMember,
+  "id" | "userId" | "alias" | "emoji" | "displayName" | "email" | "emailLower" | "status"
+>;
 
 export function memberName(member: AssignableMember) {
-  return String(member.displayName || member.email || member.emailLower || "Team member").trim();
+  return memberPublicLabel(member);
 }
 
 export function InfoTip({ label, text }: { label: string; text: string }) {
@@ -18,6 +27,54 @@ export function InfoTip({ label, text }: { label: string; text: string }) {
       <Info size={12} />
       <span role="tooltip"><strong>{label}</strong>{text}</span>
     </span>
+  );
+}
+
+export function AliasProfileEditor({
+  alias,
+  emoji,
+  onAliasChange,
+  onEmojiChange,
+}: {
+  alias: string;
+  emoji: string;
+  onAliasChange: (value: string) => void;
+  onEmojiChange: (value: string) => void;
+}) {
+  return (
+    <div className="cw-alias-editor">
+      <label>
+        Alias
+        <input
+          maxLength={32}
+          onChange={(event) => onAliasChange(event.target.value)}
+          placeholder="How teammates should see you"
+          value={alias}
+        />
+      </label>
+      <div>
+        <span>Icon</span>
+        <div className="cw-emoji-choices">
+          {MEMBER_EMOJI_CHOICES.map((choice) => (
+            <button
+              className={emoji === choice ? "is-selected" : ""}
+              key={choice}
+              onClick={() => onEmojiChange(choice)}
+              type="button"
+            >
+              {choice}
+            </button>
+          ))}
+          <input
+            aria-label="Custom emoji"
+            maxLength={8}
+            onChange={(event) => onEmojiChange(event.target.value || DEFAULT_MEMBER_EMOJI)}
+            placeholder="+"
+            value={MEMBER_EMOJI_CHOICES.includes(emoji) ? "" : emoji}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -34,29 +91,117 @@ export function MultiAssigneePicker({
   onChange: (ids: string[], names: string[]) => void;
   label?: string;
 }) {
-  const activeMembers = members.filter((member) => String(member.status || "active") !== "removed");
-  const normalizedNames = selectedNames.map((name) => String(name).trim()).filter(Boolean);
-  const selected = activeMembers.filter((member) => selectedIds.includes(member.id) || normalizedNames.includes(memberName(member)));
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const activeMembers = useMemo(
+    () => members.filter((member) => isAssignableMember(member)),
+    [members],
+  );
+  const selected = activeMembers.filter((member) =>
+    memberMatchesSelection(member, selectedIds, selectedNames),
+  );
+
+  const placeMenu = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = 280;
+    const estimatedHeight = Math.min(320, 88 + activeMembers.length * 44);
+    let left = Math.min(rect.right - width, window.innerWidth - width - 8);
+    if (left < 8) left = 8;
+    const openUp = rect.bottom + estimatedHeight + 8 > window.innerHeight && rect.top > estimatedHeight;
+    const top = openUp ? Math.max(8, rect.top - estimatedHeight - 6) : rect.bottom + 6;
+    setMenuStyle({
+      position: "fixed",
+      top,
+      left,
+      width,
+      zIndex: 240,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    placeMenu();
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onReposition = () => placeMenu();
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, activeMembers.length]);
+
   const toggle = (member: AssignableMember) => {
     const isSelected = selected.some((candidate) => candidate.id === member.id);
-    const next = isSelected ? selected.filter((candidate) => candidate.id !== member.id) : [...selected, member];
-    onChange(next.map((candidate) => candidate.id), next.map(memberName));
+    const next = isSelected
+      ? selected.filter((candidate) => candidate.id !== member.id)
+      : [...selected, member];
+    onChange(
+      next.map((candidate) => candidate.id),
+      next.map((candidate) => memberAssignmentValue(candidate)),
+    );
   };
 
   return (
-    <details className="cw-multi-assignee">
-      <summary aria-label={`${label}: ${selected.length} selected`}>
+    <div className="cw-multi-assignee">
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`${label}: ${selected.length} selected`}
+        className="cw-multi-assignee-trigger"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+        ref={triggerRef}
+        type="button"
+      >
         <Users size={12} />
-        <span>{selected.length ? selected.slice(0, 2).map(memberName).join(", ") : "Unassigned"}{selected.length > 2 ? ` +${selected.length - 2}` : ""}</span>
-      </summary>
-      <div>
-        <header><strong>{label}</strong><small>Select one or many people</small></header>
-        {activeMembers.map((member) => {
-          const checked = selected.some((candidate) => candidate.id === member.id);
-          return <label key={member.id}><input checked={checked} onChange={() => toggle(member)} type="checkbox" /><span><strong>{memberName(member)}</strong><small>{member.email || member.emailLower || "Workspace member"}</small></span></label>;
-        })}
-        {activeMembers.length === 0 && <p>Invite members from Workspace & team first.</p>}
-      </div>
-    </details>
+        <span>
+          {selected.length
+            ? selected
+                .slice(0, 2)
+                .map((member) => `${memberAvatar(member)} ${memberName(member)}`)
+                .join(", ")
+            : "Unassigned"}
+          {selected.length > 2 ? ` +${selected.length - 2}` : ""}
+        </span>
+      </button>
+      {open &&
+        createPortal(
+          <div className="cw-multi-assignee-menu" ref={menuRef} style={menuStyle}>
+            <header>
+              <strong>{label}</strong>
+              <small>Select one or many people. Emails stay private.</small>
+            </header>
+            {activeMembers.map((member) => {
+              const checked = selected.some((candidate) => candidate.id === member.id);
+              return (
+                <label key={member.id}>
+                  <input checked={checked} onChange={() => toggle(member)} type="checkbox" />
+                  <em aria-hidden="true">{memberAvatar(member)}</em>
+                  <span>
+                    <strong>{memberName(member)}</strong>
+                    <small>{String(member.status || "active") === "invited" ? "Invite pending" : "Workspace member"}</small>
+                  </span>
+                </label>
+              );
+            })}
+            {activeMembers.length === 0 && <p>Invite members from Workspace & team first.</p>}
+          </div>,
+          document.body,
+        )}
+    </div>
   );
 }

@@ -63,6 +63,7 @@ import {
 } from "../lib/projectDelivery";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import { AiRewriteButton, type RewriteFieldKind } from "./AiRewriteButton";
 import {
   ProjectTemplatesPanel,
@@ -76,6 +77,9 @@ import { ControlledSelect } from "./ControlledSelect";
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
   id: string;
+  userId?: string;
+  alias?: string;
+  emoji?: string;
   displayName?: string;
   email?: string;
   emailLower?: string;
@@ -1385,15 +1389,11 @@ export function ProjectConsolePanel({
         ...new Set([
           ...workspaceMembers
             .filter((member) => String(member.status || "active") !== "removed")
-            .map((member) =>
-              String(
-                member.displayName || member.email || member.emailLower || "",
-              ).trim(),
-            )
-            .filter(Boolean),
+            .map((member) => memberName(member))
+            .filter((name) => name && name !== "Needs alias" && !looksLikeEmail(name)),
           ...tasks
             .map((item) => String(item.owner || item.assignee || "").trim())
-            .filter(Boolean),
+            .filter((name) => name && !looksLikeEmail(name)),
         ]),
       ].sort(),
     [tasks, workspaceMembers],

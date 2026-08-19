@@ -3,6 +3,7 @@ import { useAuth } from "../lib/AuthContext";
 import { Folder, Plus, Check, MoreVertical, UserPlus, Trash2, Edit2 } from "lucide-react";
 import { setDoc, collection, doc, serverTimestamp, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { membershipPublicPatch } from "../lib/workspaceCollaboration";
 
 export function WorkspaceSwitcher({ isMobile = false, isCollapsed = false }: { isMobile?: boolean, isCollapsed?: boolean }) {
   const { user, workspace, workspaces, setWorkspace, reloadWorkspaces } = useAuth();
@@ -31,7 +32,8 @@ export function WorkspaceSwitcher({ isMobile = false, isCollapsed = false }: { i
         workspaceId: newRef.id,
         userId: user.uid,
         email: user.email || "",
-        displayName: user.displayName || "",
+        emailLower: (user.email || "").toLowerCase(),
+        ...membershipPublicPatch({ displayName: user.displayName }),
         role: "owner",
         status: "active",
         createdAt: serverTimestamp(),
