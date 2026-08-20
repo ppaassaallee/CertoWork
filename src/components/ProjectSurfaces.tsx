@@ -8,20 +8,27 @@ import {
   ArrowUp,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Copy,
+  Download,
   FileText,
   Flag,
   FolderKanban,
   LayoutGrid,
+  Link as LinkIcon,
   ListChecks,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   Search,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
   Target,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -69,10 +76,22 @@ import {
   ProjectTemplatesPanel,
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
+import { WorkItemsCenter } from "./WorkItemsCenter";
+import { canDeleteProject } from "../lib/projectPermissions";
+import {
+  PROJECT_RESOURCE_MAX_BYTES,
+  PROJECT_RESOURCE_TYPES,
+  isAllowedProjectResourceSize,
+  looksLikeExternalUrl,
+  resourceTypeLabel,
+} from "../lib/projectResources";
+import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
+import type { SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -198,61 +217,6 @@ function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
   return fallback.filter((column) => current.includes(column));
 }
 
-function TagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
-  );
-}
-
 type SharedProjectActions = {
   onUpdateProject: (
     projectId: string,
@@ -344,6 +308,36 @@ function ProjectStatusSelect({
       {PROJECT_STATUSES.map((status) => (
         <option key={status} value={status}>
           {projectStatusLabel(status)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TeamPersonSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ id: string; name: string }>;
+  onChange: (id: string, name: string) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      onChange={(event) => {
+        const id = event.target.value;
+        onChange(id, options.find((option) => option.id === id)?.name || "");
+      }}
+      value={value}
+    >
+      <option value="">Unassigned</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
         </option>
       ))}
     </select>
@@ -1327,6 +1321,9 @@ export function ProjectConsolePanel({
   workspaceMembers = [],
   costTemplates = [],
   conversationId,
+  sprints = [],
+  currentUser = null,
+  workspace = null,
   onAsk,
   onUpdateProject,
   onArchiveProject,
@@ -1337,6 +1334,17 @@ export function ProjectConsolePanel({
   onAddRisk,
   onCreateCostTemplate,
   onUpdateCostTemplate,
+  onAddDocument,
+  onCreateSprint,
+  onUpdateSprint,
+  onCreateShareLink,
+  onConnectGoogleDrive,
+  onCreateProjectFolder,
+  onSelectDriveRoot,
+  driveFolders = [],
+  driveRoot = null,
+  driveConnected = false,
+  driveMessage = "",
 }: {
   project: any;
   tasks: any[];
@@ -1346,6 +1354,9 @@ export function ProjectConsolePanel({
   workspaceMembers?: AssignmentMember[];
   costTemplates?: any[];
   conversationId?: string | null;
+  sprints?: SprintRecord[];
+  currentUser?: { uid?: string } | null;
+  workspace?: { ownerId?: string } | null;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
@@ -1363,6 +1374,17 @@ export function ProjectConsolePanel({
     templateId: string,
     patch: Record<string, unknown>,
   ) => Promise<void> | void;
+  onAddDocument?: (payload: Record<string, unknown>) => Promise<void> | void;
+  onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
+  onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onCreateShareLink?: () => Promise<string | void> | string | void;
+  onConnectGoogleDrive?: () => Promise<void> | void;
+  onCreateProjectFolder?: () => Promise<void> | void;
+  onSelectDriveRoot?: (folderId: string, folderName: string) => Promise<void> | void;
+  driveFolders?: Array<{ id: string; name: string }>;
+  driveRoot?: { id: string; name: string } | null;
+  driveConnected?: boolean;
+  driveMessage?: string;
 }) {
   const [tab, setTab] = useState<
     | "brief"
@@ -1375,6 +1397,19 @@ export function ProjectConsolePanel({
     | "docs"
     | "codex"
   >("brief");
+  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("certo-project-header-collapsed") === "true";
+  });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [shareMemberId, setShareMemberId] = useState("");
+  const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
+  const [docTitle, setDocTitle] = useState("");
+  const [docBody, setDocBody] = useState("");
+  const [docUrl, setDocUrl] = useState("");
+  const [docError, setDocError] = useState("");
+  const [shareLink, setShareLink] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [workTitle, setWorkTitle] = useState("");
   const [workType, setWorkType] = useState<WorkItemKind>("pbi");
@@ -1443,7 +1478,13 @@ export function ProjectConsolePanel({
     setTab("brief");
     setArchiveConfirm(false);
     setDeleteConfirm(false);
+    setMoreOpen(false);
   }, [project.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("certo-project-header-collapsed", String(headerCollapsed));
+  }, [headerCollapsed]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
   const submitTask = async () => {
@@ -1526,15 +1567,6 @@ export function ProjectConsolePanel({
         : workType === "subtask"
           ? hierarchy.pbis
           : [...hierarchy.features, ...hierarchy.epics];
-  const tabHelp: Partial<Record<typeof tab, string>> = {
-    backlog: "Hierarchy and prioritization: Epic → Feature → PBI → Subtask.",
-    work: "Execution board. Use it to move active items through Backlog, Doing, Blocked and Done.",
-    team: "Project governance roles and the people allowed to own delivery work.",
-    costs:
-      "Planned and actual hours, initial investment, recurring costs and unit-based cost drivers.",
-    risks:
-      "Risk register, severity and the signals used to calculate project health.",
-  };
   const renderWorkItemRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     return (
@@ -1643,6 +1675,17 @@ export function ProjectConsolePanel({
     );
   };
 
+  const allowDelete = Boolean(
+    onDeleteProject &&
+      canDeleteProject(
+        project,
+        currentUser,
+        workspace,
+        workspaceMembers.find((member) => member.userId === currentUser?.uid)?.id,
+      ),
+  );
+  const report = buildProjectStatusReport(project, tasks, risks, milestones);
+
   return (
     <section className="do-project-console" data-testid="project-console">
       <datalist id="do-project-member-options">
@@ -1650,6 +1693,22 @@ export function ProjectConsolePanel({
           <option key={owner} value={owner} />
         ))}
       </datalist>
+      {headerCollapsed ? (
+        <div className="do-console-compact">
+          <button aria-label="Expand project header" onClick={() => setHeaderCollapsed(false)} title="Expand" type="button">
+            <ChevronDown size={14} />
+          </button>
+          <strong>{projectTitle(project)}</strong>
+          <span>{projectStatusLabel(project.status)} · {deliveryStageLabels[deliveryStage(project)]}</span>
+          <div className="do-console-compact-actions">
+            <button aria-label="Add team member" onClick={() => setTab("team")} title="Add team member" type="button"><UserPlus size={14} /></button>
+            <button aria-label="Share project" onClick={() => setTab("team")} title="Share project" type="button"><Share2 size={14} /></button>
+            <button aria-label="Ask Certo" onClick={() => onAsk(`Give me the cleanest project update for ${projectTitle(project)}.`)} title="Ask Certo" type="button"><MessageSquare size={14} /></button>
+            <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button"><MoreHorizontal size={14} /></button>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="do-console-hero">
         <div>
           <span className="do-project-card-kicker">PROJECT CONSOLE</span>
@@ -1666,21 +1725,26 @@ export function ProjectConsolePanel({
               "Define the outcome so every conversation and work item points to the same finish line."}
           </p>
         </div>
-        <button
-          aria-label={
-            isProjectFavorite(project)
-              ? "Remove from favorites"
-              : "Add to favorites"
-          }
-          className={isProjectFavorite(project) ? "is-favorite" : ""}
-          onClick={() => update({ favorite: !isProjectFavorite(project) })}
-          type="button"
-        >
-          <Star
-            fill={isProjectFavorite(project) ? "currentColor" : "none"}
-            size={15}
-          />
-        </button>
+        <div className="do-console-hero-actions">
+          <button aria-label="Collapse project header" onClick={() => setHeaderCollapsed(true)} title="Collapse" type="button">
+            <ChevronUp size={15} />
+          </button>
+          <button
+            aria-label={
+              isProjectFavorite(project)
+                ? "Remove from favorites"
+                : "Add to favorites"
+            }
+            className={isProjectFavorite(project) ? "is-favorite" : ""}
+            onClick={() => update({ favorite: !isProjectFavorite(project) })}
+            type="button"
+          >
+            <Star
+              fill={isProjectFavorite(project) ? "currentColor" : "none"}
+              size={15}
+            />
+          </button>
+        </div>
       </div>
 
       <div className="do-console-metrics">
@@ -1763,29 +1827,53 @@ export function ProjectConsolePanel({
           <option value="hybrid">Hybrid</option>
         </select>
         <button
+          aria-label="Add team member"
+          onClick={() => setTab("team")}
+          title="Add team member"
+          type="button"
+        >
+          <UserPlus size={13} /> Team
+        </button>
+        <button
+          aria-label="Share project"
+          onClick={() => setTab("team")}
+          title="Share project"
+          type="button"
+        >
+          <Share2 size={13} /> Share
+        </button>
+        <button
+          aria-label="Ask Certo Work for a project update"
+          className="do-icon-button"
           onClick={() =>
             onAsk(
               `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
             )
           }
+          title="Ask for project update"
           type="button"
         >
-          <MessageSquare size={13} /> Ask
+          <MessageSquare size={14} />
+        </button>
+        <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button">
+          <MoreHorizontal size={13} />
+        </button>
+        <button onClick={() => downloadProjectStatusReport(report)} title="Download status report" type="button">
+          <Download size={13} /> PDF
         </button>
       </div>
+      </>
+      )}
 
       <nav className="do-console-tabs" aria-label="Project console sections">
         {(
           [
-            ["brief", "Brief"],
+            ["brief", "Overview"],
             ["backlog", "Backlog"],
-            ["plan", "Plan"],
-            ["work", "Board"],
             ["team", "Team"],
             ["costs", "Costs"],
             ["risks", "Risks"],
             ["docs", "Docs"],
-            ["codex", "Codex"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -1794,10 +1882,7 @@ export function ProjectConsolePanel({
             onClick={() => setTab(value)}
             type="button"
           >
-            <span>{label}</span>
-            {tabHelp[value] && (
-              <InfoTip label={label} text={tabHelp[value] || ""} />
-            )}
+            {label}
           </button>
         ))}
       </nav>
@@ -1894,6 +1979,29 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "backlog" && (
+        <div className="do-console-section">
+          <WorkItemsCenter
+            activeProject={project}
+            compact
+            onAddTask={(projectId, title, status, patch) =>
+              onAddTask(title, status, { ...patch, projectId })
+            }
+            onAsk={onAsk}
+            onCreateSprint={onCreateSprint}
+            onOpenProjectConsole={() => undefined}
+            onSelectItem={setSelectedWorkItemId}
+            onUpdateSprint={onUpdateSprint}
+            onUpdateTask={onUpdateTask}
+            projects={[project]}
+            selectedItemId={selectedWorkItemId}
+            sprints={sprints}
+            tasks={tasks}
+            workspaceMembers={workspaceMembers}
+          />
+        </div>
+      )}
+
+      {false && tab === "backlog" && (
         <div className="do-console-section">
           <section className="do-planning-session">
             <div>
@@ -2272,208 +2380,116 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "team" && (
-        <div className="do-console-section">
-          <div className="do-section-title">
-            <div>
-              <span className="do-project-card-kicker">PROJECT GOVERNANCE</span>
-              <h4>Accountability and delivery team</h4>
-            </div>
-            <InfoTip
-              label="Project roles"
-              text="The Project Manager owns delivery, the Product Owner owns value and backlog decisions, and Sponsors provide authority, funding and escalation support."
-            />
+        <div className="do-console-section do-team-panel">
+          <div className="do-team-table-wrap">
+            <table className="do-team-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Person</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    ["Project Manager", "projectManagerId", "projectManager"],
+                    ["Product Owner", "productOwnerId", "productOwner"],
+                    ["Solution Architect", "solutionArchitectId", "solutionArchitect"],
+                    ["Delivery / Tech Lead", "deliveryLeadId", "deliveryLead"],
+                    ["Client Lead", "clientLeadId", "clientLead"],
+                  ] as const
+                ).map(([label, idKey, nameKey]) => (
+                  <tr key={idKey}>
+                    <th>{label}</th>
+                    <td>
+                      <TeamPersonSelect
+                        label={label}
+                        onChange={(id, name) =>
+                          update({ [idKey]: id || null, [nameKey]: name })
+                        }
+                        options={roleOptions}
+                        value={project[idKey] || ""}
+                      />
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <th>Sponsors</th>
+                  <td>
+                    <MultiAssigneePicker
+                      label="Sponsors"
+                      members={workspaceMembers}
+                      onChange={(sponsorIds, sponsors) =>
+                        update({ sponsorIds, sponsors, sponsor: sponsors[0] || "" })
+                      }
+                      selectedIds={
+                        Array.isArray(project.sponsorIds) ? project.sponsorIds : []
+                      }
+                      selectedNames={
+                        Array.isArray(project.sponsors)
+                          ? project.sponsors
+                          : [project.sponsor].filter(Boolean)
+                      }
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <th>Team</th>
+                  <td>
+                    <MultiAssigneePicker
+                      label="Team"
+                      members={workspaceMembers}
+                      onChange={(teamMemberIds, teamMembers) =>
+                        update({ teamMemberIds, teamMembers })
+                      }
+                      selectedIds={
+                        Array.isArray(project.teamMemberIds)
+                          ? project.teamMemberIds
+                          : []
+                      }
+                      selectedNames={
+                        Array.isArray(project.teamMembers) ? project.teamMembers : []
+                      }
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div className="do-project-role-grid">
-            <label>
-              <span>
-                Project Manager{" "}
-                <InfoTip
-                  label="Project Manager"
-                  text="Owns delivery plan, coordination, dependencies, status and escalation."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    projectManagerId: event.target.value || null,
-                    projectManager:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.projectManagerId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Product Owner{" "}
-                <InfoTip
-                  label="Product Owner"
-                  text="Owns desired outcomes, backlog priority and acceptance decisions."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    productOwnerId: event.target.value || null,
-                    productOwner:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.productOwnerId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Solution Architect{" "}
-                <InfoTip
-                  label="Solution Architect"
-                  text="Owns the solution design, technical coherence, non-functional requirements and architecture decisions."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    solutionArchitectId: event.target.value || null,
-                    solutionArchitect:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.solutionArchitectId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Delivery / Tech Lead{" "}
-                <InfoTip
-                  label="Delivery lead"
-                  text="Owns technical execution, engineering quality and implementation readiness."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    deliveryLeadId: event.target.value || null,
-                    deliveryLead:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.deliveryLeadId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Client Lead{" "}
-                <InfoTip
-                  label="Client lead"
-                  text="Primary client-side owner for decisions, access and acceptance."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    clientLeadId: event.target.value || null,
-                    clientLead:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.clientLeadId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="do-project-team-pickers">
-            <section>
-              <span>
-                Sponsors{" "}
-                <InfoTip
-                  label="Sponsors"
-                  text="One or more executives who provide mandate, funding and escalation decisions."
-                />
-              </span>
-              <MultiAssigneePicker
-                label="Sponsors"
-                members={workspaceMembers}
-                onChange={(sponsorIds, sponsors) =>
-                  update({ sponsorIds, sponsors, sponsor: sponsors[0] || "" })
-                }
-                selectedIds={
-                  Array.isArray(project.sponsorIds) ? project.sponsorIds : []
-                }
-                selectedNames={
-                  Array.isArray(project.sponsors)
-                    ? project.sponsors
-                    : [project.sponsor].filter(Boolean)
-                }
-              />
-            </section>
-            <section>
-              <span>
-                Project team{" "}
-                <InfoTip
-                  label="Project team"
-                  text="People who may be assigned to Epics, Features, PBIs, tasks, bugs or subtasks."
-                />
-              </span>
-              <MultiAssigneePicker
-                label="Project team"
-                members={workspaceMembers}
-                onChange={(teamMemberIds, teamMembers) =>
-                  update({ teamMemberIds, teamMembers })
-                }
-                selectedIds={
-                  Array.isArray(project.teamMemberIds)
-                    ? project.teamMemberIds
-                    : []
-                }
-                selectedNames={
-                  Array.isArray(project.teamMembers) ? project.teamMembers : []
-                }
-              />
-            </section>
+          <div className="do-team-access">
+            <select
+              aria-label="Share project with colleague"
+              onChange={(event) => setShareMemberId(event.target.value)}
+              value={shareMemberId}
+            >
+              <option value="">Share with…</option>
+              {activeMembers.map((member) => (
+                <option key={`share-${member.id}`} value={member.userId || member.id}>
+                  {memberName(member)}
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={!shareMemberId}
+              onClick={() => {
+                const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
+                update({ visibleToUserIds: ids, sharedWithUserIds: ids });
+                setShareMemberId("");
+              }}
+              type="button"
+            >
+              Grant
+            </button>
+            <button
+              onClick={async () => {
+                const url = await onCreateShareLink?.();
+                if (url) setShareLink(String(url));
+              }}
+              type="button"
+            >
+              Status link
+            </button>
+            {shareLink && <small className="do-team-share-url">{shareLink}</small>}
           </div>
         </div>
       )}
@@ -2615,12 +2631,119 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "docs" && (
-        <div className="do-console-section">
-          <div className="do-console-list">
+        <div className="do-console-section do-docs-panel">
+          <header className="do-docs-heading">
+            <div>
+              <h4>Documents</h4>
+              <p>Files, notes, and links for this project.</p>
+            </div>
+            <span>{documents.length}</span>
+          </header>
+          <div className="do-docs-compose">
+            <select aria-label="Document type" onChange={(event) => setDocType(event.target.value as typeof docType)} value={docType}>
+              {PROJECT_RESOURCE_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            <input aria-label="Document title" onChange={(event) => setDocTitle(event.target.value)} placeholder="Title" value={docTitle} />
+            {(docType === "link" || docType === "google_drive" || docType === "onedrive") && (
+              <input aria-label="Document URL" onChange={(event) => setDocUrl(event.target.value)} placeholder="https://..." value={docUrl} />
+            )}
+            {docType === "note" && (
+              <input aria-label="Note body" onChange={(event) => setDocBody(event.target.value)} placeholder="Note" value={docBody} />
+            )}
+            {docType === "file" && (
+              <label className="do-docs-file-button">
+                <FileText size={13} />
+                <span>Choose file</span>
+                <input
+                  accept="*/*"
+                  aria-label="Upload file up to 20 MB"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file || !onAddDocument) return;
+                    if (!isAllowedProjectResourceSize(file.size)) {
+                      setDocError(`Files must be ${Math.round(PROJECT_RESOURCE_MAX_BYTES / 1024 / 1024)} MB or smaller.`);
+                      return;
+                    }
+                    setDocError("");
+                    void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
+                    setDocTitle("");
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
+            )}
+            {docType !== "file" && (
+              <button
+                disabled={!docTitle.trim() || !onAddDocument}
+                onClick={() => {
+                  if ((docType === "link" || docType === "google_drive" || docType === "onedrive") && !looksLikeExternalUrl(docUrl)) {
+                    setDocError("Enter a valid http(s) URL.");
+                    return;
+                  }
+                  setDocError("");
+                  void onAddDocument?.({
+                    resourceType: docType,
+                    title: docTitle.trim(),
+                    url: docUrl,
+                    body: docBody,
+                  });
+                  setDocTitle("");
+                  setDocBody("");
+                  setDocUrl("");
+                }}
+                type="button"
+              >
+                <Plus size={13} /> Add
+              </button>
+            )}
+          </div>
+          {docError && <p className="do-signin-error" role="alert">{docError}</p>}
+          <section className="do-docs-drive">
+            <div className="do-docs-drive-label">
+              <FolderKanban size={16} />
+              <span>
+                <strong>Google Drive</strong>
+                <small>{project.externalFolderName || driveRoot?.name || (driveConnected ? "Connected" : "Not connected")}</small>
+              </span>
+            </div>
+            <div className="do-docs-drive-actions">
+              <button onClick={() => void onConnectGoogleDrive?.()} type="button">
+                {driveConnected ? "Reconnect" : "Connect"}
+              </button>
+              {driveFolders.length > 0 && (
+                <select
+                  aria-label="Google Drive root folder"
+                  onChange={(event) => {
+                    const folder = driveFolders.find((item) => item.id === event.target.value);
+                    if (folder) void onSelectDriveRoot?.(folder.id, folder.name);
+                  }}
+                  value={driveRoot?.id || ""}
+                >
+                  <option value="">Choose root folder</option>
+                  {driveFolders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>{folder.name}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                disabled={!driveConnected}
+                onClick={() => void onCreateProjectFolder?.()}
+                type="button"
+              >
+                Create folder
+              </button>
+            </div>
+            {driveMessage && <p>{driveMessage}</p>}
+          </section>
+          <div className="do-console-list do-docs-list">
             {documents.map((document) => {
               const content = String(
                 document.content || document.body || document.description || "",
               );
+              const href = document.url || document.href;
               return (
                 <article key={document.id}>
                   <FileText size={13} />
@@ -2629,29 +2752,26 @@ export function ProjectConsolePanel({
                       {document.title || document.name || "Untitled document"}
                     </strong>
                     <small>
+                      {resourceTypeLabel(document.resourceType)} ·{" "}
                       {document.summary ||
                         content.slice(0, 120) ||
+                        href ||
                         "No summary recorded."}
                     </small>
                   </span>
-                  <button
-                    onClick={() =>
-                      onAsk(
-                        `Using ${document.title || "this project document"}, tell me what ${projectTitle(project)} should do next.`,
-                      )
-                    }
-                    type="button"
-                  >
-                    <ArrowRight size={12} />
-                  </button>
+                  {href && (
+                    <a href={href} rel="noreferrer" target="_blank" title="Open link">
+                      <LinkIcon size={12} />
+                    </a>
+                  )}
                 </article>
               );
             })}
             {documents.length === 0 && (
               <EmptyState
                 icon={<FileText size={18} />}
-                title="No docs yet"
-                text="Paste a PRD in this project conversation and ask Certo Work to save it here."
+                title="No documents yet"
+                text="Choose a type above to add the first one."
               />
             )}
           </div>
@@ -2667,15 +2787,30 @@ export function ProjectConsolePanel({
         />
       )}
 
+      {moreOpen && (
+        <div className="do-console-more-menu">
+          <button onClick={() => { setArchiveConfirm(true); setMoreOpen(false); }} type="button">
+            <Archive size={13} /> Archive project
+          </button>
+          <hr />
+          <p>Danger zone</p>
+          {allowDelete ? (
+            <button className="is-quiet-danger" onClick={() => { setDeleteConfirm(true); setMoreOpen(false); }} type="button">
+              Delete project
+            </button>
+          ) : (
+            <small>Delete is limited to the Project Manager or workspace owner.</small>
+          )}
+        </div>
+      )}
+      {(archiveConfirm || deleteConfirm || String(project.status || "").toLowerCase() === "deleted") && (
       <div className="do-console-danger">
         {String(project.status || "").toLowerCase() === "deleted" &&
         onRestoreProject ? (
           <button onClick={() => onRestoreProject(project)} type="button">
             Restore project
           </button>
-        ) : (
-          <>
-            {archiveConfirm ? (
+        ) : archiveConfirm ? (
               <>
                 <button onClick={() => setArchiveConfirm(false)} type="button">
                   Cancel
@@ -2684,32 +2819,21 @@ export function ProjectConsolePanel({
                   Confirm archive
                 </button>
               </>
-            ) : (
-              <button onClick={() => setArchiveConfirm(true)} type="button">
-                <Archive size={13} /> Archive
-              </button>
-            )}
-            {onDeleteProject &&
-              (deleteConfirm ? (
+            ) : deleteConfirm && allowDelete ? (
                 <>
                   <button onClick={() => setDeleteConfirm(false)} type="button">
                     Cancel
                   </button>
                   <button
-                    onClick={() => onDeleteProject(project)}
+                    onClick={() => onDeleteProject?.(project)}
                     type="button"
                   >
                     Move to deleted
                   </button>
                 </>
-              ) : (
-                <button onClick={() => setDeleteConfirm(true)} type="button">
-                  <X size={13} /> Delete · restore for 30 days
-                </button>
-              ))}
-          </>
-        )}
+              ) : null}
       </div>
+      )}
     </section>
   );
 }
@@ -4469,6 +4593,19 @@ export function ProjectCommandCenter({
   ) => Promise<string | void> | string | void;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("active");
+  const [statusFilters, setStatusFilters] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem("certo-project-status-filters") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("active");
+  const [bulkStage, setBulkStage] = useState<DeliveryStage>("build");
+  const [bulkManagerId, setBulkManagerId] = useState("");
+  const [bulkTeamId, setBulkTeamId] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -4674,12 +4811,19 @@ export function ProjectCommandCenter({
       risks.filter((risk) => risk.projectId === project.id),
     );
     const matchesFilter =
-      filter === "all" ||
-      (filter === "active"
-        ? !["completed", "archived", "done", "deleted", "cancelled"].includes(
-            status,
+      statusFilters.length > 0
+        ? statusFilters.some((value) =>
+            value === "active"
+              ? ["active", "in_progress"].includes(status)
+              : status === value,
           )
-        : status === filter);
+        : filter === "all"
+          ? true
+          : filter === "active"
+            ? !["completed", "archived", "done", "deleted", "cancelled"].includes(
+                status,
+              )
+            : status === filter;
     const matchesStage =
       stageFilter === "all" || deliveryStage(project) === stageFilter;
     const matchesPhase =
@@ -5298,28 +5442,40 @@ export function ProjectCommandCenter({
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
               <div className="do-command-filters">
-                {[
-                  "active",
-                  "planning",
-                  "paused",
-                  "completed",
-                  "archived",
-                  "deleted",
-                  "all",
-                ].map((value) => (
+                {["planning", "active", "paused", "completed", "archived"].map((value) => (
                   <button
-                    className={filter === value ? "is-active" : ""}
+                    className={statusFilters.includes(value) || (statusFilters.length === 0 && filter === value) ? "is-active" : ""}
                     key={value}
-                    onClick={() => setFilter(value)}
+                    onClick={() => {
+                      setFilter("all");
+                      setStatusFilters((current) =>
+                        current.includes(value)
+                          ? current.filter((item) => item !== value)
+                          : [...current, value],
+                      );
+                    }}
                     type="button"
                   >
-                    {value === "all"
-                      ? "All"
-                      : value === "active"
-                        ? "Open"
-                        : projectStatusLabel(value)}
+                    {projectStatusLabel(value)}
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    setStatusFilters([]);
+                    setFilter("all");
+                    setStageFilter("all");
+                    setPhaseFilter("all");
+                    setHealthFilter("all");
+                    setTagFilter("all");
+                    setWorkCategoryFilter("all");
+                    setProductPhaseFilter("all");
+                    setTaxonomyValue(null);
+                    setSearch("");
+                  }}
+                  type="button"
+                >
+                  Clear filters
+                </button>
               </div>
               <div className="do-command-view-toggle">
                 <button
@@ -5348,6 +5504,62 @@ export function ProjectCommandCenter({
               />
             </label>
           </div>
+          {selectedProjectIds.length > 0 && (
+            <div className="do-items-bulk" aria-label="Project bulk actions">
+              <span>{selectedProjectIds.length} selected</span>
+              <select aria-label="Bulk project status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>
+                {PROJECT_STATUSES.map((status) => (
+                  <option key={status} value={status}>{projectStatusLabel(status)}</option>
+                ))}
+              </select>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { status: bulkStatus })))} type="button">Change status</button>
+              <select aria-label="Bulk project stage" onChange={(event) => setBulkStage(event.target.value as DeliveryStage)} value={bulkStage}>
+                {DELIVERY_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>
+                ))}
+              </select>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { deliveryStage: bulkStage })))} type="button">Change stage</button>
+              <select aria-label="Bulk project manager" onChange={(event) => setBulkManagerId(event.target.value)} value={bulkManagerId}>
+                <option value="">Project manager</option>
+                {activeMemberOptions.map((member) => (
+                  <option key={member.id} value={member.id}>{member.name}</option>
+                ))}
+              </select>
+              <button
+                disabled={!bulkManagerId}
+                onClick={() => {
+                  const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
+                  return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: bulkManagerId, projectManager: member?.name || "" })));
+                }}
+                type="button"
+              >
+                Assign PM
+              </button>
+              <select aria-label="Bulk add team member" onChange={(event) => setBulkTeamId(event.target.value)} value={bulkTeamId}>
+                <option value="">Add team member</option>
+                {activeMemberOptions.map((member) => (
+                  <option key={`team-${member.id}`} value={member.id}>{member.name}</option>
+                ))}
+              </select>
+              <button
+                disabled={!bulkTeamId}
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) => {
+                    const project = projects.find((item) => item.id === id);
+                    const teamMemberIds = [...new Set([...(project?.teamMemberIds || []), bulkTeamId])];
+                    return onUpdateProject(id, { teamMemberIds });
+                  }))
+                }
+                type="button"
+              >
+                Add member
+              </button>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => {
+                const project = projects.find((item) => item.id === id);
+                return project ? onArchiveProject(project) : Promise.resolve();
+              }))} type="button">Archive</button>
+            </div>
+          )}
           <div className="do-command-subtoolbar">
             <label>
               Stage
@@ -5482,8 +5694,14 @@ export function ProjectCommandCenter({
                 ))}
               </select>
             </label>
-            <button onClick={exportPortfolioPdf} type="button">
-              <FileText size={12} /> Export PDF
+            <button
+              aria-label="Export portfolio PDF"
+              className="do-icon-button"
+              onClick={exportPortfolioPdf}
+              title="Export PDF"
+              type="button"
+            >
+              <FileText size={14} />
             </button>
             {view === "overview" && (
               <div className="do-table-scroll-buttons" aria-label="Move portfolio table horizontally">
@@ -5739,6 +5957,21 @@ export function ProjectCommandCenter({
                     <article style={portfolioGridStyle}>
                       {columnSet.has("project") && <div className="do-command-project-name">
                         <button
+                          aria-label={`Select ${projectTitle(project)}`}
+                          className={selectedProjectIds.includes(project.id) ? "is-selected" : ""}
+                          onClick={() =>
+                            setSelectedProjectIds((current) =>
+                              current.includes(project.id)
+                                ? current.filter((id) => id !== project.id)
+                                : [...current, project.id],
+                            )
+                          }
+                          title="Select for bulk actions"
+                          type="button"
+                        >
+                          {selectedProjectIds.includes(project.id) ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                        </button>
+                        <button
                           aria-label={
                             favorite ? "Remove favorite" : "Favorite project"
                           }
@@ -5818,7 +6051,7 @@ export function ProjectCommandCenter({
                         />
                       </div>}
                       {columnSet.has("tags") && (
-                        <TagPicker
+                        <CompactTagPicker
                           label={`Tags for ${projectTitle(project)}`}
                           onCreateTag={(name) =>
                             onCreateControlledOption?.("tag", name)

@@ -21,12 +21,72 @@ export function memberName(member: AssignableMember) {
   return memberPublicLabel(member);
 }
 
+let closeOpenInfoTip: (() => void) | null = null;
+
 export function InfoTip({ label, text }: { label: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const [style, setStyle] = useState<CSSProperties>({});
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    if (closeOpenInfoTip && closeOpenInfoTip !== close) closeOpenInfoTip();
+    closeOpenInfoTip = close;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 260;
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 120);
+      setStyle({ position: "fixed", top, left, width, zIndex: 280 });
+    };
+    place();
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || bubbleRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    return () => {
+      if (closeOpenInfoTip === close) closeOpenInfoTip = null;
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
   return (
-    <span className="cw-info-tip" tabIndex={0} aria-label={`${label}: ${text}`}>
-      <Info size={12} />
-      <span role="tooltip"><strong>{label}</strong>{text}</span>
-    </span>
+    <>
+      <button
+        aria-expanded={open}
+        aria-label={label}
+        className={`cw-info-tip${open ? " is-open" : ""}`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen((current) => !current);
+        }}
+        ref={triggerRef}
+        type="button"
+      >
+        <Info size={12} />
+      </button>
+      {open &&
+        createPortal(
+          <div className="cw-info-tip-bubble" ref={bubbleRef} role="tooltip" style={style}>
+            <strong>{label}</strong>
+            <p>{text}</p>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

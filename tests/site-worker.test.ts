@@ -47,11 +47,26 @@ test("Sites worker reports an offline-safe health state without an API key", asy
     environment(),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    ok: true,
-    service: "delivereeos-codex-sites",
-    aiProvider: "offline-safe",
-  });
+  const body = (await response.json()) as any;
+  assert.equal(body.ok, true);
+  assert.equal(body.service, "delivereeos-codex-sites");
+  assert.equal(body.aiProvider, "offline-safe");
+  assert.equal(body.ai.providerConfigured, false);
+  assert.equal(body.ai.safeMode, true);
+  assert.equal(body.ai.connectionStatus, "not_configured");
+});
+
+test("AI health never returns the OpenAI secret", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/ai/health"),
+    environment({ OPENAI_API_KEY: "sk-secret-value", OPENAI_MODEL: "gpt-test" }),
+  );
+  const body = (await response.json()) as any;
+  const serialized = JSON.stringify(body);
+  assert.equal(body.providerConfigured, true);
+  assert.equal(body.model, "gpt-test");
+  assert.equal(body.safeMode, false);
+  assert.equal(serialized.includes("sk-secret-value"), false);
 });
 
 test("Firebase auth helpers are resolved through the legacy Firebase host", () => {

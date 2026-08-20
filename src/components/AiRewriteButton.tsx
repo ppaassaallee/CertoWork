@@ -69,14 +69,13 @@ export function AiRewriteButton({
     <span className="do-ai-rewrite-wrap">
       <button
         aria-label={label}
-        className="do-ai-rewrite"
+        className="do-ai-rewrite do-icon-button"
         disabled={!String(text || "").trim() || working}
         onClick={rewrite}
         title={label}
         type="button"
       >
         {working ? <Loader2 className="spin" size={12} /> : <WandSparkles size={12} />}
-        <span>{working ? "Improving" : "Magic"}</span>
       </button>
       {error && <small className="do-ai-rewrite-error" role="status">{error}</small>}
     </span>

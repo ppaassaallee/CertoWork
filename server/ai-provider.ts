@@ -27,7 +27,10 @@ function extractOpenAIText(payload: any): string {
 }
 
 export function resolveAssistantProvider(): AssistantProvider {
-  const requested = (process.env.BOLDI_AI_PROVIDER || "auto").toLowerCase();
+  const requested = (process.env.AI_PROVIDER || process.env.BOLDI_AI_PROVIDER || "auto").toLowerCase();
+  if (requested === "none") {
+    throw new Error("Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.");
+  }
   if (requested === "openai") return "openai";
   if (requested === "gemini") return "gemini";
   return process.env.OPENAI_API_KEY ? "openai" : "gemini";
