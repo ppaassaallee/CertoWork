@@ -91,3 +91,14 @@ test("items view switcher buttons size to their labels instead of a 30px icon bo
   assert.match(block, /white-space: nowrap/);
   assert.equal(/width:\s*30px/.test(block), false);
 });
+
+test("project team panel uses a table with consistent 13px controls", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const [css, source] = await Promise.all([
+    readFile(new URL("../src/index.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(source, /className="do-team-table"/);
+  assert.match(css, /\.do-team-table select[\s\S]*font-size: calc\(13px \* var\(--cw-text-scale\)\)/);
+  assert.match(css, /\.do-team-access-controls button[\s\S]*font-size: calc\(13px \* var\(--cw-text-scale\)\)/);
+});

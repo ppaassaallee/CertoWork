@@ -369,6 +369,36 @@ function ProjectStatusSelect({
   );
 }
 
+function TeamPersonSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ id: string; name: string }>;
+  onChange: (id: string, name: string) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      onChange={(event) => {
+        const id = event.target.value;
+        onChange(id, options.find((option) => option.id === id)?.name || "");
+      }}
+      value={value}
+    >
+      <option value="">Unassigned</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function EmptyState({
   icon,
   title,
@@ -2415,7 +2445,7 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "team" && (
-        <div className="do-console-section">
+        <div className="do-console-section do-team-panel">
           <div className="do-section-title">
             <div>
               <span className="do-project-card-kicker">PROJECT GOVERNANCE</span>
@@ -2426,218 +2456,202 @@ export function ProjectConsolePanel({
               text="The Project Manager owns delivery, the Product Owner owns value and backlog decisions, and Sponsors provide authority, funding and escalation support."
             />
           </div>
-          <div className="do-project-role-grid">
-            <label>
-              <span>
-                Project Manager{" "}
-                <InfoTip
-                  label="Project Manager"
-                  text="Owns delivery plan, coordination, dependencies, status and escalation."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    projectManagerId: event.target.value || null,
-                    projectManager:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.projectManagerId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Product Owner{" "}
-                <InfoTip
-                  label="Product Owner"
-                  text="Owns desired outcomes, backlog priority and acceptance decisions."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    productOwnerId: event.target.value || null,
-                    productOwner:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.productOwnerId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Solution Architect{" "}
-                <InfoTip
-                  label="Solution Architect"
-                  text="Owns the solution design, technical coherence, non-functional requirements and architecture decisions."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    solutionArchitectId: event.target.value || null,
-                    solutionArchitect:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.solutionArchitectId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Delivery / Tech Lead{" "}
-                <InfoTip
-                  label="Delivery lead"
-                  text="Owns technical execution, engineering quality and implementation readiness."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    deliveryLeadId: event.target.value || null,
-                    deliveryLead:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.deliveryLeadId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>
-                Client Lead{" "}
-                <InfoTip
-                  label="Client lead"
-                  text="Primary client-side owner for decisions, access and acceptance."
-                />
-              </span>
-              <select
-                onChange={(event) =>
-                  update({
-                    clientLeadId: event.target.value || null,
-                    clientLead:
-                      roleOptions.find(
-                        (option) => option.id === event.target.value,
-                      )?.name || "",
-                  })
-                }
-                value={project.clientLeadId || ""}
-              >
-                <option value="">Unassigned</option>
-                {roleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="do-team-table-wrap">
+            <table className="do-team-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Person</th>
+                  <th>Scope</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>
+                    <span>Project Manager</span>
+                    <InfoTip
+                      label="Project Manager"
+                      text="Owns delivery plan, coordination, dependencies, status and escalation."
+                    />
+                  </th>
+                  <td>
+                    <TeamPersonSelect
+                      label="Project Manager"
+                      onChange={(projectManagerId, projectManager) =>
+                        update({ projectManagerId: projectManagerId || null, projectManager })
+                      }
+                      options={roleOptions}
+                      value={project.projectManagerId || ""}
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Governance</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Product Owner</span>
+                    <InfoTip
+                      label="Product Owner"
+                      text="Owns desired outcomes, backlog priority and acceptance decisions."
+                    />
+                  </th>
+                  <td>
+                    <TeamPersonSelect
+                      label="Product Owner"
+                      onChange={(productOwnerId, productOwner) =>
+                        update({ productOwnerId: productOwnerId || null, productOwner })
+                      }
+                      options={roleOptions}
+                      value={project.productOwnerId || ""}
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Value</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Solution Architect</span>
+                    <InfoTip
+                      label="Solution Architect"
+                      text="Owns the solution design, technical coherence, non-functional requirements and architecture decisions."
+                    />
+                  </th>
+                  <td>
+                    <TeamPersonSelect
+                      label="Solution Architect"
+                      onChange={(solutionArchitectId, solutionArchitect) =>
+                        update({ solutionArchitectId: solutionArchitectId || null, solutionArchitect })
+                      }
+                      options={roleOptions}
+                      value={project.solutionArchitectId || ""}
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Design</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Delivery / Tech Lead</span>
+                    <InfoTip
+                      label="Delivery lead"
+                      text="Owns technical execution, engineering quality and implementation readiness."
+                    />
+                  </th>
+                  <td>
+                    <TeamPersonSelect
+                      label="Delivery / Tech Lead"
+                      onChange={(deliveryLeadId, deliveryLead) =>
+                        update({ deliveryLeadId: deliveryLeadId || null, deliveryLead })
+                      }
+                      options={roleOptions}
+                      value={project.deliveryLeadId || ""}
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Delivery</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Client Lead</span>
+                    <InfoTip
+                      label="Client lead"
+                      text="Primary client-side owner for decisions, access and acceptance."
+                    />
+                  </th>
+                  <td>
+                    <TeamPersonSelect
+                      label="Client Lead"
+                      onChange={(clientLeadId, clientLead) =>
+                        update({ clientLeadId: clientLeadId || null, clientLead })
+                      }
+                      options={roleOptions}
+                      value={project.clientLeadId || ""}
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Client</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Sponsors</span>
+                    <InfoTip
+                      label="Sponsors"
+                      text="One or more executives who provide mandate, funding and escalation decisions."
+                    />
+                  </th>
+                  <td>
+                    <MultiAssigneePicker
+                      label="Sponsors"
+                      members={workspaceMembers}
+                      onChange={(sponsorIds, sponsors) =>
+                        update({ sponsorIds, sponsors, sponsor: sponsors[0] || "" })
+                      }
+                      selectedIds={
+                        Array.isArray(project.sponsorIds) ? project.sponsorIds : []
+                      }
+                      selectedNames={
+                        Array.isArray(project.sponsors)
+                          ? project.sponsors
+                          : [project.sponsor].filter(Boolean)
+                      }
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Mandate</span></td>
+                </tr>
+                <tr>
+                  <th>
+                    <span>Project team</span>
+                    <InfoTip
+                      label="Project team"
+                      text="People who may be assigned to Epics, Features, PBIs, tasks, bugs or subtasks."
+                    />
+                  </th>
+                  <td>
+                    <MultiAssigneePicker
+                      label="Project team"
+                      members={workspaceMembers}
+                      onChange={(teamMemberIds, teamMembers) =>
+                        update({ teamMemberIds, teamMembers })
+                      }
+                      selectedIds={
+                        Array.isArray(project.teamMemberIds)
+                          ? project.teamMemberIds
+                          : []
+                      }
+                      selectedNames={
+                        Array.isArray(project.teamMembers) ? project.teamMembers : []
+                      }
+                    />
+                  </td>
+                  <td><span className="do-team-scope">Delivery</span></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div className="do-project-team-pickers">
-            <section>
-              <span>
-                Sponsors{" "}
-                <InfoTip
-                  label="Sponsors"
-                  text="One or more executives who provide mandate, funding and escalation decisions."
-                />
-              </span>
-              <MultiAssigneePicker
-                label="Sponsors"
-                members={workspaceMembers}
-                onChange={(sponsorIds, sponsors) =>
-                  update({ sponsorIds, sponsors, sponsor: sponsors[0] || "" })
-                }
-                selectedIds={
-                  Array.isArray(project.sponsorIds) ? project.sponsorIds : []
-                }
-                selectedNames={
-                  Array.isArray(project.sponsors)
-                    ? project.sponsors
-                    : [project.sponsor].filter(Boolean)
-                }
-              />
-            </section>
-            <section>
-              <span>
-                Project team{" "}
-                <InfoTip
-                  label="Project team"
-                  text="People who may be assigned to Epics, Features, PBIs, tasks, bugs or subtasks."
-                />
-              </span>
-              <MultiAssigneePicker
-                label="Project team"
-                members={workspaceMembers}
-                onChange={(teamMemberIds, teamMembers) =>
-                  update({ teamMemberIds, teamMembers })
-                }
-                selectedIds={
-                  Array.isArray(project.teamMemberIds)
-                    ? project.teamMemberIds
-                    : []
-                }
-                selectedNames={
-                  Array.isArray(project.teamMembers) ? project.teamMembers : []
-                }
-              />
-              <label>
-                Share project access
-                <select aria-label="Share project with colleague" onChange={(event) => setShareMemberId(event.target.value)} value={shareMemberId}>
-                  <option value="">Select a Certo user</option>
-                  {activeMembers.map((member) => (
-                    <option key={`share-${member.id}`} value={member.userId || member.id}>
-                      {memberName(member)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  disabled={!shareMemberId}
-                  onClick={() => {
-                    const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
-                    update({ visibleToUserIds: ids, sharedWithUserIds: ids });
-                    setShareMemberId("");
-                  }}
-                  type="button"
-                >
-                  <Share2 size={13} /> Grant access
-                </button>
-              </label>
+          <div className="do-team-access">
+            <div>
+              <span>Share project access</span>
+              <p>Grant a Certo user visibility, or create a read-only status link.</p>
+            </div>
+            <div className="do-team-access-controls">
+              <select
+                aria-label="Share project with colleague"
+                onChange={(event) => setShareMemberId(event.target.value)}
+                value={shareMemberId}
+              >
+                <option value="">Select a Certo user</option>
+                {activeMembers.map((member) => (
+                  <option key={`share-${member.id}`} value={member.userId || member.id}>
+                    {memberName(member)}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={!shareMemberId}
+                onClick={() => {
+                  const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
+                  update({ visibleToUserIds: ids, sharedWithUserIds: ids });
+                  setShareMemberId("");
+                }}
+                type="button"
+              >
+                <Share2 size={13} /> Grant access
+              </button>
               <button
                 onClick={async () => {
                   const url = await onCreateShareLink?.();
@@ -2647,8 +2661,8 @@ export function ProjectConsolePanel({
               >
                 Create read-only status link
               </button>
-              {shareLink && <small>{shareLink}</small>}
-            </section>
+            </div>
+            {shareLink && <small className="do-team-share-url">{shareLink}</small>}
           </div>
         </div>
       )}

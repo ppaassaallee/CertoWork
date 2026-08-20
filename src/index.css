@@ -471,6 +471,29 @@ button { color: inherit; }
 .do-project-role-grid label > span, .do-project-team-pickers section > span, .do-cost-summary-grid label > span { display: flex; align-items: center; gap: 4px; color: #6d7b72; font-size: calc(7px * var(--cw-text-scale)); font-weight: 700; }
 .do-project-role-grid select, .do-cost-summary-grid input { min-width: 0; border: 1px solid #dbe4dd; border-radius: 8px; background: #fbfcfb; padding: 8px; color: #415248; font-size: calc(8px * var(--cw-text-scale)); outline: none; }
 .do-project-team-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.do-team-panel { gap: 10px; }
+.do-team-panel .do-project-card-kicker { font-size: calc(11px * var(--cw-text-scale)); letter-spacing: .08em; }
+.do-team-panel .do-section-title h4 { margin-top: 4px; font-size: calc(16px * var(--cw-text-scale)); }
+.do-team-table-wrap { overflow: auto; border: 1px solid #d7e0d8; border-radius: 10px; background: #fff; }
+.do-team-table { width: 100%; min-width: 640px; border-collapse: collapse; }
+.do-team-table th, .do-team-table td { padding: 10px 12px; text-align: left; vertical-align: middle; }
+.do-team-table thead th { background: #f3f7f4; color: #5f7267; font-size: calc(11px * var(--cw-text-scale)); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid #dce4de; }
+.do-team-table tbody th { width: 22%; color: #2f3f36; font-size: calc(13px * var(--cw-text-scale)); font-weight: 650; }
+.do-team-table tbody th span { display: inline-flex; align-items: center; gap: 6px; }
+.do-team-table tbody td { color: #314039; font-size: calc(13px * var(--cw-text-scale)); }
+.do-team-table tbody tr + tr td, .do-team-table tbody tr + tr th { border-top: 1px solid #edf1ee; }
+.do-team-table tbody tr:nth-child(even) { background: #f8faf8; }
+.do-team-table select, .do-team-table .cw-multi-assignee-trigger { width: 100%; min-height: 36px; border: 1px solid #d5dfd8; border-radius: 8px; background: #fff; padding: 8px 10px; color: #314039; font-size: calc(13px * var(--cw-text-scale)); }
+.do-team-scope { display: inline-flex; border-radius: 999px; background: #e8f1eb; padding: 4px 8px; color: #2f5a43; font-size: calc(11px * var(--cw-text-scale)); font-weight: 700; }
+.do-team-access { display: grid; gap: 8px; border: 1px solid #d7e0d8; border-radius: 10px; background: #fff; padding: 12px 14px; }
+.do-team-access > div:first-child span { display: block; color: #2f3f36; font-size: calc(13px * var(--cw-text-scale)); font-weight: 700; }
+.do-team-access > div:first-child p { margin: 3px 0 0; color: #6d7b72; font-size: calc(12px * var(--cw-text-scale)); line-height: 1.4; }
+.do-team-access-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.do-team-access-controls select, .do-team-access-controls button { height: 36px; border-radius: 8px; font-size: calc(13px * var(--cw-text-scale)); }
+.do-team-access-controls select { min-width: 220px; border: 1px solid #d5dfd8; background: #fff; padding: 0 10px; color: #314039; }
+.do-team-access-controls button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #c5d4c9; background: #f4f8f5; padding: 0 12px; color: #24513d; font-weight: 700; cursor: pointer; }
+.do-team-access-controls button:disabled { opacity: .45; cursor: default; }
+.do-team-share-url { display: block; overflow: hidden; color: #5e7266; font-size: calc(12px * var(--cw-text-scale)); word-break: break-all; }
 .do-health-explainer { display: grid; grid-template-columns: minmax(0, 1fr) 210px; align-items: end; gap: 14px; border: 1px solid #dce6de; border-radius: 12px; background: #f2f7f3; padding: 13px; }
 .do-health-explainer h4 { margin: 3px 0; color: #315c44; font: 650 calc(16px * var(--cw-text-scale)) "Manrope", sans-serif; }
 .do-health-explainer p { margin: 0; color: #748178; font-size: calc(7.5px * var(--cw-text-scale)); line-height: 1.45; }
@@ -1696,6 +1719,11 @@ button { color: inherit; }
   .do-console-tabs { grid-template-columns: repeat(3, 1fr); }
   .do-console-metrics, .do-console-insights, .do-console-ask-grid, .do-console-board { grid-template-columns: 1fr 1fr; }
   .do-project-role-grid, .do-project-team-pickers, .do-health-explainer, .do-cost-summary-grid, .do-cost-audit-summary { grid-template-columns: 1fr; }
+  .do-team-table { min-width: 0; }
+  .do-team-table thead { display: none; }
+  .do-team-table, .do-team-table tbody, .do-team-table tr, .do-team-table th, .do-team-table td { display: block; width: 100%; }
+  .do-team-table tbody th { padding-bottom: 4px; }
+  .do-team-table tbody td { padding-top: 0; }
   .do-cost-audit-summary > div { border-right: 0; border-bottom: 1px solid #e2e8e3; padding: 0 0 7px; }
   .do-items-helpbar { overflow-x: auto; padding-left: 10px; padding-right: 10px; white-space: nowrap; }
   .do-risk-add { grid-template-columns: 1fr; }
