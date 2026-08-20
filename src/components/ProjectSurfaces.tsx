@@ -1623,15 +1623,6 @@ export function ProjectConsolePanel({
         : workType === "subtask"
           ? hierarchy.pbis
           : [...hierarchy.features, ...hierarchy.epics];
-  const tabHelp: Partial<Record<typeof tab, string>> = {
-    backlog: "Hierarchy and prioritization: Epic → Feature → PBI → Subtask.",
-    work: "Execution board. Use it to move active items through Backlog, Doing, Blocked and Done.",
-    team: "Project governance roles and the people allowed to own delivery work.",
-    costs:
-      "Planned and actual hours, initial investment, recurring costs and unit-based cost drivers.",
-    risks:
-      "Risk register, severity and the signals used to calculate project health.",
-  };
   const renderWorkItemRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     return (
@@ -1944,10 +1935,7 @@ export function ProjectConsolePanel({
             onClick={() => setTab(value)}
             type="button"
           >
-            <span>{label}</span>
-            {tabHelp[value] && (
-              <InfoTip label={label} text={tabHelp[value] || ""} />
-            )}
+            {label}
           </button>
         ))}
       </nav>
@@ -2446,134 +2434,40 @@ export function ProjectConsolePanel({
 
       {tab === "team" && (
         <div className="do-console-section do-team-panel">
-          <div className="do-section-title">
-            <div>
-              <span className="do-project-card-kicker">PROJECT GOVERNANCE</span>
-              <h4>Accountability and delivery team</h4>
-            </div>
-            <InfoTip
-              label="Project roles"
-              text="The Project Manager owns delivery, the Product Owner owns value and backlog decisions, and Sponsors provide authority, funding and escalation support."
-            />
-          </div>
           <div className="do-team-table-wrap">
             <table className="do-team-table">
               <thead>
                 <tr>
                   <th>Role</th>
                   <th>Person</th>
-                  <th>Scope</th>
                 </tr>
               </thead>
               <tbody>
+                {(
+                  [
+                    ["Project Manager", "projectManagerId", "projectManager"],
+                    ["Product Owner", "productOwnerId", "productOwner"],
+                    ["Solution Architect", "solutionArchitectId", "solutionArchitect"],
+                    ["Delivery / Tech Lead", "deliveryLeadId", "deliveryLead"],
+                    ["Client Lead", "clientLeadId", "clientLead"],
+                  ] as const
+                ).map(([label, idKey, nameKey]) => (
+                  <tr key={idKey}>
+                    <th>{label}</th>
+                    <td>
+                      <TeamPersonSelect
+                        label={label}
+                        onChange={(id, name) =>
+                          update({ [idKey]: id || null, [nameKey]: name })
+                        }
+                        options={roleOptions}
+                        value={project[idKey] || ""}
+                      />
+                    </td>
+                  </tr>
+                ))}
                 <tr>
-                  <th>
-                    <span>Project Manager</span>
-                    <InfoTip
-                      label="Project Manager"
-                      text="Owns delivery plan, coordination, dependencies, status and escalation."
-                    />
-                  </th>
-                  <td>
-                    <TeamPersonSelect
-                      label="Project Manager"
-                      onChange={(projectManagerId, projectManager) =>
-                        update({ projectManagerId: projectManagerId || null, projectManager })
-                      }
-                      options={roleOptions}
-                      value={project.projectManagerId || ""}
-                    />
-                  </td>
-                  <td><span className="do-team-scope">Governance</span></td>
-                </tr>
-                <tr>
-                  <th>
-                    <span>Product Owner</span>
-                    <InfoTip
-                      label="Product Owner"
-                      text="Owns desired outcomes, backlog priority and acceptance decisions."
-                    />
-                  </th>
-                  <td>
-                    <TeamPersonSelect
-                      label="Product Owner"
-                      onChange={(productOwnerId, productOwner) =>
-                        update({ productOwnerId: productOwnerId || null, productOwner })
-                      }
-                      options={roleOptions}
-                      value={project.productOwnerId || ""}
-                    />
-                  </td>
-                  <td><span className="do-team-scope">Value</span></td>
-                </tr>
-                <tr>
-                  <th>
-                    <span>Solution Architect</span>
-                    <InfoTip
-                      label="Solution Architect"
-                      text="Owns the solution design, technical coherence, non-functional requirements and architecture decisions."
-                    />
-                  </th>
-                  <td>
-                    <TeamPersonSelect
-                      label="Solution Architect"
-                      onChange={(solutionArchitectId, solutionArchitect) =>
-                        update({ solutionArchitectId: solutionArchitectId || null, solutionArchitect })
-                      }
-                      options={roleOptions}
-                      value={project.solutionArchitectId || ""}
-                    />
-                  </td>
-                  <td><span className="do-team-scope">Design</span></td>
-                </tr>
-                <tr>
-                  <th>
-                    <span>Delivery / Tech Lead</span>
-                    <InfoTip
-                      label="Delivery lead"
-                      text="Owns technical execution, engineering quality and implementation readiness."
-                    />
-                  </th>
-                  <td>
-                    <TeamPersonSelect
-                      label="Delivery / Tech Lead"
-                      onChange={(deliveryLeadId, deliveryLead) =>
-                        update({ deliveryLeadId: deliveryLeadId || null, deliveryLead })
-                      }
-                      options={roleOptions}
-                      value={project.deliveryLeadId || ""}
-                    />
-                  </td>
-                  <td><span className="do-team-scope">Delivery</span></td>
-                </tr>
-                <tr>
-                  <th>
-                    <span>Client Lead</span>
-                    <InfoTip
-                      label="Client lead"
-                      text="Primary client-side owner for decisions, access and acceptance."
-                    />
-                  </th>
-                  <td>
-                    <TeamPersonSelect
-                      label="Client Lead"
-                      onChange={(clientLeadId, clientLead) =>
-                        update({ clientLeadId: clientLeadId || null, clientLead })
-                      }
-                      options={roleOptions}
-                      value={project.clientLeadId || ""}
-                    />
-                  </td>
-                  <td><span className="do-team-scope">Client</span></td>
-                </tr>
-                <tr>
-                  <th>
-                    <span>Sponsors</span>
-                    <InfoTip
-                      label="Sponsors"
-                      text="One or more executives who provide mandate, funding and escalation decisions."
-                    />
-                  </th>
+                  <th>Sponsors</th>
                   <td>
                     <MultiAssigneePicker
                       label="Sponsors"
@@ -2591,19 +2485,12 @@ export function ProjectConsolePanel({
                       }
                     />
                   </td>
-                  <td><span className="do-team-scope">Mandate</span></td>
                 </tr>
                 <tr>
-                  <th>
-                    <span>Project team</span>
-                    <InfoTip
-                      label="Project team"
-                      text="People who may be assigned to Epics, Features, PBIs, tasks, bugs or subtasks."
-                    />
-                  </th>
+                  <th>Team</th>
                   <td>
                     <MultiAssigneePicker
-                      label="Project team"
+                      label="Team"
                       members={workspaceMembers}
                       onChange={(teamMemberIds, teamMembers) =>
                         update({ teamMemberIds, teamMembers })
@@ -2618,50 +2505,43 @@ export function ProjectConsolePanel({
                       }
                     />
                   </td>
-                  <td><span className="do-team-scope">Delivery</span></td>
                 </tr>
               </tbody>
             </table>
           </div>
           <div className="do-team-access">
-            <div>
-              <span>Share project access</span>
-              <p>Grant a Certo user visibility, or create a read-only status link.</p>
-            </div>
-            <div className="do-team-access-controls">
-              <select
-                aria-label="Share project with colleague"
-                onChange={(event) => setShareMemberId(event.target.value)}
-                value={shareMemberId}
-              >
-                <option value="">Select a Certo user</option>
-                {activeMembers.map((member) => (
-                  <option key={`share-${member.id}`} value={member.userId || member.id}>
-                    {memberName(member)}
-                  </option>
-                ))}
-              </select>
-              <button
-                disabled={!shareMemberId}
-                onClick={() => {
-                  const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
-                  update({ visibleToUserIds: ids, sharedWithUserIds: ids });
-                  setShareMemberId("");
-                }}
-                type="button"
-              >
-                <Share2 size={13} /> Grant access
-              </button>
-              <button
-                onClick={async () => {
-                  const url = await onCreateShareLink?.();
-                  if (url) setShareLink(String(url));
-                }}
-                type="button"
-              >
-                Create read-only status link
-              </button>
-            </div>
+            <select
+              aria-label="Share project with colleague"
+              onChange={(event) => setShareMemberId(event.target.value)}
+              value={shareMemberId}
+            >
+              <option value="">Share with…</option>
+              {activeMembers.map((member) => (
+                <option key={`share-${member.id}`} value={member.userId || member.id}>
+                  {memberName(member)}
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={!shareMemberId}
+              onClick={() => {
+                const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
+                update({ visibleToUserIds: ids, sharedWithUserIds: ids });
+                setShareMemberId("");
+              }}
+              type="button"
+            >
+              Grant
+            </button>
+            <button
+              onClick={async () => {
+                const url = await onCreateShareLink?.();
+                if (url) setShareLink(String(url));
+              }}
+              type="button"
+            >
+              Status link
+            </button>
             {shareLink && <small className="do-team-share-url">{shareLink}</small>}
           </div>
         </div>

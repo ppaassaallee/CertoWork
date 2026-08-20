@@ -92,13 +92,17 @@ test("items view switcher buttons size to their labels instead of a 30px icon bo
   assert.equal(/width:\s*30px/.test(block), false);
 });
 
-test("project team panel uses a table with consistent 13px controls", async () => {
+test("project team panel is a short two-column table without hover tooltips", async () => {
   const { readFile } = await import("node:fs/promises");
-  const [css, source] = await Promise.all([
+  const [css, source, tips] = await Promise.all([
     readFile(new URL("../src/index.css", import.meta.url), "utf8"),
     readFile(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/ProjectControls.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(source, /className="do-team-table"/);
-  assert.match(css, /\.do-team-table select[\s\S]*font-size: calc\(13px \* var\(--cw-text-scale\)\)/);
-  assert.match(css, /\.do-team-access-controls button[\s\S]*font-size: calc\(13px \* var\(--cw-text-scale\)\)/);
+  const teamBlock = source.split("do-team-panel")[1]?.split('{tab === "costs" &&')[0] || "";
+  assert.match(teamBlock, /className="do-team-table"/);
+  assert.equal(teamBlock.includes("InfoTip"), false);
+  assert.equal(teamBlock.includes("Scope"), false);
+  assert.equal(/\.cw-info-tip:hover > span/.test(css), false);
+  assert.match(tips, /createPortal/);
 });
