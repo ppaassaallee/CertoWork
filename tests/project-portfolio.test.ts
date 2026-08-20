@@ -7,7 +7,7 @@ import {
   taskWorkLane,
 } from "../src/lib/projectPortfolio";
 
-test("puts favorite projects first and keeps the three latest non-favorites", () => {
+test("puts favorite projects first and keeps the six latest non-favorites", () => {
     const projects = [
       { id: "old", title: "Old", updatedAt: 1 },
       { id: "favorite", title: "Favorite", favorite: true, updatedAt: 2 },
@@ -17,7 +17,7 @@ test("puts favorite projects first and keeps the three latest non-favorites", ()
     ];
     const groups = sidebarProjectGroups(projects);
   assert.deepEqual(groups.favorites.map((project) => project.id), ["favorite"]);
-  assert.deepEqual(groups.recent.map((project) => project.id), ["recent-1", "recent-2", "recent-3"]);
+  assert.deepEqual(groups.recent.map((project) => project.id), ["recent-1", "recent-2", "recent-3", "old"]);
 });
 
 test("does not hide a just-created project behind insertion order", () => {

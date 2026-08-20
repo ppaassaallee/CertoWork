@@ -417,7 +417,17 @@ button { color: inherit; }
 .do-panel-empty span { max-width: 230px; margin-top: 4px; color: #909892; font-size: calc(8px * var(--cw-text-scale)); line-height: 1.5; }
 .do-panel-primary { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; margin-top: 14px; border: 0; border-radius: 10px; background: #214b39; padding: 10px; color: #fff; font-size: calc(8.5px * var(--cw-text-scale)); font-weight: 700; cursor: pointer; }
 .do-project-console { display: grid; gap: 12px; }
-.do-console-hero { display: grid; grid-template-columns: minmax(0, 1fr) 34px; gap: 12px; border: 1px solid #dfe5e0; border-radius: 14px; background: #fff; padding: 14px; }
+.do-console-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; border: 1px solid #dfe5e0; border-radius: 14px; background: #fff; padding: 14px; }
+.do-console-hero-actions { display: flex; gap: 6px; }
+.do-console-compact { display: flex; align-items: center; gap: 10px; border: 1px solid #dfe5e0; border-radius: 12px; background: #fff; padding: 8px 10px; }
+.do-console-compact strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.do-console-compact-actions { margin-left: auto; display: flex; gap: 6px; }
+.do-console-more-menu { display: grid; gap: 6px; justify-items: start; border: 1px solid #e5ddd9; border-radius: 12px; background: #fff; padding: 10px; }
+.do-console-more-menu .is-quiet-danger { color: #8a5b52; background: transparent; border: 0; }
+.do-gantt-scale { display: flex; gap: 6px; }
+.do-gantt-scale button.is-active { background: #214b39; color: #fff; }
+.do-gantt-rows { display: grid; gap: 6px; position: relative; overflow-x: auto; }
+.do-gantt-today { position: absolute; top: 0; bottom: 0; width: 1px; background: #c45c4a; z-index: 1; }
 .do-console-hero h3, .do-console-hero > div > input { overflow: hidden; width: 100%; margin: 5px 0 0; border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 0; color: #26322b; font: 700 calc(20px * var(--cw-text-scale))/1.15 "Manrope", sans-serif; letter-spacing: -.03em; text-overflow: ellipsis; outline: none; }
 .do-console-hero > div > input:hover, .do-console-hero > div > input:focus { border-bottom-color: #b8c9bd; }
 .do-console-hero p { margin: 8px 0 0; color: #6f7a73; font-size: calc(9px * var(--cw-text-scale)); line-height: 1.55; }
@@ -675,7 +685,7 @@ button { color: inherit; }
 .do-gantt-axis { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; padding: 8px 10px; color: #87928b; font-size: calc(7px * var(--cw-text-scale)); font-weight: 800; text-transform: uppercase; }
 .do-gantt-axis span:not(:first-child) { text-align: center; }
 .do-gantt-axis span:last-child { text-align: right; }
-.do-gantt-rows { display: grid; gap: 6px; }
+.do-gantt-rows { display: grid; gap: 6px; position: relative; }
 .do-gantt-row { display: grid; grid-template-columns: minmax(170px, .45fr) minmax(230px, 1fr); gap: 9px; align-items: center; border: 1px solid #e1e7e2; border-radius: 12px; background: #fff; padding: 8px; }
 .do-gantt-row > button { display: grid; min-width: 0; gap: 3px; border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .do-gantt-row > button span { width: fit-content; border-radius: 7px; background: #e9f1ec; padding: 2px 6px; color: #3e6b52; font-size: calc(6px * var(--cw-text-scale)); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }

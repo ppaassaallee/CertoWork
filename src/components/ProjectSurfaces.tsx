@@ -8,20 +8,27 @@ import {
   ArrowUp,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Copy,
+  Download,
   FileText,
   Flag,
   FolderKanban,
   LayoutGrid,
+  Link as LinkIcon,
   ListChecks,
   MessageSquare,
+  MoreHorizontal,
   Plus,
   Search,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
   Target,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -73,6 +80,18 @@ import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
+import { WorkItemsCenter } from "./WorkItemsCenter";
+import { canDeleteProject } from "../lib/projectPermissions";
+import {
+  PROJECT_RESOURCE_MAX_BYTES,
+  PROJECT_RESOURCE_TYPES,
+  isAllowedProjectResourceSize,
+  looksLikeExternalUrl,
+  resourceTypeLabel,
+} from "../lib/projectResources";
+import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
+import type { SprintRecord } from "../lib/sprints";
+import { usePlatformCapabilities } from "../lib/capabilities";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -1327,6 +1346,9 @@ export function ProjectConsolePanel({
   workspaceMembers = [],
   costTemplates = [],
   conversationId,
+  sprints = [],
+  currentUser = null,
+  workspace = null,
   onAsk,
   onUpdateProject,
   onArchiveProject,
@@ -1337,6 +1359,10 @@ export function ProjectConsolePanel({
   onAddRisk,
   onCreateCostTemplate,
   onUpdateCostTemplate,
+  onAddDocument,
+  onCreateSprint,
+  onUpdateSprint,
+  onCreateShareLink,
 }: {
   project: any;
   tasks: any[];
@@ -1346,6 +1372,9 @@ export function ProjectConsolePanel({
   workspaceMembers?: AssignmentMember[];
   costTemplates?: any[];
   conversationId?: string | null;
+  sprints?: SprintRecord[];
+  currentUser?: { uid?: string } | null;
+  workspace?: { ownerId?: string } | null;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
@@ -1363,6 +1392,10 @@ export function ProjectConsolePanel({
     templateId: string,
     patch: Record<string, unknown>,
   ) => Promise<void> | void;
+  onAddDocument?: (payload: Record<string, unknown>) => Promise<void> | void;
+  onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
+  onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onCreateShareLink?: () => Promise<string | void> | string | void;
 }) {
   const [tab, setTab] = useState<
     | "brief"
@@ -1375,6 +1408,20 @@ export function ProjectConsolePanel({
     | "docs"
     | "codex"
   >("brief");
+  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("certo-project-header-collapsed") === "true";
+  });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [shareMemberId, setShareMemberId] = useState("");
+  const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
+  const [docTitle, setDocTitle] = useState("");
+  const [docBody, setDocBody] = useState("");
+  const [docUrl, setDocUrl] = useState("");
+  const [docError, setDocError] = useState("");
+  const [shareLink, setShareLink] = useState("");
+  const capabilities = usePlatformCapabilities();
   const [taskTitle, setTaskTitle] = useState("");
   const [workTitle, setWorkTitle] = useState("");
   const [workType, setWorkType] = useState<WorkItemKind>("pbi");
@@ -1443,7 +1490,13 @@ export function ProjectConsolePanel({
     setTab("brief");
     setArchiveConfirm(false);
     setDeleteConfirm(false);
+    setMoreOpen(false);
   }, [project.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("certo-project-header-collapsed", String(headerCollapsed));
+  }, [headerCollapsed]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
   const submitTask = async () => {
@@ -1643,6 +1696,17 @@ export function ProjectConsolePanel({
     );
   };
 
+  const allowDelete = Boolean(
+    onDeleteProject &&
+      canDeleteProject(
+        project,
+        currentUser,
+        workspace,
+        workspaceMembers.find((member) => member.userId === currentUser?.uid)?.id,
+      ),
+  );
+  const report = buildProjectStatusReport(project, tasks, risks, milestones);
+
   return (
     <section className="do-project-console" data-testid="project-console">
       <datalist id="do-project-member-options">
@@ -1650,6 +1714,22 @@ export function ProjectConsolePanel({
           <option key={owner} value={owner} />
         ))}
       </datalist>
+      {headerCollapsed ? (
+        <div className="do-console-compact">
+          <button aria-label="Expand project header" onClick={() => setHeaderCollapsed(false)} title="Expand" type="button">
+            <ChevronDown size={14} />
+          </button>
+          <strong>{projectTitle(project)}</strong>
+          <span>{projectStatusLabel(project.status)} · {deliveryStageLabels[deliveryStage(project)]}</span>
+          <div className="do-console-compact-actions">
+            <button aria-label="Add team member" onClick={() => setTab("team")} title="Add team member" type="button"><UserPlus size={14} /></button>
+            <button aria-label="Share project" onClick={() => setTab("team")} title="Share project" type="button"><Share2 size={14} /></button>
+            <button aria-label="Ask Certo" onClick={() => onAsk(`Give me the cleanest project update for ${projectTitle(project)}.`)} title="Ask Certo" type="button"><MessageSquare size={14} /></button>
+            <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button"><MoreHorizontal size={14} /></button>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="do-console-hero">
         <div>
           <span className="do-project-card-kicker">PROJECT CONSOLE</span>
@@ -1666,21 +1746,26 @@ export function ProjectConsolePanel({
               "Define the outcome so every conversation and work item points to the same finish line."}
           </p>
         </div>
-        <button
-          aria-label={
-            isProjectFavorite(project)
-              ? "Remove from favorites"
-              : "Add to favorites"
-          }
-          className={isProjectFavorite(project) ? "is-favorite" : ""}
-          onClick={() => update({ favorite: !isProjectFavorite(project) })}
-          type="button"
-        >
-          <Star
-            fill={isProjectFavorite(project) ? "currentColor" : "none"}
-            size={15}
-          />
-        </button>
+        <div className="do-console-hero-actions">
+          <button aria-label="Collapse project header" onClick={() => setHeaderCollapsed(true)} title="Collapse" type="button">
+            <ChevronUp size={15} />
+          </button>
+          <button
+            aria-label={
+              isProjectFavorite(project)
+                ? "Remove from favorites"
+                : "Add to favorites"
+            }
+            className={isProjectFavorite(project) ? "is-favorite" : ""}
+            onClick={() => update({ favorite: !isProjectFavorite(project) })}
+            type="button"
+          >
+            <Star
+              fill={isProjectFavorite(project) ? "currentColor" : "none"}
+              size={15}
+            />
+          </button>
+        </div>
       </div>
 
       <div className="do-console-metrics">
@@ -1763,6 +1848,22 @@ export function ProjectConsolePanel({
           <option value="hybrid">Hybrid</option>
         </select>
         <button
+          aria-label="Add team member"
+          onClick={() => setTab("team")}
+          title="Add team member"
+          type="button"
+        >
+          <UserPlus size={13} /> Team
+        </button>
+        <button
+          aria-label="Share project"
+          onClick={() => setTab("team")}
+          title="Share project"
+          type="button"
+        >
+          <Share2 size={13} /> Share
+        </button>
+        <button
           onClick={() =>
             onAsk(
               `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
@@ -1772,20 +1873,25 @@ export function ProjectConsolePanel({
         >
           <MessageSquare size={13} /> Ask
         </button>
+        <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button">
+          <MoreHorizontal size={13} />
+        </button>
+        <button onClick={() => downloadProjectStatusReport(report)} title="Download status report" type="button">
+          <Download size={13} /> PDF
+        </button>
       </div>
+      </>
+      )}
 
       <nav className="do-console-tabs" aria-label="Project console sections">
         {(
           [
-            ["brief", "Brief"],
+            ["brief", "Overview"],
             ["backlog", "Backlog"],
-            ["plan", "Plan"],
-            ["work", "Board"],
             ["team", "Team"],
             ["costs", "Costs"],
             ["risks", "Risks"],
             ["docs", "Docs"],
-            ["codex", "Codex"],
           ] as const
         ).map(([value, label]) => (
           <button
@@ -1894,6 +2000,29 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "backlog" && (
+        <div className="do-console-section">
+          <WorkItemsCenter
+            activeProject={project}
+            compact
+            onAddTask={(projectId, title, status, patch) =>
+              onAddTask(title, status, { ...patch, projectId })
+            }
+            onAsk={onAsk}
+            onCreateSprint={onCreateSprint}
+            onOpenProjectConsole={() => undefined}
+            onSelectItem={setSelectedWorkItemId}
+            onUpdateSprint={onUpdateSprint}
+            onUpdateTask={onUpdateTask}
+            projects={[project]}
+            selectedItemId={selectedWorkItemId}
+            sprints={sprints}
+            tasks={tasks}
+            workspaceMembers={workspaceMembers}
+          />
+        </div>
+      )}
+
+      {false && tab === "backlog" && (
         <div className="do-console-section">
           <section className="do-planning-session">
             <div>
@@ -2473,6 +2602,38 @@ export function ProjectConsolePanel({
                   Array.isArray(project.teamMembers) ? project.teamMembers : []
                 }
               />
+              <label>
+                Share project access
+                <select aria-label="Share project with colleague" onChange={(event) => setShareMemberId(event.target.value)} value={shareMemberId}>
+                  <option value="">Select a Certo user</option>
+                  {activeMembers.map((member) => (
+                    <option key={`share-${member.id}`} value={member.userId || member.id}>
+                      {memberName(member)}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  disabled={!shareMemberId}
+                  onClick={() => {
+                    const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
+                    update({ visibleToUserIds: ids, sharedWithUserIds: ids });
+                    setShareMemberId("");
+                  }}
+                  type="button"
+                >
+                  <Share2 size={13} /> Grant access
+                </button>
+              </label>
+              <button
+                onClick={async () => {
+                  const url = await onCreateShareLink?.();
+                  if (url) setShareLink(String(url));
+                }}
+                type="button"
+              >
+                Create read-only status link
+              </button>
+              {shareLink && <small>{shareLink}</small>}
             </section>
           </div>
         </div>
@@ -2616,11 +2777,93 @@ export function ProjectConsolePanel({
 
       {tab === "docs" && (
         <div className="do-console-section">
+          <div className="do-project-inline-add">
+            <select aria-label="Document type" onChange={(event) => setDocType(event.target.value as typeof docType)} value={docType}>
+              {PROJECT_RESOURCE_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            <input aria-label="Document title" onChange={(event) => setDocTitle(event.target.value)} placeholder="Title" value={docTitle} />
+            {(docType === "link" || docType === "google_drive" || docType === "onedrive") && (
+              <input aria-label="Document URL" onChange={(event) => setDocUrl(event.target.value)} placeholder="https://..." value={docUrl} />
+            )}
+            {docType === "note" && (
+              <input aria-label="Note body" onChange={(event) => setDocBody(event.target.value)} placeholder="Note" value={docBody} />
+            )}
+            {docType === "file" && (
+              <input
+                accept="*/*"
+                aria-label="Upload file up to 20 MB"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file || !onAddDocument) return;
+                  if (!isAllowedProjectResourceSize(file.size)) {
+                    setDocError(`Files must be ${Math.round(PROJECT_RESOURCE_MAX_BYTES / 1024 / 1024)} MB or smaller.`);
+                    return;
+                  }
+                  setDocError("");
+                  void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
+                  setDocTitle("");
+                  event.target.value = "";
+                }}
+                type="file"
+              />
+            )}
+            {docType !== "file" && (
+              <button
+                disabled={!docTitle.trim() || !onAddDocument}
+                onClick={() => {
+                  if ((docType === "link" || docType === "google_drive" || docType === "onedrive") && !looksLikeExternalUrl(docUrl)) {
+                    setDocError("Enter a valid http(s) URL.");
+                    return;
+                  }
+                  setDocError("");
+                  void onAddDocument?.({
+                    resourceType: docType,
+                    title: docTitle.trim(),
+                    url: docUrl,
+                    body: docBody,
+                  });
+                  setDocTitle("");
+                  setDocBody("");
+                  setDocUrl("");
+                }}
+                type="button"
+              >
+                <Plus size={13} /> Add
+              </button>
+            )}
+          </div>
+          {docError && <p className="do-signin-error" role="alert">{docError}</p>}
+          {!(capabilities.capabilities?.googleDrive?.configured) && (
+            <p className="do-composer-note">Google Drive connector has not been configured. You can still paste a Drive link.</p>
+          )}
+          {!(capabilities.capabilities?.oneDrive?.configured) && (
+            <p className="do-composer-note">OneDrive connector has not been configured. You can still paste a OneDrive link.</p>
+          )}
+          <label className="do-inline-control">
+            <span>Optional project folder</span>
+            <button
+              disabled={!capabilities.capabilities?.googleDrive?.configured && !capabilities.capabilities?.oneDrive?.configured}
+              onClick={() =>
+                update({
+                  externalFolderName: projectTitle(project),
+                  externalFolderId: project.externalFolderId || `folder_${project.id}`,
+                  autoCreateExternalFolder: false,
+                })
+              }
+              type="button"
+            >
+              Create project folder
+            </button>
+            {project.externalFolderId && <small>Saved folder ref: {project.externalFolderId}</small>}
+          </label>
           <div className="do-console-list">
             {documents.map((document) => {
               const content = String(
                 document.content || document.body || document.description || "",
               );
+              const href = document.url || document.href;
               return (
                 <article key={document.id}>
                   <FileText size={13} />
@@ -2629,21 +2872,18 @@ export function ProjectConsolePanel({
                       {document.title || document.name || "Untitled document"}
                     </strong>
                     <small>
+                      {resourceTypeLabel(document.resourceType)} ·{" "}
                       {document.summary ||
                         content.slice(0, 120) ||
+                        href ||
                         "No summary recorded."}
                     </small>
                   </span>
-                  <button
-                    onClick={() =>
-                      onAsk(
-                        `Using ${document.title || "this project document"}, tell me what ${projectTitle(project)} should do next.`,
-                      )
-                    }
-                    type="button"
-                  >
-                    <ArrowRight size={12} />
-                  </button>
+                  {href && (
+                    <a href={href} rel="noreferrer" target="_blank" title="Open link">
+                      <LinkIcon size={12} />
+                    </a>
+                  )}
                 </article>
               );
             })}
@@ -2651,7 +2891,7 @@ export function ProjectConsolePanel({
               <EmptyState
                 icon={<FileText size={18} />}
                 title="No docs yet"
-                text="Paste a PRD in this project conversation and ask Certo Work to save it here."
+                text="Upload a file up to 20 MB, add a link, create a note, or paste a Drive / OneDrive URL."
               />
             )}
           </div>
@@ -2667,15 +2907,30 @@ export function ProjectConsolePanel({
         />
       )}
 
+      {moreOpen && (
+        <div className="do-console-more-menu">
+          <button onClick={() => { setArchiveConfirm(true); setMoreOpen(false); }} type="button">
+            <Archive size={13} /> Archive project
+          </button>
+          <hr />
+          <p>Danger zone</p>
+          {allowDelete ? (
+            <button className="is-quiet-danger" onClick={() => { setDeleteConfirm(true); setMoreOpen(false); }} type="button">
+              Delete project
+            </button>
+          ) : (
+            <small>Delete is limited to the Project Manager or workspace owner.</small>
+          )}
+        </div>
+      )}
+      {(archiveConfirm || deleteConfirm || String(project.status || "").toLowerCase() === "deleted") && (
       <div className="do-console-danger">
         {String(project.status || "").toLowerCase() === "deleted" &&
         onRestoreProject ? (
           <button onClick={() => onRestoreProject(project)} type="button">
             Restore project
           </button>
-        ) : (
-          <>
-            {archiveConfirm ? (
+        ) : archiveConfirm ? (
               <>
                 <button onClick={() => setArchiveConfirm(false)} type="button">
                   Cancel
@@ -2684,32 +2939,21 @@ export function ProjectConsolePanel({
                   Confirm archive
                 </button>
               </>
-            ) : (
-              <button onClick={() => setArchiveConfirm(true)} type="button">
-                <Archive size={13} /> Archive
-              </button>
-            )}
-            {onDeleteProject &&
-              (deleteConfirm ? (
+            ) : deleteConfirm && allowDelete ? (
                 <>
                   <button onClick={() => setDeleteConfirm(false)} type="button">
                     Cancel
                   </button>
                   <button
-                    onClick={() => onDeleteProject(project)}
+                    onClick={() => onDeleteProject?.(project)}
                     type="button"
                   >
                     Move to deleted
                   </button>
                 </>
-              ) : (
-                <button onClick={() => setDeleteConfirm(true)} type="button">
-                  <X size={13} /> Delete · restore for 30 days
-                </button>
-              ))}
-          </>
-        )}
+              ) : null}
       </div>
+      )}
     </section>
   );
 }
@@ -4469,6 +4713,19 @@ export function ProjectCommandCenter({
   ) => Promise<string | void> | string | void;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("active");
+  const [statusFilters, setStatusFilters] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem("certo-project-status-filters") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("active");
+  const [bulkStage, setBulkStage] = useState<DeliveryStage>("build");
+  const [bulkManagerId, setBulkManagerId] = useState("");
+  const [bulkTeamId, setBulkTeamId] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -4674,12 +4931,19 @@ export function ProjectCommandCenter({
       risks.filter((risk) => risk.projectId === project.id),
     );
     const matchesFilter =
-      filter === "all" ||
-      (filter === "active"
-        ? !["completed", "archived", "done", "deleted", "cancelled"].includes(
-            status,
+      statusFilters.length > 0
+        ? statusFilters.some((value) =>
+            value === "active"
+              ? ["active", "in_progress"].includes(status)
+              : status === value,
           )
-        : status === filter);
+        : filter === "all"
+          ? true
+          : filter === "active"
+            ? !["completed", "archived", "done", "deleted", "cancelled"].includes(
+                status,
+              )
+            : status === filter;
     const matchesStage =
       stageFilter === "all" || deliveryStage(project) === stageFilter;
     const matchesPhase =
@@ -5298,28 +5562,40 @@ export function ProjectCommandCenter({
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
               <div className="do-command-filters">
-                {[
-                  "active",
-                  "planning",
-                  "paused",
-                  "completed",
-                  "archived",
-                  "deleted",
-                  "all",
-                ].map((value) => (
+                {["planning", "active", "paused", "completed", "archived"].map((value) => (
                   <button
-                    className={filter === value ? "is-active" : ""}
+                    className={statusFilters.includes(value) || (statusFilters.length === 0 && filter === value) ? "is-active" : ""}
                     key={value}
-                    onClick={() => setFilter(value)}
+                    onClick={() => {
+                      setFilter("all");
+                      setStatusFilters((current) =>
+                        current.includes(value)
+                          ? current.filter((item) => item !== value)
+                          : [...current, value],
+                      );
+                    }}
                     type="button"
                   >
-                    {value === "all"
-                      ? "All"
-                      : value === "active"
-                        ? "Open"
-                        : projectStatusLabel(value)}
+                    {projectStatusLabel(value)}
                   </button>
                 ))}
+                <button
+                  onClick={() => {
+                    setStatusFilters([]);
+                    setFilter("all");
+                    setStageFilter("all");
+                    setPhaseFilter("all");
+                    setHealthFilter("all");
+                    setTagFilter("all");
+                    setWorkCategoryFilter("all");
+                    setProductPhaseFilter("all");
+                    setTaxonomyValue(null);
+                    setSearch("");
+                  }}
+                  type="button"
+                >
+                  Clear filters
+                </button>
               </div>
               <div className="do-command-view-toggle">
                 <button
@@ -5348,6 +5624,62 @@ export function ProjectCommandCenter({
               />
             </label>
           </div>
+          {selectedProjectIds.length > 0 && (
+            <div className="do-items-bulk" aria-label="Project bulk actions">
+              <span>{selectedProjectIds.length} selected</span>
+              <select aria-label="Bulk project status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>
+                {PROJECT_STATUSES.map((status) => (
+                  <option key={status} value={status}>{projectStatusLabel(status)}</option>
+                ))}
+              </select>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { status: bulkStatus })))} type="button">Change status</button>
+              <select aria-label="Bulk project stage" onChange={(event) => setBulkStage(event.target.value as DeliveryStage)} value={bulkStage}>
+                {DELIVERY_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>
+                ))}
+              </select>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { deliveryStage: bulkStage })))} type="button">Change stage</button>
+              <select aria-label="Bulk project manager" onChange={(event) => setBulkManagerId(event.target.value)} value={bulkManagerId}>
+                <option value="">Project manager</option>
+                {activeMemberOptions.map((member) => (
+                  <option key={member.id} value={member.id}>{member.name}</option>
+                ))}
+              </select>
+              <button
+                disabled={!bulkManagerId}
+                onClick={() => {
+                  const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
+                  return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: bulkManagerId, projectManager: member?.name || "" })));
+                }}
+                type="button"
+              >
+                Assign PM
+              </button>
+              <select aria-label="Bulk add team member" onChange={(event) => setBulkTeamId(event.target.value)} value={bulkTeamId}>
+                <option value="">Add team member</option>
+                {activeMemberOptions.map((member) => (
+                  <option key={`team-${member.id}`} value={member.id}>{member.name}</option>
+                ))}
+              </select>
+              <button
+                disabled={!bulkTeamId}
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) => {
+                    const project = projects.find((item) => item.id === id);
+                    const teamMemberIds = [...new Set([...(project?.teamMemberIds || []), bulkTeamId])];
+                    return onUpdateProject(id, { teamMemberIds });
+                  }))
+                }
+                type="button"
+              >
+                Add member
+              </button>
+              <button onClick={() => Promise.all(selectedProjectIds.map((id) => {
+                const project = projects.find((item) => item.id === id);
+                return project ? onArchiveProject(project) : Promise.resolve();
+              }))} type="button">Archive</button>
+            </div>
+          )}
           <div className="do-command-subtoolbar">
             <label>
               Stage
@@ -5738,6 +6070,21 @@ export function ProjectCommandCenter({
                   >
                     <article style={portfolioGridStyle}>
                       {columnSet.has("project") && <div className="do-command-project-name">
+                        <button
+                          aria-label={`Select ${projectTitle(project)}`}
+                          className={selectedProjectIds.includes(project.id) ? "is-selected" : ""}
+                          onClick={() =>
+                            setSelectedProjectIds((current) =>
+                              current.includes(project.id)
+                                ? current.filter((id) => id !== project.id)
+                                : [...current, project.id],
+                            )
+                          }
+                          title="Select for bulk actions"
+                          type="button"
+                        >
+                          {selectedProjectIds.includes(project.id) ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                        </button>
                         <button
                           aria-label={
                             favorite ? "Remove favorite" : "Favorite project"

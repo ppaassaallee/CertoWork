@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
+import { InviteActivate } from "./components/InviteActivate";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 function SignIn() {
@@ -324,6 +325,12 @@ export default function App() {
 
   if (loading) {
     return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
+  }
+  const inviteToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/invite\/([^/]+)/) || [])[1] || "")
+    : "";
+  if (inviteToken && (!user || !workspace)) {
+    return <InviteActivate token={inviteToken} />;
   }
   if (!user) return <SignIn />;
   if (!workspace) return <WorkspaceRecovery />;

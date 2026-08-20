@@ -17,6 +17,22 @@ const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
 const MAX_MESSAGES = 40;
 
+export function openaiApiKey(env = {}) {
+  return String(env.OPENAI_API_KEY || env.OPENAI_KEY || "").trim();
+}
+
+export function openaiModelName(env = {}) {
+  return String(env.OPENAI_MODEL || env.AI_MODEL || "gpt-5.6-sol").trim() || "gpt-5.6-sol";
+}
+
+export function requestedAiProvider(env = {}) {
+  return String(env.AI_PROVIDER || env.BOLDI_AI_PROVIDER || "openai").trim().toLowerCase() || "openai";
+}
+
+export function openaiIsConfigured(env = {}) {
+  return Boolean(openaiApiKey(env)) && requestedAiProvider(env) !== "none";
+}
+
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
@@ -574,15 +590,15 @@ async function rewriteField(request, env) {
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
   }
-  if (!env.OPENAI_API_KEY) {
-    return json({ error: "OpenAI is not configured for this Certo Work deployment yet.", code: "OPENAI_NOT_CONFIGURED" }, 503);
+  if (!openaiIsConfigured(env)) {
+    return json({ error: "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.", code: "OPENAI_NOT_CONFIGURED", safeMode: true }, 503);
   }
-  const model = env.OPENAI_MODEL || "gpt-5.6-sol";
+  const model = openaiModelName(env);
   try {
     const response = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        authorization: `Bearer ${openaiApiKey(env)}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -633,12 +649,13 @@ async function chat(request, env) {
     );
   }
 
-  if (!env.OPENAI_API_KEY) {
+  if (!openaiIsConfigured(env)) {
     return json(
       {
         error:
-          "OpenAI is not configured for this Certo Work deployment yet.",
+          "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.",
         code: "OPENAI_NOT_CONFIGURED",
+        safeMode: true,
       },
       503,
     );
@@ -647,13 +664,13 @@ async function chat(request, env) {
   const latestUserMessage =
     [...body.messages].reverse().find((message) => message.role === "user")?.content || "";
   const citations = groundedCitations(latestUserMessage, body.workspaceContext);
-  const model = env.OPENAI_MODEL || "gpt-5.6-sol";
+  const model = openaiModelName(env);
 
   try {
     const response = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        authorization: `Bearer ${openaiApiKey(env)}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -695,15 +712,34 @@ async function chat(request, env) {
   }
 }
 
+export function aiHealth(env, extras = {}) {
+  const configured = openaiIsConfigured(env);
+  const model = openaiModelName(env);
+  const provider = requestedAiProvider(env);
+  return {
+    provider,
+    providerConfigured: configured,
+    providerAvailable: configured && extras.connection !== "error",
+    modelConfigured: Boolean(model),
+    model: configured ? model : null,
+    connectionStatus: configured ? extras.connection || "ready" : "not_configured",
+    safeMode: !configured,
+  };
+}
+
 function capabilities(env) {
-  const openAIConfigured = Boolean(env.OPENAI_API_KEY);
+  const health = aiHealth(env);
+  const openAIConfigured = health.providerConfigured;
   const brevoConfigured = Boolean(env.BREVO_API_KEY);
   return {
     openai: {
       configured: openAIConfigured,
+      available: health.providerAvailable,
+      model: health.model,
+      connectionStatus: health.connectionStatus,
       description: openAIConfigured
-        ? `OpenAI is active through ${env.OPENAI_MODEL || "gpt-5.6-sol"}.`
-        : "Add OPENAI_API_KEY in the deployment environment to activate AI responses.",
+        ? `OpenAI is active through ${health.model}.`
+        : "Add OPENAI_API_KEY as a Cloudflare Worker secret to activate AI responses.",
     },
     gemini: {
       configured: false,
@@ -729,8 +765,16 @@ function capabilities(env) {
       description: "No live HubSpot connection is configured.",
     },
     googleDrive: {
-      configured: false,
-      description: "No live Google Drive connection is configured.",
+      configured: Boolean(env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET),
+      description: env.GOOGLE_DRIVE_CLIENT_ID
+        ? "Google Drive connector credentials are present. Select a root folder from a Project."
+        : "Google Drive connector has not been configured for this deployment.",
+    },
+    oneDrive: {
+      configured: Boolean(env.ONEDRIVE_CLIENT_ID && env.ONEDRIVE_CLIENT_SECRET),
+      description: env.ONEDRIVE_CLIENT_ID
+        ? "OneDrive connector credentials are present. Select a root folder from a Project."
+        : "OneDrive connector has not been configured for this deployment.",
     },
   };
 }
@@ -745,7 +789,8 @@ function escapeHtml(value) {
 }
 
 function inviteEmailContent(body, origin) {
-  const inviteUrl = `${origin}/`;
+  const token = String(body.inviteToken || "").trim();
+  const inviteUrl = token ? `${origin}/invite/${encodeURIComponent(token)}` : `${origin}/`;
   const workspaceName = String(body.workspaceName || "Certo Work").trim();
   const toEmail = String(body.toEmail || "").trim().toLowerCase();
   const role = String(body.role || "member").trim();
@@ -754,8 +799,11 @@ function inviteEmailContent(body, origin) {
   const textContent = [
     `You have been invited to ${workspaceName} in Certo Work.`,
     "",
-    `Open ${inviteUrl}`,
-    `Use this exact email: ${toEmail}`,
+    "Complete these steps so you can sign in later with your own password:",
+    `1. Open ${inviteUrl}`,
+    `2. Use this exact email: ${toEmail}`,
+    "3. Create or confirm your password (at least 6 characters).",
+    "4. Sign out, then sign back in with that email and password.",
     `Role: ${role}`,
     "",
     "If you do not have an account yet, choose Request beta access and create your password with that same email.",
@@ -777,7 +825,7 @@ function inviteEmailContent(body, origin) {
           <small>Role: ${escapeHtml(role)}</small>
         </div>
         <a href="${inviteUrl}" style="display:inline-block;border-radius:999px;background:#214b39;color:#ffffff;padding:13px 18px;text-decoration:none;font-weight:800;">Open Certo Work</a>
-        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">If you do not have an account yet, choose <strong>Request beta access</strong> and create your password with the same email. If you already have an account, choose <strong>Sign in</strong>.</p>
+        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">Open the button above, set your password, then sign out and sign back in with this email and password. If the account already exists, sign in with your current password on the invitation page.</p>
       </div>
     </div>
   </body>
@@ -899,11 +947,29 @@ const worker = {
     }
 
     if (request.method === "GET" && (url.pathname === "/health" || url.pathname === "/api/health")) {
+      const health = aiHealth(env);
       return json({
         ok: true,
-    service: "delivereeos-codex-sites",
-        aiProvider: env.OPENAI_API_KEY ? "openai" : "offline-safe",
+        service: "delivereeos-codex-sites",
+        aiProvider: health.providerConfigured ? "openai" : "offline-safe",
+        ai: health,
       });
+    }
+    if (request.method === "GET" && url.pathname === "/api/ai/health") {
+      const health = aiHealth(env);
+      if (url.searchParams.get("probe") === "1" && openaiIsConfigured(env)) {
+        try {
+          const probe = await fetch("https://api.openai.com/v1/models", {
+            headers: { authorization: `Bearer ${openaiApiKey(env)}` },
+          });
+          health.connectionStatus = probe.ok ? "connected" : "error";
+          health.providerAvailable = probe.ok;
+        } catch {
+          health.connectionStatus = "error";
+          health.providerAvailable = false;
+        }
+      }
+      return json(health);
     }
     if (request.method === "GET" && url.pathname === "/api/capabilities") {
       return json(capabilities(env));

@@ -3,6 +3,9 @@ import { useState, useEffect } from "react";
 export interface CapabilityInfo {
   configured: boolean;
   description: string;
+  available?: boolean;
+  model?: string | null;
+  connectionStatus?: string;
 }
 
 export interface PlatformCapabilities {
@@ -12,6 +15,7 @@ export interface PlatformCapabilities {
   firebase: CapabilityInfo;
   hubspot: CapabilityInfo;
   googleDrive: CapabilityInfo;
+  oneDrive?: CapabilityInfo;
 }
 
 export function usePlatformCapabilities() {

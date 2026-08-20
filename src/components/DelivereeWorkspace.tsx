@@ -22,6 +22,7 @@ import {
   Circle,
   Folder,
   Inbox,
+  Home,
   LayoutGrid,
   ListTodo,
   Loader2,
@@ -62,7 +63,8 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
@@ -79,6 +81,7 @@ import {
   conversationScopeLabel,
   conversationScopeType,
   conversationTaskIds,
+  isStandaloneConversation,
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
@@ -117,6 +120,12 @@ import {
   streamConversationReply,
 } from "../lib/conversationSession";
 import { sendWorkspaceInviteEmail } from "../lib/emailClient";
+import {
+  isAllowedProjectResourceSize,
+} from "../lib/projectResources";
+import { canDeleteProject } from "../lib/projectPermissions";
+import type { SprintRecord } from "../lib/sprints";
+import { createShareToken } from "../lib/projectStatusReport";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -226,7 +235,8 @@ function initials(name?: string | null) {
 
 function inviteMessage(invite: any) {
   const email = invite.email || invite.emailLower || "your invited email";
-  return `You have been invited to Certo Work. Open https://certo.work and sign in or request beta access using this exact email: ${email}`;
+  const token = invite.inviteToken ? `/invite/${invite.inviteToken}` : "";
+  return `You have been invited to Certo Work. Open https://certo.work${token || ""} and activate your account using this exact email: ${email}. Set your password, then sign out and sign back in with those credentials.`;
 }
 
 function displayName(name?: string | null) {
@@ -579,6 +589,7 @@ export function DelivereeWorkspace() {
     [],
   );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
+  const [sprints, setSprints] = useState<SprintRecord[]>([]);
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
@@ -737,6 +748,7 @@ export function DelivereeWorkspace() {
               [where("visibleToEmails", "array-contains", emailLower)],
               [where("assigneeIds", "array-contains", memberId)],
               [where("accessMemberIds", "array-contains", memberId)],
+              [where("sharedWithUserIds", "array-contains", user.uid)],
             ],
             setTasks,
           );
@@ -750,7 +762,13 @@ export function DelivereeWorkspace() {
               timestamp(left.updatedAt || left.createdAt),
           );
           setConversations(sorted);
-          setConversationId((current) => current || sorted[0]?.id || null);
+          setConversationId((current) => {
+            if (current) return current;
+            const standalone = sorted.find((conversation) =>
+              isStandaloneConversation(conversation),
+            );
+            return standalone?.id || null;
+          });
         },
         true,
         true,
@@ -758,6 +776,7 @@ export function DelivereeWorkspace() {
       ...projectUnsubscribers,
       ...taskUnsubscribers,
       makeQuery("milestones", setMilestones),
+      makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
       makeQuery("categories", setCategories),
       makeQuery("cost_templates", setCostTemplates),
@@ -1082,11 +1101,12 @@ export function DelivereeWorkspace() {
   const currentContextLabel = selectedWorkItem
     ? entityTitle(selectedWorkItem)
     : conversationScopeLabel(impliedConversationScope, projects, tasks);
-  const filteredConversations = conversations.filter((conversation) =>
-    String(conversation.title || "")
+  const filteredConversations = conversations.filter((conversation) => {
+    if (!isStandaloneConversation(conversation)) return false;
+    return String(conversation.title || "")
       .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+      .includes(search.toLowerCase());
+  });
 
   useEffect(() => {
     if (!activeProject) return;
@@ -1117,10 +1137,10 @@ export function DelivereeWorkspace() {
         workspaceId: workspace.id,
         title: "New conversation",
         status: "active",
-        sourceContext: activeProject ? "project" : "home",
-        contextEntityId: activeProject?.id || null,
-        conversationType: activeProject ? "project" : "general",
-        linkedProjectIds: activeProject ? [activeProject.id] : [],
+        sourceContext: "home",
+        contextEntityId: null,
+        conversationType: "general",
+        linkedProjectIds: [],
         linkedTaskIds: [],
         isChiefOfStaff: false,
         createdBy: user.uid,
@@ -1131,10 +1151,10 @@ export function DelivereeWorkspace() {
         {
           id: ref.id,
           title: "New conversation",
-          contextEntityId: activeProject?.id || null,
-          sourceContext: activeProject ? "project" : "home",
-          conversationType: activeProject ? "project" : "general",
-          linkedProjectIds: activeProject ? [activeProject.id] : [],
+          contextEntityId: null,
+          sourceContext: "home",
+          conversationType: "general",
+          linkedProjectIds: [],
           linkedTaskIds: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -1147,7 +1167,7 @@ export function DelivereeWorkspace() {
       setJudgment(null);
       setSidebarOpen(false);
       setPanel(null);
-      navigate(activeProject ? `/work/projects/${activeProject.id}` : "/");
+      navigate("/");
       requestAnimationFrame(() => composerRef.current?.focus());
     } catch {
       setNotice(
@@ -1156,7 +1176,7 @@ export function DelivereeWorkspace() {
     } finally {
       setCreatingConversation(false);
     }
-  }, [activeProject, creatingConversation, navigate, user, workspace]);
+  }, [creatingConversation, navigate, user, workspace]);
 
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
@@ -2655,6 +2675,7 @@ export function DelivereeWorkspace() {
       },
       { merge: true },
     );
+    const inviteToken = createInviteCode();
     const inviteRef = await addDoc(collection(db, "agent_invites"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -2662,8 +2683,9 @@ export function DelivereeWorkspace() {
       emailLower: email,
       role: inviteRole,
       inviteType: "workspace_member",
-      inviteToken: createInviteCode(),
+      inviteToken,
       status: "pending",
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2681,6 +2703,7 @@ export function DelivereeWorkspace() {
         role: inviteRole,
         inviterName: user.displayName,
         inviterEmail: user.email,
+        inviteToken,
       });
       emailSent = Boolean(result.sent);
       if (!emailSent) emailWarning = result.error || "Brevo is not configured yet.";
@@ -3028,6 +3051,11 @@ export function DelivereeWorkspace() {
   };
 
   const deleteProject = async (project: any) => {
+    const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
+    if (!canDeleteProject(project, user, workspace, memberId)) {
+      setNotice("Only the Project Manager or workspace owner can delete this project.");
+      return;
+    }
     const confirmed = window.confirm(
       `Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`,
     );
@@ -3168,6 +3196,55 @@ export function DelivereeWorkspace() {
       }),
       updatedAt: serverTimestamp(),
     });
+  };
+
+  const createSprint = async (patch: Record<string, unknown>) => {
+    if (!user || !workspace) return;
+    await addDoc(collection(db, "sprints"), {
+      ...patch,
+      userId: user.uid,
+      workspaceId: workspace.id,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice("Sprint saved.");
+  };
+
+  const updateSprint = async (sprintId: string, patch: Record<string, unknown>) => {
+    await updateDoc(doc(db, "sprints", sprintId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const addProjectDocument = async (projectId: string, payload: Record<string, unknown>) => {
+    if (!user || !workspace) return;
+    let url = String(payload.url || "");
+    const file = payload.file as File | undefined;
+    if (file) {
+      if (!isAllowedProjectResourceSize(file.size)) {
+        setNotice("Files must be 20 MB or smaller.");
+        return;
+      }
+      const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file);
+      url = await getDownloadURL(fileRef);
+    }
+    await addDoc(collection(db, "knowledge_items"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      projectId,
+      title: payload.title || file?.name || "Untitled",
+      resourceType: payload.resourceType || "note",
+      url,
+      content: payload.body || "",
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice("Document saved.");
   };
 
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
@@ -3803,6 +3880,24 @@ export function DelivereeWorkspace() {
       <main className="do-main">
         <header className="do-header">
           <button
+            aria-label="Home"
+            className="do-icon-button"
+            onClick={() => {
+              const standalone = conversations.find((conversation) =>
+                isStandaloneConversation(conversation),
+              );
+              setConversationId(standalone?.id || null);
+              setProjectConsoleId(null);
+              setPanel(null);
+              goCenterView("conversation");
+              navigate("/");
+            }}
+            title="Home"
+            type="button"
+          >
+            <Home size={18} />
+          </button>
+          <button
             aria-label="Open navigation"
             className="do-icon-button do-menu-button"
             onClick={() => setSidebarOpen(true)}
@@ -4337,12 +4432,15 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onCreateSprint={createSprint}
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
             onCreateControlledOption={createControlledOption}
+            onUpdateSprint={updateSprint}
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
+            sprints={sprints}
             tags={categories}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
@@ -4391,6 +4489,7 @@ export function DelivereeWorkspace() {
             <ProjectConsolePanel
               conversationId={conversationId}
               costTemplates={costTemplates}
+              currentUser={user}
               documents={knowledgeItems.filter(
                 (item) =>
                   item.projectId === consoleProject.id &&
@@ -4399,6 +4498,7 @@ export function DelivereeWorkspace() {
               milestones={milestones.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              onAddDocument={(payload) => addProjectDocument(consoleProject.id, payload)}
               onAddRisk={(title, patch) =>
                 addProjectRisk(consoleProject.id, title, patch)
               }
@@ -4407,6 +4507,22 @@ export function DelivereeWorkspace() {
               }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
+              onCreateShareLink={async () => {
+                if (!user || !workspace) return;
+                const token = createShareToken();
+                await addDoc(collection(db, "project_status_shares"), {
+                  userId: user.uid,
+                  workspaceId: workspace.id,
+                  projectId: consoleProject.id,
+                  token,
+                  revoked: false,
+                  createdAt: serverTimestamp(),
+                });
+                const url = `${window.location.origin}/report/${token}`;
+                setNotice("Read-only status link created.");
+                return url;
+              }}
+              onCreateSprint={createSprint}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
               onAsk={(prompt) => {
@@ -4415,14 +4531,17 @@ export function DelivereeWorkspace() {
               }}
               onUpdateProject={updateProject}
               onUpdateCostTemplate={updateCostTemplate}
+              onUpdateSprint={updateSprint}
               onUpdateTask={updateProjectTask}
               project={consoleProject}
               risks={risks.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
               tasks={tasks.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              workspace={workspace}
               workspaceMembers={workspaceMembers}
             />
           ) : (
