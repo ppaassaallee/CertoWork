@@ -9,7 +9,7 @@ import {
   isAllowedProjectResourceSize,
   looksLikeExternalUrl,
 } from "../src/lib/projectResources";
-import { buildProjectStatusReport } from "../src/lib/projectStatusReport";
+import { buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../src/lib/projectStatusReport";
 import { sidebarProjectGroups } from "../src/lib/projectPortfolio";
 import { itemMatchesSprint } from "../src/lib/sprints";
 
@@ -72,4 +72,13 @@ test("status report and sprint matching use the same item records", () => {
   assert.equal(report.blockers.length, 1);
   assert.equal(itemMatchesSprint({ sprintId: "s1" }, "s1"), true);
   assert.equal(itemMatchesSprint({ sprintId: "s1" }, "none"), false);
+});
+
+test("public status snapshots only include report fields", () => {
+  const snapshot = sanitizeStatusReportSnapshot(
+    buildProjectStatusReport({ id: "p1", title: "Alpha", status: "active", secret: "nope" }, [], [], []),
+  );
+  assert.equal(snapshot.title, "Alpha");
+  assert.equal("secret" in snapshot, false);
+  assert.ok(Array.isArray(snapshot.epics));
 });

@@ -1363,6 +1363,13 @@ export function ProjectConsolePanel({
   onCreateSprint,
   onUpdateSprint,
   onCreateShareLink,
+  onConnectGoogleDrive,
+  onCreateProjectFolder,
+  onSelectDriveRoot,
+  driveFolders = [],
+  driveRoot = null,
+  driveConnected = false,
+  driveMessage = "",
 }: {
   project: any;
   tasks: any[];
@@ -1396,6 +1403,13 @@ export function ProjectConsolePanel({
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
   onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateShareLink?: () => Promise<string | void> | string | void;
+  onConnectGoogleDrive?: () => Promise<void> | void;
+  onCreateProjectFolder?: () => Promise<void> | void;
+  onSelectDriveRoot?: (folderId: string, folderName: string) => Promise<void> | void;
+  driveFolders?: Array<{ id: string; name: string }>;
+  driveRoot?: { id: string; name: string } | null;
+  driveConnected?: boolean;
+  driveMessage?: string;
 }) {
   const [tab, setTab] = useState<
     | "brief"
@@ -2835,29 +2849,47 @@ export function ProjectConsolePanel({
             )}
           </div>
           {docError && <p className="do-signin-error" role="alert">{docError}</p>}
-          {!(capabilities.capabilities?.googleDrive?.configured) && (
-            <p className="do-composer-note">Google Drive connector has not been configured. You can still paste a Drive link.</p>
-          )}
-          {!(capabilities.capabilities?.oneDrive?.configured) && (
-            <p className="do-composer-note">OneDrive connector has not been configured. You can still paste a OneDrive link.</p>
-          )}
-          <label className="do-inline-control">
-            <span>Optional project folder</span>
-            <button
-              disabled={!capabilities.capabilities?.googleDrive?.configured && !capabilities.capabilities?.oneDrive?.configured}
-              onClick={() =>
-                update({
-                  externalFolderName: projectTitle(project),
-                  externalFolderId: project.externalFolderId || `folder_${project.id}`,
-                  autoCreateExternalFolder: false,
-                })
-              }
-              type="button"
-            >
-              Create project folder
-            </button>
-            {project.externalFolderId && <small>Saved folder ref: {project.externalFolderId}</small>}
-          </label>
+          <div className="do-console-section">
+            <strong>Optional Google Drive folder</strong>
+            <p className="do-composer-note">
+              Connect a Google account with Drive access, choose a root such as “Certo Projects”, then optionally create this project’s folder. Files stay in Drive unless you upload them here.
+            </p>
+            <div className="do-project-inline-add">
+              <button onClick={() => void onConnectGoogleDrive?.()} type="button">
+                {driveConnected ? "Reconnect Google Drive" : "Connect Google Drive"}
+              </button>
+              {driveFolders.length > 0 && (
+                <select
+                  aria-label="Google Drive root folder"
+                  onChange={(event) => {
+                    const folder = driveFolders.find((item) => item.id === event.target.value);
+                    if (folder) void onSelectDriveRoot?.(folder.id, folder.name);
+                  }}
+                  value={driveRoot?.id || ""}
+                >
+                  <option value="">Choose root folder</option>
+                  {driveFolders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>{folder.name}</option>
+                  ))}
+                </select>
+              )}
+              <button
+                disabled={!driveConnected}
+                onClick={() => void onCreateProjectFolder?.()}
+                type="button"
+              >
+                Create project folder
+              </button>
+            </div>
+            {driveRoot && <small>Root folder: {driveRoot.name} ({driveRoot.id})</small>}
+            {project.externalFolderId && (
+              <small>Project folder ref: {project.externalFolderName || project.externalFolderId} ({project.externalFolderId})</small>
+            )}
+            {driveMessage && <p className="do-composer-note">{driveMessage}</p>}
+            {!capabilities.capabilities?.oneDrive?.configured && (
+              <p className="do-composer-note">OneDrive connector has not been configured. You can still paste a OneDrive link above.</p>
+            )}
+          </div>
           <div className="do-console-list">
             {documents.map((document) => {
               const content = String(

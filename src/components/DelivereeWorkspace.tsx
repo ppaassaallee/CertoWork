@@ -125,7 +125,14 @@ import {
 } from "../lib/projectResources";
 import { canDeleteProject } from "../lib/projectPermissions";
 import type { SprintRecord } from "../lib/sprints";
-import { createShareToken } from "../lib/projectStatusReport";
+import { createShareToken, buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../lib/projectStatusReport";
+import {
+  connectGoogleDrive,
+  createDriveFolder,
+  listDriveFolders,
+  storedDriveAccessToken,
+  type DriveFolder,
+} from "../lib/googleDrive";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -590,6 +597,9 @@ export function DelivereeWorkspace() {
   );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
   const [sprints, setSprints] = useState<SprintRecord[]>([]);
+  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>([]);
+  const [driveRoot, setDriveRoot] = useState<DriveFolder | null>(null);
+  const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
@@ -3247,6 +3257,53 @@ export function DelivereeWorkspace() {
     setNotice("Document saved.");
   };
 
+  const connectProjectDrive = async () => {
+    try {
+      await connectGoogleDrive();
+      const folders = await listDriveFolders();
+      setDriveFolders(folders);
+      setDriveMessage("Google Drive connected. Choose a root folder, or create a project folder under Drive root.");
+      setNotice("Google Drive connected.");
+    } catch (reason) {
+      setDriveMessage(reason instanceof Error ? reason.message : "Google Drive could not be connected.");
+      setNotice(reason instanceof Error ? reason.message : "Google Drive could not be connected.");
+    }
+  };
+
+  const selectDriveRoot = async (folderId: string, folderName: string) => {
+    if (!user || !workspace) return;
+    setDriveRoot({ id: folderId, name: folderName });
+    await addDoc(collection(db, "integration_configs"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      provider: "google_drive",
+      rootFolderId: folderId,
+      rootFolderName: folderName,
+      autoCreateExternalFolder: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setDriveMessage(`Root folder saved: ${folderName}`);
+  };
+
+  const createProjectDriveFolder = async (project: any) => {
+    try {
+      if (!storedDriveAccessToken()) await connectGoogleDrive();
+      const folder = await createDriveFolder(String(project.title || project.name || "Project"), driveRoot?.id || null);
+      await updateProject(project.id, {
+        externalFolderId: folder.id,
+        externalFolderName: folder.name,
+        externalFolderProvider: "google_drive",
+        autoCreateExternalFolder: false,
+      });
+      setDriveMessage(`Created Drive folder ${folder.name}`);
+      setNotice(`Project folder created in Google Drive.`);
+    } catch (reason) {
+      setDriveMessage(reason instanceof Error ? reason.message : "The Drive folder could not be created.");
+      setNotice(reason instanceof Error ? reason.message : "The Drive folder could not be created.");
+    }
+  };
+
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
     if (!user || !workspace) return;
     const successCriteria = splitProjectWizardLines(draft.successCriteriaText);
@@ -4510,11 +4567,20 @@ export function DelivereeWorkspace() {
               onCreateShareLink={async () => {
                 if (!user || !workspace) return;
                 const token = createShareToken();
-                await addDoc(collection(db, "project_status_shares"), {
+                const snapshot = sanitizeStatusReportSnapshot(
+                  buildProjectStatusReport(
+                    consoleProject,
+                    tasks.filter((item) => item.projectId === consoleProject.id),
+                    risks.filter((item) => item.projectId === consoleProject.id),
+                    milestones.filter((item) => item.projectId === consoleProject.id),
+                  ),
+                );
+                await setDoc(doc(db, "project_status_shares", token), {
                   userId: user.uid,
                   workspaceId: workspace.id,
                   projectId: consoleProject.id,
                   token,
+                  snapshot,
                   revoked: false,
                   createdAt: serverTimestamp(),
                 });
@@ -4522,6 +4588,13 @@ export function DelivereeWorkspace() {
                 setNotice("Read-only status link created.");
                 return url;
               }}
+              onConnectGoogleDrive={connectProjectDrive}
+              onCreateProjectFolder={() => createProjectDriveFolder(consoleProject)}
+              onSelectDriveRoot={selectDriveRoot}
+              driveFolders={driveFolders}
+              driveRoot={driveRoot}
+              driveConnected={Boolean(storedDriveAccessToken() || driveRoot)}
+              driveMessage={driveMessage}
               onCreateSprint={createSprint}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}

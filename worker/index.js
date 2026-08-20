@@ -765,16 +765,15 @@ function capabilities(env) {
       description: "No live HubSpot connection is configured.",
     },
     googleDrive: {
-      configured: Boolean(env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET),
-      description: env.GOOGLE_DRIVE_CLIENT_ID
-        ? "Google Drive connector credentials are present. Select a root folder from a Project."
-        : "Google Drive connector has not been configured for this deployment.",
+      configured: true,
+      available: true,
+      description: "Connect Google Drive with a Google account to choose a root folder and optionally create a project folder. This is optional.",
     },
     oneDrive: {
       configured: Boolean(env.ONEDRIVE_CLIENT_ID && env.ONEDRIVE_CLIENT_SECRET),
       description: env.ONEDRIVE_CLIENT_ID
-        ? "OneDrive connector credentials are present. Select a root folder from a Project."
-        : "OneDrive connector has not been configured for this deployment.",
+        ? "OneDrive connector credentials are present."
+        : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
   };
 }

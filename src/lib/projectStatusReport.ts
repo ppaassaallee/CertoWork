@@ -62,6 +62,39 @@ export function createShareToken() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
+export function sanitizeStatusReportSnapshot(report: ReturnType<typeof buildProjectStatusReport>) {
+  return {
+    title: String(report.title || "Untitled project"),
+    manager: String(report.manager || "Unassigned"),
+    status: String(report.status || ""),
+    stage: String(report.stage || ""),
+    phase: String(report.phase || ""),
+    target: String(report.target || ""),
+    progress: Number(report.progress || 0),
+    health: String(report.health || ""),
+    healthKey: String(report.healthKey || ""),
+    outcome: String(report.outcome || ""),
+    epics: (report.epics || []).slice(0, 40).map((item) => ({
+      title: String(item.title || "Epic"),
+      due: String(item.due || ""),
+      status: String(item.status || ""),
+      owner: String(item.owner || ""),
+    })),
+    milestones: (report.milestones || []).slice(0, 40).map((item) => ({
+      title: String(item.title || "Milestone"),
+      due: String(item.due || ""),
+      status: String(item.status || ""),
+    })),
+    risks: (report.risks || []).slice(0, 40).map((item) => ({
+      title: String(item.title || "Risk"),
+      severity: String(item.severity || "medium"),
+      response: String(item.response || ""),
+    })),
+    blockers: (report.blockers || []).slice(0, 40).map((item) => String(item)),
+    nextAction: String(report.nextAction || ""),
+  };
+}
+
 function escapeHtml(value: unknown) {
   return String(value || "")
     .replace(/&/g, "&amp;")

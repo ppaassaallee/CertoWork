@@ -896,9 +896,24 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
     }
     match /project_status_shares/{id} {
-      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceAdmin(resource.data.workspaceId)));
+      allow get: if resource.data.revoked != true
+        && resource.data.token == id
+        && resource.data.snapshot is map;
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))
+      );
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().token == id
+        && incoming().snapshot is map
+        && incoming().revoked == false;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid
+        && incoming().diff(resource.data).affectedKeys().hasOnly(['revoked', 'updatedAt']);
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        ('workspaceId' in resource.data && isWorkspaceAdmin(resource.data.workspaceId))
+      );
     }
     match /contacts/{id} { allow read, write: if isSignedIn(); }
     match /contact_requests/{id} { allow read, write: if isSignedIn(); }
