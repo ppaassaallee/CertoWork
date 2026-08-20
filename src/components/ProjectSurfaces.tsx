@@ -76,7 +76,7 @@ import {
   ProjectTemplatesPanel,
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
@@ -91,6 +91,7 @@ import {
 } from "../lib/projectResources";
 import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
 import type { SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -214,61 +215,6 @@ function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
     if (fallback.includes(column) && !current.includes(column)) current.push(column);
   });
   return fallback.filter((column) => current.includes(column));
-}
-
-function TagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
-  );
 }
 
 type SharedProjectActions = {
@@ -6105,7 +6051,7 @@ export function ProjectCommandCenter({
                         />
                       </div>}
                       {columnSet.has("tags") && (
-                        <TagPicker
+                        <CompactTagPicker
                           label={`Tags for ${projectTitle(project)}`}
                           onCreateTag={(name) =>
                             onCreateControlledOption?.("tag", name)

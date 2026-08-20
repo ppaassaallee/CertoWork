@@ -1247,11 +1247,8 @@ button { color: inherit; }
 .do-command-table-head, .do-command-project-block > article { display: grid; grid-template-columns: minmax(230px, 1.45fr) minmax(180px, 1.05fr) 105px 120px 105px 120px 100px 130px 155px 155px 120px 135px; align-items: center; gap: 9px; padding: 8px 12px; }
 .do-command-table-head { color: #929b96; font-size: calc(6.5px * var(--cw-text-scale)); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .do-command-table-head > span { display: flex; align-items: center; gap: 3px; }
-.do-tag-picker { display: grid; gap: 5px; min-width: 0; }
-.do-tag-picker > div { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; align-items: center; }
-.do-tag-picker span { border-radius: 999px; background: #e9f2ed; color: #315f46; font-size: calc(6.6px * var(--cw-text-scale)); font-weight: 700; padding: 3px 7px; }
-.do-tag-picker small { color: #98a39d; font-size: calc(7px * var(--cw-text-scale)); }
-.do-tag-picker select { width: 100%; border: 1px solid #dce3de; border-radius: 8px; background: #fff; color: #3d4741; padding: 6px 7px; font-size: calc(8px * var(--cw-text-scale)); }
+.do-tag-picker { display: block; min-width: 0; overflow: hidden; }
+.do-tag-picker select { display: block; width: 100%; min-width: 0; height: 28px; overflow: hidden; border: 1px solid #dce3de; border-radius: 7px; background: #fff; padding: 0 24px 0 7px; color: #3d4741; font-size: var(--text-caption); font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
 .do-view-manager { margin: 0 16px 10px; border: 1px solid #dfe8e2; border-radius: 14px; background: #fbfdfb; box-shadow: 0 8px 22px rgba(38, 67, 49, .035); }
 .do-view-manager summary { display: flex; align-items: center; gap: 7px; cursor: pointer; color: #315b43; font-size: calc(10px * var(--cw-text-scale)); font-weight: 850; padding: 9px 12px; list-style: none; }
 .do-view-manager summary::-webkit-details-marker { display: none; }
@@ -2174,4 +2171,75 @@ button { color: inherit; }
   font-family: var(--font-display) !important;
   font-size: var(--text-h2) !important;
   font-weight: 600 !important;
+}
+
+/* Dense operational surfaces use the caption tier, not heading/body scale. */
+:is(
+  .do-items-row,
+  .do-items-row *,
+  .do-command-table-head,
+  .do-command-table-head *,
+  .do-command-project-block > article,
+  .do-command-project-block > article *,
+  .do-team-table,
+  .do-team-table *,
+  .do-team-access,
+  .do-team-access *
+) {
+  font-family: var(--font-body) !important;
+  font-size: var(--text-caption) !important;
+}
+
+.do-tag-picker,
+.do-tag-picker * {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap !important;
+}
+
+.do-tag-picker select {
+  height: 28px;
+  overflow: hidden;
+  font-size: var(--text-caption) !important;
+  text-overflow: ellipsis;
+}
+
+.do-team-panel {
+  gap: 8px;
+}
+
+.do-team-table th,
+.do-team-table td {
+  padding: 6px 10px;
+}
+
+.do-team-table thead th {
+  font-weight: 700 !important;
+  letter-spacing: .06em;
+}
+
+.do-team-table tbody th {
+  width: 25%;
+  font-weight: 600 !important;
+}
+
+.do-team-table select,
+.do-team-table .cw-multi-assignee-trigger {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 8px;
+  font-weight: 400 !important;
+}
+
+.do-team-access {
+  gap: 6px;
+}
+
+.do-team-access select,
+.do-team-access button {
+  height: 30px;
+}
+
+:is(.do-console-tabs, .do-project-tabs, .do-view-switch, .do-header-actions) button {
+  font-size: var(--text-caption) !important;
 }

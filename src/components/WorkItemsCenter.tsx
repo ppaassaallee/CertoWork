@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
@@ -27,6 +27,7 @@ import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
@@ -452,61 +453,6 @@ function InlineText({
       onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
       value={draft}
     />
-  );
-}
-
-function ItemTagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
   );
 }
 
@@ -945,7 +891,7 @@ export function WorkItemsCenter({
         </button>}
         {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
         {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
-        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
         {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
           {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
         </select>}
@@ -1543,7 +1489,7 @@ export function WorkItemsCenter({
             <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
             <label>Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
             <label>Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
-            <label>Tags<ItemTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
+            <label>Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"

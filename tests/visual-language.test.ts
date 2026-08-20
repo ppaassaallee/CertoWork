@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { CERTO_TEXT_SIZE_OPTIONS, normalizeCertoTextSize } from "../src/lib/textSize";
+import { compactTagSummary } from "../src/components/CompactTagPicker";
 
 const read = (relativePath: string) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
@@ -51,4 +52,19 @@ test("primary navigation uses consistent English labels", async () => {
   assert.match(source, /> Items/);
   assert.match(source, /> Notes/);
   assert.equal(/Conversación|Ítems|Notas|Pendientes/.test(source), false);
+});
+
+test("tag controls collapse multiple values to a no-wrap count", async () => {
+  const css = await read("src/index.css");
+  assert.equal(compactTagSummary([]), "No tags");
+  assert.equal(compactTagSummary(["AI"]), "AI");
+  assert.equal(compactTagSummary(["AI", "Client", "Urgent"]), "3 tags");
+  assert.match(css, /\.do-tag-picker select[\s\S]*white-space: nowrap/);
+  assert.match(css, /\.do-tag-picker select[\s\S]*text-overflow: ellipsis/);
+});
+
+test("project Team uses the dense caption tier", async () => {
+  const css = await read("src/index.css");
+  assert.match(css, /\.do-team-table select[\s\S]*height: 30px/);
+  assert.match(css, /\.do-team-table,[\s\S]*font-size: var\(--text-caption\) !important/);
 });
