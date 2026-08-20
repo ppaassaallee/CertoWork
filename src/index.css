@@ -487,6 +487,34 @@ button { color: inherit; }
 .do-team-access button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #c5d4c9; background: #f4f8f5; padding: 0 12px; color: #24513d; font-weight: 700; cursor: pointer; }
 .do-team-access button:disabled { opacity: .45; cursor: default; }
 .do-team-share-url { flex: 1 0 100%; color: #5e7266; font-size: calc(12px * var(--cw-text-scale)); word-break: break-all; }
+.do-docs-panel { gap: 10px; }
+.do-docs-heading { display: flex; align-items: center; justify-content: space-between; }
+.do-docs-heading h4, .do-docs-heading p { margin: 0; }
+.do-docs-heading h4 { color: #2f3f36; font: 650 calc(15px * var(--cw-text-scale)) "Manrope", sans-serif; }
+.do-docs-heading p { margin-top: 2px; color: #77847c; font-size: calc(12px * var(--cw-text-scale)); }
+.do-docs-heading > span { display: grid; min-width: 26px; height: 26px; place-items: center; border-radius: 999px; background: #e8f1eb; color: #315b44; font-size: calc(12px * var(--cw-text-scale)); font-weight: 750; }
+.do-docs-compose { display: grid; grid-template-columns: 140px minmax(180px, .8fr) minmax(220px, 1.2fr) auto; gap: 8px; }
+.do-docs-compose select, .do-docs-compose > input, .do-docs-file-button, .do-docs-compose > button { min-width: 0; height: 36px; border-radius: 8px; font-size: calc(13px * var(--cw-text-scale)); }
+.do-docs-compose select, .do-docs-compose > input { border: 1px solid #d5dfd8; background: #fff; padding: 0 10px; color: #314039; outline: none; }
+.do-docs-file-button { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #c5d4c9; background: #f4f8f5; padding: 0 12px; color: #24513d; font-weight: 700; cursor: pointer; }
+.do-docs-file-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.do-docs-compose > button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; background: #244f3c; padding: 0 14px; color: #fff; font-weight: 750; cursor: pointer; }
+.do-docs-compose > button:disabled { background: #dfe4e0; color: #929a95; cursor: default; }
+.do-docs-drive { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px solid #dce4de; border-radius: 10px; background: #f8faf8; padding: 10px 12px; }
+.do-docs-drive-label { display: flex; min-width: 180px; flex: 1; align-items: center; gap: 9px; color: #315944; }
+.do-docs-drive-label > span, .do-docs-drive-label strong, .do-docs-drive-label small { display: block; min-width: 0; }
+.do-docs-drive-label strong { color: #2f3f36; font-size: calc(13px * var(--cw-text-scale)); }
+.do-docs-drive-label small { margin-top: 1px; color: #7d8981; font-size: calc(11px * var(--cw-text-scale)); }
+.do-docs-drive-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.do-docs-drive-actions select, .do-docs-drive-actions button { height: 34px; border-radius: 8px; font-size: calc(12px * var(--cw-text-scale)); }
+.do-docs-drive-actions select { min-width: 170px; border: 1px solid #d5dfd8; background: #fff; padding: 0 9px; color: #314039; }
+.do-docs-drive-actions button { border: 1px solid #c5d4c9; background: #fff; padding: 0 10px; color: #24513d; font-weight: 700; cursor: pointer; }
+.do-docs-drive-actions button:first-child { border-color: #244f3c; background: #244f3c; color: #fff; }
+.do-docs-drive-actions button:disabled { opacity: .45; cursor: default; }
+.do-docs-drive > p { flex: 1 0 100%; margin: 0; color: #65756c; font-size: calc(11px * var(--cw-text-scale)); }
+.do-docs-list .do-project-empty { min-height: 130px; padding: 24px; background: #fbfcfb; }
+.do-docs-list .do-project-empty strong { font-size: calc(13px * var(--cw-text-scale)); }
+.do-docs-list .do-project-empty span { font-size: calc(12px * var(--cw-text-scale)); }
 .do-health-explainer { display: grid; grid-template-columns: minmax(0, 1fr) 210px; align-items: end; gap: 14px; border: 1px solid #dce6de; border-radius: 12px; background: #f2f7f3; padding: 13px; }
 .do-health-explainer h4 { margin: 3px 0; color: #315c44; font: 650 calc(16px * var(--cw-text-scale)) "Manrope", sans-serif; }
 .do-health-explainer p { margin: 0; color: #748178; font-size: calc(7.5px * var(--cw-text-scale)); line-height: 1.45; }
@@ -1784,6 +1812,11 @@ button { color: inherit; }
   .do-project-tabs { overflow-x: auto; padding: 0 5px; }
   .do-project-tabs button { flex: none; padding: 0 11px; }
   .do-project-record-body { padding: 11px; }
+  .do-docs-compose { grid-template-columns: 1fr 1fr; }
+  .do-docs-compose > input:nth-of-type(2), .do-docs-compose > button, .do-docs-file-button { grid-column: 1 / -1; }
+  .do-docs-drive { align-items: stretch; flex-direction: column; }
+  .do-docs-drive-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .do-docs-drive-actions select { grid-column: 1 / -1; }
   .do-project-overview { display: grid; grid-template-columns: 1fr; }
   .do-project-card-large { grid-row: auto; }
   .do-project-ai-card { grid-column: auto; }

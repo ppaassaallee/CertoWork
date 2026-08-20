@@ -106,3 +106,18 @@ test("project team panel is a short two-column table without hover tooltips", as
   assert.equal(/\.cw-info-tip:hover > span/.test(css), false);
   assert.match(tips, /createPortal/);
 });
+
+test("project Docs uses a compact structured panel instead of raw browser controls", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const [css, source] = await Promise.all([
+    readFile(new URL("../src/index.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8"),
+  ]);
+  const docsBlock = source.split('tab === "docs"')[1]?.split('tab === "codex"')[0] || "";
+  assert.match(docsBlock, /do-docs-compose/);
+  assert.match(docsBlock, /do-docs-drive/);
+  assert.match(docsBlock, /do-docs-file-button/);
+  assert.equal(docsBlock.includes("Optional Google Drive folder"), false);
+  assert.equal(docsBlock.includes("OneDrive connector has not been configured"), false);
+  assert.match(css, /\.do-docs-compose[\s\S]*height: 36px/);
+});

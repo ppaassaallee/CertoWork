@@ -91,7 +91,6 @@ import {
 } from "../lib/projectResources";
 import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
 import type { SprintRecord } from "../lib/sprints";
-import { usePlatformCapabilities } from "../lib/capabilities";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -1465,7 +1464,6 @@ export function ProjectConsolePanel({
   const [docUrl, setDocUrl] = useState("");
   const [docError, setDocError] = useState("");
   const [shareLink, setShareLink] = useState("");
-  const capabilities = usePlatformCapabilities();
   const [taskTitle, setTaskTitle] = useState("");
   const [workTitle, setWorkTitle] = useState("");
   const [workType, setWorkType] = useState<WorkItemKind>("pbi");
@@ -2684,8 +2682,15 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "docs" && (
-        <div className="do-console-section">
-          <div className="do-project-inline-add">
+        <div className="do-console-section do-docs-panel">
+          <header className="do-docs-heading">
+            <div>
+              <h4>Documents</h4>
+              <p>Files, notes, and links for this project.</p>
+            </div>
+            <span>{documents.length}</span>
+          </header>
+          <div className="do-docs-compose">
             <select aria-label="Document type" onChange={(event) => setDocType(event.target.value as typeof docType)} value={docType}>
               {PROJECT_RESOURCE_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>{type.label}</option>
@@ -2699,23 +2704,27 @@ export function ProjectConsolePanel({
               <input aria-label="Note body" onChange={(event) => setDocBody(event.target.value)} placeholder="Note" value={docBody} />
             )}
             {docType === "file" && (
-              <input
-                accept="*/*"
-                aria-label="Upload file up to 20 MB"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file || !onAddDocument) return;
-                  if (!isAllowedProjectResourceSize(file.size)) {
-                    setDocError(`Files must be ${Math.round(PROJECT_RESOURCE_MAX_BYTES / 1024 / 1024)} MB or smaller.`);
-                    return;
-                  }
-                  setDocError("");
-                  void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
-                  setDocTitle("");
-                  event.target.value = "";
-                }}
-                type="file"
-              />
+              <label className="do-docs-file-button">
+                <FileText size={13} />
+                <span>Choose file</span>
+                <input
+                  accept="*/*"
+                  aria-label="Upload file up to 20 MB"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file || !onAddDocument) return;
+                    if (!isAllowedProjectResourceSize(file.size)) {
+                      setDocError(`Files must be ${Math.round(PROJECT_RESOURCE_MAX_BYTES / 1024 / 1024)} MB or smaller.`);
+                      return;
+                    }
+                    setDocError("");
+                    void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
+                    setDocTitle("");
+                    event.target.value = "";
+                  }}
+                  type="file"
+                />
+              </label>
             )}
             {docType !== "file" && (
               <button
@@ -2743,14 +2752,17 @@ export function ProjectConsolePanel({
             )}
           </div>
           {docError && <p className="do-signin-error" role="alert">{docError}</p>}
-          <div className="do-console-section">
-            <strong>Optional Google Drive folder</strong>
-            <p className="do-composer-note">
-              Connect a Google account with Drive access, choose a root such as “Certo Projects”, then optionally create this project’s folder. Files stay in Drive unless you upload them here.
-            </p>
-            <div className="do-project-inline-add">
+          <section className="do-docs-drive">
+            <div className="do-docs-drive-label">
+              <FolderKanban size={16} />
+              <span>
+                <strong>Google Drive</strong>
+                <small>{project.externalFolderName || driveRoot?.name || (driveConnected ? "Connected" : "Not connected")}</small>
+              </span>
+            </div>
+            <div className="do-docs-drive-actions">
               <button onClick={() => void onConnectGoogleDrive?.()} type="button">
-                {driveConnected ? "Reconnect Google Drive" : "Connect Google Drive"}
+                {driveConnected ? "Reconnect" : "Connect"}
               </button>
               {driveFolders.length > 0 && (
                 <select
@@ -2772,19 +2784,12 @@ export function ProjectConsolePanel({
                 onClick={() => void onCreateProjectFolder?.()}
                 type="button"
               >
-                Create project folder
+                Create folder
               </button>
             </div>
-            {driveRoot && <small>Root folder: {driveRoot.name} ({driveRoot.id})</small>}
-            {project.externalFolderId && (
-              <small>Project folder ref: {project.externalFolderName || project.externalFolderId} ({project.externalFolderId})</small>
-            )}
-            {driveMessage && <p className="do-composer-note">{driveMessage}</p>}
-            {!capabilities.capabilities?.oneDrive?.configured && (
-              <p className="do-composer-note">OneDrive connector has not been configured. You can still paste a OneDrive link above.</p>
-            )}
-          </div>
-          <div className="do-console-list">
+            {driveMessage && <p>{driveMessage}</p>}
+          </section>
+          <div className="do-console-list do-docs-list">
             {documents.map((document) => {
               const content = String(
                 document.content || document.body || document.description || "",
@@ -2816,8 +2821,8 @@ export function ProjectConsolePanel({
             {documents.length === 0 && (
               <EmptyState
                 icon={<FileText size={18} />}
-                title="No docs yet"
-                text="Upload a file up to 20 MB, add a link, create a note, or paste a Drive / OneDrive URL."
+                title="No documents yet"
+                text="Choose a type above to add the first one."
               />
             )}
           </div>
