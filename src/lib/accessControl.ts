@@ -56,10 +56,14 @@ export function buildTaskAccessPatch({
   const explicitEmails = Array.isArray(task?.visibleToEmails)
     ? (task?.visibleToEmails as unknown[]).map((item) => normalizeAccessEmail(String(item)))
     : [];
+  const sharedWithUserIds = Array.isArray(task?.sharedWithUserIds)
+    ? (task?.sharedWithUserIds as unknown[]).map((item) => String(item))
+    : [];
   return {
     visibility: String(task?.visibility || "private"),
-    visibleToUserIds: unique([userId, ...explicitUserIds]),
+    visibleToUserIds: unique([userId, ...explicitUserIds, ...sharedWithUserIds]),
     visibleToEmails: unique([normalizeAccessEmail(email), ...explicitEmails]),
+    sharedWithUserIds: unique(sharedWithUserIds),
     assigneeIds,
     accessMemberIds: unique([
       activeWorkspaceMemberId(workspaceId, userId),
