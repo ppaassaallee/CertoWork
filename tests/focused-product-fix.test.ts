@@ -113,7 +113,7 @@ test("project Docs uses a compact structured panel instead of raw browser contro
     readFile(new URL("../src/index.css", import.meta.url), "utf8"),
     readFile(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8"),
   ]);
-  const docsBlock = source.split('tab === "docs"')[1]?.split('tab === "codex"')[0] || "";
+  const docsBlock = source.split("do-docs-panel")[1]?.split('tab === "codex"')[0] || "";
   assert.match(docsBlock, /do-docs-compose/);
   assert.match(docsBlock, /do-docs-drive/);
   assert.match(docsBlock, /do-docs-file-button/);
