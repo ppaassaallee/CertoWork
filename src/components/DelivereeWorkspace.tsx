@@ -2526,7 +2526,7 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     const issuedItemKeys: string[] = [];
-    instantiatedItems.forEach((item: any) => {
+    instantiatedItems.forEach((item: any, index: number) => {
       const taskRef = taskRefs.get(item.templateKey)!;
       const parentRef = item.parentTemplateKey
         ? taskRefs.get(item.parentTemplateKey)
