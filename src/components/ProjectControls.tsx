@@ -138,54 +138,6 @@ export function AliasProfileEditor({
   );
 }
 
-export function AliasProfileEditor({
-  alias,
-  emoji,
-  onAliasChange,
-  onEmojiChange,
-}: {
-  alias: string;
-  emoji: string;
-  onAliasChange: (value: string) => void;
-  onEmojiChange: (value: string) => void;
-}) {
-  return (
-    <div className="cw-alias-editor">
-      <label>
-        Alias
-        <input
-          maxLength={32}
-          onChange={(event) => onAliasChange(event.target.value)}
-          placeholder="How teammates should see you"
-          value={alias}
-        />
-      </label>
-      <div>
-        <span>Icon</span>
-        <div className="cw-emoji-choices">
-          {MEMBER_EMOJI_CHOICES.map((choice) => (
-            <button
-              className={emoji === choice ? "is-selected" : ""}
-              key={choice}
-              onClick={() => onEmojiChange(choice)}
-              type="button"
-            >
-              {choice}
-            </button>
-          ))}
-          <input
-            aria-label="Custom emoji"
-            maxLength={8}
-            onChange={(event) => onEmojiChange(event.target.value || DEFAULT_MEMBER_EMOJI)}
-            placeholder="+"
-            value={MEMBER_EMOJI_CHOICES.includes(emoji) ? "" : emoji}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function MultiAssigneePicker({
   members,
   selectedIds = [],
