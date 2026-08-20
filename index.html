@@ -25,7 +25,10 @@
       (function () {
         try {
           var size = localStorage.getItem("certoWorkTextSize");
-          document.documentElement.dataset.certoTextSize = size === "1" || size === "3" ? size : "2";
+          document.documentElement.dataset.certoTextSize =
+            size === "1" || size === "2" || size === "3" || size === "4" || size === "5"
+              ? size
+              : "2";
         } catch (error) {
           document.documentElement.dataset.certoTextSize = "2";
         }

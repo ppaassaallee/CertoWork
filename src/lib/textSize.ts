@@ -8,11 +8,11 @@ export const CERTO_TEXT_SIZE_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  { value: "1", label: "Super pequeño", description: "Máxima densidad" },
-  { value: "2", label: "Pequeño", description: "Balanceado" },
-  { value: "3", label: "Mediano", description: "Más legible" },
-  { value: "4", label: "Grande", description: "Lectura cómoda" },
-  { value: "5", label: "Extra grande", description: "Máxima legibilidad" },
+  { value: "1", label: "Compact", description: "More information" },
+  { value: "2", label: "Default", description: "Balanced" },
+  { value: "3", label: "Comfortable", description: "Easier reading" },
+  { value: "4", label: "Large", description: "High readability" },
+  { value: "5", label: "Extra large", description: "Maximum readability" },
 ];
 
 export function normalizeCertoTextSize(value: unknown): CertoTextSize {

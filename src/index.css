@@ -5,18 +5,31 @@
 
 :root {
   --cw-text-scale: 1;
-  font-family: "DM Sans", sans-serif;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", var(--font-body);
+  --text-h1: calc(24px * var(--cw-text-scale));
+  --text-h2: calc(20px * var(--cw-text-scale));
+  --text-h3: calc(16px * var(--cw-text-scale));
+  --text-h4: calc(14px * var(--cw-text-scale));
+  --text-body: calc(14px * var(--cw-text-scale));
+  --text-ui: calc(13px * var(--cw-text-scale));
+  --text-caption: calc(12px * var(--cw-text-scale));
+  --leading-heading: 1.2;
+  --leading-body: 1.5;
+  --control-sm: 32px;
+  --control-md: 36px;
+  font-family: var(--font-body);
   color: #1c211e;
   background: #f7f8f6;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
-:root[data-certo-text-size="1"] { --cw-text-scale: .92; }
-:root[data-certo-text-size="2"] { --cw-text-scale: 1.12; }
-:root[data-certo-text-size="3"] { --cw-text-scale: 1.28; }
-:root[data-certo-text-size="4"] { --cw-text-scale: 1.42; }
-:root[data-certo-text-size="5"] { --cw-text-scale: 1.56; }
+:root[data-certo-text-size="1"] { --cw-text-scale: .9; }
+:root[data-certo-text-size="2"] { --cw-text-scale: 1; }
+:root[data-certo-text-size="3"] { --cw-text-scale: 1.125; }
+:root[data-certo-text-size="4"] { --cw-text-scale: 1.25; }
+:root[data-certo-text-size="5"] { --cw-text-scale: 1.375; }
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; }
@@ -1505,7 +1518,7 @@ button { color: inherit; }
 .do-strategy-head h1 { display: inline; margin: 0 10px 0 0; color: #20382b; font: 650 calc(21px * var(--cw-text-scale)) "Manrope", sans-serif; letter-spacing: -.04em; }
 .do-strategy-head p { display: inline; margin: 0; color: #7c8981; font-size: calc(8px * var(--cw-text-scale)); }
 .do-strategy-head > div:last-child { display: flex; gap: 7px; }
-.do-strategy button { border: 1px solid #295841; border-radius: 8px; background: #295841; padding: 8px 11px; color: #fff; font: 750 calc(7.5px * var(--cw-text-scale)) Inter, sans-serif; cursor: pointer; }
+.do-strategy button { border: 1px solid #295841; border-radius: 8px; background: #295841; padding: 8px 11px; color: #fff; font: 700 calc(7.5px * var(--cw-text-scale)) var(--font-body); cursor: pointer; }
 .do-strategy button:disabled { cursor: not-allowed; opacity: .45; }
 .do-strategy button.is-secondary { border-color: #d9e3dc; background: #fff; color: #315e47; }
 .do-strategy-head button, .do-strategy-builder-actions button, .do-strategy-plan-list footer button, .do-boost-card > button, .do-prize-builder button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
@@ -1532,7 +1545,7 @@ button { color: inherit; }
 .do-strategy-form-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 8px; margin-top: 11px; }
 .do-strategy-form-grid .is-wide { grid-column: span 2; }
 .do-strategy label, .do-measure-builder label { display: grid; gap: 4px; min-width: 0; color: #728077; font-size: calc(6.5px * var(--cw-text-scale)); font-weight: 750; }
-.do-strategy input, .do-strategy select, .do-strategy textarea { min-width: 0; border: 1px solid #dae3dc; border-radius: 8px; background: #fcfdfc; padding: 8px 9px; color: #35483d; font: 500 calc(7.5px * var(--cw-text-scale)) Inter, sans-serif; outline: none; }
+.do-strategy input, .do-strategy select, .do-strategy textarea { min-width: 0; border: 1px solid #dae3dc; border-radius: 8px; background: #fcfdfc; padding: 8px 9px; color: #35483d; font: 500 calc(7.5px * var(--cw-text-scale)) var(--font-body); outline: none; }
 .do-strategy input, .do-strategy select { height: 34px; }
 .do-strategy input:focus, .do-strategy select:focus, .do-strategy textarea:focus { border-color: #78a088; box-shadow: 0 0 0 2px rgba(71, 126, 91, .08); }
 .do-strategy-builder-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
@@ -1835,4 +1848,186 @@ button { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Certo Work typography and control language.
+   These rules intentionally come last so live surfaces share one hierarchy. */
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) {
+  font-family: var(--font-body);
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) h1 {
+  margin-block: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: 600;
+  line-height: var(--leading-heading);
+  letter-spacing: -.035em;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) h2 {
+  margin-block: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: 600;
+  line-height: var(--leading-heading);
+  letter-spacing: -.025em;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) h3 {
+  margin-block: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: 600;
+  line-height: var(--leading-heading);
+  letter-spacing: -.02em;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) h4 {
+  margin-block: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h4);
+  font-weight: 600;
+  line-height: var(--leading-heading);
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) p {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal) :is(button, input, select, textarea, label) {
+  font-family: var(--font-body);
+  font-size: var(--text-ui);
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal) button {
+  font-weight: 600;
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal) :is(input, select, textarea) {
+  font-weight: 400;
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal) label {
+  font-weight: 600;
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal) small {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+.do-shell strong {
+  font-family: var(--font-body);
+  font-size: var(--text-ui);
+  font-weight: 600;
+}
+
+:is(.do-kicker, .do-section-head, .do-project-card-kicker, .do-context-eyebrow, .do-panel-head > div > span, .do-command-head .do-project-card-kicker) {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+:is(
+  .do-breadcrumb,
+  .do-assistant-name,
+  .do-inline-context,
+  .do-composer-context,
+  .do-context-section-label,
+  .do-project-pulse span,
+  .do-items-when,
+  .do-items-summary span,
+  .do-items-title > span,
+  .do-console-metrics span,
+  .do-command-metrics span,
+  .do-strategy-metrics span,
+  .do-strategy-metrics small,
+  .do-workspace-admin-card label,
+  .do-member-list em,
+  .do-team-list small
+) {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+:is(
+  .do-user-message,
+  .do-rich-text,
+  .do-panel-intro,
+  .do-project-card-copy,
+  .do-console-hero p,
+  .do-notes-paper textarea
+) {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+
+.do-shell :is(th, .do-command-table-head, .do-items-head) {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+
+.do-shell :is(td, .do-console-list article, .do-panel-list button, .do-items-row) {
+  font-family: var(--font-body);
+  font-size: var(--text-ui);
+}
+
+:is(.do-console-metrics, .do-command-metrics, .do-strategy-metrics, .do-cost-summary-grid) strong {
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  font-weight: 600;
+}
+
+.do-signin-copy h1 {
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 500;
+  line-height: .92;
+}
+
+.do-welcome h1 {
+  font-size: clamp(28px, 4vw, 42px);
+}
+
+.do-notes-editor > header input {
+  font-family: var(--font-display);
+  font-size: var(--text-h1);
+  font-weight: 600;
+}
+
+.do-icon-button,
+.do-header-button.is-icon-only {
+  display: inline-grid;
+  width: var(--control-sm);
+  min-width: var(--control-sm);
+  height: var(--control-sm);
+  place-items: center;
+  gap: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+}
+
+.do-header-button.is-icon-only small {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+}
+
+.do-header-button.is-icon-only {
+  position: relative;
+}
+
+:is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid #3f7659;
+  outline-offset: 2px;
 }

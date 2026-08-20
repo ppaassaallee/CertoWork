@@ -1763,14 +1763,17 @@ export function ProjectConsolePanel({
           <option value="hybrid">Hybrid</option>
         </select>
         <button
+          aria-label="Ask Certo Work for a project update"
+          className="do-icon-button"
           onClick={() =>
             onAsk(
               `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
             )
           }
+          title="Ask for project update"
           type="button"
         >
-          <MessageSquare size={13} /> Ask
+          <MessageSquare size={14} />
         </button>
       </div>
 
@@ -5482,8 +5485,14 @@ export function ProjectCommandCenter({
                 ))}
               </select>
             </label>
-            <button onClick={exportPortfolioPdf} type="button">
-              <FileText size={12} /> Export PDF
+            <button
+              aria-label="Export portfolio PDF"
+              className="do-icon-button"
+              onClick={exportPortfolioPdf}
+              title="Export PDF"
+              type="button"
+            >
+              <FileText size={14} />
             </button>
             {view === "overview" && (
               <div className="do-table-scroll-buttons" aria-label="Move portfolio table horizontally">

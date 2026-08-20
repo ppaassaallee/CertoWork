@@ -3821,7 +3821,8 @@ export function DelivereeWorkspace() {
           <div className="do-header-actions">
             {routeOrPrimaryProject && (
               <button
-                className={`do-header-button ${centerView === "project" ? "is-active" : ""}`}
+                aria-label="Project console"
+                className={`do-header-button is-icon-only ${centerView === "project" ? "is-active" : ""}`}
                 onClick={() => {
                   setProjectConsoleId(routeOrPrimaryProject.id);
                   setPanel(null);
@@ -3829,44 +3830,48 @@ export function DelivereeWorkspace() {
                     centerView === "project" ? "conversation" : "project",
                   );
                 }}
+                title="Project console"
                 type="button"
               >
                 <Folder size={15} />
-                <span>Project console</span>
               </button>
             )}
             <button
-              className={`do-header-button ${panel === "skills" ? "is-active" : ""}`}
+              aria-label="Skills"
+              className={`do-header-button is-icon-only ${panel === "skills" ? "is-active" : ""}`}
               onClick={() => setPanel(panel === "skills" ? null : "skills")}
+              title="Skills"
               type="button"
             >
               <WandSparkles size={15} />
-              <span>Skills</span>
             </button>
             <button
-              className={`do-header-button ${panel === "digest" ? "is-active" : ""}`}
+              aria-label="Digest"
+              className={`do-header-button is-icon-only ${panel === "digest" ? "is-active" : ""}`}
               onClick={() => setPanel(panel === "digest" ? null : "digest")}
+              title="Digest"
               type="button"
             >
               <Mail size={15} />
-              <span>Digest</span>
             </button>
             <button
-              className="do-header-button"
+              aria-label="Today"
+              className="do-header-button is-icon-only"
               onClick={() => setPanel("today")}
+              title="Today"
               type="button"
             >
               <ListTodo size={15} />
-              <span>Today</span>
               {todayTasks.length > 0 && <small>{todayTasks.length}</small>}
             </button>
             <button
-              className="do-header-button"
+              aria-label="Pending changes"
+              className="do-header-button is-icon-only"
               onClick={() => setPanel("approvals")}
+              title="Pending changes"
               type="button"
             >
               <ShieldCheck size={15} />
-              <span>Pendientes</span>
               {reviewItems.length > 0 && (
                 <small className="is-attention">{reviewItems.length}</small>
               )}
@@ -3935,7 +3940,7 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <MessageSquare size={13} /> Conversación
+              <MessageSquare size={13} /> Conversation
             </button>
             <button
               aria-selected={centerView === "items"}
@@ -3944,7 +3949,7 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <ListTodo size={13} /> Ítems
+              <ListTodo size={13} /> Items
             </button>
             <button
               aria-selected={centerView === "notes"}
@@ -3953,7 +3958,7 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <BookOpen size={13} /> Notas
+              <BookOpen size={13} /> Notes
             </button>
             <button
               aria-selected={centerView === "strategy"}
@@ -4483,7 +4488,7 @@ export function DelivereeWorkspace() {
                           ? "Workspace & team"
                           : panel === "settings"
                             ? "Settings"
-                          : "Pendientes"}
+                          : "Pending changes"}
             </h2>
           </div>
           <button
