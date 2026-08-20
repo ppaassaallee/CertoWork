@@ -82,3 +82,12 @@ test("public status snapshots only include report fields", () => {
   assert.equal("secret" in snapshot, false);
   assert.ok(Array.isArray(snapshot.epics));
 });
+
+test("items view switcher buttons size to their labels instead of a 30px icon box", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const css = await readFile(new URL("../src/index.css", import.meta.url), "utf8");
+  const block = css.match(/\.do-items-mode button \{[^}]+\}/)?.[0] || "";
+  assert.match(block, /inline-flex/);
+  assert.match(block, /white-space: nowrap/);
+  assert.equal(/width:\s*30px/.test(block), false);
+});
