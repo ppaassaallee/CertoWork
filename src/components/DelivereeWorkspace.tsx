@@ -124,6 +124,7 @@ import {
   isAllowedProjectResourceSize,
 } from "../lib/projectResources";
 import { canDeleteProject } from "../lib/projectPermissions";
+import { isModernWorkItemKey, nextWorkItemKey } from "../lib/workItemKey";
 import type { SprintRecord } from "../lib/sprints";
 import { createShareToken, buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../lib/projectStatusReport";
 import {
@@ -2524,7 +2525,8 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    instantiatedItems.forEach((item: any, index: number) => {
+    const issuedItemKeys: string[] = [];
+    instantiatedItems.forEach((item: any) => {
       const taskRef = taskRefs.get(item.templateKey)!;
       const parentRef = item.parentTemplateKey
         ? taskRefs.get(item.parentTemplateKey)
@@ -2534,6 +2536,11 @@ export function DelivereeWorkspace() {
         : null;
       const parentKind = String(parentTemplate?.workItemType || "");
       const canonicalType = String(item.workItemType || "pbi").toLowerCase();
+      const itemKey = nextWorkItemKey([
+        ...tasks.map((task) => task.key || task.workItemKey),
+        ...issuedItemKeys,
+      ]);
+      issuedItemKeys.push(itemKey);
       batch.set(taskRef, {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -2547,7 +2554,7 @@ export function DelivereeWorkspace() {
         title: item.title,
         normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
         description: item.description || "",
-        key: `${projectWorkKey({ title: application.title })}-${index + 1}`,
+        key: itemKey,
         type: canonicalType,
         workItemType: canonicalType,
         itemType: canonicalType,
@@ -3148,19 +3155,10 @@ export function DelivereeWorkspace() {
     patch: Record<string, unknown> = {},
   ) => {
     if (!user || !workspace) return;
-    const project = projects.find((item) => item.id === projectId);
-    const prefix = projectId ? projectWorkKey(project) : "TASK";
-    const nextSequence =
-      tasks
-        .filter((item) =>
-          projectId ? item.projectId === projectId : !item.projectId,
-        )
-        .reduce((maximum, item) => {
-          const match = String(item.key || item.workItemKey || "").match(
-            /-(\d+)$/,
-          );
-          return Math.max(maximum, match ? Number(match[1]) : 0);
-        }, 0) + 1;
+    const requestedKey = String(patch.key || "").trim().toUpperCase();
+    const key = isModernWorkItemKey(requestedKey)
+      ? requestedKey
+      : nextWorkItemKey(tasks.map((item) => item.key || item.workItemKey));
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
@@ -3177,7 +3175,7 @@ export function DelivereeWorkspace() {
       }),
       title,
       normalizedTitle: title.trim().toLowerCase().replace(/\s+/g, " "),
-      key: String(patch.key || `${prefix}-${nextSequence}`),
+      key,
       type: canonicalType,
       workItemType: canonicalType,
       itemType: canonicalType,
@@ -3339,7 +3337,6 @@ export function DelivereeWorkspace() {
       draft.firstAction.trim().slice(0, 500),
       "backlog",
       {
-        key: `${projectWorkKey({ title: draft.title })}-1`,
         source: "project_wizard",
         priority: "1",
         dueDate: targetDate || null,
