@@ -2031,3 +2031,79 @@ button { color: inherit; }
   outline: 2px solid #3f7659;
   outline-offset: 2px;
 }
+
+/* Enforce the live-system floor after legacy component rules.
+   Exceptions below restore semantic display roles. */
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) {
+  font-size: var(--text-body);
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal)
+  :is(span, strong, em, time, code, button, input, select, textarea, label, th, td) {
+  font-family: var(--font-body) !important;
+  font-size: var(--text-ui) !important;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal) p {
+  font-size: var(--text-body) !important;
+}
+
+:is(.do-shell, .do-signin, .do-clean-modal, .do-skill-modal)
+  :is(small, small *, .do-kicker, .do-kicker *, .do-section-head, .do-section-head *, .do-project-card-kicker, .do-project-card-kicker *, .do-context-eyebrow, .do-context-eyebrow *, .do-context-section-label) {
+  font-size: var(--text-caption) !important;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal)
+  :is(h1, h1 *) {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h1) !important;
+  font-weight: 600 !important;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal)
+  :is(h2, h2 *) {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h2) !important;
+  font-weight: 600 !important;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal)
+  :is(h3, h3 *) {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h3) !important;
+  font-weight: 600 !important;
+}
+
+:is(.do-shell, .do-signin, .do-loading, .do-recovery, .do-clean-modal, .do-skill-modal)
+  :is(h4, h4 *) {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h4) !important;
+  font-weight: 600 !important;
+}
+
+:is(.do-console-metrics, .do-command-metrics, .do-strategy-metrics, .do-cost-summary-grid) strong {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h3) !important;
+  font-weight: 600 !important;
+}
+
+.do-signin-copy :is(h1, h1 *) {
+  font-size: clamp(48px, 7vw, 96px) !important;
+  font-weight: 500 !important;
+}
+
+.do-welcome :is(h1, h1 *) {
+  font-size: clamp(28px, 4vw, 42px) !important;
+}
+
+:is(.do-notes-editor > header input, .do-console-hero > div > input) {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h1) !important;
+  font-weight: 600 !important;
+}
+
+.do-item-detail > input {
+  font-family: var(--font-display) !important;
+  font-size: var(--text-h2) !important;
+  font-weight: 600 !important;
+}

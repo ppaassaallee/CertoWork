@@ -18,6 +18,8 @@ test("live typography exposes one semantic hierarchy", async () => {
   assert.match(css, /--text-ui: calc\(13px/);
   assert.match(css, /--text-caption: calc\(12px/);
   assert.equal(css.includes("Inter, sans-serif"), false);
+  assert.match(css, /font-size: var\(--text-ui\) !important/);
+  assert.match(css, /font-size: var\(--text-caption\) !important/);
 });
 
 test("all five text sizes survive startup and use one language", async () => {
