@@ -115,6 +115,13 @@ type PortfolioColumnKey =
   | "stage"
   | "phase"
   | "status"
+  | "source_status"
+  | "contact"
+  | "qa_plan"
+  | "days_to_prod"
+  | "june_usd"
+  | "july_usd"
+  | "total_usd"
   | "health"
   | "progress"
   | "due"
@@ -133,9 +140,16 @@ const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   stage: "Stage",
   phase: "Phase",
   status: "Status",
+  source_status: "ESTADO",
+  contact: "OWNER / POC",
+  qa_plan: "QA PLAN",
+  days_to_prod: "DÍAS A PROD",
+  june_usd: "JUN USD",
+  july_usd: "JUL USD",
+  total_usd: "TOTAL USD",
   health: "Health",
   progress: "Progress",
-  due: "Due",
+  due: "PROD PLAN",
   solution_architect: "Solution Architect",
   project_manager: "Project Manager",
   economics: "Economics",
@@ -152,9 +166,16 @@ const defaultPortfolioColumns: PortfolioColumnKey[] = [
   "stage",
   "phase",
   "status",
+  "source_status",
+  "contact",
+  "qa_plan",
+  "days_to_prod",
   "health",
   "progress",
   "due",
+  "june_usd",
+  "july_usd",
+  "total_usd",
   "solution_architect",
   "project_manager",
   "economics",
@@ -171,6 +192,13 @@ const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
   stage: "105px",
   phase: "120px",
   status: "105px",
+  source_status: "140px",
+  contact: "150px",
+  qa_plan: "120px",
+  days_to_prod: "110px",
+  june_usd: "110px",
+  july_usd: "110px",
+  total_usd: "120px",
   health: "120px",
   progress: "100px",
   due: "130px",
@@ -211,7 +239,7 @@ function clampColumnWidth(value: number) {
 
 function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
   const current = value?.length ? [...value] : [...fallback];
-  (["work_category", "product_phase"] as T[]).forEach((column) => {
+  (["work_category", "product_phase", "source_status", "contact", "qa_plan", "days_to_prod", "june_usd", "july_usd", "total_usd"] as T[]).forEach((column) => {
     if (fallback.includes(column) && !current.includes(column)) current.push(column);
   });
   return fallback.filter((column) => current.includes(column));
@@ -4429,6 +4457,13 @@ function projectDueDate(project: any) {
   );
 }
 
+function projectMoney(value: unknown) {
+  if (value == null || value === "") return "—";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function projectSortValue(
   project: any,
   key: ProjectSortKey,
@@ -5891,6 +5926,16 @@ export function ProjectCommandCenter({
                     text="Administrative record state: Planning, Active, Paused, Completed or Archived."
                   />
                 </span>}
+                {columnSet.has("source_status") && <span>
+                  ESTADO{" "}
+                  <InfoTip
+                    label="ESTADO"
+                    text="Executive workbook status from the August 2026 master."
+                  />
+                </span>}
+                {columnSet.has("contact") && <span>OWNER / POC</span>}
+                {columnSet.has("qa_plan") && <span>QA PLAN</span>}
+                {columnSet.has("days_to_prod") && <span>DÍAS A PROD</span>}
                 {columnSet.has("health") && <span>
                   Health{" "}
                   <InfoTip
@@ -5906,12 +5951,15 @@ export function ProjectCommandCenter({
                   />
                 </span>}
                 {columnSet.has("due") && <span>
-                  Due{" "}
+                  PROD PLAN{" "}
                   <InfoTip
-                    label="Due date"
-                    text="Editable delivery date. A revised date is used when one exists."
+                    label="PROD PLAN"
+                    text="Committed production date from the executive workbook."
                   />
                 </span>}
+                {columnSet.has("june_usd") && <span>JUN USD</span>}
+                {columnSet.has("july_usd") && <span>JUL USD</span>}
+                {columnSet.has("total_usd") && <span>TOTAL USD</span>}
                 {columnSet.has("solution_architect") && <span>
                   Solution Architect{" "}
                   <InfoTip
@@ -6184,6 +6232,22 @@ export function ProjectCommandCenter({
                         ))}
                       </select>
                       )}
+                      {columnSet.has("source_status") && (
+                        <span>{project.sourceStatus || project.excel?.estado || "—"}</span>
+                      )}
+                      {columnSet.has("contact") && (
+                        <span>{project.contact || project.projectManager || "—"}</span>
+                      )}
+                      {columnSet.has("qa_plan") && (
+                        <span>{String(project.qaPlanDate || project.excel?.qaPlan || "").slice(0, 10) || "—"}</span>
+                      )}
+                      {columnSet.has("days_to_prod") && (
+                        <span>
+                          {project.daysToProd == null && project.excel?.diasAProd == null
+                            ? "—"
+                            : String(project.daysToProd ?? project.excel?.diasAProd)}
+                        </span>
+                      )}
                       {columnSet.has("health") && (
                       <select
                         aria-label={`Health for ${projectTitle(project)}`}
@@ -6252,6 +6316,15 @@ export function ProjectCommandCenter({
                         }
                         type="date"
                       />
+                      )}
+                      {columnSet.has("june_usd") && (
+                        <span>{projectMoney(project.juneUsd ?? project.excel?.junUsd)}</span>
+                      )}
+                      {columnSet.has("july_usd") && (
+                        <span>{projectMoney(project.julyUsd ?? project.excel?.julUsd)}</span>
+                      )}
+                      {columnSet.has("total_usd") && (
+                        <span>{projectMoney(project.totalUsd ?? project.excel?.totalUsd)}</span>
                       )}
                       {columnSet.has("solution_architect") && (
                       <select
