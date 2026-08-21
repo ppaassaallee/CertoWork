@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { collection, query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrProject, PIPELINE_STAGES, getPhaseForStage, PipelineStage } from './types';
-import { Plus, GripVertical } from 'lucide-react';
+import { Plus, GripVertical } from "../ui/Icon";
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 const PHASES = [

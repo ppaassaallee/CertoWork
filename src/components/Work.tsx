@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { ChevronRight, CheckSquare, Folders, HelpCircle, BrainCircuit, BookOpen, Users, Brain, MessageSquare, Briefcase, Rocket } from "lucide-react";
+import { ChevronRight, CheckSquare, Folders, HelpCircle, BrainCircuit, BookOpen, Users, Brain, MessageSquare, Briefcase, Rocket } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";

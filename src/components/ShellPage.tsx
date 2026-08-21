@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, HardHat } from "lucide-react";
+import { ArrowLeft, HardHat } from "./ui/Icon";
 
 export function ShellPage({ title, entityName }: { title: string, entityName: string }) {
   return (

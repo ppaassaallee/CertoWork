@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bug, Lock, Plus, Settings2, X } from "lucide-react";
+import { ArrowLeft, Bug, Lock, Plus, Settings2, X } from "./ui/Icon";
 import {
   controlledListLabels,
   controlledOptions,

@@ -3,7 +3,7 @@ import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Folder, FileText, Search, Plus, SlidersHorizontal, BookOpen, Clock, Tag, BrainCircuit, Paperclip, Network } from "lucide-react";
+import { Folder, FileText, Search, Plus, SlidersHorizontal, BookOpen, Clock, Tag, BrainCircuit, Paperclip, Network } from "./ui/Icon";
 import { motion } from "motion/react";
 import { SkillsLibrary } from "./SkillsLibrary";
 import { PlaybooksList } from "./PlaybooksList";

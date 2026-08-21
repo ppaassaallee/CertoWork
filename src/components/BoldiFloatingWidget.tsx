@@ -5,7 +5,7 @@ import {
   Sparkles, Bot, Send, Mic, MicOff, Loader2, Check, X, ShieldAlert, Cpu, 
   History, ChevronRight, Undo, Maximize2, Minimize2, Settings, Lock, Unlock, RefreshCw,
   BookOpen, Download
-} from "lucide-react";
+} from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { 
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, 

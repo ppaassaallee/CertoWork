@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckSquare, Square, Info } from "lucide-react";
+import { CheckSquare, Square, Info } from "../ui/Icon";
 import { STARTER_HABITS_LIST, StarterHabitDefinition } from "../../lib/habits";
 
 interface StarterHabitsConfigProps {

@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Dot, ShieldMinus, AlertCircle } from "lucide-react";
+import { Check, Dot, ShieldMinus, AlertCircle } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { isHabitDueOnDate } from "../../lib/habitUtils";
 

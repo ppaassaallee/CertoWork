@@ -18,10 +18,11 @@ test("legacy and new routes resolve into one conversational lens", () => {
     kind: "work",
     section: "issues",
   });
-  assert.deepEqual(resolveDelivereeLens("/capture/review"), { kind: "review" });
+  assert.deepEqual(resolveDelivereeLens("/capture/review"), { kind: "approvals" });
   assert.deepEqual(resolveDelivereeLens("/work/projects/project-123"), {
     kind: "project",
     projectId: "project-123",
+    tab: "overview",
   });
 });
 

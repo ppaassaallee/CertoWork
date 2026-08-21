@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Sparkles, Loader2, Check } from "lucide-react";
+import { X, Sparkles, Loader2, Check } from "./ui/Icon";
 import { addDoc, collection, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion } from "motion/react";

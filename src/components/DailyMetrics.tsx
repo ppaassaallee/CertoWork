@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Scale, Zap, Moon, Heart, Activity, Loader2, Save, ChevronLeft, ChevronRight, TrendingUp } from "lucide-react";
+import { Scale, Zap, Moon, Heart, Activity, Loader2, Save, ChevronLeft, ChevronRight, TrendingUp } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { db } from "../lib/firebase";
 import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";
