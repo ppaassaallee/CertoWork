@@ -1,0 +1,244 @@
+/**
+ * Certo Calm Authority — design tokens (single source of truth).
+ * Components must use these variables; do not introduce raw hex in UI chrome.
+ */
+:root {
+  /* Neutrals — ~95% of every screen */
+  --surface-0: #ffffff;
+  --surface-1: #f7f8f7;
+  --surface-2: #eff1ef;
+  --border: #e3e6e3;
+  --text-primary: #1a1f1c;
+  --text-secondary: #5b645f;
+  --text-muted: #8a938d;
+
+  /* Brand accent — max ~5% of any screen */
+  --accent: #1e4633;
+  --accent-hover: #163828;
+  --accent-soft: #e7efea;
+  --accent-on: #ffffff;
+
+  /* Semantic status — status only, never decoration */
+  --status-success: #1f7a45;
+  --status-success-soft: #e6f4ec;
+  --status-warning: #b07500;
+  --status-warning-soft: #fbf3e0;
+  --status-danger: #c2352b;
+  --status-danger-soft: #fcebe9;
+  --status-info: #2563eb;
+  --status-info-soft: #eff6ff;
+  --status-neutral: #8a938d;
+  --status-neutral-soft: #eff1ef;
+
+  /* Legacy aliases → Calm Authority (keep older CSS compiling) */
+  --status-green: var(--status-success);
+  --status-amber: var(--status-warning);
+  --status-red: var(--status-danger);
+  --status-blue: var(--status-info);
+  --status-gray: var(--status-neutral);
+  --status-green-bg: var(--status-success-soft);
+  --status-amber-bg: var(--status-warning-soft);
+  --status-red-bg: var(--status-danger-soft);
+  --status-blue-bg: var(--status-info-soft);
+  --status-gray-bg: var(--status-neutral-soft);
+
+  /* Typography — Inter workhorse, 1.25 scale */
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-body);
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --cw-text-scale: 1;
+  --text-caption: calc(0.75rem * var(--cw-text-scale)); /* 12 */
+  --text-body-sm: calc(0.8125rem * var(--cw-text-scale)); /* 13 */
+  --text-body: calc(0.875rem * var(--cw-text-scale)); /* 14 */
+  --text-body-lg: calc(1rem * var(--cw-text-scale)); /* 16 */
+  --text-h4: calc(1.125rem * var(--cw-text-scale)); /* 18 */
+  --text-h3: calc(1.375rem * var(--cw-text-scale)); /* 22 */
+  --text-h2: calc(1.75rem * var(--cw-text-scale)); /* 28 */
+  --text-h1: calc(2.125rem * var(--cw-text-scale)); /* 34 */
+  --text-eyebrow: calc(0.6875rem * var(--cw-text-scale)); /* 11 */
+
+  --leading-body: 1.5;
+  --leading-heading: 1.25;
+
+  /* Spacing — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --page-gutter: var(--space-5);
+  --content-max: 1440px;
+  --card-pad-compact: var(--space-4);
+  --card-pad: var(--space-5);
+
+  /* Radius */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-modal: 16px;
+  --radius-pill: 999px;
+
+  /* Elevation — borders first; shadows only for overlays */
+  --shadow-sm: 0 8px 20px rgba(26, 31, 28, 0.08);
+  --shadow-md: 0 16px 40px rgba(26, 31, 28, 0.14);
+
+  /* Controls */
+  --control-sm: 32px;
+  --control-md: 40px;
+  --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent);
+
+  /* Shell aliases used across legacy rules */
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border);
+  --paper: var(--surface-0);
+  --green: var(--accent);
+  --nav-home: var(--status-warning);
+  --nav-work: var(--status-info);
+  --nav-approvals: var(--status-warning);
+  --nav-settings: var(--status-neutral);
+
+  /* Compatibility with older text token names */
+  --text-ui: var(--text-body-sm);
+
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--surface-1);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "tnum" 1;
+}
+
+:root[data-certo-text-size="1"] { --cw-text-scale: 0.9; }
+:root[data-certo-text-size="2"] { --cw-text-scale: 1; }
+:root[data-certo-text-size="3"] { --cw-text-scale: 1.125; }
+:root[data-certo-text-size="4"] { --cw-text-scale: 1.25; }
+:root[data-certo-text-size="5"] { --cw-text-scale: 1.375; }
+
+/* ——— Primitives (forbid one-offs that bypass these) ——— */
+
+.cw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  padding: 0 var(--space-4);
+  font-size: var(--text-body-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
+}
+.cw-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.cw-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cw-btn-sm { min-height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-caption); }
+.cw-btn-primary {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.cw-btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.cw-btn-secondary {
+  background: var(--surface-0);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.cw-btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.cw-btn-tertiary {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.cw-btn-tertiary:hover:not(:disabled) { background: var(--surface-2); color: var(--text-primary); }
+.cw-btn-destructive {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+  border-color: transparent;
+}
+.cw-btn-destructive:hover:not(:disabled) { background: var(--status-danger); color: #fff; }
+
+.cw-input,
+.cw-select {
+  height: var(--control-md);
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-0);
+  padding: 0 var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  outline: none;
+}
+.cw-input:focus,
+.cw-select:focus { box-shadow: var(--focus-ring); border-color: var(--accent); }
+.cw-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A938D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}
+
+.cw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-0);
+  padding: 0 var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-medium);
+}
+.cw-chip-success { background: var(--status-success-soft); border-color: transparent; color: var(--status-success); }
+.cw-chip-warning { background: var(--status-warning-soft); border-color: transparent; color: var(--status-warning); }
+.cw-chip-danger { background: var(--status-danger-soft); border-color: transparent; color: var(--status-danger); }
+
+.cw-eyebrow {
+  color: var(--text-muted);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cw-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+  color: var(--text-secondary);
+}
+.cw-empty strong { color: var(--text-primary); font-weight: var(--font-weight-semibold); font-size: var(--text-body-lg); }
+.cw-empty span { max-width: 36ch; font-size: var(--text-body-sm); line-height: var(--leading-body); }
+
+.cw-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-0);
+  padding: var(--card-pad);
+}
+.cw-card-compact { padding: var(--card-pad-compact); }
+
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
