@@ -78,6 +78,26 @@ import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
 import { t } from "../lib/i18n";
 import {
+  dateKey,
+  displayName,
+  entityTitle,
+  findMatchingProject,
+  inviteMessage,
+  initials,
+  isClosed,
+  localDateKey,
+  priorityLabel,
+  projectWorkKey,
+  proposalChipLabel,
+  proposedTitle,
+  reviewTypeForAction,
+  reviewTypeLabel,
+  timeAgo,
+  timestamp,
+} from "../lib/workspaceDisplay";
+import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
+import { HomeAttention } from "../pages/HomeAttention";
+import {
   conversationIncludesProject,
   conversationProjectIds,
   conversationScopeLabel,
@@ -216,360 +236,6 @@ type CenterView =
   | "strategy"
   | "portfolio"
   | "project";
-
-function timestamp(value: any) {
-  if (value?.seconds)
-    return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
-  return typeof value === "number" ? value : 0;
-}
-
-function timeAgo(value: any) {
-  const delta = Math.max(0, Date.now() - timestamp(value));
-  const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-function initials(name?: string | null) {
-  const source = name?.trim() || "D";
-  return source
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-function inviteMessage(invite: any) {
-  const email = invite.email || invite.emailLower || "your invited email";
-  const token = invite.inviteToken ? `/invite/${invite.inviteToken}` : "";
-  return `You have been invited to Certo Work. Open https://certo.work${token || ""} and activate your account using this exact email: ${email}. Set your password, then sign out and sign back in with those credentials.`;
-}
-
-function displayName(name?: string | null) {
-  return name?.trim().split(/\s+/)[0] || "there";
-}
-
-function entityTitle(entity: any) {
-  return entity?.title || entity?.name || "Untitled";
-}
-
-function isGenericProjectTitle(value: any) {
-  return [
-    "create a project",
-    "crear un proyecto",
-    "new project",
-    "nuevo proyecto",
-    "project",
-    "proyecto",
-    "help me create a project",
-  ].includes(
-    String(value || "")
-      .trim()
-      .toLowerCase(),
-  );
-}
-
-function proposedTitle(proposed: any, fallback: any) {
-  const proposedValue = String(proposed?.title || proposed?.name || "").trim();
-  if (proposedValue && !isGenericProjectTitle(proposedValue))
-    return proposedValue;
-  const fallbackValue = String(fallback || "").trim();
-  if (fallbackValue && !isGenericProjectTitle(fallbackValue))
-    return fallbackValue;
-  return proposedValue || fallbackValue || "Untitled";
-}
-
-function projectWorkKey(project: any) {
-  const explicit = String(project?.projectKey || project?.key || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-  if (explicit) return explicit.slice(0, 10);
-  const words = String(project?.title || project?.name || "WORK")
-    .toUpperCase()
-    .match(/[A-Z0-9]+/g) || ["WORK"];
-  const initials = words.map((word) => word[0]).join("");
-  return (initials.length >= 2 ? initials : words[0].slice(0, 5)).slice(0, 6);
-}
-
-function isClosed(status?: string) {
-  return ["done", "completed", "closed", "archived", "cancelled"].includes(
-    String(status || "").toLowerCase(),
-  );
-}
-
-function localDateKey(value: Date) {
-  return [
-    value.getFullYear(),
-    String(value.getMonth() + 1).padStart(2, "0"),
-    String(value.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function dateKey(value: any) {
-  if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
-  if (value?.toDate) return localDateKey(value.toDate());
-  if (value?.seconds) return localDateKey(new Date(value.seconds * 1000));
-  return "";
-}
-
-function priorityLabel(value: any) {
-  const normalized = String(value || "").toLowerCase();
-  if (["urgent", "critical", "p0", "p1", "high", "1"].includes(normalized))
-    return "Priority 1";
-  if (["p2", "medium", "2"].includes(normalized)) return "Priority 2";
-  if (["p3", "low", "3"].includes(normalized)) return "Priority 3";
-  return "N/A";
-}
-
-function reviewTypeForAction(type?: string) {
-  const types: Record<string, string> = {
-    create_project: "project",
-    update_project: "project_update",
-    create_project_artifact: "knowledge",
-    create_milestone: "milestone",
-    update_milestone: "milestone_update",
-    create_risk: "risk",
-    update_risk: "risk_update",
-    update_task: "task_update",
-    reschedule_task: "task_update",
-    post_to_conversation: "conversation_message",
-    outbox_communication: "digest_request",
-  };
-  return types[String(type || "")] || "task";
-}
-
-function normalizedEntityName(value: any) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function findMatchingProject(
-  projects: any[],
-  proposed: any,
-  fallbackProjectId = "",
-) {
-  const explicitId = String(
-    proposed?.projectId || proposed?.id || fallbackProjectId || "",
-  );
-  if (explicitId) {
-    const direct = projects.find((project) => project.id === explicitId);
-    if (direct) return direct;
-  }
-  const proposedTitle = normalizedEntityName(
-    proposed?.title ||
-      proposed?.name ||
-      proposed?.projectTitle ||
-      proposed?.projectName,
-  );
-  if (!proposedTitle) return null;
-  return (
-    projects.find((project) => {
-      const title = normalizedEntityName(project.title || project.name);
-      return (
-        title === proposedTitle ||
-        title.includes(proposedTitle) ||
-        proposedTitle.includes(title)
-      );
-    }) || null
-  );
-}
-
-function isDuplicateProjectProposal(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  if (String(action?.type || "") !== "create_project") return null;
-  return (
-    findMatchingProject(
-      projects,
-      action?.proposedChange || {},
-      fallbackProject?.id || "",
-    ) ||
-    fallbackProject ||
-    null
-  );
-}
-
-function proposalActionType(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  return isDuplicateProjectProposal(action, projects, fallbackProject)
-    ? "update_project"
-    : String(action?.type || "");
-}
-
-function proposalActionTitle(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  const existingProject = isDuplicateProjectProposal(
-    action,
-    projects,
-    fallbackProject,
-  );
-  const proposedTitle =
-    action?.proposedChange?.title ||
-    action?.proposedChange?.name ||
-    action?.reason ||
-    "Review details";
-  if (!existingProject) return proposedTitle;
-  return `Update existing project: ${existingProject.title || existingProject.name || proposedTitle}`;
-}
-
-function proposalChipLabel(
-  chip: string,
-  plan: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  const hasDuplicateProject = plan?.proposedActions?.some((action: any) =>
-    isDuplicateProjectProposal(action, projects, fallbackProject),
-  );
-  if (!hasDuplicateProject) return chip;
-  if (
-    /approve.*project.*creation|create.*project|project.*creation/i.test(chip)
-  )
-    return "Update existing project";
-  return chip;
-}
-
-function reviewTypeLabel(type?: string) {
-  const labels: Record<string, string> = {
-    project: "Project",
-    project_update: "Project update",
-    knowledge: "Project document",
-    milestone: "Milestone",
-    milestone_update: "Milestone update",
-    risk: "Risk",
-    risk_update: "Risk update",
-    conversation_message: "Conversation handoff",
-    task: "Task",
-    task_update: "Task update",
-  };
-  return labels[String(type || "task")] || "Item";
-}
-
-function RichText({ text }: { text: string }) {
-  return (
-    <div className="do-rich-text">
-      {text.split("\n").map((line, index) => {
-        const plain = line.replace(/^#{1,4}\s*/, "").replace(/\*\*/g, "");
-        if (!plain.trim()) return <div className="do-rich-space" key={index} />;
-        if (/^#{1,4}\s/.test(line)) return <h3 key={index}>{plain}</h3>;
-        if (/^\s*[-*]\s/.test(line)) {
-          return (
-            <div className="do-rich-bullet" key={index}>
-              <span />
-              <p>{plain.replace(/^\s*[-*]\s*/, "")}</p>
-            </div>
-          );
-        }
-        return <p key={index}>{plain}</p>;
-      })}
-    </div>
-  );
-}
-
-function UserMessage({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isDocument = text.length > 2_500;
-  const visible =
-    isDocument && !expanded ? `${text.slice(0, 1_400).trimEnd()}…` : text;
-  return (
-    <div className={`do-user-message ${isDocument ? "is-document" : ""}`}>
-      {isDocument && (
-        <div className="do-user-document-head">
-          <span>
-            Long project input · {text.length.toLocaleString()} characters
-          </span>
-          <button onClick={() => setExpanded((value) => !value)} type="button">
-            {expanded ? "Collapse" : "Show full"}
-          </button>
-        </div>
-      )}
-      <div>{visible}</div>
-    </div>
-  );
-}
-
-function ActionProposal({
-  message,
-  projects,
-  activeProject,
-  onStage,
-}: {
-  message: Message;
-  projects: any[];
-  activeProject: any | null;
-  onStage: (message: Message) => Promise<void>;
-}) {
-  const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
-  const plan = message.actionPlan;
-  if (!plan?.proposedActions?.length) return null;
-  return (
-    <section className="do-proposal" data-testid="action-proposal">
-      <div className="do-proposal-head">
-        <div>
-          <span className="do-kicker">Pending</span>
-          <h3>{plan.title || "Pending changes"}</h3>
-          <p>{plan.summary}</p>
-        </div>
-        <ShieldCheck size={17} />
-      </div>
-      <div className="do-proposal-items">
-        {plan.proposedActions.map((action: any, index: number) => (
-          <div className="do-proposal-item" key={`${action.type}-${index}`}>
-            <span className="do-proposal-number">{index + 1}</span>
-            <div>
-              <strong>
-                {actionLabel(
-                  proposalActionType(action, projects, activeProject),
-                )}
-              </strong>
-              <p>{proposalActionTitle(action, projects, activeProject)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="do-proposal-foot">
-        <span>Nothing changes until you apply it.</span>
-        <button
-          className="do-button do-button-dark"
-          disabled={status !== "idle"}
-          onClick={async () => {
-            setStatus("saving");
-            await onStage(message);
-            setStatus("done");
-          }}
-          type="button"
-        >
-          {status === "saving" ? (
-            <Loader2 className="spin" size={14} />
-          ) : status === "done" ? (
-            <Check size={14} />
-          ) : (
-            <ShieldCheck size={14} />
-          )}
-          {status === "done" ? "Ready to apply" : "Review pending"}
-        </button>
-      </div>
-    </section>
-  );
-}
 
 export function DelivereeWorkspace() {
   const {
@@ -4265,6 +3931,19 @@ export function DelivereeWorkspace() {
                             : "Capture anything. Make a plan. Finish the right work."}
                       </p>
                     </div>
+
+                    {!isFocusedConversation && (
+                      <HomeAttention
+                        projects={projects}
+                        tasks={tasks}
+                        risks={risks}
+                        reviewItems={reviewItems}
+                        todayTasks={todayTasks}
+                        onOpenProject={openProjectRecord}
+                        onOpenApprovals={() => setPanel("approvals")}
+                        onAsk={setComposer}
+                      />
+                    )}
 
                     {!isFocusedConversation && (
                       <button

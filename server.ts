@@ -2,7 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import path from "path";
 import { fileURLToPath } from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
@@ -11,6 +11,9 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fs from "fs";
 import { generateWithOpenAI, resolveAssistantProvider } from "./server/ai-provider";
 import { rankRetrievalCandidates, type RetrievalCandidate } from "./server/retrieval";
+import { generateContentWithFallback } from "./server/lib/ai";
+import { parseCleanJSON } from "./server/lib/json";
+import { dataManagementAuditBody, dataManagementMigrateBody, fieldErrors } from "./server/lib/schemas";
 import {
   createRequireWorkspaceApiAuth,
   principalDisplayName,
@@ -22,49 +25,6 @@ import { createAiRateLimit } from "./server/middleware/rateLimit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function parseCleanJSON(str: string): any {
-  if (!str) return null;
-  // 1. Remove markdown code blocks if any
-  let cleaned = str.replace(/^```json\n?/gi, '').replace(/```\n?$/g, '').trim();
-  
-  // 2. Remove comments
-  // Strip single line comments: //...
-  cleaned = cleaned.replace(/\/\/.*/g, '');
-  // Strip multi-line comments: /*...*/
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
-
-  // 3. Remove trailing commas in objects and arrays
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-
-  // 4. Try to parse
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    // If it still fails, try to escape raw newlines inside JSON strings
-    try {
-      let withinString = false;
-      let fixed = "";
-      for (let i = 0; i < cleaned.length; i++) {
-        const char = cleaned[i];
-        if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
-          withinString = !withinString;
-          fixed += char;
-        } else if (char === '\n' && withinString) {
-          fixed += '\\n';
-        } else if (char === '\r' && withinString) {
-          fixed += '\\r';
-        } else {
-          fixed += char;
-        }
-      }
-      return JSON.parse(fixed);
-    } catch (err2) {
-      console.error("[parseCleanJSON] Failed to parse cleaned JSON. Original:", str, "Cleaned:", cleaned);
-      throw err;
-    }
-  }
-}
 
 async function startServer() {
   const app = express();
@@ -130,123 +90,6 @@ async function startServer() {
     console.error("[Firebase Admin] Init failed:", e);
   }
   
-  let aiInstance: GoogleGenAI | null = null;
-  function getGeminiClient(): GoogleGenAI {
-    if (!aiInstance) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY environment variable is required but missing. Please configure it in Settings > Secrets.");
-      }
-      aiInstance = new GoogleGenAI({ 
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-    }
-    return aiInstance;
-  }
-
-  async function generateContentWithFallback(params: any): Promise<any> {
-    const primaryModel = process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash";
-    const fallbackModel = process.env.BOLDI_GEMINI_FALLBACK_MODEL || "gemini-2.0-flash";
-    const models = [
-      primaryModel,
-      fallbackModel,
-      "gemini-2.5-pro",
-      "gemini-2.0-pro-exp-02-05"
-    ];
-    
-    if (params.model && !models.includes(params.model)) {
-      models.unshift(params.model);
-    } else if (params.model) {
-      const idx = models.indexOf(params.model);
-      if (idx > -1) {
-        models.splice(idx, 1);
-      }
-      models.unshift(params.model);
-    }
-
-    // Sanitize the contents to remove system roles and normalize other roles to "user" or "model"
-    const sanitizedParams = { ...params };
-    if (Array.isArray(sanitizedParams.contents)) {
-      sanitizedParams.contents = sanitizedParams.contents
-        .filter((item: any) => {
-          if (!item) return false;
-          const role = (item.role || "").toLowerCase();
-          return role !== "system";
-        })
-        .map((item: any) => {
-          const role = (item.role || "").toLowerCase();
-          const mappedRole = (role === "assistant" || role === "model") ? "model" : "user";
-          return {
-            ...item,
-            role: mappedRole
-          };
-        });
-    }
-
-    let lastError: any = null;
-    const aiClient = getGeminiClient();
-    for (const model of models) {
-      let attempts = 0;
-      const maxAttempts = 3;
-      while (attempts < maxAttempts) {
-        attempts++;
-        try {
-          console.log(`[AI Fallback Logger] Trying model: ${model} (attempt ${attempts}/${maxAttempts})`);
-          const response = await aiClient.models.generateContent({
-            ...sanitizedParams,
-            model,
-          });
-          console.log(`[AI Fallback Logger] Success with model: ${model}`);
-          return response;
-        } catch (err: any) {
-          lastError = err;
-          const errMsg = (err.message || "").toLowerCase();
-          
-          const isQuotaExceeded = 
-            err.code === 429 || 
-            err.status === 429 || 
-            errMsg.includes("429") || 
-            errMsg.includes("quota") || 
-            errMsg.includes("limit") ||
-            errMsg.includes("resource has been exhausted");
-
-          if (isQuotaExceeded) {
-            console.warn(`[AI Fallback Logger] Model ${model} returned quota exceeded (429). Falling back immediately...`);
-            break; // Break out of the while loop to try the next model
-          }
-
-          const isRetryable = 
-            err.code === 503 ||
-            err.status === 503 ||
-            errMsg.includes("503") ||
-            errMsg.includes("unavailable") ||
-            errMsg.includes("demand");
-
-          if (isRetryable) {
-            if (attempts < maxAttempts) {
-              const waitTime = attempts * 1000;
-              console.warn(`[AI Fallback Logger] Model ${model} returned retryable error (503). Retrying in ${waitTime}ms...`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              continue;
-            } else {
-              console.warn(`[AI Fallback Logger] Model ${model} failed after ${maxAttempts} attempts. Falling back...`);
-              break;
-            }
-          }
-          console.error(`[AI Fallback Logger] Error with model ${model}. Trying next fallback model... Error:`, err.message || err);
-          break; // Break out of the while loop to try the next model
-        }
-      }
-    }
-    console.error(`[AI Fallback Logger] All fallback models failed. Final error:`, lastError?.message || lastError);
-    throw lastError || new Error("All fallback models failed");
-  }
-
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
@@ -3602,7 +3445,16 @@ Respond STRICTLY in a valid JSON schema:
   // 1. Live Data Quality Audit
   app.post("/api/data-management/audit", async (req, res) => {
     try {
-      const { userId, workspaceId } = req.body;
+      const parsed = dataManagementAuditBody.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          code: "invalid_request",
+          requestId: req.requestId,
+          fields: fieldErrors(parsed.error),
+        });
+      }
+      const { userId, workspaceId } = parsed.data;
       if (!userId || !workspaceId) {
         return res.status(400).json({ error: "userId and workspaceId are required in body." });
       }
@@ -3908,7 +3760,16 @@ Respond STRICTLY in a valid JSON schema:
   // 2. Dry Run & Apply Database Migrations
   app.post("/api/data-management/migrate", async (req, res) => {
     try {
-      const { userId, workspaceId, mode } = req.body; // mode is "dry" or "apply"
+      const parsed = dataManagementMigrateBody.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          code: "invalid_request",
+          requestId: req.requestId,
+          fields: fieldErrors(parsed.error),
+        });
+      }
+      const { userId, workspaceId, mode } = parsed.data;
       if (!userId || !workspaceId || !mode) {
         return res.status(400).json({ error: "userId, workspaceId, and mode are required in body." });
       }

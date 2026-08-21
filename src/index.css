@@ -1207,7 +1207,14 @@ button { color: inherit; }
 .cw-btn-ghost { background: transparent; color: var(--muted); }
 .cw-btn-destructive { background: var(--status-red); color: #fff; }
 .cw-btn-sm { min-height: var(--control-sm); padding: 0 9px; font-size: var(--text-caption); }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.do-home-attention { display: grid; gap: 8px; margin: 12px 0 4px; }
+.do-attention-block { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
+.do-attention-block.is-red { border-color: color-mix(in srgb, var(--status-red) 35%, var(--line)); }
+.do-attention-block.is-amber { border-color: color-mix(in srgb, var(--status-amber) 35%, var(--line)); }
+.do-attention-block.is-quiet { background: #fafafa; }
+.do-attention-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: transparent; padding: 9px 11px; text-align: left; cursor: pointer; }
+.do-attention-block > button:not(.do-attention-head) { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; width: 100%; border: 0; border-top: 1px solid var(--line); background: transparent; padding: 8px 11px; text-align: left; cursor: pointer; }
+.do-attention-block > button:not(.do-attention-head):hover { background: #f8faf9; }
 .do-portfolio-note { margin: 12px 0 0; color: #8a968e; font-size: calc(7.5px * var(--cw-text-scale)); line-height: 1.45; }
 .do-upcoming-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 12px; }
 .do-upcoming-list button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; border: 1px solid #e3e9e4; border-radius: 9px; background: #fbfdfb; padding: 9px; color: #536359; text-align: left; cursor: pointer; }
