@@ -28,6 +28,7 @@ export function TextSizeControl({ compact = false }: { compact?: boolean }) {
     <div className={`do-text-size-control ${compact ? "is-compact" : ""}`} role="group" aria-label="Text size">
       {CERTO_TEXT_SIZE_OPTIONS.map((option) => (
         <button
+          aria-label={`${option.label}: ${option.description}`}
           aria-pressed={textSize === option.value}
           className={textSize === option.value ? "is-active" : ""}
           key={option.value}

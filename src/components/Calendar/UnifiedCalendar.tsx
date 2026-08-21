@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, CheckCircle2, Zap, Dumbbell, Plus, X, Check, ShieldMinus, Ban } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, Zap, Dumbbell, Plus, X, Check, ShieldMinus, Ban } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";

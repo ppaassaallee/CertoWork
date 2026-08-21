@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../lib/AuthContext";
-import { Folder, Plus, Check, MoreVertical, UserPlus, Trash2, Edit2 } from "lucide-react";
+import { Folder, Plus, Check, MoreVertical, UserPlus, Trash2, Edit2 } from "./ui/Icon";
 import { setDoc, collection, doc, serverTimestamp, updateDoc, arrayUnion, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { membershipPublicPatch } from "../lib/workspaceCollaboration";

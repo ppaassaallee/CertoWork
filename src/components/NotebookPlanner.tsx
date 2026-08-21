@@ -28,7 +28,7 @@ import {
   AlertTriangle,
   Brain,
   Coffee
-} from "lucide-react";
+} from "./ui/Icon";
 import { logHabit, deleteHabitLog } from "../lib/habits";
 import { NotebookShell, NotebookActionBar, NotebookPage, NotebookRibbon, NotebookSection, NotebookSectionHeader, NotebookCallout, NotebookField } from "./notebook/NotebookComponents";
 

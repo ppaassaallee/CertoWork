@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { 
   Shield, FileCode, CalendarCheck, ChevronRight, ArrowLeft, Bot, 
   Sparkles, Check, Heart, Smile, ShieldAlert, Sliders, Info, Zap
-} from "lucide-react";
+} from "../ui/Icon";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/AuthContext";
 import { doc, getDoc, setDoc } from "firebase/firestore";

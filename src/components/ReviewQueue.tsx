@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Inbox, List, Kanban, Sparkles, Loader2, Plus, ArrowRight, 
   Search, CheckCircle2
-} from "lucide-react";
+} from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, doc, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";

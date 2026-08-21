@@ -1,4 +1,5 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
+import { runOdiseusAgent } from "./odiseus-agent.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -314,18 +315,20 @@ export function assistantInstructions(body, citations) {
 - If exactly one project is attached and the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject?.id || allowedProjectIds[0] || "")}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
 - If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
 - Every proposed project action must carry one applicable projectId from ${JSON.stringify(allowedProjectIds)}. When several are attached, separate work by project rather than blending ownership. Use create_milestone for delivery gates and create_risk for material risks.`
-    : `CHIEF OF STAFF MODE — general workspace conversation:
-- Be the user's Chief of Staff, assistant, engineer, and advisor. You may inspect and manage any supplied workspace item while keeping the final decision with the user.
+    : `ODISEUS MODE — general workspace conversation:
+- You are Odiseus, the user's AI employee inside Certo Work — not a chatbot. You take ownership: research, draft, update records, and hand back finished work. Be the user's assistant, engineer, and advisor while keeping the final decision with the user.
 - Help the user choose across personal and cross-project commitments, coordinate work, and route clear handoffs to focused conversations.
 - You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
 - Keep capacity warnings occasional, specific, and paired with a constructive alternative.
 - To leave a handoff in another existing conversation, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
-  return `You are Certo Work, a calm conversational productivity partner. The entire product is one continuous conversation that helps a person or team turn thoughts into focused, credible action.
+  return `You are Odiseus, Certo Work's AI employee. Not a tool — a hire. The product is one continuous workspace conversation that helps a person or team turn thoughts into focused, credible action. You propose the next step and ask before anything you cannot undo.
 
 ${operatingMode}
 
 Product behavior:
 - Help the user capture, clarify, choose, plan, and finish meaningful work.
+- Prefer tool calls (search_projects, get_overdue_items, get_activity_summary, list_project_items, get_project, propose_followups, prepare_status_report) before guessing from memory.
+- After tools, return a concise outcome: what you found, what changed or what needs approval, and any artifact/next decision.
 - Organize work by when it needs attention: Today, This Week, Later, or a real calendar block.
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
@@ -341,7 +344,7 @@ Product behavior:
 - If the user asks for an email reminder, daily digest, daily summary, or weekly summary, prepare the request or draft as an outbox_communication action. Never claim an email was sent unless an email delivery integration is explicitly present in evidence.
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
-- In Chief of Staff mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
+- In Odiseus mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
 - In Focused Delivery mode, every suggested chip must be a useful next move for the attached context. Never surface unrelated tasks or projects in chips.
 
 Safety and judgment:
@@ -665,39 +668,75 @@ async function chat(request, env) {
     [...body.messages].reverse().find((message) => message.role === "user")?.content || "";
   const citations = groundedCitations(latestUserMessage, body.workspaceContext);
   const model = openaiModelName(env);
+  const wantsStream =
+    body.stream === true ||
+    String(request.headers.get("accept") || "").includes("text/event-stream");
+
+  if (wantsStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event, data) => {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+        try {
+          const result = await runOdiseusAgent({
+            env,
+            model,
+            instructions: assistantInstructions(body, citations),
+            messages: body.messages,
+            workspaceContext: body.workspaceContext || {},
+            openaiApiKey: openaiApiKey(env),
+            openaiUrl: OPENAI_RESPONSES_URL,
+            extractOpenAIText,
+            parseJsonObject,
+            normalizeAssistantResult,
+            citations,
+            latestUserMessage,
+            onStep: async (step) => send("step", step),
+          });
+          send("final", result);
+        } catch (error) {
+          send("error", {
+            error:
+              error instanceof Error
+                ? error.message
+                : "The assistant is temporarily unavailable",
+            code: error?.code || "ASSISTANT_UNAVAILABLE",
+          });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      },
+    });
+  }
 
   try {
-    const response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${openaiApiKey(env)}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        instructions: assistantInstructions(body, citations),
-        input: [
-          {
-            role: "user",
-            content:
-              "Certo Work response contract: return exactly one valid JSON object matching the provided instructions.",
-          },
-          ...body.messages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-        ],
-        text: { format: { type: "json_object" } },
-        store: false,
-      }),
+    const result = await runOdiseusAgent({
+      env,
+      model,
+      instructions: assistantInstructions(body, citations),
+      messages: body.messages,
+      workspaceContext: body.workspaceContext || {},
+      openaiApiKey: openaiApiKey(env),
+      openaiUrl: OPENAI_RESPONSES_URL,
+      extractOpenAIText,
+      parseJsonObject,
+      normalizeAssistantResult,
+      citations,
+      latestUserMessage,
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      const message = payload?.error?.message || `OpenAI request failed (${response.status})`;
-      return json({ error: message, code: "OPENAI_REQUEST_FAILED" }, 502);
-    }
-    const result = parseJsonObject(extractOpenAIText(payload));
-    return json(normalizeAssistantResult(result, citations, model, latestUserMessage));
+    return json(result);
   } catch (error) {
     return json(
       {
@@ -705,9 +744,9 @@ async function chat(request, env) {
           error instanceof Error
             ? error.message
             : "The assistant is temporarily unavailable",
-        code: "ASSISTANT_UNAVAILABLE",
+        code: error?.code || "ASSISTANT_UNAVAILABLE",
       },
-      502,
+      error?.status || 502,
     );
   }
 }

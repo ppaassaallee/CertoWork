@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, setDoc, deleteField } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { setTaskStatus } from "../lib/tasks";
-import { CheckSquare, ArrowLeft, Plus, Loader2, Tag, Repeat, Zap, X, Kanban, ChevronDown, ChevronRight, ChevronLeft, Search, Lightbulb, Scale, Book, Briefcase, Calendar, Inbox, RefreshCw, Timer, Users, Brain, ArrowUp, ArrowDown, SlidersHorizontal, Sparkles, Eye, MoreHorizontal, Sliders, Star, Trash2, Bot } from "lucide-react";
+import { CheckSquare, ArrowLeft, Plus, Loader2, Tag, Repeat, Zap, X, Kanban, ChevronDown, ChevronRight, ChevronLeft, Search, Lightbulb, Scale, Book, Briefcase, Calendar, Inbox, RefreshCw, Timer, Users, Brain, ArrowUp, ArrowDown, SlidersHorizontal, Sparkles, Eye, MoreHorizontal, Sliders, Star, Trash2, Bot } from "./ui/Icon";
 import { Link, useNavigate } from "react-router-dom";
 import { useUndo } from "../lib/UndoContext";
 import { TagsManager } from "./TagsManager";

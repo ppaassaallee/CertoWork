@@ -42,7 +42,7 @@ import {
   Users,
   X,
   Zap,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,
@@ -465,7 +465,7 @@ export function BoldiAssistant({
   const [offlineCount, setOfflineCount] = useState(() => readOfflineQueue().length);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
-  const [providerLabel, setProviderLabel] = useState("Chief of Staff");
+  const [providerLabel, setProviderLabel] = useState("Odiseus");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -829,8 +829,8 @@ export function BoldiAssistant({
       });
       setProviderLabel(
         result.provider?.provider
-          ? `${result.provider.provider === "openai" ? "OpenAI" : "Legacy AI adapter"} · Chief of Staff`
-          : "Chief of Staff",
+          ? `${result.provider.provider === "openai" ? "OpenAI" : "Legacy AI adapter"} · Odiseus`
+          : "Odiseus",
       );
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
@@ -929,7 +929,7 @@ export function BoldiAssistant({
           actionPlanId: planRef.id,
           type: action.type,
           proposedChange: action.proposedChange || {},
-          reason: action.reason || "Proposed by the Chief of Staff",
+          reason: action.reason || "Proposed by the Odiseus",
           confidence: action.confidence || 0.85,
           safetyLevel: action.safetyLevel || plan.safetyLevel || 1,
           status: "approved_for_review",
@@ -948,7 +948,7 @@ export function BoldiAssistant({
               : action.type === "outbox_communication"
                 ? "outbox"
                 : "task",
-          why: action.reason || "Proposed by the Chief of Staff",
+          why: action.reason || "Proposed by the Odiseus",
           action: actionLabel(action),
           confidence: (action.confidence || 0.85) >= 0.8 ? "high" : "medium",
           proposed: action.proposedChange || {},
@@ -1058,7 +1058,7 @@ export function BoldiAssistant({
             <div className="flex items-center gap-1.5 text-[10px] text-[#96998f]">
               <span>{workspace?.name || "Personal Focus"}</span>
               <ChevronRight className="h-2.5 w-2.5" />
-              <span className="truncate">{currentConversation?.title || "Chief of Staff"}</span>
+              <span className="truncate">{currentConversation?.title || "Odiseus"}</span>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-[#72885d]" />

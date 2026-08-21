@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle, Loader2, X, Zap } from "lucide-react";
+import { CheckCircle, Loader2, X, Zap } from "../ui/Icon";
 import { db } from "../../lib/firebase";
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { RecurrenceType, RecurrenceUnit } from "../../types";

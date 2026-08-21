@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   X, Check, AlertCircle, Sparkles, Brain, Plus, Trash2, Edit2, Play, Pause, ChevronRight, ChevronLeft, 
   RefreshCw, Calendar, CheckCircle2, Timer as TimerIcon
-} from "lucide-react";
+} from "./ui/Icon";
 import { 
   collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
 } from "firebase/firestore";
