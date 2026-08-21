@@ -8,7 +8,7 @@ import {
   CheckCircle2, 
   X,
   Wand2
-} from "lucide-react";
+} from "./ui/Icon";
 import { doc, updateDoc, deleteField } from "firebase/firestore";
 
 interface Task {

@@ -71,9 +71,24 @@ export function conversationScopeLabel(
   if (projectTitles.length > 0 || taskTitles.length > 0) {
     return `${projectTitles.length} project${projectTitles.length === 1 ? "" : "s"} · ${taskTitles.length} task${taskTitles.length === 1 ? "" : "s"}`;
   }
-  return conversation?.conversationType === "chief_of_staff" ? "Chief of Staff" : "General";
+  return conversation?.conversationType === "chief_of_staff" ||
+    (conversation as { isChiefOfStaff?: boolean } | null | undefined)?.isChiefOfStaff
+    ? "Odiseus"
+    : "General";
 }
 
 export function conversationIncludesProject(conversation: ConversationScopeRecord | null | undefined, projectId: string) {
   return conversationProjectIds(conversation).includes(projectId);
+}
+
+export function isStandaloneConversation(conversation?: ConversationScopeRecord | null) {
+  if (!conversation) return true;
+  if (conversation.conversationType === "chief_of_staff" || (conversation as { isChiefOfStaff?: boolean }).isChiefOfStaff) {
+    return true;
+  }
+  return conversationProjectIds(conversation).length === 0 && conversationTaskIds(conversation).length === 0;
+}
+
+export function isProjectConversation(conversation?: ConversationScopeRecord | null) {
+  return conversationProjectIds(conversation).length > 0;
 }

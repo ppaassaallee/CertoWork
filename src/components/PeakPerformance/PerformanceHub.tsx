@@ -6,7 +6,7 @@ import {
     Brain, Sparkles, Plus, Calendar, Dumbbell,
     MessageSquare, Smile, Thermometer, Battery,
     ArrowUpRight, Loader2
-} from "lucide-react";
+} from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, doc, setDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";

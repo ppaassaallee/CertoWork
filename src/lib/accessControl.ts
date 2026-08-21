@@ -1,16 +1,13 @@
-export const PORTFOLIO_VIEWER_EMAILS = [
-  "cesar.a@getboldr.ai",
-  "cesar.ar@alliedglobal.com",
-  "rafael.f@getboldr.ai",
-  "rafael.f@alliedglobal.com",
-];
-
 export function normalizeAccessEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
-export function isPortfolioViewerEmail(value?: string | null) {
-  return PORTFOLIO_VIEWER_EMAILS.includes(normalizeAccessEmail(value));
+export function isPortfolioViewerMember(member?: {
+  role?: string | null;
+  portfolioViewer?: boolean | null;
+} | null) {
+  const role = String(member?.role || "").toLowerCase();
+  return role === "owner" || role === "admin" || Boolean(member?.portfolioViewer);
 }
 
 export function activeWorkspaceMemberId(workspaceId: string, userId: string) {
@@ -56,10 +53,14 @@ export function buildTaskAccessPatch({
   const explicitEmails = Array.isArray(task?.visibleToEmails)
     ? (task?.visibleToEmails as unknown[]).map((item) => normalizeAccessEmail(String(item)))
     : [];
+  const sharedWithUserIds = Array.isArray(task?.sharedWithUserIds)
+    ? (task?.sharedWithUserIds as unknown[]).map((item) => String(item))
+    : [];
   return {
     visibility: String(task?.visibility || "private"),
-    visibleToUserIds: unique([userId, ...explicitUserIds]),
+    visibleToUserIds: unique([userId, ...explicitUserIds, ...sharedWithUserIds]),
     visibleToEmails: unique([normalizeAccessEmail(email), ...explicitEmails]),
+    sharedWithUserIds: unique(sharedWithUserIds),
     assigneeIds,
     accessMemberIds: unique([
       activeWorkspaceMemberId(workspaceId, userId),

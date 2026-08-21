@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Save, Loader2, X, Dumbbell } from "lucide-react";
+import { Save, Loader2, X, Dumbbell } from "../ui/Icon";
 import { FitnessGoal, ExperienceLevel, FitnessProfile } from "../../types";
 import { db } from "../../lib/firebase";
 import { doc, setDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";

@@ -7,6 +7,7 @@ import {
   type Auth,
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Keep the Firebase-hosted auth helper as the canonical Google OAuth redirect.
@@ -16,6 +17,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // handler is also hosted and registered there.
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const storage = getStorage(app);
 
 // Firebase defaults to IndexedDB before falling back to localStorage. Safari and
 // embedded browsers can leave IndexedDB initialization pending, which prevents

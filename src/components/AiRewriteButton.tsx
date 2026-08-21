@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, WandSparkles } from "lucide-react";
+import { Loader2, WandSparkles } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 
 export type RewriteFieldKind =
@@ -31,6 +31,9 @@ export function AiRewriteButton({
   const rewrite = async () => {
     const source = String(text || "").trim();
     if (!source || !user || !workspace || working) return;
+    if (!window.confirm("Rewrite this text with Certo AI? You can undo the change after it applies.")) {
+      return;
+    }
     setWorking(true);
     setError("");
     try {
@@ -69,14 +72,13 @@ export function AiRewriteButton({
     <span className="do-ai-rewrite-wrap">
       <button
         aria-label={label}
-        className="do-ai-rewrite"
+        className="do-ai-rewrite do-icon-button"
         disabled={!String(text || "").trim() || working}
         onClick={rewrite}
         title={label}
         type="button"
       >
         {working ? <Loader2 className="spin" size={12} /> : <WandSparkles size={12} />}
-        <span>{working ? "Improving" : "Magic"}</span>
       </button>
       {error && <small className="do-ai-rewrite-error" role="status">{error}</small>}
     </span>

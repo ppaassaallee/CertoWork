@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Mic, Square, Loader2, UploadCloud, X, FileAudio, Sparkles, Inbox } from "lucide-react";
+import { Mic, Square, Loader2, UploadCloud, X, FileAudio, Sparkles, Inbox } from "./ui/Icon";
 import { transcribeCaptureWithAI } from "../lib/gemini";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";

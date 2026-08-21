@@ -18,7 +18,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,

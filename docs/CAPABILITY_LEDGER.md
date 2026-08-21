@@ -4,7 +4,7 @@ This ledger is the non-destructive contract for the conversational MVP. A capabi
 
 | Capability | Canonical route | Status | Conversational enhancement |
 | --- | --- | --- | --- |
-| Chief of Staff | `/boldi` | Enhanced; primary home | Conversation history, suggestions, workspace context, judgment, citations, action proposals |
+| Odiseus (AI employee) | `/home`, Odiseus conversation | Renamed from Chief of Staff; hire-first UX | Conversation history, judgment, citations, approval-gated actions |
 | Today | `/today` | Preserved | Daily-plan prompt and capacity rail link |
 | Focus | `/today/focus` | Preserved | Available from Today and conversational planning |
 | Agenda / calendar | `/today/agenda` | Preserved | Included in preflight context where calendar records exist |

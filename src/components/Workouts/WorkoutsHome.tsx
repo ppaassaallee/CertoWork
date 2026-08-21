@@ -16,7 +16,7 @@ import {
   History,
   Target,
   Sparkles
-} from "lucide-react";
+} from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
 import {

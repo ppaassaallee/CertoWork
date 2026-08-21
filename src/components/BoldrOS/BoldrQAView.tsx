@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrQA, BoldrProject } from './types';
-import { Plus, CheckSquare } from 'lucide-react';
+import { Plus, CheckSquare } from "../ui/Icon";
 import { format } from 'date-fns';
 
 export function BoldrQAView() {

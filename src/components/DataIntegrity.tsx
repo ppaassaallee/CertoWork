@@ -16,7 +16,7 @@ import {
   Wrench,
   HelpCircle,
   FileCode
-} from "lucide-react";
+} from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 
