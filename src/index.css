@@ -63,13 +63,13 @@ button { color: inherit; }
   --paper: #f8faf9;
   --green: #1f553f;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 278px minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
   background: var(--paper);
   color: var(--ink);
 }
-.do-shell.is-sidebar-collapsed { grid-template-columns: 66px minmax(0, 1fr); }
+.do-shell.is-sidebar-collapsed { grid-template-columns: 80px minmax(0, 1fr); }
 
 .do-sidebar {
   position: relative;
@@ -131,7 +131,7 @@ button { color: inherit; }
 .do-shell.is-sidebar-collapsed .do-chief-conversation { width: 42px; height: 42px; justify-content: center; margin: 0 auto 7px; padding: 0; }
 .do-shell.is-sidebar-collapsed .do-chief-conversation > span { width: 29px; height: 29px; }
 .do-shell.is-sidebar-collapsed .do-account > button { justify-content: center; padding: 10px 0; }
-.do-shell.is-sidebar-collapsed .do-account-menu { left: 58px; right: auto; bottom: 8px; width: 230px; }
+.do-shell.is-sidebar-collapsed .do-account-menu { left: 70px; right: auto; bottom: 8px; width: 230px; }
 .do-new-conversation {
   display: flex;
   align-items: center;
@@ -203,10 +203,13 @@ button { color: inherit; }
 .do-project-group-label:first-child { padding-top: 1px; }
 .do-project-row { display: flex; min-width: 0; align-items: center; border-radius: 8px; transition: background .15s; }
 .do-project-row:hover, .do-project-row.is-active { background: rgba(25, 76, 54, .09); }
-.do-project-context { display: flex; min-width: 0; flex: 1; align-items: center; gap: 7px; border: 0; background: transparent; padding: 7px 4px 7px 8px; color: #5d6a63; font-size: calc(9px * var(--cw-text-scale)); text-align: left; cursor: pointer; }
-.do-project-context > svg { flex: none; color: #466d59; }
-.do-project-context > span { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.do-project-context > small { color: #91a097; font-size: calc(7px * var(--cw-text-scale)); }
+.do-project-context { display: flex; min-width: 0; flex: 1; align-items: flex-start; gap: 7px; border: 0; background: transparent; padding: 7px 4px 7px 8px; color: #5d6a63; font-size: calc(9px * var(--cw-text-scale)); text-align: left; cursor: pointer; }
+.do-project-context > svg { flex: none; margin-top: 1px; color: #466d59; }
+.do-project-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.do-project-title { min-width: 0; overflow: hidden; line-height: 1.25; white-space: nowrap; text-overflow: ellipsis; }
+.do-project-meta { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.do-project-meta .status-light { min-height: 14px; gap: 4px; }
+.do-project-meta small { color: #91a097; font-size: calc(7px * var(--cw-text-scale)); }
 .do-project-open { flex: none; border: 0; border-radius: 6px; background: transparent; padding: 5px 6px; color: #557063; font-size: calc(6.5px * var(--cw-text-scale)); font-weight: 700; cursor: pointer; opacity: .25; }
 .do-project-icon { display: grid; flex: none; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #7f9087; cursor: pointer; opacity: .18; }
 .do-project-icon.is-danger { color: #a65b52; }
@@ -1795,7 +1798,7 @@ button { color: inherit; }
   .do-shell.is-sidebar-collapsed .do-account > button { justify-content: flex-start; padding: 10px; }
   .do-sidebar-collapse { display: none; }
   .do-main { height: 100dvh; }
-  .do-sidebar { position: fixed; z-index: 80; top: 0; bottom: 0; left: 0; width: min(84vw, 292px); transform: translateX(-103%); box-shadow: 18px 0 50px rgba(25, 38, 30, .14); transition: transform .2s ease; }
+  .do-sidebar { position: fixed; z-index: 80; top: 0; bottom: 0; left: 0; width: min(84vw, 350px); transform: translateX(-103%); box-shadow: 18px 0 50px rgba(25, 38, 30, .14); transition: transform .2s ease; }
   .do-sidebar.is-open { transform: translateX(0); }
   .do-mobile-close, .do-menu-button { display: grid !important; place-items: center; }
   .do-header { padding: 0 9px; }

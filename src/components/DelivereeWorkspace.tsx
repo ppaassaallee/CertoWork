@@ -3506,22 +3506,26 @@ export function DelivereeWorkspace() {
                     type="button"
                   >
                     <Star fill="currentColor" size={12} />
-                    <StatusLight
-                      status={healthToStatus(
-                        projectHealth(
-                          project,
-                          openTasks.filter((task) => task.projectId === project.id),
-                          risks.filter((risk) => risk.projectId === project.id),
-                        ),
-                      )}
-                      label={false}
-                      size="sm"
-                    />
-                    <span>{entityTitle(project)}</span>
-                    <small>
-                      {openTasks.filter((task) => task.projectId === project.id)
-                        .length || ""}
-                    </small>
+                    <span className="do-project-copy">
+                      <span className="do-project-title">{entityTitle(project)}</span>
+                      <span className="do-project-meta">
+                        <StatusLight
+                          status={healthToStatus(
+                            projectHealth(
+                              project,
+                              openTasks.filter((task) => task.projectId === project.id),
+                              risks.filter((risk) => risk.projectId === project.id),
+                            ),
+                          )}
+                          label={false}
+                          size="sm"
+                        />
+                        <small>
+                          {openTasks.filter((task) => task.projectId === project.id)
+                            .length || ""}
+                        </small>
+                      </span>
+                    </span>
                   </button>
                   <button
                     className="do-project-open"
@@ -3571,22 +3575,26 @@ export function DelivereeWorkspace() {
                     type="button"
                   >
                     <Folder size={12} />
-                    <StatusLight
-                      status={healthToStatus(
-                        projectHealth(
-                          project,
-                          openTasks.filter((task) => task.projectId === project.id),
-                          risks.filter((risk) => risk.projectId === project.id),
-                        ),
-                      )}
-                      label={false}
-                      size="sm"
-                    />
-                    <span>{entityTitle(project)}</span>
-                    <small>
-                      {openTasks.filter((task) => task.projectId === project.id)
-                        .length || ""}
-                    </small>
+                    <span className="do-project-copy">
+                      <span className="do-project-title">{entityTitle(project)}</span>
+                      <span className="do-project-meta">
+                        <StatusLight
+                          status={healthToStatus(
+                            projectHealth(
+                              project,
+                              openTasks.filter((task) => task.projectId === project.id),
+                              risks.filter((risk) => risk.projectId === project.id),
+                            ),
+                          )}
+                          label={false}
+                          size="sm"
+                        />
+                        <small>
+                          {openTasks.filter((task) => task.projectId === project.id)
+                            .length || ""}
+                        </small>
+                      </span>
+                    </span>
                   </button>
                   <button
                     className="do-project-open"
