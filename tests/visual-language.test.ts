@@ -35,10 +35,10 @@ test("all five text sizes survive startup and use one language", async () => {
   );
 });
 
-test("header keeps only search and create utilities", async () => {
+test("header keeps command palette and create utilities", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
   const header = source.split('<header className="do-header">')[1]?.split("</header>")[0] || "";
-  assert.match(header, /headerSearch|aria-label="Search"/);
+  assert.match(header, /command palette|Command palette/i);
   assert.match(header, /headerCreate|Create/);
   assert.equal(header.includes('aria-label="Skills"'), false);
   assert.equal(header.includes('aria-label="Digest"'), false);

@@ -97,9 +97,11 @@ import { HomeAttention } from "../pages/HomeAttention";
 import { OdiseusBadge, OdiseusMark } from "./odiseus/OdiseusMark";
 import {
   OdiseusArtifactCard,
-  OdiseusEmptyHero,
+  OdiseusAgentHome,
   OdiseusWorkLog,
 } from "./odiseus/OdiseusWork";
+import { AppBreadcrumbs } from "./AppBreadcrumbs";
+import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
 import {
   ODISEUS_CONVERSATION_TITLE,
   ODISEUS_HANDOFF_PREFIX,
@@ -326,6 +328,7 @@ export function DelivereeWorkspace() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
@@ -967,12 +970,30 @@ export function DelivereeWorkspace() {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        createConversation();
+        setCommandPaletteOpen(true);
+      }
+      if (event.key === "Escape") {
+        if (commandPaletteOpen) {
+          event.preventDefault();
+          setCommandPaletteOpen(false);
+          return;
+        }
+        if (createMenuOpen) {
+          setCreateMenuOpen(false);
+          return;
+        }
+        if (panel) {
+          setPanel(null);
+          return;
+        }
+        if (sidebarOpen) {
+          setSidebarOpen(false);
+        }
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [createConversation]);
+  }, [commandPaletteOpen, createMenuOpen, panel, sidebarOpen]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -2787,8 +2808,86 @@ export function DelivereeWorkspace() {
         "Create follow-ups for the biggest blockers",
       ];
 
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(() => {
+    const items: CommandPaletteItem[] = [
+      {
+        id: "nav-home",
+        label: "Go to Home",
+        group: "Navigate",
+        onSelect: () => navigate("/home"),
+      },
+      {
+        id: "nav-work",
+        label: "Go to Work",
+        group: "Navigate",
+        onSelect: () => navigate("/work"),
+      },
+      {
+        id: "nav-approvals",
+        label: "Go to Approvals",
+        group: "Navigate",
+        onSelect: () => navigate("/approvals"),
+      },
+      {
+        id: "nav-settings",
+        label: "Go to Settings",
+        group: "Navigate",
+        onSelect: () => navigate("/settings"),
+      },
+      {
+        id: "odiseus",
+        label: "Open Odiseus",
+        group: "Actions",
+        keywords: "ai employee hire",
+        onSelect: () => openChiefOfStaff(),
+      },
+      {
+        id: "new-conversation",
+        label: "New conversation",
+        group: "Actions",
+        onSelect: () => void createConversation(),
+      },
+      {
+        id: "command-center",
+        label: "Open Command Center",
+        group: "Actions",
+        onSelect: () => {
+          goCenterView("portfolio");
+          setPanel(null);
+        },
+      },
+      {
+        id: "new-project",
+        label: "Create project",
+        group: "Actions",
+        onSelect: () => setProjectWizardOpen(true),
+      },
+    ];
+    for (const project of activeProjects.slice(0, 30)) {
+      items.push({
+        id: `project-${project.id}`,
+        label: entityTitle(project),
+        group: "Projects",
+        onSelect: () => openProjectRecord(project),
+      });
+    }
+    return items;
+  }, [
+    activeProjects,
+    createConversation,
+    goCenterView,
+    navigate,
+    openChiefOfStaff,
+    openProjectRecord,
+  ]);
+
   return (
     <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" ? "settings" : lens.kind === "project" ? "work" : lens.kind}`}>
+      <CommandPalette
+        items={commandPaletteItems}
+        onClose={() => setCommandPaletteOpen(false)}
+        open={commandPaletteOpen}
+      />
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -2926,7 +3025,7 @@ export function DelivereeWorkspace() {
             <Plus size={15} />
           )}
           <span>{creatingConversation ? "Starting…" : "New conversation"}</span>
-          <kbd>⌘K</kbd>
+          <kbd>N</kbd>
         </button>
 
         <button
@@ -3006,37 +3105,37 @@ export function DelivereeWorkspace() {
                     className="do-project-context"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    <Star fill="currentColor" size={12} />
-                    <span className="do-project-title">{entityTitle(project)}</span>
-                  </button>
-                  <div className="do-project-meta">
                     <StatusLight
                       status={healthToStatus(health)}
                       label={false}
                       size="sm"
                     />
+                    <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
-                    <span className="do-project-actions">
-                      <button
-                        aria-label={`Archive ${entityTitle(project)}`}
-                        className="do-project-icon"
-                        onClick={() => void archiveProject(project)}
-                        type="button"
-                      >
-                        <Archive size={11} />
-                      </button>
-                      <button
-                        aria-label={`Delete ${entityTitle(project)}`}
-                        className="do-project-icon is-danger"
-                        onClick={() => void deleteProject(project)}
-                        type="button"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </span>
-                  </div>
+                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
                   );
                 })}
@@ -3075,37 +3174,37 @@ export function DelivereeWorkspace() {
                     className="do-project-context"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    <Folder size={12} />
-                    <span className="do-project-title">{entityTitle(project)}</span>
-                  </button>
-                  <div className="do-project-meta">
                     <StatusLight
                       status={healthToStatus(health)}
                       label={false}
                       size="sm"
                     />
+                    <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
-                    <span className="do-project-actions">
-                      <button
-                        aria-label={`Archive ${entityTitle(project)}`}
-                        className="do-project-icon"
-                        onClick={() => void archiveProject(project)}
-                        type="button"
-                      >
-                        <Archive size={11} />
-                      </button>
-                      <button
-                        aria-label={`Delete ${entityTitle(project)}`}
-                        className="do-project-icon is-danger"
-                        onClick={() => void deleteProject(project)}
-                        type="button"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </span>
-                  </div>
+                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
                   );
                 })}
@@ -3312,20 +3411,43 @@ export function DelivereeWorkspace() {
             <Menu size={18} />
           </button>
           <div className="do-breadcrumb">
-            <span>{currentContextLabel}</span>
-            {selectedWorkItem && (
-              <>
-                <ChevronRight size={13} />
-                <strong>{entityTitle(selectedWorkItem)}</strong>
-              </>
-            )}
+            <AppBreadcrumbs
+              segments={[
+                {
+                  label: workspace?.name || "Workspace",
+                  onClick: () => navigate("/home"),
+                },
+                ...(centerView === "portfolio"
+                  ? [{ label: "Command Center" }]
+                  : []),
+                ...(activeProject
+                  ? [
+                      {
+                        label: entityTitle(activeProject),
+                        onClick: () => openProjectRecord(activeProject),
+                      },
+                    ]
+                  : lens.kind === "home"
+                    ? [{ label: "Home" }]
+                    : lens.kind === "approvals"
+                      ? [{ label: "Approvals" }]
+                      : lens.kind === "settings"
+                        ? [{ label: "Settings" }]
+                        : centerView === "conversation"
+                          ? [{ label: currentContextLabel || "Odiseus" }]
+                          : []),
+                ...(selectedWorkItem
+                  ? [{ label: entityTitle(selectedWorkItem) }]
+                  : []),
+              ]}
+            />
           </div>
           <div className="do-header-actions">
             <button
-              aria-label={t("headerSearch")}
+              aria-label="Open command palette"
               className="do-icon-button"
-              onClick={() => setSearchOpen((open) => !open)}
-              title={t("headerSearch")}
+              onClick={() => setCommandPaletteOpen(true)}
+              title="Command palette (⌘K)"
               type="button"
             >
               <Search size={15} />
@@ -3436,25 +3558,25 @@ export function DelivereeWorkspace() {
                         </p>
                       </div>
                     ) : (
-                      <OdiseusEmptyHero
-                        examples={openingPrompts}
-                        onExample={(prompt) => sendMessage(prompt)}
-                        subtitle={t("odiseusSubline")}
-                        title={t("odiseusWelcomePrompt")}
-                      />
-                    )}
-
-                    {!isFocusedConversation && (
-                      <HomeAttention
-                        projects={projects}
-                        tasks={tasks}
-                        risks={risks}
-                        reviewItems={reviewItems}
-                        todayTasks={todayTasks}
-                        onOpenProject={openProjectRecord}
-                        onOpenApprovals={() => setPanel("approvals")}
-                        onAsk={setComposer}
-                      />
+                      <>
+                        {!isFocusedConversation && (
+                          <HomeAttention
+                            projects={projects}
+                            tasks={tasks}
+                            risks={risks}
+                            reviewItems={reviewItems}
+                            todayTasks={todayTasks}
+                            onOpenProject={openProjectRecord}
+                            onOpenApprovals={() => setPanel("approvals")}
+                            onAsk={setComposer}
+                          />
+                        )}
+                        <OdiseusAgentHome
+                          examples={openingPrompts}
+                          onExample={(prompt) => sendMessage(prompt)}
+                          pendingApprovals={reviewItems.length}
+                        />
+                      </>
                     )}
 
                     {isFocusedConversation && (
