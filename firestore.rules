@@ -729,7 +729,10 @@ service cloud.firestore {
       return isSignedIn()
         && data.userId == request.auth.uid
         && data.workspaceId is string
-        && isWorkspaceMember(data.workspaceId);
+        && (
+          isWorkspaceMember(data.workspaceId)
+          || isWorkspaceOwner(data.workspaceId)
+        );
     }
     match /boldi_conversations/{id} {
       allow create: if canAccessBoldiRecord(incoming());

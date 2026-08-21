@@ -108,7 +108,7 @@ import {
   ODISEUS_NAME,
 } from "../lib/odiseus";
 import { actionIdempotencyKey, normalizeOdiseusRun } from "../lib/odiseusJobs";
-import { recordOdiseusActivity } from "../lib/odiseusActivity";
+import { persistOdiseusRun, recordOdiseusActivitySafe } from "../lib/odiseusActivity";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -1228,7 +1228,10 @@ export function DelivereeWorkspace() {
         "I reviewed the workspace, but there is no response to display.";
       const odiseusRun = normalizeOdiseusRun(result.run);
       await streamConversationReply(reply, setStreamed);
-      const runRef = await addDoc(collection(db, "odiseus_runs"), {
+      // Run/activity logs must never block the assistant reply. Missing
+      // Firestore rules for odiseus_* previously surfaced as a false
+      // "insufficient permissions" failure after a successful chat.
+      const runId = await persistOdiseusRun({
         userId: user.uid,
         workspaceId: workspace.id,
         conversationId: activeConversationId,
@@ -1240,8 +1243,6 @@ export function DelivereeWorkspace() {
         artifact: odiseusRun?.artifact || null,
         actionPlan: result.actionPlan || null,
         outcome: reply.slice(0, 2_000),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
@@ -1254,25 +1255,25 @@ export function DelivereeWorkspace() {
         suggestedChips: result.suggestedChips || [],
         actionPlan: result.actionPlan || null,
         odiseusRun: odiseusRun
-          ? { ...odiseusRun, runId: runRef.id }
+          ? { ...odiseusRun, runId: runId || null }
           : null,
         provider: result.provider || null,
         judgment: nextJudgment,
         createdAt: serverTimestamp(),
       });
-      await recordOdiseusActivity({
+      await recordOdiseusActivitySafe({
         workspaceId: workspace.id,
         userId: user.uid,
         conversationId: activeConversationId,
         projectId: primaryProject?.id || null,
-        runId: runRef.id,
+        runId,
         action: "job_completed",
         summary:
           odiseusRun?.toolCount
             ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
             : "Completed Odiseus job",
         metadata: { stepCount: odiseusRun?.steps?.length || 0 },
-      }).catch(() => undefined);
+      });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
           title: conversationTitleForMessage(
@@ -1381,7 +1382,7 @@ export function DelivereeWorkspace() {
       });
       staged += 1;
     }
-    await recordOdiseusActivity({
+    await recordOdiseusActivitySafe({
       workspaceId: workspace.id,
       userId: user.uid,
       conversationId,
@@ -1391,7 +1392,7 @@ export function DelivereeWorkspace() {
       summary: `Staged ${staged} action(s) for approval`,
       approvalRequired: true,
       approvedBy: user.uid,
-    }).catch(() => undefined);
+    });
     setNotice("Pending change ready. Review it before anything changes.");
     setPanel("approvals");
   };
@@ -1406,7 +1407,7 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       }).catch(() => undefined);
     }
-    await recordOdiseusActivity({
+    await recordOdiseusActivitySafe({
       workspaceId: workspace.id,
       userId: user.uid,
       conversationId,
@@ -1416,7 +1417,7 @@ export function DelivereeWorkspace() {
       summary: "Rejected Odiseus proposed actions",
       approvalRequired: true,
       approvedBy: user.uid,
-    }).catch(() => undefined);
+    });
     setNotice("Odiseus will not apply those actions.");
   };
 
