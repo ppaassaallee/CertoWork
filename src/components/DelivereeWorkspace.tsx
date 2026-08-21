@@ -370,11 +370,9 @@ export function DelivereeWorkspace() {
     lens.kind === "project"
       ? lens.tab === "notes"
         ? "notes"
-        : lens.tab === "tasks"
-          ? "items"
-          : lens.tab === "strategy"
-            ? "strategy"
-            : "project"
+        : lens.tab === "strategy"
+          ? "strategy"
+          : "project"
       : lens.kind === "work"
         ? lens.section === "issues"
           ? "items"
@@ -386,11 +384,15 @@ export function DelivereeWorkspace() {
     if (next === "portfolio") navigate("/work");
     else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
     else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
-    else if (next === "items" && projectId) navigate(`/work/projects/${projectId}/tasks`);
-    else if (next === "items") navigate("/work");
+    // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
+    else if (next === "items" && projectId)
+      navigate(`/work/projects/${projectId}/tasks`);
+    else if (next === "items") navigate("/work/tasks");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else navigate("/home");
   };
+  const projectConsoleInitialTab =
+    lens.kind === "project" && lens.tab === "tasks" ? "items" : "brief";
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
@@ -3506,15 +3508,6 @@ export function DelivereeWorkspace() {
               Overview
             </button>
             <button
-              aria-selected={centerView === "items"}
-              className={centerView === "items" ? "is-active" : ""}
-              onClick={() => goCenterView("items")}
-              role="tab"
-              type="button"
-            >
-              Tasks
-            </button>
-            <button
               aria-selected={centerView === "notes"}
               className={centerView === "notes" ? "is-active" : ""}
               onClick={() => goCenterView("notes")}
@@ -3967,6 +3960,7 @@ export function DelivereeWorkspace() {
                   item.projectId === consoleProject.id &&
                   item.status !== "archived",
               )}
+              initialTab={projectConsoleInitialTab}
               milestones={milestones.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
@@ -4263,11 +4257,11 @@ export function DelivereeWorkspace() {
                     </button>
                   );
                 })}
-                <span className="do-context-section-label">Tasks</span>
+                <span className="do-context-section-label">Items</span>
                 <input
-                  aria-label="Find tasks for this conversation"
+                  aria-label="Find items for this conversation"
                   onChange={(event) => setContextTaskSearch(event.target.value)}
-                  placeholder="Find a task"
+                  placeholder="Find an item"
                   value={contextTaskSearch}
                 />
                 {openTasks
