@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Loader2, ShieldCheck } from "../ui/Icon";
+import { Check, Loader2, ShieldCheck, X } from "../ui/Icon";
 import { actionLabel } from "../../lib/delivereeRoutes";
 import { proposalActionTitle, proposalActionType } from "../../lib/workspaceDisplay";
 
@@ -11,6 +11,7 @@ export type ConversationMessage = {
   citations?: Array<{ id: string; title: string; type?: string }>;
   suggestedChips?: string[];
   actionPlan?: any;
+  odiseusRun?: any;
   offline?: boolean;
 };
 
@@ -62,59 +63,111 @@ export function ActionProposal({
   projects,
   activeProject,
   onStage,
+  onReject,
 }: {
   message: ConversationMessage;
   projects: any[];
   activeProject: any | null;
   onStage: (message: ConversationMessage) => Promise<void>;
+  onReject?: (message: ConversationMessage) => Promise<void> | void;
 }) {
-  const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "done" | "rejected">(
+    "idle",
+  );
+  const [reviewing, setReviewing] = useState(false);
   const plan = message.actionPlan;
   if (!plan?.proposedActions?.length) return null;
+  const count = plan.proposedActions.length;
   return (
     <section className="do-proposal" data-testid="action-proposal">
       <div className="do-proposal-head">
         <div>
-          <span className="do-kicker">Pending</span>
-          <h3>{plan.title || "Pending changes"}</h3>
+          <span className="do-kicker">Approval needed</span>
+          <h3>
+            {plan.title || `Odiseus wants to perform ${count} action${count === 1 ? "" : "s"}`}
+          </h3>
           <p>{plan.summary}</p>
         </div>
         <ShieldCheck size={17} />
       </div>
-      <div className="do-proposal-items">
-        {plan.proposedActions.map((action: any, index: number) => (
-          <div className="do-proposal-item" key={`${action.type}-${index}`}>
-            <span className="do-proposal-number">{index + 1}</span>
+      {reviewing && (
+        <div className="do-proposal-items">
+          {plan.proposedActions.map((action: any, index: number) => (
+            <div className="do-proposal-item" key={`${action.type}-${index}`}>
+              <span className="do-proposal-number">{index + 1}</span>
+              <div>
+                <strong>
+                  {actionLabel(
+                    proposalActionType(action, projects, activeProject),
+                  )}
+                </strong>
+                <p>{proposalActionTitle(action, projects, activeProject)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!reviewing && (
+        <div className="do-proposal-items do-proposal-summary-row">
+          <div className="do-proposal-item">
+            <span className="do-proposal-number">{count}</span>
             <div>
-              <strong>
-                {actionLabel(proposalActionType(action, projects, activeProject))}
-              </strong>
-              <p>{proposalActionTitle(action, projects, activeProject)}</p>
+              <strong>Prepared actions</strong>
+              <p>Review details or approve to stage them for apply.</p>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
       <div className="do-proposal-foot">
         <span>Nothing changes until you approve.</span>
-        <button
-          className="do-button do-button-dark"
-          disabled={status !== "idle"}
-          onClick={async () => {
-            setStatus("saving");
-            await onStage(message);
-            setStatus("done");
-          }}
-          type="button"
-        >
-          {status === "saving" ? (
-            <Loader2 className="spin" size={14} />
-          ) : status === "done" ? (
-            <Check size={14} />
-          ) : (
-            <ShieldCheck size={14} />
+        <div className="do-proposal-actions">
+          {onReject && status === "idle" && (
+            <button
+              className="do-button"
+              onClick={async () => {
+                setStatus("rejected");
+                await onReject(message);
+              }}
+              type="button"
+            >
+              <X size={14} />
+              Reject
+            </button>
           )}
-          {status === "done" ? "Ready to apply" : "Review pending"}
-        </button>
+          <button
+            className="do-button"
+            disabled={status !== "idle"}
+            onClick={() => setReviewing((value) => !value)}
+            type="button"
+          >
+            {reviewing ? "Hide details" : "Review actions"}
+          </button>
+          <button
+            className="do-button do-button-dark"
+            disabled={status !== "idle"}
+            onClick={async () => {
+              setStatus("saving");
+              await onStage(message);
+              setStatus("done");
+            }}
+            type="button"
+          >
+            {status === "saving" ? (
+              <Loader2 className="spin" size={14} />
+            ) : status === "done" ? (
+              <Check size={14} />
+            ) : status === "rejected" ? (
+              <X size={14} />
+            ) : (
+              <ShieldCheck size={14} />
+            )}
+            {status === "done"
+              ? "Ready to apply"
+              : status === "rejected"
+                ? "Rejected"
+                : "Approve all"}
+          </button>
+        </div>
       </div>
     </section>
   );

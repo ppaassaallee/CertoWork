@@ -13,6 +13,24 @@ export type BoldiChatResult = {
   suggestedChips?: string[];
   actionPlan?: any;
   provider?: any;
+  run?: {
+    status?: string;
+    steps?: Array<{
+      id?: string;
+      tool?: string;
+      label: string;
+      status: "queued" | "working" | "done" | "failed";
+      at?: number;
+    }>;
+    toolCount?: number;
+    artifact?: {
+      kind: string;
+      title: string;
+      summary?: string;
+      body?: string;
+      projectId?: string | null;
+    } | null;
+  };
   error?: string;
 };
 

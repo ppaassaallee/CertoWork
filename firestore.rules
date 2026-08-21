@@ -776,6 +776,24 @@ service cloud.firestore {
         && incoming().workspaceId == resource.data.workspaceId;
       allow delete: if canAccessBoldiRecord(resource.data);
     }
+    match /odiseus_runs/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /odiseus_activity/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
     match /boldi_profiles/{userId} {
       allow read, write: if isSignedIn() && userId == request.auth.uid;
     }

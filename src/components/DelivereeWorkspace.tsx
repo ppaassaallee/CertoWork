@@ -96,10 +96,17 @@ import { ActionProposal, RichText, UserMessage } from "./conversation/MessagePar
 import { HomeAttention } from "../pages/HomeAttention";
 import { OdiseusBadge, OdiseusMark } from "./odiseus/OdiseusMark";
 import {
+  OdiseusArtifactCard,
+  OdiseusEmptyHero,
+  OdiseusWorkLog,
+} from "./odiseus/OdiseusWork";
+import {
   ODISEUS_CONVERSATION_TITLE,
   ODISEUS_HANDOFF_PREFIX,
   ODISEUS_NAME,
 } from "../lib/odiseus";
+import { actionIdempotencyKey, normalizeOdiseusRun } from "../lib/odiseusJobs";
+import { recordOdiseusActivity } from "../lib/odiseusActivity";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -202,6 +209,7 @@ export type Message = {
   citations?: Array<{ id: string; title: string; type?: string }>;
   suggestedChips?: string[];
   actionPlan?: any;
+  odiseusRun?: any;
   offline?: boolean;
 };
 
@@ -1195,7 +1203,23 @@ export function DelivereeWorkspace() {
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
+      const odiseusRun = normalizeOdiseusRun(result.run);
       await streamConversationReply(reply, setStreamed);
+      const runRef = await addDoc(collection(db, "odiseus_runs"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        conversationId: activeConversationId,
+        projectId: primaryProject?.id || null,
+        request: text,
+        status: odiseusRun?.status || "completed",
+        steps: odiseusRun?.steps || [],
+        toolCount: odiseusRun?.toolCount || 0,
+        artifact: odiseusRun?.artifact || null,
+        actionPlan: result.actionPlan || null,
+        outcome: reply.slice(0, 2_000),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -1206,10 +1230,26 @@ export function DelivereeWorkspace() {
         citations: result.citations || [],
         suggestedChips: result.suggestedChips || [],
         actionPlan: result.actionPlan || null,
+        odiseusRun: odiseusRun
+          ? { ...odiseusRun, runId: runRef.id }
+          : null,
         provider: result.provider || null,
         judgment: nextJudgment,
         createdAt: serverTimestamp(),
       });
+      await recordOdiseusActivity({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId: activeConversationId,
+        projectId: primaryProject?.id || null,
+        runId: runRef.id,
+        action: "job_completed",
+        summary:
+          odiseusRun?.toolCount
+            ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
+            : "Completed Odiseus job",
+        metadata: { stepCount: odiseusRun?.steps?.length || 0 },
+      }).catch(() => undefined);
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
           title: conversationTitleForMessage(
@@ -1253,10 +1293,12 @@ export function DelivereeWorkspace() {
       status: "approved_for_review",
       contextEntityId: primaryProject?.id || null,
       createdBy: user.uid,
+      odiseusRunId: message.odiseusRun?.runId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    for (const action of plan.proposedActions || []) {
+    let staged = 0;
+    for (const [index, action] of (plan.proposedActions || []).entries()) {
       const proposedChange = action.proposedChange || {};
       const duplicateProject =
         String(action.type || "") === "create_project"
@@ -1273,6 +1315,18 @@ export function DelivereeWorkspace() {
         proposedChange.projectId ||
         primaryProject?.id ||
         "";
+      const idempotencyKey = actionIdempotencyKey(planRef.id, index, {
+        type: actionType,
+        proposedChange,
+      });
+      const existing = await getDocs(
+        query(
+          collection(db, "review_candidates"),
+          where("workspaceId", "==", workspace.id),
+          where("idempotencyKey", "==", idempotencyKey),
+        ),
+      );
+      if (!existing.empty) continue;
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -1282,7 +1336,7 @@ export function DelivereeWorkspace() {
             ? proposedTitle(proposedChange, actionLabel(actionType))
             : proposedChange?.title || actionLabel(actionType),
         type: reviewType,
-        why: action.reason || "Proposed in conversation",
+        why: action.reason || "Proposed by Odiseus",
         action: actionLabel(actionType),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
@@ -1292,17 +1346,55 @@ export function DelivereeWorkspace() {
         },
         projectId,
         source: duplicateProject
-          ? `${plan.summary || "Certo Work conversation"} · Existing project recognized; converted create_project to update_project.`
-          : plan.summary || "Certo Work conversation",
-        sourceType: "delivereeos",
+          ? `${plan.summary || "Odiseus"} · Existing project recognized; converted create_project to update_project.`
+          : plan.summary || "Odiseus",
+        sourceType: "odiseus",
         sourceId: planRef.id,
+        idempotencyKey,
+        safetyLevel: Number(action.safetyLevel || plan.safetyLevel || 2),
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      staged += 1;
     }
+    await recordOdiseusActivity({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      conversationId,
+      projectId: primaryProject?.id || null,
+      runId: message.odiseusRun?.runId || null,
+      action: "actions_staged",
+      summary: `Staged ${staged} action(s) for approval`,
+      approvalRequired: true,
+      approvedBy: user.uid,
+    }).catch(() => undefined);
     setNotice("Pending change ready. Review it before anything changes.");
     setPanel("approvals");
+  };
+
+  const rejectPlan = async (message: Message) => {
+    if (!user || !workspace) return;
+    if (message.id && !message.id.startsWith("error-")) {
+      await updateDoc(doc(db, "boldi_messages", message.id), {
+        actionPlan: message.actionPlan
+          ? { ...message.actionPlan, status: "rejected" }
+          : null,
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+    }
+    await recordOdiseusActivity({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      conversationId,
+      projectId: primaryProject?.id || null,
+      runId: message.odiseusRun?.runId || null,
+      action: "actions_rejected",
+      summary: "Rejected Odiseus proposed actions",
+      approvalRequired: true,
+      approvedBy: user.uid,
+    }).catch(() => undefined);
+    setNotice("Odiseus will not apply those actions.");
   };
 
   const processReview = async (
@@ -2681,14 +2773,18 @@ export function DelivereeWorkspace() {
 
   const openingPrompts = isFocusedConversation
     ? [
-        `What needs attention in ${currentContextLabel}?`,
-        `Turn the next step for ${currentContextLabel} into clear work.`,
-        `Give me a short, honest update for this conversation.`,
+        "What's blocking us?",
+        "Summarize progress this week",
+        "Find overdue work",
+        "Prepare a status report",
+        "Recommend next actions",
       ]
     : [
-        "Triage what needs me today and take the first steps.",
-        "Draft the update, tasks, and risks for the work that is slipping.",
-        "Capture this and turn it into owned next actions.",
+        "Review projects at risk",
+        "Prepare my weekly portfolio report",
+        "Find overdue work and follow up",
+        "Which projects need attention today?",
+        "Create follow-ups for the biggest blockers",
       ];
 
   return (
@@ -3324,37 +3420,29 @@ export function DelivereeWorkspace() {
               <div className="do-thread">
                 {contextualMessages.length === 0 && !submitting ? (
                   <section className="do-opening">
-                    <div className="do-welcome">
-                      <OdiseusMark size="lg" />
-                      {isFocusedConversation ? (
+                    {isFocusedConversation ? (
+                      <div className="do-welcome">
+                        <OdiseusMark size="lg" />
                         <span className="do-context-eyebrow">
                           FOCUSED · {currentContextLabel}
                         </span>
-                      ) : (
-                        <span className="do-context-eyebrow">{t("odiseusTagline")}</span>
-                      )}
-                      <h1>
-                        {isFocusedConversation
-                          ? t("odiseusFocusedPrompt")
-                          : t("odiseusWelcomePrompt")}
-                      </h1>
-                      <p>
-                        {routeOrPrimaryProject
-                          ? routeOrPrimaryProject.outcome ||
-                            routeOrPrimaryProject.description ||
-                            `${projectTasks.length} open tasks in this context.`
-                          : isFocusedConversation
-                            ? `${projectTasks.length} open items are connected to this conversation.`
-                            : t("odiseusSubline")}
-                      </p>
-                      {!isFocusedConversation && (
-                        <div className="odiseus-trust-row">
-                          <span>Proposes, then asks</span>
-                          <span>Approval before irreversible changes</span>
-                          <span>Works across your Certo workspace</span>
-                        </div>
-                      )}
-                    </div>
+                        <h1>{t("odiseusFocusedPrompt")}</h1>
+                        <p>
+                          {routeOrPrimaryProject
+                            ? routeOrPrimaryProject.outcome ||
+                              routeOrPrimaryProject.description ||
+                              `${projectTasks.length} open tasks in this context.`
+                            : `${projectTasks.length} open items are connected to this conversation.`}
+                        </p>
+                      </div>
+                    ) : (
+                      <OdiseusEmptyHero
+                        examples={openingPrompts}
+                        onExample={(prompt) => sendMessage(prompt)}
+                        subtitle={t("odiseusSubline")}
+                        title={t("odiseusWelcomePrompt")}
+                      />
+                    )}
 
                     {!isFocusedConversation && (
                       <HomeAttention
@@ -3367,28 +3455,6 @@ export function DelivereeWorkspace() {
                         onOpenApprovals={() => setPanel("approvals")}
                         onAsk={setComposer}
                       />
-                    )}
-
-                    {!isFocusedConversation && (
-                      <button
-                        className="do-daily-pulse"
-                        onClick={() =>
-                          sendMessage(
-                            "Give me a realistic plan for today using my current work.",
-                          )
-                        }
-                        type="button"
-                      >
-                        <span>
-                          <CalendarDays size={15} /> Today
-                        </span>
-                        <strong>
-                          {todayTasks.length
-                            ? `${todayTasks.length} tasks need attention`
-                            : "Your day is open"}
-                        </strong>
-                        <ChevronRight size={15} />
-                      </button>
                     )}
 
                     {isFocusedConversation && (
@@ -3408,18 +3474,20 @@ export function DelivereeWorkspace() {
                       </div>
                     )}
 
-                    <div className="do-prompt-list">
-                      {openingPrompts.map((prompt) => (
-                        <button
-                          key={prompt}
-                          onClick={() => sendMessage(prompt)}
-                          type="button"
-                        >
-                          <span>{prompt}</span>
-                          <ArrowUp size={14} />
-                        </button>
-                      ))}
-                    </div>
+                    {isFocusedConversation && (
+                      <div className="do-prompt-list">
+                        {openingPrompts.map((prompt) => (
+                          <button
+                            key={prompt}
+                            onClick={() => sendMessage(prompt)}
+                            type="button"
+                          >
+                            <span>{prompt}</span>
+                            <ArrowUp size={14} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 ) : (
                   <>
@@ -3471,14 +3539,40 @@ export function DelivereeWorkspace() {
                                     ))}
                                   </div>
                                 )}
-                              <ActionProposal
-                                activeProject={
-                                  primaryProject || activeProject || null
-                                }
-                                message={message}
-                                onStage={stagePlan}
-                                projects={projects}
-                              />
+                              {message.odiseusRun?.steps?.length ? (
+                                <OdiseusWorkLog
+                                  steps={message.odiseusRun.steps}
+                                />
+                              ) : null}
+                              {message.odiseusRun?.artifact ? (
+                                <OdiseusArtifactCard
+                                  meta="Generated by Odiseus"
+                                  summary={
+                                    message.odiseusRun.artifact.summary ||
+                                    undefined
+                                  }
+                                  title={message.odiseusRun.artifact.title}
+                                  onOpen={
+                                    message.odiseusRun.artifact.body
+                                      ? () =>
+                                          setComposer(
+                                            `Here is the report you prepared:\n\n${message.odiseusRun.artifact.body}`,
+                                          )
+                                      : undefined
+                                  }
+                                />
+                              ) : null}
+                              {message.actionPlan?.status !== "rejected" && (
+                                <ActionProposal
+                                  activeProject={
+                                    primaryProject || activeProject || null
+                                  }
+                                  message={message}
+                                  onReject={rejectPlan}
+                                  onStage={stagePlan}
+                                  projects={projects}
+                                />
+                              )}
                               {message.suggestedChips && (
                                 <div className="do-chips">
                                   {message.suggestedChips.map((chip) => {
@@ -3518,11 +3612,7 @@ export function DelivereeWorkspace() {
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
-                              <div className="do-thinking">
-                                <span />
-                                <span />
-                                <span />
-                              </div>
+                              <OdiseusWorkLog steps={[]} working />
                             )}
                           </div>
                         </div>
@@ -3629,8 +3719,8 @@ export function DelivereeWorkspace() {
                   }}
                   placeholder={
                     isFocusedConversation
-                      ? `Ask about ${currentContextLabel}…`
-                      : "Ask, capture, or plan…"
+                      ? `Give Odiseus a job for ${currentContextLabel}…`
+                      : "Give Odiseus a job…"
                   }
                   ref={composerRef}
                   rows={1}

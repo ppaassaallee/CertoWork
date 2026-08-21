@@ -1,4 +1,5 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
+import { runOdiseusAgent } from "./odiseus-agent.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -326,6 +327,8 @@ ${operatingMode}
 
 Product behavior:
 - Help the user capture, clarify, choose, plan, and finish meaningful work.
+- Prefer tool calls (search_projects, get_overdue_items, get_activity_summary, list_project_items, get_project, propose_followups, prepare_status_report) before guessing from memory.
+- After tools, return a concise outcome: what you found, what changed or what needs approval, and any artifact/next decision.
 - Organize work by when it needs attention: Today, This Week, Later, or a real calendar block.
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
@@ -667,37 +670,21 @@ async function chat(request, env) {
   const model = openaiModelName(env);
 
   try {
-    const response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${openaiApiKey(env)}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        instructions: assistantInstructions(body, citations),
-        input: [
-          {
-            role: "user",
-            content:
-              "Certo Work response contract: return exactly one valid JSON object matching the provided instructions.",
-          },
-          ...body.messages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-        ],
-        text: { format: { type: "json_object" } },
-        store: false,
-      }),
+    const result = await runOdiseusAgent({
+      env,
+      model,
+      instructions: assistantInstructions(body, citations),
+      messages: body.messages,
+      workspaceContext: body.workspaceContext || {},
+      openaiApiKey: openaiApiKey(env),
+      openaiUrl: OPENAI_RESPONSES_URL,
+      extractOpenAIText,
+      parseJsonObject,
+      normalizeAssistantResult,
+      citations,
+      latestUserMessage,
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      const message = payload?.error?.message || `OpenAI request failed (${response.status})`;
-      return json({ error: message, code: "OPENAI_REQUEST_FAILED" }, 502);
-    }
-    const result = parseJsonObject(extractOpenAIText(payload));
-    return json(normalizeAssistantResult(result, citations, model, latestUserMessage));
+    return json(result);
   } catch (error) {
     return json(
       {
@@ -705,9 +692,9 @@ async function chat(request, env) {
           error instanceof Error
             ? error.message
             : "The assistant is temporarily unavailable",
-        code: "ASSISTANT_UNAVAILABLE",
+        code: error?.code || "ASSISTANT_UNAVAILABLE",
       },
-      502,
+      error?.status || 502,
     );
   }
 }

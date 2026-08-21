@@ -12,7 +12,8 @@ test("Odiseus brand copy is hire-first", () => {
   assert.equal(ODISEUS_NAME, "Odiseus");
   assert.equal(ODISEUS_TAGLINE, "Not a tool. A hire.");
   assert.equal(t("odiseusName", "en"), "Odiseus");
-  assert.match(t("odiseusSubline", "en"), /asks before anything irreversible/i);
+  assert.match(t("odiseusWelcomePrompt", "en"), /take off your plate/i);
+  assert.match(t("odiseusSubline", "en"), /assign an outcome/i);
 });
 
 test("Odiseus conversations keep the legacy chief_of_staff key", () => {

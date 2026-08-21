@@ -34,9 +34,9 @@ const dictionaries = {
     odiseusName: "Odiseus",
     odiseusTagline: "Not a tool. A hire.",
     odiseusSubline:
-      "The AI employee that lives inside Certo Work. You set direction; Odiseus does the legwork and asks before anything irreversible.",
+      "Assign an outcome. Odiseus can investigate, organize, execute and return the finished work.",
     odiseusSidebarBlurb: "Does the work you can't get to",
-    odiseusWelcomePrompt: "What should Odiseus take ownership of?",
+    odiseusWelcomePrompt: "What should I take off your plate?",
     odiseusFocusedPrompt: "What should move next on this work?",
   },
   es: {
@@ -72,9 +72,9 @@ const dictionaries = {
     odiseusName: "Odiseus",
     odiseusTagline: "No es una herramienta. Es una contratación.",
     odiseusSubline:
-      "El empleado de IA que vive dentro de Certo Work. Tú das dirección; Odiseus hace el trabajo y pregunta antes de lo irreversible.",
+      "Asigna un resultado. Odiseus puede investigar, organizar, ejecutar y devolver el trabajo terminado.",
     odiseusSidebarBlurb: "Hace el trabajo al que no llegas",
-    odiseusWelcomePrompt: "¿De qué debería hacerse cargo Odiseus?",
+    odiseusWelcomePrompt: "¿Qué te quito de encima?",
     odiseusFocusedPrompt: "¿Qué debe avanzar en este trabajo?",
   },
 } as const;
