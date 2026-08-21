@@ -1,0 +1,27 @@
+export function inviteActivationPath(token?: string | null) {
+  const value = String(token || "").trim();
+  return value ? `/invite/${encodeURIComponent(value)}` : "/";
+}
+
+function asMillis(value: any) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (value?.toMillis) return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function inviteIsExpired(invite: { createdAt?: any; expiresAt?: any } | null | undefined, now = Date.now()) {
+  if (!invite) return true;
+  const expires = asMillis(invite.expiresAt);
+  if (expires && expires < now) return true;
+  const created = asMillis(invite.createdAt);
+  if (!created) return false;
+  return now - created > 14 * 24 * 60 * 60 * 1000;
+}
+
+export function inviteIsUsable(invite: { status?: string } | null | undefined) {
+  const status = String(invite?.status || "pending").toLowerCase();
+  return ["pending", "sent", "invited"].includes(status);
+}
