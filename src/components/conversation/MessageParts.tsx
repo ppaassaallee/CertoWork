@@ -95,7 +95,7 @@ export function ActionProposal({
         ))}
       </div>
       <div className="do-proposal-foot">
-        <span>Nothing changes until you apply it.</span>
+        <span>Nothing changes until you approve.</span>
         <button
           className="do-button do-button-dark"
           disabled={status !== "idle"}

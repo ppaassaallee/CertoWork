@@ -282,7 +282,7 @@ function SignIn() {
       </div>
       <footer>
         <span>Certo Work</span>
-        <span>Chief of Staff · Projects · Costs · Teams</span>
+        <span>Odiseus · Projects · Approvals · Teams</span>
         <span>Approval-first by design</span>
       </footer>
     </main>

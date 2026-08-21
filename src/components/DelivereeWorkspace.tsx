@@ -11,7 +11,6 @@ import {
   Archive,
   ArrowUp,
   BookOpen,
-  Bot,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -79,7 +78,6 @@ import { Toast } from "./ui/Toast";
 import { t } from "../lib/i18n";
 import {
   dateKey,
-  displayName,
   entityTitle,
   findMatchingProject,
   inviteMessage,
@@ -87,7 +85,6 @@ import {
   isClosed,
   localDateKey,
   priorityLabel,
-  projectWorkKey,
   proposalChipLabel,
   proposedTitle,
   reviewTypeForAction,
@@ -97,6 +94,12 @@ import {
 } from "../lib/workspaceDisplay";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { HomeAttention } from "../pages/HomeAttention";
+import { OdiseusBadge, OdiseusMark } from "./odiseus/OdiseusMark";
+import {
+  ODISEUS_CONVERSATION_TITLE,
+  ODISEUS_HANDOFF_PREFIX,
+  ODISEUS_NAME,
+} from "../lib/odiseus";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -112,13 +115,9 @@ import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
-import {
-  buildProjectTemplate,
-  instantiateTemplateItems,
-  type TemplateRole,
-} from "../lib/projectTemplates";
-import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
-import { recordClientException } from "../lib/clientExceptions";
+import { useControlledListsActions } from "../hooks/useControlledListsActions";
+import { useControlledListDeletion } from "../hooks/useControlledListDeletion";
+import { useProjectTemplates } from "../hooks/useProjectTemplates";
 import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
@@ -126,7 +125,6 @@ import {
   isPortfolioViewerMember,
   normalizeAccessEmail,
 } from "../lib/accessControl";
-import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
   isProjectWizardInvocation,
@@ -196,7 +194,7 @@ type Conversation = {
   createdAt?: any;
 };
 
-type Message = {
+export type Message = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
@@ -219,7 +217,7 @@ type AccessRequest = {
   updatedAt?: any;
 };
 
-type Panel =
+export type Panel =
   | "today"
   | "projects"
   | "project"
@@ -229,7 +227,7 @@ type Panel =
   | "workspace"
   | "settings"
   | null;
-type CenterView =
+export type CenterView =
   | "conversation"
   | "items"
   | "notes"
@@ -1031,7 +1029,7 @@ export function DelivereeWorkspace() {
     const ref = await addDoc(collection(db, "boldi_conversations"), {
       userId: user.uid,
       workspaceId: workspace.id,
-      title: "Chief of Staff",
+      title: ODISEUS_CONVERSATION_TITLE,
       status: "active",
       sourceContext: "home",
       contextEntityId: null,
@@ -1427,7 +1425,7 @@ export function DelivereeWorkspace() {
           workspaceId: workspace.id,
           conversationId: targetConversationId,
           role: "assistant",
-          content: `**Handoff from Chief of Staff**\n\n${content}`,
+          content: `**${ODISEUS_HANDOFF_PREFIX}**\n\n${content}`,
           inputType: "conversation_handoff",
           sourceConversationId: conversationId,
           contextType: targetConversation.conversationType || "general",
@@ -1680,697 +1678,52 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const createControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    name: string,
-  ) => {
-    if (!user || !workspace) return name;
-    const cleaned = name.trim();
-    if (!cleaned) return "";
-    const exists = categories.some(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
-    );
-    const existing = categories.find(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
-    );
-    if (exists) return group === "tag" ? existing?.id || cleaned : cleaned;
-    try {
-      const created = await addDoc(collection(db, "categories"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        name: cleaned,
-        group,
-        color:
-          group === "delivery_entity"
-            ? "#315f46"
-            : group === "client_entity"
-              ? "#4b6988"
-              : "#7b5ea7",
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      setCategories((current) =>
-        current.some((category) => category.id === created.id)
-          ? current
-          : [
-              ...current,
-              {
-                id: created.id,
-                userId: user.uid,
-                workspaceId: workspace.id,
-                name: cleaned,
-                group,
-                color:
-                  group === "delivery_entity"
-                    ? "#315f46"
-                    : group === "client_entity"
-                      ? "#4b6988"
-                      : "#7b5ea7",
-                createdBy: user.uid,
-              },
-            ],
-      );
-      setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
-      return group === "tag" ? created.id : cleaned;
-    } catch (reason) {
-      recordClientException("controlled_lists", "create", reason, {
-        group,
-        name: cleaned,
-      });
-      setNotice(`Could not add ${cleaned}. Open Exception trace in Settings for details.`);
-      return "";
-    }
-  };
-
-  const renameControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    option: ControlledListOption,
-    name: string,
-  ) => {
-    if (!user || !workspace) return;
-    const previous = String(option.name || "").trim();
-    const next = name.trim();
-    if (!previous || !next || previous === next) return;
-    try {
-      const batch = writeBatch(db);
-      let createdCategoryId: string | null = null;
-      if (option.id) {
-        batch.update(doc(db, "categories", option.id), {
-          name: next,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        const existing = categories.find(
-          (category) =>
-            categoryGroup(category) === group &&
-            String(category.name || "").trim().toLowerCase() ===
-              next.toLowerCase(),
-        );
-        if (!existing) {
-          const categoryRef = doc(collection(db, "categories"));
-          createdCategoryId = categoryRef.id;
-          batch.set(categoryRef, {
-            userId: user.uid,
-            workspaceId: workspace.id,
-            name: next,
-            group,
-            color:
-              group === "delivery_entity"
-                ? "#315f46"
-                : group === "client_entity"
-                  ? "#4b6988"
-                  : "#7b5ea7",
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-      if (group === "delivery_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.deliveryEntity || "").trim() === previous ||
-              String(project.bpo || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              deliveryEntity: next,
-              bpo: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.deliveryEntity || "").trim() === previous ||
-              String(task.bpo || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              deliveryEntity: next,
-              bpo: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "client_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.clientEntity || "").trim() === previous ||
-              String(project.client || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              clientEntity: next,
-              client: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.clientEntity || "").trim() === previous ||
-              String(task.client || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              clientEntity: next,
-              client: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "tag") {
-        const matchingTag = categories.find(
-          (category) =>
-            categoryGroup(category) === "tag" &&
-            String(category.name || "").trim() === previous,
-        );
-        if (matchingTag?.id && !option.id) {
-          batch.update(doc(db, "categories", matchingTag.id), {
-            name: next,
-          });
-        }
-      }
-      await batch.commit();
-      setCategories((current) => {
-        const updated = current.map((category) =>
-          categoryGroup(category) === group &&
-          (category.id === option.id ||
-            String(category.name || "").trim().toLowerCase() ===
-              previous.toLowerCase())
-            ? { ...category, name: next }
-            : category,
-        );
-        const existsAfterUpdate = updated.some(
-          (category) =>
-            categoryGroup(category) === group &&
-            String(category.name || "").trim().toLowerCase() ===
-              next.toLowerCase(),
-        );
-        if (existsAfterUpdate) return updated;
-        return [
-          ...updated,
-          {
-            id: createdCategoryId || `local-${group}-${next}`,
-            userId: user.uid,
-            workspaceId: workspace.id,
-            name: next,
-            group,
-            color:
-              group === "delivery_entity"
-                ? "#315f46"
-                : group === "client_entity"
-                  ? "#4b6988"
-                  : "#7b5ea7",
-            createdBy: user.uid,
-          },
-        ];
-      });
-      if (group === "delivery_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.deliveryEntity || "").trim() === previous ||
-            String(project.bpo || "").trim() === previous
-              ? { ...project, deliveryEntity: next, bpo: next }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.deliveryEntity || "").trim() === previous ||
-            String(task.bpo || "").trim() === previous
-              ? { ...task, deliveryEntity: next, bpo: next }
-              : task,
-          ),
-        );
-      }
-      if (group === "client_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.clientEntity || "").trim() === previous ||
-            String(project.client || "").trim() === previous
-              ? { ...project, clientEntity: next, client: next }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.clientEntity || "").trim() === previous ||
-            String(task.client || "").trim() === previous
-              ? { ...task, clientEntity: next, client: next }
-              : task,
-          ),
-        );
-      }
-      setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
-    } catch (reason) {
-      recordClientException("controlled_lists", "rename", reason, {
-        group,
-        previous,
-        next,
-        optionId: option.id || null,
-      });
-      setNotice(`Could not rename ${previous}. Open Exception trace in Settings for details.`);
-    }
-  };
-
-  const deleteControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    option: ControlledListOption,
-  ) => {
-    if (!user || !workspace) return;
-    const previous = String(option.name || "").trim();
-    if (!previous) return;
-    const confirmed = window.confirm(
-      group === "tag"
-        ? `Remove "${previous}" from tags? Matching projects/items will have this tag cleared.`
-        : `Remove "${previous}" from ${group.replace(/_/g, " ")}? Existing projects/items using it will be moved to Internal so it does not reappear.`,
-    );
-    if (!confirmed) return;
-    try {
-      const batch = writeBatch(db);
-      const matchingCategoryIds = categories
-        .filter(
-          (category) =>
-            categoryGroup(category) === group &&
-            (category.id === option.id ||
-              String(category.name || "").trim().toLowerCase() ===
-                previous.toLowerCase()),
-        )
-        .map((category) => category.id)
-        .filter(Boolean);
-      matchingCategoryIds.forEach((categoryId) =>
-        batch.delete(doc(db, "categories", categoryId)),
-      );
-      if (group === "delivery_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.deliveryEntity || "").trim() === previous ||
-              String(project.bpo || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              deliveryEntity: "Internal",
-              bpo: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.deliveryEntity || "").trim() === previous ||
-              String(task.bpo || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              deliveryEntity: "Internal",
-              bpo: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "client_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.clientEntity || "").trim() === previous ||
-              String(project.client || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              clientEntity: "Internal",
-              client: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.clientEntity || "").trim() === previous ||
-              String(task.client || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              clientEntity: "Internal",
-              client: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "tag") {
-        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
-          .map((value) => String(value || "").trim())
-          .filter(Boolean);
-        const withoutRemoved = (record: any) => [
-          ...new Set(
-            [
-              ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-              ...(Array.isArray(record.tags) ? record.tags : []),
-              ...(Array.isArray(record.labels) ? record.labels : []),
-            ]
-              .map((value) => String(value || "").trim())
-              .filter(
-                (value) =>
-                  value &&
-                  !removedKeys.some(
-                    (removed) =>
-                      removed.toLowerCase() === value.toLowerCase(),
-                  ),
-              ),
-          ),
-        ];
-        const hasRemovedTag = (record: any) => {
-          const values = [
-            ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-            ...(Array.isArray(record.tags) ? record.tags : []),
-            ...(Array.isArray(record.labels) ? record.labels : []),
-          ].map((value) => String(value || "").trim().toLowerCase());
-          return removedKeys.some((removed) =>
-            values.includes(removed.toLowerCase()),
-          );
-        };
-        projects.filter(hasRemovedTag).forEach((project) => {
-          const next = withoutRemoved(project);
-          batch.update(doc(db, "projects", project.id), {
-            tagIds: next,
-            tags: next,
-            labels: next,
-            updatedAt: serverTimestamp(),
-          });
-        });
-        tasks.filter(hasRemovedTag).forEach((task) => {
-          const next = withoutRemoved(task);
-          batch.update(doc(db, "tasks", task.id), {
-            tagIds: next,
-            tags: next,
-            labels: next,
-            updatedAt: serverTimestamp(),
-          });
-        });
-      }
-      await batch.commit();
-      setCategories((current) =>
-        current.filter(
-          (category) =>
-            !(
-              categoryGroup(category) === group &&
-              (matchingCategoryIds.includes(category.id) ||
-                String(category.name || "").trim().toLowerCase() ===
-                  previous.toLowerCase())
-            ),
-        ),
-      );
-      if (group === "delivery_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.deliveryEntity || "").trim() === previous ||
-            String(project.bpo || "").trim() === previous
-              ? { ...project, deliveryEntity: "Internal", bpo: "Internal" }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.deliveryEntity || "").trim() === previous ||
-            String(task.bpo || "").trim() === previous
-              ? { ...task, deliveryEntity: "Internal", bpo: "Internal" }
-              : task,
-          ),
-        );
-      }
-      if (group === "client_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.clientEntity || "").trim() === previous ||
-            String(project.client || "").trim() === previous
-              ? { ...project, clientEntity: "Internal", client: "Internal" }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.clientEntity || "").trim() === previous ||
-            String(task.client || "").trim() === previous
-              ? { ...task, clientEntity: "Internal", client: "Internal" }
-              : task,
-          ),
-        );
-      }
-      if (group === "tag") {
-        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
-          .map((value) => String(value || "").trim())
-          .filter(Boolean);
-        const cleanRecordTags = (record: any) => {
-          const next = [
-            ...new Set(
-              [
-                ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-                ...(Array.isArray(record.tags) ? record.tags : []),
-                ...(Array.isArray(record.labels) ? record.labels : []),
-              ]
-                .map((value) => String(value || "").trim())
-                .filter(
-                  (value) =>
-                    value &&
-                    !removedKeys.some(
-                      (removed) =>
-                        removed.toLowerCase() === value.toLowerCase(),
-                    ),
-                ),
-            ),
-          ];
-          return { ...record, tagIds: next, tags: next, labels: next };
-        };
-        setProjects((current) => current.map(cleanRecordTags));
-        setTasks((current) => current.map(cleanRecordTags));
-      }
-      setNotice(
-        group === "tag"
-          ? `${previous} removed. Matching project/item tags were cleared.`
-          : `${previous} removed. Matching projects/items were moved to Internal.`,
-      );
-    } catch (reason) {
-      recordClientException("controlled_lists", "delete", reason, {
-        group,
-        previous,
-        optionId: option.id || null,
-      });
-      setNotice(`Could not remove ${previous}. Open Exception trace in Settings for details.`);
-    }
-  };
-
-  const createCostTemplate = async (template: any) => {
-    if (!user || !workspace || !template?.name?.trim()) return;
-    await addDoc(collection(db, "cost_templates"), {
-      name: template.name.trim(),
-      description: String(template.description || "").trim(),
-      rows: Array.isArray(template.rows) ? template.rows : [],
-      userId: user.uid,
-      workspaceId: workspace.id,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+  const { createControlledOption, renameControlledOption } =
+    useControlledListsActions({
+      user,
+      workspace,
+      categories,
+      projects,
+      tasks,
+      setCategories,
+      setProjects,
+      setTasks,
+      setNotice,
     });
-    setNotice("Cost template saved for this workspace.");
-  };
 
-  const updateCostTemplate = async (
-    templateId: string,
-    patch: Record<string, unknown>,
-  ) => {
-    await updateDoc(doc(db, "cost_templates", templateId), {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
-    setNotice("Cost template updated.");
-  };
+  const { deleteControlledOption } = useControlledListDeletion({
+    user,
+    workspace,
+    categories,
+    projects,
+    tasks,
+    setCategories,
+    setProjects,
+    setTasks,
+    setNotice,
+  });
 
-  const createProjectTemplate = async (
-    sourceProjectId: string,
-    name: string,
-    description: string,
-  ) => {
-    if (!user || !workspace) return;
-    const source = projects.find((project) => project.id === sourceProjectId);
-    if (!source || !name.trim()) return;
-    const template = buildProjectTemplate(source, tasks, name, description);
-    await addDoc(collection(db, "agent_templates"), {
-      ...template,
-      userId: user.uid,
-      workspaceId: workspace.id,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice(`${name.trim()} saved to the workspace template library.`);
-  };
-
-  const deleteProjectTemplate = async (templateId: string) => {
-    if (!templateId) return;
-    await deleteDoc(doc(db, "agent_templates", templateId));
-    setNotice("Project template deleted.");
-  };
-
-  const applyProjectTemplate = async (
-    template: any,
-    application: TemplateApplication,
-  ) => {
-    if (!user || !workspace || !application.title.trim()) return;
-    const member = (id: string) =>
-      workspaceMembers.find((candidate) => candidate.id === id);
-    const roleAssignment = (id: string) => {
-      const selected = member(id);
-      return selected
-        ? { id: selected.id, name: memberLabel(selected) }
-        : undefined;
-    };
-    const roleAssignments: Partial<
-      Record<TemplateRole, { id: string; name: string }>
-    > = {
-      project_manager: roleAssignment(application.projectManagerId),
-      product_owner: roleAssignment(application.productOwnerId),
-      sponsor: roleAssignment(application.sponsorId),
-    };
-    const instantiatedItems = instantiateTemplateItems(
-      template,
-      application.startDate,
-      roleAssignments,
-    );
-    const projectRef = doc(collection(db, "projects"));
-    const conversationRef = doc(collection(db, "boldi_conversations"));
-    const taskRefs = new Map<string, ReturnType<typeof doc>>();
-    const taskByKey = new Map<string, any>();
-    instantiatedItems.forEach((item: any) => {
-      taskRefs.set(item.templateKey, doc(collection(db, "tasks")));
-      taskByKey.set(item.templateKey, item);
-    });
-    const projectManager = roleAssignments.project_manager;
-    const productOwner = roleAssignments.product_owner;
-    const sponsor = roleAssignments.sponsor;
-    const dueDates = instantiatedItems
-      .map((item: any) => item.dueDate)
-      .filter(Boolean)
-      .sort();
-    const batch = writeBatch(db);
-    batch.set(projectRef, {
-      ...(template.projectDefaults || {}),
-      userId: user.uid,
-      workspaceId: workspace.id,
-      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
-      title: application.title.trim(),
-      name: application.title.trim(),
-      normalizedTitle: application.title.trim().toLowerCase().replace(/\s+/g, " "),
-      projectKey: `${projectWorkKey({ title: application.title })}-${projectRef.id.slice(0, 4).toUpperCase()}`,
-      client: application.client || "Internal",
-      bpo: application.bpo || "Internal",
-      status: "planning",
-      startDate: application.startDate,
-      plannedStartDate: application.startDate,
-      targetDate: dueDates[dueDates.length - 1] || null,
-      dueDate: dueDates[dueDates.length - 1] || null,
-      projectManagerId: projectManager?.id || null,
-      projectManager: projectManager?.name || "",
-      productOwnerId: productOwner?.id || null,
-      productOwner: productOwner?.name || "",
-      sponsorId: sponsor?.id || null,
-      sponsor: sponsor?.name || "",
-      sponsorIds: sponsor?.id ? [sponsor.id] : [],
-      sponsors: sponsor?.name ? [sponsor.name] : [],
-      sourceTemplateId: template.id,
-      sourceTemplateName: template.name,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    const issuedItemKeys: string[] = [];
-    instantiatedItems.forEach((item: any, index: number) => {
-      const taskRef = taskRefs.get(item.templateKey)!;
-      const parentRef = item.parentTemplateKey
-        ? taskRefs.get(item.parentTemplateKey)
-        : null;
-      const parentTemplate = item.parentTemplateKey
-        ? taskByKey.get(item.parentTemplateKey)
-        : null;
-      const parentKind = String(parentTemplate?.workItemType || "");
-      const canonicalType = String(item.workItemType || "pbi").toLowerCase();
-      const itemKey = nextWorkItemKey([
-        ...tasks.map((task) => task.key || task.workItemKey),
-        ...issuedItemKeys,
-      ]);
-      issuedItemKeys.push(itemKey);
-      batch.set(taskRef, {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        projectId: projectRef.id,
-        ...buildTaskAccessPatch({
-          task: item,
-          workspaceId: workspace.id,
-          userId: user.uid,
-          email: user.email,
-        }),
-        title: item.title,
-        normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
-        description: item.description || "",
-        key: itemKey,
-        type: canonicalType,
-        workItemType: canonicalType,
-        itemType: canonicalType,
-        parentId: parentRef?.id || null,
-        epicId: parentKind === "epic" ? parentRef?.id || null : null,
-        featureId: parentKind === "feature" ? parentRef?.id || null : null,
-        priority: item.priority || null,
-        status: "backlog",
-        startDate: item.startDate || null,
-        dueDate: item.dueDate || null,
-        assigneeIds: item.assigneeIds || [],
-        assignees: item.assignees || [],
-        owner: item.owner || "",
-        order: Number(item.order ?? index),
-        rank: Number(item.order ?? index),
-        source: "project_template",
-        sourceTemplateId: template.id,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    });
-    batch.set(conversationRef, {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      title: application.title.trim(),
-      status: "active",
-      sourceContext: "project",
-      contextEntityId: projectRef.id,
-      conversationType: "project",
-      linkedProjectIds: [projectRef.id],
-      linkedTaskIds: [],
-      isChiefOfStaff: false,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    await batch.commit();
-    setConversationId(conversationRef.id);
-    setMessages([]);
-    setProjectConsoleId(projectRef.id);
-    setPanel(null);
-    goCenterView("project");
-    navigate(`/work/projects/${projectRef.id}`);
-    setNotice(
-      `${application.title.trim()} created from ${template.name} with ${instantiatedItems.length} work items.`,
-    );
-  };
+  const {
+    createCostTemplate,
+    updateCostTemplate,
+    createProjectTemplate,
+    deleteProjectTemplate,
+    applyProjectTemplate,
+  } = useProjectTemplates({
+    user,
+    workspace,
+    projects,
+    tasks,
+    workspaceMembers,
+    setNotice,
+    memberLabel,
+    setConversationId,
+    setMessages,
+    setProjectConsoleId,
+    setPanel,
+    goCenterView,
+    navigate,
+  });
 
   const updateWorkspaceProfile = async () => {
     if (!workspace || !workspaceNameDraft.trim()) return;
@@ -3333,9 +2686,9 @@ export function DelivereeWorkspace() {
         `Give me a short, honest update for this conversation.`,
       ]
     : [
-        "Plan my day realistically.",
-        "What is the most important thing to move next?",
-        "Help me capture and clarify something new.",
+        "Triage what needs me today and take the first steps.",
+        "Draft the update, tasks, and risks for the work that is slipping.",
+        "Capture this and turn it into owned next actions.",
       ];
 
   return (
@@ -3481,16 +2834,14 @@ export function DelivereeWorkspace() {
         </button>
 
         <button
-          className="do-chief-conversation"
+          className="do-odiseus-hire"
           onClick={openChiefOfStaff}
           type="button"
         >
-          <span>
-            <Sparkles size={14} />
-          </span>
+          <OdiseusMark size="md" />
           <div>
-            <strong>Chief of Staff</strong>
-            <small>Coordinate across all work</small>
+            <strong>{t("odiseusName")}</strong>
+            <small>{t("odiseusSidebarBlurb")}</small>
           </div>
           <ChevronRight size={13} />
         </button>
@@ -3974,22 +3325,18 @@ export function DelivereeWorkspace() {
                 {contextualMessages.length === 0 && !submitting ? (
                   <section className="do-opening">
                     <div className="do-welcome">
-                      <span className="do-orb">
-                        <Sparkles size={21} />
-                      </span>
-                      {isFocusedConversation && (
+                      <OdiseusMark size="lg" />
+                      {isFocusedConversation ? (
                         <span className="do-context-eyebrow">
                           FOCUSED · {currentContextLabel}
                         </span>
+                      ) : (
+                        <span className="do-context-eyebrow">{t("odiseusTagline")}</span>
                       )}
                       <h1>
                         {isFocusedConversation
-                          ? "What should move next?"
-                          : `What matters now, ${displayName(
-                              currentWorkspaceMember
-                                ? memberLabel(currentWorkspaceMember)
-                                : user?.displayName,
-                            )}?`}
+                          ? t("odiseusFocusedPrompt")
+                          : t("odiseusWelcomePrompt")}
                       </h1>
                       <p>
                         {routeOrPrimaryProject
@@ -3998,8 +3345,15 @@ export function DelivereeWorkspace() {
                             `${projectTasks.length} open tasks in this context.`
                           : isFocusedConversation
                             ? `${projectTasks.length} open items are connected to this conversation.`
-                            : "Capture anything. Make a plan. Finish the right work."}
+                            : t("odiseusSubline")}
                       </p>
+                      {!isFocusedConversation && (
+                        <div className="odiseus-trust-row">
+                          <span>Proposes, then asks</span>
+                          <span>Approval before irreversible changes</span>
+                          <span>Works across your Certo workspace</span>
+                        </div>
+                      )}
                     </div>
 
                     {!isFocusedConversation && (
@@ -4097,11 +3451,11 @@ export function DelivereeWorkspace() {
                         ) : (
                           <div className="do-assistant-message">
                             <div className="do-assistant-mark">
-                              <Bot size={16} />
+                              <OdiseusMark size="sm" />
                             </div>
                             <div className="do-assistant-content">
                               <div className="do-assistant-name">
-                                Certo Work{" "}
+                                <OdiseusBadge />
                                 {message.offline && <span>safe mode</span>}
                               </div>
                               <RichText text={message.content} />
@@ -4155,9 +3509,12 @@ export function DelivereeWorkspace() {
                       <article className="do-message is-assistant">
                         <div className="do-assistant-message">
                           <div className="do-assistant-mark">
-                            <Bot size={16} />
+                            <OdiseusMark size="sm" />
                           </div>
                           <div className="do-assistant-content">
+                            <div className="do-assistant-name">
+                              <OdiseusBadge />
+                            </div>
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
@@ -4650,7 +4007,7 @@ export function DelivereeWorkspace() {
                 >
                   <Sparkles size={14} />
                   <span>
-                    <strong>Chief of Staff · general</strong>
+                    <strong>{ODISEUS_NAME} · general</strong>
                     <small>
                       Coordinate and manage anything in the workspace
                     </small>
