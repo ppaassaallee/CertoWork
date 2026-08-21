@@ -2659,3 +2659,33 @@ a { color: var(--accent); }
 .do-items-center {
   max-width: var(--content-max);
 }
+
+.do-odiseus-recently { display: grid; gap: 4px; padding: 9px 11px; }
+.do-odiseus-recently .do-attention-head { padding: 0 0 4px; cursor: default; justify-content: flex-start; }
+.do-odiseus-recently .do-attention-head span { color: var(--text-secondary); font-size: calc(9px * var(--cw-text-scale)); font-weight: 600; }
+.do-odiseus-recently p { margin: 0; color: var(--text-muted); font-size: calc(9px * var(--cw-text-scale)); line-height: 1.5; }
+
+.do-odiseus-schedules { display: grid; gap: 12px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; }
+.do-odiseus-schedules > header { display: flex; align-items: flex-start; gap: 8px; }
+.do-odiseus-schedules > header svg { flex: none; margin-top: 2px; color: var(--accent); }
+.do-odiseus-schedules > header strong { display: block; font-size: calc(9.5px * var(--cw-text-scale)); color: var(--text-primary); }
+.do-odiseus-schedules > header p { margin: 3px 0 0; color: var(--text-muted); font-size: calc(8px * var(--cw-text-scale)); line-height: 1.5; }
+
+.do-odiseus-schedule-form { display: grid; gap: 8px; }
+.do-odiseus-schedule-form input,
+.do-odiseus-schedule-form textarea { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-0); padding: 8px 9px; color: var(--text-primary); font-size: calc(9px * var(--cw-text-scale)); outline: none; resize: none; }
+.do-odiseus-schedule-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.do-odiseus-schedule-presets button { border: 1px solid var(--border); border-radius: 999px; background: var(--surface-0); padding: 5px 9px; color: var(--text-secondary); font-size: calc(7.5px * var(--cw-text-scale)); cursor: pointer; }
+.do-odiseus-schedule-presets button.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
+.do-odiseus-schedule-form > button { display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--radius-control); background: var(--accent); padding: 9px 10px; color: var(--accent-on); font-size: calc(9px * var(--cw-text-scale)); font-weight: 600; cursor: pointer; }
+.do-odiseus-schedule-form > button:disabled { background: var(--border); color: var(--text-muted); cursor: default; }
+
+.do-odiseus-schedule-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.do-odiseus-schedule-list li { display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-0); padding: 10px 11px; }
+.do-odiseus-schedule-list li.is-empty { color: var(--text-muted); font-size: calc(9px * var(--cw-text-scale)); text-align: center; padding: 16px 10px; }
+.do-odiseus-schedule-list li strong { display: block; font-size: calc(9px * var(--cw-text-scale)); color: var(--text-primary); }
+.do-odiseus-schedule-list li small { display: block; margin-top: 2px; color: var(--text-muted); font-size: calc(7.5px * var(--cw-text-scale)); }
+.do-odiseus-schedule-list li p { margin: 5px 0 0; color: var(--text-secondary); font-size: calc(8.5px * var(--cw-text-scale)); line-height: 1.45; }
+.do-odiseus-schedule-actions { display: flex; gap: 6px; }
+.do-odiseus-schedule-actions button { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-0); padding: 6px 8px; color: var(--text-secondary); font-size: calc(7.5px * var(--cw-text-scale)); font-weight: 600; cursor: pointer; }
+.do-odiseus-schedule-actions button:hover { border-color: var(--accent); color: var(--accent-hover); }
