@@ -7,6 +7,7 @@ type WorkspaceInviteEmailRequest = {
   role: string;
   inviterName?: string | null;
   inviterEmail?: string | null;
+  inviteToken?: string | null;
 };
 
 export type WorkspaceInviteEmailResult = {
@@ -25,6 +26,7 @@ export async function sendWorkspaceInviteEmail({
   role,
   inviterName,
   inviterEmail,
+  inviteToken,
 }: WorkspaceInviteEmailRequest): Promise<WorkspaceInviteEmailResult> {
   const response = await fetch("/api/email/invite", {
     method: "POST",
@@ -40,6 +42,7 @@ export async function sendWorkspaceInviteEmail({
       role,
       inviterName,
       inviterEmail,
+      inviteToken,
     }),
   });
   const result = await response.json().catch(() => ({}));

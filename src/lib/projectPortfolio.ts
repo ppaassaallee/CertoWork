@@ -42,7 +42,7 @@ export function sidebarProjectGroups(projects: any[]) {
   const sorted = sortProjectsByRecency(projects).filter((project) => !isProjectClosed(project));
   const favorites = sorted.filter(isProjectFavorite).slice(0, 4);
   const favoriteIds = new Set(favorites.map((project) => project.id));
-  const recent = sorted.filter((project) => !favoriteIds.has(project.id)).slice(0, 3);
+  const recent = sorted.filter((project) => !favoriteIds.has(project.id)).slice(0, 6);
   return { favorites, recent };
 }
 

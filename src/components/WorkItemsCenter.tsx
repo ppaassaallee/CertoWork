@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
   Check,
@@ -13,19 +14,23 @@ import {
   Search,
   SlidersHorizontal,
   Square,
+  X,
 } from "lucide-react";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
+import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
+import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
-type WorkItemsViewMode = "list" | "kanban" | "gantt";
+type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
 type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag" | "work_category" | "product_phase";
 type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity" | "work_category" | "product_phase";
 type ItemViewFilters = {
@@ -69,7 +74,8 @@ type Props = {
   projects: any[];
   tasks: any[];
   tags?: TagLike[];
-  workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string }>;
+  workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string; userId?: string }>;
+  sprints?: SprintRecord[];
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
@@ -77,6 +83,9 @@ type Props = {
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
+  onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
+  onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  compact?: boolean;
 };
 
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
@@ -447,67 +456,13 @@ function InlineText({
   );
 }
 
-function ItemTagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
-  );
-}
-
 export function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
   tags = [],
   workspaceMembers = [],
+  sprints = [],
   selectedItemId,
   onSelectItem,
   onAsk,
@@ -515,6 +470,9 @@ export function WorkItemsCenter({
   onUpdateTask,
   onCreateControlledOption,
   onOpenProjectConsole,
+  onCreateSprint,
+  onUpdateSprint,
+  compact = false,
 }: Props) {
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
   const [query, setQuery] = useState("");
@@ -541,6 +499,14 @@ export function WorkItemsCenter({
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkSprintId, setBulkSprintId] = useState("");
+  const [bulkProjectId, setBulkProjectId] = useState("");
+  const [bulkShareId, setBulkShareId] = useState("");
+  const [sprintFilter, setSprintFilter] = useState("all");
+  const [ganttScale, setGanttScale] = useState<"week" | "month">("week");
+  const [sprintName, setSprintName] = useState("");
+  const [kanbanError, setKanbanError] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
   const [chromeCollapsed, setChromeCollapsed] = useState(() => {
@@ -759,10 +725,11 @@ export function WorkItemsCenter({
       const matchesItemTag = matchesTag(item, tagFilter);
       const matchesWorkCategory = workCategoryFilter === "all" || itemWorkCategory(item, projects) === workCategoryFilter;
       const matchesProductPhase = productPhaseFilter === "all" || itemProductPhase(item, projects) === productPhaseFilter;
+      const matchesSprint = itemMatchesSprint(item, sprintFilter);
       const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${itemWorkCategory(item, projects)} ${itemProductPhase(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
-      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && (!needle || searchable.includes(needle));
+      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && matchesSprint && (!needle || searchable.includes(needle));
     }), primarySort, secondarySort, projects);
-  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
@@ -829,8 +796,34 @@ export function WorkItemsCenter({
   };
 
   const updateBulk = async (patch: Record<string, unknown>) => {
-    await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
-    setSelectedBulkIds([]);
+    try {
+      await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
+      setSelectedBulkIds([]);
+      setKanbanError("");
+    } catch (reason) {
+      setKanbanError(reason instanceof Error ? reason.message : "Bulk update failed.");
+    }
+  };
+
+  const projectSprints = sprints.filter((sprint) => !activeProject || sprint.projectId === activeProject.id);
+
+  const persistKanbanMove = async (result: DropResult) => {
+    if (!result.destination) return;
+    const item = tasks.find((candidate) => candidate.id === result.draggableId);
+    if (!item) return;
+    const previous = { status: item.status, order: item.order, rank: item.rank };
+    const nextStatus = statusForKanbanColumn(result.destination.droppableId, item.status);
+    try {
+      await onUpdateTask(item.id, {
+        status: nextStatus,
+        order: result.destination.index,
+        rank: result.destination.index,
+      });
+      setKanbanError("");
+    } catch (reason) {
+      await onUpdateTask(item.id, previous);
+      setKanbanError(reason instanceof Error ? reason.message : "The card could not be moved.");
+    }
   };
 
   const toggleBulk = (id: string) => {
@@ -898,7 +891,7 @@ export function WorkItemsCenter({
         </button>}
         {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
         {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
-        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
         {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
           {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
         </select>}
@@ -1042,39 +1035,60 @@ export function WorkItemsCenter({
   };
 
   const renderKanban = () => {
-    const columns = groupBy === "hierarchy"
-      ? workStatuses.map((status) => ({ key: status, title: displayStatus(status), items: filtered.filter((item) => canonicalStatus(item) === status) }))
+    const useDeliveryBoard = Boolean(activeProject) || groupBy === "hierarchy" || groupBy === "status";
+    const columns = useDeliveryBoard && groupBy !== "actionBoard"
+      ? KANBAN_COLUMNS.map((column) => ({
+          key: column.key,
+          title: column.label,
+          items: filtered.filter((item) => kanbanColumnForStatus(canonicalStatus(item)) === column.key),
+        }))
       : Object.entries(grouped)
-        .map(([key, items]) => ({ key, title: groupBy === "status" ? displayStatus(key) : key, items }))
+        .map(([key, items]) => ({ key, title: displayStatus(key) === key ? key : key, items }))
         .sort((left, right) => {
           const leftIndex = groupSortIndex(groupBy, left.key);
           const rightIndex = groupSortIndex(groupBy, right.key);
           if (leftIndex !== rightIndex) return leftIndex - rightIndex;
           return left.title.localeCompare(right.title);
         });
-    const visibleColumns = columns.filter((column) => column.items.length > 0 || groupBy === "hierarchy");
+    const visibleColumns = columns.filter((column) => column.items.length > 0 || (useDeliveryBoard && groupBy !== "actionBoard"));
 
     return (
-      <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`}>
-        {visibleColumns.map((column) => (
-          <section className="do-kanban-column" key={column.key}>
-            <header>
-              <strong>{column.title}</strong>
-              <span>{column.items.length}</span>
-            </header>
-            <div>
-              {column.items.map((item) => renderBoardCard(item))}
-              {column.items.length === 0 && <p>No items</p>}
-            </div>
-          </section>
-        ))}
-        {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
-      </div>
+      <DragDropContext onDragEnd={(result) => void persistKanbanMove(result)}>
+        {kanbanError && <p className="do-signin-error" role="alert">{kanbanError}</p>}
+        <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`}>
+          {visibleColumns.map((column) => (
+            <Droppable droppableId={column.key} key={column.key}>
+              {(provided) => (
+                <section className="do-kanban-column" ref={provided.innerRef} {...provided.droppableProps}>
+                  <header>
+                    <strong>{column.title}</strong>
+                    <span>{column.items.length}</span>
+                  </header>
+                  <div>
+                    {column.items.map((item, index) => (
+                      <Draggable draggableId={item.id} index={index} key={item.id}>
+                        {(drag) => (
+                          <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                            {renderBoardCard(item)}
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                    {column.items.length === 0 && <p>No items</p>}
+                  </div>
+                </section>
+              )}
+            </Droppable>
+          ))}
+          {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+        </div>
+      </DragDropContext>
     );
   };
 
-  const renderGantt = () => {
-    const dated = filtered
+  const renderGantt = (items = filtered) => {
+    const dated = items
       .map((item) => {
         const start = ganttDate(item);
         const explicitEnd = ganttDate({ dueDate: item.dueDate || item.targetDate || item.endDate || item.plannedEndDate });
@@ -1082,18 +1096,28 @@ export function WorkItemsCenter({
         return { item, start, end };
       })
       .filter((entry) => entry.start && entry.end) as Array<{ item: any; start: Date; end: Date }>;
-    const undated = filtered.filter((item) => !ganttDate(item));
-    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime())) : Date.now();
-    const maxTime = dated.length ? Math.max(...dated.map((entry) => entry.end.getTime())) : Date.now() + 30 * 86_400_000;
+    const undated = items.filter((item) => !ganttDate(item));
+    const now = Date.now();
+    const spanDays = ganttScale === "week" ? 7 : 31;
+    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime()), now) : now;
+    const maxTime = dated.length
+      ? Math.max(...dated.map((entry) => entry.end.getTime()), minTime + spanDays * 86_400_000)
+      : now + spanDays * 86_400_000;
     const span = Math.max(1, maxTime - minTime);
     const markers = Array.from({ length: 5 }, (_, index) => new Date(minTime + (span * index) / 4));
+    const todayLeft = ((now - minTime) / span) * 100;
 
     return (
       <div className="do-gantt">
+        <div className="do-gantt-scale">
+          <button className={ganttScale === "week" ? "is-active" : ""} onClick={() => setGanttScale("week")} type="button">Week</button>
+          <button className={ganttScale === "month" ? "is-active" : ""} onClick={() => setGanttScale("month")} type="button">Month</button>
+        </div>
         <div className="do-gantt-axis">
           {markers.map((marker) => <span key={marker.toISOString()}>{dateLabel(marker)}</span>)}
         </div>
         <div className="do-gantt-rows">
+          <div className="do-gantt-today" style={{ left: `${Math.max(0, Math.min(100, todayLeft))}%` }} title="Today" />
           {dated.map(({ item, start, end }) => {
             const kind = workItemKind(item);
             const left = ((start.getTime() - minTime) / span) * 100;
@@ -1141,7 +1165,7 @@ export function WorkItemsCenter({
   const activeControlLabel = `${activeControlCount} filter${activeControlCount === 1 ? "" : "s"}`;
 
   return (
-    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""}`} data-testid="work-items-center">
+    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""}`} data-testid="work-items-center">
       <section className={`do-items-toolbar ${chromeCollapsed ? "is-compact" : ""}`}>
         {!chromeCollapsed && <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>}
         <datalist id="do-workspace-member-options">
@@ -1155,9 +1179,10 @@ export function WorkItemsCenter({
           </div>
         )}
         <div className="do-items-mode" aria-label="Work item view">
-          <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
-          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => setMode("kanban")} type="button"><Kanban size={14} /></button>
-          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /></button>
+          <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
+          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
+          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
+          {activeProject && <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
         <button className="do-items-focus-toggle" onClick={() => setChromeCollapsed((current) => !current)} type="button">
           <SlidersHorizontal size={13} />
@@ -1205,6 +1230,23 @@ export function WorkItemsCenter({
           <option value="all">Any product phase</option>
           {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
         </select>
+        {activeProject && (
+          <>
+          <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
+            <option value="all">All sprints</option>
+            <option value="none">No sprint</option>
+            {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+          </select>
+          {sprintFilter !== "all" && sprintFilter !== "none" && onUpdateSprint && (
+            <button
+              onClick={() => void onUpdateSprint(sprintFilter, { status: "completed" })}
+              type="button"
+            >
+              Complete sprint
+            </button>
+          )}
+          </>
+        )}
         <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
           <option value="hierarchy">Hierarchy</option>
           <option value="actionBoard">Action Board</option>
@@ -1314,6 +1356,21 @@ export function WorkItemsCenter({
         <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
         <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
       </section>
+      {activeProject && onCreateSprint && (
+        <section className="do-items-create">
+          <input aria-label="New sprint name" onChange={(event) => setSprintName(event.target.value)} placeholder="Sprint name" value={sprintName} />
+          <button
+            disabled={!sprintName.trim()}
+            onClick={async () => {
+              await onCreateSprint({ name: sprintName.trim(), projectId: activeProject.id, status: "planning" });
+              setSprintName("");
+            }}
+            type="button"
+          >
+            <Plus size={13} /> Create sprint
+          </button>
+        </section>
+      )}
       </>}
 
       {selectedBulkIds.length > 0 && (
@@ -1325,6 +1382,61 @@ export function WorkItemsCenter({
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
           <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
           <button onClick={() => updateBulk({ dueDate: bulkDueDate || null })} type="button">Apply date</button>
+          <select aria-label="Bulk assignee" onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
+            <option value="">Assignee</option>
+            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+              <option key={member.id} value={member.id}>{memberName(member)}</option>
+            ))}
+          </select>
+          <button
+            disabled={!bulkAssigneeId}
+            onClick={() => {
+              const member = workspaceMembers.find((item) => item.id === bulkAssigneeId);
+              updateBulk({
+                assigneeIds: member ? [member.id] : [],
+                assignees: member ? [memberName(member)] : [],
+                owner: member ? memberName(member) : "",
+                assignee: member ? memberName(member) : "",
+              });
+            }}
+            type="button"
+          >
+            Assign
+          </button>
+          {activeProject && (
+            <>
+              <select aria-label="Bulk sprint" onChange={(event) => setBulkSprintId(event.target.value)} value={bulkSprintId}>
+                <option value="">Sprint</option>
+                <option value="none">Remove sprint</option>
+                {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+              </select>
+              <button disabled={!bulkSprintId} onClick={() => updateBulk({ sprintId: bulkSprintId === "none" ? null : bulkSprintId })} type="button">Apply sprint</button>
+            </>
+          )}
+          <select aria-label="Bulk project" onChange={(event) => setBulkProjectId(event.target.value)} value={bulkProjectId}>
+            <option value="">Project</option>
+            <option value="none">Remove from project</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}
+          </select>
+          <button disabled={!bulkProjectId} onClick={() => updateBulk({ projectId: bulkProjectId === "none" ? null : bulkProjectId })} type="button">Apply project</button>
+          <select aria-label="Share item with colleague" onChange={(event) => setBulkShareId(event.target.value)} value={bulkShareId}>
+            <option value="">Share with</option>
+            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+              <option key={`share-${member.id}`} value={member.userId || member.id}>{memberName(member)}</option>
+            ))}
+          </select>
+          <button
+            disabled={!bulkShareId}
+            onClick={() => Promise.all(selectedBulkIds.map((id) => {
+              const item = tasks.find((task) => task.id === id);
+              const shared = [...new Set([...(item?.sharedWithUserIds || []), bulkShareId])];
+              return onUpdateTask(id, { sharedWithUserIds: shared, visibleToUserIds: [...new Set([...(item?.visibleToUserIds || []), bulkShareId])] });
+            }))}
+            type="button"
+          >
+            Share item
+          </button>
+          <button onClick={() => updateBulk({ status: "archived" })} type="button">Archive</button>
         </section>
       )}
 
@@ -1337,7 +1449,7 @@ export function WorkItemsCenter({
             <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
           </div>
           {mode === "list" && renderColumnHeader()}
-          {mode === "gantt" ? renderGantt() : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
+          {mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(groupBy, left);
@@ -1359,7 +1471,7 @@ export function WorkItemsCenter({
           <aside className="do-item-detail" aria-label="Selected work item detail">
             <div className="do-item-detail-head">
               <span>{workItemLabel(workItemKind(selectedItem))}</span>
-              <button aria-label="Close item detail" onClick={() => onSelectItem(null)} type="button">×</button>
+              <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>
             </div>
             <div className="do-ai-inline-field"><InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} /><AiRewriteButton context={{ itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={(next) => onUpdateTask(selectedItem.id, { title: next })} text={title(selectedItem)} /></div>
             <div className="do-ai-description-field"><textarea
@@ -1377,7 +1489,7 @@ export function WorkItemsCenter({
             <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
             <label>Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
             <label>Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
-            <label>Tags<ItemTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
+            <label>Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"
@@ -1387,6 +1499,9 @@ export function WorkItemsCenter({
               selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}
             />
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
+            <label>Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
+            <label>Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
+            <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
