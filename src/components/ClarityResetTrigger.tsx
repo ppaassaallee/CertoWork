@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Brain, BellOff } from "lucide-react";
+import { Brain, BellOff } from "./ui/Icon";
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";

@@ -12,9 +12,11 @@ export async function streamConversationReply(
 }
 
 export function assistantFallbackReply(error: unknown) {
-  return `I couldn't complete that request: ${
-    error instanceof Error ? error.message : "the service is unavailable"
-  }\n\nNothing was changed.`;
+  const message = error instanceof Error ? error.message : "the service is unavailable";
+  if (/OPENAI_NOT_CONFIGURED|not configured for this Certo Work/i.test(message)) {
+    return "Certo Work SAFE MODE\nOpenAI is not configured for this Certo Work deployment yet.\n\nNothing was changed.";
+  }
+  return `I couldn't complete that request: ${message}\n\nNothing was changed.`;
 }
 
 export function conversationTitleForMessage(

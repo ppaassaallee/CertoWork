@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Activity, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, Sparkles, Send, Calendar, Folder, Loader2 } from "lucide-react";
+import { Activity, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, Sparkles, Send, Calendar, Folder, Loader2 } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
 

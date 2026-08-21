@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ChevronLeft, Plus, FileText, Loader2, Trash } from "lucide-react";
+import { ChevronLeft, Plus, FileText, Loader2, Trash } from "./ui/Icon";
 import { Link, useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";

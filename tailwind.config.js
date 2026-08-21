@@ -8,8 +8,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['Space Grotesk', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-body)'],
+        display: ['var(--font-display)'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -44,6 +44,13 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        status: {
+          green: "var(--status-green)",
+          amber: "var(--status-amber)",
+          red: "var(--status-red)",
+          blue: "var(--status-blue)",
+          gray: "var(--status-gray)",
         },
       },
       borderRadius: {

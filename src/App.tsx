@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "./components/ui/Icon";
 import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
+import { InviteActivate } from "./components/InviteActivate";
+import { PublicStatusReport } from "./components/PublicStatusReport";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 function SignIn() {
@@ -280,7 +282,7 @@ function SignIn() {
       </div>
       <footer>
         <span>Certo Work</span>
-        <span>Chief of Staff · Projects · Costs · Teams</span>
+        <span>Odiseus · Projects · Approvals · Teams</span>
         <span>Approval-first by design</span>
       </footer>
     </main>
@@ -324,6 +326,18 @@ export default function App() {
 
   if (loading) {
     return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
+  }
+  const inviteToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/invite\/([^/]+)/) || [])[1] || "")
+    : "";
+  const reportToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/report\/([^/]+)/) || [])[1] || "")
+    : "";
+  if (reportToken) {
+    return <PublicStatusReport token={reportToken} />;
+  }
+  if (inviteToken && (!user || !workspace)) {
+    return <InviteActivate token={inviteToken} />;
   }
   if (!user) return <SignIn />;
   if (!workspace) return <WorkspaceRecovery />;

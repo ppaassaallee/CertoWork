@@ -4,7 +4,7 @@ import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc, setDoc, collection,
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
 import { useUndo } from "../lib/UndoContext";
-import { ChevronLeft, Save, Trash2, Tag, BookOpen, Activity, Loader2, Sparkles, Link as LucideLink, Plus, Search, CheckSquare, Lightbulb } from "lucide-react";
+import { ChevronLeft, Save, Trash2, Tag, BookOpen, Activity, Loader2, Sparkles, Link as LucideLink, Plus, Search, CheckSquare, Lightbulb } from "./ui/Icon";
 import { motion } from "motion/react";
 import { InvokeSkillModal } from "./InvokeSkillModal";
 

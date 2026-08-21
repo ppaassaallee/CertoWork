@@ -1,5 +1,5 @@
 import { useUndo } from '../lib/UndoContext';
-import { Undo2, Redo2 } from 'lucide-react';
+import { Undo2, Redo2 } from "./ui/Icon";
 import { motion, AnimatePresence } from 'motion/react';
 
 export function GlobalUndoRedo() {

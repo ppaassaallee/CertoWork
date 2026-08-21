@@ -38,14 +38,15 @@ service cloud.firestore {
       return workspaceId + "_" + request.auth.uid;
     }
 
-    function isPortfolioViewerEmail() {
-      return request.auth.token.email != null
-        && request.auth.token.email in [
-          "cesar.a@getboldr.ai",
-          "cesar.ar@alliedglobal.com",
-          "rafael.f@getboldr.ai",
-          "rafael.f@alliedglobal.com"
-        ];
+    function isPortfolioViewer(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && exists(memberDoc(workspaceId))
+        && get(memberDoc(workspaceId)).data.status == "active"
+        && (
+          get(memberDoc(workspaceId)).data.portfolioViewer == true
+          || get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+        );
     }
 
     function isWorkspaceAdmin(workspaceId) {
@@ -98,7 +99,7 @@ service cloud.firestore {
         hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
         (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
-        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewerEmail())
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewer(data.workspaceId))
       );
     }
 
@@ -131,6 +132,10 @@ service cloud.firestore {
           ('accessMemberIds' in data) &&
           data.accessMemberIds is list &&
           activeWorkspaceMemberId(data.workspaceId) in data.accessMemberIds
+        ) || (
+          ('sharedWithUserIds' in data) &&
+          data.sharedWithUserIds is list &&
+          request.auth.uid in data.sharedWithUserIds
         )
       );
     }
@@ -176,10 +181,11 @@ service cloud.firestore {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
     match /knowledge_items/{id} {
-      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid);
-      allow update, delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid
+        && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow update, delete: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
     }
     match /knowledge_folders/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
@@ -770,6 +776,24 @@ service cloud.firestore {
         && incoming().workspaceId == resource.data.workspaceId;
       allow delete: if canAccessBoldiRecord(resource.data);
     }
+    match /odiseus_runs/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /odiseus_activity/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
     match /boldi_profiles/{userId} {
       allow read, write: if isSignedIn() && userId == request.auth.uid;
     }
@@ -885,6 +909,31 @@ service cloud.firestore {
     match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
     match /agent_resources/{id} { allow read, write: if isSignedIn(); }
     match /agent_invites/{id} { allow read, write: if isSignedIn(); }
+    match /sprints/{id} {
+      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().workspaceId is string && isWorkspaceMember(incoming().workspaceId);
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+    }
+    match /project_status_shares/{id} {
+      allow get: if resource.data.revoked != true
+        && resource.data.token == id
+        && resource.data.snapshot is map;
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))
+      );
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().token == id
+        && incoming().snapshot is map
+        && incoming().revoked == false;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid
+        && incoming().diff(resource.data).affectedKeys().hasOnly(['revoked', 'updatedAt']);
+      allow delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        ('workspaceId' in resource.data && isWorkspaceAdmin(resource.data.workspaceId))
+      );
+    }
     match /contacts/{id} { allow read, write: if isSignedIn(); }
     match /contact_requests/{id} { allow read, write: if isSignedIn(); }
     match /agent_groups/{id} { allow read, write: if isSignedIn(); }

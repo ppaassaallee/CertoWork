@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Loader2, ArrowLeft, Trash, Play, Pause, Archive } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowLeft, Trash, Play, Pause, Archive } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../lib/firebase";

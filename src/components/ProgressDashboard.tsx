@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Loader2, Brain, BarChart3, Sparkles } from "lucide-react";
+import { Loader2, Brain, BarChart3, Sparkles } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { computeAnalytics } from "../lib/analytics";
 import { db } from "../lib/firebase";
 import { collection, serverTimestamp, query, where, onSnapshot, orderBy, limit, addDoc } from "firebase/firestore";
-import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from 'recharts';
+import { chartColors } from "../lib/chartColors";
+import { ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar } from "recharts";
 
 export function ProgressDashboard() {
   const { user, workspace } = useAuth();
@@ -190,7 +191,7 @@ export function ProgressDashboard() {
                         <XAxis dataKey="name" />
                         <YAxis />
                         <Tooltip />
-                        <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="value" fill={chartColors[0]} radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
              </div>

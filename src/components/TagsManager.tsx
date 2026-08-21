@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
-import { X, Tag, Trash } from "lucide-react";
+import { X, Tag, Trash } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
 const COLORS = [

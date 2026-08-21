@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { CheckCircle, Loader2, Play, Pause, ChevronLeft, Save, AlertCircle, Info } from "lucide-react";
+import { CheckCircle, Loader2, Play, Pause, ChevronLeft, Save, AlertCircle, Info } from "../ui/Icon";
 import { db } from "../../lib/firebase";
 import { collection, query, where, getDocs, doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { WorkoutSession, WorkoutExercise } from "../../types";

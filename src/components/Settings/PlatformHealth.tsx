@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Sparkles, Database, Folder, Workflow, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
+import { Sparkles, Database, Folder, Workflow, CheckCircle2, XCircle, ArrowLeft } from "../ui/Icon";
 import { usePlatformCapabilities } from "../../lib/capabilities";
 import { useNavigate } from "react-router-dom";
 

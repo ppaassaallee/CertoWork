@@ -64,7 +64,7 @@ export interface SpecialistAgentDefinition {
 
 export const CHIEF_OF_STAFF_ORCHESTRATOR: SpecialistAgentDefinition = {
   id: "chief_of_staff",
-  name: "Chief of Staff Orchestrator",
+  name: "Odiseus Orchestrator",
   purpose: "Route bounded tasks, synthesize evidence, and present one accountable response.",
   allowedTools: ["delegate_typed_task", "merge_agent_results", "propose_action_plan"],
   dataScopes: ["tasks", "projects", "calendar", "knowledge", "conversations", "review_queue", "reports"],

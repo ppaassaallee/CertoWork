@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from "../ui/Icon";
 
 // Shell to constrain and style the full-screen notebook experience
 export function NotebookShell({ children }: { children: React.ReactNode }) {

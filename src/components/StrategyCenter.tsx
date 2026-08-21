@@ -13,7 +13,7 @@ import {
   Trophy,
   Users,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,
