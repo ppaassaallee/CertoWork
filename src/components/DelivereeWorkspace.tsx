@@ -287,6 +287,36 @@ export function DelivereeWorkspace() {
       : false,
   );
   const [moreOpen, setMoreOpen] = useState(false);
+  const [sidebarSections, setSidebarSections] = useState<{
+    projects: boolean;
+    favorites: boolean;
+    recent: boolean;
+    conversations: boolean;
+  }>(() => {
+    const defaults = {
+      projects: true,
+      favorites: true,
+      recent: true,
+      conversations: true,
+    };
+    if (typeof window === "undefined") return defaults;
+    try {
+      const raw = window.localStorage.getItem("certo-sidebar-sections");
+      if (!raw) return defaults;
+      return { ...defaults, ...JSON.parse(raw) };
+    } catch {
+      return defaults;
+    }
+  });
+  const toggleSidebarSection = (
+    key: "projects" | "favorites" | "recent" | "conversations",
+  ) => {
+    setSidebarSections((current) => {
+      const next = { ...current, [key]: !current[key] };
+      window.localStorage.setItem("certo-sidebar-sections", JSON.stringify(next));
+      return next;
+    });
+  };
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -3468,7 +3498,18 @@ export function DelivereeWorkspace() {
         <div className="do-sidebar-scroll">
           <div className="do-sidebar-section">
             <div className="do-section-head">
-              <span>Projects</span>
+              <button
+                aria-expanded={sidebarSections.projects}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("projects")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.projects ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>Projects</span>
+              </button>
               <button
                 aria-label="Open project command center"
                 onClick={() => {
@@ -3481,147 +3522,146 @@ export function DelivereeWorkspace() {
                 Command center
               </button>
             </div>
+            {sidebarSections.projects && (
             <div className="do-project-list">
               {sidebarProjects.favorites.length > 0 && (
-                <span className="do-project-group-label">
+                <button
+                  aria-expanded={sidebarSections.favorites}
+                  className="do-project-group-label is-toggle"
+                  onClick={() => toggleSidebarSection("favorites")}
+                  type="button"
+                >
+                  <ChevronDown
+                    className={sidebarSections.favorites ? "" : "is-collapsed"}
+                    size={11}
+                  />
                   <Star size={10} /> Favorites
-                </span>
+                </button>
               )}
-              {sidebarProjects.favorites.map((project) => (
+              {sidebarSections.favorites &&
+                sidebarProjects.favorites.map((project) => {
+                  const health = projectHealth(
+                    project,
+                    openTasks.filter((task) => task.projectId === project.id),
+                    risks.filter((risk) => risk.projectId === project.id),
+                  );
+                  const openCount = openTasks.filter(
+                    (task) => task.projectId === project.id,
+                  ).length;
+                  return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
-                    projectHealth(
-                      project,
-                      openTasks.filter((task) => task.projectId === project.id),
-                      risks.filter((risk) => risk.projectId === project.id),
-                    ) === "blocked"
-                      ? "is-blocked"
-                      : ""
+                    health === "blocked" ? "is-blocked" : ""
                   }`}
                   key={project.id}
                 >
                   <button
                     className="do-project-context"
-                    onClick={() => selectProjectContext(project)}
+                    data-testid={`open-project-${project.id}`}
+                    onClick={() => openProjectRecord(project)}
                     type="button"
                   >
                     <Star fill="currentColor" size={12} />
-                    <span className="do-project-copy">
-                      <span className="do-project-title">{entityTitle(project)}</span>
-                      <span className="do-project-meta">
-                        <StatusLight
-                          status={healthToStatus(
-                            projectHealth(
-                              project,
-                              openTasks.filter((task) => task.projectId === project.id),
-                              risks.filter((risk) => risk.projectId === project.id),
-                            ),
-                          )}
-                          label={false}
-                          size="sm"
-                        />
-                        <small>
-                          {openTasks.filter((task) => task.projectId === project.id)
-                            .length || ""}
-                        </small>
-                      </span>
+                    <span className="do-project-title">{entityTitle(project)}</span>
+                  </button>
+                  <div className="do-project-meta">
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={false}
+                      size="sm"
+                    />
+                    {openCount > 0 && <small>{openCount}</small>}
+                    <span className="do-project-actions">
+                      <button
+                        aria-label={`Archive ${entityTitle(project)}`}
+                        className="do-project-icon"
+                        onClick={() => void archiveProject(project)}
+                        type="button"
+                      >
+                        <Archive size={11} />
+                      </button>
+                      <button
+                        aria-label={`Delete ${entityTitle(project)}`}
+                        className="do-project-icon is-danger"
+                        onClick={() => void deleteProject(project)}
+                        type="button"
+                      >
+                        <Trash2 size={11} />
+                      </button>
                     </span>
-                  </button>
-                  <button
-                    className="do-project-open"
-                    data-testid={`open-project-${project.id}`}
-                    onClick={() => openProjectRecord(project)}
-                    type="button"
-                  >
-                    Open
-                  </button>
-                  <button
-                    aria-label={`Archive ${entityTitle(project)}`}
-                    className="do-project-icon"
-                    onClick={() => archiveProject(project)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  <button
-                    aria-label={`Delete ${entityTitle(project)}`}
-                    className="do-project-icon is-danger"
-                    onClick={() => deleteProject(project)}
-                    type="button"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                  </div>
                 </div>
-              ))}
+                  );
+                })}
               {sidebarProjects.recent.length > 0 && (
-                <span className="do-project-group-label">Recent</span>
+                <button
+                  aria-expanded={sidebarSections.recent}
+                  className="do-project-group-label is-toggle"
+                  onClick={() => toggleSidebarSection("recent")}
+                  type="button"
+                >
+                  <ChevronDown
+                    className={sidebarSections.recent ? "" : "is-collapsed"}
+                    size={11}
+                  />
+                  Recent
+                </button>
               )}
-              {sidebarProjects.recent.map((project) => (
+              {sidebarSections.recent &&
+                sidebarProjects.recent.map((project) => {
+                  const health = projectHealth(
+                    project,
+                    openTasks.filter((task) => task.projectId === project.id),
+                    risks.filter((risk) => risk.projectId === project.id),
+                  );
+                  const openCount = openTasks.filter(
+                    (task) => task.projectId === project.id,
+                  ).length;
+                  return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
-                    projectHealth(
-                      project,
-                      openTasks.filter((task) => task.projectId === project.id),
-                      risks.filter((risk) => risk.projectId === project.id),
-                    ) === "blocked"
-                      ? "is-blocked"
-                      : ""
+                    health === "blocked" ? "is-blocked" : ""
                   }`}
                   key={project.id}
                 >
                   <button
                     className="do-project-context"
-                    onClick={() => selectProjectContext(project)}
-                    type="button"
-                  >
-                    <Folder size={12} />
-                    <span className="do-project-copy">
-                      <span className="do-project-title">{entityTitle(project)}</span>
-                      <span className="do-project-meta">
-                        <StatusLight
-                          status={healthToStatus(
-                            projectHealth(
-                              project,
-                              openTasks.filter((task) => task.projectId === project.id),
-                              risks.filter((risk) => risk.projectId === project.id),
-                            ),
-                          )}
-                          label={false}
-                          size="sm"
-                        />
-                        <small>
-                          {openTasks.filter((task) => task.projectId === project.id)
-                            .length || ""}
-                        </small>
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    className="do-project-open"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
                     type="button"
                   >
-                    Open
+                    <Folder size={12} />
+                    <span className="do-project-title">{entityTitle(project)}</span>
                   </button>
-                  <button
-                    aria-label={`Archive ${entityTitle(project)}`}
-                    className="do-project-icon"
-                    onClick={() => archiveProject(project)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  <button
-                    aria-label={`Delete ${entityTitle(project)}`}
-                    className="do-project-icon is-danger"
-                    onClick={() => deleteProject(project)}
-                    type="button"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                  <div className="do-project-meta">
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={false}
+                      size="sm"
+                    />
+                    {openCount > 0 && <small>{openCount}</small>}
+                    <span className="do-project-actions">
+                      <button
+                        aria-label={`Archive ${entityTitle(project)}`}
+                        className="do-project-icon"
+                        onClick={() => void archiveProject(project)}
+                        type="button"
+                      >
+                        <Archive size={11} />
+                      </button>
+                      <button
+                        aria-label={`Delete ${entityTitle(project)}`}
+                        className="do-project-icon is-danger"
+                        onClick={() => void deleteProject(project)}
+                        type="button"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </span>
+                  </div>
                 </div>
-              ))}
+                  );
+                })}
               {activeProjects.length === 0 && (
                 <button
                   className="do-empty-link"
@@ -3632,11 +3672,23 @@ export function DelivereeWorkspace() {
                 </button>
               )}
             </div>
+            )}
           </div>
 
           <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
-              <span>Conversations</span>
+              <button
+                aria-expanded={sidebarSections.conversations}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("conversations")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.conversations ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>Conversations</span>
+              </button>
               <button
                 aria-label="Search conversations"
                 onClick={() => setSearchOpen((open) => !open)}
@@ -3645,6 +3697,8 @@ export function DelivereeWorkspace() {
                 <Search size={13} />
               </button>
             </div>
+            {sidebarSections.conversations && (
+            <>
             {searchOpen && (
               <input
                 aria-label="Search conversations"
@@ -3670,7 +3724,7 @@ export function DelivereeWorkspace() {
                       navigate(
                         projectIds.length === 1 && taskIds.length === 0
                           ? `/work/projects/${projectIds[0]}`
-                          : "/",
+                          : "/home",
                       );
                       setSidebarOpen(false);
                     }}
@@ -3685,32 +3739,38 @@ export function DelivereeWorkspace() {
                     ) : (
                       <MessageSquare size={13} />
                     )}
-                    <span>{conversation.title || "New conversation"}</span>
+                    <span className="do-conversation-title">
+                      {conversation.title || "New conversation"}
+                    </span>
+                  </button>
+                  <div className="do-conversation-meta">
                     <small>
                       {conversationScopeLabel(conversation, projects, tasks)} ·{" "}
                       {timeAgo(
                         conversation.updatedAt || conversation.createdAt,
                       )}
                     </small>
-                  </button>
-                  <button
-                    aria-label={`Archive ${conversation.title || "conversation"}`}
-                    className="do-conversation-action"
-                    onClick={() => archiveConversation(conversation)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  {!conversation.isChiefOfStaff && (
-                    <button
-                      aria-label={`Delete ${conversation.title || "conversation"}`}
-                      className="do-conversation-action is-danger"
-                      onClick={() => deleteConversation(conversation)}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
+                    <span className="do-conversation-actions">
+                      <button
+                        aria-label={`Archive ${conversation.title || "conversation"}`}
+                        className="do-conversation-action"
+                        onClick={() => void archiveConversation(conversation)}
+                        type="button"
+                      >
+                        <Archive size={11} />
+                      </button>
+                      {!conversation.isChiefOfStaff && (
+                        <button
+                          aria-label={`Delete ${conversation.title || "conversation"}`}
+                          className="do-conversation-action is-danger"
+                          onClick={() => void deleteConversation(conversation)}
+                          type="button"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </span>
+                  </div>
                 </div>
               ))}
             {!search.trim() && filteredConversations.length > 5 && (
@@ -3729,6 +3789,8 @@ export function DelivereeWorkspace() {
                     : `Show ${filteredConversations.length - 5} more`}
                 </span>
               </button>
+            )}
+            </>
             )}
           </div>
         </div>
