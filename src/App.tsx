@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "./components/ui/Icon";
 import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 import { InviteActivate } from "./components/InviteActivate";
@@ -282,7 +282,7 @@ function SignIn() {
       </div>
       <footer>
         <span>Certo Work</span>
-        <span>Chief of Staff · Projects · Costs · Teams</span>
+        <span>Odiseus · Projects · Approvals · Teams</span>
         <span>Approval-first by design</span>
       </footer>
     </main>

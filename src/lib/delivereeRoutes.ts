@@ -1,21 +1,61 @@
+export type ProjectTab = "overview" | "notes" | "tasks" | "strategy";
+export type MoreSection =
+  | "automations"
+  | "updates"
+  | "habits"
+  | "workouts"
+  | "warroom"
+  | "knowledge"
+  | "workspace";
+
 export type DelivereeLens =
   | { kind: "home" }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
-  | { kind: "project"; projectId: string }
-  | { kind: "review" }
-  | { kind: "settings" };
+  | { kind: "project"; projectId: string; tab: ProjectTab }
+  | { kind: "approvals" }
+  | { kind: "settings" }
+  | { kind: "more"; section: MoreSection };
 
 export function resolveDelivereeLens(pathname: string): DelivereeLens {
   const path = pathname.replace(/\/+$/, "") || "/";
-  const projectMatch = path.match(/^\/work\/projects\/([^/]+)$/);
+  const projectMatch = path.match(
+    /^\/work\/projects\/([^/]+)(?:\/(notes|tasks|strategy|overview))?$/,
+  );
   if (projectMatch && projectMatch[1] !== "health") {
-    return { kind: "project", projectId: decodeURIComponent(projectMatch[1]) };
+    const tab = (projectMatch[2] || "overview") as ProjectTab;
+    const normalized: ProjectTab =
+      tab === "notes" || tab === "tasks" || tab === "strategy" ? tab : "overview";
+    return {
+      kind: "project",
+      projectId: decodeURIComponent(projectMatch[1]),
+      tab: normalized,
+    };
   }
-  if (path.startsWith("/capture/review") || path.startsWith("/review")) {
-    return { kind: "review" };
+  if (
+    path === "/approvals" ||
+    path.startsWith("/capture/review") ||
+    path.startsWith("/review")
+  ) {
+    return { kind: "approvals" };
   }
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
+  }
+  if (path.startsWith("/more/")) {
+    const section = path.slice("/more/".length) as MoreSection;
+    if (
+      ["automations", "updates", "habits", "workouts", "warroom", "knowledge", "workspace"].includes(
+        section,
+      )
+    ) {
+      return { kind: "more", section };
+    }
+  }
+  if (path === "/skills" || path === "/more/skills") {
+    return { kind: "more", section: "automations" };
+  }
+  if (path === "/digest") {
+    return { kind: "more", section: "updates" };
   }
   if (path.startsWith("/capture") || path === "/inbox" || path === "/rich-capture") {
     return { kind: "work", section: "intake" };
@@ -40,9 +80,40 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   return { kind: "home" };
 }
 
+export function lensToPath(lens: DelivereeLens) {
+  if (lens.kind === "work") {
+    if (lens.section === "issues") return "/work/tasks";
+    if (lens.section === "intake") return "/capture";
+    return "/work";
+  }
+  if (lens.kind === "project") {
+    const base = `/work/projects/${encodeURIComponent(lens.projectId)}`;
+    if (lens.tab === "overview") return base;
+    return `${base}/${lens.tab}`;
+  }
+  if (lens.kind === "approvals") return "/approvals";
+  if (lens.kind === "settings") return "/settings";
+  if (lens.kind === "more") return `/more/${lens.section}`;
+  return "/home";
+}
+
 export function normalizeDeliveryStage(value?: string | null) {
-  const stage = String(value || "").toLowerCase().replace(/\s+/g, "_");
-  if (["idea", "assessment", "approved", "planning", "delivery", "uat", "production", "support", "archived"].includes(stage)) {
+  const stage = String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+  if (
+    [
+      "idea",
+      "assessment",
+      "approved",
+      "planning",
+      "delivery",
+      "uat",
+      "production",
+      "support",
+      "archived",
+    ].includes(stage)
+  ) {
     return stage;
   }
   if (["done", "completed", "closed"].includes(stage)) return "support";

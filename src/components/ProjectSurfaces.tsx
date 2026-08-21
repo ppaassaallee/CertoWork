@@ -8,8 +8,6 @@ import {
   ArrowUp,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Circle,
   Copy,
   Download,
@@ -31,7 +29,7 @@ import {
   UserPlus,
   Users,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   PROJECT_HEALTH,
   PROJECT_STATUSES,
@@ -43,6 +41,7 @@ import {
   taskWorkLane,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import {
   financeAmount,
   financeCapacityAllocations,
@@ -76,7 +75,7 @@ import {
   ProjectTemplatesPanel,
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
@@ -91,6 +90,7 @@ import {
 } from "../lib/projectResources";
 import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
 import type { SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -114,6 +114,13 @@ type PortfolioColumnKey =
   | "stage"
   | "phase"
   | "status"
+  | "source_status"
+  | "contact"
+  | "qa_plan"
+  | "days_to_prod"
+  | "june_usd"
+  | "july_usd"
+  | "total_usd"
   | "health"
   | "progress"
   | "due"
@@ -132,9 +139,16 @@ const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   stage: "Stage",
   phase: "Phase",
   status: "Status",
+  source_status: "ESTADO",
+  contact: "OWNER / POC",
+  qa_plan: "QA PLAN",
+  days_to_prod: "DÍAS A PROD",
+  june_usd: "JUN USD",
+  july_usd: "JUL USD",
+  total_usd: "TOTAL USD",
   health: "Health",
   progress: "Progress",
-  due: "Due",
+  due: "PROD PLAN",
   solution_architect: "Solution Architect",
   project_manager: "Project Manager",
   economics: "Economics",
@@ -151,9 +165,16 @@ const defaultPortfolioColumns: PortfolioColumnKey[] = [
   "stage",
   "phase",
   "status",
+  "source_status",
+  "contact",
+  "qa_plan",
+  "days_to_prod",
   "health",
   "progress",
   "due",
+  "june_usd",
+  "july_usd",
+  "total_usd",
   "solution_architect",
   "project_manager",
   "economics",
@@ -170,6 +191,13 @@ const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
   stage: "105px",
   phase: "120px",
   status: "105px",
+  source_status: "140px",
+  contact: "150px",
+  qa_plan: "120px",
+  days_to_prod: "110px",
+  june_usd: "110px",
+  july_usd: "110px",
+  total_usd: "120px",
   health: "120px",
   progress: "100px",
   due: "130px",
@@ -210,65 +238,10 @@ function clampColumnWidth(value: number) {
 
 function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
   const current = value?.length ? [...value] : [...fallback];
-  (["work_category", "product_phase"] as T[]).forEach((column) => {
+  (["work_category", "product_phase", "source_status", "contact", "qa_plan", "days_to_prod", "june_usd", "july_usd", "total_usd"] as T[]).forEach((column) => {
     if (fallback.includes(column) && !current.includes(column)) current.push(column);
   });
   return fallback.filter((column) => current.includes(column));
-}
-
-function TagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
-  );
 }
 
 type SharedProjectActions = {
@@ -287,11 +260,7 @@ function projectTitle(project: any) {
 }
 
 function healthClass(value: string) {
-  return value === "blocked"
-    ? "is-blocked"
-    : value === "at_risk"
-      ? "is-risk"
-      : "is-track";
+  return `status-tone-${healthToStatus(value)}`;
 }
 
 function EditableField({
@@ -379,22 +348,28 @@ function TeamPersonSelect({
   options: Array<{ id: string; name: string }>;
   onChange: (id: string, name: string) => void;
 }) {
+  const selected = options.find((option) => option.id === value);
   return (
-    <select
-      aria-label={label}
-      onChange={(event) => {
-        const id = event.target.value;
-        onChange(id, options.find((option) => option.id === id)?.name || "");
-      }}
-      value={value}
-    >
-      <option value="">Unassigned</option>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.name}
-        </option>
-      ))}
-    </select>
+    <label className={`do-assign-select ${value ? "" : "is-empty"}`}>
+      <span className="do-assign-avatar" aria-hidden="true">
+        {(selected?.name || "?").slice(0, 1).toUpperCase()}
+      </span>
+      <select
+        aria-label={label}
+        onChange={(event) => {
+          const id = event.target.value;
+          onChange(id, options.find((option) => option.id === id)?.name || "");
+        }}
+        value={value}
+      >
+        <option value="">Assign…</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -402,16 +377,19 @@ function EmptyState({
   icon,
   title,
   text,
+  action,
 }: {
   icon: React.ReactNode;
   title: string;
   text: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="do-project-empty">
       {icon}
       <strong>{title}</strong>
       <span>{text}</span>
+      {action}
     </div>
   );
 }
@@ -1132,7 +1110,7 @@ export function ProjectRecordModal({
                 <div className="do-risk-list">
                   {risks.map((risk) => (
                     <div key={risk.id}>
-                      <span className="is-risk">
+                      <span className="status-tone-amber">
                         <AlertTriangle size={12} />
                       </span>
                       <div>
@@ -1148,7 +1126,7 @@ export function ProjectRecordModal({
                   ))}
                   {lanes.blocked.map((task) => (
                     <div key={`task-${task.id}`}>
-                      <span className="is-blocked">
+                      <span className="status-tone-red">
                         <Circle size={12} />
                       </span>
                       <div>
@@ -1451,10 +1429,6 @@ export function ProjectConsolePanel({
     | "docs"
     | "codex"
   >("brief");
-  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("certo-project-header-collapsed") === "true";
-  });
   const [moreOpen, setMoreOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [shareMemberId, setShareMemberId] = useState("");
@@ -1536,9 +1510,24 @@ export function ProjectConsolePanel({
   }, [project.id]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("certo-project-header-collapsed", String(headerCollapsed));
-  }, [headerCollapsed]);
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const map: Record<string, typeof tab> = {
+        "1": "brief",
+        "2": "backlog",
+        "3": "team",
+        "4": "costs",
+        "5": "risks",
+        "6": "docs",
+      };
+      const next = map[event.key];
+      if (!next) return;
+      event.preventDefault();
+      setTab(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
   const submitTask = async () => {
@@ -1747,176 +1736,152 @@ export function ProjectConsolePanel({
           <option key={owner} value={owner} />
         ))}
       </datalist>
-      {headerCollapsed ? (
-        <div className="do-console-compact">
-          <button aria-label="Expand project header" onClick={() => setHeaderCollapsed(false)} title="Expand" type="button">
-            <ChevronDown size={14} />
-          </button>
-          <strong>{projectTitle(project)}</strong>
-          <span>{projectStatusLabel(project.status)} · {deliveryStageLabels[deliveryStage(project)]}</span>
-          <div className="do-console-compact-actions">
-            <button aria-label="Add team member" onClick={() => setTab("team")} title="Add team member" type="button"><UserPlus size={14} /></button>
-            <button aria-label="Share project" onClick={() => setTab("team")} title="Share project" type="button"><Share2 size={14} /></button>
-            <button aria-label="Ask Certo" onClick={() => onAsk(`Give me the cleanest project update for ${projectTitle(project)}.`)} title="Ask Certo" type="button"><MessageSquare size={14} /></button>
-            <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button"><MoreHorizontal size={14} /></button>
-          </div>
-        </div>
-      ) : (
-        <>
-      <div className="do-console-hero">
-        <div>
-          <span className="do-project-card-kicker">PROJECT CONSOLE</span>
+      {/* Compact project header ≤96px — description lives in Overview only */}
+      <div className="do-console-band">
+        <div className="do-console-band-main">
           <InlineEdit
             ariaLabel="Project name"
             onCommit={(title) => title && update({ title, name: title })}
             placeholder="Project name"
             value={projectTitle(project)}
           />
-          <p>
-            {project.outcome ||
-              project.objective ||
-              project.description ||
-              "Define the outcome so every conversation and work item points to the same finish line."}
-          </p>
+          <div className="do-console-band-chips">
+            <span className={`do-chip do-chip-health ${healthClass(currentHealth)}`}>
+              {projectHealthLabel(currentHealth)}
+            </span>
+            <label className="do-chip do-chip-select">
+              <span className="sr-only">Delivery stage</span>
+              <select
+                aria-label="Project delivery stage"
+                onChange={(event) => update({ deliveryStage: event.target.value })}
+                value={deliveryStage(project)}
+              >
+                {DELIVERY_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {deliveryStageLabels[stage]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ProjectStatusSelect onUpdate={update} project={project} />
+          </div>
+          <div className="do-console-stat-strip" aria-label="Project stats">
+            <span className={openTasks.length === 0 ? "is-muted" : ""}>
+              Open <strong>{openTasks.length}</strong>
+            </span>
+            <span
+              className={
+                hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length === 0
+                  ? "is-muted"
+                  : ""
+              }
+            >
+              Epics{" "}
+              <strong>
+                {hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length}
+              </strong>
+            </span>
+            <span
+              className={
+                blockedTasks.length + risks.length === 0 ? "is-muted" : "status-tone-amber"
+              }
+            >
+              Signals <strong>{blockedTasks.length + risks.length}</strong>
+            </span>
+            <span className={blockedTasks.length === 0 ? "is-muted" : "status-tone-red"}>
+              Blocked <strong>{blockedTasks.length}</strong>
+            </span>
+          </div>
         </div>
-        <div className="do-console-hero-actions">
-          <button aria-label="Collapse project header" onClick={() => setHeaderCollapsed(true)} title="Collapse" type="button">
-            <ChevronUp size={15} />
-          </button>
+        <div className="do-console-band-actions">
           <button
-            aria-label={
-              isProjectFavorite(project)
-                ? "Remove from favorites"
-                : "Add to favorites"
-            }
-            className={isProjectFavorite(project) ? "is-favorite" : ""}
-            onClick={() => update({ favorite: !isProjectFavorite(project) })}
+            aria-label="Download status report PDF"
+            className="do-button-secondary"
+            onClick={() => downloadProjectStatusReport(report)}
+            title="Download PDF"
             type="button"
           >
-            <Star
-              fill={isProjectFavorite(project) ? "currentColor" : "none"}
-              size={15}
-            />
+            <Download size={14} /> PDF
           </button>
-        </div>
-      </div>
-
-      <div className="do-console-metrics">
-        <div>
-          <strong>{openTasks.length}</strong>
-          <span>
-            Open{" "}
-            <InfoTip
-              label="Open work"
-              text="All PBIs, tasks, bugs and subtasks that are not completed or cancelled."
-            />
-          </span>
-        </div>
-        <div>
-          <strong>
-            {
-              hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done")
-                .length
-            }
-          </strong>
-          <span>
-            Open Epics{" "}
-            <InfoTip
-              label="Epics"
-              text="The major outcomes that automatically act as delivery checkpoints."
-            />
-          </span>
-        </div>
-        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}>
-          <strong>{blockedTasks.length + risks.length}</strong>
-          <span>
-            Signals{" "}
-            <InfoTip
-              label="Risk signals"
-              text="Open risks plus blocked work items. Severity determines their effect on project health."
-            />
-          </span>
-        </div>
-        <div className={healthClass(currentHealth)}>
-          <strong>{projectHealthLabel(currentHealth)}</strong>
-          <span>
-            Health{" "}
-            <InfoTip
-              label="Project health"
-              text="Calculated from blocked work, risk severity, overdue delivery dates and any manual override."
-            />
-          </span>
-        </div>
-      </div>
-
-      <div className="do-console-controls">
-        <ProjectStatusSelect onUpdate={update} project={project} />
-        <label className="do-inline-control">
-          <span>
-            Stage{" "}
-            <InfoTip
-              label="Delivery stage"
-              text="Define clarifies the project; Onboarding aligns client and team; Build creates it; Deploy releases it; Operations runs and supports it."
-            />
-          </span>
-          <select
-            aria-label="Project delivery stage"
-            onChange={(event) => update({ deliveryStage: event.target.value })}
-            value={deliveryStage(project)}
+          <button
+            aria-label="Open team"
+            className="do-button-secondary"
+            onClick={() => setTab("team")}
+            title="Team"
+            type="button"
           >
-            {DELIVERY_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {deliveryStageLabels[stage]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <select
-          aria-label="Project method"
-          onChange={(event) => update({ methodology: event.target.value })}
-          value={methodology}
-        >
-          <option value="scrum">Scrum</option>
-          <option value="pmi">PMI</option>
-          <option value="hybrid">Hybrid</option>
-        </select>
-        <button
-          aria-label="Add team member"
-          onClick={() => setTab("team")}
-          title="Add team member"
-          type="button"
-        >
-          <UserPlus size={13} /> Team
-        </button>
-        <button
-          aria-label="Share project"
-          onClick={() => setTab("team")}
-          title="Share project"
-          type="button"
-        >
-          <Share2 size={13} /> Share
-        </button>
-        <button
-          onClick={() =>
-            onAsk(
-              `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
-            )
-          }
-          type="button"
-        >
-          <MessageSquare size={13} /> Ask
-        </button>
-        <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button">
-          <MoreHorizontal size={13} />
-        </button>
-        <button onClick={() => downloadProjectStatusReport(report)} title="Download status report" type="button">
-          <Download size={13} /> PDF
-        </button>
+            <UserPlus size={14} /> Team
+          </button>
+          <button
+            aria-label="Share project"
+            className="do-button-secondary"
+            onClick={() => setTab("team")}
+            title="Share"
+            type="button"
+          >
+            <Share2 size={14} />
+          </button>
+          <button
+            aria-label="Ask Odiseus for a project update"
+            className="do-button-secondary"
+            onClick={() =>
+              onAsk(
+                `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
+              )
+            }
+            title="Ask Odiseus"
+            type="button"
+          >
+            <MessageSquare size={14} />
+          </button>
+          <div className="do-console-more">
+            <button
+              aria-label="More actions"
+              className="do-button-secondary do-kebab"
+              onClick={() => setMoreOpen((open) => !open)}
+              title="More actions"
+              type="button"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreOpen && (
+              <div className="do-account-menu do-console-more-menu">
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    update({ favorite: !isProjectFavorite(project) });
+                  }}
+                  type="button"
+                >
+                  {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
+                </button>
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setArchiveConfirm(true);
+                  }}
+                  type="button"
+                >
+                  Archive
+                </button>
+                {allowDelete && (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setDeleteConfirm(true);
+                    }}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      </>
-      )}
 
-      <nav className="do-console-tabs" aria-label="Project console sections">
+      <nav className="do-console-tabs is-sticky" aria-label="Project console sections">
         {(
           [
             ["brief", "Overview"],
@@ -2508,6 +2473,8 @@ export function ProjectConsolePanel({
             </table>
           </div>
           <div className="do-team-access">
+            <h4 className="do-section-label">Sharing & access</h4>
+            <div className="do-team-access-row">
             <select
               aria-label="Share project with colleague"
               onChange={(event) => setShareMemberId(event.target.value)}
@@ -2541,6 +2508,7 @@ export function ProjectConsolePanel({
               Status link
             </button>
             {shareLink && <small className="do-team-share-url">{shareLink}</small>}
+            </div>
           </div>
         </div>
       )}
@@ -2571,7 +2539,7 @@ export function ProjectConsolePanel({
 
       {tab === "risks" && (
         <div className="do-console-section">
-          <div className="do-health-explainer">
+          <div className="do-status-explainer">
             <div>
               <span className="do-project-card-kicker">PROJECT HEALTH</span>
               <h4>{projectHealthLabel(currentHealth)}</h4>
@@ -2838,22 +2806,6 @@ export function ProjectConsolePanel({
         />
       )}
 
-      {moreOpen && (
-        <div className="do-console-more-menu">
-          <button onClick={() => { setArchiveConfirm(true); setMoreOpen(false); }} type="button">
-            <Archive size={13} /> Archive project
-          </button>
-          <hr />
-          <p>Danger zone</p>
-          {allowDelete ? (
-            <button className="is-quiet-danger" onClick={() => { setDeleteConfirm(true); setMoreOpen(false); }} type="button">
-              Delete project
-            </button>
-          ) : (
-            <small>Delete is limited to the Project Manager or workspace owner.</small>
-          )}
-        </div>
-      )}
       {(archiveConfirm || deleteConfirm || String(project.status || "").toLowerCase() === "deleted") && (
       <div className="do-console-danger">
         {String(project.status || "").toLowerCase() === "deleted" &&
@@ -3315,6 +3267,7 @@ function ProjectFinanceLedger({
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1);
   const [newYear, setNewYear] = useState(new Date().getFullYear());
   const [templateId, setTemplateId] = useState("none");
+  const [addPeriodOpen, setAddPeriodOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const monthOptions = Array.from({ length: 12 }, (_, index) => ({
     value: index + 1,
@@ -3642,73 +3595,11 @@ function ProjectFinanceLedger({
       </div>
 
       <div className="do-finance-add-period">
-        <label>
-          <span>New period</span>
-          <select
-            onChange={(event) =>
-              setNewKind(event.target.value as FinancePeriodKind)
-            }
-            value={newKind}
-          >
-            <option value="build">Build / change request</option>
-            <option value="monthly">Monthly operations</option>
-          </select>
-        </label>
-        {newKind === "build" && (
-          <label>
-            <span>Version or CR</span>
-            <input
-              onChange={(event) => setNewBuildLabel(event.target.value)}
-              placeholder="V1, V2, CR1…"
-              value={newBuildLabel}
-            />
-          </label>
-        )}
-        <div className="do-finance-month-picker">
-          <label>
-            <span>Period month</span>
-            <select
-              onChange={(event) => setNewMonth(Number(event.target.value))}
-              value={newMonth}
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Period year</span>
-            <select
-              onChange={(event) => setNewYear(Number(event.target.value))}
-              value={newYear}
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {newKind === "build" && (
-          <label>
-            <span>Cost template</span>
-            <select
-              onChange={(event) => setTemplateId(event.target.value)}
-              value={templateId}
-            >
-              <option value="none">Start empty</option>
-              {availableTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button onClick={addPeriod} type="button">
+        <button
+          className="do-button do-button-dark"
+          onClick={() => setAddPeriodOpen(true)}
+          type="button"
+        >
           <Plus size={13} /> Add period
         </button>
         {periods.length === 0 &&
@@ -3716,7 +3607,7 @@ function ProjectFinanceLedger({
             (row: any) => row.plannedQty || row.actualQty || row.rate,
           ) && (
             <button
-              className="is-secondary"
+              className="do-button-secondary"
               onClick={migrateLegacy}
               type="button"
             >
@@ -3724,6 +3615,103 @@ function ProjectFinanceLedger({
             </button>
           )}
       </div>
+      {addPeriodOpen && (
+        <div className="do-sheet" role="dialog" aria-label="Add finance period">
+          <button
+            aria-label="Close"
+            className="do-sheet-scrim"
+            onClick={() => setAddPeriodOpen(false)}
+            type="button"
+          />
+          <div className="do-sheet-panel">
+            <header>
+              <h3>Add period</h3>
+              <button
+                aria-label="Close add period"
+                onClick={() => setAddPeriodOpen(false)}
+                title="Close"
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <label>
+              <span>Period type</span>
+              <select
+                onChange={(event) =>
+                  setNewKind(event.target.value as FinancePeriodKind)
+                }
+                value={newKind}
+              >
+                <option value="build">Build / change request</option>
+                <option value="monthly">Monthly operations</option>
+              </select>
+            </label>
+            {newKind === "build" && (
+              <label>
+                <span>Version or CR</span>
+                <input
+                  onChange={(event) => setNewBuildLabel(event.target.value)}
+                  placeholder="V1, V2, CR1…"
+                  value={newBuildLabel}
+                />
+              </label>
+            )}
+            <label>
+              <span>Period month</span>
+              <select
+                onChange={(event) => setNewMonth(Number(event.target.value))}
+                value={newMonth}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Period year</span>
+              <select
+                onChange={(event) => setNewYear(Number(event.target.value))}
+                value={newYear}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {newKind === "build" && (
+              <label>
+                <span>Cost template</span>
+                <select
+                  onChange={(event) => setTemplateId(event.target.value)}
+                  value={templateId}
+                >
+                  <option value="none">Start empty</option>
+                  {availableTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              className="do-button do-button-dark"
+              onClick={() => {
+                addPeriod();
+                setAddPeriodOpen(false);
+              }}
+              type="button"
+            >
+              Create period
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="do-finance-periods">
         {periods.map((period, periodIndex) => {
@@ -4378,9 +4366,22 @@ function ProjectFinanceLedger({
         })}
         {periods.length === 0 && (
           <EmptyState
-            icon={<FileText size={18} />}
+            icon={<FileText size={24} />}
             title="No financial periods yet"
-            text="Create Build V1, a change request, or the first operating month."
+            text="Start with Build V1 or the first operating month."
+            action={
+              <button
+                className="do-button do-button-dark"
+                onClick={() => {
+                  setNewKind("build");
+                  setNewBuildLabel("V1");
+                  setAddPeriodOpen(true);
+                }}
+                type="button"
+              >
+                Create Build V1
+              </button>
+            }
           />
         )}
       </div>
@@ -4478,6 +4479,13 @@ function projectDueDate(project: any) {
         "",
     ).slice(0, 10) || "No date"
   );
+}
+
+function projectMoney(value: unknown) {
+  if (value == null || value === "") return "—";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function projectSortValue(
@@ -5136,13 +5144,16 @@ export function ProjectCommandCenter({
           >
             <LayoutGrid size={14} /> Dashboard
           </button>
-          <button
-            aria-label="Close command center"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={19} />
-          </button>
+          {!templatesOpen && (
+            <button
+              aria-label="Close command center"
+              onClick={onClose}
+              title="Close"
+              type="button"
+            >
+              <X size={19} />
+            </button>
+          )}
         </div>
       </header>
       {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
@@ -5185,7 +5196,7 @@ export function ProjectCommandCenter({
           </strong>
           <span>In operations</span>
         </div>
-        <div className="is-risk">
+        <div className="status-tone-amber">
           <strong>
             {
               realProjects.filter(
@@ -5200,20 +5211,33 @@ export function ProjectCommandCenter({
           </strong>
           <span>Need attention</span>
         </div>
-        <div>
+        <div className={totals.plannedHours === 0 && totals.actualHours === 0 ? "is-muted" : ""}>
           <strong>
             {Math.round(totals.actualHours)}h /{" "}
             {Math.round(totals.plannedHours)}h
           </strong>
-          <span>Hours used / planned</span>
+          <span>
+            Hours used / planned
+            {totals.plannedHours === 0 && totals.actualHours === 0 ? (
+              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add planned hours</button></>
+            ) : null}
+          </span>
         </div>
-        <div>
+        <div className={totals.recurring === 0 ? "is-muted" : ""}>
           <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
-          <span>Monthly recurring</span>
+          <span>
+            Monthly recurring
+            {totals.recurring === 0 ? " · not configured" : ""}
+          </span>
         </div>
-        <div>
+        <div className={totals.initial === 0 ? "is-muted" : ""}>
           <strong>${Math.round(totals.initial).toLocaleString()}</strong>
-          <span>Initial investment</span>
+          <span>
+            Initial investment
+            {totals.initial === 0 ? (
+              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add costs</button></>
+            ) : null}
+          </span>
         </div>
       </div>
       <div className={`do-command-body do-command-body-${view}`}>
@@ -5239,6 +5263,7 @@ export function ProjectCommandCenter({
                     "Prepare a concise stakeholder portfolio update.",
                   ].map((question) => (
                     <button
+                      className="do-pm-prompt-card"
                       key={question}
                       onClick={() => onAsk(question)}
                       type="button"
@@ -5298,7 +5323,7 @@ export function ProjectCommandCenter({
                   </div>
                   <AlertTriangle size={15} />
                 </div>
-                <div className="do-health-summary">
+                <div className="do-status-summary">
                   {healthCounts.map(({ health, count }) => (
                     <button
                       key={health}
@@ -5312,11 +5337,12 @@ export function ProjectCommandCenter({
                       }}
                       type="button"
                     >
-                      <span
-                        className={`do-health-dot ${healthClass(health)}`}
+                      <StatusLight
+                        status={healthToStatus(health)}
+                        label={projectHealthLabel(health)}
+                        size="sm"
                       />
                       <strong>{count}</strong>
-                      <small>{projectHealthLabel(health)}</small>
                     </button>
                   ))}
                 </div>
@@ -5348,8 +5374,10 @@ export function ProjectCommandCenter({
                         onClick={() => onOpenProject(project)}
                         type="button"
                       >
-                        <span
-                          className={`do-health-dot ${healthClass(health)}`}
+                        <StatusLight
+                          status={healthToStatus(health)}
+                          label={false}
+                          size="sm"
                         />
                         <span>
                           <strong>{projectTitle(project)}</strong>
@@ -5455,9 +5483,11 @@ export function ProjectCommandCenter({
                     onClick={() => onOpenProject(project)}
                     type="button"
                   >
-                    <span className={healthClass(health)}>
-                      {projectHealthLabel(health)}
-                    </span>
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={projectHealthLabel(health)}
+                      size="sm"
+                    />
                     <strong>{projectTitle(project)}</strong>
                     <small>
                       {
@@ -5745,8 +5775,14 @@ export function ProjectCommandCenter({
                 ))}
               </select>
             </label>
-            <button onClick={exportPortfolioPdf} type="button">
-              <FileText size={12} /> Export PDF
+            <button
+              aria-label="Export portfolio PDF"
+              className="do-icon-button"
+              onClick={exportPortfolioPdf}
+              title="Export PDF"
+              type="button"
+            >
+              <FileText size={14} />
             </button>
             {view === "overview" && (
               <div className="do-table-scroll-buttons" aria-label="Move portfolio table horizontally">
@@ -5936,6 +5972,16 @@ export function ProjectCommandCenter({
                     text="Administrative record state: Planning, Active, Paused, Completed or Archived."
                   />
                 </span>}
+                {columnSet.has("source_status") && <span>
+                  ESTADO{" "}
+                  <InfoTip
+                    label="ESTADO"
+                    text="Executive workbook status from the August 2026 master."
+                  />
+                </span>}
+                {columnSet.has("contact") && <span>OWNER / POC</span>}
+                {columnSet.has("qa_plan") && <span>QA PLAN</span>}
+                {columnSet.has("days_to_prod") && <span>DÍAS A PROD</span>}
                 {columnSet.has("health") && <span>
                   Health{" "}
                   <InfoTip
@@ -5951,12 +5997,15 @@ export function ProjectCommandCenter({
                   />
                 </span>}
                 {columnSet.has("due") && <span>
-                  Due{" "}
+                  PROD PLAN{" "}
                   <InfoTip
-                    label="Due date"
-                    text="Editable delivery date. A revised date is used when one exists."
+                    label="PROD PLAN"
+                    text="Committed production date from the executive workbook."
                   />
                 </span>}
+                {columnSet.has("june_usd") && <span>JUN USD</span>}
+                {columnSet.has("july_usd") && <span>JUL USD</span>}
+                {columnSet.has("total_usd") && <span>TOTAL USD</span>}
                 {columnSet.has("solution_architect") && <span>
                   Solution Architect{" "}
                   <InfoTip
@@ -6096,7 +6145,7 @@ export function ProjectCommandCenter({
                         />
                       </div>}
                       {columnSet.has("tags") && (
-                        <TagPicker
+                        <CompactTagPicker
                           label={`Tags for ${projectTitle(project)}`}
                           onCreateTag={(name) =>
                             onCreateControlledOption?.("tag", name)
@@ -6229,10 +6278,26 @@ export function ProjectCommandCenter({
                         ))}
                       </select>
                       )}
+                      {columnSet.has("source_status") && (
+                        <span>{project.sourceStatus || project.excel?.estado || "—"}</span>
+                      )}
+                      {columnSet.has("contact") && (
+                        <span>{project.contact || project.projectManager || "—"}</span>
+                      )}
+                      {columnSet.has("qa_plan") && (
+                        <span>{String(project.qaPlanDate || project.excel?.qaPlan || "").slice(0, 10) || "—"}</span>
+                      )}
+                      {columnSet.has("days_to_prod") && (
+                        <span>
+                          {project.daysToProd == null && project.excel?.diasAProd == null
+                            ? "—"
+                            : String(project.daysToProd ?? project.excel?.diasAProd)}
+                        </span>
+                      )}
                       {columnSet.has("health") && (
                       <select
                         aria-label={`Health for ${projectTitle(project)}`}
-                        className={`do-health-select ${healthClass(health)}`}
+                        className={`do-status-select ${healthClass(health)}`}
                         onChange={(event) =>
                           onUpdateProject(project.id, {
                             healthOverride:
@@ -6297,6 +6362,15 @@ export function ProjectCommandCenter({
                         }
                         type="date"
                       />
+                      )}
+                      {columnSet.has("june_usd") && (
+                        <span>{projectMoney(project.juneUsd ?? project.excel?.junUsd)}</span>
+                      )}
+                      {columnSet.has("july_usd") && (
+                        <span>{projectMoney(project.julyUsd ?? project.excel?.julUsd)}</span>
+                      )}
+                      {columnSet.has("total_usd") && (
+                        <span>{projectMoney(project.totalUsd ?? project.excel?.totalUsd)}</span>
                       )}
                       {columnSet.has("solution_architect") && (
                       <select

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, FolderPlus, Sparkles, WandSparkles, X } from "lucide-react";
+import { Check, ChevronRight, FolderPlus, Sparkles, WandSparkles, X } from "./ui/Icon";
 import {
   DELIVEREE_SKILLS,
   EMPTY_PROJECT_WIZARD_DRAFT,

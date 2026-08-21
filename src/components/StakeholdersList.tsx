@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
-import { Users, Plus, X, Trash2, Mail, Briefcase, Search, Loader2, Sparkles, AlertTriangle, Send, CheckSquare, Square, Calendar } from "lucide-react";
+import { Users, Plus, X, Trash2, Mail, Briefcase, Search, Loader2, Sparkles, AlertTriangle, Send, CheckSquare, Square, Calendar } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 import { Stakeholder } from "../types";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "lucide-react";
+import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
 interface TimeBlockDef {

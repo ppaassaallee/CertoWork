@@ -16,7 +16,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "./ui/Icon";
 import { auth, db } from "../lib/firebase";
 import { inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
 import { membershipPublicPatch } from "../lib/workspaceCollaboration";

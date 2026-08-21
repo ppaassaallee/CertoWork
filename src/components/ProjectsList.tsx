@@ -5,7 +5,7 @@ import {
   Search, Tag, ShieldAlert, ArrowRightLeft,
   SlidersHorizontal, CheckSquare, Info, X,
   LayoutGrid, List, ArrowUp, ArrowDown, Bot
-} from "lucide-react";
+} from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore";

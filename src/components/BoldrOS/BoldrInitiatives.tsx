@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrInitiative, BoldrProject } from './types';
-import { Plus, Link2 } from 'lucide-react';
+import { Plus, Link2 } from "../ui/Icon";
 
 const STATUS_OPTIONS = ["Candidate", "Selected", "Mapped", "Prioritized", "Designed", "In Build", "In QA", "In Review", "Live", "Optimizing", "Completed", "Parked"] as const;
 

@@ -18,7 +18,7 @@ import {
   Sparkles,
   Tags,
   Undo2,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,
@@ -502,8 +502,8 @@ export function NotesWorkspace({
                 />
               </div>
               <div className="do-notes-actions">
-                <button onClick={() => setInkOpen((open) => !open)} type="button"><PenLine size={13} /> {inkOpen ? "Close ink" : "Handwrite"}</button>
-                <button onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button"><Sparkles size={13} /> Analyze</button>
+                <button aria-label={inkOpen ? "Close handwriting" : "Handwrite"} className="do-icon-button" onClick={() => setInkOpen((open) => !open)} title={inkOpen ? "Close handwriting" : "Handwrite"} type="button"><PenLine size={14} /></button>
+                <button aria-label="Analyze note" className="do-icon-button" onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} title="Analyze note" type="button"><Sparkles size={14} /></button>
                 <button onClick={() => onAsk(`Extract actionable tasks, decisions, and follow-ups from this notebook note. Keep changes pending for approval:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button">Extract actions</button>
               </div>
             </header>
@@ -541,8 +541,8 @@ export function NotesWorkspace({
                     ))}
                     <button className={inkWidth === 2.5 ? "is-active" : ""} onClick={() => setInkWidth(2.5)} type="button">Fine</button>
                     <button className={inkWidth === 5 ? "is-active" : ""} onClick={() => setInkWidth(5)} type="button">Bold</button>
-                    <button onClick={undoStroke} type="button"><Undo2 size={12} /> Undo</button>
-                    <button onClick={clearInk} type="button"><Eraser size={12} /> Clear</button>
+                    <button aria-label="Undo stroke" className="do-icon-button" onClick={undoStroke} title="Undo stroke" type="button"><Undo2 size={13} /></button>
+                    <button aria-label="Clear handwriting" className="do-icon-button" onClick={clearInk} title="Clear handwriting" type="button"><Eraser size={13} /></button>
                   </div>
                   <canvas
                     ref={canvasRef}

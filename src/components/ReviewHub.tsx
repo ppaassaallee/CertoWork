@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { CheckSquare, Sparkles, TrendingUp, Zap, Dumbbell, Activity, Calendar, ChevronRight, Award } from "lucide-react";
+import { CheckSquare, Sparkles, TrendingUp, Zap, Dumbbell, Activity, Calendar, ChevronRight, Award } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";

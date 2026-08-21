@@ -1,16 +1,13 @@
-export const PORTFOLIO_VIEWER_EMAILS = [
-  "cesar.a@getboldr.ai",
-  "cesar.ar@alliedglobal.com",
-  "rafael.f@getboldr.ai",
-  "rafael.f@alliedglobal.com",
-];
-
 export function normalizeAccessEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
-export function isPortfolioViewerEmail(value?: string | null) {
-  return PORTFOLIO_VIEWER_EMAILS.includes(normalizeAccessEmail(value));
+export function isPortfolioViewerMember(member?: {
+  role?: string | null;
+  portfolioViewer?: boolean | null;
+} | null) {
+  const role = String(member?.role || "").toLowerCase();
+  return role === "owner" || role === "admin" || Boolean(member?.portfolioViewer);
 }
 
 export function activeWorkspaceMemberId(workspaceId: string, userId: string) {

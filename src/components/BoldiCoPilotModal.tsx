@@ -5,7 +5,7 @@ import {
   Copy, HelpCircle, FileText, 
   Mail, Compass, FileCheck2, ArrowRight,
   ChevronDown, ExternalLink
-} from "lucide-react";
+} from "./ui/Icon";
 import { doc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
