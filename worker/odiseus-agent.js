@@ -38,6 +38,7 @@ export async function runOdiseusAgent({
   citations,
   latestUserMessage,
   maxRounds = 5,
+  onStep = null,
 }) {
   const steps = [];
   const collectedActions = [];
@@ -46,13 +47,25 @@ export async function runOdiseusAgent({
     {
       role: "user",
       content:
-        "Odiseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval.",
+        "Odiseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval. Use recall_memory before inventing preferences. Use remember_fact only for durable facts the user affirmed.",
     },
     ...messages.map((message) => ({
       role: message.role,
       content: message.content,
     })),
   ];
+
+  const memoryNotes = Array.isArray(workspaceContext?.odiseusMemory)
+    ? workspaceContext.odiseusMemory.slice(0, 12)
+    : [];
+  if (memoryNotes.length) {
+    input.unshift({
+      role: "user",
+      content: `Durable Odiseus memory for this workspace:\n${memoryNotes
+        .map((item) => `- (${item.kind || "fact"}) ${item.text}`)
+        .join("\n")}`,
+    });
+  }
 
   let lastPayload = null;
   for (let round = 0; round < maxRounds; round += 1) {
@@ -90,14 +103,35 @@ export async function runOdiseusAgent({
 
     for (const call of calls) {
       const args = parseArgs(call.arguments);
-      const executed = executeOdiseusTool(call.name, args, workspaceContext);
-      steps.push({
+      const workingStep = {
         id: call.callId || `${call.name}-${steps.length}`,
         tool: call.name,
-        label: executed.label || TOOL_LABELS[call.name] || call.name,
+        label: TOOL_LABELS[call.name] || call.name,
+        status: "working",
+        at: Date.now(),
+      };
+      if (typeof onStep === "function") {
+        try {
+          await onStep(workingStep);
+        } catch {
+          // Streaming callbacks must never abort the agent loop.
+        }
+      }
+      const executed = executeOdiseusTool(call.name, args, workspaceContext);
+      const doneStep = {
+        ...workingStep,
+        label: executed.label || workingStep.label,
         status: "done",
         at: Date.now(),
-      });
+      };
+      steps.push(doneStep);
+      if (typeof onStep === "function") {
+        try {
+          await onStep(doneStep);
+        } catch {
+          // ignore
+        }
+      }
       if (Array.isArray(executed.proposedActions)) {
         collectedActions.push(...executed.proposedActions);
       }

@@ -668,6 +668,58 @@ async function chat(request, env) {
     [...body.messages].reverse().find((message) => message.role === "user")?.content || "";
   const citations = groundedCitations(latestUserMessage, body.workspaceContext);
   const model = openaiModelName(env);
+  const wantsStream =
+    body.stream === true ||
+    String(request.headers.get("accept") || "").includes("text/event-stream");
+
+  if (wantsStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event, data) => {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+        try {
+          const result = await runOdiseusAgent({
+            env,
+            model,
+            instructions: assistantInstructions(body, citations),
+            messages: body.messages,
+            workspaceContext: body.workspaceContext || {},
+            openaiApiKey: openaiApiKey(env),
+            openaiUrl: OPENAI_RESPONSES_URL,
+            extractOpenAIText,
+            parseJsonObject,
+            normalizeAssistantResult,
+            citations,
+            latestUserMessage,
+            onStep: async (step) => send("step", step),
+          });
+          send("final", result);
+        } catch (error) {
+          send("error", {
+            error:
+              error instanceof Error
+                ? error.message
+                : "The assistant is temporarily unavailable",
+            code: error?.code || "ASSISTANT_UNAVAILABLE",
+          });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      },
+    });
+  }
 
   try {
     const result = await runOdiseusAgent({
