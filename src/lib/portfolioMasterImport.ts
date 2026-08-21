@@ -1,6 +1,6 @@
 import type { WorkspaceMember } from "./workspaceCollaboration";
 import { normalizeAlias, isAssignableMember } from "./workspaceCollaboration";
-import { normalizeAccessEmail, PORTFOLIO_VIEWER_EMAILS } from "./accessControl";
+import { normalizeAccessEmail } from "./accessControl";
 import { normalizeDeliveryStage } from "./projectDelivery";
 import type { ProductPhase } from "./workClassification";
 
@@ -171,10 +171,7 @@ export function resolvePortfolioShareTargets(
     missingAliases: matched.filter((item) => !item.member).map((item) => item.alias),
     userIds: unique(matched.map((item) => item.member?.userId)),
     memberIds: unique(matched.map((item) => item.member?.id)),
-    emails: unique([
-      ...matched.map((item) => item.member?.email || item.member?.emailLower),
-      ...PORTFOLIO_VIEWER_EMAILS,
-    ]),
+    emails: unique(matched.map((item) => item.member?.email || item.member?.emailLower)),
     labels: unique(
       matched.map(
         (item) =>

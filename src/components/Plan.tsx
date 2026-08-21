@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Layers, Calendar, Target, TrendingUp, Sparkles, BookOpen, Clock, ChevronRight, Activity } from "lucide-react";
+import { Layers, Calendar, Target, TrendingUp, Sparkles, BookOpen, Clock, ChevronRight, Activity } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";

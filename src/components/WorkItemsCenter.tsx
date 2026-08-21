@@ -15,9 +15,10 @@ import {
   SlidersHorizontal,
   Square,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
+import { taskDueStatus } from "./ui/StatusLight";
 import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
@@ -1122,8 +1123,9 @@ export function WorkItemsCenter({
             const kind = workItemKind(item);
             const left = ((start.getTime() - minTime) / span) * 100;
             const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
+            const tone = taskDueStatus({ status: item.status, dueDate: end });
             return (
-              <article className={`do-gantt-row is-${kind}`} key={item.id}>
+              <article className={`do-gantt-row is-${tone}`} key={item.id}>
                 <button onClick={() => onSelectItem(item.id)} type="button">
                   <span>{workItemLabel(kind)}</span>
                   <strong>{title(item)}</strong>

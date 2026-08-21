@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Send, Inbox as InboxIcon, Sparkles, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Send, Inbox as InboxIcon, Sparkles, RefreshCw, Trash2, Zap } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";

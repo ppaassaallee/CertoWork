@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Link as LinkIcon, Plus, X, Loader2, ArrowRight } from "lucide-react";
+import { Link as LinkIcon, Plus, X, Loader2, ArrowRight } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { db } from "../lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, getDocs, limit } from "firebase/firestore";

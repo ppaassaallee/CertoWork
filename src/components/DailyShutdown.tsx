@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { CheckSquare, ArrowLeft, Inbox, Calendar, Activity, Power, Brain } from "lucide-react";
+import { CheckSquare, ArrowLeft, Inbox, Calendar, Activity, Power, Brain } from "./ui/Icon";
 
 export function DailyShutdown() {
   return (

@@ -5,7 +5,7 @@ import { BoldrBlockers } from './BoldrBlockers';
 import { BoldrMBRs } from './BoldrMBRs';
 import { BoldrQAView } from './BoldrQAView';
 import { BoldrProjectDetails } from './BoldrProjectDetails';
-import { Briefcase, Zap, AlertTriangle, BarChart, CheckSquare } from 'lucide-react';
+import { Briefcase, Zap, AlertTriangle, BarChart, CheckSquare } from "../ui/Icon";
 
 export function BoldrOSHub() {
   const location = useLocation();

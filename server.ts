@@ -1,4 +1,6 @@
 import express from "express";
+import helmet from "helmet";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import path from "path";
@@ -9,6 +11,14 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fs from "fs";
 import { generateWithOpenAI, resolveAssistantProvider } from "./server/ai-provider";
 import { rankRetrievalCandidates, type RetrievalCandidate } from "./server/retrieval";
+import {
+  createRequireWorkspaceApiAuth,
+  principalDisplayName,
+  requestIdMiddleware,
+  verifyHubspotSignature,
+} from "./server/middleware/auth";
+import { errorHandler, sendPublicError } from "./server/middleware/errors";
+import { createAiRateLimit } from "./server/middleware/rateLimit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,8 +70,25 @@ async function startServer() {
   const app = express();
   app.set("trust proxy", 1);
   const PORT = Number(process.env.PORT) || 3000;
+  const corsAllowlist = String(
+    process.env.CORS_ORIGIN || "http://localhost:3000,https://certo.work,https://certo-work.gazellehunt.workers.dev",
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
-  app.use(express.json({ limit: "50mb" }));
+  app.use(requestIdMiddleware);
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(cors({ origin: corsAllowlist, credentials: true }));
+  app.use((req, res, next) => {
+    const limit = req.path === "/api/transcribe-capture" ? "25mb" : "1mb";
+    return express.json({
+      limit,
+      verify: (request, _response, buffer) => {
+        (request as typeof req).rawBody = buffer;
+      },
+    })(req, res, next);
+  });
 
   // Initialize firebase admin SDK
   let dbAdmin: any = null;
@@ -260,40 +287,74 @@ async function startServer() {
     });
   });
 
-  async function requireWorkspaceApiAuth(req: any, res: any, next: any) {
-    try {
-      const authorization = String(req.headers.authorization || "");
-      if (!authorization.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      const decoded = await getAdminAuth().verifyIdToken(authorization.slice(7));
-      const requestedUserId = req.body?.userId || req.body?.workspaceContext?.userId;
-      const workspaceId = req.body?.workspaceId || req.body?.workspaceContext?.workspaceId;
-      if (requestedUserId && requestedUserId !== decoded.uid) {
-        return res.status(403).json({ error: "User scope mismatch" });
-      }
-      if (!workspaceId || !dbAdmin) {
-        return res.status(503).json({ error: "Workspace authorization is unavailable" });
-      }
-      const memberId = `${workspaceId}_${decoded.uid}`;
-      const [memberDoc, workspaceDoc] = await Promise.all([
-        dbAdmin.collection("workspace_members").doc(memberId).get(),
-        dbAdmin.collection("workspaces").doc(workspaceId).get(),
-      ]);
-      const isActiveMember = memberDoc.exists && memberDoc.data()?.status === "active";
-      const isOwner = workspaceDoc.exists && workspaceDoc.data()?.ownerId === decoded.uid;
-      if (!isActiveMember && !isOwner) {
-        return res.status(403).json({ error: "Workspace access denied" });
-      }
-      req.authUser = decoded;
-      req.body.userId = decoded.uid;
-      req.body.workspaceId = workspaceId;
-      next();
-    } catch (error) {
-      console.error("[API Auth]", error);
-      res.status(401).json({ error: "Invalid or expired authentication" });
-    }
+  async function loadWorkspaceAccess(workspaceId: string, uid: string) {
+    if (!dbAdmin) return false;
+    const memberId = `${workspaceId}_${uid}`;
+    const [memberDoc, workspaceDoc] = await Promise.all([
+      dbAdmin.collection("workspace_members").doc(memberId).get(),
+      dbAdmin.collection("workspaces").doc(workspaceId).get(),
+    ]);
+    const isActiveMember = memberDoc.exists && memberDoc.data()?.status === "active";
+    const isOwner = workspaceDoc.exists && workspaceDoc.data()?.ownerId === uid;
+    return Boolean(isActiveMember || isOwner);
   }
+
+  const requireWorkspaceApiAuth = createRequireWorkspaceApiAuth({
+    verifyIdToken: async (token) => {
+      const decoded = await getAdminAuth().verifyIdToken(token);
+      return {
+        uid: decoded.uid,
+        email: decoded.email,
+        name: decoded.name,
+      };
+    },
+    loadWorkspaceAccess,
+    adminAvailable: () => Boolean(dbAdmin),
+  });
+  const aiRateLimit = createAiRateLimit();
+
+  app.post("/api/webhooks/hubspot", verifyHubspotSignature, async (req, res) => {
+    try {
+      const events = Array.isArray(req.body) ? req.body : [];
+      for (const event of events) {
+        if (event.subscriptionType === "deal.propertyChange" && event.propertyName === "dealstage") {
+          const TARGET_STAGE_ID = process.env.HUBSPOT_TARGET_STAGE_ID || "closed_won_handoff_required";
+          if (event.propertyValue === TARGET_STAGE_ID) {
+            console.log(`[HubSpot Automation] Deal ${event.objectId} reached trigger stage.`);
+          }
+        }
+      }
+      res.status(200).send("OK");
+    } catch (err: unknown) {
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
+    }
+  });
+
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/webhooks/hubspot") return next();
+    return requireWorkspaceApiAuth(req, res, next);
+  });
+  app.use(
+    [
+      "/api/boldi",
+      "/api/warroom",
+      "/api/triage",
+      "/api/generateProject",
+      "/api/projects",
+      "/api/performTask",
+      "/api/autoOrganize",
+      "/api/workouts",
+      "/api/analytics",
+      "/api/habits",
+      "/api/clarity",
+      "/api/portfolio",
+      "/api/stakeholder",
+      "/api/timeblocks",
+      "/api/skills",
+      "/api/transcribe-capture",
+    ],
+    aiRateLimit,
+  );
 
   app.post("/api/warroom/modify-canvas", async (req, res) => {
     try {
@@ -342,7 +403,7 @@ Format your output strictly as a valid JSON matching this schema:
       res.json(parsed);
     } catch (e: any) {
       console.error("[Canvas Modify Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -382,7 +443,7 @@ Execute the skill instructions precisely on the provided input item. Generate a 
       res.json({ outputText });
     } catch (e: any) {
       console.error("[Skill Invoke Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -437,7 +498,7 @@ Do not include any other text outside of this JSON block.`
       res.json(parsed);
     } catch (e: any) {
       console.error("[Transcribe Capture Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -493,7 +554,7 @@ Raw Input: "${content}"`,
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -564,7 +625,7 @@ ${skillsContext}`;
       res.json(parseCleanJSON(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -618,7 +679,7 @@ Do not invent anything that isn't logical, but structure it beautifully. Keep yo
       res.json(parseCleanJSON(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -649,7 +710,7 @@ Feel free to suggest names or emails from the task/project stakeholders if they 
       res.json({ text: response.text });
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -741,7 +802,7 @@ Return your analysis strictly as a JSON object matching this schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -813,7 +874,7 @@ IMPORTANT: Disclaimer "Workout recommendations are general fitness guidance, not
       res.json(JSON.parse(response.text));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -870,7 +931,7 @@ Focus on actionable decisions. Recommendations must be potential review candidat
       res.json(JSON.parse(response.text));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -942,7 +1003,7 @@ Specifically answer:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -950,7 +1011,7 @@ Specifically answer:
     try {
       const { pendientes, decisiones, ideas, dejarIr } = req.body;
       
-      const prompt = `You are Gazelle, an elite productivity strategist. The user is doing their 10-Minute Daily Mental Clarity Reset in Alejandro OS.
+      const prompt = `You are Gazelle, an elite productivity strategist. The user is doing their 10-Minute Daily Mental Clarity Reset in Certo Work.
       Here are the items they captured under each of the 4 sections:
       
       - PENDIENTES (Raw captured tasks or admin duties):
@@ -1054,7 +1115,7 @@ Specifically answer:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -1122,7 +1183,7 @@ Specifically answer:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -1181,7 +1242,7 @@ Specifically answer:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -1244,51 +1305,7 @@ Specifically answer:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ============================================================================
-  // HUBSPOT WEBHOOKS & AUTOMATION LAYER
-  // ============================================================================
-  
-  app.post("/api/webhooks/hubspot", async (req, res) => {
-    try {
-      const events = req.body;
-      console.log("[HubSpot Webhook] Received events:", events);
-
-      // Verify the request signature or token if configured
-      // const signature = req.headers['x-hubspot-signature'];
-
-      for(const event of events) {
-        // Look for deal property changes
-        if (event.subscriptionType === "deal.propertyChange" && event.propertyName === "dealstage") {
-          const dealId = event.objectId;
-          const newStage = event.propertyValue;
-          
-          // ID for "Closed Won — Handoff Required" (Replace with real HubSpot ID)
-          const TARGET_STAGE_ID = process.env.HUBSPOT_TARGET_STAGE_ID || "closed_won_handoff_required";
-          
-          if (newStage === TARGET_STAGE_ID) {
-            console.log(`[HubSpot Automation] Deal ${dealId} reached trigger stage. Initiating handoff automation.`);
-            
-            // 1. Fetch deal data from HubSpot API
-            // 2. Validate completeness score >= 95
-            // 3. Create Google Drive folder structure
-            // 4. Create Gazelle Project via Firestore (if using firebase-admin)
-            // 5. Create Default Artifacts, Timeline, & Blocker logic
-            // 6. Write Google Drive UI & Gazelle project URLs back to HubSpot
-            
-            // Note: Since this requires firebase-admin to write to the specific user's workspace,
-            // the backend should be configured with a service account and the correct user ID binding.
-          }
-        }
-      }
-      
-      res.status(200).send("OK");
-    } catch(err: any) {
-      console.error("[HubSpot Webhook Error]", err);
-      res.status(500).send("Internal Server Error");
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -1375,7 +1392,7 @@ Specifically answer:
     return resultData;
   }
 
-  app.post("/api/boldi/chat", requireWorkspaceApiAuth, async (req, res) => {
+  app.post("/api/boldi/chat", async (req, res) => {
     try {
       let { userId, workspaceId, messages, workspaceContext } = req.body;
       if (!userId) userId = workspaceContext?.userId;
@@ -1475,7 +1492,7 @@ Specifically answer:
         
         const currentServerDate = new Date().toISOString().slice(0, 10);
         const enrichPrompt = `
-You are Boldi, an elite AI Productivity Analyst. Your job is to suggest high-fidelity metadata updates for Alejandro's incomplete tasks.
+You are Boldi, an elite AI Productivity Analyst. Your job is to suggest high-fidelity metadata updates for ${principalDisplayName(req)}'s incomplete tasks.
 The current reference date is ${currentServerDate}.
 Analyze the following list of tasks that are missing metadata:
 ${JSON.stringify(tasksToEnrich, null, 2)}
@@ -2008,7 +2025,7 @@ Respond in a JSON format matching this schema:
         : null;
 
       const prompt = `You are ${assistantName}, a personal productivity strategist inspired by Carl Pullein’s COD, Time Sector System, Weekly Planning Matrix, 2+8 prioritization, and Perfect Week blueprint.
-      You are running inside Alejandro's executive system, Gazelle, acting as his Personal Chief of Staff.
+      You are running inside ${principalDisplayName(req)}'s executive system, Gazelle, acting as Personal Chief of Staff.
       
       ABSOLUTE RULES:
       - Never mention Breeze, HubSpot, or any external platform references.
@@ -2072,8 +2089,8 @@ Respond in a JSON format matching this schema:
          - Keep conversational reply elegant and brief, using customized chips in 'suggestedChips' (e.g. ["Let's start onboarding", "Skip to dashboard"]).
 
       2. JUDGMENT ENGINE / CHALLENGE VERDICTS:
-         - If Alejandro asks to schedule something, add a project, or make a commitment:
-           * WIP LIMIT: If tasks > 5 for a single day, or projects > 3 active in the workspace, you MUST challenge the addition! State clearly: "Alejandro, you are exceeding your active WIP limit. We need to focus on completing outstanding tasks first."
+         - If ${principalDisplayName(req)} asks to schedule something, add a project, or make a commitment:
+           * WIP LIMIT: If tasks > 5 for a single day, or projects > 3 active in the workspace, you MUST challenge the addition! State clearly: "${principalDisplayName(req)}, you are exceeding your active WIP limit. We need to focus on completing outstanding tasks first."
            * CALENDAR CONFLICT (Scenario 4): If he asks to schedule "lunch with Alexis tomorrow" and tomorrow already has "Client-B visit" (detected as YES), raise a structural conflict! Push back: "Tomorrow is your Client-B site visit, which requires travel and full energy. Adding lunch with Alexis tomorrow compromises your focus. I suggest Thursday or Monday instead." Propose an action plan to draft the WhatsApp message to Alexis for Thursday/Monday!
            * VAGUE COMMITMENTS: If he types vague objectives ("I want to write more" or "Need to exercise"), challenge him: "Vague intentions do not convert. Let's apply a concrete implementation plan (when, where, and how). Would you like to schedule 30 minutes on Thursday at 8 AM?"
 
@@ -2083,7 +2100,7 @@ Respond in a JSON format matching this schema:
            * Let the user know they can click the "Download Weekly Report" button below to download it as a markdown file.
 
       4. COMMUNICATION OUTBOX DESIGN (Scenario 8):
-         - If he says "Tell Cesar I need the ABC report today" or "Email Julian", draft a grounded message in YOUR assistant voice (e.g. "Hi Cesar, Alejandro's assistant Laura here. Just following up to see if we can get the ABC report today? Thank you!").
+         - If they say "Tell Cesar I need the ABC report today" or "Email Julian", draft a grounded message in YOUR assistant voice (e.g. "Hi Cesar, ${principalDisplayName(req)}'s assistant here. Just following up to see if we can get the ABC report today? Thank you!").
          - Propose a 'proposedActions' item of type: "outbox_communication" with 'proposedChange' containing:
            { "recipient": "Cesar", "channel": "whatsapp", "content": "[draft message]" }.
 
@@ -2234,7 +2251,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       res.json(resultData);
     } catch (e: any) {
       console.error("[Boldi Chat Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -2590,7 +2607,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (err: any) {
       console.error("[Chat Orchestration Endpoint Error]", err);
-      res.status(500).json({ error: err.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
     }
   });
 
@@ -2656,7 +2673,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (err: any) {
       console.error("[Apply Action Plan Error]", err);
-      res.status(500).json({ error: err.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
     }
   });
 
@@ -2769,7 +2786,7 @@ Respond STRICTLY in a valid JSON schema:
       });
     } catch (e: any) {
       console.error("[Audit Metadata Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -2947,7 +2964,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (e: any) {
       console.error("[Bulk Enrich Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3123,7 +3140,7 @@ Respond STRICTLY in a valid JSON schema:
       });
     } catch (e: any) {
       console.error("[Apply Updates Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3131,7 +3148,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals, stakeholders, alerts, claritySession, dailyMetric } = req.body;
       
-      const prompt = `You are Gazelle, Alejandro's Chief of Staff. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
+      const prompt = `You are Gazelle, ${principalDisplayName(req)}'s Chief of Staff. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
       
       CURRENT DATE: ${new Date().toLocaleDateString()}
       ACTIVE STRATEGIC GOALS / WIGs:
@@ -3154,7 +3171,7 @@ Respond STRICTLY in a valid JSON schema:
 
       Synthesize all of this context. Answer:
       1. What is the single highest leverage Strategic Objective or WIG focus today?
-      2. Recommand the absolute ONE Thing Alejandro must complete today. Provide a very clear justification.
+      2. Recommand the absolute ONE Thing ${principalDisplayName(req)} must complete today. Provide a very clear justification.
       3. Recommend up to 3 highly critical "Should Dos" tasks (Top 3) with justifications.
       4. Detect active project alerts or stagnation risks.
       5. Identify outstanding stakeholder commitments or follow-ups.
@@ -3259,7 +3276,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Boldi Daily Brief Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3403,7 +3420,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Process Meeting Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3411,7 +3428,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals } = req.body;
       
-      const prompt = `You are a strategic alignment engine. Auditing Alejandro's current task list and projects against the highest priority WIGs and OKR objectives.
+      const prompt = `You are a strategic alignment engine. Auditing ${principalDisplayName(req)}'s current task list and projects against the highest priority WIGs and OKR objectives.
       
       WIGs & OKRs:
       ${JSON.stringify(goals)}
@@ -3464,7 +3481,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Strategic Alignment Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3472,7 +3489,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals, timeBlocks, previousReview } = req.body;
       
-      const prompt = `You are Gazelle, performing a Strategic Weekly Executive Review for Alejandro.
+      const prompt = `You are Gazelle, performing a Strategic Weekly Executive Review for ${principalDisplayName(req)}.
       
       COMPLETED & OPEN TASKS:
       ${JSON.stringify(tasks)}
@@ -3549,7 +3566,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Weekly Review Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3884,7 +3901,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (e: any) {
       console.error("[Database Audit Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4046,7 +4063,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (e: any) {
       console.error("[Database Migration Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4126,7 +4143,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (e: any) {
       console.error("[Workspace Export Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4161,7 +4178,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(logs);
     } catch (e: any) {
       console.error("[Get Audit Logs Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4194,7 +4211,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json({ id: docRef.id, status: "logged" });
     } catch (e: any) {
       console.error("[Log Audit Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4224,7 +4241,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json({ id: docRef.id, status: "logged" });
     } catch (e: any) {
       console.error("[Log Event Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4405,7 +4422,7 @@ Respond STRICTLY in a valid JSON schema:
           toEmail: "sarah.chen@fintech.io",
           contactType: "human",
           status: "pending",
-          message: "Hey Alejandro, would love to join your agent workspace to sync on the Q3 financial roadmap.",
+          message: "Hey, would love to join your agent workspace to sync on the Q3 financial roadmap.",
           createdBy: "external"
         },
         {
@@ -4473,13 +4490,15 @@ Respond STRICTLY in a valid JSON schema:
       res.json({ seeded: true, message: "Workspace successfully seeded" });
     } catch (e: any) {
       console.error("[Seed Agent Workspace Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true });
   });
+
+  app.use(errorHandler);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

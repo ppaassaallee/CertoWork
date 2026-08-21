@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Workflow, Folder, Calendar, Cloud, Mic, MessageSquare, ChevronRight, ArrowLeft } from "lucide-react";
+import { Workflow, Folder, Calendar, Cloud, Mic, MessageSquare, ChevronRight, ArrowLeft } from "../ui/Icon";
 import { useNavigate } from "react-router-dom";
 import { usePlatformCapabilities } from "../../lib/capabilities";
 

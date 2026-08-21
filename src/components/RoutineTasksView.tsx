@@ -4,7 +4,7 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
 import { Task, RecurrenceStatus } from "../types";
 import { motion, AnimatePresence } from "motion/react";
-import { RefreshCw, Play, Pause, Square, Calendar, CheckCircle2, ChevronRight, ArrowLeft } from "lucide-react";
+import { RefreshCw, Play, Pause, Square, Calendar, CheckCircle2, ChevronRight, ArrowLeft } from "./ui/Icon";
 import { Link } from "react-router-dom";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";
 

@@ -31,7 +31,7 @@ import {
   UserPlus,
   Users,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   PROJECT_HEALTH,
   PROJECT_STATUSES,
@@ -43,6 +43,7 @@ import {
   taskWorkLane,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import {
   financeAmount,
   financeCapacityAllocations,
@@ -261,11 +262,7 @@ function projectTitle(project: any) {
 }
 
 function healthClass(value: string) {
-  return value === "blocked"
-    ? "is-blocked"
-    : value === "at_risk"
-      ? "is-risk"
-      : "is-track";
+  return `status-tone-${healthToStatus(value)}`;
 }
 
 function EditableField({
@@ -1106,7 +1103,7 @@ export function ProjectRecordModal({
                 <div className="do-risk-list">
                   {risks.map((risk) => (
                     <div key={risk.id}>
-                      <span className="is-risk">
+                      <span className="status-tone-amber">
                         <AlertTriangle size={12} />
                       </span>
                       <div>
@@ -1122,7 +1119,7 @@ export function ProjectRecordModal({
                   ))}
                   {lanes.blocked.map((task) => (
                     <div key={`task-${task.id}`}>
-                      <span className="is-blocked">
+                      <span className="status-tone-red">
                         <Circle size={12} />
                       </span>
                       <div>
@@ -1801,7 +1798,7 @@ export function ProjectConsolePanel({
             />
           </span>
         </div>
-        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}>
+        <div className={blockedTasks.length || risks.length ? "status-tone-amber" : ""}>
           <strong>{blockedTasks.length + risks.length}</strong>
           <span>
             Signals{" "}
@@ -2548,7 +2545,7 @@ export function ProjectConsolePanel({
 
       {tab === "risks" && (
         <div className="do-console-section">
-          <div className="do-health-explainer">
+          <div className="do-status-explainer">
             <div>
               <span className="do-project-card-kicker">PROJECT HEALTH</span>
               <h4>{projectHealthLabel(currentHealth)}</h4>
@@ -5169,7 +5166,7 @@ export function ProjectCommandCenter({
           </strong>
           <span>In operations</span>
         </div>
-        <div className="is-risk">
+        <div className="status-tone-amber">
           <strong>
             {
               realProjects.filter(
@@ -5282,7 +5279,7 @@ export function ProjectCommandCenter({
                   </div>
                   <AlertTriangle size={15} />
                 </div>
-                <div className="do-health-summary">
+                <div className="do-status-summary">
                   {healthCounts.map(({ health, count }) => (
                     <button
                       key={health}
@@ -5296,11 +5293,12 @@ export function ProjectCommandCenter({
                       }}
                       type="button"
                     >
-                      <span
-                        className={`do-health-dot ${healthClass(health)}`}
+                      <StatusLight
+                        status={healthToStatus(health)}
+                        label={projectHealthLabel(health)}
+                        size="sm"
                       />
                       <strong>{count}</strong>
-                      <small>{projectHealthLabel(health)}</small>
                     </button>
                   ))}
                 </div>
@@ -5332,8 +5330,10 @@ export function ProjectCommandCenter({
                         onClick={() => onOpenProject(project)}
                         type="button"
                       >
-                        <span
-                          className={`do-health-dot ${healthClass(health)}`}
+                        <StatusLight
+                          status={healthToStatus(health)}
+                          label={false}
+                          size="sm"
                         />
                         <span>
                           <strong>{projectTitle(project)}</strong>
@@ -5439,9 +5439,11 @@ export function ProjectCommandCenter({
                     onClick={() => onOpenProject(project)}
                     type="button"
                   >
-                    <span className={healthClass(health)}>
-                      {projectHealthLabel(health)}
-                    </span>
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={projectHealthLabel(health)}
+                      size="sm"
+                    />
                     <strong>{projectTitle(project)}</strong>
                     <small>
                       {
@@ -6251,7 +6253,7 @@ export function ProjectCommandCenter({
                       {columnSet.has("health") && (
                       <select
                         aria-label={`Health for ${projectTitle(project)}`}
-                        className={`do-health-select ${healthClass(health)}`}
+                        className={`do-status-select ${healthClass(health)}`}
                         onChange={(event) =>
                           onUpdateProject(project.id, {
                             healthOverride:

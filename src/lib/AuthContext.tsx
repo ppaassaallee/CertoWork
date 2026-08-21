@@ -257,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               emailLower: (u.email || "").toLowerCase(),
               role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
               status: "active",
+              portfolioViewer: isOwner,
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {
@@ -301,6 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
           role: "owner",
           status: "active",
+          portfolioViewer: true,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }), 7_000, 'Owner membership creation');

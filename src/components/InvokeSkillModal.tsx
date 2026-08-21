@@ -11,7 +11,7 @@ import {
   Play, 
   Loader2, 
   HelpCircle
-} from "lucide-react";
+} from "./ui/Icon";
 
 interface InvokeSkillModalProps {
   isOpen: boolean;

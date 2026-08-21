@@ -9,8 +9,6 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
-  ArrowLeft,
-  ArrowRight,
   ArrowUp,
   BookOpen,
   Bot,
@@ -23,7 +21,6 @@ import {
   Folder,
   Inbox,
   Home,
-  LayoutGrid,
   ListTodo,
   Loader2,
   Menu,
@@ -40,13 +37,12 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Target,
   Trash2,
   UserMinus,
   Users,
   WandSparkles,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
   addDoc,
@@ -73,10 +69,14 @@ import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import {
+  projectHealth,
   sidebarProjectGroups,
   sortProjectsByRecency,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { StatusLight, healthToStatus } from "./ui/StatusLight";
+import { Toast } from "./ui/Toast";
+import { t } from "../lib/i18n";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -103,7 +103,7 @@ import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
-  isPortfolioViewerEmail,
+  isPortfolioViewerMember,
   normalizeAccessEmail,
 } from "../lib/accessControl";
 import type { TemplateApplication } from "./ProjectTemplatesPanel";
@@ -620,7 +620,8 @@ export function DelivereeWorkspace() {
       ? window.localStorage.getItem("certo-sidebar-collapsed") === "true"
       : false,
   );
-  const [panel, setPanel] = useState<Panel>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -628,11 +629,63 @@ export function DelivereeWorkspace() {
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [centerHistory, setCenterHistory] = useState<{
-    items: CenterView[];
-    index: number;
-  }>({ items: ["items"], index: 0 });
-  const centerView = centerHistory.items[centerHistory.index];
+  const panel = (
+    lens.kind === "approvals"
+      ? "approvals"
+      : lens.kind === "settings"
+        ? "settings"
+        : lens.kind === "more"
+          ? lens.section === "automations"
+            ? "skills"
+            : lens.section === "updates"
+              ? "digest"
+              : lens.section === "workspace"
+                ? "workspace"
+                : null
+          : null
+  ) as Panel;
+  const setPanel = (next: Panel) => {
+    setSidebarOpen(false);
+    if (!next) {
+      navigate("/home");
+      return;
+    }
+    if (next === "today") navigate("/home");
+    else if (next === "projects") navigate("/work");
+    else if (next === "project") {
+      const id = projectConsoleId || (lens.kind === "project" ? lens.projectId : null);
+      navigate(id ? `/work/projects/${id}` : "/work");
+    } else if (next === "approvals") navigate("/approvals");
+    else if (next === "skills") navigate("/more/automations");
+    else if (next === "digest") navigate("/more/updates");
+    else if (next === "workspace") navigate("/more/workspace");
+    else if (next === "settings") navigate("/settings");
+  };
+  const centerView: CenterView =
+    lens.kind === "project"
+      ? lens.tab === "notes"
+        ? "notes"
+        : lens.tab === "tasks"
+          ? "items"
+          : lens.tab === "strategy"
+            ? "strategy"
+            : "project"
+      : lens.kind === "work"
+        ? lens.section === "issues"
+          ? "items"
+          : "portfolio"
+        : "conversation";
+  const goCenterView = (next: CenterView) => {
+    const projectId =
+      (lens.kind === "project" ? lens.projectId : null) || projectConsoleId;
+    if (next === "portfolio") navigate("/work");
+    else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
+    else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
+    else if (next === "items" && projectId) navigate(`/work/projects/${projectId}/tasks`);
+    else if (next === "items") navigate("/work");
+    else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
+    else navigate("/home");
+  };
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
@@ -660,31 +713,14 @@ export function DelivereeWorkspace() {
     typeof replacePureAiPortfolioFromMaster
   > | null>(null);
 
-  const goCenterView = (next: CenterView) => {
-    setCenterHistory((current) => {
-      if (current.items[current.index] === next) return current;
-      const items = [...current.items.slice(0, current.index + 1), next];
-      return { items, index: items.length - 1 };
-    });
-  };
-  const goCenterBack = () =>
-    setCenterHistory((current) => ({
-      ...current,
-      index: Math.max(0, current.index - 1),
-    }));
-  const goCenterForward = () =>
-    setCenterHistory((current) => ({
-      ...current,
-      index: Math.min(current.items.length - 1, current.index + 1),
-    }));
-
   useEffect(() => {
     if (!user || !workspace) return;
     setWorkspaceNameDraft(workspace.name || "Workspace");
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
+    const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
     const canSeeWorkspacePortfolio =
-      workspace.ownerId === user.uid || isPortfolioViewerEmail(emailLower);
+      workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
     const mergeQueries = (
       name: string,
       queryClauses: any[][],
@@ -824,7 +860,7 @@ export function DelivereeWorkspace() {
       ),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [user, workspace]);
+  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -973,17 +1009,6 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, streamed, submitting]);
-
-  useEffect(() => {
-    if (lens.kind === "review") setPanel("approvals");
-    if (lens.kind === "work")
-      setPanel(lens.section === "portfolio" ? "projects" : "today");
-    if (lens.kind === "settings") {
-      setPanel(null);
-      goCenterView("items");
-      navigate("/", { replace: true });
-    }
-  }, [lens.kind, lens.kind === "work" ? lens.section : null, navigate]);
 
   useEffect(() => {
     const Recognition =
@@ -3618,7 +3643,7 @@ export function DelivereeWorkspace() {
       ];
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" ? "settings" : lens.kind === "project" ? "work" : lens.kind}`}>
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -3666,6 +3691,82 @@ export function DelivereeWorkspace() {
             <X size={16} />
           </button>
         </div>
+
+        <nav className="do-nav-primary" aria-label="Primary">
+          <button
+            className={`do-nav-item is-home ${lens.kind === "home" ? "is-active" : ""}`}
+            onClick={() => {
+              navigate("/home");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Home size="sm" />
+            <span>{t("navHome")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-work ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
+            onClick={() => {
+              navigate("/work");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Folder size="sm" />
+            <span>{t("navWork")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-approvals ${lens.kind === "approvals" ? "is-active" : ""}`}
+            onClick={() => {
+              navigate("/approvals");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <ShieldCheck size="sm" />
+            <span>{t("navApprovals")}</span>
+            {reviewItems.length > 0 && (
+              <em
+                className={`do-nav-badge ${reviewItems.some((item) => Date.now() - timestamp(item.createdAt) > 48 * 3600 * 1000) ? "is-critical" : ""}`}
+              >
+                {reviewItems.length}
+              </em>
+            )}
+          </button>
+          <button
+            className={`do-nav-item is-settings ${lens.kind === "settings" ? "is-active" : ""}`}
+            onClick={() => {
+              navigate("/settings");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Settings size="sm" />
+            <span>{t("navSettings")}</span>
+          </button>
+          <button
+            className={`do-nav-item ${lens.kind === "more" || moreOpen ? "is-active" : ""}`}
+            onClick={() => setMoreOpen((open) => !open)}
+            type="button"
+          >
+            <MoreHorizontal size="sm" />
+            <span>{t("navMore")}</span>
+            <ChevronDown size="sm" />
+          </button>
+          {moreOpen && (
+            <>
+              <button className="do-nav-item" onClick={() => { navigate("/more/automations"); setSidebarOpen(false); }} type="button">
+                <WandSparkles size="sm" /><span>{t("moreAutomations")}</span>
+              </button>
+              <button className="do-nav-item" onClick={() => { navigate("/more/updates"); setSidebarOpen(false); }} type="button">
+                <Mail size="sm" /><span>{t("moreUpdates")}</span>
+              </button>
+              <button className="do-nav-item" onClick={() => { navigate("/more/workspace"); setSidebarOpen(false); }} type="button">
+                <Users size="sm" /><span>{t("moreWorkspace")}</span>
+              </button>
+            </>
+          )}
+        </nav>
 
         <button
           className="do-new-conversation"
@@ -3722,7 +3823,15 @@ export function DelivereeWorkspace() {
               )}
               {sidebarProjects.favorites.map((project) => (
                 <div
-                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
+                    projectHealth(
+                      project,
+                      openTasks.filter((task) => task.projectId === project.id),
+                      risks.filter((risk) => risk.projectId === project.id),
+                    ) === "blocked"
+                      ? "is-blocked"
+                      : ""
+                  }`}
                   key={project.id}
                 >
                   <button
@@ -3731,6 +3840,17 @@ export function DelivereeWorkspace() {
                     type="button"
                   >
                     <Star fill="currentColor" size={12} />
+                    <StatusLight
+                      status={healthToStatus(
+                        projectHealth(
+                          project,
+                          openTasks.filter((task) => task.projectId === project.id),
+                          risks.filter((risk) => risk.projectId === project.id),
+                        ),
+                      )}
+                      label={false}
+                      size="sm"
+                    />
                     <span>{entityTitle(project)}</span>
                     <small>
                       {openTasks.filter((task) => task.projectId === project.id)
@@ -3768,7 +3888,15 @@ export function DelivereeWorkspace() {
               )}
               {sidebarProjects.recent.map((project) => (
                 <div
-                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
+                    projectHealth(
+                      project,
+                      openTasks.filter((task) => task.projectId === project.id),
+                      risks.filter((risk) => risk.projectId === project.id),
+                    ) === "blocked"
+                      ? "is-blocked"
+                      : ""
+                  }`}
                   key={project.id}
                 >
                   <button
@@ -3777,6 +3905,17 @@ export function DelivereeWorkspace() {
                     type="button"
                   >
                     <Folder size={12} />
+                    <StatusLight
+                      status={healthToStatus(
+                        projectHealth(
+                          project,
+                          openTasks.filter((task) => task.projectId === project.id),
+                          risks.filter((risk) => risk.projectId === project.id),
+                        ),
+                      )}
+                      label={false}
+                      size="sm"
+                    />
                     <span>{entityTitle(project)}</span>
                     <small>
                       {openTasks.filter((task) => task.projectId === project.id)
@@ -3981,162 +4120,85 @@ export function DelivereeWorkspace() {
       <main className="do-main">
         <header className="do-header">
           <button
-            aria-label="Home"
-            className="do-icon-button"
-            onClick={() => {
-              const standalone = conversations.find((conversation) =>
-                isStandaloneConversation(conversation),
-              );
-              setConversationId(standalone?.id || null);
-              setProjectConsoleId(null);
-              setPanel(null);
-              goCenterView("conversation");
-              navigate("/");
-            }}
-            title="Home"
-            type="button"
-          >
-            <Home size={18} />
-          </button>
-          <button
-            aria-label="Open navigation"
+            aria-label={t("openNav")}
             className="do-icon-button do-menu-button"
             onClick={() => setSidebarOpen(true)}
+            title={t("openNav")}
             type="button"
           >
             <Menu size={18} />
           </button>
-          <button
-            className="do-context-title"
-            onClick={() => setPanel("projects")}
-            type="button"
-          >
-            <span>{currentContextLabel}</span>
-            <ChevronRight size={13} />
-          </button>
-          <div className="do-header-actions">
-            {routeOrPrimaryProject && (
-              <button
-                aria-label="Project console"
-                className={`do-header-button is-icon-only ${centerView === "project" ? "is-active" : ""}`}
-                onClick={() => {
-                  setProjectConsoleId(routeOrPrimaryProject.id);
-                  setPanel(null);
-                  goCenterView(
-                    centerView === "project" ? "conversation" : "project",
-                  );
-                }}
-                title="Project console"
-                type="button"
-              >
-                <Folder size={15} />
-              </button>
-            )}
-            <button
-              aria-label="Skills"
-              className={`do-header-button is-icon-only ${panel === "skills" ? "is-active" : ""}`}
-              onClick={() => setPanel(panel === "skills" ? null : "skills")}
-              title="Skills"
-              type="button"
-            >
-              <WandSparkles size={15} />
-            </button>
-            <button
-              aria-label="Digest"
-              className={`do-header-button is-icon-only ${panel === "digest" ? "is-active" : ""}`}
-              onClick={() => setPanel(panel === "digest" ? null : "digest")}
-              title="Digest"
-              type="button"
-            >
-              <Mail size={15} />
-            </button>
-            <button
-              aria-label="Today"
-              className="do-header-button is-icon-only"
-              onClick={() => setPanel("today")}
-              title="Today"
-              type="button"
-            >
-              <ListTodo size={15} />
-              {todayTasks.length > 0 && <small>{todayTasks.length}</small>}
-            </button>
-            <button
-              aria-label="Pending changes"
-              className="do-header-button is-icon-only"
-              onClick={() => setPanel("approvals")}
-              title="Pending changes"
-              type="button"
-            >
-              <ShieldCheck size={15} />
-              {reviewItems.length > 0 && (
-                <small className="is-attention">{reviewItems.length}</small>
-              )}
-            </button>
-          </div>
-        </header>
-
-        {notice && (
-          <div className="do-notice" role="status">
-            <CheckCircle2 size={15} />
-            <span>{notice}</span>
-            <button
-              aria-label="Dismiss notification"
-              onClick={() => setNotice("")}
-              type="button"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        <section
-          className={`do-center-bar ${centerView === "portfolio" ? "is-portfolio" : ""}`}
-          aria-label="Current work view"
-        >
-          <div className="do-center-navigation" aria-label="View history">
-            <button
-              aria-label="Go back"
-              disabled={centerHistory.index === 0}
-              onClick={goCenterBack}
-              type="button"
-            >
-              <ArrowLeft size={14} />
-            </button>
-            <button
-              aria-label="Go forward"
-              disabled={centerHistory.index === centerHistory.items.length - 1}
-              onClick={goCenterForward}
-              type="button"
-            >
-              <ArrowRight size={14} />
-            </button>
-          </div>
           <div className="do-breadcrumb">
-            <span>
-              {routeOrPrimaryProject
-                ? entityTitle(routeOrPrimaryProject)
-                : "Chief of Staff"}
-            </span>
+            <span>{currentContextLabel}</span>
             {selectedWorkItem && (
               <>
-                <ChevronRight size={12} />
+                <ChevronRight size={13} />
                 <strong>{entityTitle(selectedWorkItem)}</strong>
               </>
             )}
           </div>
+          <div className="do-header-actions">
+            <button
+              aria-label={t("headerSearch")}
+              className="do-icon-button"
+              onClick={() => setSearchOpen((open) => !open)}
+              title={t("headerSearch")}
+              type="button"
+            >
+              <Search size={15} />
+            </button>
+            <div className="do-create-menu">
+              <button
+                aria-label={t("headerCreate")}
+                className="cw-btn cw-btn-primary cw-btn-sm"
+                onClick={() => setCreateMenuOpen((open) => !open)}
+                title={t("headerCreate")}
+                type="button"
+              >
+                <Plus size={15} />
+                <span>{t("headerCreate")}</span>
+              </button>
+              {createMenuOpen && (
+                <div className="do-account-menu">
+                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
+                    {t("createTask")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                    {t("createProject")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
+                    {t("createCapture")}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {notice && (
+          <Toast kind="success" onDismiss={() => setNotice("")}>
+            {notice}
+          </Toast>
+        )}
+
+        {lens.kind === "project" && (
+        <section
+          className="do-center-bar"
+          aria-label="Project views"
+        >
           <div
             className="do-view-switch"
             role="tablist"
-            aria-label="Central view"
+            aria-label="Project views"
           >
             <button
-              aria-selected={centerView === "conversation"}
-              className={centerView === "conversation" ? "is-active" : ""}
-              onClick={() => goCenterView("conversation")}
+              aria-selected={centerView === "project"}
+              className={centerView === "project" ? "is-active" : ""}
+              onClick={() => goCenterView("project")}
               role="tab"
               type="button"
             >
-              <MessageSquare size={13} /> Conversation
+              Overview
             </button>
             <button
               aria-selected={centerView === "items"}
@@ -4145,7 +4207,7 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <ListTodo size={13} /> Items
+              Tasks
             </button>
             <button
               aria-selected={centerView === "notes"}
@@ -4154,34 +4216,20 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <BookOpen size={13} /> Notes
+              Notes
             </button>
             <button
               aria-selected={centerView === "strategy"}
               className={centerView === "strategy" ? "is-active" : ""}
-              onClick={() => {
-                goCenterView("strategy");
-                setPanel(null);
-              }}
+              onClick={() => goCenterView("strategy")}
               role="tab"
               type="button"
             >
-              <Target size={13} /> Strategy
-            </button>
-            <button
-              aria-selected={centerView === "portfolio"}
-              className={centerView === "portfolio" ? "is-active" : ""}
-              onClick={() => {
-                goCenterView("portfolio");
-                setPanel(null);
-              }}
-              role="tab"
-              type="button"
-            >
-              <LayoutGrid size={13} /> Portfolio
+              Strategy
             </button>
           </div>
         </section>
+        )}
 
         {centerView === "conversation" ? (
           <>
@@ -4702,9 +4750,9 @@ export function DelivereeWorkspace() {
                   : panel === "project"
                     ? "PROJECT"
                     : panel === "skills"
-                      ? "SKILLS"
+                      ? "AUTOMATIONS"
                       : panel === "digest"
-                        ? "EMAIL"
+                        ? "UPDATES"
                         : panel === "workspace"
                           ? "ADMIN"
                           : "CONTROL"}
@@ -4717,9 +4765,9 @@ export function DelivereeWorkspace() {
                   : panel === "project"
                     ? "Project console"
                     : panel === "skills"
-                      ? "Skills"
+                      ? "Automations"
                       : panel === "digest"
-                        ? "Digest & reminders"
+                        ? "Updates"
                         : panel === "workspace"
                           ? "Workspace & team"
                           : panel === "settings"

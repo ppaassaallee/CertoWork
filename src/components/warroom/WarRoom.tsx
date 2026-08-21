@@ -53,7 +53,7 @@ import {
   Settings,
   UserPlus,
   Archive
-} from 'lucide-react';
+} from "../ui/Icon";
 import {
   WarRoomChat,
   WarRoomParticipant,

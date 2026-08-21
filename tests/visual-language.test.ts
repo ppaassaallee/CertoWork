@@ -35,22 +35,22 @@ test("all five text sizes survive startup and use one language", async () => {
   );
 });
 
-test("persistent utility buttons are icon-only and accessibly named", async () => {
+test("header keeps only search and create utilities", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
-  const header = source.split('<div className="do-header-actions">')[1]?.split("</div>")[0] || "";
-  assert.match(header, /is-icon-only/);
-  assert.match(header, /aria-label="Skills"/);
-  assert.match(header, /aria-label="Digest"/);
-  assert.match(header, /aria-label="Today"/);
-  assert.match(header, /aria-label="Pending changes"/);
-  assert.equal(header.includes("<span>Skills</span>"), false);
+  const header = source.split('<header className="do-header">')[1]?.split("</header>")[0] || "";
+  assert.match(header, /headerSearch|aria-label="Search"/);
+  assert.match(header, /headerCreate|Create/);
+  assert.equal(header.includes('aria-label="Skills"'), false);
+  assert.equal(header.includes('aria-label="Digest"'), false);
+  assert.equal(header.includes('aria-label="Today"'), false);
+  assert.equal(header.includes('aria-label="Pending changes"'), false);
 });
 
 test("primary navigation uses consistent English labels", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
-  assert.match(source, /> Conversation/);
-  assert.match(source, /> Items/);
-  assert.match(source, /> Notes/);
+  assert.match(source, /navHome|Home/);
+  assert.match(source, /navWork|Work/);
+  assert.match(source, /navApprovals|Approvals/);
   assert.equal(/Conversación|Ítems|Notas|Pendientes/.test(source), false);
 });
 

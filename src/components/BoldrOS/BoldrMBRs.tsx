@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrMBR, BoldrProject } from './types';
-import { Plus, BarChart2 } from 'lucide-react';
+import { Plus, BarChart2 } from "../ui/Icon";
 import { format } from 'date-fns';
 
 export function BoldrMBRs() {

@@ -38,14 +38,15 @@ service cloud.firestore {
       return workspaceId + "_" + request.auth.uid;
     }
 
-    function isPortfolioViewerEmail() {
-      return request.auth.token.email != null
-        && request.auth.token.email in [
-          "cesar.a@getboldr.ai",
-          "cesar.ar@alliedglobal.com",
-          "rafael.f@getboldr.ai",
-          "rafael.f@alliedglobal.com"
-        ];
+    function isPortfolioViewer(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && exists(memberDoc(workspaceId))
+        && get(memberDoc(workspaceId)).data.status == "active"
+        && (
+          get(memberDoc(workspaceId)).data.portfolioViewer == true
+          || get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+        );
     }
 
     function isWorkspaceAdmin(workspaceId) {
@@ -98,7 +99,7 @@ service cloud.firestore {
         hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
         (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
-        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewerEmail())
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewer(data.workspaceId))
       );
     }
 

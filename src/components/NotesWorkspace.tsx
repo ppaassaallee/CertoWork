@@ -18,7 +18,7 @@ import {
   Sparkles,
   Tags,
   Undo2,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,

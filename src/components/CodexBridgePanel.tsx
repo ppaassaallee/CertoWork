@@ -11,7 +11,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Unplug,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,

@@ -45,6 +45,13 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        status: {
+          green: "var(--status-green)",
+          amber: "var(--status-amber)",
+          red: "var(--status-red)",
+          blue: "var(--status-blue)",
+          gray: "var(--status-gray)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

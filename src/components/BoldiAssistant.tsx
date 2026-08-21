@@ -42,7 +42,7 @@ import {
   Users,
   X,
   Zap,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,
