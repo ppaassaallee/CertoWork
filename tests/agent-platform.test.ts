@@ -9,7 +9,7 @@ import { proposeAgentAction } from "../src/lib/agent-platform/actionExecutor";
 import { decideActionPolicy, riskForActionType } from "../src/lib/agent-platform/policy";
 import { opaqueHermesProfileId } from "../src/lib/agent-platform/types";
 import { normalizeCompletedRun } from "../src/lib/agent-platform/hermesAdapter";
-import { hermesRuntimeEnabled } from "../worker/runtime/hermesBridge.js";
+import { hermesRuntimeEnabled, normalizeHermesBaseUrl } from "../worker/runtime/hermesBridge.js";
 import { executeCertoMcpTool as workerMcp } from "../worker/mcp/certoMcp.js";
 
 test("policy defaults ask for mutations and deny privileged ops", () => {
@@ -109,4 +109,9 @@ test("normalized runtime events are product-safe", () => {
 test("hermes runtime flag defaults off", () => {
   assert.equal(hermesRuntimeEnabled({}), false);
   assert.equal(hermesRuntimeEnabled({ CERTO_HERMES_RUNTIME: "1" }), true);
+});
+
+test("normalizeHermesBaseUrl strips trailing slash and /v1", () => {
+  assert.equal(normalizeHermesBaseUrl("https://agent.example.com/v1/"), "https://agent.example.com");
+  assert.equal(normalizeHermesBaseUrl("http://127.0.0.1:8642"), "http://127.0.0.1:8642");
 });
