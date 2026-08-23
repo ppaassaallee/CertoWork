@@ -128,6 +128,69 @@ Check live numbers in Portal billing / Cloud FAQ — do not assume GCE `$18/mo`.
 2. Interim: keep `CERTO_HERMES_RUNTIME=0` and use Certo legacy Odysseus.
 3. Last resort only: self-host GCE path in `06-deployment-architecture.md` + `15-production-runbook.md`.
 
+## Stuck: `Auth provider 'nous' unreachable`
+
+This means the Cloud **host** is reachable, but the instance cannot verify/use **Nous Portal** auth. Do **not** set Certo Worker secrets until chat returns real assistant JSON.
+
+### Recovery checklist (do in order)
+
+1. **Portal account**
+   - Sign in at https://portal.nousresearch.com
+   - Open https://portal.nousresearch.com/manage-subscription
+   - Confirm plan is active and credits > 0
+
+2. **Open the Cloud instance UI (not local Hermes)**
+   - https://portal.nousresearch.com/cloud
+   - Open `certo-team-agent` (or your instance)
+   - Status must be **Running** (not Stopped / Starting / Error)
+
+3. **Chat inside Cloud UI first**
+   - Send: `Say hello`
+   - If UI chat also fails → skip to step 6 (platform issue)
+   - If UI chat works → continue (API key / endpoint issue)
+
+4. **Restart the instance**
+   - Stop → wait until Stopped → Start → wait until Running
+   - Retry Cloud UI chat once
+
+5. **Fresh API credentials**
+   - In the instance panel, find API / Keys
+   - Regenerate or copy a new API key
+   - Copy base URL **without** trailing `/v1`
+   - Test:
+
+```bash
+export HERMES_BASE_URL="https://YOUR_HOST"
+export API_SERVER_KEY="YOUR_NEW_KEY"
+
+curl -sS -i "$HERMES_BASE_URL/v1/models" \
+  -H "Authorization: Bearer $API_SERVER_KEY"
+
+curl -sS -i "$HERMES_BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $API_SERVER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"hermes-agent","messages":[{"role":"user","content":"ping"}],"stream":false}'
+```
+
+   Success = HTTP 200 and a `choices` / assistant message.  
+   Still `Auth provider 'nous' unreachable` = step 6.
+
+6. **Nous support (Cloud is preview)**
+   - Discord Nous Research, or support@nousresearch.com
+   - Include: instance name, region/size, exact error JSON, that UI and/or `/v1/chat/completions` fail
+
+7. **Unblock Certo meanwhile**
+   - Leave `CERTO_HERMES_RUNTIME` unset or `0`
+   - Use legacy Odysseus on certo.work
+   - Revisit Cloud when curl succeeds
+
+### Common mistakes
+
+- Using **local** Hermes Keys OAuth as if it fixed Cloud (it does not)
+- Pasting `HERMES_BASE_URL` with `/v1` (Worker adds `/v1/...`; strip it)
+- Wiring Wrangler secrets before curl succeeds
+- Assuming `claude-opus-*` is available; use `hermes-agent` or the model chosen at instance create until auth works
+
 ## Related
 
 - Runtime contract: `05-runtime-contract.md`
