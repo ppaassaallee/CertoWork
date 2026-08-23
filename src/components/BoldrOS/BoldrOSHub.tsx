@@ -19,7 +19,7 @@ export function BoldrOSHub() {
   ];
 
   return (
-    <div className="flex flex-col h-full bg-[#FDFCFB]">
+    <div className="flex flex-col h-full bg-[var(--status-warning-soft)]">
       <header className="p-6 border-b border-gray-200 bg-white sticky top-0 z-10 hidden md:block">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>

@@ -622,7 +622,7 @@ export function DeliveryOS() {
       className="gazelle-integrated-page mx-auto w-full max-w-7xl space-y-6 p-4 pb-28"
       initial={{ opacity: 0, y: 10 }}
     >
-      <header className="overflow-hidden rounded-[28px] border border-gray-200 bg-[#11140f] p-5 text-white shadow-sm md:p-7">
+      <header className="overflow-hidden rounded-[28px] border border-gray-200 bg-[var(--border)] p-5 text-white shadow-sm md:p-7">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-200">Work / AI Delivery Operating System</p>

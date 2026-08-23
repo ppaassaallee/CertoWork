@@ -4,7 +4,7 @@ import { CheckCircle2, AlertCircle } from "../ui/Icon";
 // Shell to constrain and style the full-screen notebook experience
 export function NotebookShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F9F8F6] flex flex-col w-full text-slate-800">
+    <div className="min-h-screen bg-[var(--surface-0)] flex flex-col w-full text-slate-800">
       {children}
     </div>
   );

@@ -1991,7 +1991,7 @@ export function DelivereeWorkspace() {
       ownerId: user.uid,
       members: email ? [emailLower] : [],
       roles: email ? { [emailLower]: "owner" } : {},
-      color: "#214b39",
+      color: "var(--accent)",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

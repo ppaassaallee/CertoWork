@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import * as Lucide from "lucide-react";
 
-export const ICON_SIZES = { sm: 14, md: 16, lg: 20 } as const;
+export const ICON_SIZES = { sm: 14, md: 16, lg: 18 } as const;
 export type IconSizeName = keyof typeof ICON_SIZES;
 export type IconSize = IconSizeName | number;
 
@@ -21,7 +21,7 @@ export function pixelSize(size?: IconSize) {
 function wrap(Cmp: LucideIconType, displayName: string) {
   function WrappedIcon({
     size = "md",
-    strokeWidth = 1.75,
+    strokeWidth = 1.5,
     color = "currentColor",
     ...props
   }: IconProps) {

@@ -278,8 +278,8 @@ function WeightChart({ metrics }: { metrics: DailyMetric[] }) {
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full p-4 drop-shadow-xl" preserveAspectRatio="none">
            <defs>
              <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
              </linearGradient>
            </defs>
            <path 
@@ -288,7 +288,7 @@ function WeightChart({ metrics }: { metrics: DailyMetric[] }) {
            />
            <polyline
              fill="none"
-             stroke="#4f46e5"
+             stroke="var(--accent)"
              strokeWidth="4"
              strokeLinecap="round"
              strokeLinejoin="round"
@@ -301,7 +301,7 @@ function WeightChart({ metrics }: { metrics: DailyMetric[] }) {
                 cy={height - ((val - min) / range) * height} 
                 r="4" 
                 fill="white" 
-                stroke="#4f46e5" 
+                stroke="var(--accent)"
                 strokeWidth="2" 
              />
            ))}

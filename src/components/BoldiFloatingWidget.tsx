@@ -845,7 +845,7 @@ export function BoldiFloatingWidget() {
                 </div>
 
                 {/* Chat History bubble stage */}
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 no-scrollbar bg-[#FAF9F6]">
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 no-scrollbar bg-[var(--status-warning-soft)]">
                   {messages.length === 0 && (
                     <div className="py-12 text-center text-neutral-400 max-w-xs mx-auto space-y-4">
                       <Sparkles className="w-10 h-10 text-yellow-500 mx-auto animate-pulse" />

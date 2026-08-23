@@ -49,7 +49,7 @@ export function HabitsHome() {
   const [formIdealVersion, setFormIdealVersion] = useState("");
   const [formIdentity, setFormIdentity] = useState("");
   const [formCalendarVisible, setFormCalendarVisible] = useState(true);
-  const [formColor, setFormColor] = useState("#6366f1");
+  const [formColor, setFormColor] = useState("var(--accent)");
 
   // Get days list for the selected month
   const periodDays = getDaysInPeriod(selectedYear, selectedMonth);
@@ -200,7 +200,7 @@ export function HabitsHome() {
       setFormIdealVersion("");
       setFormIdentity("");
       setFormDaysOfWeek([]);
-      setFormColor("#6366f1");
+      setFormColor("var(--accent)");
       setShowAddModal(false);
     } catch (e) {
       console.error(e);
@@ -352,7 +352,7 @@ export function HabitsHome() {
                         <div className="flex items-center gap-2">
                           <span
                             className="w-2.5 h-2.5 rounded-full shrink-0"
-                            style={{ backgroundColor: habit.color || "#6b7280" }}
+                            style={{ backgroundColor: habit.color || "var(--text-secondary)" }}
                           />
                           <h4
                             onClick={() => setSelectedHabitForDetail(habit)}
