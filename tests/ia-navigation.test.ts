@@ -118,3 +118,22 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
     /lens\.section === "automations"[\s\S]*lens\.section === "activity"[\s\S]*: \[\]/,
   );
 });
+
+test("opening a project record stays on the project URL, not Home", () => {
+  const source = readFileSync(
+    resolve("src/components/DelivereeWorkspace.tsx"),
+    "utf8",
+  );
+  const openMatch = source.match(
+    /const openProjectRecord = \([\s\S]*?\n  \};/,
+  );
+  const selectMatch = source.match(
+    /const selectProjectContext = \([\s\S]*?\n  \};/,
+  );
+  assert.ok(openMatch, "openProjectRecord missing");
+  assert.ok(selectMatch, "selectProjectContext missing");
+  assert.match(selectMatch[0], /navigate\(`\/work\/projects\/\$\{project\.id\}`\)/);
+  assert.doesNotMatch(selectMatch[0], /setPanel\(null\)/);
+  assert.doesNotMatch(openMatch[0], /setPanel\(null\)/);
+  assert.doesNotMatch(openMatch[0], /goCenterView\("project"\)/);
+});

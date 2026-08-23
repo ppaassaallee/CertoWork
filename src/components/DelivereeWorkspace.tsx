@@ -1889,6 +1889,7 @@ export function DelivereeWorkspace() {
   };
 
   const selectProjectContext = (project: any) => {
+    if (!project?.id) return;
     const projectConversation = conversations.find(
       (conversation) =>
         conversationProjectIds(conversation).length === 1 &&
@@ -1896,16 +1897,13 @@ export function DelivereeWorkspace() {
         conversationIncludesProject(conversation, project.id),
     );
     setConversationId(projectConversation?.id || null);
-    navigate(`/work/projects/${project.id}`);
-    setPanel(null);
+    setProjectConsoleId(project.id);
     setSidebarOpen(false);
+    navigate(`/work/projects/${project.id}`);
   };
 
   const openProjectRecord = (project: any) => {
     selectProjectContext(project);
-    setProjectConsoleId(project.id);
-    setPanel(null);
-    goCenterView("project");
   };
 
   const updateProject = async (
