@@ -10519,7 +10519,7 @@ a {
 .do-signin-bg {
   position: absolute;
   inset: 0;
-  background-image: url("/certo-work-hero.png");
+  background-image: url("/certo-work-hero.jpg");
   background-size: cover;
   background-position: center;
   transform: scale(1.01);
