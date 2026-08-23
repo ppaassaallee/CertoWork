@@ -1643,14 +1643,14 @@ export function ProjectConsolePanel({
             <Share2 size={14} />
           </button>
           <button
-            aria-label="Ask Odiseus for a project update"
+            aria-label="Ask Odysseus for a project update"
             className="do-button-secondary"
             onClick={() =>
               onAsk(
                 `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
               )
             }
-            title="Ask Odiseus"
+            title="Ask Odysseus"
             type="button"
           >
             <MessageSquare size={14} />

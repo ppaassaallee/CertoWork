@@ -84,7 +84,7 @@ export function ActionProposal({
         <div>
           <span className="do-kicker">Approval needed</span>
           <h3>
-            {plan.title || `Odiseus wants to perform ${count} action${count === 1 ? "" : "s"}`}
+            {plan.title || `Odysseus wants to perform ${count} action${count === 1 ? "" : "s"}`}
           </h3>
           <p>{plan.summary}</p>
         </div>

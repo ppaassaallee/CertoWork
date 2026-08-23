@@ -1,6 +1,6 @@
 import { ODISEUS_MARK, ODISEUS_NAME } from "../../lib/odiseus";
 
-export function OdiseusMark({
+export function OdysseusMark({
   size = "md",
 }: {
   size?: "sm" | "md" | "lg";
@@ -16,10 +16,10 @@ export function OdiseusMark({
   );
 }
 
-export function OdiseusBadge() {
+export function OdysseusBadge() {
   return (
     <span className="odiseus-app-badge">
-      <OdiseusMark size="sm" />
+      <OdysseusMark size="sm" />
       <strong>{ODISEUS_NAME}</strong>
       <em>APP</em>
     </span>

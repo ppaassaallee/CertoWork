@@ -129,7 +129,7 @@ export function HomeAttention({
         <section className="do-attention-block is-quiet do-odiseus-recently">
           <div className="do-attention-head">
             <Activity size={13} />
-            <span>Odiseus recently</span>
+            <span>Odysseus recently</span>
           </div>
           {activityItems.slice(0, 5).map((item, index) => (
             <p key={item.id || index}>{item.summary}</p>

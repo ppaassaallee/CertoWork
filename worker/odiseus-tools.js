@@ -1,5 +1,5 @@
 /**
- * Odiseus first-party tools — execute against the authorized workspaceContext
+ * Odysseus first-party tools — execute against the authorized workspaceContext
  * the client already scoped for this user. Never trust tools to invent records.
  */
 
@@ -140,7 +140,7 @@ export const ODISEUS_TOOLS = [
   {
     type: "function",
     name: "recall_memory",
-    description: "Recall durable facts Odiseus previously remembered for this workspace.",
+    description: "Recall durable facts Odysseus previously remembered for this workspace.",
     parameters: {
       type: "object",
       properties: {
@@ -154,7 +154,7 @@ export const ODISEUS_TOOLS = [
     type: "function",
     name: "remember_fact",
     description:
-      "Remember a durable workspace fact for future Odiseus sessions. Only store what the user affirmed.",
+      "Remember a durable workspace fact for future Odysseus sessions. Only store what the user affirmed.",
     parameters: {
       type: "object",
       properties: {
@@ -183,7 +183,7 @@ export const ODISEUS_TOOLS = [
   {
     type: "function",
     name: "list_schedules",
-    description: "List Odiseus scheduled jobs the user has configured.",
+    description: "List Odysseus scheduled jobs the user has configured.",
     parameters: {
       type: "object",
       properties: {},
@@ -206,7 +206,7 @@ export const TOOL_LABELS = {
   list_schedules: "Checking schedules",
 };
 
-export function executeOdiseusTool(name, args, workspaceContext) {
+export function executeOdysseusTool(name, args, workspaceContext) {
   const projects = asList(workspaceContext?.projects);
   const tasks = asList(workspaceContext?.tasks);
   const risks = asList(workspaceContext?.risks);
@@ -457,7 +457,7 @@ export function executeOdiseusTool(name, args, workspaceContext) {
         type: "create_odiseus_memory",
         safetyLevel: 1,
         confidence: 0.95,
-        reason: "Store a durable Odiseus memory for future sessions",
+        reason: "Store a durable Odysseus memory for future sessions",
         proposedChange: {
           text: text.slice(0, 2_000),
           kind: String(args?.kind || "fact"),
@@ -504,7 +504,7 @@ export function executeOdiseusTool(name, args, workspaceContext) {
       "",
       "## Suggested next moves",
       "- Apply the skill output to the current project or conversation.",
-      "- Ask Odiseus to turn the result into approved follow-up actions.",
+      "- Ask Odysseus to turn the result into approved follow-up actions.",
     ]
       .filter(Boolean)
       .join("\n");

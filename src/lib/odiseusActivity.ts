@@ -1,8 +1,8 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 
-/** Persist a human-readable Odiseus activity row (no LLM traces). */
-export async function recordOdiseusActivity(input: {
+/** Persist a human-readable Odysseus activity row (no LLM traces). */
+export async function recordOdysseusActivity(input: {
   workspaceId: string;
   userId: string;
   conversationId?: string | null;
@@ -34,17 +34,17 @@ export async function recordOdiseusActivity(input: {
 }
 
 /** Best-effort activity write — never blocks the chat reply. */
-export async function recordOdiseusActivitySafe(
-  input: Parameters<typeof recordOdiseusActivity>[0],
+export async function recordOdysseusActivitySafe(
+  input: Parameters<typeof recordOdysseusActivity>[0],
 ) {
   try {
-    await recordOdiseusActivity(input);
+    await recordOdysseusActivity(input);
   } catch (error) {
-    console.warn("Odiseus activity was not persisted:", error);
+    console.warn("Odysseus activity was not persisted:", error);
   }
 }
 
-export type OdiseusRunPersistInput = {
+export type OdysseusRunPersistInput = {
   userId: string;
   workspaceId: string;
   conversationId?: string | null;
@@ -59,12 +59,12 @@ export type OdiseusRunPersistInput = {
 };
 
 /**
- * Persist an Odiseus run log. Returns the doc id, or null when Firestore
+ * Persist an Odysseus run log. Returns the doc id, or null when Firestore
  * rejects the write (e.g. rules not deployed yet). Callers must still save
  * the assistant message so chat does not look like a permission failure.
  */
-export async function persistOdiseusRun(
-  input: OdiseusRunPersistInput,
+export async function persistOdysseusRun(
+  input: OdysseusRunPersistInput,
 ): Promise<string | null> {
   try {
     const runRef = await addDoc(collection(db, "odiseus_runs"), {
@@ -84,7 +84,7 @@ export async function persistOdiseusRun(
     });
     return runRef.id;
   } catch (error) {
-    console.warn("Odiseus run was not persisted:", error);
+    console.warn("Odysseus run was not persisted:", error);
     return null;
   }
 }
