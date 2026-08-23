@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
-import { Users, Mail, UserMinus, Plus, ArrowLeft, Loader2, Edit3 } from "lucide-react";
+import { Users, Mail, UserMinus, Plus, ArrowLeft, Loader2, Edit3 } from "./ui/Icon";
 import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion, AnimatePresence } from "motion/react";
@@ -145,7 +145,7 @@ export function WorkspaceSettings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFCFB]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--status-warning-soft)]">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
       </div>
     );

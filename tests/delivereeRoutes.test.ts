@@ -15,13 +15,14 @@ test("legacy and new routes resolve into one conversational lens", () => {
     section: "portfolio",
   });
   assert.deepEqual(resolveDelivereeLens("/work/action-board"), {
-    kind: "work",
-    section: "issues",
+    kind: "my-work",
+    section: "assigned",
   });
-  assert.deepEqual(resolveDelivereeLens("/capture/review"), { kind: "review" });
+  assert.deepEqual(resolveDelivereeLens("/capture/review"), { kind: "approvals" });
   assert.deepEqual(resolveDelivereeLens("/work/projects/project-123"), {
     kind: "project",
     projectId: "project-123",
+    tab: "overview",
   });
 });
 

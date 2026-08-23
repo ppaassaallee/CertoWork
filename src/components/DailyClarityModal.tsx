@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   X, Check, AlertCircle, Sparkles, Brain, Plus, Trash2, Edit2, Play, Pause, ChevronRight, ChevronLeft, 
   RefreshCw, Calendar, CheckCircle2, Timer as TimerIcon
-} from "lucide-react";
+} from "./ui/Icon";
 import { 
   collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, serverTimestamp, writeBatch
 } from "firebase/firestore";
@@ -934,7 +934,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
             idealVersion: "Complete standard 10-Min Clarity Reset and priorize daily core work",
             difficulty: "easy",
             identityStatement: "I am a disciplined and focused deep organizer of my mind.",
-            color: "#1e293b",
+            color: "var(--accent)",
             icon: "Brain",
             priority: 1,
             calendarVisible: false,
@@ -979,10 +979,10 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#FAF9F5] rounded-3xl w-full max-w-4xl shadow-2xl border border-amber-100 flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
+      <div className="bg-[var(--status-warning-soft)] rounded-3xl w-full max-w-4xl shadow-2xl border border-amber-100 flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
         
         {/* Left Side: Dynamic Timer, instructions & strategic notes */}
-        <div className="bg-[#1c1d1a] text-amber-50 p-6 md:w-80 flex flex-col justify-between">
+        <div className="bg-[var(--text-primary)] text-amber-50 p-6 md:w-80 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-6">
               <div className="p-2 bg-amber-500/20 rounded-xl text-amber-400">
@@ -995,7 +995,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
             </div>
 
             <div className="space-y-4">
-              <div className="bg-[#242621] p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center">
+              <div className="bg-[var(--border)] p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center">
                 <span className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1">Time Bandwidth</span>
                 <div className="text-4xl font-black font-mono tracking-tight text-amber-400 mb-3">
                   {formatTime(timeLeft)}
@@ -1317,7 +1317,12 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                                         )}
                                         {catName && (
                                           <span 
-                                            style={{ backgroundColor: `${catColor}15`, color: catColor || '#555' }}
+                                            style={{
+                                              backgroundColor: catColor
+                                                ? `color-mix(in srgb, ${catColor} 8%, transparent)`
+                                                : "var(--surface-2)",
+                                              color: catColor || "var(--text-secondary)",
+                                            }}
                                             className="px-1.5 py-0.5 rounded-md font-bold"
                                           >
                                             🏷️ {catName}
@@ -1443,7 +1448,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                 </div>
 
                 {successMsg && (
-                  <div className="bg-[#FAF9F5] p-3 text-xs text-emerald-800 italic font-medium rounded-xl border border-emerald-100/50 flex gap-2">
+                  <div className="bg-[var(--status-warning-soft)] p-3 text-xs text-emerald-800 italic font-medium rounded-xl border border-emerald-100/50 flex gap-2">
                     <Sparkles className="w-4 h-4 text-emerald-500" />
                     <span>Reflection: "{successMsg}"</span>
                   </div>
@@ -1695,7 +1700,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                   <button 
                     onClick={handleFinalizeReset}
                     disabled={loading}
-                    className="flex items-center gap-1.5 text-xs bg-black text-white hover:bg-[#2e7d32] hover:shadow-emerald-100 font-extrabold p-2 px-5 rounded-xl transition-all shadow-md disabled:opacity-50"
+                    className="flex items-center gap-1.5 text-xs bg-black text-white hover:bg-[var(--accent)] hover:shadow-emerald-100 font-extrabold p-2 px-5 rounded-xl transition-all shadow-md disabled:opacity-50"
                   >
                     {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 text-emerald-400" />}
                     Send to Review & Complete Reset
@@ -1768,7 +1773,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                 onChange={e => setEditingText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(item.id, type); }}
                 autoFocus
-                className="flex-1 px-2.5 py-1 border border-neutral-300 rounded-xl bg-[#FAF9F5] text-xs text-neutral-800 focus:outline-none"
+                className="flex-1 px-2.5 py-1 border border-neutral-300 rounded-xl bg-[var(--status-warning-soft)] text-xs text-neutral-800 focus:outline-none"
               />
             ) : (
               <span className="flex-1 text-neutral-800 font-bold leading-tight select-none">
@@ -1810,7 +1815,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
               <select
                 value={item.projectId || ""}
                 onChange={(e) => handleUpdateItemField(item.id, "projectId", e.target.value)}
-                className="w-full text-[11px] bg-[#FAF9F5] border border-neutral-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer"
+                className="w-full text-[11px] bg-[var(--status-warning-soft)] border border-neutral-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer"
               >
                 <option value="">Select Project...</option>
                 {Object.entries(allProjects).map(([id, title]) => (
@@ -1825,7 +1830,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
                 type="date"
                 value={item.dueDate && /^\d{4}-\d{2}-\d{2}/.test(item.dueDate) ? item.dueDate.substring(0, 10) : ""}
                 onChange={(e) => handleUpdateItemField(item.id, "dueDate", e.target.value)}
-                className="w-full text-[11px] bg-[#FAF9F5] border border-neutral-200 rounded-lg px-2 py-1 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer select-none"
+                className="w-full text-[11px] bg-[var(--status-warning-soft)] border border-neutral-200 rounded-lg px-2 py-1 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer select-none"
               />
             </div>
 
@@ -1834,7 +1839,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
               <select
                 value={item.stakeholderIds?.[0] || ""}
                 onChange={(e) => handleUpdateItemField(item.id, "stakeholderIds", e.target.value ? [e.target.value] : [])}
-                className="w-full text-[11px] bg-[#FAF9F5] border border-neutral-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer"
+                className="w-full text-[11px] bg-[var(--status-warning-soft)] border border-neutral-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-black font-semibold text-neutral-700 cursor-pointer"
               >
                 <option value="">Select Stakeholder...</option>
                 {stakeholders.map((s) => (
@@ -1850,7 +1855,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
     return (
       <div 
         key={item.id} 
-        className="flex items-center justify-between gap-3 p-2 bg-[#FAF9F5] border border-neutral-150 rounded-xl max-w-full text-xs hover:border-neutral-300 transition-colors"
+        className="flex items-center justify-between gap-3 p-2 bg-[var(--status-warning-soft)] border border-neutral-150 rounded-xl max-w-full text-xs hover:border-neutral-300 transition-colors"
       >
         {isEditing ? (
           <input

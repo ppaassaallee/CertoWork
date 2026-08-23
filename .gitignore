@@ -9,3 +9,7 @@ outputs/
 .wrangler/
 .codex-trash/
 *.tsbuildinfo
+patch_*.py
+grep_output.txt
+firestore_full.txt
+scan-and-update.js

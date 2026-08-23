@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
-import { X, Users, Check, Plus, UserPlus } from "lucide-react";
+import { X, Users, Check, Plus, UserPlus } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 import { Stakeholder } from "../types";
 import { handleFirestoreError, OperationType } from "../lib/firestore-errors";

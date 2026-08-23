@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CheckCircle, Brain, Flame, ChevronRight, Loader2, Sparkles, Plus, Trash2, Play, Pause, RefreshCw } from "lucide-react";
+import { CheckCircle, Brain, Flame, ChevronRight, Loader2, Sparkles, Plus, Trash2, Play, Pause, RefreshCw } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, addDoc, getDocs, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";

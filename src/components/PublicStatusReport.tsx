@@ -67,7 +67,7 @@ export function PublicStatusReport({ token }: { token: string }) {
       <iframe
         sandbox=""
         srcDoc={html}
-        style={{ width: "100%", minHeight: "100vh", border: 0, background: "#fff" }}
+        style={{ width: "100%", minHeight: "100vh", border: 0, background: "var(--surface-0)" }}
         title="Project status report"
       />
     </main>

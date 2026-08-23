@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrProject, PIPELINE_STAGES, BoldrArtifact } from './types';
-import { ArrowLeft, Save, Folder, ExternalLink, Activity, Cloud, AlertTriangle, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Folder, ExternalLink, Activity, Cloud, AlertTriangle, FileText } from "../ui/Icon";
 
 export function BoldrProjectDetails() {
   const { id } = useParams<{ id: string }>();

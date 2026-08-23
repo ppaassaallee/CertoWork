@@ -53,7 +53,7 @@ import {
   Settings,
   UserPlus,
   Archive
-} from 'lucide-react';
+} from "../ui/Icon";
 import {
   WarRoomChat,
   WarRoomParticipant,
@@ -1526,7 +1526,7 @@ export function WarRoom() {
   const activeRuns = agentRuns.filter(r => r.status === 'running' || r.status === 'queued');
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden bg-[#FAFAF9]" id="boldi_war_room">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden bg-[var(--surface-0)]" id="boldi_war_room">
       
       {/* COLUMN 1: LEFT APP RAIL (Narrow vertical icon stripe) */}
       <div className="w-16 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-4 shrink-0 justify-between h-full shadow-sm">
@@ -1983,7 +1983,7 @@ export function WarRoom() {
       </div>
 
       {/* CENTER WORKSPACE (Slack conversation or selected module view) */}
-      <div className="flex-1 flex flex-col h-full bg-[#FCFBF9] overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full bg-[var(--status-warning-soft)] overflow-hidden relative">
         
         {/* TAB 1: ACTIVE CHATS CONVERSATION */}
         {activeTab === 'chats' && activeChat && (
@@ -2207,7 +2207,7 @@ export function WarRoom() {
 
                             return (
                               <div className="max-w-2xl bg-white border border-gray-200 rounded-3xl shadow-sm overflow-hidden mt-2">
-                                <div className="p-4 bg-[#FAF9F6] border-b border-gray-150 flex items-center justify-between">
+                                <div className="p-4 bg-[var(--status-warning-soft)] border-b border-gray-150 flex items-center justify-between">
                                   <div>
                                     <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">{widget.title}</h4>
                                     <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">Created by {widget.createdByAgentId ? agents.find(a => a.id === widget.createdByAgentId)?.name : 'System'} • v{latestVersion.versionNumber}</p>
@@ -2228,7 +2228,7 @@ export function WarRoom() {
                                   {latestVersion.heroMetrics && latestVersion.heroMetrics.length > 0 && (
                                     <div className="grid grid-cols-3 gap-3">
                                       {latestVersion.heroMetrics.slice(0, 3).map((metric, mIdx) => (
-                                        <div key={mIdx} className="bg-[#FAF9F6] p-3 rounded-2xl border border-gray-100/50">
+                                        <div key={mIdx} className="bg-[var(--status-warning-soft)] p-3 rounded-2xl border border-gray-100/50">
                                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide truncate">{metric.label}</p>
                                           <p className="text-base font-black text-indigo-700 mt-1">{metric.value}</p>
                                           {metric.subtext && <p className="text-[9px] text-gray-400 font-semibold truncate mt-0.5">{metric.subtext}</p>}
@@ -2304,7 +2304,7 @@ export function WarRoom() {
                 <div className="flex flex-wrap gap-2 items-center text-xs">
                   
                   {/* Link Workspace Project */}
-                  <div className="flex items-center gap-1.5 bg-[#FAF9F6] border border-gray-200 rounded-xl px-2.5 py-1.5 text-gray-600 font-bold">
+                  <div className="flex items-center gap-1.5 bg-[var(--status-warning-soft)] border border-gray-200 rounded-xl px-2.5 py-1.5 text-gray-600 font-bold">
                     <Layers className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Project:</span>
                     <select 
@@ -2331,7 +2331,7 @@ export function WarRoom() {
                       }
                     }}
                     className={`flex items-center gap-1.5 border rounded-xl px-2.5 py-1.5 font-bold transition-all ${
-                      selectedFileUrl ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-[#FAF9F6] border-gray-200 text-gray-600'
+                      selectedFileUrl ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-[var(--status-warning-soft)] border-gray-200 text-gray-600'
                     }`}
                   >
                     <FolderOpen className="w-3.5 h-3.5 text-sky-500" />
@@ -2514,7 +2514,7 @@ export function WarRoom() {
                       <div key={group.id} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
                         <div>
                           <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 bg-[#FAF9F6] rounded-2xl border border-gray-150 flex items-center justify-center text-xl shrink-0 shadow-sm">
+                            <div className="w-11 h-11 bg-[var(--status-warning-soft)] rounded-2xl border border-gray-150 flex items-center justify-center text-xl shrink-0 shadow-sm">
                               {group.avatarEmoji || '🛡️'}
                             </div>
                             <div>
@@ -2559,7 +2559,7 @@ export function WarRoom() {
                   </div>
 
                   {contactRequests.length === 0 ? (
-                    <div className="bg-[#FAF9F6]/50 border border-gray-150 rounded-2xl p-6 text-center text-xs font-semibold text-gray-400">
+                    <div className="bg-[var(--status-warning-soft)]/50 border border-gray-150 rounded-2xl p-6 text-center text-xs font-semibold text-gray-400">
                       No pending workspace contact requests.
                     </div>
                   ) : (
@@ -2618,7 +2618,7 @@ export function WarRoom() {
                   </div>
 
                   {agentInvites.length === 0 ? (
-                    <div className="bg-[#FAF9F6]/50 border border-gray-150 rounded-2xl p-6 text-center text-xs font-semibold text-gray-400">
+                    <div className="bg-[var(--status-warning-soft)]/50 border border-gray-150 rounded-2xl p-6 text-center text-xs font-semibold text-gray-400">
                       No active invitation links created.
                     </div>
                   ) : (
@@ -3122,7 +3122,7 @@ export function WarRoom() {
           >
             
             {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[#FAF9F6]">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-[var(--status-warning-soft)]">
               <div>
                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">{expandedWidget.widget.title}</h3>
                 <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">Version History • v{expandedWidget.version.versionNumber}</p>
@@ -3141,7 +3141,7 @@ export function WarRoom() {
               {expandedWidget.version.heroMetrics && expandedWidget.version.heroMetrics.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                   {expandedWidget.version.heroMetrics.map((metric, idx) => (
-                    <div key={idx} className="bg-[#FAF9F6] p-4 rounded-3xl border border-gray-100">
+                    <div key={idx} className="bg-[var(--status-warning-soft)] p-4 rounded-3xl border border-gray-100">
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{metric.label}</p>
                       <p className="text-lg font-black text-indigo-700 mt-1">{metric.value}</p>
                       {metric.subtext && <p className="text-[9px] text-gray-400 font-semibold mt-0.5">{metric.subtext}</p>}
@@ -3174,7 +3174,7 @@ export function WarRoom() {
 
               {/* General Body */}
               {!expandedWidget.version.jsonPayload?.navigation_tabs && (
-                <div className="bg-[#FAF9F6] p-5 rounded-3xl border border-gray-100/50 text-xs text-gray-700 font-medium leading-relaxed whitespace-pre-line">
+                <div className="bg-[var(--status-warning-soft)] p-5 rounded-3xl border border-gray-100/50 text-xs text-gray-700 font-medium leading-relaxed whitespace-pre-line">
                   {expandedWidget.version.markdownBody || JSON.stringify(expandedWidget.version.jsonPayload, null, 2)}
                 </div>
               )}
@@ -3280,7 +3280,7 @@ export function WarRoom() {
                   value={threadInputMessage}
                   onChange={(e) => setThreadInputMessage(e.target.value)}
                   placeholder="Reply in thread..."
-                  className="flex-1 bg-[#FAF9F6] border border-gray-200 hover:border-gray-300 focus:outline-none focus:border-indigo-500 rounded-xl px-4 py-2 text-xs font-semibold"
+                  className="flex-1 bg-[var(--status-warning-soft)] border border-gray-200 hover:border-gray-300 focus:outline-none focus:border-indigo-500 rounded-xl px-4 py-2 text-xs font-semibold"
                 />
                 <button
                   type="submit"

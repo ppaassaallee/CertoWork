@@ -1,6 +1,6 @@
 # Certo Work — powered by Boldr AI
 
-Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Chief of Staff layer.
+Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Odysseus layer.
 
 ## Production hosting
 
@@ -55,15 +55,21 @@ See [docs/CAPABILITY_LEDGER.md](docs/CAPABILITY_LEDGER.md) for the preservation 
 
 ## Local development
 
-1. Install dependencies with the package manager represented by the lockfile.
-2. Copy `.env.example` to `.env.local`.
-3. Configure Firebase and add `OPENAI_API_KEY`.
-4. Run `npm run dev`.
+1. Copy `.env.example` to `.env.local` and fill Firebase Admin, `OPENAI_API_KEY`, `CORS_ORIGIN`, and `HUBSPOT_WEBHOOK_SECRET`.
+2. `npm install`
+3. `npm run dev` — Express + Vite on `PORT` (default 3000)
+4. Optional: Firebase emulators for rules tests
 
 `BOLDI_AI_PROVIDER=openai` is the production setting. The application remains
 usable for capture and review when OpenAI is unavailable.
 
+Every `/api/*` route except `/api/health` and `/api/capabilities` requires a Firebase Bearer token and an active workspace membership. Unsigned HubSpot webhooks are rejected.
+
 ## Verification
 
+- `npm run lint`
+- `npx tsc -b`
 - `npm test`
 - `npm run build`
+
+See [docs/data-model.md](docs/data-model.md) for collections and tenancy, and [docs/runbooks/restore.md](docs/runbooks/restore.md) for Firestore backup/restore.

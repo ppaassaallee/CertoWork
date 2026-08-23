@@ -7,19 +7,22 @@ import { compactTagSummary } from "../src/components/CompactTagPicker";
 const read = (relativePath: string) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("live typography exposes one semantic hierarchy", async () => {
+test("live typography exposes the Notion five-token hierarchy", async () => {
+  const tokens = await read("src/styles/certo-tokens.css");
   const css = await read("src/index.css");
-  assert.match(css, /--font-body: "DM Sans"/);
-  assert.match(css, /--font-display: "Manrope"/);
-  assert.match(css, /--text-h1: calc\(24px/);
-  assert.match(css, /--text-h2: calc\(20px/);
-  assert.match(css, /--text-h3: calc\(16px/);
-  assert.match(css, /--text-h4: calc\(14px/);
-  assert.match(css, /--text-body: calc\(14px/);
-  assert.match(css, /--text-ui: calc\(13px/);
-  assert.match(css, /--text-caption: calc\(12px/);
-  assert.equal(css.includes("Inter, sans-serif"), false);
-  assert.match(css, /font-size: var\(--text-ui\) !important/);
+  assert.match(tokens, /--font-body: "Inter"/);
+  assert.match(tokens, /--text-primary: #37352f/);
+  assert.match(tokens, /--accent: #2383e2/);
+  assert.match(tokens, /--text-h2: calc\(1\.75rem/);
+  assert.match(tokens, /--text-h4: calc\(1\.125rem/);
+  assert.match(tokens, /--text-body: calc\(0\.875rem/);
+  assert.match(tokens, /--text-body-sm: calc\(0\.8125rem/);
+  assert.match(tokens, /--text-caption: calc\(0\.75rem/);
+  assert.match(css, /certo-tokens\.css/);
+  assert.equal(css.includes("Manrope"), false);
+  assert.equal(css.includes("DM Sans"), false);
+  assert.equal(/font-size:\s*var\(--text-(?:h1|h3|body-lg|eyebrow|ui)\)/.test(css), false);
+  assert.match(css, /font-size: var\(--text-body-sm\) !important/);
   assert.match(css, /font-size: var\(--text-caption\) !important/);
 });
 
@@ -35,22 +38,24 @@ test("all five text sizes survive startup and use one language", async () => {
   );
 });
 
-test("persistent utility buttons are icon-only and accessibly named", async () => {
+test("header keeps command palette and create utilities", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
-  const header = source.split('<div className="do-header-actions">')[1]?.split("</div>")[0] || "";
-  assert.match(header, /is-icon-only/);
-  assert.match(header, /aria-label="Skills"/);
-  assert.match(header, /aria-label="Digest"/);
-  assert.match(header, /aria-label="Today"/);
-  assert.match(header, /aria-label="Pending changes"/);
-  assert.equal(header.includes("<span>Skills</span>"), false);
+  const header = source.split('<header className="do-header">')[1]?.split("</header>")[0] || "";
+  assert.match(header, /command palette|Command palette/i);
+  assert.match(header, /headerCreate|Create/);
+  assert.equal(header.includes('aria-label="Skills"'), false);
+  assert.equal(header.includes('aria-label="Digest"'), false);
+  assert.equal(header.includes('aria-label="Today"'), false);
+  assert.equal(header.includes('aria-label="Pending changes"'), false);
 });
 
 test("primary navigation uses consistent English labels", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
-  assert.match(source, /> Conversation/);
-  assert.match(source, /> Items/);
-  assert.match(source, /> Notes/);
+  assert.match(source, /navHome|Home/);
+  assert.match(source, /navMyWork|My Work/);
+  assert.match(source, /navProjects|Projects/);
+  assert.match(source, /navAgents|Agents/);
+  assert.match(source, /navApprovals|Approvals/);
   assert.equal(/Conversación|Ítems|Notas|Pendientes/.test(source), false);
 });
 

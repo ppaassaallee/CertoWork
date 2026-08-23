@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Target, FileText, Link as LinkIcon, Paperclip, CheckCircle } from 'lucide-react';
+import { Target, FileText, Link as LinkIcon, Paperclip, CheckCircle } from "./ui/Icon";
 import { Link } from 'react-router-dom';
 
 export function HubView({ project, tasks = [] }: { project: any, tasks: any[] }) {

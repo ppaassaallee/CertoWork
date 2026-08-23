@@ -42,7 +42,7 @@ import {
   Users,
   X,
   Zap,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   addDoc,
   collection,
@@ -278,7 +278,7 @@ function RichText({ text }: { text: string }) {
         if (!clean.trim()) return <div className="h-2" key={index} />;
         if (/^#{1,3}\s/.test(line)) {
           return (
-            <h3 key={index} className="mt-4 mb-1 font-semibold text-[15px] text-[#171a17]">
+            <h3 key={index} className="mt-4 mb-1 font-semibold text-[15px] text-[var(--text-primary)]">
               {clean}
             </h3>
           );
@@ -286,7 +286,7 @@ function RichText({ text }: { text: string }) {
         if (/^\s*[-*]\s/.test(line)) {
           return (
             <div key={index} className="flex gap-2.5 py-0.5">
-              <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-[#6d765f]" />
+              <span className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-[var(--text-secondary)]" />
               <span>{clean.replace(/^\s*[-*]\s*/, "")}</span>
             </div>
           );
@@ -300,10 +300,10 @@ function RichText({ text }: { text: string }) {
 function JudgmentArtifact({ assessment }: { assessment: JudgmentAssessment }) {
   const tone =
     assessment.verdict === "stop"
-      ? "border-[#e7b9aa] bg-[#fff8f5]"
+      ? "border-[var(--status-danger-soft)] bg-[var(--status-danger-soft)]"
       : assessment.verdict === "challenge"
-        ? "border-[#e7d7a4] bg-[#fffdf5]"
-        : "border-[#cbdcc5] bg-[#f8fcf6]";
+        ? "border-[var(--status-warning)] bg-[var(--status-warning-soft)]"
+        : "border-[var(--accent-soft)] bg-[var(--accent-soft)]";
   const label =
     assessment.verdict === "stop"
       ? "Pause"
@@ -316,13 +316,13 @@ function JudgmentArtifact({ assessment }: { assessment: JudgmentAssessment }) {
       <div className="flex items-start justify-between gap-4 px-4 py-3.5">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 rounded-lg bg-white p-1.5 shadow-sm">
-            <ShieldCheck className="h-4 w-4 text-[#566149]" />
+            <ShieldCheck className="h-4 w-4 text-[var(--text-secondary)]" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#757a70]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
               Judgment preflight
             </p>
-            <p className="mt-1 text-sm font-semibold text-[#20231f]">{assessment.recommendation}</p>
+            <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{assessment.recommendation}</p>
           </div>
         </div>
         <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">
@@ -336,15 +336,15 @@ function JudgmentArtifact({ assessment }: { assessment: JudgmentAssessment }) {
               <CircleDot
                 className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
                   signal.severity === "blocking"
-                    ? "text-[#bd5e46]"
+                    ? "text-[var(--status-danger)]"
                     : signal.severity === "warning"
-                      ? "text-[#9b7a20]"
-                      : "text-[#65715c]"
+                      ? "text-[var(--status-warning)]"
+                      : "text-[var(--text-secondary)]"
                 }`}
               />
               <div>
-                <span className="font-semibold text-[#292c27]">{signal.title}. </span>
-                <span className="text-[#686d64]">{signal.detail}</span>
+                <span className="font-semibold text-[var(--text-primary)]">{signal.title}. </span>
+                <span className="text-[var(--text-secondary)]">{signal.detail}</span>
               </div>
             </div>
           ))}
@@ -369,41 +369,41 @@ function ActionPlanArtifact({
 }) {
   if (status === "dismissed") return null;
   return (
-    <section className="mt-5 overflow-hidden rounded-[20px] border border-[#d9d9d1] bg-[#fbfbf8] shadow-[0_8px_25px_rgba(30,35,25,0.05)]">
-      <div className="flex items-start justify-between gap-4 border-b border-[#e7e6df] px-4 py-4">
+    <section className="mt-5 overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--status-warning-soft)] shadow-[0_8px_25px_rgba(30,35,25,0.05)]">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-4 py-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[#e6efd9] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#516043]">
+            <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--text-primary)]">
               Proposed actions
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#8b8e86]">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
               {plan.riskLevel || "low"} risk
             </span>
           </div>
-          <h3 className="mt-2 text-[15px] font-semibold text-[#191c18]">{plan.title}</h3>
-          <p className="mt-1 max-w-xl text-xs leading-5 text-[#73766f]">{plan.summary}</p>
+          <h3 className="mt-2 text-[15px] font-semibold text-[var(--text-primary)]">{plan.title}</h3>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-[var(--text-secondary)]">{plan.summary}</p>
         </div>
-        <MoreHorizontal className="h-4 w-4 text-[#9a9d96]" />
+        <MoreHorizontal className="h-4 w-4 text-[var(--text-muted)]" />
       </div>
-      <div className="divide-y divide-[#e8e7e1] bg-white">
+      <div className="divide-y divide-[var(--surface-2)] bg-white">
         {(plan.proposedActions || []).map((action, index) => (
           <div key={`${action.type}-${index}`} className="flex items-start gap-3 px-4 py-3.5">
-            <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#d9ddd1] bg-[#f4f7ef] text-[10px] font-bold text-[#59624f]">
+            <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--accent-soft)] text-[10px] font-bold text-[var(--border)]">
               {index + 1}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-[#20231f]">{actionLabel(action)}</p>
-              <p className="mt-0.5 truncate text-xs text-[#6f736b]">{actionTitle(action)}</p>
-              {action.reason && <p className="mt-1 text-[11px] text-[#95988f]">{action.reason}</p>}
+              <p className="text-xs font-semibold text-[var(--text-primary)]">{actionLabel(action)}</p>
+              <p className="mt-0.5 truncate text-xs text-[var(--text-secondary)]">{actionTitle(action)}</p>
+              {action.reason && <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{action.reason}</p>}
             </div>
-            <span className="rounded-md bg-[#f2f2ee] px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#767a72]">
+            <span className="rounded-md bg-[var(--surface-1)] px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
               S{action.safetyLevel || plan.safetyLevel || 1}
             </span>
           </div>
         ))}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e7e6df] px-4 py-3">
-        <p className="flex items-center gap-1.5 text-[10px] text-[#7f827a]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-4 py-3">
+        <p className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)]">
           <ShieldCheck className="h-3 w-3" />
           Review only. Nothing executes without another explicit approval.
         </p>
@@ -465,7 +465,7 @@ export function BoldiAssistant({
   const [offlineCount, setOfflineCount] = useState(() => readOfflineQueue().length);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
-  const [providerLabel, setProviderLabel] = useState("Chief of Staff");
+  const [providerLabel, setProviderLabel] = useState("Odysseus");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -829,8 +829,8 @@ export function BoldiAssistant({
       });
       setProviderLabel(
         result.provider?.provider
-          ? `${result.provider.provider === "openai" ? "OpenAI" : "Legacy AI adapter"} · Chief of Staff`
-          : "Chief of Staff",
+          ? `${result.provider.provider === "openai" ? "OpenAI" : "Legacy AI adapter"} · Odysseus`
+          : "Odysseus",
       );
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
@@ -929,7 +929,7 @@ export function BoldiAssistant({
           actionPlanId: planRef.id,
           type: action.type,
           proposedChange: action.proposedChange || {},
-          reason: action.reason || "Proposed by the Chief of Staff",
+          reason: action.reason || "Proposed by the Odysseus",
           confidence: action.confidence || 0.85,
           safetyLevel: action.safetyLevel || plan.safetyLevel || 1,
           status: "approved_for_review",
@@ -948,7 +948,7 @@ export function BoldiAssistant({
               : action.type === "outbox_communication"
                 ? "outbox"
                 : "task",
-          why: action.reason || "Proposed by the Chief of Staff",
+          why: action.reason || "Proposed by the Odysseus",
           action: actionLabel(action),
           confidence: (action.confidence || 0.85) >= 0.8 ? "high" : "medium",
           proposed: action.proposedChange || {},
@@ -1055,19 +1055,19 @@ export function BoldiAssistant({
             <Menu className="h-4.5 w-4.5" />
           </button>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#96998f]">
+            <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
               <span>{workspace?.name || "Personal Focus"}</span>
               <ChevronRight className="h-2.5 w-2.5" />
-              <span className="truncate">{currentConversation?.title || "Chief of Staff"}</span>
+              <span className="truncate">{currentConversation?.title || "Odysseus"}</span>
             </div>
             <div className="mt-0.5 flex items-center gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#72885d]" />
-              <p className="text-[11px] font-medium text-[#676c62]">{providerLabel}</p>
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)]" />
+              <p className="text-[11px] font-medium text-[var(--text-secondary)]">{providerLabel}</p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             {offlineCount > 0 && (
-              <span className="hidden rounded-full bg-[#f2ead5] px-2.5 py-1 text-[9px] font-semibold text-[#7b672c] sm:inline">
+              <span className="hidden rounded-full bg-[var(--status-warning-soft)] px-2.5 py-1 text-[9px] font-semibold text-[var(--status-warning)] sm:inline">
                 {offlineCount} queued
               </span>
             )}
@@ -1102,14 +1102,14 @@ export function BoldiAssistant({
               <div className="gazelle-opening-mark">
                 <Sparkles className="h-5 w-5" />
               </div>
-              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#899080]">
+              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                 {todayLabel}
               </p>
-              <h1 className="mt-2 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-[1.08] tracking-[-0.035em] text-[#20231e]">
+              <h1 className="mt-2 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-[1.08] tracking-[-0.035em] text-[var(--text-primary)]">
                 Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"},{" "}
                 {userName}.
               </h1>
-              <p className="mt-3 max-w-xl text-balance text-[15px] leading-6 text-[#777c71]">
+              <p className="mt-3 max-w-xl text-balance text-[15px] leading-6 text-[var(--text-secondary)]">
                 What are we making clearer, lighter, or more achievable?
               </p>
               <div className="gazelle-prompt-grid">
@@ -1121,13 +1121,13 @@ export function BoldiAssistant({
                     type="button"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#89917f]">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-[var(--text-secondary)]">
                         {eyebrow}
                       </span>
-                      <Icon className="h-3.5 w-3.5 text-[#828b77]" />
+                      <Icon className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                     </div>
-                    <p className="mt-3 text-left text-[13px] font-semibold text-[#272a25]">{title}</p>
-                    <p className="mt-1 text-left text-[11px] leading-[1.5] text-[#858980]">{text}</p>
+                    <p className="mt-3 text-left text-[13px] font-semibold text-[var(--text-primary)]">{title}</p>
+                    <p className="mt-1 text-left text-[11px] leading-[1.5] text-[var(--text-secondary)]">{text}</p>
                   </button>
                 ))}
               </div>
@@ -1145,9 +1145,9 @@ export function BoldiAssistant({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-[#343832]">Certo Work</span>
+                          <span className="text-[11px] font-semibold text-[var(--text-primary)]">Certo Work</span>
                           {message.offline && (
-                            <span className="rounded-full bg-[#f2ead5] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#806a2d]">
+                            <span className="rounded-full bg-[var(--status-warning-soft)] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--status-warning)]">
                               Offline-safe
                             </span>
                           )}
@@ -1219,7 +1219,7 @@ export function BoldiAssistant({
                       <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="mb-2 text-[11px] font-semibold text-[#343832]">Certo Work</div>
+                      <div className="mb-2 text-[11px] font-semibold text-[var(--text-primary)]">Certo Work</div>
                       <RichText text={streamingReply} />
                       <span className="gazelle-stream-cursor" />
                     </div>
@@ -1235,7 +1235,7 @@ export function BoldiAssistant({
                     <span className="gazelle-thinking-dot" />
                     <span className="gazelle-thinking-dot" />
                     <span className="gazelle-thinking-dot" />
-                    <span className="ml-2 text-[10px] text-[#92968d]">
+                    <span className="ml-2 text-[10px] text-[var(--text-secondary)]">
                       Checking capacity, conflicts, and context
                     </span>
                   </div>
@@ -1272,7 +1272,7 @@ export function BoldiAssistant({
                 >
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </button>
-                <span className="hidden text-[9px] text-[#9a9d95] sm:inline">
+                <span className="hidden text-[9px] text-[var(--text-muted)] sm:inline">
                   {isListening ? "Listening..." : "Enter to send - Shift+Enter for a new line"}
                 </span>
               </div>
@@ -1287,7 +1287,7 @@ export function BoldiAssistant({
               </button>
             </div>
           </div>
-          <p className="mt-2 text-center text-[9px] text-[#a1a49b]">
+          <p className="mt-2 text-center text-[9px] text-[var(--text-muted)]">
             Certo Work shows assumptions and asks before making changes. You always retain override authority.
           </p>
         </div>
@@ -1318,20 +1318,20 @@ export function BoldiAssistant({
             >
               <span className="gazelle-brand-mark">C</span>
               <span className="min-w-0 flex-1 text-left">
-                <span className="block truncate text-[13px] font-semibold text-[#242720]">
+                <span className="block truncate text-[13px] font-semibold text-[var(--text-primary)]">
                   {workspace?.name || "Personal Focus"}
                 </span>
-                <span className="block text-[10px] text-[#8a8e82]">
+                <span className="block text-[10px] text-[var(--text-secondary)]">
                   {workspaces.length > 1 ? `${workspaces.length} workspaces` : "Private workspace"}
                 </span>
               </span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#8a8e82]" />
+              <ChevronDown className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
             </button>
             {workspaces.length > 1 && workspaceMenuOpen && (
-              <div className="mt-1 rounded-xl border border-[#dfded7] bg-white p-1 shadow-lg">
+              <div className="mt-1 rounded-xl border border-[var(--border)] bg-white p-1 shadow-lg">
                 {workspaces.map((item) => (
                   <button
-                    className="w-full rounded-lg px-2.5 py-2 text-left text-xs hover:bg-[#f3f3ed]"
+                    className="w-full rounded-lg px-2.5 py-2 text-left text-xs hover:bg-[var(--surface-1)]"
                     key={item.id}
                     onClick={() => {
                       setWorkspaceMenuOpen(false);
@@ -1350,13 +1350,13 @@ export function BoldiAssistant({
             <button className="gazelle-new-chat" onClick={createConversation} type="button">
               <Plus className="h-3.5 w-3.5" />
               New conversation
-              <span className="ml-auto hidden text-[9px] text-[#9a9c94] xl:inline">⌘ K</span>
+              <span className="ml-auto hidden text-[9px] text-[var(--text-muted)] xl:inline">⌘ K</span>
             </button>
           </div>
 
           <div className="px-3.5 py-2">
             <button
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#6f7369] hover:bg-[#eaeae3]"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-1)]"
               onClick={() => setSearchOpen((current) => !current)}
               type="button"
             >
@@ -1366,7 +1366,7 @@ export function BoldiAssistant({
             {searchOpen && (
               <input
                 autoFocus
-                className="mt-1 w-full rounded-lg border border-[#d7d7cf] bg-white px-3 py-2 text-xs outline-none focus:border-[#9da58f]"
+                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-xs outline-none focus:border-[var(--border)]"
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search conversations"
                 value={searchQuery}
@@ -1392,11 +1392,11 @@ export function BoldiAssistant({
                   >
                     <MessageSquareText className="h-3.5 w-3.5 shrink-0" />
                     <span className="min-w-0 flex-1 truncate text-left">{conversation.title}</span>
-                    <span className="text-[9px] text-[#a0a299]">{relativeDate(conversation.updatedAt)}</span>
+                    <span className="text-[9px] text-[var(--text-muted)]">{relativeDate(conversation.updatedAt)}</span>
                   </button>
                 ))}
                 {filteredConversations.length === 0 && (
-                  <p className="px-2.5 py-2 text-[11px] leading-4 text-[#989b92]">
+                  <p className="px-2.5 py-2 text-[11px] leading-4 text-[var(--text-muted)]">
                     Your conversations will appear here.
                   </p>
                 )}
@@ -1407,7 +1407,7 @@ export function BoldiAssistant({
               <div className="flex items-center justify-between px-2">
                 <p className="gazelle-sidebar-heading !px-0">Projects</p>
                 <Link aria-label="View all projects" to="/work/projects">
-                  <Plus className="h-3.5 w-3.5 text-[#94978f]" />
+                  <Plus className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 </Link>
               </div>
               <div className="mt-1 space-y-0.5">
@@ -1420,10 +1420,10 @@ export function BoldiAssistant({
                     <span
                       className={`h-2 w-2 rounded-[3px] ${
                         index === 0
-                          ? "bg-[#788a63]"
+                          ? "bg-[var(--text-secondary)]"
                           : index === 1
-                            ? "bg-[#b68d58]"
-                            : "bg-[#74808d]"
+                            ? "bg-[var(--status-warning)]"
+                            : "bg-[var(--text-secondary)]"
                       }`}
                     />
                     <span className="truncate">{project.title || project.name || "Untitled project"}</span>
@@ -1451,16 +1451,16 @@ export function BoldiAssistant({
             </div>
           </div>
 
-          <div className="mt-auto border-t border-[#deded6] p-3.5">
-            <Link className="flex items-center gap-2.5 rounded-xl p-2 hover:bg-[#e8e8e0]" to="/me">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#252921] text-[10px] font-bold text-white">
+          <div className="mt-auto border-t border-[var(--border)] p-3.5">
+            <Link className="flex items-center gap-2.5 rounded-xl p-2 hover:bg-[var(--surface-2)]" to="/me">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--text-primary)] text-[10px] font-bold text-white">
                 {userName.slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-semibold text-[#33362f]">{user?.displayName || userName}</p>
-                <p className="truncate text-[9px] text-[#92958c]">{user?.email}</p>
+                <p className="truncate text-[11px] font-semibold text-[var(--text-primary)]">{user?.displayName || userName}</p>
+                <p className="truncate text-[9px] text-[var(--text-secondary)]">{user?.email}</p>
               </div>
-              <MoreHorizontal className="h-3.5 w-3.5 text-[#90938a]" />
+              <MoreHorizontal className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
             </Link>
           </div>
         </div>
@@ -1469,10 +1469,10 @@ export function BoldiAssistant({
       {conversationMain}
 
       <aside className={`gazelle-context-rail ${railOpen ? "is-open" : ""}`}>
-        <div className="flex items-center justify-between border-b border-[#e7e6df] px-4 py-4">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#91958b]">Live context</p>
-            <p className="mt-0.5 text-xs font-semibold text-[#31352e]">Workspace snapshot</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--text-secondary)]">Live context</p>
+            <p className="mt-0.5 text-xs font-semibold text-[var(--text-primary)]">Workspace snapshot</p>
           </div>
           <button
             aria-label="Close context"
@@ -1487,28 +1487,28 @@ export function BoldiAssistant({
           <section className="gazelle-rail-section">
             <div className="flex items-center justify-between">
               <p className="gazelle-rail-heading">Capacity</p>
-              <Link className="text-[9px] font-semibold text-[#6c765e]" to="/today">
+              <Link className="text-[9px] font-semibold text-[var(--text-secondary)]" to="/today">
                 Open today
               </Link>
             </div>
-            <div className="mt-3 rounded-2xl border border-[#e2e2db] bg-white p-3.5">
+            <div className="mt-3 rounded-2xl border border-[var(--border)] bg-white p-3.5">
               <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-[24px] font-medium tracking-[-0.04em] text-[#252922]">
+                  <p className="text-[24px] font-medium tracking-[-0.04em] text-[var(--text-primary)]">
                     {capacity?.dueToday ?? 0}
                   </p>
-                  <p className="text-[10px] text-[#8c9087]">items due today</p>
+                  <p className="text-[10px] text-[var(--text-secondary)]">items due today</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-semibold text-[#66705b]">
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">
                     {capacity?.activeProjects ?? activeProjects.length} active
                   </p>
-                  <p className="text-[9px] text-[#999c94]">projects</p>
+                  <p className="text-[9px] text-[var(--text-muted)]">projects</p>
                 </div>
               </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#ecece6]">
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-1)]">
                 <div
-                  className="h-full rounded-full bg-[#7d9067] transition-all"
+                  className="h-full rounded-full bg-[var(--text-secondary)] transition-all"
                   style={{
                     width: `${Math.min(
                       100,
@@ -1517,7 +1517,7 @@ export function BoldiAssistant({
                   }}
                 />
               </div>
-              <p className="mt-2 text-[9px] leading-4 text-[#92968d]">
+              <p className="mt-2 text-[9px] leading-4 text-[var(--text-secondary)]">
                 Based on open work and a six-hour planning capacity.
               </p>
             </div>
@@ -1529,10 +1529,10 @@ export function BoldiAssistant({
               <span
                 className={`h-2 w-2 rounded-full ${
                   latestJudgment?.verdict === "stop"
-                    ? "bg-[#c46b54]"
+                    ? "bg-[var(--status-danger)]"
                     : latestJudgment?.verdict === "challenge"
-                      ? "bg-[#b79843]"
-                      : "bg-[#72885d]"
+                      ? "bg-[var(--status-warning)]"
+                      : "bg-[var(--text-secondary)]"
                 }`}
               />
             </div>
@@ -1544,13 +1544,13 @@ export function BoldiAssistant({
                 ["Action clarity", latestJudgment?.signals.some((signal) => ["vague-action", "missing-outcome"].includes(signal.id))],
               ].map(([label, flagged]) => (
                 <div className="flex items-center justify-between text-[11px]" key={String(label)}>
-                  <span className="text-[#656a61]">{String(label)}</span>
+                  <span className="text-[var(--text-secondary)]">{String(label)}</span>
                   {flagged ? (
-                    <span className="rounded-full bg-[#f2ead5] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#7e692b]">
+                    <span className="rounded-full bg-[var(--status-warning-soft)] px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--status-warning)]">
                       Review
                     </span>
                   ) : (
-                    <Check className="h-3.5 w-3.5 text-[#748466]" />
+                    <Check className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                   )}
                 </div>
               ))}
@@ -1562,11 +1562,11 @@ export function BoldiAssistant({
               <p className="gazelle-rail-heading">Assessment</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {Object.entries(latestJudgment.dimensions).map(([label, value]) => (
-                  <div className="rounded-xl bg-[#f2f2ed] px-2.5 py-2" key={label}>
-                    <p className="truncate text-[8px] font-bold uppercase tracking-wider text-[#94978e]">
+                  <div className="rounded-xl bg-[var(--surface-1)] px-2.5 py-2" key={label}>
+                    <p className="truncate text-[8px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">
                       {label.replace(/([A-Z])/g, " $1")}
                     </p>
-                    <p className="mt-1 text-[10px] font-semibold capitalize text-[#53594f]">{value}</p>
+                    <p className="mt-1 text-[10px] font-semibold capitalize text-[var(--text-secondary)]">{value}</p>
                   </div>
                 ))}
               </div>
@@ -1576,10 +1576,10 @@ export function BoldiAssistant({
           <section className="gazelle-rail-section">
             <div className="flex items-center justify-between">
               <p className="gazelle-rail-heading">Memory & evidence</p>
-              <Brain className="h-3.5 w-3.5 text-[#8a8f83]" />
+              <Brain className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
             </div>
-            <div className="mt-3 rounded-xl border border-dashed border-[#d9d9d1] px-3 py-3">
-              <p className="text-[10px] leading-4 text-[#7f837a]">
+            <div className="mt-3 rounded-xl border border-dashed border-[var(--border)] px-3 py-3">
+              <p className="text-[10px] leading-4 text-[var(--text-secondary)]">
                 Answers use workspace-scoped tasks, projects, goals, conversations, and cited knowledge. No cross-workspace memory is mixed.
               </p>
             </div>
@@ -1601,12 +1601,12 @@ export function BoldiAssistant({
                 ];
                 const Icon = icons[index];
                 return (
-                <div className="flex items-center gap-2.5 text-[10px] text-[#676c62]" key={agent.id}>
-                  <div className="rounded-md bg-[#eef0e9] p-1.5">
+                <div className="flex items-center gap-2.5 text-[10px] text-[var(--text-secondary)]" key={agent.id}>
+                  <div className="rounded-md bg-[var(--surface-1)] p-1.5">
                     <Icon className="h-3 w-3" />
                   </div>
                   <span>{agent.name}</span>
-                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#7e916a]" />
+                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--text-secondary)]" />
                 </div>
                 );
               })}
@@ -1614,7 +1614,7 @@ export function BoldiAssistant({
           </section>
 
           <section className="gazelle-rail-section">
-            <div className="flex items-center gap-2 text-[10px] text-[#8d9187]">
+            <div className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)]">
               <History className="h-3.5 w-3.5" />
               <span>Actions are logged and recoverable.</span>
             </div>

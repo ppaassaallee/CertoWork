@@ -112,8 +112,9 @@ test("shares with alias users even when emails differ", () => {
   ]);
   assert.deepEqual(share.missingAliases, []);
   assert.deepEqual(share.userIds.sort(), ["u-cesar", "u-jose", "u-nico", "u-rafa", "u-regina"]);
-  assert.ok(share.emails.includes("cesar.a@getboldr.ai"));
-  assert.ok(share.emails.includes("rafael.f@alliedglobal.com"));
+  assert.ok(share.emails.includes("cesar.ar@alliedglobal.com"));
+  assert.ok(share.emails.includes("jose@getboldr.ai"));
+  assert.ok(share.emails.includes("rafael.f@getboldr.ai"));
   assert.equal(memberMatchesShareAlias({ id: "x", alias: "cesar", userId: "1" }, "cesar"), true);
 });
 
