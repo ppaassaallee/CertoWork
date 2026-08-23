@@ -95,6 +95,7 @@ import {
   timestamp,
 } from "../lib/workspaceDisplay";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
+import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { HomeAttention } from "../pages/HomeAttention";
 import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
 import {
@@ -424,6 +425,8 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
+  const [agentOutcomeDraft, setAgentOutcomeDraft] = useState("");
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -4129,63 +4132,27 @@ export function DelivereeWorkspace() {
           />
           </div>
         ) : centerView === "agents" ? (
-          <div className="do-agents-home" data-testid="agents-home">
-            <header className="do-agents-head">
-              <Bot size={22} />
-              <div>
-                <strong>{t("navAgents")}</strong>
-                <p>{t("emptyAgents")}</p>
-              </div>
-            </header>
-            <div className="do-agents-grid">
-              <button
-                className="do-agents-card"
-                onClick={() => void openChiefOfStaff()}
-                type="button"
-              >
-                <OdysseusMark size="md" />
-                <span>
-                  <strong>{t("agentsOdysseus")}</strong>
-                  <small>{t("odiseusSidebarBlurb")}</small>
-                </span>
-                <ChevronRight size={14} />
-              </button>
-              <button
-                className="do-agents-card"
-                onClick={() => navigate("/agents/automations")}
-                type="button"
-              >
-                <WandSparkles size={18} />
-                <span>
-                  <strong>{t("agentsAutomations")}</strong>
-                  <small>Skills and scheduled runs</small>
-                </span>
-                <ChevronRight size={14} />
-              </button>
-              <button
-                className="do-agents-card"
-                onClick={() => navigate("/agents/activity")}
-                type="button"
-              >
-                <Mail size={18} />
-                <span>
-                  <strong>{t("agentsActivity")}</strong>
-                  <small>Updates, digests, and follow-ups</small>
-                </span>
-                <ChevronRight size={14} />
-              </button>
-            </div>
-            {odiseusActivity.length > 0 && (
-              <section className="do-agents-recent">
-                <h3>Recent agent activity</h3>
-                <ul>
-                  {odiseusActivity.slice(0, 8).map((item: any) => (
-                    <li key={item.id}>{item.summary}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </div>
+          agentBuilderOpen ? (
+            <AgentBuilderDraft
+              onChange={setAgentOutcomeDraft}
+              onContinue={() => {
+                setNotice(
+                  `Draft Agent captured: “${agentOutcomeDraft.trim().slice(0, 80)}”. Publish + Hermes provision comes next.`,
+                );
+                setAgentBuilderOpen(false);
+                setAgentOutcomeDraft("");
+              }}
+              outcome={agentOutcomeDraft}
+            />
+          ) : (
+            <AgentsLibrary
+              activityItems={odiseusActivity}
+              onCreateAgent={() => setAgentBuilderOpen(true)}
+              onOpenActivity={() => navigate("/agents/activity")}
+              onOpenAutomations={() => navigate("/agents/automations")}
+              onOpenOdysseus={() => void openChiefOfStaff()}
+            />
+          )
         ) : centerView === "strategy" ? (
           <StrategyCenter
             goals={strategicGoals}

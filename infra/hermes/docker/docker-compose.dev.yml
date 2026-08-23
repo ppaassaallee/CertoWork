@@ -1,0 +1,46 @@
+# Certo local Hermes stack (Prompt 2 Phase 3)
+# Usage:
+#   export API_SERVER_KEY=change-me-local-dev
+#   export HERMES_UID=$(id -u) HERMES_GID=$(id -g)
+#   docker compose -f infra/hermes/docker/docker-compose.dev.yml up -d
+#
+# Hermes API binds localhost:8642 only. Certo Runtime Gateway fronts it.
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: certo-hermes
+    restart: unless-stopped
+    volumes:
+      - certo_hermes_data:/opt/data
+    environment:
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=127.0.0.1
+      - API_SERVER_KEY=${API_SERVER_KEY:-change-me-local-dev}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    ports:
+      - "127.0.0.1:8642:8642"
+    command: ["gateway", "run"]
+
+  runtime-gateway:
+    image: node:22-alpine
+    container_name: certo-runtime-gateway
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../../runtime-gateway:/app
+    environment:
+      - PORT=8787
+      - HERMES_BASE_URL=http://hermes:8642
+      - HERMES_API_SERVER_KEY=${API_SERVER_KEY:-change-me-local-dev}
+      - CERTO_RUNTIME_GATEWAY_TOKEN=${CERTO_RUNTIME_GATEWAY_TOKEN:-certo-dev-gateway-token}
+    ports:
+      - "127.0.0.1:8787:8787"
+    command: ["sh", "-c", "npm install --omit=dev && node src/server.js"]
+    depends_on:
+      - hermes
+
+volumes:
+  certo_hermes_data:
