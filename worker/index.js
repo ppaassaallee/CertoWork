@@ -1,5 +1,6 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
+import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -722,6 +723,34 @@ async function chat(request, env) {
   }
 
   try {
+    if (hermesRuntimeEnabled(env)) {
+      const hermes = await tryHermesChat(env, {
+        agentId: "odysseus",
+        traceId: `${Date.now()}`,
+        messages: [
+          {
+            role: "system",
+            content: assistantInstructions(body, citations),
+          },
+          ...(Array.isArray(body.messages) ? body.messages : []),
+        ],
+      });
+      if (hermes?.content) {
+        return json(
+          normalizeAssistantResult(
+            {
+              reply: hermes.content,
+              actionPlan: null,
+              suggestedChips: [],
+            },
+            citations,
+            model,
+            latestUserMessage,
+          ),
+        );
+      }
+      // Fall through to legacy Odysseus loop on Hermes miss/error.
+    }
     const result = await runOdysseusAgent({
       env,
       model,

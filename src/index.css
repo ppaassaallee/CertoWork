@@ -1629,10 +1629,44 @@ a { color: var(--accent); }
   gap: 18px;
   padding: 24px 28px;
 }
+.do-agents-section { display: grid; gap: 10px; }
+.do-agents-section h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: calc(11px * var(--cw-text-scale));
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
 .do-agents-head {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+}
+.do-agents-head .cw-btn { margin-left: auto; }
+.do-agent-builder {
+  display: grid;
+  gap: 12px;
+  max-width: 640px;
+  padding: 28px;
+}
+.do-agent-builder h2 {
+  margin: 0;
+  font-size: calc(22px * var(--cw-text-scale));
+  font-weight: 600;
+}
+.do-agent-builder p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: calc(13px * var(--cw-text-scale));
+}
+.do-agent-builder textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  font: inherit;
+  resize: vertical;
 }
 .do-agents-head strong {
   display: block;

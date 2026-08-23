@@ -91,6 +91,10 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
     resolve("src/components/DelivereeWorkspace.tsx"),
     "utf8",
   );
+  const agents = readFileSync(
+    resolve("src/components/agents/AgentsLibrary.tsx"),
+    "utf8",
+  );
   assert.match(source, /data-testid="nav-home"/);
   assert.match(source, /data-testid="nav-my-work"/);
   assert.match(source, /data-testid="nav-projects"/);
@@ -101,6 +105,7 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);
   assert.doesNotMatch(source, /do-odiseus-hire/);
   assert.match(source, /data-testid="sidebar-search"/);
-  assert.match(source, /data-testid="agents-home"/);
   assert.match(source, /data-testid="my-work-shell"/);
+  assert.match(agents, /data-testid="agents-home"/);
+  assert.match(agents, /data-testid="agents-library"/);
 });

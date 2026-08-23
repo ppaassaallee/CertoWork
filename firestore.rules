@@ -809,6 +809,50 @@ service cloud.firestore {
         && incoming().workspaceId == resource.data.workspaceId;
       allow delete: if canAccessBoldiRecord(resource.data);
     }
+
+    // Agent platform (Prompt 2) — server-owned runtime state is create-by-owner, mutate limited.
+    match /agent_definitions/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /agent_versions/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update, delete: if false;
+    }
+    match /agent_runtime_bindings/{id} {
+      allow read: if isSignedIn() && isWorkspaceMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+    match /runtime_instances/{id} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+    match /agent_triggers/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming());
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /agent_actions/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data);
+      allow delete: if false;
+    }
+    match /event_outbox/{id} {
+      allow read, write: if false;
+    }
+    match /agent_audit_log/{id} {
+      allow read: if isSignedIn() && isWorkspaceMember(resource.data.workspaceId);
+      allow write: if false;
+    }
+
     match /boldi_profiles/{userId} {
       allow read, write: if isSignedIn() && userId == request.auth.uid;
     }
