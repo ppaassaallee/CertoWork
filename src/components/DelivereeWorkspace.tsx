@@ -1318,10 +1318,16 @@ export function DelivereeWorkspace() {
         projectId: primaryProject?.id || null,
         runId,
         action: "job_completed",
+        agentId: "odysseus",
+        agentName: ODISEUS_NAME,
+        result: "completed",
         summary:
           odiseusRun?.toolCount
             ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
-            : "Completed Odysseus job",
+            : `${ODISEUS_NAME} completed a run`,
+        actionCount: Array.isArray(result.actionPlan?.actions)
+          ? result.actionPlan.actions.length
+          : 0,
         metadata: { stepCount: odiseusRun?.steps?.length || 0 },
       });
       if (activeConversationId) {
@@ -1472,7 +1478,11 @@ export function DelivereeWorkspace() {
         projectId: primaryProject?.id || null,
         runId: message.odiseusRun?.runId || null,
         action: "actions_staged",
-        summary: `Staged ${staged} action(s) for approval`,
+        agentId: "odysseus",
+        agentName: ODISEUS_NAME,
+        result: "proposed",
+        actionCount: staged,
+        summary: `${ODISEUS_NAME} proposed ${staged} action${staged === 1 ? "" : "s"}`,
         approvalRequired: true,
         approvedBy: user.uid,
       });
@@ -1481,8 +1491,8 @@ export function DelivereeWorkspace() {
     } else if (remembered > 0) {
       setNotice(
         remembered > 1
-          ? `Odysseus remembered ${remembered} things.`
-          : "Odysseus remembered that.",
+          ? `${ODISEUS_NAME} remembered ${remembered} things.`
+          : `${ODISEUS_NAME} remembered that.`,
       );
     }
   };
@@ -1497,6 +1507,9 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       }).catch(() => undefined);
     }
+    const rejectedCount = Array.isArray(message.actionPlan?.actions)
+      ? message.actionPlan.actions.length
+      : 0;
     await recordOdysseusActivitySafe({
       workspaceId: workspace.id,
       userId: user.uid,
@@ -1504,11 +1517,18 @@ export function DelivereeWorkspace() {
       projectId: primaryProject?.id || null,
       runId: message.odiseusRun?.runId || null,
       action: "actions_rejected",
-      summary: "Rejected Odysseus proposed actions",
+      agentId: "odysseus",
+      agentName: ODISEUS_NAME,
+      result: "rejected",
+      actionCount: rejectedCount,
+      summary:
+        rejectedCount > 0
+          ? `You rejected ${rejectedCount} action${rejectedCount === 1 ? "" : "s"} proposed by ${ODISEUS_NAME}`
+          : `You rejected actions proposed by ${ODISEUS_NAME}`,
       approvalRequired: true,
       approvedBy: user.uid,
     });
-    setNotice("Odysseus will not apply those actions.");
+    setNotice(`${ODISEUS_NAME} will not apply those actions.`);
   };
 
   const processReview = async (
@@ -3609,7 +3629,7 @@ export function DelivereeWorkspace() {
                         ? [{ label: "Automations" }]
                         : lens.section === "activity"
                           ? [{ label: "Activity" }]
-                          : [{ label: "Odysseus" }]),
+                          : []),
                     ]
                   : []),
                 ...(activeProject
@@ -4147,8 +4167,11 @@ export function DelivereeWorkspace() {
           ) : (
             <AgentsLibrary
               activityItems={odiseusActivity}
+              pendingApprovals={reviewItems.length}
+              viewerUserId={user?.uid}
               onCreateAgent={() => setAgentBuilderOpen(true)}
               onOpenActivity={() => navigate("/agents/activity")}
+              onOpenApprovals={() => setPanel("approvals")}
               onOpenAutomations={() => navigate("/agents/automations")}
               onOpenOdysseus={() => void openChiefOfStaff()}
             />
