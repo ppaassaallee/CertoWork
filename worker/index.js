@@ -1,5 +1,5 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
-import { runOdiseusAgent } from "./odiseus-agent.js";
+import { runOdysseusAgent } from "./odiseus-agent.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -316,12 +316,12 @@ export function assistantInstructions(body, citations) {
 - If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
 - Every proposed project action must carry one applicable projectId from ${JSON.stringify(allowedProjectIds)}. When several are attached, separate work by project rather than blending ownership. Use create_milestone for delivery gates and create_risk for material risks.`
     : `ODISEUS MODE — general workspace conversation:
-- You are Odiseus, the user's AI employee inside Certo Work — not a chatbot. You take ownership: research, draft, update records, and hand back finished work. Be the user's assistant, engineer, and advisor while keeping the final decision with the user.
+- You are Odysseus, the user's AI employee inside Certo Work — not a chatbot. You take ownership: research, draft, update records, and hand back finished work. Be the user's assistant, engineer, and advisor while keeping the final decision with the user.
 - Help the user choose across personal and cross-project commitments, coordinate work, and route clear handoffs to focused conversations.
 - You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
 - Keep capacity warnings occasional, specific, and paired with a constructive alternative.
 - To leave a handoff in another existing conversation, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
-  return `You are Odiseus, Certo Work's AI employee. Not a tool — a hire. The product is one continuous workspace conversation that helps a person or team turn thoughts into focused, credible action. You propose the next step and ask before anything you cannot undo.
+  return `You are Odysseus, Certo Work's AI employee. Not a tool — a hire. The product is one continuous workspace conversation that helps a person or team turn thoughts into focused, credible action. You propose the next step and ask before anything you cannot undo.
 
 ${operatingMode}
 
@@ -344,7 +344,7 @@ Product behavior:
 - If the user asks for an email reminder, daily digest, daily summary, or weekly summary, prepare the request or draft as an outbox_communication action. Never claim an email was sent unless an email delivery integration is explicitly present in evidence.
 - Never tell the user to open another module, dashboard, board, or page. Offer the next move in plain language.
 - Use progressive disclosure. Do not flood the user with a long framework.
-- In Odiseus mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
+- In Odysseus mode, do not mention the total number of active projects unless the user asks, explicitly proposes starting another project, or a concrete recommendation directly depends on portfolio capacity. Do not repeat a workload warning already raised in the conversation.
 - In Focused Delivery mode, every suggested chip must be a useful next move for the attached context. Never surface unrelated tasks or projects in chips.
 
 Safety and judgment:
@@ -668,9 +668,61 @@ async function chat(request, env) {
     [...body.messages].reverse().find((message) => message.role === "user")?.content || "";
   const citations = groundedCitations(latestUserMessage, body.workspaceContext);
   const model = openaiModelName(env);
+  const wantsStream =
+    body.stream === true ||
+    String(request.headers.get("accept") || "").includes("text/event-stream");
+
+  if (wantsStream) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event, data) => {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        };
+        try {
+          const result = await runOdysseusAgent({
+            env,
+            model,
+            instructions: assistantInstructions(body, citations),
+            messages: body.messages,
+            workspaceContext: body.workspaceContext || {},
+            openaiApiKey: openaiApiKey(env),
+            openaiUrl: OPENAI_RESPONSES_URL,
+            extractOpenAIText,
+            parseJsonObject,
+            normalizeAssistantResult,
+            citations,
+            latestUserMessage,
+            onStep: async (step) => send("step", step),
+          });
+          send("final", result);
+        } catch (error) {
+          send("error", {
+            error:
+              error instanceof Error
+                ? error.message
+                : "The assistant is temporarily unavailable",
+            code: error?.code || "ASSISTANT_UNAVAILABLE",
+          });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        connection: "keep-alive",
+      },
+    });
+  }
 
   try {
-    const result = await runOdiseusAgent({
+    const result = await runOdysseusAgent({
       env,
       model,
       instructions: assistantInstructions(body, citations),

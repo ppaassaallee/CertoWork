@@ -121,6 +121,7 @@ export function reviewTypeForAction(type?: string) {
     reschedule_task: "task_update",
     post_to_conversation: "conversation_message",
     outbox_communication: "digest_request",
+    create_odiseus_memory: "odiseus_memory",
   };
   return types[String(type || "")] || "task";
 }
@@ -227,6 +228,7 @@ export function reviewTypeLabel(type?: string) {
     conversation_message: "Conversation handoff",
     task: "Task",
     task_update: "Task update",
+    odiseus_memory: "Odysseus memory",
   };
   return labels[String(type || "task")] || "Item";
 }

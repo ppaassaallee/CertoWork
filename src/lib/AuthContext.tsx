@@ -286,7 +286,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ownerId: u.uid,
           members: [u.email].filter(Boolean) as string[],
           roles: u.email ? { [u.email.toLowerCase()]: "owner" } : {},
-          color: "#214b39",
+          color: "var(--accent)",
           createdAt: serverTimestamp()
         };
         await withTimeout(setDoc(newRef, newWs), 7_000, 'Workspace creation');

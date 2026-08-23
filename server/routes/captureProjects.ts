@@ -166,7 +166,7 @@ Feel free to suggest names or emails from the task/project stakeholders if they 
       const { tasks, categories, gtdStages, pipelineStages } = req.body;
       const stages = gtdStages || pipelineStages || [];
       
-      const prompt = `You are an elite productivity strategist and Odiseus (inspired by Carl Pullein's methodologies, COD, and Perfect Week principles).
+      const prompt = `You are an elite productivity strategist and Odysseus (inspired by Carl Pullein's methodologies, COD, and Perfect Week principles).
 Your goal is to organize, de-duplicate, merge, and enrich the user's task inbox.
 
 You must perform three tasks:

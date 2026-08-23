@@ -39,6 +39,9 @@ type ConversationContextBuildParams = {
   notebookEntries: NotebookEntry[];
   userId: string;
   workspaceId: string;
+  odiseusMemory?: any[];
+  skills?: any[];
+  schedules?: any[];
 };
 
 export type ConversationRequestContext = {
@@ -100,6 +103,9 @@ export function buildConversationRequestContext({
   notebookEntries,
   userId,
   workspaceId,
+  odiseusMemory,
+  skills,
+  schedules,
 }: ConversationContextBuildParams): ConversationRequestContext {
   const scopedTasks = isFocusedConversation ? projectTasks : openTasks;
   const scopedProjects = isFocusedConversation ? contextProjects : activeProjects;
@@ -210,6 +216,26 @@ export function buildConversationRequestContext({
       notebookNotes: notebookDocuments,
       userId,
       workspaceId,
+      odiseusMemory: (odiseusMemory || []).slice(0, 40).map((item) => ({
+        id: item.id,
+        text: item.text,
+        kind: item.kind,
+        tags: item.tags,
+      })),
+      skills: (skills || []).slice(0, 40).map((item) => ({
+        id: item.id,
+        name: item.name || item.title,
+        description: item.description,
+        instructions: item.instructions || item.prompt,
+      })),
+      schedules: (schedules || []).slice(0, 20).map((item) => ({
+        id: item.id,
+        title: item.title,
+        cron: item.cron,
+        prompt: item.prompt,
+        enabled: item.enabled,
+        lastRunAt: item.lastRunAt,
+      })),
     },
   };
 }
