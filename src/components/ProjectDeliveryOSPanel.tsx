@@ -10,7 +10,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { AlertTriangle, Boxes, BrainCircuit, CheckCircle2, ClipboardCheck, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Boxes, BrainCircuit, CheckCircle2, ClipboardCheck, ShieldCheck } from "./ui/Icon";
 import { db } from "../lib/firebase";
 
 const gateTypes = [

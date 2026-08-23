@@ -8,7 +8,7 @@ import {
   Trash2,
   Users,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import { memberName } from "./ProjectControls";
 
 function projectTitle(project: any) {

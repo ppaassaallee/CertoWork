@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
   Check,
@@ -13,19 +14,24 @@ import {
   Search,
   SlidersHorizontal,
   Square,
-} from "lucide-react";
+  X,
+} from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { taskDueStatus } from "./ui/StatusLight";
+import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
+import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
+import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
+import { CompactTagPicker } from "./CompactTagPicker";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
-type WorkItemsViewMode = "list" | "kanban" | "gantt";
+type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
 type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag" | "work_category" | "product_phase";
 type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity" | "work_category" | "product_phase";
 type ItemViewFilters = {
@@ -69,7 +75,8 @@ type Props = {
   projects: any[];
   tasks: any[];
   tags?: TagLike[];
-  workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string }>;
+  workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string; userId?: string }>;
+  sprints?: SprintRecord[];
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
@@ -77,6 +84,9 @@ type Props = {
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
+  onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
+  onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  compact?: boolean;
 };
 
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
@@ -447,67 +457,13 @@ function InlineText({
   );
 }
 
-function ItemTagPicker({
-  record,
-  tags,
-  onChange,
-  onCreateTag,
-  label = "Tags",
-}: {
-  record: any;
-  tags: TagLike[];
-  onChange: (patch: Record<string, unknown>) => void;
-  onCreateTag?: (name: string) => Promise<string | void> | string | void;
-  label?: string;
-}) {
-  const ids = tagIds(record);
-  return (
-    <div className="do-tag-picker">
-      <div>
-        {tagLabels(record, tags).slice(0, 3).map((name) => (
-          <span key={name}>{name}</span>
-        ))}
-        {ids.length === 0 && <small>No tags</small>}
-      </div>
-      <select
-        aria-label={label}
-        onChange={(event) => {
-          if (!event.target.value) return;
-          if (event.target.value === "__create_tag__") {
-            const name = window.prompt("Create tag");
-            const cleaned = String(name || "").trim();
-            event.target.value = "";
-            if (!cleaned) return;
-            Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
-              const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
-            });
-            return;
-          }
-          onChange(toggleTagId(record, event.target.value));
-          event.target.value = "";
-        }}
-        value=""
-      >
-        <option value="">+ Tag</option>
-        {tags.map((tag) => (
-          <option key={tag.id} value={tag.id}>
-            {ids.includes(tag.id) ? "Remove " : "Add "}
-            {tag.name || tag.id}
-          </option>
-        ))}
-        {onCreateTag && <option value="__create_tag__">+ Create tag…</option>}
-      </select>
-    </div>
-  );
-}
-
 export function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
   tags = [],
   workspaceMembers = [],
+  sprints = [],
   selectedItemId,
   onSelectItem,
   onAsk,
@@ -515,6 +471,9 @@ export function WorkItemsCenter({
   onUpdateTask,
   onCreateControlledOption,
   onOpenProjectConsole,
+  onCreateSprint,
+  onUpdateSprint: _onUpdateSprint,
+  compact = false,
 }: Props) {
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
   const [query, setQuery] = useState("");
@@ -541,12 +500,26 @@ export function WorkItemsCenter({
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
+  const [bulkAssigneeId, setBulkAssigneeId] = useState("");
+  const [bulkSprintId, setBulkSprintId] = useState("");
+  const [bulkProjectId, setBulkProjectId] = useState("");
+  const [bulkShareId, setBulkShareId] = useState("");
+  const [sprintFilter, setSprintFilter] = useState("all");
+  const [ganttScale, setGanttScale] = useState<"week" | "month">("week");
+  const [sprintName, setSprintName] = useState("");
+  const [kanbanError, setKanbanError] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
   const [chromeCollapsed, setChromeCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("certo-items-focus-list") === "true";
   });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [addSprintOpen, setAddSprintOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState("status");
   const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -759,10 +732,11 @@ export function WorkItemsCenter({
       const matchesItemTag = matchesTag(item, tagFilter);
       const matchesWorkCategory = workCategoryFilter === "all" || itemWorkCategory(item, projects) === workCategoryFilter;
       const matchesProductPhase = productPhaseFilter === "all" || itemProductPhase(item, projects) === productPhaseFilter;
+      const matchesSprint = itemMatchesSprint(item, sprintFilter);
       const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${itemWorkCategory(item, projects)} ${itemProductPhase(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
-      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && (!needle || searchable.includes(needle));
+      return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && matchesSprint && (!needle || searchable.includes(needle));
     }), primarySort, secondarySort, projects);
-  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
@@ -829,8 +803,34 @@ export function WorkItemsCenter({
   };
 
   const updateBulk = async (patch: Record<string, unknown>) => {
-    await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
-    setSelectedBulkIds([]);
+    try {
+      await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
+      setSelectedBulkIds([]);
+      setKanbanError("");
+    } catch (reason) {
+      setKanbanError(reason instanceof Error ? reason.message : "Bulk update failed.");
+    }
+  };
+
+  const projectSprints = sprints.filter((sprint) => !activeProject || sprint.projectId === activeProject.id);
+
+  const persistKanbanMove = async (result: DropResult) => {
+    if (!result.destination) return;
+    const item = tasks.find((candidate) => candidate.id === result.draggableId);
+    if (!item) return;
+    const previous = { status: item.status, order: item.order, rank: item.rank };
+    const nextStatus = statusForKanbanColumn(result.destination.droppableId, item.status);
+    try {
+      await onUpdateTask(item.id, {
+        status: nextStatus,
+        order: result.destination.index,
+        rank: result.destination.index,
+      });
+      setKanbanError("");
+    } catch (reason) {
+      await onUpdateTask(item.id, previous);
+      setKanbanError(reason instanceof Error ? reason.message : "The card could not be moved.");
+    }
   };
 
   const toggleBulk = (id: string) => {
@@ -898,7 +898,7 @@ export function WorkItemsCenter({
         </button>}
         {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
         {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
-        {itemColumnSet.has("tags") && <ItemTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+        {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
         {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
           {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
         </select>}
@@ -1042,39 +1042,60 @@ export function WorkItemsCenter({
   };
 
   const renderKanban = () => {
-    const columns = groupBy === "hierarchy"
-      ? workStatuses.map((status) => ({ key: status, title: displayStatus(status), items: filtered.filter((item) => canonicalStatus(item) === status) }))
+    const useDeliveryBoard = Boolean(activeProject) || groupBy === "hierarchy" || groupBy === "status";
+    const columns = useDeliveryBoard && groupBy !== "actionBoard"
+      ? KANBAN_COLUMNS.map((column) => ({
+          key: column.key,
+          title: column.label,
+          items: filtered.filter((item) => kanbanColumnForStatus(canonicalStatus(item)) === column.key),
+        }))
       : Object.entries(grouped)
-        .map(([key, items]) => ({ key, title: groupBy === "status" ? displayStatus(key) : key, items }))
+        .map(([key, items]) => ({ key, title: displayStatus(key) === key ? key : key, items }))
         .sort((left, right) => {
           const leftIndex = groupSortIndex(groupBy, left.key);
           const rightIndex = groupSortIndex(groupBy, right.key);
           if (leftIndex !== rightIndex) return leftIndex - rightIndex;
           return left.title.localeCompare(right.title);
         });
-    const visibleColumns = columns.filter((column) => column.items.length > 0 || groupBy === "hierarchy");
+    const visibleColumns = columns.filter((column) => column.items.length > 0 || (useDeliveryBoard && groupBy !== "actionBoard"));
 
     return (
-      <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`}>
-        {visibleColumns.map((column) => (
-          <section className="do-kanban-column" key={column.key}>
-            <header>
-              <strong>{column.title}</strong>
-              <span>{column.items.length}</span>
-            </header>
-            <div>
-              {column.items.map((item) => renderBoardCard(item))}
-              {column.items.length === 0 && <p>No items</p>}
-            </div>
-          </section>
-        ))}
-        {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
-      </div>
+      <DragDropContext onDragEnd={(result) => void persistKanbanMove(result)}>
+        {kanbanError && <p className="do-signin-error" role="alert">{kanbanError}</p>}
+        <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`}>
+          {visibleColumns.map((column) => (
+            <Droppable droppableId={column.key} key={column.key}>
+              {(provided) => (
+                <section className="do-kanban-column" ref={provided.innerRef} {...provided.droppableProps}>
+                  <header>
+                    <strong>{column.title}</strong>
+                    <span>{column.items.length}</span>
+                  </header>
+                  <div>
+                    {column.items.map((item, index) => (
+                      <Draggable draggableId={item.id} index={index} key={item.id}>
+                        {(drag) => (
+                          <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                            {renderBoardCard(item)}
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                    {column.items.length === 0 && <p>No items</p>}
+                  </div>
+                </section>
+              )}
+            </Droppable>
+          ))}
+          {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+        </div>
+      </DragDropContext>
     );
   };
 
-  const renderGantt = () => {
-    const dated = filtered
+  const renderGantt = (items = filtered) => {
+    const dated = items
       .map((item) => {
         const start = ganttDate(item);
         const explicitEnd = ganttDate({ dueDate: item.dueDate || item.targetDate || item.endDate || item.plannedEndDate });
@@ -1082,24 +1103,35 @@ export function WorkItemsCenter({
         return { item, start, end };
       })
       .filter((entry) => entry.start && entry.end) as Array<{ item: any; start: Date; end: Date }>;
-    const undated = filtered.filter((item) => !ganttDate(item));
-    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime())) : Date.now();
-    const maxTime = dated.length ? Math.max(...dated.map((entry) => entry.end.getTime())) : Date.now() + 30 * 86_400_000;
+    const undated = items.filter((item) => !ganttDate(item));
+    const now = Date.now();
+    const spanDays = ganttScale === "week" ? 7 : 31;
+    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime()), now) : now;
+    const maxTime = dated.length
+      ? Math.max(...dated.map((entry) => entry.end.getTime()), minTime + spanDays * 86_400_000)
+      : now + spanDays * 86_400_000;
     const span = Math.max(1, maxTime - minTime);
     const markers = Array.from({ length: 5 }, (_, index) => new Date(minTime + (span * index) / 4));
+    const todayLeft = ((now - minTime) / span) * 100;
 
     return (
       <div className="do-gantt">
+        <div className="do-gantt-scale">
+          <button className={ganttScale === "week" ? "is-active" : ""} onClick={() => setGanttScale("week")} type="button">Week</button>
+          <button className={ganttScale === "month" ? "is-active" : ""} onClick={() => setGanttScale("month")} type="button">Month</button>
+        </div>
         <div className="do-gantt-axis">
           {markers.map((marker) => <span key={marker.toISOString()}>{dateLabel(marker)}</span>)}
         </div>
         <div className="do-gantt-rows">
+          <div className="do-gantt-today" style={{ left: `${Math.max(0, Math.min(100, todayLeft))}%` }} title="Today" />
           {dated.map(({ item, start, end }) => {
             const kind = workItemKind(item);
             const left = ((start.getTime() - minTime) / span) * 100;
             const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
+            const tone = taskDueStatus({ status: item.status, dueDate: end });
             return (
-              <article className={`do-gantt-row is-${kind}`} key={item.id}>
+              <article className={`do-gantt-row is-${tone}`} key={item.id}>
                 <button onClick={() => onSelectItem(item.id)} type="button">
                   <span>{workItemLabel(kind)}</span>
                   <strong>{title(item)}</strong>
@@ -1128,193 +1160,287 @@ export function WorkItemsCenter({
     );
   };
 
-  const activeControlCount = [
-    query.trim(),
-    projectFilter !== (activeProject?.id || "all"),
-    statusFilter !== "open",
-    priorityFilter !== "all",
-    typeFilter !== "all",
-    ownerFilter !== "all",
-    dateFilter !== "all",
-    tagFilter !== "all",
-  ].filter(Boolean).length;
-  const activeControlLabel = `${activeControlCount} filter${activeControlCount === 1 ? "" : "s"}`;
+  const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (projectFilter !== "all" && !activeProject) {
+    activeFilterChips.push({
+      key: "project",
+      label:
+        projectFilter === "no_project"
+          ? "No project"
+          : projectTitle(projects.find((p) => p.id === projectFilter) || { title: "Project" }),
+      clear: () => setProjectFilter("all"),
+    });
+  }
+  if (statusFilter !== "open") {
+    activeFilterChips.push({
+      key: "status",
+      label: statusFilter === "all" ? "All statuses" : displayStatus(statusFilter),
+      clear: () => setStatusFilter("open"),
+    });
+  }
+  if (priorityFilter !== "all") {
+    activeFilterChips.push({
+      key: "priority",
+      label: `Priority ${priorityFilter}`,
+      clear: () => setPriorityFilter("all"),
+    });
+  }
+  if (typeFilter !== "all") {
+    activeFilterChips.push({
+      key: "type",
+      label: workItemLabel(typeFilter as WorkItemKind),
+      clear: () => setTypeFilter("all"),
+    });
+  }
+  if (ownerFilter !== "all") {
+    activeFilterChips.push({ key: "owner", label: ownerFilter, clear: () => setOwnerFilter("all") });
+  }
+  if (dateFilter !== "all") {
+    activeFilterChips.push({
+      key: "date",
+      label: dueBucketLabels[dateFilter as keyof typeof dueBucketLabels] || dateFilter,
+      clear: () => setDateFilter("all"),
+    });
+  }
+  if (tagFilter !== "all") {
+    activeFilterChips.push({
+      key: "tag",
+      label: tags.find((tag) => tag.id === tagFilter)?.name || "Tag",
+      clear: () => setTagFilter("all"),
+    });
+  }
+  if (workCategoryFilter !== "all") {
+    activeFilterChips.push({
+      key: "category",
+      label: workCategoryFilter,
+      clear: () => setWorkCategoryFilter("all"),
+    });
+  }
+  if (productPhaseFilter !== "all") {
+    activeFilterChips.push({
+      key: "phase",
+      label: productPhaseFilter,
+      clear: () => setProductPhaseFilter("all"),
+    });
+  }
+  if (sprintFilter !== "all") {
+    activeFilterChips.push({
+      key: "sprint",
+      label:
+        sprintFilter === "none"
+          ? "No sprint"
+          : projectSprints.find((sprint) => sprint.id === sprintFilter)?.name || "Sprint",
+      clear: () => setSprintFilter("all"),
+    });
+  }
+
+  const blockedCount = filtered.filter((item) => canonicalStatus(item) === "blocked").length;
+  const priorityOneCount = filtered.filter((item) => priorityValue(item.priority) === "1").length;
+  const overdueCount = filtered.filter(
+    (item) => dueBucket(item.dueDate || item.targetDate) === "overdue",
+  ).length;
+  const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
-    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""}`} data-testid="work-items-center">
+    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""}`} data-testid="work-items-center">
       <section className={`do-items-toolbar ${chromeCollapsed ? "is-compact" : ""}`}>
-        {!chromeCollapsed && <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>}
+        {!chromeCollapsed && (
+          <label className="do-items-search">
+            <Search size={14} />
+            <input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items…" value={query} />
+          </label>
+        )}
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
-        {chromeCollapsed && (
-          <div className="do-items-focus-status">
-            <strong>{filtered.length} items</strong>
-            <span>{groupBy === "actionBoard" ? "Action Board" : groupBy}</span>
-            <span>{activeControlLabel}</span>
-          </div>
-        )}
         <div className="do-items-mode" aria-label="Work item view">
-          <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /></button>
-          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => setMode("kanban")} type="button"><Kanban size={14} /></button>
-          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /></button>
+          <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
+          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
+          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
+          {activeProject && <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
-        <button className="do-items-focus-toggle" onClick={() => setChromeCollapsed((current) => !current)} type="button">
-          <SlidersHorizontal size={13} />
-          {chromeCollapsed ? "Show controls" : "Focus list"}
-        </button>
-      </section>
-
-      {!chromeCollapsed && <>
-      <section className="do-items-filters" aria-label="Work item filters">
-        <select aria-label="Project filter" onChange={(event) => { setProjectFilter(event.target.value); setNewProjectId(event.target.value === "all" || event.target.value === "no_project" ? activeProject?.id || "" : event.target.value); }} value={projectFilter}>
-          <option value="all">All projects</option>
-          <option value="no_project">No project / errands</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-        </select>
-        <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-          <option value="open">Open · hide done</option>
-          <option value="all">All statuses</option>
-          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-        </select>
-        <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
-          <option value="all">Any priority</option>
-          {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>
-        <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
-          <option value="all">Any type</option>
-          {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
-        </select>
-        <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
-          <option value="all">Any owner</option>
-          {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
-        </select>
-        <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
-          <option value="all">Any date</option>
-          {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
-        </select>
-        <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
-          <option value="all">Any tag</option>
-          {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
-        </select>
-        <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
-          <option value="all">Any category</option>
-          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-        </select>
-        <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
-          <option value="all">Any product phase</option>
-          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
-        </select>
-        <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
-          <option value="hierarchy">Hierarchy</option>
-          <option value="actionBoard">Action Board</option>
-          <option value="status">Status</option>
-          <option value="priority">Priority</option>
-          <option value="project">Project</option>
-          <option value="owner">Owner</option>
-          <option value="type">Type</option>
-          <option value="work_category">Work Category</option>
-          <option value="product_phase">Product Phase</option>
-          <option value="tag">Tag</option>
-          <option value="due">Due date</option>
-        </select>
-        <select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>
-          {sortOptions.map((option) => <option key={option.value} value={option.value}>Sort: {option.label}</option>)}
-        </select>
-        <select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>
-          {sortOptions.map((option) => <option key={option.value} value={option.value}>Then: {option.label}</option>)}
-        </select>
-      </section>
-      <details className="do-view-manager">
-        <summary>
-          <SlidersHorizontal size={13} /> Item views & columns
-        </summary>
-        <div className="do-view-manager-body">
-          <label>
-            Saved views
-            <select aria-label="Apply saved item view" onChange={(event) => applyItemView(event.target.value)} value="">
-              <option value="">Choose saved view</option>
-              {savedItemViews.map((saved) => <option key={saved.name} value={saved.name}>{saved.name}</option>)}
-            </select>
-          </label>
-          <label>
-            New view name
-            <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
-          </label>
-          <button onClick={saveItemView} type="button">Save current view</button>
-          <div className="do-column-picker">
-            {defaultItemColumns.filter((column) => column !== "title").map((column) => (
-              <label key={column}>
-                <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
-                {itemColumnLabels[column]}
-              </label>
-            ))}
-          </div>
-          <div className="do-column-widths">
-            <div>
-              <strong>Column widths</strong>
-              <button onClick={resetItemColumnWidths} type="button">
-                Reset
-              </button>
-            </div>
-            {visibleItemColumns.map((column) => (
-              <label key={`item-width-${column}`}>
-                <span>{itemColumnLabels[column]}</span>
-                <input
-                  aria-label={`${itemColumnLabels[column]} width`}
-                  max={420}
-                  min={72}
-                  onChange={(event) =>
-                    updateItemColumnWidth(column, Number(event.target.value))
+        <div className="do-items-toolbar-actions">
+          <div className="do-popover-anchor">
+            <button aria-expanded={viewsOpen} aria-label="Views" className={viewsOpen ? "is-active" : ""} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); }} type="button">Views</button>
+            {viewsOpen && (
+              <div className="do-popover" role="menu">
+                <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
+                <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
+                <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>
+                <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); setViewsOpen(false); }} type="button">Priority → project</button>
+                {savedItemViews.length > 0 && <hr />}
+                {savedItemViews.map((saved) => (
+                  <button key={saved.name} onClick={() => { applyItemView(saved.name); setViewsOpen(false); }} type="button">{saved.name}</button>
+                ))}
+                <hr />
+                <label>
+                  Save current view
+                  <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
+                </label>
+                <button onClick={() => { saveItemView(); setViewsOpen(false); }} type="button">Save view</button>
+                {defaultItemColumns.filter((column) => column !== "title").slice(0, 6).map((column) => (
+                  <label key={column} className="do-column-toggle">
+                    <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
+                    {itemColumnLabels[column]}
+                  </label>
+                ))}
+                <button onClick={resetItemColumnWidths} type="button">Reset column widths</button>
+                <button
+                  onClick={() =>
+                    visibleItemColumns.forEach((column) =>
+                      updateItemColumnWidth(
+                        column,
+                        defaultItemColumnPixels[column],
+                      ),
+                    )
                   }
-                  type="range"
-                  value={
-                    itemColumnPixels[column] || defaultItemColumnPixels[column]
-                  }
-                />
-                <small>
-                  {itemColumnPixels[column] || defaultItemColumnPixels[column]}
-                  px
-                </small>
-              </label>
-            ))}
-          </div>
-          {savedItemViews.length > 0 && (
-            <div className="do-saved-view-list">
-              {savedItemViews.map((saved) => (
-                <button key={saved.name} onClick={() => deleteItemView(saved.name)} type="button">
-                  Delete {saved.name}
+                  type="button"
+                >
+                  Apply default widths
                 </button>
-              ))}
-            </div>
+                {savedItemViews.map((saved) => (
+                  <button key={`del-${saved.name}`} onClick={() => deleteItemView(saved.name)} type="button">Delete {saved.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="do-popover-anchor">
+            <button aria-expanded={filterOpen} aria-label="Filter" className={activeFilterChips.length ? "is-active" : ""} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); }} type="button">
+              <SlidersHorizontal size={13} /> Filter{activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
+            </button>
+            {filterOpen && (
+              <div className="do-popover do-filter-popover">
+                <label>
+                  Add filter
+                  <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
+                    {!activeProject && <option value="project">Project</option>}
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="type">Type</option>
+                    <option value="owner">Owner</option>
+                    <option value="date">Date</option>
+                    <option value="tag">Tag</option>
+                    <option value="category">Category</option>
+                    <option value="phase">Product phase</option>
+                    {activeProject && <option value="sprint">Sprint</option>}
+                  </select>
+                </label>
+                {filterDraft === "project" && (
+                  <select aria-label="Project filter" onChange={(event) => setProjectFilter(event.target.value)} value={projectFilter}>
+                    <option value="all">All projects</option>
+                    <option value="no_project">No project / errands</option>
+                    {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "status" && (
+                  <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                    <option value="open">Open · hide done</option>
+                    <option value="all">All statuses</option>
+                    {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "priority" && (
+                  <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
+                    <option value="all">Any priority</option>
+                    {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                  </select>
+                )}
+                {filterDraft === "type" && (
+                  <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
+                    <option value="all">Any type</option>
+                    {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "owner" && (
+                  <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
+                    <option value="all">Any owner</option>
+                    {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                  </select>
+                )}
+                {filterDraft === "date" && (
+                  <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
+                    <option value="all">Any date</option>
+                    {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
+                  </select>
+                )}
+                {filterDraft === "tag" && (
+                  <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
+                    <option value="all">Any tag</option>
+                    {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+                  </select>
+                )}
+                {filterDraft === "category" && (
+                  <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
+                    <option value="all">Any category</option>
+                    {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                )}
+                {filterDraft === "phase" && (
+                  <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
+                    <option value="all">Any product phase</option>
+                    {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+                  </select>
+                )}
+                {filterDraft === "sprint" && activeProject && (
+                  <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
+                    <option value="all">All sprints</option>
+                    <option value="none">No sprint</option>
+                    {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="do-popover-anchor">
+            <button aria-expanded={sortOpen} aria-label="Sort" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); }} type="button">Sort</button>
+            {sortOpen && (
+              <div className="do-popover">
+                <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+                <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              </div>
+            )}
+          </div>
+          <button aria-label="Add item" className="do-button do-button-dark" onClick={() => setAddItemOpen((o) => !o)} type="button"><Plus size={13} /> Add item</button>
+          {activeProject && onCreateSprint && (
+            <button aria-label="Add sprint" className="do-button-secondary" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
           )}
+          <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
-      </details>
-      <div className="do-items-helpbar"><span>Group, then sort twice <InfoTip label="Two-level sorting" text="Group controls the visible sections. Primary sort orders items first; secondary sort breaks ties inside that order." /></span><span>Board <InfoTip label="Board view" text="A visual execution view for moving work through status. Backlog remains the source for hierarchy and planning." /></span><span>Assignees <InfoTip label="Multiple assignees" text="Select one or many workspace members. The first selected person is retained as the primary owner for compatibility." /></span></div>
-
-      <section className="do-sort-presets" aria-label="Sorting presets">
-        <button className={groupBy === "actionBoard" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); }} type="button">Action Board</button>
-        <button className={groupBy === "project" && primarySort === "project" && secondarySort === "priority" ? "is-active" : ""} onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); }} type="button">Project → priority</button>
-        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); }} type="button">Priority → date</button>
-        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "project" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); }} type="button">Priority → project</button>
       </section>
 
-      <section className="do-items-create">
-        <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
-          <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-        </select>
-        <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
-          {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
-        </select>
-        <select aria-label="New item parent" disabled={parentOptions.length === 0} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
-          <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
-          {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
-        </select>
-        <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
-        <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
-      </section>
-      </>}
+      {activeFilterChips.length > 0 && (
+        <div className="do-filter-chips" aria-label="Active filters">
+          {activeFilterChips.map((chip) => (
+            <button key={chip.key} onClick={chip.clear} type="button">{chip.label} <X size={12} /></button>
+          ))}
+          <button className="is-text" onClick={() => { if (!activeProject) setProjectFilter("all"); setStatusFilter("open"); setPriorityFilter("all"); setTypeFilter("all"); setOwnerFilter("all"); setDateFilter("all"); setTagFilter("all"); setWorkCategoryFilter("all"); setProductPhaseFilter("all"); setSprintFilter("all"); }} type="button">Clear all</button>
+        </div>
+      )}
+
+      {addItemOpen && (
+        <section className="do-items-create">
+          <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
+            <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+          </select>
+          <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
+            {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+          </select>
+          <select aria-label="New item parent" disabled={parentOptions.length === 0} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
+            <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
+            {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
+          </select>
+          <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
+          <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
+        </section>
+      )}
+      {addSprintOpen && activeProject && onCreateSprint && (
+        <section className="do-items-create">
+          <input aria-label="New sprint name" onChange={(event) => setSprintName(event.target.value)} placeholder="Sprint name" value={sprintName} />
+          <button disabled={!sprintName.trim()} onClick={async () => { await onCreateSprint({ name: sprintName.trim(), projectId: activeProject.id, status: "planning" }); setSprintName(""); setAddSprintOpen(false); }} type="button"><Plus size={13} /> Create sprint</button>
+        </section>
+      )}
 
       {selectedBulkIds.length > 0 && (
         <section className="do-items-bulk" aria-label="Bulk actions">
@@ -1325,19 +1451,83 @@ export function WorkItemsCenter({
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
           <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
           <button onClick={() => updateBulk({ dueDate: bulkDueDate || null })} type="button">Apply date</button>
+          <select aria-label="Bulk assignee" onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
+            <option value="">Assignee</option>
+            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+              <option key={member.id} value={member.id}>{memberName(member)}</option>
+            ))}
+          </select>
+          <button
+            disabled={!bulkAssigneeId}
+            onClick={() => {
+              const member = workspaceMembers.find((item) => item.id === bulkAssigneeId);
+              updateBulk({
+                assigneeIds: member ? [member.id] : [],
+                assignees: member ? [memberName(member)] : [],
+                owner: member ? memberName(member) : "",
+                assignee: member ? memberName(member) : "",
+              });
+            }}
+            type="button"
+          >
+            Assign
+          </button>
+          {activeProject && (
+            <>
+              <select aria-label="Bulk sprint" onChange={(event) => setBulkSprintId(event.target.value)} value={bulkSprintId}>
+                <option value="">Sprint</option>
+                <option value="none">Remove sprint</option>
+                {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+              </select>
+              <button disabled={!bulkSprintId} onClick={() => updateBulk({ sprintId: bulkSprintId === "none" ? null : bulkSprintId })} type="button">Apply sprint</button>
+            </>
+          )}
+          <select aria-label="Bulk project" onChange={(event) => setBulkProjectId(event.target.value)} value={bulkProjectId}>
+            <option value="">Project</option>
+            <option value="none">Remove from project</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}
+          </select>
+          <button disabled={!bulkProjectId} onClick={() => updateBulk({ projectId: bulkProjectId === "none" ? null : bulkProjectId })} type="button">Apply project</button>
+          <select aria-label="Share item with colleague" onChange={(event) => setBulkShareId(event.target.value)} value={bulkShareId}>
+            <option value="">Share with</option>
+            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+              <option key={`share-${member.id}`} value={member.userId || member.id}>{memberName(member)}</option>
+            ))}
+          </select>
+          <button
+            disabled={!bulkShareId}
+            onClick={() => Promise.all(selectedBulkIds.map((id) => {
+              const item = tasks.find((task) => task.id === id);
+              const shared = [...new Set([...(item?.sharedWithUserIds || []), bulkShareId])];
+              return onUpdateTask(id, { sharedWithUserIds: shared, visibleToUserIds: [...new Set([...(item?.visibleToUserIds || []), bulkShareId])] });
+            }))}
+            type="button"
+          >
+            Share item
+          </button>
+          <button onClick={() => updateBulk({ status: "archived" })} type="button">Archive</button>
         </section>
       )}
 
       <div className={`do-items-layout ${selectedItem ? "has-detail" : ""}`}>
         <section className={`do-items-workspace is-${mode}`}>
           <div className="do-items-summary">
-            <span><strong>{filtered.length}</strong> shown</span>
-            <span><strong>{filtered.filter((item) => canonicalStatus(item) === "blocked").length}</strong> blocked</span>
-            <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "1").length}</strong> priority 1</span>
-            <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
+            {(summaryHasSignal || filtered.length > 0) && (
+              <span>
+                <strong>{filtered.length}</strong> shown
+                {summaryHasSignal && (
+                  <>
+                    {" · "}
+                    {blockedCount > 0 && <><strong>{blockedCount}</strong> blocked </>}
+                    {priorityOneCount > 0 && <><strong>{priorityOneCount}</strong> P1 </>}
+                    {overdueCount > 0 && <><strong>{overdueCount}</strong> overdue</>}
+                  </>
+                )}
+              </span>
+            )}
           </div>
           {mode === "list" && renderColumnHeader()}
-          {mode === "gantt" ? renderGantt() : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
+          {mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(groupBy, left);
@@ -1350,7 +1540,20 @@ export function WorkItemsCenter({
                   {!collapsedGroups.includes(group) && <div>{items.map((item) => renderRow(item, items))}</div>}
                 </section>
               ))}
-              {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+              {filtered.length === 0 && (
+                <div className="do-items-empty">
+                  <ListChecks size={24} />
+                  <strong>No items here yet</strong>
+                  <span>Create the first item to start this backlog.</span>
+                  <button
+                    className="do-button do-button-dark"
+                    onClick={() => setAddItemOpen(true)}
+                    type="button"
+                  >
+                    Create first item
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -1359,7 +1562,7 @@ export function WorkItemsCenter({
           <aside className="do-item-detail" aria-label="Selected work item detail">
             <div className="do-item-detail-head">
               <span>{workItemLabel(workItemKind(selectedItem))}</span>
-              <button aria-label="Close item detail" onClick={() => onSelectItem(null)} type="button">×</button>
+              <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>
             </div>
             <div className="do-ai-inline-field"><InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} /><AiRewriteButton context={{ itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={(next) => onUpdateTask(selectedItem.id, { title: next })} text={title(selectedItem)} /></div>
             <div className="do-ai-description-field"><textarea
@@ -1377,7 +1580,7 @@ export function WorkItemsCenter({
             <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
             <label>Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
             <label>Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
-            <label>Tags<ItemTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
+            <label>Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"
@@ -1387,6 +1590,9 @@ export function WorkItemsCenter({
               selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}
             />
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
+            <label>Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
+            <label>Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
+            <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
             <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}

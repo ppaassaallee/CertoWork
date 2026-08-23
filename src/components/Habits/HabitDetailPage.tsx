@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Loader2, ArrowLeft, Trash, Play, Pause, Archive } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowLeft, Trash, Play, Pause, Archive } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { doc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../lib/firebase";
@@ -25,7 +25,7 @@ export function HabitDetailPage({ habit, logs, onClose, periodDays }: HabitDetai
   const [cadenceType, setCadenceType] = useState<Habit["cadenceType"]>(habit.cadenceType);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(habit.daysOfWeek || []);
   const [calendarVisible, setCalendarVisible] = useState(habit.calendarVisible);
-  const [color, setColor] = useState(habit.color || "#6366f1");
+  const [color, setColor] = useState(habit.color || "var(--accent)");
   const [type, setType] = useState<Habit["type"]>(habit.type);
 
   const stats = computeHabitStats(habit, logs, periodDays);

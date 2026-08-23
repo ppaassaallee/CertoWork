@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Brain, AlertTriangle, Lightbulb, Sparkles, ChevronRight, Check } from "lucide-react";
+import { Loader2, Brain, AlertTriangle, Lightbulb, Sparkles, ChevronRight, Check } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../lib/firebase";

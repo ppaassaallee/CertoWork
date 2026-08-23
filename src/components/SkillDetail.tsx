@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc, updateDoc, serverTimestamp, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
-import { ChevronLeft, Save, Trash2, BrainCircuit, Play, Loader2, ListChecks, FileOutput, HelpCircle } from "lucide-react";
+import { ChevronLeft, Save, Trash2, BrainCircuit, Play, Loader2, ListChecks, FileOutput, HelpCircle } from "./ui/Icon";
 import { motion } from "motion/react";
 
 export function SkillDetail() {

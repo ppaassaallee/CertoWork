@@ -3,7 +3,7 @@ import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Link, useNavigate } from "react-router-dom";
-import { Folder, BrainCircuit, Search, Plus, Sparkles, Filter, Code2, Zap } from "lucide-react";
+import { Folder, BrainCircuit, Search, Plus, Sparkles, Filter, Code2, Zap } from "./ui/Icon";
 import { motion } from "motion/react";
 
 export function SkillsLibrary({ isEmbedded = false }: { isEmbedded?: boolean }) {

@@ -9,8 +9,6 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
-  ArrowLeft,
-  ArrowRight,
   ArrowUp,
   BookOpen,
   Bot,
@@ -21,8 +19,9 @@ import {
   ChevronRight,
   Circle,
   Folder,
+  HelpCircle,
   Inbox,
-  LayoutGrid,
+  Home,
   ListTodo,
   Loader2,
   Menu,
@@ -39,13 +38,12 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  Target,
   Trash2,
   UserMinus,
   Users,
   WandSparkles,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
   addDoc,
@@ -62,23 +60,67 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { db, storage } from "../lib/firebase";
+import { shouldReplacePureAiPortfolio } from "../lib/portfolioMasterImport";
+import { replacePureAiPortfolioFromMaster } from "../lib/runPortfolioMasterImport";
 import { AliasProfileEditor } from "./ProjectControls";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import {
+  projectHealth,
   sidebarProjectGroups,
   sortProjectsByRecency,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { StatusLight, healthToStatus } from "./ui/StatusLight";
+import { Toast } from "./ui/Toast";
+import { t } from "../lib/i18n";
+import {
+  dateKey,
+  entityTitle,
+  findMatchingProject,
+  inviteMessage,
+  initials,
+  isClosed,
+  localDateKey,
+  priorityLabel,
+  proposalChipLabel,
+  proposedTitle,
+  reviewTypeForAction,
+  reviewTypeLabel,
+  timeAgo,
+  timestamp,
+} from "../lib/workspaceDisplay";
+import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
+import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
+import { HomeAttention } from "../pages/HomeAttention";
+import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
+import {
+  OdysseusArtifactCard,
+  OdysseusAgentHome,
+  OdysseusWorkLog,
+  type OdysseusRunStep,
+} from "./odiseus/OdysseusWork";
+import { OdysseusSchedules } from "./odiseus/OdysseusSchedules";
+import { AppBreadcrumbs } from "./AppBreadcrumbs";
+import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
+import {
+  ODISEUS_CONVERSATION_TITLE,
+  ODISEUS_HANDOFF_PREFIX,
+  ODISEUS_NAME,
+} from "../lib/odiseus";
+import { actionIdempotencyKey, normalizeOdysseusRun } from "../lib/odiseusJobs";
+import { persistOdysseusRun, recordOdysseusActivitySafe } from "../lib/odiseusActivity";
 import {
   conversationIncludesProject,
   conversationProjectIds,
   conversationScopeLabel,
   conversationScopeType,
   conversationTaskIds,
+  isStandaloneConversation,
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
@@ -87,21 +129,16 @@ import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
-import {
-  buildProjectTemplate,
-  instantiateTemplateItems,
-  type TemplateRole,
-} from "../lib/projectTemplates";
-import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
-import { recordClientException } from "../lib/clientExceptions";
+import { useControlledListsActions } from "../hooks/useControlledListsActions";
+import { useControlledListDeletion } from "../hooks/useControlledListDeletion";
+import { useProjectTemplates } from "../hooks/useProjectTemplates";
 import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
-  isPortfolioViewerEmail,
+  isPortfolioViewerMember,
   normalizeAccessEmail,
 } from "../lib/accessControl";
-import type { TemplateApplication } from "./ProjectTemplatesPanel";
 import {
   DELIVEREE_SKILLS,
   isProjectWizardInvocation,
@@ -117,6 +154,20 @@ import {
   streamConversationReply,
 } from "../lib/conversationSession";
 import { sendWorkspaceInviteEmail } from "../lib/emailClient";
+import {
+  isAllowedProjectResourceSize,
+} from "../lib/projectResources";
+import { canDeleteProject } from "../lib/projectPermissions";
+import { isModernWorkItemKey, nextWorkItemKey } from "../lib/workItemKey";
+import type { SprintRecord } from "../lib/sprints";
+import { createShareToken, buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../lib/projectStatusReport";
+import {
+  connectGoogleDrive,
+  createDriveFolder,
+  listDriveFolders,
+  storedDriveAccessToken,
+  type DriveFolder,
+} from "../lib/googleDrive";
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
@@ -157,7 +208,7 @@ type Conversation = {
   createdAt?: any;
 };
 
-type Message = {
+export type Message = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
@@ -165,6 +216,7 @@ type Message = {
   citations?: Array<{ id: string; title: string; type?: string }>;
   suggestedChips?: string[];
   actionPlan?: any;
+  odiseusRun?: any;
   offline?: boolean;
 };
 
@@ -180,7 +232,7 @@ type AccessRequest = {
   updatedAt?: any;
 };
 
-type Panel =
+export type Panel =
   | "today"
   | "projects"
   | "project"
@@ -190,366 +242,14 @@ type Panel =
   | "workspace"
   | "settings"
   | null;
-type CenterView =
+export type CenterView =
   | "conversation"
   | "items"
   | "notes"
   | "strategy"
   | "portfolio"
-  | "project";
-
-function timestamp(value: any) {
-  if (value?.seconds)
-    return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
-  return typeof value === "number" ? value : 0;
-}
-
-function timeAgo(value: any) {
-  const delta = Math.max(0, Date.now() - timestamp(value));
-  const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
-function initials(name?: string | null) {
-  const source = name?.trim() || "D";
-  return source
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-function inviteMessage(invite: any) {
-  const email = invite.email || invite.emailLower || "your invited email";
-  return `You have been invited to Certo Work. Open https://certo.work and sign in or request beta access using this exact email: ${email}`;
-}
-
-function displayName(name?: string | null) {
-  return name?.trim().split(/\s+/)[0] || "there";
-}
-
-function entityTitle(entity: any) {
-  return entity?.title || entity?.name || "Untitled";
-}
-
-function isGenericProjectTitle(value: any) {
-  return [
-    "create a project",
-    "crear un proyecto",
-    "new project",
-    "nuevo proyecto",
-    "project",
-    "proyecto",
-    "help me create a project",
-  ].includes(
-    String(value || "")
-      .trim()
-      .toLowerCase(),
-  );
-}
-
-function proposedTitle(proposed: any, fallback: any) {
-  const proposedValue = String(proposed?.title || proposed?.name || "").trim();
-  if (proposedValue && !isGenericProjectTitle(proposedValue))
-    return proposedValue;
-  const fallbackValue = String(fallback || "").trim();
-  if (fallbackValue && !isGenericProjectTitle(fallbackValue))
-    return fallbackValue;
-  return proposedValue || fallbackValue || "Untitled";
-}
-
-function projectWorkKey(project: any) {
-  const explicit = String(project?.projectKey || project?.key || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-  if (explicit) return explicit.slice(0, 10);
-  const words = String(project?.title || project?.name || "WORK")
-    .toUpperCase()
-    .match(/[A-Z0-9]+/g) || ["WORK"];
-  const initials = words.map((word) => word[0]).join("");
-  return (initials.length >= 2 ? initials : words[0].slice(0, 5)).slice(0, 6);
-}
-
-function isClosed(status?: string) {
-  return ["done", "completed", "closed", "archived", "cancelled"].includes(
-    String(status || "").toLowerCase(),
-  );
-}
-
-function localDateKey(value: Date) {
-  return [
-    value.getFullYear(),
-    String(value.getMonth() + 1).padStart(2, "0"),
-    String(value.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function dateKey(value: any) {
-  if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
-  if (value?.toDate) return localDateKey(value.toDate());
-  if (value?.seconds) return localDateKey(new Date(value.seconds * 1000));
-  return "";
-}
-
-function priorityLabel(value: any) {
-  const normalized = String(value || "").toLowerCase();
-  if (["urgent", "critical", "p0", "p1", "high", "1"].includes(normalized))
-    return "Priority 1";
-  if (["p2", "medium", "2"].includes(normalized)) return "Priority 2";
-  if (["p3", "low", "3"].includes(normalized)) return "Priority 3";
-  return "N/A";
-}
-
-function reviewTypeForAction(type?: string) {
-  const types: Record<string, string> = {
-    create_project: "project",
-    update_project: "project_update",
-    create_project_artifact: "knowledge",
-    create_milestone: "milestone",
-    update_milestone: "milestone_update",
-    create_risk: "risk",
-    update_risk: "risk_update",
-    update_task: "task_update",
-    reschedule_task: "task_update",
-    post_to_conversation: "conversation_message",
-    outbox_communication: "digest_request",
-  };
-  return types[String(type || "")] || "task";
-}
-
-function normalizedEntityName(value: any) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function findMatchingProject(
-  projects: any[],
-  proposed: any,
-  fallbackProjectId = "",
-) {
-  const explicitId = String(
-    proposed?.projectId || proposed?.id || fallbackProjectId || "",
-  );
-  if (explicitId) {
-    const direct = projects.find((project) => project.id === explicitId);
-    if (direct) return direct;
-  }
-  const proposedTitle = normalizedEntityName(
-    proposed?.title ||
-      proposed?.name ||
-      proposed?.projectTitle ||
-      proposed?.projectName,
-  );
-  if (!proposedTitle) return null;
-  return (
-    projects.find((project) => {
-      const title = normalizedEntityName(project.title || project.name);
-      return (
-        title === proposedTitle ||
-        title.includes(proposedTitle) ||
-        proposedTitle.includes(title)
-      );
-    }) || null
-  );
-}
-
-function isDuplicateProjectProposal(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  if (String(action?.type || "") !== "create_project") return null;
-  return (
-    findMatchingProject(
-      projects,
-      action?.proposedChange || {},
-      fallbackProject?.id || "",
-    ) ||
-    fallbackProject ||
-    null
-  );
-}
-
-function proposalActionType(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  return isDuplicateProjectProposal(action, projects, fallbackProject)
-    ? "update_project"
-    : String(action?.type || "");
-}
-
-function proposalActionTitle(
-  action: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  const existingProject = isDuplicateProjectProposal(
-    action,
-    projects,
-    fallbackProject,
-  );
-  const proposedTitle =
-    action?.proposedChange?.title ||
-    action?.proposedChange?.name ||
-    action?.reason ||
-    "Review details";
-  if (!existingProject) return proposedTitle;
-  return `Update existing project: ${existingProject.title || existingProject.name || proposedTitle}`;
-}
-
-function proposalChipLabel(
-  chip: string,
-  plan: any,
-  projects: any[],
-  fallbackProject: any | null = null,
-) {
-  const hasDuplicateProject = plan?.proposedActions?.some((action: any) =>
-    isDuplicateProjectProposal(action, projects, fallbackProject),
-  );
-  if (!hasDuplicateProject) return chip;
-  if (
-    /approve.*project.*creation|create.*project|project.*creation/i.test(chip)
-  )
-    return "Update existing project";
-  return chip;
-}
-
-function reviewTypeLabel(type?: string) {
-  const labels: Record<string, string> = {
-    project: "Project",
-    project_update: "Project update",
-    knowledge: "Project document",
-    milestone: "Milestone",
-    milestone_update: "Milestone update",
-    risk: "Risk",
-    risk_update: "Risk update",
-    conversation_message: "Conversation handoff",
-    task: "Task",
-    task_update: "Task update",
-  };
-  return labels[String(type || "task")] || "Item";
-}
-
-function RichText({ text }: { text: string }) {
-  return (
-    <div className="do-rich-text">
-      {text.split("\n").map((line, index) => {
-        const plain = line.replace(/^#{1,4}\s*/, "").replace(/\*\*/g, "");
-        if (!plain.trim()) return <div className="do-rich-space" key={index} />;
-        if (/^#{1,4}\s/.test(line)) return <h3 key={index}>{plain}</h3>;
-        if (/^\s*[-*]\s/.test(line)) {
-          return (
-            <div className="do-rich-bullet" key={index}>
-              <span />
-              <p>{plain.replace(/^\s*[-*]\s*/, "")}</p>
-            </div>
-          );
-        }
-        return <p key={index}>{plain}</p>;
-      })}
-    </div>
-  );
-}
-
-function UserMessage({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isDocument = text.length > 2_500;
-  const visible =
-    isDocument && !expanded ? `${text.slice(0, 1_400).trimEnd()}…` : text;
-  return (
-    <div className={`do-user-message ${isDocument ? "is-document" : ""}`}>
-      {isDocument && (
-        <div className="do-user-document-head">
-          <span>
-            Long project input · {text.length.toLocaleString()} characters
-          </span>
-          <button onClick={() => setExpanded((value) => !value)} type="button">
-            {expanded ? "Collapse" : "Show full"}
-          </button>
-        </div>
-      )}
-      <div>{visible}</div>
-    </div>
-  );
-}
-
-function ActionProposal({
-  message,
-  projects,
-  activeProject,
-  onStage,
-}: {
-  message: Message;
-  projects: any[];
-  activeProject: any | null;
-  onStage: (message: Message) => Promise<void>;
-}) {
-  const [status, setStatus] = useState<"idle" | "saving" | "done">("idle");
-  const plan = message.actionPlan;
-  if (!plan?.proposedActions?.length) return null;
-  return (
-    <section className="do-proposal" data-testid="action-proposal">
-      <div className="do-proposal-head">
-        <div>
-          <span className="do-kicker">Pending</span>
-          <h3>{plan.title || "Pending changes"}</h3>
-          <p>{plan.summary}</p>
-        </div>
-        <ShieldCheck size={17} />
-      </div>
-      <div className="do-proposal-items">
-        {plan.proposedActions.map((action: any, index: number) => (
-          <div className="do-proposal-item" key={`${action.type}-${index}`}>
-            <span className="do-proposal-number">{index + 1}</span>
-            <div>
-              <strong>
-                {actionLabel(
-                  proposalActionType(action, projects, activeProject),
-                )}
-              </strong>
-              <p>{proposalActionTitle(action, projects, activeProject)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="do-proposal-foot">
-        <span>Nothing changes until you apply it.</span>
-        <button
-          className="do-button do-button-dark"
-          disabled={status !== "idle"}
-          onClick={async () => {
-            setStatus("saving");
-            await onStage(message);
-            setStatus("done");
-          }}
-          type="button"
-        >
-          {status === "saving" ? (
-            <Loader2 className="spin" size={14} />
-          ) : status === "done" ? (
-            <Check size={14} />
-          ) : (
-            <ShieldCheck size={14} />
-          )}
-          {status === "done" ? "Ready to apply" : "Review pending"}
-        </button>
-      </div>
-    </section>
-  );
-}
+  | "project"
+  | "agents";
 
 export function DelivereeWorkspace() {
   const {
@@ -579,6 +279,10 @@ export function DelivereeWorkspace() {
     [],
   );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
+  const [sprints, setSprints] = useState<SprintRecord[]>([]);
+  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>([]);
+  const [driveRoot, setDriveRoot] = useState<DriveFolder | null>(null);
+  const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
@@ -586,6 +290,13 @@ export function DelivereeWorkspace() {
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
   const [strategicMeasures, setStrategicMeasures] = useState<any[]>([]);
   const [strategicRecords, setStrategicRecords] = useState<any[]>([]);
+  const [odiseusMemory, setOdysseusMemory] = useState<any[]>([]);
+  const [odiseusActivity, setOdysseusActivity] = useState<any[]>([]);
+  const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
+  const [odiseusSchedules, setOdysseusSchedules] = useState<any[]>([]);
+  const [liveOdysseusSteps, setLiveOdysseusSteps] = useState<OdysseusRunStep[]>(
+    [],
+  );
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -596,19 +307,115 @@ export function DelivereeWorkspace() {
       ? window.localStorage.getItem("certo-sidebar-collapsed") === "true"
       : false,
   );
-  const [panel, setPanel] = useState<Panel>(null);
+  const [sidebarSections, setSidebarSections] = useState<{
+    projects: boolean;
+    favorites: boolean;
+    recent: boolean;
+    conversations: boolean;
+  }>(() => {
+    const defaults = {
+      projects: true,
+      favorites: true,
+      recent: true,
+      conversations: true,
+    };
+    if (typeof window === "undefined") return defaults;
+    try {
+      const raw = window.localStorage.getItem("certo-sidebar-sections");
+      if (!raw) return defaults;
+      return { ...defaults, ...JSON.parse(raw) };
+    } catch {
+      return defaults;
+    }
+  });
+  const toggleSidebarSection = (
+    key: "projects" | "favorites" | "recent" | "conversations",
+  ) => {
+    setSidebarSections((current) => {
+      const next = { ...current, [key]: !current[key] };
+      window.localStorage.setItem("certo-sidebar-sections", JSON.stringify(next));
+      return next;
+    });
+  };
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [centerHistory, setCenterHistory] = useState<{
-    items: CenterView[];
-    index: number;
-  }>({ items: ["items"], index: 0 });
-  const centerView = centerHistory.items[centerHistory.index];
+  const panel = (
+    lens.kind === "approvals"
+      ? "approvals"
+      : lens.kind === "settings"
+        ? "settings"
+        : lens.kind === "agents"
+          ? lens.section === "automations"
+            ? "skills"
+            : lens.section === "activity"
+              ? "digest"
+              : null
+          : lens.kind === "more"
+            ? lens.section === "automations"
+              ? "skills"
+              : lens.section === "updates"
+                ? "digest"
+                : lens.section === "workspace"
+                  ? "workspace"
+                  : null
+            : null
+  ) as Panel;
+  const setPanel = (next: Panel) => {
+    setSidebarOpen(false);
+    if (!next) {
+      navigate("/home");
+      return;
+    }
+    if (next === "today") navigate("/home");
+    else if (next === "projects") navigate("/projects");
+    else if (next === "project") {
+      const id = projectConsoleId || (lens.kind === "project" ? lens.projectId : null);
+      navigate(id ? `/work/projects/${id}` : "/projects");
+    } else if (next === "approvals") navigate("/approvals");
+    else if (next === "skills") navigate("/agents/automations");
+    else if (next === "digest") navigate("/agents/activity");
+    else if (next === "workspace") navigate("/workspace");
+    else if (next === "settings") navigate("/settings");
+  };
+  const centerView: CenterView =
+    lens.kind === "project"
+      ? lens.tab === "notes"
+        ? "notes"
+        : lens.tab === "strategy"
+          ? "strategy"
+          : "project"
+      : lens.kind === "my-work"
+        ? "items"
+        : lens.kind === "work"
+          ? lens.section === "issues"
+            ? "items"
+            : "portfolio"
+          : lens.kind === "agents"
+            ? "agents"
+            : "conversation";
+  const goCenterView = (next: CenterView) => {
+    const projectId =
+      (lens.kind === "project" ? lens.projectId : null) || projectConsoleId;
+    if (next === "portfolio") navigate("/projects");
+    else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
+    else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
+    // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
+    else if (next === "items" && projectId)
+      navigate(`/work/projects/${projectId}/tasks`);
+    else if (next === "items") navigate("/my-work");
+    else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
+    else if (next === "agents") navigate("/agents");
+    else navigate("/home");
+  };
+  const projectConsoleInitialTab =
+    lens.kind === "project" && lens.tab === "tasks" ? "items" : "brief";
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
@@ -618,6 +425,8 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
+  const [agentOutcomeDraft, setAgentOutcomeDraft] = useState("");
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -632,32 +441,18 @@ export function DelivereeWorkspace() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-
-  const goCenterView = (next: CenterView) => {
-    setCenterHistory((current) => {
-      if (current.items[current.index] === next) return current;
-      const items = [...current.items.slice(0, current.index + 1), next];
-      return { items, index: items.length - 1 };
-    });
-  };
-  const goCenterBack = () =>
-    setCenterHistory((current) => ({
-      ...current,
-      index: Math.max(0, current.index - 1),
-    }));
-  const goCenterForward = () =>
-    setCenterHistory((current) => ({
-      ...current,
-      index: Math.min(current.items.length - 1, current.index + 1),
-    }));
+  const portfolioImportRef = useRef<ReturnType<
+    typeof replacePureAiPortfolioFromMaster
+  > | null>(null);
 
   useEffect(() => {
     if (!user || !workspace) return;
     setWorkspaceNameDraft(workspace.name || "Workspace");
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
+    const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
     const canSeeWorkspacePortfolio =
-      workspace.ownerId === user.uid || isPortfolioViewerEmail(emailLower);
+      workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
     const mergeQueries = (
       name: string,
       queryClauses: any[][],
@@ -737,6 +532,7 @@ export function DelivereeWorkspace() {
               [where("visibleToEmails", "array-contains", emailLower)],
               [where("assigneeIds", "array-contains", memberId)],
               [where("accessMemberIds", "array-contains", memberId)],
+              [where("sharedWithUserIds", "array-contains", user.uid)],
             ],
             setTasks,
           );
@@ -750,7 +546,13 @@ export function DelivereeWorkspace() {
               timestamp(left.updatedAt || left.createdAt),
           );
           setConversations(sorted);
-          setConversationId((current) => current || sorted[0]?.id || null);
+          setConversationId((current) => {
+            if (current) return current;
+            const standalone = sorted.find((conversation) =>
+              isStandaloneConversation(conversation),
+            );
+            return standalone?.id || null;
+          });
         },
         true,
         true,
@@ -758,6 +560,7 @@ export function DelivereeWorkspace() {
       ...projectUnsubscribers,
       ...taskUnsubscribers,
       makeQuery("milestones", setMilestones),
+      makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
       makeQuery("categories", setCategories),
       makeQuery("cost_templates", setCostTemplates),
@@ -787,9 +590,24 @@ export function DelivereeWorkspace() {
         false,
         true,
       ),
+      makeQuery("odiseus_memory", setOdysseusMemory, false, true),
+      makeQuery(
+        "odiseus_activity",
+        (items) =>
+          setOdysseusActivity(
+            items.sort(
+              (left, right) =>
+                timestamp(right.createdAt) - timestamp(left.createdAt),
+            ),
+          ),
+        false,
+        true,
+      ),
+      makeQuery("skills", setWorkspaceSkills, false, true),
+      makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [user, workspace]);
+  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -797,6 +615,48 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!user || !workspace) return;
+    if (!shouldReplacePureAiPortfolio(workspace)) return;
+    if (workspace.ownerId !== user.uid) return;
+    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
+    if (!portfolioImportRef.current) {
+      portfolioImportRef.current = replacePureAiPortfolioFromMaster({
+        db,
+        user,
+        workspace,
+        members: workspaceMembers,
+      });
+    }
+    let cancelled = false;
+    portfolioImportRef.current
+      .then((result) => {
+        if (cancelled) return;
+        if (result.skipped) {
+          portfolioImportRef.current = null;
+          return;
+        }
+        const missing = result.missingAliases.length
+          ? ` Missing aliases: ${result.missingAliases.join(", ")}.`
+          : "";
+        setNotice(
+          `Pure AI portfolio replaced with ${result.createdProjects} projects from the August 2026 master. Shared with ${result.sharedWith.join(", ") || "no matched users"}. Removed ${result.removedProjects} legacy projects.${missing}`,
+        );
+      })
+      .catch((reason) => {
+        portfolioImportRef.current = null;
+        if (cancelled) return;
+        setNotice(
+          reason instanceof Error
+            ? `Portfolio migration failed: ${reason.message}`
+            : "Portfolio migration failed. Open the Pure AI workspace as owner and retry.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -896,17 +756,6 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, streamed, submitting]);
-
-  useEffect(() => {
-    if (lens.kind === "review") setPanel("approvals");
-    if (lens.kind === "work")
-      setPanel(lens.section === "portfolio" ? "projects" : "today");
-    if (lens.kind === "settings") {
-      setPanel(null);
-      goCenterView("items");
-      navigate("/", { replace: true });
-    }
-  }, [lens.kind, lens.kind === "work" ? lens.section : null, navigate]);
 
   useEffect(() => {
     const Recognition =
@@ -1082,11 +931,12 @@ export function DelivereeWorkspace() {
   const currentContextLabel = selectedWorkItem
     ? entityTitle(selectedWorkItem)
     : conversationScopeLabel(impliedConversationScope, projects, tasks);
-  const filteredConversations = conversations.filter((conversation) =>
-    String(conversation.title || "")
+  const filteredConversations = conversations.filter((conversation) => {
+    if (!isStandaloneConversation(conversation)) return false;
+    return String(conversation.title || "")
       .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+      .includes(search.toLowerCase());
+  });
 
   useEffect(() => {
     if (!activeProject) return;
@@ -1117,10 +967,10 @@ export function DelivereeWorkspace() {
         workspaceId: workspace.id,
         title: "New conversation",
         status: "active",
-        sourceContext: activeProject ? "project" : "home",
-        contextEntityId: activeProject?.id || null,
-        conversationType: activeProject ? "project" : "general",
-        linkedProjectIds: activeProject ? [activeProject.id] : [],
+        sourceContext: "home",
+        contextEntityId: null,
+        conversationType: "general",
+        linkedProjectIds: [],
         linkedTaskIds: [],
         isChiefOfStaff: false,
         createdBy: user.uid,
@@ -1131,10 +981,10 @@ export function DelivereeWorkspace() {
         {
           id: ref.id,
           title: "New conversation",
-          contextEntityId: activeProject?.id || null,
-          sourceContext: activeProject ? "project" : "home",
-          conversationType: activeProject ? "project" : "general",
-          linkedProjectIds: activeProject ? [activeProject.id] : [],
+          contextEntityId: null,
+          sourceContext: "home",
+          conversationType: "general",
+          linkedProjectIds: [],
           linkedTaskIds: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -1147,7 +997,7 @@ export function DelivereeWorkspace() {
       setJudgment(null);
       setSidebarOpen(false);
       setPanel(null);
-      navigate(activeProject ? `/work/projects/${activeProject.id}` : "/");
+      navigate("/");
       requestAnimationFrame(() => composerRef.current?.focus());
     } catch {
       setNotice(
@@ -1156,18 +1006,36 @@ export function DelivereeWorkspace() {
     } finally {
       setCreatingConversation(false);
     }
-  }, [activeProject, creatingConversation, navigate, user, workspace]);
+  }, [creatingConversation, navigate, user, workspace]);
 
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        createConversation();
+        setCommandPaletteOpen(true);
+      }
+      if (event.key === "Escape") {
+        if (commandPaletteOpen) {
+          event.preventDefault();
+          setCommandPaletteOpen(false);
+          return;
+        }
+        if (createMenuOpen) {
+          setCreateMenuOpen(false);
+          return;
+        }
+        if (panel) {
+          setPanel(null);
+          return;
+        }
+        if (sidebarOpen) {
+          setSidebarOpen(false);
+        }
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [createConversation]);
+  }, [commandPaletteOpen, createMenuOpen, panel, sidebarOpen]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -1232,7 +1100,7 @@ export function DelivereeWorkspace() {
     const ref = await addDoc(collection(db, "boldi_conversations"), {
       userId: user.uid,
       workspaceId: workspace.id,
-      title: "Chief of Staff",
+      title: ODISEUS_CONVERSATION_TITLE,
       status: "active",
       sourceContext: "home",
       contextEntityId: null,
@@ -1329,6 +1197,7 @@ export function DelivereeWorkspace() {
     setSubmitting(true);
     setStreamed("");
     setNotice("");
+    setLiveOdysseusSteps([]);
     const localId = `local-${Date.now()}`;
     setMessages((current) => [
       ...current,
@@ -1383,6 +1252,9 @@ export function DelivereeWorkspace() {
         notebookEntries,
         userId: user.uid,
         workspaceId: workspace.id,
+        odiseusMemory,
+        skills: workspaceSkills,
+        schedules: odiseusSchedules,
       });
       const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);
@@ -1394,11 +1266,34 @@ export function DelivereeWorkspace() {
         conversationId: activeConversationId,
         messages: requestContext.messages,
         workspaceContext: requestContext.workspaceContext,
+        onStep: (step) => {
+          setLiveOdysseusSteps((current) => {
+            const without = current.filter((item) => item.id !== step.id);
+            return [...without, step];
+          });
+        },
       });
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
+      const odiseusRun = normalizeOdysseusRun(result.run);
       await streamConversationReply(reply, setStreamed);
+      // Run/activity logs must never block the assistant reply. Missing
+      // Firestore rules for odiseus_* previously surfaced as a false
+      // "insufficient permissions" failure after a successful chat.
+      const runId = await persistOdysseusRun({
+        userId: user.uid,
+        workspaceId: workspace.id,
+        conversationId: activeConversationId,
+        projectId: primaryProject?.id || null,
+        request: text,
+        status: odiseusRun?.status || "completed",
+        steps: odiseusRun?.steps || [],
+        toolCount: odiseusRun?.toolCount || 0,
+        artifact: odiseusRun?.artifact || null,
+        actionPlan: result.actionPlan || null,
+        outcome: reply.slice(0, 2_000),
+      });
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -1409,9 +1304,31 @@ export function DelivereeWorkspace() {
         citations: result.citations || [],
         suggestedChips: result.suggestedChips || [],
         actionPlan: result.actionPlan || null,
+        odiseusRun: odiseusRun
+          ? { ...odiseusRun, runId: runId || null }
+          : null,
         provider: result.provider || null,
         judgment: nextJudgment,
         createdAt: serverTimestamp(),
+      });
+      await recordOdysseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId: activeConversationId,
+        projectId: primaryProject?.id || null,
+        runId,
+        action: "job_completed",
+        agentId: "odysseus",
+        agentName: ODISEUS_NAME,
+        result: "completed",
+        summary:
+          odiseusRun?.toolCount
+            ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
+            : `${ODISEUS_NAME} completed a run`,
+        actionCount: Array.isArray(result.actionPlan?.actions)
+          ? result.actionPlan.actions.length
+          : 0,
+        metadata: { stepCount: odiseusRun?.steps?.length || 0 },
       });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
@@ -1440,6 +1357,7 @@ export function DelivereeWorkspace() {
     } finally {
       setStreamed("");
       setSubmitting(false);
+      setLiveOdysseusSteps([]);
     }
   };
 
@@ -1456,11 +1374,33 @@ export function DelivereeWorkspace() {
       status: "approved_for_review",
       contextEntityId: primaryProject?.id || null,
       createdBy: user.uid,
+      odiseusRunId: message.odiseusRun?.runId || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    for (const action of plan.proposedActions || []) {
+    let staged = 0;
+    let remembered = 0;
+    for (const [index, action] of (plan.proposedActions || []).entries()) {
       const proposedChange = action.proposedChange || {};
+      if (String(action.type || "") === "create_odiseus_memory") {
+        const safetyLevel = Number(action.safetyLevel ?? plan.safetyLevel ?? 1);
+        const text = String(proposedChange.text || "").trim();
+        if (safetyLevel <= 1 && text) {
+          await addDoc(collection(db, "odiseus_memory"), {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            text: text.slice(0, 2_000),
+            kind: proposedChange.kind || "fact",
+            tags: Array.isArray(proposedChange.tags)
+              ? proposedChange.tags.slice(0, 12)
+              : [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          remembered += 1;
+          continue;
+        }
+      }
       const duplicateProject =
         String(action.type || "") === "create_project"
           ? findMatchingProject(
@@ -1476,6 +1416,18 @@ export function DelivereeWorkspace() {
         proposedChange.projectId ||
         primaryProject?.id ||
         "";
+      const idempotencyKey = actionIdempotencyKey(planRef.id, index, {
+        type: actionType,
+        proposedChange,
+      });
+      const existing = await getDocs(
+        query(
+          collection(db, "review_candidates"),
+          where("workspaceId", "==", workspace.id),
+          where("idempotencyKey", "==", idempotencyKey),
+        ),
+      );
+      if (!existing.empty) continue;
       await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -1485,7 +1437,7 @@ export function DelivereeWorkspace() {
             ? proposedTitle(proposedChange, actionLabel(actionType))
             : proposedChange?.title || actionLabel(actionType),
         type: reviewType,
-        why: action.reason || "Proposed in conversation",
+        why: action.reason || "Proposed by Odysseus",
         action: actionLabel(actionType),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
@@ -1495,17 +1447,88 @@ export function DelivereeWorkspace() {
         },
         projectId,
         source: duplicateProject
-          ? `${plan.summary || "Certo Work conversation"} · Existing project recognized; converted create_project to update_project.`
-          : plan.summary || "Certo Work conversation",
-        sourceType: "delivereeos",
+          ? `${plan.summary || "Odysseus"} · Existing project recognized; converted create_project to update_project.`
+          : plan.summary || "Odysseus",
+        sourceType: "odiseus",
         sourceId: planRef.id,
+        idempotencyKey,
+        safetyLevel: Number(action.safetyLevel || plan.safetyLevel || 2),
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      staged += 1;
     }
-    setNotice("Pending change ready. Review it before anything changes.");
-    setPanel("approvals");
+    if (remembered > 0) {
+      await recordOdysseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "memory_saved",
+        summary: `Saved ${remembered} memory note(s)`,
+      });
+    }
+    if (staged > 0) {
+      await recordOdysseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "actions_staged",
+        agentId: "odysseus",
+        agentName: ODISEUS_NAME,
+        result: "proposed",
+        actionCount: staged,
+        summary: `${ODISEUS_NAME} proposed ${staged} action${staged === 1 ? "" : "s"}`,
+        approvalRequired: true,
+        approvedBy: user.uid,
+      });
+      setNotice("Pending change ready. Review it before anything changes.");
+      setPanel("approvals");
+    } else if (remembered > 0) {
+      setNotice(
+        remembered > 1
+          ? `${ODISEUS_NAME} remembered ${remembered} things.`
+          : `${ODISEUS_NAME} remembered that.`,
+      );
+    }
+  };
+
+  const rejectPlan = async (message: Message) => {
+    if (!user || !workspace) return;
+    if (message.id && !message.id.startsWith("error-")) {
+      await updateDoc(doc(db, "boldi_messages", message.id), {
+        actionPlan: message.actionPlan
+          ? { ...message.actionPlan, status: "rejected" }
+          : null,
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+    }
+    const rejectedCount = Array.isArray(message.actionPlan?.actions)
+      ? message.actionPlan.actions.length
+      : 0;
+    await recordOdysseusActivitySafe({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      conversationId,
+      projectId: primaryProject?.id || null,
+      runId: message.odiseusRun?.runId || null,
+      action: "actions_rejected",
+      agentId: "odysseus",
+      agentName: ODISEUS_NAME,
+      result: "rejected",
+      actionCount: rejectedCount,
+      summary:
+        rejectedCount > 0
+          ? `You rejected ${rejectedCount} action${rejectedCount === 1 ? "" : "s"} proposed by ${ODISEUS_NAME}`
+          : `You rejected actions proposed by ${ODISEUS_NAME}`,
+      approvalRequired: true,
+      approvedBy: user.uid,
+    });
+    setNotice(`${ODISEUS_NAME} will not apply those actions.`);
   };
 
   const processReview = async (
@@ -1628,7 +1651,7 @@ export function DelivereeWorkspace() {
           workspaceId: workspace.id,
           conversationId: targetConversationId,
           role: "assistant",
-          content: `**Handoff from Chief of Staff**\n\n${content}`,
+          content: `**${ODISEUS_HANDOFF_PREFIX}**\n\n${content}`,
           inputType: "conversation_handoff",
           sourceConversationId: conversationId,
           contextType: targetConversation.conversationType || "general",
@@ -1661,6 +1684,20 @@ export function DelivereeWorkspace() {
           updatedAt: serverTimestamp(),
         });
         convertedToType = "daily_briefs";
+        convertedToId = created.id;
+      } else if (reviewType === "odiseus_memory") {
+        const text = String(proposed.text || "").trim();
+        if (!text) throw new Error("Memory text is required");
+        const created = await addDoc(collection(db, "odiseus_memory"), {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          text: text.slice(0, 2_000),
+          kind: proposed.kind || "fact",
+          tags: Array.isArray(proposed.tags) ? proposed.tags.slice(0, 12) : [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        convertedToType = "odiseus_memory";
         convertedToId = created.id;
       } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
@@ -1881,691 +1918,52 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const createControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    name: string,
-  ) => {
-    if (!user || !workspace) return name;
-    const cleaned = name.trim();
-    if (!cleaned) return "";
-    const exists = categories.some(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
-    );
-    const existing = categories.find(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
-    );
-    if (exists) return group === "tag" ? existing?.id || cleaned : cleaned;
-    try {
-      const created = await addDoc(collection(db, "categories"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        name: cleaned,
-        group,
-        color:
-          group === "delivery_entity"
-            ? "#315f46"
-            : group === "client_entity"
-              ? "#4b6988"
-              : "#7b5ea7",
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      setCategories((current) =>
-        current.some((category) => category.id === created.id)
-          ? current
-          : [
-              ...current,
-              {
-                id: created.id,
-                userId: user.uid,
-                workspaceId: workspace.id,
-                name: cleaned,
-                group,
-                color:
-                  group === "delivery_entity"
-                    ? "#315f46"
-                    : group === "client_entity"
-                      ? "#4b6988"
-                      : "#7b5ea7",
-                createdBy: user.uid,
-              },
-            ],
-      );
-      setNotice(`${cleaned} added to ${group.replace(/_/g, " ")}.`);
-      return group === "tag" ? created.id : cleaned;
-    } catch (reason) {
-      recordClientException("controlled_lists", "create", reason, {
-        group,
-        name: cleaned,
-      });
-      setNotice(`Could not add ${cleaned}. Open Exception trace in Settings for details.`);
-      return "";
-    }
-  };
-
-  const renameControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    option: ControlledListOption,
-    name: string,
-  ) => {
-    if (!user || !workspace) return;
-    const previous = String(option.name || "").trim();
-    const next = name.trim();
-    if (!previous || !next || previous === next) return;
-    try {
-      const batch = writeBatch(db);
-      let createdCategoryId: string | null = null;
-      if (option.id) {
-        batch.update(doc(db, "categories", option.id), {
-          name: next,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        const existing = categories.find(
-          (category) =>
-            categoryGroup(category) === group &&
-            String(category.name || "").trim().toLowerCase() ===
-              next.toLowerCase(),
-        );
-        if (!existing) {
-          const categoryRef = doc(collection(db, "categories"));
-          createdCategoryId = categoryRef.id;
-          batch.set(categoryRef, {
-            userId: user.uid,
-            workspaceId: workspace.id,
-            name: next,
-            group,
-            color:
-              group === "delivery_entity"
-                ? "#315f46"
-                : group === "client_entity"
-                  ? "#4b6988"
-                  : "#7b5ea7",
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-      if (group === "delivery_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.deliveryEntity || "").trim() === previous ||
-              String(project.bpo || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              deliveryEntity: next,
-              bpo: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.deliveryEntity || "").trim() === previous ||
-              String(task.bpo || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              deliveryEntity: next,
-              bpo: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "client_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.clientEntity || "").trim() === previous ||
-              String(project.client || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              clientEntity: next,
-              client: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.clientEntity || "").trim() === previous ||
-              String(task.client || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              clientEntity: next,
-              client: next,
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "tag") {
-        const matchingTag = categories.find(
-          (category) =>
-            categoryGroup(category) === "tag" &&
-            String(category.name || "").trim() === previous,
-        );
-        if (matchingTag?.id && !option.id) {
-          batch.update(doc(db, "categories", matchingTag.id), {
-            name: next,
-          });
-        }
-      }
-      await batch.commit();
-      setCategories((current) => {
-        const updated = current.map((category) =>
-          categoryGroup(category) === group &&
-          (category.id === option.id ||
-            String(category.name || "").trim().toLowerCase() ===
-              previous.toLowerCase())
-            ? { ...category, name: next }
-            : category,
-        );
-        const existsAfterUpdate = updated.some(
-          (category) =>
-            categoryGroup(category) === group &&
-            String(category.name || "").trim().toLowerCase() ===
-              next.toLowerCase(),
-        );
-        if (existsAfterUpdate) return updated;
-        return [
-          ...updated,
-          {
-            id: createdCategoryId || `local-${group}-${next}`,
-            userId: user.uid,
-            workspaceId: workspace.id,
-            name: next,
-            group,
-            color:
-              group === "delivery_entity"
-                ? "#315f46"
-                : group === "client_entity"
-                  ? "#4b6988"
-                  : "#7b5ea7",
-            createdBy: user.uid,
-          },
-        ];
-      });
-      if (group === "delivery_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.deliveryEntity || "").trim() === previous ||
-            String(project.bpo || "").trim() === previous
-              ? { ...project, deliveryEntity: next, bpo: next }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.deliveryEntity || "").trim() === previous ||
-            String(task.bpo || "").trim() === previous
-              ? { ...task, deliveryEntity: next, bpo: next }
-              : task,
-          ),
-        );
-      }
-      if (group === "client_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.clientEntity || "").trim() === previous ||
-            String(project.client || "").trim() === previous
-              ? { ...project, clientEntity: next, client: next }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.clientEntity || "").trim() === previous ||
-            String(task.client || "").trim() === previous
-              ? { ...task, clientEntity: next, client: next }
-              : task,
-          ),
-        );
-      }
-      setNotice(`${previous} renamed to ${next}. Dropdowns and existing records were updated.`);
-    } catch (reason) {
-      recordClientException("controlled_lists", "rename", reason, {
-        group,
-        previous,
-        next,
-        optionId: option.id || null,
-      });
-      setNotice(`Could not rename ${previous}. Open Exception trace in Settings for details.`);
-    }
-  };
-
-  const deleteControlledOption = async (
-    group: "delivery_entity" | "client_entity" | "tag",
-    option: ControlledListOption,
-  ) => {
-    if (!user || !workspace) return;
-    const previous = String(option.name || "").trim();
-    if (!previous) return;
-    const confirmed = window.confirm(
-      group === "tag"
-        ? `Remove "${previous}" from tags? Matching projects/items will have this tag cleared.`
-        : `Remove "${previous}" from ${group.replace(/_/g, " ")}? Existing projects/items using it will be moved to Internal so it does not reappear.`,
-    );
-    if (!confirmed) return;
-    try {
-      const batch = writeBatch(db);
-      const matchingCategoryIds = categories
-        .filter(
-          (category) =>
-            categoryGroup(category) === group &&
-            (category.id === option.id ||
-              String(category.name || "").trim().toLowerCase() ===
-                previous.toLowerCase()),
-        )
-        .map((category) => category.id)
-        .filter(Boolean);
-      matchingCategoryIds.forEach((categoryId) =>
-        batch.delete(doc(db, "categories", categoryId)),
-      );
-      if (group === "delivery_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.deliveryEntity || "").trim() === previous ||
-              String(project.bpo || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              deliveryEntity: "Internal",
-              bpo: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.deliveryEntity || "").trim() === previous ||
-              String(task.bpo || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              deliveryEntity: "Internal",
-              bpo: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "client_entity") {
-        projects
-          .filter(
-            (project) =>
-              String(project.clientEntity || "").trim() === previous ||
-              String(project.client || "").trim() === previous,
-          )
-          .forEach((project) =>
-            batch.update(doc(db, "projects", project.id), {
-              clientEntity: "Internal",
-              client: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-        tasks
-          .filter(
-            (task) =>
-              String(task.clientEntity || "").trim() === previous ||
-              String(task.client || "").trim() === previous,
-          )
-          .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
-              clientEntity: "Internal",
-              client: "Internal",
-              updatedAt: serverTimestamp(),
-            }),
-          );
-      }
-      if (group === "tag") {
-        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
-          .map((value) => String(value || "").trim())
-          .filter(Boolean);
-        const withoutRemoved = (record: any) => [
-          ...new Set(
-            [
-              ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-              ...(Array.isArray(record.tags) ? record.tags : []),
-              ...(Array.isArray(record.labels) ? record.labels : []),
-            ]
-              .map((value) => String(value || "").trim())
-              .filter(
-                (value) =>
-                  value &&
-                  !removedKeys.some(
-                    (removed) =>
-                      removed.toLowerCase() === value.toLowerCase(),
-                  ),
-              ),
-          ),
-        ];
-        const hasRemovedTag = (record: any) => {
-          const values = [
-            ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-            ...(Array.isArray(record.tags) ? record.tags : []),
-            ...(Array.isArray(record.labels) ? record.labels : []),
-          ].map((value) => String(value || "").trim().toLowerCase());
-          return removedKeys.some((removed) =>
-            values.includes(removed.toLowerCase()),
-          );
-        };
-        projects.filter(hasRemovedTag).forEach((project) => {
-          const next = withoutRemoved(project);
-          batch.update(doc(db, "projects", project.id), {
-            tagIds: next,
-            tags: next,
-            labels: next,
-            updatedAt: serverTimestamp(),
-          });
-        });
-        tasks.filter(hasRemovedTag).forEach((task) => {
-          const next = withoutRemoved(task);
-          batch.update(doc(db, "tasks", task.id), {
-            tagIds: next,
-            tags: next,
-            labels: next,
-            updatedAt: serverTimestamp(),
-          });
-        });
-      }
-      await batch.commit();
-      setCategories((current) =>
-        current.filter(
-          (category) =>
-            !(
-              categoryGroup(category) === group &&
-              (matchingCategoryIds.includes(category.id) ||
-                String(category.name || "").trim().toLowerCase() ===
-                  previous.toLowerCase())
-            ),
-        ),
-      );
-      if (group === "delivery_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.deliveryEntity || "").trim() === previous ||
-            String(project.bpo || "").trim() === previous
-              ? { ...project, deliveryEntity: "Internal", bpo: "Internal" }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.deliveryEntity || "").trim() === previous ||
-            String(task.bpo || "").trim() === previous
-              ? { ...task, deliveryEntity: "Internal", bpo: "Internal" }
-              : task,
-          ),
-        );
-      }
-      if (group === "client_entity") {
-        setProjects((current) =>
-          current.map((project) =>
-            String(project.clientEntity || "").trim() === previous ||
-            String(project.client || "").trim() === previous
-              ? { ...project, clientEntity: "Internal", client: "Internal" }
-              : project,
-          ),
-        );
-        setTasks((current) =>
-          current.map((task) =>
-            String(task.clientEntity || "").trim() === previous ||
-            String(task.client || "").trim() === previous
-              ? { ...task, clientEntity: "Internal", client: "Internal" }
-              : task,
-          ),
-        );
-      }
-      if (group === "tag") {
-        const removedKeys = [previous, option.id || "", ...matchingCategoryIds]
-          .map((value) => String(value || "").trim())
-          .filter(Boolean);
-        const cleanRecordTags = (record: any) => {
-          const next = [
-            ...new Set(
-              [
-                ...(Array.isArray(record.tagIds) ? record.tagIds : []),
-                ...(Array.isArray(record.tags) ? record.tags : []),
-                ...(Array.isArray(record.labels) ? record.labels : []),
-              ]
-                .map((value) => String(value || "").trim())
-                .filter(
-                  (value) =>
-                    value &&
-                    !removedKeys.some(
-                      (removed) =>
-                        removed.toLowerCase() === value.toLowerCase(),
-                    ),
-                ),
-            ),
-          ];
-          return { ...record, tagIds: next, tags: next, labels: next };
-        };
-        setProjects((current) => current.map(cleanRecordTags));
-        setTasks((current) => current.map(cleanRecordTags));
-      }
-      setNotice(
-        group === "tag"
-          ? `${previous} removed. Matching project/item tags were cleared.`
-          : `${previous} removed. Matching projects/items were moved to Internal.`,
-      );
-    } catch (reason) {
-      recordClientException("controlled_lists", "delete", reason, {
-        group,
-        previous,
-        optionId: option.id || null,
-      });
-      setNotice(`Could not remove ${previous}. Open Exception trace in Settings for details.`);
-    }
-  };
-
-  const createCostTemplate = async (template: any) => {
-    if (!user || !workspace || !template?.name?.trim()) return;
-    await addDoc(collection(db, "cost_templates"), {
-      name: template.name.trim(),
-      description: String(template.description || "").trim(),
-      rows: Array.isArray(template.rows) ? template.rows : [],
-      userId: user.uid,
-      workspaceId: workspace.id,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+  const { createControlledOption, renameControlledOption } =
+    useControlledListsActions({
+      user,
+      workspace,
+      categories,
+      projects,
+      tasks,
+      setCategories,
+      setProjects,
+      setTasks,
+      setNotice,
     });
-    setNotice("Cost template saved for this workspace.");
-  };
 
-  const updateCostTemplate = async (
-    templateId: string,
-    patch: Record<string, unknown>,
-  ) => {
-    await updateDoc(doc(db, "cost_templates", templateId), {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
-    setNotice("Cost template updated.");
-  };
+  const { deleteControlledOption } = useControlledListDeletion({
+    user,
+    workspace,
+    categories,
+    projects,
+    tasks,
+    setCategories,
+    setProjects,
+    setTasks,
+    setNotice,
+  });
 
-  const createProjectTemplate = async (
-    sourceProjectId: string,
-    name: string,
-    description: string,
-  ) => {
-    if (!user || !workspace) return;
-    const source = projects.find((project) => project.id === sourceProjectId);
-    if (!source || !name.trim()) return;
-    const template = buildProjectTemplate(source, tasks, name, description);
-    await addDoc(collection(db, "agent_templates"), {
-      ...template,
-      userId: user.uid,
-      workspaceId: workspace.id,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice(`${name.trim()} saved to the workspace template library.`);
-  };
-
-  const deleteProjectTemplate = async (templateId: string) => {
-    if (!templateId) return;
-    await deleteDoc(doc(db, "agent_templates", templateId));
-    setNotice("Project template deleted.");
-  };
-
-  const applyProjectTemplate = async (
-    template: any,
-    application: TemplateApplication,
-  ) => {
-    if (!user || !workspace || !application.title.trim()) return;
-    const member = (id: string) =>
-      workspaceMembers.find((candidate) => candidate.id === id);
-    const roleAssignment = (id: string) => {
-      const selected = member(id);
-      return selected
-        ? { id: selected.id, name: memberLabel(selected) }
-        : undefined;
-    };
-    const roleAssignments: Partial<
-      Record<TemplateRole, { id: string; name: string }>
-    > = {
-      project_manager: roleAssignment(application.projectManagerId),
-      product_owner: roleAssignment(application.productOwnerId),
-      sponsor: roleAssignment(application.sponsorId),
-    };
-    const instantiatedItems = instantiateTemplateItems(
-      template,
-      application.startDate,
-      roleAssignments,
-    );
-    const projectRef = doc(collection(db, "projects"));
-    const conversationRef = doc(collection(db, "boldi_conversations"));
-    const taskRefs = new Map<string, ReturnType<typeof doc>>();
-    const taskByKey = new Map<string, any>();
-    instantiatedItems.forEach((item: any) => {
-      taskRefs.set(item.templateKey, doc(collection(db, "tasks")));
-      taskByKey.set(item.templateKey, item);
-    });
-    const projectManager = roleAssignments.project_manager;
-    const productOwner = roleAssignments.product_owner;
-    const sponsor = roleAssignments.sponsor;
-    const dueDates = instantiatedItems
-      .map((item: any) => item.dueDate)
-      .filter(Boolean)
-      .sort();
-    const batch = writeBatch(db);
-    batch.set(projectRef, {
-      ...(template.projectDefaults || {}),
-      userId: user.uid,
-      workspaceId: workspace.id,
-      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
-      title: application.title.trim(),
-      name: application.title.trim(),
-      normalizedTitle: application.title.trim().toLowerCase().replace(/\s+/g, " "),
-      projectKey: `${projectWorkKey({ title: application.title })}-${projectRef.id.slice(0, 4).toUpperCase()}`,
-      client: application.client || "Internal",
-      bpo: application.bpo || "Internal",
-      status: "planning",
-      startDate: application.startDate,
-      plannedStartDate: application.startDate,
-      targetDate: dueDates[dueDates.length - 1] || null,
-      dueDate: dueDates[dueDates.length - 1] || null,
-      projectManagerId: projectManager?.id || null,
-      projectManager: projectManager?.name || "",
-      productOwnerId: productOwner?.id || null,
-      productOwner: productOwner?.name || "",
-      sponsorId: sponsor?.id || null,
-      sponsor: sponsor?.name || "",
-      sponsorIds: sponsor?.id ? [sponsor.id] : [],
-      sponsors: sponsor?.name ? [sponsor.name] : [],
-      sourceTemplateId: template.id,
-      sourceTemplateName: template.name,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    instantiatedItems.forEach((item: any, index: number) => {
-      const taskRef = taskRefs.get(item.templateKey)!;
-      const parentRef = item.parentTemplateKey
-        ? taskRefs.get(item.parentTemplateKey)
-        : null;
-      const parentTemplate = item.parentTemplateKey
-        ? taskByKey.get(item.parentTemplateKey)
-        : null;
-      const parentKind = String(parentTemplate?.workItemType || "");
-      const canonicalType = String(item.workItemType || "pbi").toLowerCase();
-      batch.set(taskRef, {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        projectId: projectRef.id,
-        ...buildTaskAccessPatch({
-          task: item,
-          workspaceId: workspace.id,
-          userId: user.uid,
-          email: user.email,
-        }),
-        title: item.title,
-        normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
-        description: item.description || "",
-        key: `${projectWorkKey({ title: application.title })}-${index + 1}`,
-        type: canonicalType,
-        workItemType: canonicalType,
-        itemType: canonicalType,
-        parentId: parentRef?.id || null,
-        epicId: parentKind === "epic" ? parentRef?.id || null : null,
-        featureId: parentKind === "feature" ? parentRef?.id || null : null,
-        priority: item.priority || null,
-        status: "backlog",
-        startDate: item.startDate || null,
-        dueDate: item.dueDate || null,
-        assigneeIds: item.assigneeIds || [],
-        assignees: item.assignees || [],
-        owner: item.owner || "",
-        order: Number(item.order ?? index),
-        rank: Number(item.order ?? index),
-        source: "project_template",
-        sourceTemplateId: template.id,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    });
-    batch.set(conversationRef, {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      title: application.title.trim(),
-      status: "active",
-      sourceContext: "project",
-      contextEntityId: projectRef.id,
-      conversationType: "project",
-      linkedProjectIds: [projectRef.id],
-      linkedTaskIds: [],
-      isChiefOfStaff: false,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    await batch.commit();
-    setConversationId(conversationRef.id);
-    setMessages([]);
-    setProjectConsoleId(projectRef.id);
-    setPanel(null);
-    goCenterView("project");
-    navigate(`/work/projects/${projectRef.id}`);
-    setNotice(
-      `${application.title.trim()} created from ${template.name} with ${instantiatedItems.length} work items.`,
-    );
-  };
+  const {
+    createCostTemplate,
+    updateCostTemplate,
+    createProjectTemplate,
+    deleteProjectTemplate,
+    applyProjectTemplate,
+  } = useProjectTemplates({
+    user,
+    workspace,
+    projects,
+    tasks,
+    workspaceMembers,
+    setNotice,
+    memberLabel,
+    setConversationId,
+    setMessages,
+    setProjectConsoleId,
+    setPanel,
+    goCenterView,
+    navigate,
+  });
 
   const updateWorkspaceProfile = async () => {
     if (!workspace || !workspaceNameDraft.trim()) return;
@@ -2593,7 +1991,7 @@ export function DelivereeWorkspace() {
       ownerId: user.uid,
       members: email ? [emailLower] : [],
       roles: email ? { [emailLower]: "owner" } : {},
-      color: "#214b39",
+      color: "var(--accent)",
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -2655,6 +2053,7 @@ export function DelivereeWorkspace() {
       },
       { merge: true },
     );
+    const inviteToken = createInviteCode();
     const inviteRef = await addDoc(collection(db, "agent_invites"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -2662,8 +2061,9 @@ export function DelivereeWorkspace() {
       emailLower: email,
       role: inviteRole,
       inviteType: "workspace_member",
-      inviteToken: createInviteCode(),
+      inviteToken,
       status: "pending",
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2681,6 +2081,7 @@ export function DelivereeWorkspace() {
         role: inviteRole,
         inviterName: user.displayName,
         inviterEmail: user.email,
+        inviteToken,
       });
       emailSent = Boolean(result.sent);
       if (!emailSent) emailWarning = result.error || "Brevo is not configured yet.";
@@ -3028,6 +2429,11 @@ export function DelivereeWorkspace() {
   };
 
   const deleteProject = async (project: any) => {
+    const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
+    if (!canDeleteProject(project, user, workspace, memberId)) {
+      setNotice("Only the Project Manager or workspace owner can delete this project.");
+      return;
+    }
     const confirmed = window.confirm(
       `Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`,
     );
@@ -3110,19 +2516,10 @@ export function DelivereeWorkspace() {
     patch: Record<string, unknown> = {},
   ) => {
     if (!user || !workspace) return;
-    const project = projects.find((item) => item.id === projectId);
-    const prefix = projectId ? projectWorkKey(project) : "TASK";
-    const nextSequence =
-      tasks
-        .filter((item) =>
-          projectId ? item.projectId === projectId : !item.projectId,
-        )
-        .reduce((maximum, item) => {
-          const match = String(item.key || item.workItemKey || "").match(
-            /-(\d+)$/,
-          );
-          return Math.max(maximum, match ? Number(match[1]) : 0);
-        }, 0) + 1;
+    const requestedKey = String(patch.key || "").trim().toUpperCase();
+    const key = isModernWorkItemKey(requestedKey)
+      ? requestedKey
+      : nextWorkItemKey(tasks.map((item) => item.key || item.workItemKey));
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
@@ -3139,7 +2536,7 @@ export function DelivereeWorkspace() {
       }),
       title,
       normalizedTitle: title.trim().toLowerCase().replace(/\s+/g, " "),
-      key: String(patch.key || `${prefix}-${nextSequence}`),
+      key,
       type: canonicalType,
       workItemType: canonicalType,
       itemType: canonicalType,
@@ -3168,6 +2565,102 @@ export function DelivereeWorkspace() {
       }),
       updatedAt: serverTimestamp(),
     });
+  };
+
+  const createSprint = async (patch: Record<string, unknown>) => {
+    if (!user || !workspace) return;
+    await addDoc(collection(db, "sprints"), {
+      ...patch,
+      userId: user.uid,
+      workspaceId: workspace.id,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice("Sprint saved.");
+  };
+
+  const updateSprint = async (sprintId: string, patch: Record<string, unknown>) => {
+    await updateDoc(doc(db, "sprints", sprintId), {
+      ...patch,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const addProjectDocument = async (projectId: string, payload: Record<string, unknown>) => {
+    if (!user || !workspace) return;
+    let url = String(payload.url || "");
+    const file = payload.file as File | undefined;
+    if (file) {
+      if (!isAllowedProjectResourceSize(file.size)) {
+        setNotice("Files must be 20 MB or smaller.");
+        return;
+      }
+      const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file);
+      url = await getDownloadURL(fileRef);
+    }
+    await addDoc(collection(db, "knowledge_items"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      projectId,
+      title: payload.title || file?.name || "Untitled",
+      resourceType: payload.resourceType || "note",
+      url,
+      content: payload.body || "",
+      status: "active",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice("Document saved.");
+  };
+
+  const connectProjectDrive = async () => {
+    try {
+      await connectGoogleDrive();
+      const folders = await listDriveFolders();
+      setDriveFolders(folders);
+      setDriveMessage("Google Drive connected. Choose a root folder, or create a project folder under Drive root.");
+      setNotice("Google Drive connected.");
+    } catch (reason) {
+      setDriveMessage(reason instanceof Error ? reason.message : "Google Drive could not be connected.");
+      setNotice(reason instanceof Error ? reason.message : "Google Drive could not be connected.");
+    }
+  };
+
+  const selectDriveRoot = async (folderId: string, folderName: string) => {
+    if (!user || !workspace) return;
+    setDriveRoot({ id: folderId, name: folderName });
+    await addDoc(collection(db, "integration_configs"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      provider: "google_drive",
+      rootFolderId: folderId,
+      rootFolderName: folderName,
+      autoCreateExternalFolder: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setDriveMessage(`Root folder saved: ${folderName}`);
+  };
+
+  const createProjectDriveFolder = async (project: any) => {
+    try {
+      if (!storedDriveAccessToken()) await connectGoogleDrive();
+      const folder = await createDriveFolder(String(project.title || project.name || "Project"), driveRoot?.id || null);
+      await updateProject(project.id, {
+        externalFolderId: folder.id,
+        externalFolderName: folder.name,
+        externalFolderProvider: "google_drive",
+        autoCreateExternalFolder: false,
+      });
+      setDriveMessage(`Created Drive folder ${folder.name}`);
+      setNotice(`Project folder created in Google Drive.`);
+    } catch (reason) {
+      setDriveMessage(reason instanceof Error ? reason.message : "The Drive folder could not be created.");
+      setNotice(reason instanceof Error ? reason.message : "The Drive folder could not be created.");
+    }
   };
 
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
@@ -3205,7 +2698,6 @@ export function DelivereeWorkspace() {
       draft.firstAction.trim().slice(0, 500),
       "backlog",
       {
-        key: `${projectWorkKey({ title: draft.title })}-1`,
         source: "project_wizard",
         priority: "1",
         dueDate: targetDate || null,
@@ -3429,18 +2921,122 @@ export function DelivereeWorkspace() {
 
   const openingPrompts = isFocusedConversation
     ? [
-        `What needs attention in ${currentContextLabel}?`,
-        `Turn the next step for ${currentContextLabel} into clear work.`,
-        `Give me a short, honest update for this conversation.`,
+        "What's blocking us?",
+        "Summarize progress this week",
+        "Find overdue work",
+        "Prepare a status report",
+        "Recommend next actions",
       ]
     : [
-        "Plan my day realistically.",
-        "What is the most important thing to move next?",
-        "Help me capture and clarify something new.",
+        "Review projects at risk",
+        "Prepare my weekly portfolio report",
+        "Find overdue work and follow up",
+        "Which projects need attention today?",
+        "Create follow-ups for the biggest blockers",
       ];
 
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(() => {
+    const items: CommandPaletteItem[] = [
+      {
+        id: "nav-home",
+        label: "Go to Home",
+        group: "Navigate",
+        onSelect: () => navigate("/home"),
+      },
+      {
+        id: "nav-my-work",
+        label: "Go to My Work",
+        group: "Navigate",
+        onSelect: () => navigate("/my-work"),
+      },
+      {
+        id: "nav-projects",
+        label: "Go to Projects",
+        group: "Navigate",
+        keywords: "work portfolio command center",
+        onSelect: () => navigate("/projects"),
+      },
+      {
+        id: "nav-agents",
+        label: "Go to Agents",
+        group: "Navigate",
+        keywords: "odysseus ai automations",
+        onSelect: () => navigate("/agents"),
+      },
+      {
+        id: "nav-approvals",
+        label: "Go to Approvals",
+        group: "Navigate",
+        onSelect: () => navigate("/approvals"),
+      },
+      {
+        id: "nav-workspace",
+        label: "Workspace & team",
+        group: "Navigate",
+        onSelect: () => navigate("/workspace"),
+      },
+      {
+        id: "nav-settings",
+        label: "Go to Settings",
+        group: "Navigate",
+        onSelect: () => navigate("/settings"),
+      },
+      {
+        id: "odiseus",
+        label: "Open Odysseus",
+        group: "Actions",
+        keywords: "ai employee hire agent",
+        onSelect: () => {
+          void openChiefOfStaff();
+          navigate("/agents");
+        },
+      },
+      {
+        id: "quick-capture",
+        label: "Quick Capture",
+        group: "Create",
+        onSelect: () => {
+          setComposer("Capture this: ");
+          navigate("/home");
+        },
+      },
+      {
+        id: "new-conversation",
+        label: "New conversation",
+        group: "Create",
+        onSelect: () => void createConversation(),
+      },
+      {
+        id: "new-project",
+        label: "Create project",
+        group: "Create",
+        onSelect: () => setProjectWizardOpen(true),
+      },
+    ];
+    for (const project of activeProjects.slice(0, 30)) {
+      items.push({
+        id: `project-${project.id}`,
+        label: entityTitle(project),
+        group: "Projects",
+        onSelect: () => openProjectRecord(project),
+      });
+    }
+    return items;
+  }, [
+    activeProjects,
+    createConversation,
+    navigate,
+    openChiefOfStaff,
+    openProjectRecord,
+  ]);
+
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+      <CommandPalette
+        items={commandPaletteItems}
+        onClose={() => setCommandPaletteOpen(false)}
+        open={commandPaletteOpen}
+      />
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -3459,16 +3055,18 @@ export function DelivereeWorkspace() {
           <button
             className="do-brand"
             onClick={() => {
-              navigate("/");
-              setSidebarOpen(false);
+              setWorkspaceOpen((open) => !open);
             }}
             type="button"
+            aria-label="Workspace switcher"
+            title="Workspace switcher"
           >
             <span className="do-logo">C</span>
-            <span>
-              <strong>Certo Work</strong>
-              <small>Think. Choose. Move.</small>
+            <span className="do-brand-copy">
+              <strong>{workspace?.name || "Certo Work"}</strong>
+              <small>Certo Work</small>
             </span>
+            <ChevronDown className="do-brand-chevron" size={13} />
           </button>
           <button
             aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -3490,6 +3088,90 @@ export function DelivereeWorkspace() {
         </div>
 
         <button
+          className="do-sidebar-search"
+          data-testid="sidebar-search"
+          onClick={() => {
+            setCommandPaletteOpen(true);
+            setSidebarOpen(false);
+          }}
+          type="button"
+        >
+          <Search size={14} />
+          <span>{t("headerSearch")}</span>
+          <kbd>⌘K</kbd>
+        </button>
+
+        <nav className="do-nav-primary" aria-label="Primary">
+          <button
+            className={`do-nav-item is-home ${lens.kind === "home" ? "is-active" : ""}`}
+            data-testid="nav-home"
+            onClick={() => {
+              navigate("/home");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Home size="sm" />
+            <span>{t("navHome")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-my-work ${lens.kind === "my-work" ? "is-active" : ""}`}
+            data-testid="nav-my-work"
+            onClick={() => {
+              navigate("/my-work");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <CheckCircle2 size="sm" />
+            <span>{t("navMyWork")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-projects ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
+            data-testid="nav-projects"
+            onClick={() => {
+              navigate("/projects");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Folder size="sm" />
+            <span>{t("navProjects")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-agents ${lens.kind === "agents" ? "is-active" : ""}`}
+            data-testid="nav-agents"
+            onClick={() => {
+              navigate("/agents");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Bot size="sm" />
+            <span>{t("navAgents")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-approvals ${lens.kind === "approvals" ? "is-active" : ""}`}
+            data-testid="nav-approvals"
+            onClick={() => {
+              navigate("/approvals");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <ShieldCheck size="sm" />
+            <span>{t("navApprovals")}</span>
+            {reviewItems.length > 0 && (
+              <em
+                className={`do-nav-badge ${reviewItems.some((item) => Date.now() - timestamp(item.createdAt) > 48 * 3600 * 1000) ? "is-critical" : ""}`}
+              >
+                {reviewItems.length}
+              </em>
+            )}
+          </button>
+        </nav>
+
+        <button
           className="do-new-conversation"
           data-testid="new-conversation"
           disabled={creatingConversation}
@@ -3501,31 +3183,27 @@ export function DelivereeWorkspace() {
           ) : (
             <Plus size={15} />
           )}
-          <span>{creatingConversation ? "Starting…" : "New conversation"}</span>
-          <kbd>⌘K</kbd>
-        </button>
-
-        <button
-          className="do-chief-conversation"
-          onClick={openChiefOfStaff}
-          type="button"
-        >
-          <span>
-            <Sparkles size={14} />
-          </span>
-          <div>
-            <strong>Chief of Staff</strong>
-            <small>Coordinate across all work</small>
-          </div>
-          <ChevronRight size={13} />
+          <span>{creatingConversation ? "Starting…" : "New"}</span>
+          <kbd>N</kbd>
         </button>
 
         <div className="do-sidebar-scroll">
           <div className="do-sidebar-section">
             <div className="do-section-head">
-              <span>Projects</span>
               <button
-                aria-label="Open project command center"
+                aria-expanded={sidebarSections.projects}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("projects")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.projects ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>Projects</span>
+              </button>
+              <button
+                aria-label="Open projects portfolio"
                 onClick={() => {
                   goCenterView("portfolio");
                   setPanel(null);
@@ -3533,104 +3211,149 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                Command center
+                All projects
               </button>
             </div>
+            {sidebarSections.projects && (
             <div className="do-project-list">
               {sidebarProjects.favorites.length > 0 && (
-                <span className="do-project-group-label">
+                <button
+                  aria-expanded={sidebarSections.favorites}
+                  className="do-project-group-label is-toggle"
+                  onClick={() => toggleSidebarSection("favorites")}
+                  type="button"
+                >
+                  <ChevronDown
+                    className={sidebarSections.favorites ? "" : "is-collapsed"}
+                    size={11}
+                  />
                   <Star size={10} /> Favorites
-                </span>
+                </button>
               )}
-              {sidebarProjects.favorites.map((project) => (
+              {sidebarSections.favorites &&
+                sidebarProjects.favorites.map((project) => {
+                  const health = projectHealth(
+                    project,
+                    openTasks.filter((task) => task.projectId === project.id),
+                    risks.filter((risk) => risk.projectId === project.id),
+                  );
+                  const openCount = openTasks.filter(
+                    (task) => task.projectId === project.id,
+                  ).length;
+                  return (
                 <div
-                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
+                    health === "blocked" ? "is-blocked" : ""
+                  }`}
                   key={project.id}
                 >
                   <button
                     className="do-project-context"
-                    onClick={() => selectProjectContext(project)}
-                    type="button"
-                  >
-                    <Star fill="currentColor" size={12} />
-                    <span>{entityTitle(project)}</span>
-                    <small>
-                      {openTasks.filter((task) => task.projectId === project.id)
-                        .length || ""}
-                    </small>
-                  </button>
-                  <button
-                    className="do-project-open"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    Open
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={false}
+                      size="sm"
+                    />
+                    <span className="do-project-title">{entityTitle(project)}</span>
+                    {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <button
-                    aria-label={`Archive ${entityTitle(project)}`}
-                    className="do-project-icon"
-                    onClick={() => archiveProject(project)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  <button
-                    aria-label={`Delete ${entityTitle(project)}`}
-                    className="do-project-icon is-danger"
-                    onClick={() => deleteProject(project)}
-                    type="button"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
-              ))}
+                  );
+                })}
               {sidebarProjects.recent.length > 0 && (
-                <span className="do-project-group-label">Recent</span>
+                <button
+                  aria-expanded={sidebarSections.recent}
+                  className="do-project-group-label is-toggle"
+                  onClick={() => toggleSidebarSection("recent")}
+                  type="button"
+                >
+                  <ChevronDown
+                    className={sidebarSections.recent ? "" : "is-collapsed"}
+                    size={11}
+                  />
+                  Recent
+                </button>
               )}
-              {sidebarProjects.recent.map((project) => (
+              {sidebarSections.recent &&
+                sidebarProjects.recent.map((project) => {
+                  const health = projectHealth(
+                    project,
+                    openTasks.filter((task) => task.projectId === project.id),
+                    risks.filter((risk) => risk.projectId === project.id),
+                  );
+                  const openCount = openTasks.filter(
+                    (task) => task.projectId === project.id,
+                  ).length;
+                  return (
                 <div
-                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""}`}
+                  className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
+                    health === "blocked" ? "is-blocked" : ""
+                  }`}
                   key={project.id}
                 >
                   <button
                     className="do-project-context"
-                    onClick={() => selectProjectContext(project)}
-                    type="button"
-                  >
-                    <Folder size={12} />
-                    <span>{entityTitle(project)}</span>
-                    <small>
-                      {openTasks.filter((task) => task.projectId === project.id)
-                        .length || ""}
-                    </small>
-                  </button>
-                  <button
-                    className="do-project-open"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    Open
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={false}
+                      size="sm"
+                    />
+                    <span className="do-project-title">{entityTitle(project)}</span>
+                    {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <button
-                    aria-label={`Archive ${entityTitle(project)}`}
-                    className="do-project-icon"
-                    onClick={() => archiveProject(project)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  <button
-                    aria-label={`Delete ${entityTitle(project)}`}
-                    className="do-project-icon is-danger"
-                    onClick={() => deleteProject(project)}
-                    type="button"
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
-              ))}
+                  );
+                })}
               {activeProjects.length === 0 && (
                 <button
                   className="do-empty-link"
@@ -3641,11 +3364,23 @@ export function DelivereeWorkspace() {
                 </button>
               )}
             </div>
+            )}
           </div>
 
           <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
-              <span>Conversations</span>
+              <button
+                aria-expanded={sidebarSections.conversations}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("conversations")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.conversations ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>Recent</span>
+              </button>
               <button
                 aria-label="Search conversations"
                 onClick={() => setSearchOpen((open) => !open)}
@@ -3654,6 +3389,8 @@ export function DelivereeWorkspace() {
                 <Search size={13} />
               </button>
             </div>
+            {sidebarSections.conversations && (
+            <>
             {searchOpen && (
               <input
                 aria-label="Search conversations"
@@ -3679,7 +3416,7 @@ export function DelivereeWorkspace() {
                       navigate(
                         projectIds.length === 1 && taskIds.length === 0
                           ? `/work/projects/${projectIds[0]}`
-                          : "/",
+                          : "/home",
                       );
                       setSidebarOpen(false);
                     }}
@@ -3694,32 +3431,38 @@ export function DelivereeWorkspace() {
                     ) : (
                       <MessageSquare size={13} />
                     )}
-                    <span>{conversation.title || "New conversation"}</span>
+                    <span className="do-conversation-title">
+                      {conversation.title || "New conversation"}
+                    </span>
+                  </button>
+                  <div className="do-conversation-meta">
                     <small>
                       {conversationScopeLabel(conversation, projects, tasks)} ·{" "}
                       {timeAgo(
                         conversation.updatedAt || conversation.createdAt,
                       )}
                     </small>
-                  </button>
-                  <button
-                    aria-label={`Archive ${conversation.title || "conversation"}`}
-                    className="do-conversation-action"
-                    onClick={() => archiveConversation(conversation)}
-                    type="button"
-                  >
-                    <Archive size={11} />
-                  </button>
-                  {!conversation.isChiefOfStaff && (
-                    <button
-                      aria-label={`Delete ${conversation.title || "conversation"}`}
-                      className="do-conversation-action is-danger"
-                      onClick={() => deleteConversation(conversation)}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
+                    <span className="do-conversation-actions">
+                      <button
+                        aria-label={`Archive ${conversation.title || "conversation"}`}
+                        className="do-conversation-action"
+                        onClick={() => void archiveConversation(conversation)}
+                        type="button"
+                      >
+                        <Archive size={11} />
+                      </button>
+                      {!conversation.isChiefOfStaff && (
+                        <button
+                          aria-label={`Delete ${conversation.title || "conversation"}`}
+                          className="do-conversation-action is-danger"
+                          onClick={() => void deleteConversation(conversation)}
+                          type="button"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </span>
+                  </div>
                 </div>
               ))}
             {!search.trim() && filteredConversations.length > 5 && (
@@ -3739,8 +3482,50 @@ export function DelivereeWorkspace() {
                 </span>
               </button>
             )}
+            </>
+            )}
           </div>
         </div>
+
+        <nav className="do-nav-admin" aria-label="Workspace administration">
+          <button
+            className={`do-nav-item ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
+            data-testid="nav-workspace"
+            onClick={() => {
+              navigate("/workspace");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Users size="sm" />
+            <span>{t("navWorkspace")}</span>
+          </button>
+          <button
+            className={`do-nav-item ${lens.kind === "settings" ? "is-active" : ""}`}
+            data-testid="nav-settings"
+            onClick={() => {
+              navigate("/settings");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Settings size="sm" />
+            <span>{t("navSettings")}</span>
+          </button>
+          <button
+            className="do-nav-item"
+            data-testid="nav-help"
+            onClick={() => {
+              setComposer("Help me understand Certo Work navigation: ");
+              navigate("/home");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <HelpCircle size="sm" />
+            <span>{t("navHelp")}</span>
+          </button>
+        </nav>
 
         <div className="do-account">
           <button
@@ -3751,8 +3536,8 @@ export function DelivereeWorkspace() {
               {memberAvatar(currentWorkspaceMember || {})}
             </span>
             <span>
-              <strong>{workspace?.name || "Certo Work"}</strong>
-              <small>{memberLabel(currentWorkspaceMember || { status: "active" })}</small>
+              <strong>{memberLabel(currentWorkspaceMember || { status: "active" })}</strong>
+              <small>{workspace?.name || "Certo Work"}</small>
             </span>
             <MoreHorizontal size={15} />
           </button>
@@ -3803,148 +3588,134 @@ export function DelivereeWorkspace() {
       <main className="do-main">
         <header className="do-header">
           <button
-            aria-label="Open navigation"
+            aria-label={t("openNav")}
             className="do-icon-button do-menu-button"
             onClick={() => setSidebarOpen(true)}
+            title={t("openNav")}
             type="button"
           >
             <Menu size={18} />
           </button>
-          <button
-            className="do-context-title"
-            onClick={() => setPanel("projects")}
-            type="button"
-          >
-            <span>{currentContextLabel}</span>
-            <ChevronRight size={13} />
-          </button>
+          <div className="do-breadcrumb">
+            <AppBreadcrumbs
+              segments={[
+                {
+                  label: workspace?.name || "Workspace",
+                  onClick: () => navigate("/home"),
+                },
+                ...(centerView === "portfolio"
+                  ? [{ label: "Projects" }]
+                  : []),
+                ...(lens.kind === "my-work"
+                  ? [
+                      {
+                        label: "My Work",
+                        onClick: () => navigate("/my-work"),
+                      },
+                      ...(lens.section === "inbox"
+                        ? [{ label: "Inbox" }]
+                        : lens.section === "waiting"
+                          ? [{ label: "Waiting" }]
+                          : [{ label: "Assigned" }]),
+                    ]
+                  : []),
+                ...(lens.kind === "agents"
+                  ? [
+                      {
+                        label: "Agents",
+                        onClick: () => navigate("/agents"),
+                      },
+                      ...(lens.section === "automations"
+                        ? [{ label: "Automations" }]
+                        : lens.section === "activity"
+                          ? [{ label: "Activity" }]
+                          : []),
+                    ]
+                  : []),
+                ...(activeProject
+                  ? [
+                      {
+                        label: entityTitle(activeProject),
+                        onClick: () => openProjectRecord(activeProject),
+                      },
+                    ]
+                  : lens.kind === "home"
+                    ? [{ label: "Home" }]
+                    : lens.kind === "approvals"
+                      ? [{ label: "Approvals" }]
+                      : lens.kind === "settings"
+                        ? [{ label: "Settings" }]
+                        : centerView === "conversation"
+                          ? [{ label: currentContextLabel || "Odysseus" }]
+                          : []),
+                ...(selectedWorkItem
+                  ? [{ label: entityTitle(selectedWorkItem) }]
+                  : []),
+              ]}
+            />
+          </div>
           <div className="do-header-actions">
-            {routeOrPrimaryProject && (
+            <button
+              aria-label="Open command palette"
+              className="do-icon-button"
+              onClick={() => setCommandPaletteOpen(true)}
+              title="Command palette (⌘K)"
+              type="button"
+            >
+              <Search size={15} />
+            </button>
+            <div className="do-create-menu">
               <button
-                className={`do-header-button ${centerView === "project" ? "is-active" : ""}`}
-                onClick={() => {
-                  setProjectConsoleId(routeOrPrimaryProject.id);
-                  setPanel(null);
-                  goCenterView(
-                    centerView === "project" ? "conversation" : "project",
-                  );
-                }}
+                aria-label={t("headerCreate")}
+                className="cw-btn cw-btn-primary cw-btn-sm"
+                onClick={() => setCreateMenuOpen((open) => !open)}
+                title={t("headerCreate")}
                 type="button"
               >
-                <Folder size={15} />
-                <span>Project console</span>
+                <Plus size={15} />
+                <span>{t("headerCreate")}</span>
               </button>
-            )}
-            <button
-              className={`do-header-button ${panel === "skills" ? "is-active" : ""}`}
-              onClick={() => setPanel(panel === "skills" ? null : "skills")}
-              type="button"
-            >
-              <WandSparkles size={15} />
-              <span>Skills</span>
-            </button>
-            <button
-              className={`do-header-button ${panel === "digest" ? "is-active" : ""}`}
-              onClick={() => setPanel(panel === "digest" ? null : "digest")}
-              type="button"
-            >
-              <Mail size={15} />
-              <span>Digest</span>
-            </button>
-            <button
-              className="do-header-button"
-              onClick={() => setPanel("today")}
-              type="button"
-            >
-              <ListTodo size={15} />
-              <span>Today</span>
-              {todayTasks.length > 0 && <small>{todayTasks.length}</small>}
-            </button>
-            <button
-              className="do-header-button"
-              onClick={() => setPanel("approvals")}
-              type="button"
-            >
-              <ShieldCheck size={15} />
-              <span>Pendientes</span>
-              {reviewItems.length > 0 && (
-                <small className="is-attention">{reviewItems.length}</small>
+              {createMenuOpen && (
+                <div className="do-account-menu">
+                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
+                    {t("createTask")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                    {t("createProject")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
+                    {t("createCapture")}
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </header>
 
         {notice && (
-          <div className="do-notice" role="status">
-            <CheckCircle2 size={15} />
-            <span>{notice}</span>
-            <button
-              aria-label="Dismiss notification"
-              onClick={() => setNotice("")}
-              type="button"
-            >
-              <X size={14} />
-            </button>
-          </div>
+          <Toast kind="success" onDismiss={() => setNotice("")}>
+            {notice}
+          </Toast>
         )}
 
+        {lens.kind === "project" && (
         <section
-          className={`do-center-bar ${centerView === "portfolio" ? "is-portfolio" : ""}`}
-          aria-label="Current work view"
+          className="do-center-bar"
+          aria-label="Project views"
         >
-          <div className="do-center-navigation" aria-label="View history">
-            <button
-              aria-label="Go back"
-              disabled={centerHistory.index === 0}
-              onClick={goCenterBack}
-              type="button"
-            >
-              <ArrowLeft size={14} />
-            </button>
-            <button
-              aria-label="Go forward"
-              disabled={centerHistory.index === centerHistory.items.length - 1}
-              onClick={goCenterForward}
-              type="button"
-            >
-              <ArrowRight size={14} />
-            </button>
-          </div>
-          <div className="do-breadcrumb">
-            <span>
-              {routeOrPrimaryProject
-                ? entityTitle(routeOrPrimaryProject)
-                : "Chief of Staff"}
-            </span>
-            {selectedWorkItem && (
-              <>
-                <ChevronRight size={12} />
-                <strong>{entityTitle(selectedWorkItem)}</strong>
-              </>
-            )}
-          </div>
           <div
             className="do-view-switch"
             role="tablist"
-            aria-label="Central view"
+            aria-label="Project views"
           >
             <button
-              aria-selected={centerView === "conversation"}
-              className={centerView === "conversation" ? "is-active" : ""}
-              onClick={() => goCenterView("conversation")}
+              aria-selected={centerView === "project"}
+              className={centerView === "project" ? "is-active" : ""}
+              onClick={() => goCenterView("project")}
               role="tab"
               type="button"
             >
-              <MessageSquare size={13} /> Conversación
-            </button>
-            <button
-              aria-selected={centerView === "items"}
-              className={centerView === "items" ? "is-active" : ""}
-              onClick={() => goCenterView("items")}
-              role="tab"
-              type="button"
-            >
-              <ListTodo size={13} /> Ítems
+              Overview
             </button>
             <button
               aria-selected={centerView === "notes"}
@@ -3953,34 +3724,20 @@ export function DelivereeWorkspace() {
               role="tab"
               type="button"
             >
-              <BookOpen size={13} /> Notas
+              Notes
             </button>
             <button
               aria-selected={centerView === "strategy"}
               className={centerView === "strategy" ? "is-active" : ""}
-              onClick={() => {
-                goCenterView("strategy");
-                setPanel(null);
-              }}
+              onClick={() => goCenterView("strategy")}
               role="tab"
               type="button"
             >
-              <Target size={13} /> Strategy
-            </button>
-            <button
-              aria-selected={centerView === "portfolio"}
-              className={centerView === "portfolio" ? "is-active" : ""}
-              onClick={() => {
-                goCenterView("portfolio");
-                setPanel(null);
-              }}
-              role="tab"
-              type="button"
-            >
-              <LayoutGrid size={13} /> Portfolio
+              Strategy
             </button>
           </div>
         </section>
+        )}
 
         {centerView === "conversation" ? (
           <>
@@ -3988,55 +3745,42 @@ export function DelivereeWorkspace() {
               <div className="do-thread">
                 {contextualMessages.length === 0 && !submitting ? (
                   <section className="do-opening">
-                    <div className="do-welcome">
-                      <span className="do-orb">
-                        <Sparkles size={21} />
-                      </span>
-                      {isFocusedConversation && (
+                    {isFocusedConversation ? (
+                      <div className="do-welcome">
+                        <OdysseusMark size="lg" />
                         <span className="do-context-eyebrow">
                           FOCUSED · {currentContextLabel}
                         </span>
-                      )}
-                      <h1>
-                        {isFocusedConversation
-                          ? "What should move next?"
-                          : `What matters now, ${displayName(
-                              currentWorkspaceMember
-                                ? memberLabel(currentWorkspaceMember)
-                                : user?.displayName,
-                            )}?`}
-                      </h1>
-                      <p>
-                        {routeOrPrimaryProject
-                          ? routeOrPrimaryProject.outcome ||
-                            routeOrPrimaryProject.description ||
-                            `${projectTasks.length} open tasks in this context.`
-                          : isFocusedConversation
-                            ? `${projectTasks.length} open items are connected to this conversation.`
-                            : "Capture anything. Make a plan. Finish the right work."}
-                      </p>
-                    </div>
-
-                    {!isFocusedConversation && (
-                      <button
-                        className="do-daily-pulse"
-                        onClick={() =>
-                          sendMessage(
-                            "Give me a realistic plan for today using my current work.",
-                          )
-                        }
-                        type="button"
-                      >
-                        <span>
-                          <CalendarDays size={15} /> Today
-                        </span>
-                        <strong>
-                          {todayTasks.length
-                            ? `${todayTasks.length} tasks need attention`
-                            : "Your day is open"}
-                        </strong>
-                        <ChevronRight size={15} />
-                      </button>
+                        <h1>{t("odiseusFocusedPrompt")}</h1>
+                        <p>
+                          {routeOrPrimaryProject
+                            ? routeOrPrimaryProject.outcome ||
+                              routeOrPrimaryProject.description ||
+                              `${projectTasks.length} open tasks in this context.`
+                            : `${projectTasks.length} open items are connected to this conversation.`}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {!isFocusedConversation && (
+                          <HomeAttention
+                            projects={projects}
+                            tasks={tasks}
+                            risks={risks}
+                            reviewItems={reviewItems}
+                            todayTasks={todayTasks}
+                            onOpenProject={openProjectRecord}
+                            onOpenApprovals={() => setPanel("approvals")}
+                            onAsk={setComposer}
+                            activityItems={odiseusActivity}
+                          />
+                        )}
+                        <OdysseusAgentHome
+                          examples={openingPrompts}
+                          onExample={(prompt) => sendMessage(prompt)}
+                          pendingApprovals={reviewItems.length}
+                        />
+                      </>
                     )}
 
                     {isFocusedConversation && (
@@ -4056,18 +3800,20 @@ export function DelivereeWorkspace() {
                       </div>
                     )}
 
-                    <div className="do-prompt-list">
-                      {openingPrompts.map((prompt) => (
-                        <button
-                          key={prompt}
-                          onClick={() => sendMessage(prompt)}
-                          type="button"
-                        >
-                          <span>{prompt}</span>
-                          <ArrowUp size={14} />
-                        </button>
-                      ))}
-                    </div>
+                    {isFocusedConversation && (
+                      <div className="do-prompt-list">
+                        {openingPrompts.map((prompt) => (
+                          <button
+                            key={prompt}
+                            onClick={() => sendMessage(prompt)}
+                            type="button"
+                          >
+                            <span>{prompt}</span>
+                            <ArrowUp size={14} />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </section>
                 ) : (
                   <>
@@ -4099,11 +3845,11 @@ export function DelivereeWorkspace() {
                         ) : (
                           <div className="do-assistant-message">
                             <div className="do-assistant-mark">
-                              <Bot size={16} />
+                              <OdysseusMark size="sm" />
                             </div>
                             <div className="do-assistant-content">
                               <div className="do-assistant-name">
-                                Certo Work{" "}
+                                <OdysseusBadge />
                                 {message.offline && <span>safe mode</span>}
                               </div>
                               <RichText text={message.content} />
@@ -4119,14 +3865,40 @@ export function DelivereeWorkspace() {
                                     ))}
                                   </div>
                                 )}
-                              <ActionProposal
-                                activeProject={
-                                  primaryProject || activeProject || null
-                                }
-                                message={message}
-                                onStage={stagePlan}
-                                projects={projects}
-                              />
+                              {message.odiseusRun?.steps?.length ? (
+                                <OdysseusWorkLog
+                                  steps={message.odiseusRun.steps}
+                                />
+                              ) : null}
+                              {message.odiseusRun?.artifact ? (
+                                <OdysseusArtifactCard
+                                  meta="Generated by Odysseus"
+                                  summary={
+                                    message.odiseusRun.artifact.summary ||
+                                    undefined
+                                  }
+                                  title={message.odiseusRun.artifact.title}
+                                  onOpen={
+                                    message.odiseusRun.artifact.body
+                                      ? () =>
+                                          setComposer(
+                                            `Here is the report you prepared:\n\n${message.odiseusRun.artifact.body}`,
+                                          )
+                                      : undefined
+                                  }
+                                />
+                              ) : null}
+                              {message.actionPlan?.status !== "rejected" && (
+                                <ActionProposal
+                                  activeProject={
+                                    primaryProject || activeProject || null
+                                  }
+                                  message={message}
+                                  onReject={rejectPlan}
+                                  onStage={stagePlan}
+                                  projects={projects}
+                                />
+                              )}
                               {message.suggestedChips && (
                                 <div className="do-chips">
                                   {message.suggestedChips.map((chip) => {
@@ -4157,17 +3929,16 @@ export function DelivereeWorkspace() {
                       <article className="do-message is-assistant">
                         <div className="do-assistant-message">
                           <div className="do-assistant-mark">
-                            <Bot size={16} />
+                            <OdysseusMark size="sm" />
                           </div>
                           <div className="do-assistant-content">
+                            <div className="do-assistant-name">
+                              <OdysseusBadge />
+                            </div>
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
-                              <div className="do-thinking">
-                                <span />
-                                <span />
-                                <span />
-                              </div>
+                              <OdysseusWorkLog steps={liveOdysseusSteps} working />
                             )}
                           </div>
                         </div>
@@ -4274,8 +4045,8 @@ export function DelivereeWorkspace() {
                   }}
                   placeholder={
                     isFocusedConversation
-                      ? `Ask about ${currentContextLabel}…`
-                      : "Ask, capture, or plan…"
+                      ? `Give Odysseus a job for ${currentContextLabel}…`
+                      : "Give Odysseus a job…"
                   }
                   ref={composerRef}
                   rows={1}
@@ -4330,23 +4101,81 @@ export function DelivereeWorkspace() {
             </div>
           </>
         ) : centerView === "items" ? (
-          <WorkItemsCenter
+          <div className="do-my-work-shell" data-testid="my-work-shell">
+            {lens.kind === "my-work" && (
+              <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
+                <button
+                  className={lens.section === "assigned" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkAssigned")}
+                </button>
+                <button
+                  className={lens.section === "inbox" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work/inbox")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkInbox")}
+                </button>
+                <button
+                  className={lens.section === "waiting" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work/waiting")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkWaiting")}
+                </button>
+              </div>
+            )}
+            <WorkItemsCenter
             activeProject={routeOrPrimaryProject}
             onAddTask={addProjectTask}
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onCreateSprint={createSprint}
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
             onCreateControlledOption={createControlledOption}
+            onUpdateSprint={updateSprint}
             onUpdateTask={updateProjectTask}
             projects={projects}
             selectedItemId={selectedWorkItemId}
+            sprints={sprints}
             tags={categories}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
+          </div>
+        ) : centerView === "agents" ? (
+          agentBuilderOpen ? (
+            <AgentBuilderDraft
+              onChange={setAgentOutcomeDraft}
+              onContinue={() => {
+                setNotice(
+                  `Draft Agent captured: “${agentOutcomeDraft.trim().slice(0, 80)}”. Publish + Hermes provision comes next.`,
+                );
+                setAgentBuilderOpen(false);
+                setAgentOutcomeDraft("");
+              }}
+              outcome={agentOutcomeDraft}
+            />
+          ) : (
+            <AgentsLibrary
+              activityItems={odiseusActivity}
+              pendingApprovals={reviewItems.length}
+              viewerUserId={user?.uid}
+              onCreateAgent={() => setAgentBuilderOpen(true)}
+              onOpenActivity={() => navigate("/agents/activity")}
+              onOpenApprovals={() => setPanel("approvals")}
+              onOpenAutomations={() => navigate("/agents/automations")}
+              onOpenOdysseus={() => void openChiefOfStaff()}
+            />
+          )
         ) : centerView === "strategy" ? (
           <StrategyCenter
             goals={strategicGoals}
@@ -4391,14 +4220,17 @@ export function DelivereeWorkspace() {
             <ProjectConsolePanel
               conversationId={conversationId}
               costTemplates={costTemplates}
+              currentUser={user}
               documents={knowledgeItems.filter(
                 (item) =>
                   item.projectId === consoleProject.id &&
                   item.status !== "archived",
               )}
+              initialTab={projectConsoleInitialTab}
               milestones={milestones.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              onAddDocument={(payload) => addProjectDocument(consoleProject.id, payload)}
               onAddRisk={(title, patch) =>
                 addProjectRisk(consoleProject.id, title, patch)
               }
@@ -4407,6 +4239,38 @@ export function DelivereeWorkspace() {
               }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
+              onCreateShareLink={async () => {
+                if (!user || !workspace) return;
+                const token = createShareToken();
+                const snapshot = sanitizeStatusReportSnapshot(
+                  buildProjectStatusReport(
+                    consoleProject,
+                    tasks.filter((item) => item.projectId === consoleProject.id),
+                    risks.filter((item) => item.projectId === consoleProject.id),
+                    milestones.filter((item) => item.projectId === consoleProject.id),
+                  ),
+                );
+                await setDoc(doc(db, "project_status_shares", token), {
+                  userId: user.uid,
+                  workspaceId: workspace.id,
+                  projectId: consoleProject.id,
+                  token,
+                  snapshot,
+                  revoked: false,
+                  createdAt: serverTimestamp(),
+                });
+                const url = `${window.location.origin}/report/${token}`;
+                setNotice("Read-only status link created.");
+                return url;
+              }}
+              onConnectGoogleDrive={connectProjectDrive}
+              onCreateProjectFolder={() => createProjectDriveFolder(consoleProject)}
+              onSelectDriveRoot={selectDriveRoot}
+              driveFolders={driveFolders}
+              driveRoot={driveRoot}
+              driveConnected={Boolean(storedDriveAccessToken() || driveRoot)}
+              driveMessage={driveMessage}
+              onCreateSprint={createSprint}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
               onAsk={(prompt) => {
@@ -4415,14 +4279,17 @@ export function DelivereeWorkspace() {
               }}
               onUpdateProject={updateProject}
               onUpdateCostTemplate={updateCostTemplate}
+              onUpdateSprint={updateSprint}
               onUpdateTask={updateProjectTask}
               project={consoleProject}
               risks={risks.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
               tasks={tasks.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
+              workspace={workspace}
               workspaceMembers={workspaceMembers}
             />
           ) : (
@@ -4461,9 +4328,9 @@ export function DelivereeWorkspace() {
                   : panel === "project"
                     ? "PROJECT"
                     : panel === "skills"
-                      ? "SKILLS"
+                      ? "AUTOMATIONS"
                       : panel === "digest"
-                        ? "EMAIL"
+                        ? "UPDATES"
                         : panel === "workspace"
                           ? "ADMIN"
                           : "CONTROL"}
@@ -4476,14 +4343,14 @@ export function DelivereeWorkspace() {
                   : panel === "project"
                     ? "Project console"
                     : panel === "skills"
-                      ? "Skills"
+                      ? "Automations"
                       : panel === "digest"
-                        ? "Digest & reminders"
+                        ? "Updates"
                         : panel === "workspace"
                           ? "Workspace & team"
                           : panel === "settings"
                             ? "Settings"
-                          : "Pendientes"}
+                          : "Pending changes"}
             </h2>
           </div>
           <button
@@ -4612,7 +4479,7 @@ export function DelivereeWorkspace() {
                 >
                   <Sparkles size={14} />
                   <span>
-                    <strong>Chief of Staff · general</strong>
+                    <strong>{ODISEUS_NAME} · general</strong>
                     <small>
                       Coordinate and manage anything in the workspace
                     </small>
@@ -4656,11 +4523,11 @@ export function DelivereeWorkspace() {
                     </button>
                   );
                 })}
-                <span className="do-context-section-label">Tasks</span>
+                <span className="do-context-section-label">Items</span>
                 <input
-                  aria-label="Find tasks for this conversation"
+                  aria-label="Find items for this conversation"
                   onChange={(event) => setContextTaskSearch(event.target.value)}
-                  placeholder="Find a task"
+                  placeholder="Find an item"
                   value={contextTaskSearch}
                 />
                 {openTasks
@@ -4735,7 +4602,7 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                Project command center
+                Project portfolio
               </button>
             </>
           )}
@@ -4774,6 +4641,7 @@ export function DelivereeWorkspace() {
                   real skills.
                 </span>
               </div>
+              <OdysseusSchedules onRunNow={(prompt) => sendMessage(prompt)} />
             </>
           )}
 

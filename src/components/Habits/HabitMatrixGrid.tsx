@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Dot, ShieldMinus, AlertCircle } from "lucide-react";
+import { Check, Dot, ShieldMinus, AlertCircle } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { isHabitDueOnDate } from "../../lib/habitUtils";
 
@@ -100,7 +100,7 @@ export function HabitMatrixGrid({ habits, logs, days, onToggleCell, onSelectHabi
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: habit.color || "#6366f1" }}
+                    style={{ backgroundColor: habit.color || "var(--accent)" }}
                   />
                   <div className="min-w-0 flex-1 truncate">
                     <div className="truncate text-gray-900 font-bold" title={habit.title}>{habit.title}</div>
@@ -122,7 +122,7 @@ export function HabitMatrixGrid({ habits, logs, days, onToggleCell, onSelectHabi
                   let cellClass = "hover:scale-105 active:scale-95";
                   let cellStyle: React.CSSProperties = {};
 
-                  const habitColor = habit.color || "#10b981";
+                  const habitColor = habit.color || "var(--status-success)";
 
                   if (!isDue) {
                     cellClass = "cursor-not-allowed bg-transparent";

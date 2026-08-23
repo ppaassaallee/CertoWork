@@ -6,7 +6,7 @@ import {
   Calendar, Folder, Zap, Trash2, Link as LinkIcon,
   User, Tag, AlertTriangle, FileText, CheckCircle,
   TrendingUp, Bot, ShieldAlert, Sparkles, Archive, Rocket
-} from "lucide-react";
+} from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import {
@@ -501,7 +501,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
       animate={{ opacity: 1 }}
       className="gazelle-integrated-page p-4 max-w-6xl mx-auto pb-32 w-full"
     >
-      <header className="mb-6 mt-4 bg-white p-5 md:p-6 rounded-[18px] border border-[#deded6] shadow-[0_8px_24px_rgba(30,35,25,0.04)] relative overflow-hidden">
+      <header className="mb-6 mt-4 bg-white p-5 md:p-6 rounded-[18px] border border-[var(--border)] shadow-[0_8px_24px_rgba(30,35,25,0.04)] relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-start gap-4 justify-between">
           <div className="flex items-start gap-3">
             <Link
@@ -798,7 +798,7 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
         </div>
       )}
 
-      <div className="flex bg-[#efeee8] p-1.5 rounded-[16px] w-full max-w-2xl mb-8 border border-[#deded6] shadow-inner overflow-x-auto">
+      <div className="flex bg-[var(--border)] p-1.5 rounded-[16px] w-full max-w-2xl mb-8 border border-[var(--border)] shadow-inner overflow-x-auto">
         <button
           onClick={() => setCurrentView("overview")}
           className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${currentView === 'overview' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}

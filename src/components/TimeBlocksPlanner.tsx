@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "lucide-react";
+import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
 interface TimeBlockDef {
@@ -183,7 +183,7 @@ export function TimeBlocksPlanner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFCFB]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--status-warning-soft)]">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
       </div>
     );

@@ -6,6 +6,8 @@ import {
   conversationScopeLabel,
   conversationScopeType,
   conversationTaskIds,
+  isProjectConversation,
+  isStandaloneConversation,
 } from "../src/lib/conversationScope";
 
 test("keeps legacy project conversations compatible", () => {
@@ -34,4 +36,9 @@ test("describes multi-entity context without pretending it is one project", () =
     ),
     "2 projects · 1 task",
   );
+});
+
+test("home history only treats chats without project ids as standalone", () => {
+  assert.equal(isStandaloneConversation({ linkedProjectIds: ["fieldops"] }), false);
+  assert.equal(isProjectConversation({ contextEntityId: "fieldops", sourceContext: "project" }), true);
 });

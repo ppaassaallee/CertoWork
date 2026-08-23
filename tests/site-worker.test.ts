@@ -47,11 +47,26 @@ test("Sites worker reports an offline-safe health state without an API key", asy
     environment(),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
-    ok: true,
-    service: "delivereeos-codex-sites",
-    aiProvider: "offline-safe",
-  });
+  const body = (await response.json()) as any;
+  assert.equal(body.ok, true);
+  assert.equal(body.service, "delivereeos-codex-sites");
+  assert.equal(body.aiProvider, "offline-safe");
+  assert.equal(body.ai.providerConfigured, false);
+  assert.equal(body.ai.safeMode, true);
+  assert.equal(body.ai.connectionStatus, "not_configured");
+});
+
+test("AI health never returns the OpenAI secret", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/ai/health"),
+    environment({ OPENAI_API_KEY: "sk-secret-value", OPENAI_MODEL: "gpt-test" }),
+  );
+  const body = (await response.json()) as any;
+  const serialized = JSON.stringify(body);
+  assert.equal(body.providerConfigured, true);
+  assert.equal(body.model, "gpt-test");
+  assert.equal(body.safeMode, false);
+  assert.equal(serialized.includes("sk-secret-value"), false);
 });
 
 test("Firebase auth helpers are resolved through the legacy Firebase host", () => {
@@ -220,7 +235,7 @@ test("inline AI rewriting preserves facts and rejects anonymous requests", async
   assert.equal(response.status, 401);
 });
 
-test("project conversations use delivery-team behavior instead of Chief of Staff lecturing", () => {
+test("project conversations use delivery-team behavior instead of Odysseus lecturing", () => {
   const instructions = assistantInstructions(
     {
       workspaceContext: {
@@ -245,7 +260,7 @@ test("project conversations use delivery-team behavior instead of Chief of Staff
   assert.match(instructions, /attached_entities_only/);
 });
 
-test("Chief of Staff can route an approved handoff to an existing conversation", () => {
+test("Odysseus can route an approved handoff to an existing conversation", () => {
   const instructions = assistantInstructions(
     {
       workspaceContext: {
@@ -258,7 +273,9 @@ test("Chief of Staff can route an approved handoff to an existing conversation",
     [],
   );
 
-  assert.match(instructions, /Chief of Staff, assistant, engineer, and advisor/);
+  assert.match(instructions, /ODISEUS MODE/);
+  assert.match(instructions, /Odysseus, the user's AI employee/);
+  assert.match(instructions, /assistant, engineer, and advisor/);
   assert.match(instructions, /post_to_conversation/);
   assert.match(instructions, /fieldops-chat/);
   assert.match(instructions, /Never invent a conversation ID/);

@@ -1,6 +1,8 @@
 import express from "express";
+import helmet from "helmet";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import path from "path";
 import { fileURLToPath } from "url";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
@@ -9,59 +11,46 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fs from "fs";
 import { generateWithOpenAI, resolveAssistantProvider } from "./server/ai-provider";
 import { rankRetrievalCandidates, type RetrievalCandidate } from "./server/retrieval";
+import { generateContentWithFallback } from "./server/lib/ai";
+import { parseCleanJSON } from "./server/lib/json";
+import {
+  createRequireWorkspaceApiAuth,
+  principalDisplayName,
+  requestIdMiddleware,
+  verifyHubspotSignature,
+} from "./server/middleware/auth";
+import { errorHandler, sendPublicError } from "./server/middleware/errors";
+import { createAiRateLimit } from "./server/middleware/rateLimit";
+import { registerCaptureRoutes } from "./server/routes/capture";
+import { registerDomainAiRoutes } from "./server/routes/domainAi";
+import { registerDataManagementRoutes } from "./server/routes/dataManagement";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-function parseCleanJSON(str: string): any {
-  if (!str) return null;
-  // 1. Remove markdown code blocks if any
-  let cleaned = str.replace(/^```json\n?/gi, '').replace(/```\n?$/g, '').trim();
-  
-  // 2. Remove comments
-  // Strip single line comments: //...
-  cleaned = cleaned.replace(/\/\/.*/g, '');
-  // Strip multi-line comments: /*...*/
-  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
-
-  // 3. Remove trailing commas in objects and arrays
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-
-  // 4. Try to parse
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    // If it still fails, try to escape raw newlines inside JSON strings
-    try {
-      let withinString = false;
-      let fixed = "";
-      for (let i = 0; i < cleaned.length; i++) {
-        const char = cleaned[i];
-        if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
-          withinString = !withinString;
-          fixed += char;
-        } else if (char === '\n' && withinString) {
-          fixed += '\\n';
-        } else if (char === '\r' && withinString) {
-          fixed += '\\r';
-        } else {
-          fixed += char;
-        }
-      }
-      return JSON.parse(fixed);
-    } catch (err2) {
-      console.error("[parseCleanJSON] Failed to parse cleaned JSON. Original:", str, "Cleaned:", cleaned);
-      throw err;
-    }
-  }
-}
 
 async function startServer() {
   const app = express();
   app.set("trust proxy", 1);
   const PORT = Number(process.env.PORT) || 3000;
+  const corsAllowlist = String(
+    process.env.CORS_ORIGIN || "http://localhost:3000,https://certo.work,https://certo-work.gazellehunt.workers.dev",
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
-  app.use(express.json({ limit: "50mb" }));
+  app.use(requestIdMiddleware);
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(cors({ origin: corsAllowlist, credentials: true }));
+  app.use((req, res, next) => {
+    const limit = req.path === "/api/transcribe-capture" ? "25mb" : "1mb";
+    return express.json({
+      limit,
+      verify: (request, _response, buffer) => {
+        (request as typeof req).rawBody = buffer;
+      },
+    })(req, res, next);
+  });
 
   // Initialize firebase admin SDK
   let dbAdmin: any = null;
@@ -103,123 +92,6 @@ async function startServer() {
     console.error("[Firebase Admin] Init failed:", e);
   }
   
-  let aiInstance: GoogleGenAI | null = null;
-  function getGeminiClient(): GoogleGenAI {
-    if (!aiInstance) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("GEMINI_API_KEY environment variable is required but missing. Please configure it in Settings > Secrets.");
-      }
-      aiInstance = new GoogleGenAI({ 
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-    }
-    return aiInstance;
-  }
-
-  async function generateContentWithFallback(params: any): Promise<any> {
-    const primaryModel = process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash";
-    const fallbackModel = process.env.BOLDI_GEMINI_FALLBACK_MODEL || "gemini-2.0-flash";
-    const models = [
-      primaryModel,
-      fallbackModel,
-      "gemini-2.5-pro",
-      "gemini-2.0-pro-exp-02-05"
-    ];
-    
-    if (params.model && !models.includes(params.model)) {
-      models.unshift(params.model);
-    } else if (params.model) {
-      const idx = models.indexOf(params.model);
-      if (idx > -1) {
-        models.splice(idx, 1);
-      }
-      models.unshift(params.model);
-    }
-
-    // Sanitize the contents to remove system roles and normalize other roles to "user" or "model"
-    const sanitizedParams = { ...params };
-    if (Array.isArray(sanitizedParams.contents)) {
-      sanitizedParams.contents = sanitizedParams.contents
-        .filter((item: any) => {
-          if (!item) return false;
-          const role = (item.role || "").toLowerCase();
-          return role !== "system";
-        })
-        .map((item: any) => {
-          const role = (item.role || "").toLowerCase();
-          const mappedRole = (role === "assistant" || role === "model") ? "model" : "user";
-          return {
-            ...item,
-            role: mappedRole
-          };
-        });
-    }
-
-    let lastError: any = null;
-    const aiClient = getGeminiClient();
-    for (const model of models) {
-      let attempts = 0;
-      const maxAttempts = 3;
-      while (attempts < maxAttempts) {
-        attempts++;
-        try {
-          console.log(`[AI Fallback Logger] Trying model: ${model} (attempt ${attempts}/${maxAttempts})`);
-          const response = await aiClient.models.generateContent({
-            ...sanitizedParams,
-            model,
-          });
-          console.log(`[AI Fallback Logger] Success with model: ${model}`);
-          return response;
-        } catch (err: any) {
-          lastError = err;
-          const errMsg = (err.message || "").toLowerCase();
-          
-          const isQuotaExceeded = 
-            err.code === 429 || 
-            err.status === 429 || 
-            errMsg.includes("429") || 
-            errMsg.includes("quota") || 
-            errMsg.includes("limit") ||
-            errMsg.includes("resource has been exhausted");
-
-          if (isQuotaExceeded) {
-            console.warn(`[AI Fallback Logger] Model ${model} returned quota exceeded (429). Falling back immediately...`);
-            break; // Break out of the while loop to try the next model
-          }
-
-          const isRetryable = 
-            err.code === 503 ||
-            err.status === 503 ||
-            errMsg.includes("503") ||
-            errMsg.includes("unavailable") ||
-            errMsg.includes("demand");
-
-          if (isRetryable) {
-            if (attempts < maxAttempts) {
-              const waitTime = attempts * 1000;
-              console.warn(`[AI Fallback Logger] Model ${model} returned retryable error (503). Retrying in ${waitTime}ms...`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              continue;
-            } else {
-              console.warn(`[AI Fallback Logger] Model ${model} failed after ${maxAttempts} attempts. Falling back...`);
-              break;
-            }
-          }
-          console.error(`[AI Fallback Logger] Error with model ${model}. Trying next fallback model... Error:`, err.message || err);
-          break; // Break out of the while loop to try the next model
-        }
-      }
-    }
-    console.error(`[AI Fallback Logger] All fallback models failed. Final error:`, lastError?.message || lastError);
-    throw lastError || new Error("All fallback models failed");
-  }
-
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
@@ -235,7 +107,7 @@ async function startServer() {
     res.json({
       openai: {
         configured: !!process.env.OPENAI_API_KEY,
-        description: "Primary Responses API adapter for structured Chief of Staff conversations."
+        description: "Primary Responses API adapter for structured Odysseus conversations."
       },
       gemini: {
         configured: !!process.env.GEMINI_API_KEY,
@@ -260,1037 +132,77 @@ async function startServer() {
     });
   });
 
-  async function requireWorkspaceApiAuth(req: any, res: any, next: any) {
-    try {
-      const authorization = String(req.headers.authorization || "");
-      if (!authorization.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Authentication required" });
-      }
-      const decoded = await getAdminAuth().verifyIdToken(authorization.slice(7));
-      const requestedUserId = req.body?.userId || req.body?.workspaceContext?.userId;
-      const workspaceId = req.body?.workspaceId || req.body?.workspaceContext?.workspaceId;
-      if (requestedUserId && requestedUserId !== decoded.uid) {
-        return res.status(403).json({ error: "User scope mismatch" });
-      }
-      if (!workspaceId || !dbAdmin) {
-        return res.status(503).json({ error: "Workspace authorization is unavailable" });
-      }
-      const memberId = `${workspaceId}_${decoded.uid}`;
-      const [memberDoc, workspaceDoc] = await Promise.all([
-        dbAdmin.collection("workspace_members").doc(memberId).get(),
-        dbAdmin.collection("workspaces").doc(workspaceId).get(),
-      ]);
-      const isActiveMember = memberDoc.exists && memberDoc.data()?.status === "active";
-      const isOwner = workspaceDoc.exists && workspaceDoc.data()?.ownerId === decoded.uid;
-      if (!isActiveMember && !isOwner) {
-        return res.status(403).json({ error: "Workspace access denied" });
-      }
-      req.authUser = decoded;
-      req.body.userId = decoded.uid;
-      req.body.workspaceId = workspaceId;
-      next();
-    } catch (error) {
-      console.error("[API Auth]", error);
-      res.status(401).json({ error: "Invalid or expired authentication" });
-    }
+  async function loadWorkspaceAccess(workspaceId: string, uid: string) {
+    if (!dbAdmin) return false;
+    const memberId = `${workspaceId}_${uid}`;
+    const [memberDoc, workspaceDoc] = await Promise.all([
+      dbAdmin.collection("workspace_members").doc(memberId).get(),
+      dbAdmin.collection("workspaces").doc(workspaceId).get(),
+    ]);
+    const isActiveMember = memberDoc.exists && memberDoc.data()?.status === "active";
+    const isOwner = workspaceDoc.exists && workspaceDoc.data()?.ownerId === uid;
+    return Boolean(isActiveMember || isOwner);
   }
 
-  app.post("/api/warroom/modify-canvas", async (req, res) => {
-    try {
-      const { canvasData, prompt } = req.body;
-      if (!canvasData || !prompt) {
-        return res.status(400).json({ error: "Missing required canvas data or instruction prompt" });
-      }
-
-      const systemPrompt = `You are Boldi, an elite workspace strategy assistant.
-Your task is to take an existing visual project canvas (structured with a list of "metrics" cards and "blocks" text content cards), and modify it in response to the user's natural language request.
-
-Existing Canvas Data:
-${JSON.stringify(canvasData, null, 2)}
-
-User Instruction: "${prompt}"
-
-Your response must be the complete, updated canvas data structure. Keep unmodified cards as-is, update existing cards where requested, delete cards if requested, or add new metrics/blocks if needed.
-
-Format your output strictly as a valid JSON matching this schema:
-{
-  "metrics": [
-    { "label": "Metric Label (e.g., Budget, Launch Date, Team Size)", "value": "Metric Value text", "subtext": "Optional subtext details" }
-  ],
-  "blocks": [
-    { "id": "unique_block_id", "title": "Block Title (e.g., Goals, Audience, Tasks, Risks)", "text": "Detailed multi-line block description and text content" }
-  ]
-}
-`;
-
-      const aiResponse = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: [
-          { role: "user", parts: [{ text: systemPrompt }] }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      });
-
-      const resText = aiResponse?.text || aiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!resText) throw new Error("Empty response from Gemini API for canvas modification");
-
-      const parsed = parseCleanJSON(resText);
-      if (!parsed) throw new Error("Failed to parse valid JSON from Gemini canvas response");
-
-      res.json(parsed);
-    } catch (e: any) {
-      console.error("[Canvas Modify Error]", e);
-      res.status(500).json({ error: e.message });
-    }
+  const requireWorkspaceApiAuth = createRequireWorkspaceApiAuth({
+    verifyIdToken: async (token) => {
+      const decoded = await getAdminAuth().verifyIdToken(token);
+      return {
+        uid: decoded.uid,
+        email: decoded.email,
+        name: decoded.name,
+      };
+    },
+    loadWorkspaceAccess,
+    adminAvailable: () => Boolean(dbAdmin),
   });
+  const aiRateLimit = createAiRateLimit();
 
-  app.post("/api/skills/invoke", async (req, res) => {
+  app.post("/api/webhooks/hubspot", verifyHubspotSignature, async (req, res) => {
     try {
-      const { skillTitle, instructions, itemTitle, itemContent, itemType } = req.body;
-      if (!instructions) {
-        return res.status(400).json({ error: "instructions is required" });
-      }
-
-      const promptText = `
-You are executing the AI Skill "${skillTitle || "Custom Skill"}" on a ${itemType || 'item'} in the Gazelle productivity system.
-
-### Core Skill Instructions:
-${instructions}
-
-### Input Item Context:
-- Title: ${itemTitle || "Untitled"}
-- Type: ${itemType || "Unknown"}
-- Current Details/Content:
-${itemContent || "(No details provided)"}
-
-Execute the skill instructions precisely on the provided input item. Generate a highly polished, comprehensive, and helpful response. Use standard, elegant Markdown for formatting.
-`;
-
-      const aiResponse = await generateContentWithFallback({
-        model: 'gemini-3.5-flash',
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: promptText }]
-          }
-        ]
-      });
-
-      const outputText = aiResponse.text;
-      res.json({ outputText });
-    } catch (e: any) {
-      console.error("[Skill Invoke Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/transcribe-capture", async (req, res) => {
-    try {
-      const { audioBase64, mimeType } = req.body;
-      if (!audioBase64) {
-        return res.status(400).json({ error: "audioBase64 is required" });
-      }
-
-      const response = await generateContentWithFallback({
-        model: 'gemini-3.1-pro-preview',
-        contents: [
-          {
-            text: `You are an elite productivity strategist and executive assistant (inspired by the COD methodology, Weekly Planning, and GTD). The user has recorded an audio file which could be a solo brain-dump, a live client conversation, or a long meeting recording.
-Your task is to transcribe the audio faithfully, analyze its contents completely, and transform it into highly structured, actionable intelligence.
-
-CRITICAL INSTRUCTIONS:
-1. Exhaustive Extraction: You MUST extract EVERY SINGLE action item, commitment, task, next step, or follow-up mentioned in the audio. Do not miss or summarize multiple distinct tasks into one. If there are 15 tasks, list all 15.
-2. Infer Implicit Actions: Think beyond the explicit words. If a discussion logically requires preparation, follow-up, or a specific next step that wasn't explicitly stated, infer it and add it as a necessary action.
-3. Rephrase for Clarity: Rephrase each extracted item into a well-crafted, robust, actionable task statement. It MUST start with a strong action verb (e.g., "Review", "Email", "Draft", "Schedule").
-4. Analyze the ENTIRE audio from beginning to end.
-
-Return your response strictly in the following JSON format:
-{
-  "rawTranscription": "The full exact transcription of the conversation or dictation.",
-  "summary": "A concise executive summary of the recording's main themes.",
-  "actionItems": [
-    { "title": "A clear, actionable task starting with a verb", "type": "task" | "follow-up", "notes": "Additional context, constraints, or inferred necessity" }
-  ],
-  "decisions": [
-    { "title": "A decision that was made", "reason": "Why the decision was made based on the audio" }
-  ],
-  "ideasAndNotes": [
-    { "title": "A summary of the idea, reflection, or note", "description": "More detailed explanation" }
-  ]
-}
-Do not include any other text outside of this JSON block.`
-          },
-          {
-            inlineData: {
-              data: audioBase64,
-              mimeType: mimeType || 'audio/webm'
-            }
-          }
-        ],
-        config: {
-          responseMimeType: "application/json"
-        }
-      });
-      const parsed = parseCleanJSON(response.text);
-      res.json(parsed);
-    } catch (e: any) {
-      console.error("[Transcribe Capture Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/triage", async (req, res) => {
-    try {
-      const { content } = req.body;
-      const response = await generateContentWithFallback({
-        model: 'gemini-2.5-pro',
-        contents: `You are an elite productivity strategist and AI assistant based on GTD and COD. The user is dumping their thoughts, plans, and ideas into the capture tool.
-Break down their raw thoughts into structured review candidates.
-A review candidate can be a 'task', 'project', 'decision', 'waiting_for', etc.
-
-CRITICAL INSTRUCTIONS:
-1. Exhaustive Extraction: Extract EVERY distinct actionable item, thought, or commitment. Do not summarize or combine items.
-2. Infer Necessary Actions: If an idea requires follow-up, preparation, or next steps to become reality, infer those logical next steps and create tasks for them.
-3. Rephrase for Clarity: Rephrase all tasks to start with a strong action verb (e.g., "Draft", "Review", "Contact").
-4. Analyze thoroughly to ensure absolutely nothing is lost.
-
-Raw Input: "${content}"`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              candidates: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    type: { type: Type.STRING, description: "e.g., 'task', 'project', 'waiting_for', 'decision'" },
-                    why: { type: Type.STRING, description: "Why this matters or what the context is" },
-                    action: { type: Type.STRING, description: "What needs to be done next" },
-                    confidence: { type: Type.STRING, description: "high, medium, or low based on how clear the input is" },
-                    proposed: { 
-                        type: Type.OBJECT, 
-                        properties: {
-                          description: { type: Type.STRING },
-                          dueDate: { type: Type.STRING }
-                        }
-                    }
-                  },
-                  required: ["title", "type", "why", "action", "confidence"]
-                }
-              }
-            },
-            required: ["candidates"]
-          }
-        }
-      });
-      if (!response.text) throw new Error("No response");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/generateProject", async (req, res) => {
-    try {
-      const { prompt, skills } = req.body;
-      const skillsContext = skills && skills.length > 0 
-        ? `Here are some skills/knowledge from the library to consider:\n${skills.map((s:any) => `- ${s.title}: ${s.description}\n  When to use: ${s.whenToUse}`).join('\n')}`
-        : '';
-
-      const systemPrompt = `You are an expert AI Project Builder.
-Your task is to take a natural language request for a new project, goal, or feature, and generate a highly structured, comprehensive project plan. If the user request is in another language (like Spanish), generate the content values in that language, but KEEP ALL JSON KEYS EXACTLY AS INSTRUCTED.
-
-${skillsContext}`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING, description: "The name of the project" },
-              description: { type: Type.STRING, description: "Detailed project overview" },
-              objective: { type: Type.STRING, description: "Primary goal of the project" },
-              successCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
-              risks: { type: Type.ARRAY, items: { type: Type.STRING } },
-              assumptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              openQuestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              methodology: { type: Type.STRING, description: "e.g., Agile, Waterfall, Kanban" },
-              milestones: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    deliverables: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    acceptanceCriteria: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    tasks: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          title: { type: Type.STRING },
-                          description: { type: Type.STRING },
-                          priority: { type: Type.INTEGER, description: "1 for High, 4 for Low" },
-                          recurrence: { type: Type.STRING, description: "Optional, e.g., 'daily', 'weekly'" },
-                          subtasks: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ["title", "description", "priority"]
-                      }
-                    }
-                  },
-                  required: ["title", "description", "deliverables", "acceptanceCriteria", "tasks"]
-                }
-              }
-            },
-            required: ["title", "description", "objective", "successCriteria", "risks", "assumptions", "openQuestions", "methodology", "milestones"]
-          }
-        }
-      });
-      if (!response.text) throw new Error("No response");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(parseCleanJSON(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/projects/generate-report", async (req, res) => {
-    try {
-      const { projectTitle, projectDescription, status, health, category, priority, tasks, milestones, recentUpdates } = req.body;
-      const prompt = `Please generate an executive status report for this project:
-Title: ${projectTitle}
-Description: ${projectDescription || "None"}
-Status: ${status}
-Health: ${health || "Not evaluated"}
-Category: ${category || "None"}
-Priority: ${priority || "None"}
-
-Current Tasks:
-${(tasks || []).map((t:any) => `- [${t.status === 'done' ? 'DONE' : 'OPEN'}] ${t.title}`).join('\n')}
-
-Key Milestones:
-${(milestones || []).map((m:any) => `- [${m.status === 'done' || m.status === 'completed' ? 'DONE' : 'OPEN'}] ${m.title}`).join('\n')}
-
-Recent Logged Updates:
-${(recentUpdates || []).map((u:any) => `- ${u.content || u}`).join('\n')}
-`;
-
-      const systemPrompt = `You are a professional PMI/Scrum Executive Assistant.
-Generate a structured, polished status report summary based on the provided project details. Write the content in the language of the request (e.g. if the project details are in Spanish, write the fields in Spanish).
-Do not invent anything that isn't logical, but structure it beautifully. Keep your summaries objective, executive, and concise.`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.3,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              executiveSummary: { type: Type.STRING, description: "A high-level executive summary of current progress and general project posture (2-3 sentences)." },
-              wins: { type: Type.STRING, description: "Key achievements, wins, or milestones completed since the last check-in." },
-              blockers: { type: Type.STRING, description: "Active blockers, bottleneck items, or unresolved issues needing attention." },
-              risks: { type: Type.STRING, description: "Potential future risks or threats that could delay the timeline or exceed budget." },
-              nextSteps: { type: Type.STRING, description: "Immediate next actions and priority focus areas for the upcoming period." }
-            },
-            required: ["executiveSummary", "wins", "blockers", "risks", "nextSteps"]
-          }
-        }
-      });
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(parseCleanJSON(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/performTask", async (req, res) => {
-    try {
-      const { prompt, context } = req.body;
-      const response = await generateContentWithFallback({
-        model: 'gemini-flash-latest',
-        contents: `You are an AI coworker assistant named Boldi built into a productivity workspace. 
-Context about the current item (Task/Project/Document):
-${context || 'No specific context provided.'}
-
-User Request:
-${prompt}
-
-Provide a helpful, direct, conversational response. Format as Markdown.
-If the user asks you to write, draft, send, or compose an email, or notify/ask a coworker/stakeholder for something, write a conversational confirmation, AND output the email draft inside a codeblock starting with \`\`\`email, like this:
-\`\`\`email
-to: [recipient email or name]
-subject: [clear email subject line]
-body:
-[the polished draft body here]
-\`\`\`
-
-Feel free to suggest names or emails from the task/project stakeholders if they appear in the context. Keep everything conversational, warm, and highly professional.`,
-      });
-      if (!response.text) throw new Error("No response");
-      res.json({ text: response.text });
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/autoOrganize", async (req, res) => {
-    try {
-      const { tasks, categories, gtdStages, pipelineStages } = req.body;
-      const stages = gtdStages || pipelineStages || [];
-      
-      const prompt = `You are an elite productivity strategist and chief of staff (inspired by Carl Pullein's methodologies, COD, and Perfect Week principles).
-Your goal is to organize, de-duplicate, merge, and enrich the user's task inbox.
-
-You must perform three tasks:
-1. Organize: Assign the best matching category ID (if any), priority (1 to 4, where 1 is highest/most urgent, 4 is lowest), and stage ID from the provided stages for each task.
-2. De-duplicate & Merge: Carefully analyze the tasks to find duplicate or highly overlapping items.
-   - If two or more tasks represent the same core task, choose one task to be the "primary" task.
-   - List the IDs of the other duplicate tasks in "duplicateTaskIds" (these will be deleted/merged).
-   - For the primary task, make sure you merge and combine their description details/context into a single cohesive, high-context description.
-3. Enrich & Contextualize: For EVERY task (both non-duplicates and primary merged tasks), rewrite the title and description to make them clearer, highly descriptive, professional, and rich with context. Each title MUST begin with a strong, precise action verb (e.g., "Draft", "Review", "Coordinate", "Analyze", "Implement", "Email", "Call").
-
-Here are the categories: ${JSON.stringify(categories)}
-Here are the stages: ${JSON.stringify(stages)}
-Here are the tasks to organize: ${JSON.stringify(tasks.map((t:any) => ({ id: t.id, title: t.title, description: t.description || "" })))}
-
-Return your analysis strictly as a JSON object matching this schema:
-{
-  "taskUpdates": [
-    {
-      "taskId": "String (the task ID)",
-      "categoryId": "String (optional, pick best match ID from categories)",
-      "priority": "Number (1-4)",
-      "globalStageId": "String (pick best match from stages)",
-      "enrichedTitle": "String (a beautiful, descriptive title starting with an action verb and rich with context)",
-      "enrichedDescription": "String (a robust, comprehensive description/notes combining details if merged, or expanding on the existing description)"
-    }
-  ],
-  "duplicateMerges": [
-    {
-      "primaryTaskId": "String (the task ID to keep and enrich)",
-      "duplicateTaskIds": ["String (list of other duplicate task IDs to be removed)"]
-    }
-  ]
-}`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              taskUpdates: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    taskId: { type: Type.STRING },
-                    categoryId: { type: Type.STRING },
-                    priority: { type: Type.INTEGER },
-                    globalStageId: { type: Type.STRING },
-                    enrichedTitle: { type: Type.STRING },
-                    enrichedDescription: { type: Type.STRING }
-                  },
-                  required: ["taskId", "priority", "globalStageId", "enrichedTitle", "enrichedDescription"]
-                }
-              },
-              duplicateMerges: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    primaryTaskId: { type: Type.STRING },
-                    duplicateTaskIds: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    }
-                  },
-                  required: ["primaryTaskId", "duplicateTaskIds"]
-                }
-              }
-            },
-            required: ["taskUpdates", "duplicateMerges"]
-          }
-        }
-      });
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/workouts/generate", async (req, res) => {
-    try {
-      const { profile } = req.body;
-      const prompt = `You are an elite fitness coach. Generate a personalized 1-week workout plan draft for this profile:
-${JSON.stringify(profile)}
-
-Rules:
-- 4 strength days, 1-2 swim days, 3 walk/run days, 1 Sunday MTB (as requested).
-- INCLUDE 'hiking' and 'mountain_bike' sessions where appropriate based on the profile.
-- Strength workouts should be ~60 mins.
-- Include gym and no-gym versions for strength.
-- Focus on muscle balance and recovery.
-- For each exercise, provide a clear, concise 'explanation' (max 2 sentences) describing form or purpose.
-- Output a weekly structure with daily sessions.
-
-IMPORTANT: Disclaimer "Workout recommendations are general fitness guidance, not medical advice."`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              weeklyStructure: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    day: { type: Type.INTEGER, description: "0-6" },
-                    title: { type: Type.STRING },
-                    type: { type: Type.STRING, description: "one of: strength, swim, walk, run, mountain_bike, hiking, mobility, recovery, rest" },
-                    durationMinutes: { type: Type.INTEGER },
-                    intensity: { type: Type.STRING },
-                    gymVersion: { type: Type.STRING },
-                    noGymVersion: { type: Type.STRING },
-                    warmup: { type: Type.STRING },
-                    cooldown: { type: Type.STRING },
-                    exercises: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          name: { type: Type.STRING },
-                          explanation: { type: Type.STRING, description: "Form check or purpose" },
-                          muscleGroup: { type: Type.STRING },
-                          sets: { type: Type.INTEGER },
-                          reps: { type: Type.INTEGER },
-                          durationSeconds: { type: Type.INTEGER },
-                          distance: { type: Type.INTEGER },
-                          restSeconds: { type: Type.INTEGER }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
-      res.json(JSON.parse(response.text));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/analytics/analyze", async (req, res) => {
-    try {
-      const { metrics, period } = req.body;
-      const prompt = `You are a productivity coach. Analyze the user's performance metrics for the period: ${period.start} to ${period.end}.
-${JSON.stringify(metrics, null, 2)}
-
-Produce a structured performance analysis following the EXACT JSON schema provided below.
-Focus on actionable decisions. Recommendations must be potential review candidates.`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.1,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              executiveSummary: { type: Type.STRING },
-              wins: { type: Type.ARRAY, items: { type: Type.STRING } },
-              risks: { type: Type.ARRAY, items: { type: Type.STRING } },
-              bottlenecks: { type: Type.ARRAY, items: { type: Type.STRING } },
-              recommendations: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    reason: { type: Type.STRING },
-                    type: { type: Type.STRING, description: "focus | review | project | delegation | kill | habit | workout | recovery | planning" },
-                    confidence: { type: Type.STRING, description: "low | medium | high" }
-                  },
-                  required: ["title", "description", "reason", "type", "confidence"]
-                }
-              },
-              nextWeekExperiment: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  successMeasure: { type: Type.STRING }
-                },
-                required: ["title", "description", "successMeasure"]
-              }
-            },
-            required: ["executiveSummary", "wins", "risks", "bottlenecks", "recommendations", "nextWeekExperiment"]
-          }
-        }
-      });
-      res.json(JSON.parse(response.text));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/habits/analyze", async (req, res) => {
-    try {
-      const { habits, logs, period } = req.body;
-      const prompt = `You are an elite productivity strategist and human performance coach.
-Analyze the user's habit tracking logs for the selected period: ${period || "current month"}.
-
-Habits tracking template definition:
-${JSON.stringify(habits, null, 2)}
-
-Habit logs (actual completions):
-${JSON.stringify(logs, null, 2)}
-
-Provide a structured, motivating habit analysis. Do not use generic placeholders or make up metrics. Analyze their actual consistency, check-ins, skipped logs, and identify patterns.
-
-Specifically answer:
-- Which habit is strongest?
-- Which habit needs attention?
-- Is the plan too ambitious (are there too many habits or too hard to sustain)?
-- What is the minimum version they should use to stay consistent?
-- What is one actionable change for next week?
-- Which habit should be paused or simplified to protect focus?`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              strongestHabit: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  analysis: { type: Type.STRING }
-                },
-                required: ["title", "analysis"]
-              },
-              needsAttentionHabit: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  analysis: { type: Type.STRING }
-                },
-                required: ["title", "analysis"]
-              },
-              planAmbitiousness: { type: Type.STRING },
-              minimumVersionSuggestions: { type: Type.STRING },
-              nextWeekChange: { type: Type.STRING },
-              suggestedPauseOrSimplify: { type: Type.STRING }
-            },
-            required: [
-              "strongestHabit",
-              "needsAttentionHabit",
-              "planAmbitiousness",
-              "minimumVersionSuggestions",
-              "nextWeekChange",
-              "suggestedPauseOrSimplify"
-            ]
-          }
-        }
-      });
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/clarity/evaluate", async (req, res) => {
-    try {
-      const { pendientes, decisiones, ideas, dejarIr } = req.body;
-      
-      const prompt = `You are Gazelle, an elite productivity strategist. The user is doing their 10-Minute Daily Mental Clarity Reset in Alejandro OS.
-      Here are the items they captured under each of the 4 sections:
-      
-      - PENDIENTES (Raw captured tasks or admin duties):
-      ${(pendientes || []).map((p: any) => `- [${p.id}] ${p.title}`).join('\n')}
-      
-      - DECISIONES (Things weighing on their mind requiring a decision):
-      ${(decisiones || []).map((d: any) => `- [${d.id}] ${d.title}`).join('\n')}
-      
-      - IDEAS (Inspirations, personal project seeds, random creative thoughts):
-      ${(ideas || []).map((i: any) => `- [${i.id}] ${i.title}`).join('\n')}
-      
-      - DEJAR IR (Release points, noise, worries, things out of control):
-      ${(dejarIr || []).map((dj: any) => `- [${dj.id}] ${dj.title}`).join('\n')}
-      
-      Evaluate these items. According to Gazelle system rules, we must:
-      1. Select 1 to 3 Pendientes that represent high-leverage moves (Core Work) rather than busywork or passive tasks. Explain why in "reason".
-      2. Choose EXACTLY 1 Decisión to resolve or close today. Explain why closing this today frees the most cognitive bandwidth in "reason".
-      3. Choose EXACTLY 1 Idea that deserves to be protected/scheduled. Suggest a calendar block time (e.g., 'morning', 'afternoon') for it.
-      4. Provide suggestions on which item(s) from 'DEJAR IR' or general clutter to release, and why.
-      5. Write a short, calm, strategic 2-sentence personal reflection to guide their day.
-      
-      Verify that all itemIds returned match the actual item ID strings provided in the lists above.
-      
-      Return a JSON response conforming to this schema:
-      {
-        "suggestedPendientes": [
-          { "itemId": "string", "reason": "string" }
-        ],
-        "suggestedDecision": {
-          "itemId": "string",
-          "reason": "string"
-        },
-        "suggestedIdea": {
-          "itemId": "string",
-          "reason": "string",
-          "suggestedCalendarBlock": "string"
-        },
-        "letGoSuggestions": [
-          { "itemId": "string", "reason": "string" }
-        ],
-        "reflection": "string"
-      }`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              suggestedPendientes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    itemId: { type: Type.STRING },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["itemId", "reason"]
-                }
-              },
-              suggestedDecision: {
-                type: Type.OBJECT,
-                properties: {
-                  itemId: { type: Type.STRING },
-                  reason: { type: Type.STRING }
-                },
-                required: ["itemId", "reason"]
-              },
-              suggestedIdea: {
-                type: Type.OBJECT,
-                properties: {
-                  itemId: { type: Type.STRING },
-                  reason: { type: Type.STRING },
-                  suggestedCalendarBlock: { type: Type.STRING }
-                },
-                required: ["itemId", "reason", "suggestedCalendarBlock"]
-              },
-              letGoSuggestions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    itemId: { type: Type.STRING },
-                    reason: { type: Type.STRING }
-                  },
-                  required: ["itemId", "reason"]
-                }
-              },
-              reflection: { type: Type.STRING }
-            },
-            required: ["suggestedPendientes", "suggestedDecision", "suggestedIdea", "letGoSuggestions", "reflection"]
-          }
-        }
-      });
-
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/portfolio/analyze", async (req, res) => {
-    try {
-      const { projects, milestones, tasks } = req.body;
-      const prompt = `You are Gazelle, a professional productivity strategist and portfolio director. Analyze this project portfolio and provide tactical assessments and action candidates.
-
-      PROJECTS:
-      ${JSON.stringify(projects.map((p: any) => ({ id: p.id, title: p.title, status: p.status, priority: p.priority, categoryId: p.categoryId, healthStatus: p.healthStatus || 'Pending', healthNote: p.healthNote || '', dueDate: p.dueDate || 'No due date' })))}
-
-      MILESTONES:
-      ${JSON.stringify(milestones.map((m: any) => ({ id: m.id, projectId: m.projectId, title: m.title, status: m.status, order: m.order })))}
-
-      TASKS:
-      ${JSON.stringify(tasks.map((t: any) => ({ id: t.id, projectId: t.projectId, title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate })))}
-
-      Evaluate individual project health, detect misalignments, identify milestones slipping or lacking active tasks, progress bottlenecks, and output a structured analysis. Include a set of tactical candidates that can be approved to adjust priorities, create follow-up task entities, or schedule project touchpoints.`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              executiveSummary: { type: Type.STRING },
-              projectAssessments: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    projectId: { type: Type.STRING },
-                    statusAssessment: { type: Type.STRING, description: "On Track | At Risk | Off Track | Proposed" },
-                    analysis: { type: Type.STRING }
-                  },
-                  required: ["projectId", "statusAssessment", "analysis"]
-                }
-              },
-              recommendations: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    projectId: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    reason: { type: Type.STRING },
-                    proposedAction: { type: Type.STRING },
-                    urgency: { type: Type.STRING, description: "High | Medium | Low" }
-                  },
-                  required: ["projectId", "title", "description", "reason", "proposedAction", "urgency"]
-                }
-              }
-            },
-            required: ["executiveSummary", "projectAssessments", "recommendations"]
-          }
-        }
-      });
-
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/stakeholder/insight", async (req, res) => {
-    try {
-      const { stakeholder, tasks, projects } = req.body;
-      const prompt = `You are a high-level organizational commander. Analyze the commitments, assignments, open issues, and performance of this stakeholder.
-
-      STAKEHOLDER PROFILE:
-      Name: ${stakeholder.name}
-      Role/Company: ${stakeholder.role || 'Unspecified'}
-      Email: ${stakeholder.email || 'Unspecified'}
-
-      projects:
-      ${JSON.stringify(projects.map((p: any) => ({ name: p.title, status: p.status })))}
-
-      TASKS ASSIGNED TO STAKEHOLDER:
-      ${JSON.stringify(tasks.map((t: any) => ({ title: t.title, status: t.status, priority: t.priority, dueDate: t.dueDate })))}
-
-      Provide a clinical leadership analysis of how to manage communications with this individual. Address blockers, upcoming deadlines they need to meet, open issues, and actions we should take to unblock opportunities. Output solid task actions we can insert into our Review Candidate collection.`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summaryText: { type: Type.STRING, description: "Executive briefing on managing this stakeholder" },
-              relationshipVibe: { type: Type.STRING, description: "Assessment of cooperation level or pressure points" },
-              blockersIdentified: { type: Type.ARRAY, items: { type: Type.STRING } },
-              communicationPlay: { type: Type.STRING, description: "Next communication play, e.g., 'Assertive reminder on Task X', 'Alignment syncing'" },
-              proposedActions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    reason: { type: Type.STRING },
-                    proposedDueDate: { type: Type.STRING }
-                  },
-                  required: ["title", "description", "reason"]
-                }
-              }
-            },
-            required: ["summaryText", "relationshipVibe", "blockersIdentified", "communicationPlay", "proposedActions"]
-          }
-        }
-      });
-
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  app.post("/api/timeblocks/optimize", async (req, res) => {
-    // ... preexisting optimization stuff
-    try {
-      const { tasks, metrics, date } = req.body;
-      const prompt = `You are Gazelle, a masterful daily planner. The user wants to map their active tasks to structured hourly time blocks.
-      
-      DATE: ${date}
-      WHOOP & ENERGY LEVELS (IF CURRENT):
-      ${JSON.stringify(metrics)}
-
-      USER'S OPEN/SCHEDULED TASKS:
-      ${JSON.stringify(tasks.map((t: any) => ({ id: t.id, title: t.title, priority: t.priority, description: t.description || '', isOneThing: t.isOneThing })))}
-
-      Organize key tasks into morning focus blocks, mid-day admin, afternoon deep work, and evening reviews. Consider priority (always schedule One Thing in the high-energy Morning Focus block if possible!). Align with health indicators (if Whoop recovery is low, schedule lighter administrative blocks and more recovery time).`;
-
-      const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              energyReflection: { type: Type.STRING, description: "Short encouragement based on their Whoop recovery score" },
-              blockPlan: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    blockName: { type: Type.STRING, description: "e.g. 'Morning Focus (08:00 - 11:00)', 'Afternoon Strategy (14:00 - 17:00)'" },
-                    blockStrategy: { type: Type.STRING },
-                    allocatedTasks: {
-                      type: Type.ARRAY,
-                      items: {
-                        type: Type.OBJECT,
-                        properties: {
-                          taskId: { type: Type.STRING },
-                          title: { type: Type.STRING },
-                          blockSpecificGoal: { type: Type.STRING }
-                        },
-                        required: ["taskId", "title", "blockSpecificGoal"]
-                      }
-                    }
-                  },
-                  required: ["blockName", "blockStrategy", "allocatedTasks"]
-                }
-              }
-            },
-            required: ["energyReflection", "blockPlan"]
-          }
-        }
-      });
-
-      if (!response.text) throw new Error("No response from AI");
-      let jsonStr = response.text.replace(/^```json\n?/g, '').replace(/```\n?$/g, '').trim();
-      res.json(JSON.parse(jsonStr));
-    } catch (e: any) {
-      console.error(e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ============================================================================
-  // HUBSPOT WEBHOOKS & AUTOMATION LAYER
-  // ============================================================================
-  
-  app.post("/api/webhooks/hubspot", async (req, res) => {
-    try {
-      const events = req.body;
-      console.log("[HubSpot Webhook] Received events:", events);
-
-      // Verify the request signature or token if configured
-      // const signature = req.headers['x-hubspot-signature'];
-
-      for(const event of events) {
-        // Look for deal property changes
+      const events = Array.isArray(req.body) ? req.body : [];
+      for (const event of events) {
         if (event.subscriptionType === "deal.propertyChange" && event.propertyName === "dealstage") {
-          const dealId = event.objectId;
-          const newStage = event.propertyValue;
-          
-          // ID for "Closed Won — Handoff Required" (Replace with real HubSpot ID)
           const TARGET_STAGE_ID = process.env.HUBSPOT_TARGET_STAGE_ID || "closed_won_handoff_required";
-          
-          if (newStage === TARGET_STAGE_ID) {
-            console.log(`[HubSpot Automation] Deal ${dealId} reached trigger stage. Initiating handoff automation.`);
-            
-            // 1. Fetch deal data from HubSpot API
-            // 2. Validate completeness score >= 95
-            // 3. Create Google Drive folder structure
-            // 4. Create Gazelle Project via Firestore (if using firebase-admin)
-            // 5. Create Default Artifacts, Timeline, & Blocker logic
-            // 6. Write Google Drive UI & Gazelle project URLs back to HubSpot
-            
-            // Note: Since this requires firebase-admin to write to the specific user's workspace,
-            // the backend should be configured with a service account and the correct user ID binding.
+          if (event.propertyValue === TARGET_STAGE_ID) {
+            console.log(`[HubSpot Automation] Deal ${event.objectId} reached trigger stage.`);
           }
         }
       }
-      
       res.status(200).send("OK");
-    } catch(err: any) {
-      console.error("[HubSpot Webhook Error]", err);
-      res.status(500).send("Internal Server Error");
+    } catch (err: unknown) {
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
     }
   });
+
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/webhooks/hubspot") return next();
+    return requireWorkspaceApiAuth(req, res, next);
+  });
+  app.use(
+    [
+      "/api/boldi",
+      "/api/warroom",
+      "/api/triage",
+      "/api/generateProject",
+      "/api/projects",
+      "/api/performTask",
+      "/api/autoOrganize",
+      "/api/workouts",
+      "/api/analytics",
+      "/api/habits",
+      "/api/clarity",
+      "/api/portfolio",
+      "/api/stakeholder",
+      "/api/timeblocks",
+      "/api/skills",
+      "/api/transcribe-capture",
+    ],
+    aiRateLimit,
+  );
+
+  registerCaptureRoutes(app);
+  registerDomainAiRoutes(app);
 
   // ============================================================================
   // BOLDI ASSISTANT & CHIEF OF STAFF POWER LAYER
@@ -1375,7 +287,7 @@ Specifically answer:
     return resultData;
   }
 
-  app.post("/api/boldi/chat", requireWorkspaceApiAuth, async (req, res) => {
+  app.post("/api/boldi/chat", async (req, res) => {
     try {
       let { userId, workspaceId, messages, workspaceContext } = req.body;
       if (!userId) userId = workspaceContext?.userId;
@@ -1475,7 +387,7 @@ Specifically answer:
         
         const currentServerDate = new Date().toISOString().slice(0, 10);
         const enrichPrompt = `
-You are Boldi, an elite AI Productivity Analyst. Your job is to suggest high-fidelity metadata updates for Alejandro's incomplete tasks.
+You are Boldi, an elite AI Productivity Analyst. Your job is to suggest high-fidelity metadata updates for ${principalDisplayName(req)}'s incomplete tasks.
 The current reference date is ${currentServerDate}.
 Analyze the following list of tasks that are missing metadata:
 ${JSON.stringify(tasksToEnrich, null, 2)}
@@ -1913,7 +825,7 @@ Respond in a JSON format matching this schema:
               id: docSnap.id,
               workspaceId,
               source: "conversation",
-              title: data.role === "user" ? "Prior user commitment" : "Prior Chief of Staff context",
+              title: data.role === "user" ? "Prior user commitment" : "Prior Odysseus context",
               body: String(data.content).slice(0, 4000),
               updatedAt: data.createdAt?.toDate?.() || null,
             });
@@ -2008,7 +920,7 @@ Respond in a JSON format matching this schema:
         : null;
 
       const prompt = `You are ${assistantName}, a personal productivity strategist inspired by Carl Pullein’s COD, Time Sector System, Weekly Planning Matrix, 2+8 prioritization, and Perfect Week blueprint.
-      You are running inside Alejandro's executive system, Gazelle, acting as his Personal Chief of Staff.
+      You are running inside ${principalDisplayName(req)}'s executive system, Gazelle, acting as Personal Odysseus.
       
       ABSOLUTE RULES:
       - Never mention Breeze, HubSpot, or any external platform references.
@@ -2072,8 +984,8 @@ Respond in a JSON format matching this schema:
          - Keep conversational reply elegant and brief, using customized chips in 'suggestedChips' (e.g. ["Let's start onboarding", "Skip to dashboard"]).
 
       2. JUDGMENT ENGINE / CHALLENGE VERDICTS:
-         - If Alejandro asks to schedule something, add a project, or make a commitment:
-           * WIP LIMIT: If tasks > 5 for a single day, or projects > 3 active in the workspace, you MUST challenge the addition! State clearly: "Alejandro, you are exceeding your active WIP limit. We need to focus on completing outstanding tasks first."
+         - If ${principalDisplayName(req)} asks to schedule something, add a project, or make a commitment:
+           * WIP LIMIT: If tasks > 5 for a single day, or projects > 3 active in the workspace, you MUST challenge the addition! State clearly: "${principalDisplayName(req)}, you are exceeding your active WIP limit. We need to focus on completing outstanding tasks first."
            * CALENDAR CONFLICT (Scenario 4): If he asks to schedule "lunch with Alexis tomorrow" and tomorrow already has "Client-B visit" (detected as YES), raise a structural conflict! Push back: "Tomorrow is your Client-B site visit, which requires travel and full energy. Adding lunch with Alexis tomorrow compromises your focus. I suggest Thursday or Monday instead." Propose an action plan to draft the WhatsApp message to Alexis for Thursday/Monday!
            * VAGUE COMMITMENTS: If he types vague objectives ("I want to write more" or "Need to exercise"), challenge him: "Vague intentions do not convert. Let's apply a concrete implementation plan (when, where, and how). Would you like to schedule 30 minutes on Thursday at 8 AM?"
 
@@ -2083,7 +995,7 @@ Respond in a JSON format matching this schema:
            * Let the user know they can click the "Download Weekly Report" button below to download it as a markdown file.
 
       4. COMMUNICATION OUTBOX DESIGN (Scenario 8):
-         - If he says "Tell Cesar I need the ABC report today" or "Email Julian", draft a grounded message in YOUR assistant voice (e.g. "Hi Cesar, Alejandro's assistant Laura here. Just following up to see if we can get the ABC report today? Thank you!").
+         - If they say "Tell Cesar I need the ABC report today" or "Email Julian", draft a grounded message in YOUR assistant voice (e.g. "Hi Cesar, ${principalDisplayName(req)}'s assistant here. Just following up to see if we can get the ABC report today? Thank you!").
          - Propose a 'proposedActions' item of type: "outbox_communication" with 'proposedChange' containing:
            { "recipient": "Cesar", "channel": "whatsapp", "content": "[draft message]" }.
 
@@ -2234,7 +1146,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       res.json(resultData);
     } catch (e: any) {
       console.error("[Boldi Chat Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -2590,7 +1502,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (err: any) {
       console.error("[Chat Orchestration Endpoint Error]", err);
-      res.status(500).json({ error: err.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
     }
   });
 
@@ -2656,7 +1568,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (err: any) {
       console.error("[Apply Action Plan Error]", err);
-      res.status(500).json({ error: err.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", err);
     }
   });
 
@@ -2769,7 +1681,7 @@ Respond STRICTLY in a valid JSON schema:
       });
     } catch (e: any) {
       console.error("[Audit Metadata Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -2947,7 +1859,7 @@ Respond STRICTLY in a valid JSON schema:
 
     } catch (e: any) {
       console.error("[Bulk Enrich Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3123,7 +2035,7 @@ Respond STRICTLY in a valid JSON schema:
       });
     } catch (e: any) {
       console.error("[Apply Updates Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3131,7 +2043,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals, stakeholders, alerts, claritySession, dailyMetric } = req.body;
       
-      const prompt = `You are Gazelle, Alejandro's Chief of Staff. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
+      const prompt = `You are Gazelle, ${principalDisplayName(req)}'s Odysseus. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
       
       CURRENT DATE: ${new Date().toLocaleDateString()}
       ACTIVE STRATEGIC GOALS / WIGs:
@@ -3154,7 +2066,7 @@ Respond STRICTLY in a valid JSON schema:
 
       Synthesize all of this context. Answer:
       1. What is the single highest leverage Strategic Objective or WIG focus today?
-      2. Recommand the absolute ONE Thing Alejandro must complete today. Provide a very clear justification.
+      2. Recommand the absolute ONE Thing ${principalDisplayName(req)} must complete today. Provide a very clear justification.
       3. Recommend up to 3 highly critical "Should Dos" tasks (Top 3) with justifications.
       4. Detect active project alerts or stagnation risks.
       5. Identify outstanding stakeholder commitments or follow-ups.
@@ -3259,7 +2171,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Boldi Daily Brief Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3267,7 +2179,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { rawInput, title, meetingDate, projectContext } = req.body;
       
-      const prompt = `You are a masterful Chief of Staff and elite productivity strategist. Your task is to process this executive meeting transcript, raw notes, or notes dump into highly structured, actionable intelligence.
+      const prompt = `You are a masterful Odysseus and elite productivity strategist. Your task is to process this executive meeting transcript, raw notes, or notes dump into highly structured, actionable intelligence.
       
       MEETING TITLE: ${title || "Default Sync"}
       DATE: ${meetingDate || new Date().toLocaleDateString()}
@@ -3403,7 +2315,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Process Meeting Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3411,7 +2323,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals } = req.body;
       
-      const prompt = `You are a strategic alignment engine. Auditing Alejandro's current task list and projects against the highest priority WIGs and OKR objectives.
+      const prompt = `You are a strategic alignment engine. Auditing ${principalDisplayName(req)}'s current task list and projects against the highest priority WIGs and OKR objectives.
       
       WIGs & OKRs:
       ${JSON.stringify(goals)}
@@ -3464,7 +2376,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Strategic Alignment Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -3472,7 +2384,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals, timeBlocks, previousReview } = req.body;
       
-      const prompt = `You are Gazelle, performing a Strategic Weekly Executive Review for Alejandro.
+      const prompt = `You are Gazelle, performing a Strategic Weekly Executive Review for ${principalDisplayName(req)}.
       
       COMPLETED & OPEN TASKS:
       ${JSON.stringify(tasks)}
@@ -3549,682 +2461,7 @@ Respond STRICTLY in a valid JSON schema:
       res.json(JSON.parse(jsonStr));
     } catch (e: any) {
       console.error("[Weekly Review Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // ==========================================
-  // GAZELLE DATABASE & DATA MANAGEMENT ENDPOINTS
-  // ==========================================
-
-  const DATA_MANAGEMENT_COLLECTIONS = [
-    "projects",
-    "tasks",
-    "milestones",
-    "stakeholders",
-    "meetings",
-    "decisions",
-    "waiting_for",
-    "playbooks",
-    "skills",
-    "knowledge_items",
-    "review_candidates",
-    "habits",
-    "workout_sessions"
-  ];
-
-  function normalizeString(str: string): string {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .trim()
-      .replace(/\s+/g, " ")
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
-  }
-
-  // 1. Live Data Quality Audit
-  app.post("/api/data-management/audit", async (req, res) => {
-    try {
-      const { userId, workspaceId } = req.body;
-      if (!userId || !workspaceId) {
-        return res.status(400).json({ error: "userId and workspaceId are required in body." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured. Database operations are unavailable." });
-      }
-
-      const issues: any[] = [];
-      const stats: any = {};
-      let criticalCount = 0;
-      let totalCount = 0;
-
-      // Map to hold known project IDs to detect orphaned tasks/milestones
-      const projectIdsSet = new Set<string>();
-      const projectWorkspaceMap = new Map<string, string>();
-
-      // Pre-scan projects
-      try {
-        const projSnap = await dbAdmin.collection("projects").where("userId", "==", userId).get();
-        projSnap.forEach((doc: any) => {
-          projectIdsSet.add(doc.id);
-          const data = doc.data();
-          if (data.workspaceId) {
-            projectWorkspaceMap.set(doc.id, data.workspaceId);
-          }
-        });
-      } catch (err) {
-        console.error("Failed to pre-scan projects:", err);
-      }
-
-      // Scan each collection
-      for (const col of DATA_MANAGEMENT_COLLECTIONS) {
-        try {
-          const snapshot = await dbAdmin.collection(col).where("userId", "==", userId).get();
-          stats[col] = snapshot.size;
-          totalCount += snapshot.size;
-
-          const tagsSeenInWorkspace = new Set<string>();
-          const categoriesSeenInWorkspace = new Set<string>();
-
-          snapshot.forEach((doc: any) => {
-            const data = doc.data();
-            const recordId = doc.id;
-
-            // Check Workspace Scope
-            if (!data.workspaceId) {
-              criticalCount++;
-              issues.push({
-                id: `ws-${col}-${recordId}`,
-                severity: "critical",
-                collection: col,
-                recordId,
-                issueType: "missing_workspace_id",
-                description: `Record is missing its workspaceId. This violates multi-tenant isolation.`,
-                suggestedFix: `Assign default workspaceId: ${workspaceId}`,
-                autoFixAvailable: true
-              });
-            } else if (data.workspaceId !== workspaceId) {
-              // Not an issue if they are in another valid workspace, but we log if it has a mismatch
-            }
-
-            // Check Timestamps
-            if (!data.createdAt) {
-              issues.push({
-                id: `ts-create-${col}-${recordId}`,
-                severity: "medium",
-                collection: col,
-                recordId,
-                issueType: "missing_created_at",
-                description: `Record is missing its createdAt timestamp.`,
-                suggestedFix: `Assign current server timestamp.`,
-                autoFixAvailable: true
-              });
-            }
-            if (!data.updatedAt && !data.createdAt) {
-              issues.push({
-                id: `ts-update-${col}-${recordId}`,
-                severity: "low",
-                collection: col,
-                recordId,
-                issueType: "missing_updated_at",
-                description: `Record is missing its updatedAt timestamp.`,
-                suggestedFix: `Set updatedAt to createdAt.`,
-                autoFixAvailable: true
-              });
-            }
-
-            // Specific validation rules for Projects
-            if (col === "projects") {
-              const title = data.title || "";
-              if (!title) {
-                issues.push({
-                  id: `proj-title-${recordId}`,
-                  severity: "high",
-                  collection: col,
-                  recordId,
-                  issueType: "empty_title",
-                  description: `Project is missing a title.`,
-                  suggestedFix: `Assign a placeholder title.`,
-                  autoFixAvailable: true
-                });
-              }
-
-              // Check normalization
-              if (title && !data.normalizedTitle) {
-                issues.push({
-                  id: `proj-norm-${recordId}`,
-                  severity: "low",
-                  collection: col,
-                  recordId,
-                  issueType: "missing_normalization",
-                  description: `Project is missing its search-optimized normalizedTitle.`,
-                  suggestedFix: `Generate normalizedTitle from "${title}"`,
-                  autoFixAvailable: true
-                });
-              }
-
-              // Duplicate Tags inside projects
-              if (Array.isArray(data.tags)) {
-                data.tags.forEach((tag: string) => {
-                  const norm = normalizeString(tag);
-                  if (tagsSeenInWorkspace.has(norm)) {
-                    issues.push({
-                      id: `proj-tag-dup-${recordId}-${norm}`,
-                      severity: "low",
-                      collection: col,
-                      recordId,
-                      issueType: "duplicate_tag",
-                      description: `Case-insensitive duplicate tag "${tag}" exists in the same project workspace.`,
-                      suggestedFix: `Merge duplicate tags.`,
-                      autoFixAvailable: true
-                    });
-                  } else {
-                    tagsSeenInWorkspace.add(norm);
-                  }
-                });
-              }
-            }
-
-            // Specific validation rules for Tasks
-            if (col === "tasks") {
-              const title = data.title || "";
-              if (!title) {
-                issues.push({
-                  id: `task-title-${recordId}`,
-                  severity: "high",
-                  collection: col,
-                  recordId,
-                  issueType: "empty_title",
-                  description: `Task is missing a title.`,
-                  suggestedFix: `Assign a placeholder title.`,
-                  autoFixAvailable: true
-                });
-              }
-
-              // Orphaned Tasks pointing to non-existent projects
-              if (data.projectId && !projectIdsSet.has(data.projectId)) {
-                issues.push({
-                  id: `task-orphan-${recordId}`,
-                  severity: "high",
-                  collection: col,
-                  recordId,
-                  issueType: "orphaned_project_reference",
-                  description: `Task points to non-existent projectId "${data.projectId}".`,
-                  suggestedFix: `Remove project reference or move to an active project.`,
-                  autoFixAvailable: true
-                });
-              }
-
-              // Cross-workspace mismatch
-              if (data.projectId && projectIdsSet.has(data.projectId)) {
-                const pWs = projectWorkspaceMap.get(data.projectId);
-                if (pWs && data.workspaceId && pWs !== data.workspaceId) {
-                  criticalCount++;
-                  issues.push({
-                    id: `task-ws-mismatch-${recordId}`,
-                    severity: "critical",
-                    collection: col,
-                    recordId,
-                    issueType: "workspace_isolation_breach",
-                    description: `Task workspaceId ("${data.workspaceId}") does not match its parent project workspaceId ("${pWs}").`,
-                    suggestedFix: `Update task workspaceId to align with parent project.`,
-                    autoFixAvailable: true
-                  });
-                }
-              }
-
-              // Check priority: "P4" or 4 fallback checks
-              if (data.priority === 4 || data.priority === "P4") {
-                issues.push({
-                  id: `task-priority-fallback-${recordId}`,
-                  severity: "medium",
-                  collection: col,
-                  recordId,
-                  issueType: "priority_fallback_p4",
-                  description: `Task has priority P4. Priority null should represent Unprioritized. P4 is reserved for intentional distraction level only.`,
-                  suggestedFix: `Convert priority value to null (Unprioritized).`,
-                  autoFixAvailable: true
-                });
-              }
-
-              if (title && !data.normalizedTitle) {
-                issues.push({
-                  id: `task-norm-${recordId}`,
-                  severity: "low",
-                  collection: col,
-                  recordId,
-                  issueType: "missing_normalization",
-                  description: `Task is missing its search-optimized normalizedTitle.`,
-                  suggestedFix: `Generate normalizedTitle from "${title}"`,
-                  autoFixAvailable: true
-                });
-              }
-            }
-
-            // Specific validation rules for Milestones
-            if (col === "milestones") {
-              if (data.projectId && !projectIdsSet.has(data.projectId)) {
-                issues.push({
-                  id: `milestone-orphan-${recordId}`,
-                  severity: "high",
-                  collection: col,
-                  recordId,
-                  issueType: "orphaned_project_reference",
-                  description: `Milestone points to non-existent projectId "${data.projectId}".`,
-                  suggestedFix: `Clean up milestone reference.`,
-                  autoFixAvailable: true
-                });
-              }
-            }
-
-            // Generic search normalization checks
-            const name = data.name || "";
-            if (name && !data.normalizedName && ["stakeholders", "skills"].includes(col)) {
-              issues.push({
-                id: `norm-name-${col}-${recordId}`,
-                severity: "low",
-                collection: col,
-                recordId,
-                issueType: "missing_normalization",
-                description: `Record is missing its search-optimized normalizedName.`,
-                suggestedFix: `Generate normalizedName from "${name}"`,
-                autoFixAvailable: true
-              });
-            }
-          });
-        } catch (e) {
-          console.error(`Error auditing collection ${col}:`, e);
-        }
-      }
-
-      // Fetch latest run info
-      let latestMigration: any = null;
-      try {
-        const migSnap = await dbAdmin.collection("migration_runs")
-          .where("userId", "==", userId)
-          .where("workspaceId", "==", workspaceId)
-          .orderBy("completedAt", "desc")
-          .limit(1)
-          .get();
-        if (!migSnap.empty) {
-          latestMigration = migSnap.docs[0].data();
-          latestMigration.id = migSnap.docs[0].id;
-        }
-      } catch (e) {
-        console.warn("Could not read latest migration runs:", e);
-      }
-
-      let latestExport: any = null;
-      try {
-        const expSnap = await dbAdmin.collection("backup_runs")
-          .where("userId", "==", userId)
-          .where("workspaceId", "==", workspaceId)
-          .orderBy("createdAt", "desc")
-          .limit(1)
-          .get();
-        if (!expSnap.empty) {
-          latestExport = expSnap.docs[0].data();
-          latestExport.id = expSnap.docs[0].id;
-        }
-      } catch (e) {
-        console.warn("Could not read latest export runs:", e);
-      }
-
-      res.json({
-        workspaceId,
-        checkedAt: new Date().toISOString(),
-        totalCount,
-        criticalCount,
-        stats,
-        issues,
-        latestMigration,
-        latestExport
-      });
-
-    } catch (e: any) {
-      console.error("[Database Audit Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 2. Dry Run & Apply Database Migrations
-  app.post("/api/data-management/migrate", async (req, res) => {
-    try {
-      const { userId, workspaceId, mode } = req.body; // mode is "dry" or "apply"
-      if (!userId || !workspaceId || !mode) {
-        return res.status(400).json({ error: "userId, workspaceId, and mode are required in body." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured." });
-      }
-
-      const isDry = mode === "dry";
-      const logs: string[] = [];
-      let recordsScanned = 0;
-      let recordsChanged = 0;
-      const errors: string[] = [];
-
-      // Pre-fetch projects for validation mapping
-      const projectIdsSet = new Set<string>();
-      const projectWorkspaceMap = new Map<string, string>();
-      try {
-        const projSnap = await dbAdmin.collection("projects").where("userId", "==", userId).get();
-        projSnap.forEach((doc: any) => {
-          projectIdsSet.add(doc.id);
-          const d = doc.data();
-          if (d.workspaceId) {
-            projectWorkspaceMap.set(doc.id, d.workspaceId);
-          }
-        });
-      } catch (e) {
-        console.error("Failed to pre-fetch projects:", e);
-      }
-
-      // Loop through and perform migration
-      for (const col of DATA_MANAGEMENT_COLLECTIONS) {
-        try {
-          const snapshot = await dbAdmin.collection(col).where("userId", "==", userId).get();
-          logs.push(`Scanning collection "${col}"... Found ${snapshot.size} records.`);
-
-          for (const doc of snapshot.docs) {
-            recordsScanned++;
-            const data = doc.data();
-            let changed = false;
-            const updateData: any = {};
-
-            // 1. Missing workspaceId
-            if (!data.workspaceId) {
-              updateData.workspaceId = workspaceId;
-              changed = true;
-              logs.push(`[${col}:${doc.id}] Adding missing workspaceId: ${workspaceId}`);
-            }
-
-            // 2. Missing timestamps
-            if (!data.createdAt) {
-              updateData.createdAt = FieldValue.serverTimestamp();
-              changed = true;
-              logs.push(`[${col}:${doc.id}] Set missing createdAt to serverTimestamp`);
-            }
-            if (!data.updatedAt) {
-              updateData.updatedAt = FieldValue.serverTimestamp();
-              changed = true;
-              logs.push(`[${col}:${doc.id}] Set missing updatedAt to serverTimestamp`);
-            }
-
-            // 3. Normalized Title / Name
-            if (col === "projects" || col === "tasks") {
-              const title = data.title || "";
-              if (title && !data.normalizedTitle) {
-                updateData.normalizedTitle = normalizeString(title);
-                changed = true;
-                logs.push(`[${col}:${doc.id}] Setting normalizedTitle: "${updateData.normalizedTitle}"`);
-              }
-            }
-            if (["stakeholders", "skills"].includes(col)) {
-              const name = data.name || "";
-              if (name && !data.normalizedName) {
-                updateData.normalizedName = normalizeString(name);
-                changed = true;
-                logs.push(`[${col}:${doc.id}] Setting normalizedName: "${updateData.normalizedName}"`);
-              }
-            }
-
-            // 4. Task specific priority conversions (P4/4 fallback to null)
-            if (col === "tasks") {
-              if (data.priority === 4 || data.priority === "P4") {
-                updateData.priority = null;
-                changed = true;
-                logs.push(`[tasks:${doc.id}] Resetting default priority P4 to null (Unprioritized)`);
-              }
-
-              // Align task workspaceId with its parent project
-              if (data.projectId && projectIdsSet.has(data.projectId)) {
-                const parentWs = projectWorkspaceMap.get(data.projectId);
-                const currentWs = data.workspaceId || updateData.workspaceId || workspaceId;
-                if (parentWs && parentWs !== currentWs) {
-                  updateData.workspaceId = parentWs;
-                  changed = true;
-                  logs.push(`[tasks:${doc.id}] Correcting workspaceId mismatch to match parent project: ${parentWs}`);
-                }
-              }
-            }
-
-            // Write back if we are applying and have changes
-            if (changed) {
-              recordsChanged++;
-              if (!isDry) {
-                try {
-                  await doc.ref.update({
-                    ...updateData,
-                    updatedAt: FieldValue.serverTimestamp()
-                  });
-                } catch (writeErr: any) {
-                  errors.push(`Error writing doc ${col}:${doc.id}: ${writeErr.message}`);
-                }
-              }
-            }
-          }
-        } catch (colErr: any) {
-          errors.push(`Error processing collection ${col}: ${colErr.message}`);
-        }
-      }
-
-      // Record run in database
-      const runPayload = {
-        userId,
-        workspaceId,
-        migrationName: "Gazelle Database Hardening Migration v1",
-        status: isDry ? "dry_run" : (errors.length > 0 ? "completed_with_errors" : "completed"),
-        recordsScanned,
-        recordsChanged,
-        errors,
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString()
-      };
-
-      if (!isDry) {
-        await dbAdmin.collection("migration_runs").add(runPayload);
-        await dbAdmin.collection("schema_migrations").doc("gazelle_hardening_v1").set({
-          name: "Gazelle Database Hardening",
-          version: 1,
-          appliedAt: new Date().toISOString(),
-          appliedBy: userId,
-          status: "success"
-        });
-      }
-
-      res.json({
-        status: "success",
-        mode,
-        recordsScanned,
-        recordsChanged,
-        errors,
-        logs
-      });
-
-    } catch (e: any) {
-      console.error("[Database Migration Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 3. Export Workspace Data (Excluding Sensitive Credentials)
-  app.post("/api/data-management/export", async (req, res) => {
-    try {
-      const { userId, workspaceId } = req.body;
-      if (!userId || !workspaceId) {
-        return res.status(400).json({ error: "userId and workspaceId are required." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured." });
-      }
-
-      const backupData: any = {
-        version: "1.0",
-        exportedAt: new Date().toISOString(),
-        userId,
-        workspaceId,
-        collections: {}
-      };
-
-      let totalRecords = 0;
-
-      for (const col of DATA_MANAGEMENT_COLLECTIONS) {
-        try {
-          const snapshot = await dbAdmin.collection(col)
-            .where("userId", "==", userId)
-            .where("workspaceId", "==", workspaceId)
-            .get();
-
-          const records: any[] = [];
-          snapshot.forEach((doc: any) => {
-            const rawData = doc.data();
-            const cleanData: any = {};
-
-            // Security: Exclude credentials, keys, passwords, and tokens
-            Object.keys(rawData).forEach((key) => {
-              const lowerKey = key.toLowerCase();
-              const isSensitive = lowerKey.includes("secret") || 
-                                  lowerKey.includes("key") || 
-                                  lowerKey.includes("token") || 
-                                  lowerKey.includes("password") ||
-                                  lowerKey.includes("auth") ||
-                                  lowerKey.includes("credential");
-              if (!isSensitive) {
-                cleanData[key] = rawData[key];
-              }
-            });
-
-            records.push({
-              id: doc.id,
-              ...cleanData
-            });
-          });
-
-          backupData.collections[col] = records;
-          totalRecords += records.length;
-        } catch (e) {
-          console.warn(`Skipped exporting collection ${col}:`, e);
-        }
-      }
-
-      // Log export activity
-      await dbAdmin.collection("backup_runs").add({
-        userId,
-        workspaceId,
-        type: "api_export",
-        format: "json",
-        status: "success",
-        recordCount: totalRecords,
-        createdAt: FieldValue.serverTimestamp()
-      });
-
-      res.json(backupData);
-
-    } catch (e: any) {
-      console.error("[Workspace Export Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 4. Get Audit Logs
-  app.get("/api/data-management/audit-logs", async (req, res) => {
-    try {
-      const { workspaceId, limit = "50" } = req.query;
-      if (!workspaceId) {
-        return res.status(400).json({ error: "workspaceId is required as a query parameter." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured." });
-      }
-
-      const snapshot = await dbAdmin.collection("audit_logs")
-        .where("workspaceId", "==", workspaceId)
-        .orderBy("createdAt", "desc")
-        .limit(parseInt(limit as string, 10))
-        .get();
-
-      const logs: any[] = [];
-      snapshot.forEach((doc: any) => {
-        const d = doc.data();
-        logs.push({
-          id: doc.id,
-          ...d,
-          createdAt: d.createdAt ? (d.createdAt.toDate ? d.createdAt.toDate().toISOString() : d.createdAt) : null
-        });
-      });
-
-      res.json(logs);
-    } catch (e: any) {
-      console.error("[Get Audit Logs Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 5. Create Audit Log (Server-side helper endpoint)
-  app.post("/api/data-management/log-audit", async (req, res) => {
-    try {
-      const { workspaceId, actorId, actorType, action, entityType, entityId, before, after, metadata } = req.body;
-      if (!workspaceId || !actorId || !action) {
-        return res.status(400).json({ error: "workspaceId, actorId, and action are required." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured." });
-      }
-
-      const logDoc = {
-        workspaceId,
-        actorId,
-        actorType: actorType || "user",
-        action,
-        entityType: entityType || null,
-        entityId: entityId || null,
-        before: before || null,
-        after: after || null,
-        metadata: metadata || null,
-        createdAt: FieldValue.serverTimestamp()
-      };
-
-      const docRef = await dbAdmin.collection("audit_logs").add(logDoc);
-      res.json({ id: docRef.id, status: "logged" });
-    } catch (e: any) {
-      console.error("[Log Audit Error]", e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
-  // 6. Create Platform Event (Server-side helper endpoint)
-  app.post("/api/data-management/log-event", async (req, res) => {
-    try {
-      const { workspaceId, actorId, eventType, entityType, entityId, payload } = req.body;
-      if (!workspaceId || !eventType) {
-        return res.status(400).json({ error: "workspaceId and eventType are required." });
-      }
-
-      if (!dbAdmin) {
-        return res.status(503).json({ error: "Firebase Admin is not configured." });
-      }
-
-      const eventDoc = {
-        workspaceId,
-        actorId: actorId || "system",
-        eventType,
-        entityType: entityType || null,
-        entityId: entityId || null,
-        payload: payload || null,
-        createdAt: FieldValue.serverTimestamp()
-      };
-
-      const docRef = await dbAdmin.collection("platform_events").add(eventDoc);
-      res.json({ id: docRef.id, status: "logged" });
-    } catch (e: any) {
-      console.error("[Log Event Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
 
@@ -4405,7 +2642,7 @@ Respond STRICTLY in a valid JSON schema:
           toEmail: "sarah.chen@fintech.io",
           contactType: "human",
           status: "pending",
-          message: "Hey Alejandro, would love to join your agent workspace to sync on the Q3 financial roadmap.",
+          message: "Hey, would love to join your agent workspace to sync on the Q3 financial roadmap.",
           createdBy: "external"
         },
         {
@@ -4473,13 +2710,17 @@ Respond STRICTLY in a valid JSON schema:
       res.json({ seeded: true, message: "Workspace successfully seeded" });
     } catch (e: any) {
       console.error("[Seed Agent Workspace Error]", e);
-      res.status(500).json({ error: e.message });
+      sendPublicError(req, res, 500, "internal_error", "Internal server error", e);
     }
   });
+
+  registerDataManagementRoutes(app, { getDb: () => dbAdmin });
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true });
   });
+
+  app.use(errorHandler);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

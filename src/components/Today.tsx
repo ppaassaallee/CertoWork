@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
-import { Clock, Calendar, Power, Loader2, Check, Brain, Sparkles, Plus, CheckSquare, RefreshCw, AlertCircle, ChevronRight } from "lucide-react";
+import { Clock, Calendar, Power, Loader2, Check, Brain, Sparkles, Plus, CheckSquare, RefreshCw, AlertCircle, ChevronRight } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";

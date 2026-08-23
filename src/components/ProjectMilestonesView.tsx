@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, ChevronDown, ChevronRight, CornerDownRight } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, CornerDownRight } from "./ui/Icon";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { setTaskStatus } from "../lib/tasks";

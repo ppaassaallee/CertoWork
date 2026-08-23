@@ -5,7 +5,7 @@ import {
   Search, Tag, ShieldAlert, ArrowRightLeft,
   SlidersHorizontal, CheckSquare, Info, X,
   LayoutGrid, List, ArrowUp, ArrowDown, Bot
-} from "lucide-react";
+} from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore";
@@ -445,7 +445,7 @@ export function ProjectsList() {
             <span className="text-[10px] font-bold uppercase tracking-wider opacity-85">At risk or blocked</span>
             <ShieldAlert className={`w-4 h-4 ${selectedHealth === 'blocked' ? 'text-red-200' : 'text-red-500'}`} />
           </div>
-          <div className="text-2xl font-black text-red-500" style={{ color: selectedHealth === 'blocked' ? '#ffffff' : undefined }}>{totalAtRiskOrBlocked}</div>
+          <div className="text-2xl font-black text-red-500" style={{ color: selectedHealth === 'blocked' ? 'var(--surface-0)' : undefined }}>{totalAtRiskOrBlocked}</div>
           <div className="text-[9px] opacity-75 mt-0.5">Needs attention</div>
         </div>
       </div>

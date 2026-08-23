@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, X, Calendar, AlertCircle, Bookmark, HelpCircle, FileText, Sparkles, Cpu, Clipboard, Briefcase, Link as LinkIcon } from "lucide-react";
+import { Check, X, Calendar, AlertCircle, Bookmark, HelpCircle, FileText, Sparkles, Cpu, Clipboard, Briefcase, Link as LinkIcon } from "./ui/Icon";
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
