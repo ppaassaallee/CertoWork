@@ -1,4 +1,4 @@
-import { executeOdiseusTool, ODISEUS_TOOLS, TOOL_LABELS } from "./odiseus-tools.js";
+import { executeOdysseusTool, ODISEUS_TOOLS, TOOL_LABELS } from "./odiseus-tools.js";
 
 function extractFunctionCalls(payload) {
   const calls = [];
@@ -24,7 +24,7 @@ function parseArgs(raw) {
   }
 }
 
-export async function runOdiseusAgent({
+export async function runOdysseusAgent({
   env,
   model,
   instructions,
@@ -47,7 +47,7 @@ export async function runOdiseusAgent({
     {
       role: "user",
       content:
-        "Odiseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval. Use recall_memory before inventing preferences. Use remember_fact only for durable facts the user affirmed.",
+        "Odysseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval. Use recall_memory before inventing preferences. Use remember_fact only for durable facts the user affirmed.",
     },
     ...messages.map((message) => ({
       role: message.role,
@@ -61,7 +61,7 @@ export async function runOdiseusAgent({
   if (memoryNotes.length) {
     input.unshift({
       role: "user",
-      content: `Durable Odiseus memory for this workspace:\n${memoryNotes
+      content: `Durable Odysseus memory for this workspace:\n${memoryNotes
         .map((item) => `- (${item.kind || "fact"}) ${item.text}`)
         .join("\n")}`,
     });
@@ -117,7 +117,7 @@ export async function runOdiseusAgent({
           // Streaming callbacks must never abort the agent loop.
         }
       }
-      const executed = executeOdiseusTool(call.name, args, workspaceContext);
+      const executed = executeOdysseusTool(call.name, args, workspaceContext);
       const doneStep = {
         ...workingStep,
         label: executed.label || workingStep.label,
@@ -175,7 +175,7 @@ export async function runOdiseusAgent({
       ? result.actionPlan.proposedActions
       : [];
     result.actionPlan = {
-      title: result?.actionPlan?.title || "Odiseus wants to perform actions",
+      title: result?.actionPlan?.title || "Odysseus wants to perform actions",
       summary:
         result?.actionPlan?.summary ||
         `Prepared ${collectedActions.length + existing.length} action(s). Nothing changes until you approve.`,

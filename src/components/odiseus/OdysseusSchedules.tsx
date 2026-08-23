@@ -28,7 +28,7 @@ const PRESETS = [
   { label: "Daily 18:00", cron: "0 18 * * *" },
 ];
 
-export function OdiseusSchedules({
+export function OdysseusSchedules({
   onRunNow,
 }: {
   onRunNow: (prompt: string) => void;
@@ -87,8 +87,8 @@ export function OdiseusSchedules({
       <header>
         <CalendarDays size={16} />
         <div>
-          <strong>Odiseus schedules</strong>
-          <p>Recurring prompts Odiseus can run. Use Run now any time; cron is stored for automation hooks.</p>
+          <strong>Odysseus schedules</strong>
+          <p>Recurring prompts Odysseus can run. Use Run now any time; cron is stored for automation hooks.</p>
         </div>
       </header>
 
@@ -120,7 +120,7 @@ export function OdiseusSchedules({
         <textarea
           aria-label="Schedule prompt"
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder="What should Odiseus do?"
+          placeholder="What should Odysseus do?"
           rows={3}
           value={prompt}
         />

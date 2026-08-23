@@ -73,7 +73,7 @@ export function conversationScopeLabel(
   }
   return conversation?.conversationType === "chief_of_staff" ||
     (conversation as { isChiefOfStaff?: boolean } | null | undefined)?.isChiefOfStaff
-    ? "Odiseus"
+    ? "Odysseus"
     : "General";
 }
 

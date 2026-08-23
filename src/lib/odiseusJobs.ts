@@ -1,6 +1,6 @@
-/** Odiseus job/run helpers — durable execution metadata on messages and runs. */
+/** Odysseus job/run helpers — durable execution metadata on messages and runs. */
 
-export type OdiseusRunStatus =
+export type OdysseusRunStatus =
   | "queued"
   | "planning"
   | "working"
@@ -11,7 +11,7 @@ export type OdiseusRunStatus =
   | "failed"
   | "cancelled";
 
-export type OdiseusRunStep = {
+export type OdysseusRunStep = {
   id?: string;
   tool?: string;
   label: string;
@@ -19,9 +19,9 @@ export type OdiseusRunStep = {
   at?: number;
 };
 
-export type OdiseusRun = {
-  status: OdiseusRunStatus;
-  steps?: OdiseusRunStep[];
+export type OdysseusRun = {
+  status: OdysseusRunStatus;
+  steps?: OdysseusRunStep[];
   toolCount?: number;
   artifact?: {
     kind: string;
@@ -33,7 +33,7 @@ export type OdiseusRun = {
   error?: string | null;
 };
 
-export function normalizeOdiseusRun(raw: any): OdiseusRun | null {
+export function normalizeOdysseusRun(raw: any): OdysseusRun | null {
   if (!raw || typeof raw !== "object") return null;
   const steps = Array.isArray(raw.steps)
     ? raw.steps.map((step: any, index: number) => ({
@@ -42,12 +42,12 @@ export function normalizeOdiseusRun(raw: any): OdiseusRun | null {
         label: String(step?.label || step?.tool || "Working"),
         status: (["queued", "working", "done", "failed"].includes(step?.status)
           ? step.status
-          : "done") as OdiseusRunStep["status"],
+          : "done") as OdysseusRunStep["status"],
         at: typeof step?.at === "number" ? step.at : undefined,
       }))
     : [];
   return {
-    status: (raw.status || "completed") as OdiseusRunStatus,
+    status: (raw.status || "completed") as OdysseusRunStatus,
     steps,
     toolCount: Number(raw.toolCount || steps.length) || 0,
     artifact: raw.artifact || null,

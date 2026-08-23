@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   actionIdempotencyKey,
-  normalizeOdiseusRun,
+  normalizeOdysseusRun,
 } from "../src/lib/odiseusJobs";
 
-test("normalizeOdiseusRun keeps human work steps", () => {
-  const run = normalizeOdiseusRun({
+test("normalizeOdysseusRun keeps human work steps", () => {
+  const run = normalizeOdysseusRun({
     status: "completed",
     steps: [{ tool: "search_projects", label: "Reviewing projects", status: "done" }],
   });

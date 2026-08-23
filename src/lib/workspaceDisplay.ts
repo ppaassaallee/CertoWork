@@ -228,7 +228,7 @@ export function reviewTypeLabel(type?: string) {
     conversation_message: "Conversation handoff",
     task: "Task",
     task_update: "Task update",
-    odiseus_memory: "Odiseus memory",
+    odiseus_memory: "Odysseus memory",
   };
   return labels[String(type || "task")] || "Item";
 }
