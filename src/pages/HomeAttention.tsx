@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "../components/ui/Icon";
+import { Activity, ChevronDown, ChevronRight } from "../components/ui/Icon";
 import { StatusLight, taskDueStatus } from "../components/ui/StatusLight";
 import { t } from "../lib/i18n";
 import { projectHealthLabel } from "../lib/projectPortfolio";
@@ -14,6 +14,7 @@ export function HomeAttention({
   onOpenProject,
   onOpenApprovals,
   onAsk,
+  activityItems,
 }: {
   projects: any[];
   tasks: any[];
@@ -23,6 +24,7 @@ export function HomeAttention({
   onOpenProject: (project: any) => void;
   onOpenApprovals: () => void;
   onAsk: (prompt: string) => void;
+  activityItems?: any[];
 }) {
   const [showHealthy, setShowHealthy] = useState(false);
   const openProjects = projects.filter((project) => !isClosed(project.status));
@@ -120,6 +122,18 @@ export function HomeAttention({
                 <span>{entityTitle(project)}</span>
               </button>
             ))}
+        </section>
+      )}
+
+      {activityItems && activityItems.length > 0 && (
+        <section className="do-attention-block is-quiet do-odiseus-recently">
+          <div className="do-attention-head">
+            <Activity size={13} />
+            <span>Odysseus recently</span>
+          </div>
+          {activityItems.slice(0, 5).map((item, index) => (
+            <p key={item.id || index}>{item.summary}</p>
+          ))}
         </section>
       )}
     </div>

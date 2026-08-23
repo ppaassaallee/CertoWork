@@ -94,12 +94,14 @@ import {
 } from "../lib/workspaceDisplay";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { HomeAttention } from "../pages/HomeAttention";
-import { OdiseusBadge, OdiseusMark } from "./odiseus/OdiseusMark";
+import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
 import {
-  OdiseusArtifactCard,
-  OdiseusAgentHome,
-  OdiseusWorkLog,
-} from "./odiseus/OdiseusWork";
+  OdysseusArtifactCard,
+  OdysseusAgentHome,
+  OdysseusWorkLog,
+  type OdysseusRunStep,
+} from "./odiseus/OdysseusWork";
+import { OdysseusSchedules } from "./odiseus/OdysseusSchedules";
 import { AppBreadcrumbs } from "./AppBreadcrumbs";
 import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
 import {
@@ -107,8 +109,8 @@ import {
   ODISEUS_HANDOFF_PREFIX,
   ODISEUS_NAME,
 } from "../lib/odiseus";
-import { actionIdempotencyKey, normalizeOdiseusRun } from "../lib/odiseusJobs";
-import { persistOdiseusRun, recordOdiseusActivitySafe } from "../lib/odiseusActivity";
+import { actionIdempotencyKey, normalizeOdysseusRun } from "../lib/odiseusJobs";
+import { persistOdysseusRun, recordOdysseusActivitySafe } from "../lib/odiseusActivity";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -284,6 +286,13 @@ export function DelivereeWorkspace() {
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
   const [strategicMeasures, setStrategicMeasures] = useState<any[]>([]);
   const [strategicRecords, setStrategicRecords] = useState<any[]>([]);
+  const [odiseusMemory, setOdysseusMemory] = useState<any[]>([]);
+  const [odiseusActivity, setOdysseusActivity] = useState<any[]>([]);
+  const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
+  const [odiseusSchedules, setOdysseusSchedules] = useState<any[]>([]);
+  const [liveOdysseusSteps, setLiveOdysseusSteps] = useState<OdysseusRunStep[]>(
+    [],
+  );
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -565,6 +574,21 @@ export function DelivereeWorkspace() {
         false,
         true,
       ),
+      makeQuery("odiseus_memory", setOdysseusMemory, false, true),
+      makeQuery(
+        "odiseus_activity",
+        (items) =>
+          setOdysseusActivity(
+            items.sort(
+              (left, right) =>
+                timestamp(right.createdAt) - timestamp(left.createdAt),
+            ),
+          ),
+        false,
+        true,
+      ),
+      makeQuery("skills", setWorkspaceSkills, false, true),
+      makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [user, workspace, workspaceMembers]);
@@ -1157,6 +1181,7 @@ export function DelivereeWorkspace() {
     setSubmitting(true);
     setStreamed("");
     setNotice("");
+    setLiveOdysseusSteps([]);
     const localId = `local-${Date.now()}`;
     setMessages((current) => [
       ...current,
@@ -1211,6 +1236,9 @@ export function DelivereeWorkspace() {
         notebookEntries,
         userId: user.uid,
         workspaceId: workspace.id,
+        odiseusMemory,
+        skills: workspaceSkills,
+        schedules: odiseusSchedules,
       });
       const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);
@@ -1222,16 +1250,22 @@ export function DelivereeWorkspace() {
         conversationId: activeConversationId,
         messages: requestContext.messages,
         workspaceContext: requestContext.workspaceContext,
+        onStep: (step) => {
+          setLiveOdysseusSteps((current) => {
+            const without = current.filter((item) => item.id !== step.id);
+            return [...without, step];
+          });
+        },
       });
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
-      const odiseusRun = normalizeOdiseusRun(result.run);
+      const odiseusRun = normalizeOdysseusRun(result.run);
       await streamConversationReply(reply, setStreamed);
       // Run/activity logs must never block the assistant reply. Missing
       // Firestore rules for odiseus_* previously surfaced as a false
       // "insufficient permissions" failure after a successful chat.
-      const runId = await persistOdiseusRun({
+      const runId = await persistOdysseusRun({
         userId: user.uid,
         workspaceId: workspace.id,
         conversationId: activeConversationId,
@@ -1261,7 +1295,7 @@ export function DelivereeWorkspace() {
         judgment: nextJudgment,
         createdAt: serverTimestamp(),
       });
-      await recordOdiseusActivitySafe({
+      await recordOdysseusActivitySafe({
         workspaceId: workspace.id,
         userId: user.uid,
         conversationId: activeConversationId,
@@ -1271,7 +1305,7 @@ export function DelivereeWorkspace() {
         summary:
           odiseusRun?.toolCount
             ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
-            : "Completed Odiseus job",
+            : "Completed Odysseus job",
         metadata: { stepCount: odiseusRun?.steps?.length || 0 },
       });
       if (activeConversationId) {
@@ -1301,6 +1335,7 @@ export function DelivereeWorkspace() {
     } finally {
       setStreamed("");
       setSubmitting(false);
+      setLiveOdysseusSteps([]);
     }
   };
 
@@ -1322,8 +1357,28 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     let staged = 0;
+    let remembered = 0;
     for (const [index, action] of (plan.proposedActions || []).entries()) {
       const proposedChange = action.proposedChange || {};
+      if (String(action.type || "") === "create_odiseus_memory") {
+        const safetyLevel = Number(action.safetyLevel ?? plan.safetyLevel ?? 1);
+        const text = String(proposedChange.text || "").trim();
+        if (safetyLevel <= 1 && text) {
+          await addDoc(collection(db, "odiseus_memory"), {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            text: text.slice(0, 2_000),
+            kind: proposedChange.kind || "fact",
+            tags: Array.isArray(proposedChange.tags)
+              ? proposedChange.tags.slice(0, 12)
+              : [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          remembered += 1;
+          continue;
+        }
+      }
       const duplicateProject =
         String(action.type || "") === "create_project"
           ? findMatchingProject(
@@ -1360,7 +1415,7 @@ export function DelivereeWorkspace() {
             ? proposedTitle(proposedChange, actionLabel(actionType))
             : proposedChange?.title || actionLabel(actionType),
         type: reviewType,
-        why: action.reason || "Proposed by Odiseus",
+        why: action.reason || "Proposed by Odysseus",
         action: actionLabel(actionType),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
         proposed: {
@@ -1370,8 +1425,8 @@ export function DelivereeWorkspace() {
         },
         projectId,
         source: duplicateProject
-          ? `${plan.summary || "Odiseus"} · Existing project recognized; converted create_project to update_project.`
-          : plan.summary || "Odiseus",
+          ? `${plan.summary || "Odysseus"} · Existing project recognized; converted create_project to update_project.`
+          : plan.summary || "Odysseus",
         sourceType: "odiseus",
         sourceId: planRef.id,
         idempotencyKey,
@@ -1382,19 +1437,38 @@ export function DelivereeWorkspace() {
       });
       staged += 1;
     }
-    await recordOdiseusActivitySafe({
-      workspaceId: workspace.id,
-      userId: user.uid,
-      conversationId,
-      projectId: primaryProject?.id || null,
-      runId: message.odiseusRun?.runId || null,
-      action: "actions_staged",
-      summary: `Staged ${staged} action(s) for approval`,
-      approvalRequired: true,
-      approvedBy: user.uid,
-    });
-    setNotice("Pending change ready. Review it before anything changes.");
-    setPanel("approvals");
+    if (remembered > 0) {
+      await recordOdysseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "memory_saved",
+        summary: `Saved ${remembered} memory note(s)`,
+      });
+    }
+    if (staged > 0) {
+      await recordOdysseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "actions_staged",
+        summary: `Staged ${staged} action(s) for approval`,
+        approvalRequired: true,
+        approvedBy: user.uid,
+      });
+      setNotice("Pending change ready. Review it before anything changes.");
+      setPanel("approvals");
+    } else if (remembered > 0) {
+      setNotice(
+        remembered > 1
+          ? `Odysseus remembered ${remembered} things.`
+          : "Odysseus remembered that.",
+      );
+    }
   };
 
   const rejectPlan = async (message: Message) => {
@@ -1407,18 +1481,18 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       }).catch(() => undefined);
     }
-    await recordOdiseusActivitySafe({
+    await recordOdysseusActivitySafe({
       workspaceId: workspace.id,
       userId: user.uid,
       conversationId,
       projectId: primaryProject?.id || null,
       runId: message.odiseusRun?.runId || null,
       action: "actions_rejected",
-      summary: "Rejected Odiseus proposed actions",
+      summary: "Rejected Odysseus proposed actions",
       approvalRequired: true,
       approvedBy: user.uid,
     });
-    setNotice("Odiseus will not apply those actions.");
+    setNotice("Odysseus will not apply those actions.");
   };
 
   const processReview = async (
@@ -1574,6 +1648,20 @@ export function DelivereeWorkspace() {
           updatedAt: serverTimestamp(),
         });
         convertedToType = "daily_briefs";
+        convertedToId = created.id;
+      } else if (reviewType === "odiseus_memory") {
+        const text = String(proposed.text || "").trim();
+        if (!text) throw new Error("Memory text is required");
+        const created = await addDoc(collection(db, "odiseus_memory"), {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          text: text.slice(0, 2_000),
+          kind: proposed.kind || "fact",
+          tags: Array.isArray(proposed.tags) ? proposed.tags.slice(0, 12) : [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        convertedToType = "odiseus_memory";
         convertedToId = created.id;
       } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
@@ -2839,7 +2927,7 @@ export function DelivereeWorkspace() {
       },
       {
         id: "odiseus",
-        label: "Open Odiseus",
+        label: "Open Odysseus",
         group: "Actions",
         keywords: "ai employee hire",
         onSelect: () => openChiefOfStaff(),
@@ -3036,7 +3124,7 @@ export function DelivereeWorkspace() {
           onClick={openChiefOfStaff}
           type="button"
         >
-          <OdiseusMark size="md" />
+          <OdysseusMark size="md" />
           <div>
             <strong>{t("odiseusName")}</strong>
             <small>{t("odiseusSidebarBlurb")}</small>
@@ -3437,7 +3525,7 @@ export function DelivereeWorkspace() {
                       : lens.kind === "settings"
                         ? [{ label: "Settings" }]
                         : centerView === "conversation"
-                          ? [{ label: currentContextLabel || "Odiseus" }]
+                          ? [{ label: currentContextLabel || "Odysseus" }]
                           : []),
                 ...(selectedWorkItem
                   ? [{ label: entityTitle(selectedWorkItem) }]
@@ -3538,7 +3626,7 @@ export function DelivereeWorkspace() {
                   <section className="do-opening">
                     {isFocusedConversation ? (
                       <div className="do-welcome">
-                        <OdiseusMark size="lg" />
+                        <OdysseusMark size="lg" />
                         <span className="do-context-eyebrow">
                           FOCUSED · {currentContextLabel}
                         </span>
@@ -3563,9 +3651,10 @@ export function DelivereeWorkspace() {
                             onOpenProject={openProjectRecord}
                             onOpenApprovals={() => setPanel("approvals")}
                             onAsk={setComposer}
+                            activityItems={odiseusActivity}
                           />
                         )}
-                        <OdiseusAgentHome
+                        <OdysseusAgentHome
                           examples={openingPrompts}
                           onExample={(prompt) => sendMessage(prompt)}
                           pendingApprovals={reviewItems.length}
@@ -3635,11 +3724,11 @@ export function DelivereeWorkspace() {
                         ) : (
                           <div className="do-assistant-message">
                             <div className="do-assistant-mark">
-                              <OdiseusMark size="sm" />
+                              <OdysseusMark size="sm" />
                             </div>
                             <div className="do-assistant-content">
                               <div className="do-assistant-name">
-                                <OdiseusBadge />
+                                <OdysseusBadge />
                                 {message.offline && <span>safe mode</span>}
                               </div>
                               <RichText text={message.content} />
@@ -3656,13 +3745,13 @@ export function DelivereeWorkspace() {
                                   </div>
                                 )}
                               {message.odiseusRun?.steps?.length ? (
-                                <OdiseusWorkLog
+                                <OdysseusWorkLog
                                   steps={message.odiseusRun.steps}
                                 />
                               ) : null}
                               {message.odiseusRun?.artifact ? (
-                                <OdiseusArtifactCard
-                                  meta="Generated by Odiseus"
+                                <OdysseusArtifactCard
+                                  meta="Generated by Odysseus"
                                   summary={
                                     message.odiseusRun.artifact.summary ||
                                     undefined
@@ -3719,16 +3808,16 @@ export function DelivereeWorkspace() {
                       <article className="do-message is-assistant">
                         <div className="do-assistant-message">
                           <div className="do-assistant-mark">
-                            <OdiseusMark size="sm" />
+                            <OdysseusMark size="sm" />
                           </div>
                           <div className="do-assistant-content">
                             <div className="do-assistant-name">
-                              <OdiseusBadge />
+                              <OdysseusBadge />
                             </div>
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
-                              <OdiseusWorkLog steps={[]} working />
+                              <OdysseusWorkLog steps={liveOdysseusSteps} working />
                             )}
                           </div>
                         </div>
@@ -3835,8 +3924,8 @@ export function DelivereeWorkspace() {
                   }}
                   placeholder={
                     isFocusedConversation
-                      ? `Give Odiseus a job for ${currentContextLabel}…`
-                      : "Give Odiseus a job…"
+                      ? `Give Odysseus a job for ${currentContextLabel}…`
+                      : "Give Odysseus a job…"
                   }
                   ref={composerRef}
                   rows={1}
@@ -4376,6 +4465,7 @@ export function DelivereeWorkspace() {
                   real skills.
                 </span>
               </div>
+              <OdysseusSchedules onRunNow={(prompt) => sendMessage(prompt)} />
             </>
           )}
 

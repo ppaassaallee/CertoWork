@@ -1,22 +1,22 @@
 import { Check, Loader2 } from "../ui/Icon";
-import { OdiseusBadge, OdiseusMark } from "./OdiseusMark";
-import type { OdiseusRunStep } from "../../lib/odiseusJobs";
+import { OdysseusBadge, OdysseusMark } from "./OdysseusMark";
+import type { OdysseusRunStep } from "../../lib/odiseusJobs";
 
-export type { OdiseusRunStep };
+export type { OdysseusRunStep };
 
-export function OdiseusWorkLog({
+export function OdysseusWorkLog({
   steps,
   working = false,
 }: {
-  steps: OdiseusRunStep[];
+  steps: OdysseusRunStep[];
   working?: boolean;
 }) {
   if (!steps.length && !working) return null;
   return (
     <div className="odiseus-work-log" data-testid="odiseus-work-log">
       <div className="odiseus-work-log-head">
-        <OdiseusMark size="sm" />
-        <strong>{working ? "Odiseus is working" : "Work completed"}</strong>
+        <OdysseusMark size="sm" />
+        <strong>{working ? "Odysseus is working" : "Work completed"}</strong>
       </div>
       <ul>
         {steps.map((step, index) => (
@@ -42,7 +42,7 @@ export function OdiseusWorkLog({
   );
 }
 
-export function OdiseusArtifactCard({
+export function OdysseusArtifactCard({
   title,
   summary,
   meta,
@@ -56,7 +56,7 @@ export function OdiseusArtifactCard({
   return (
     <div className="odiseus-artifact-card">
       <div>
-        <span className="odiseus-artifact-kicker">Artifact · Odiseus</span>
+        <span className="odiseus-artifact-kicker">Artifact · Odysseus</span>
         <strong>{title}</strong>
         {summary ? <p>{summary}</p> : null}
         {meta ? <small>{meta}</small> : null}
@@ -71,7 +71,7 @@ export function OdiseusArtifactCard({
 }
 
 /** Functional agent home chrome — queues render above via parent. */
-export function OdiseusAgentHome({
+export function OdysseusAgentHome({
   examples,
   onExample,
   pendingApprovals = 0,
@@ -83,9 +83,9 @@ export function OdiseusAgentHome({
   return (
     <div className="odiseus-agent-home">
       <div className="odiseus-agent-head">
-        <OdiseusMark size="md" />
+        <OdysseusMark size="md" />
         <div>
-          <strong>Odiseus</strong>
+          <strong>Odysseus</strong>
           <p>
             Your AI employee · Ready
             {pendingApprovals > 0
@@ -109,10 +109,10 @@ export function OdiseusAgentHome({
   );
 }
 
-export { OdiseusBadge };
+export { OdysseusBadge };
 
-/** @deprecated Prefer OdiseusAgentHome */
-export function OdiseusEmptyHero({
+/** @deprecated Prefer OdysseusAgentHome */
+export function OdysseusEmptyHero({
   examples,
   onExample,
 }: {
@@ -121,5 +121,5 @@ export function OdiseusEmptyHero({
   examples: string[];
   onExample: (prompt: string) => void;
 }) {
-  return <OdiseusAgentHome examples={examples} onExample={onExample} />;
+  return <OdysseusAgentHome examples={examples} onExample={onExample} />;
 }

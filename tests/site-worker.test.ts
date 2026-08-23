@@ -235,7 +235,7 @@ test("inline AI rewriting preserves facts and rejects anonymous requests", async
   assert.equal(response.status, 401);
 });
 
-test("project conversations use delivery-team behavior instead of Odiseus lecturing", () => {
+test("project conversations use delivery-team behavior instead of Odysseus lecturing", () => {
   const instructions = assistantInstructions(
     {
       workspaceContext: {
@@ -260,7 +260,7 @@ test("project conversations use delivery-team behavior instead of Odiseus lectur
   assert.match(instructions, /attached_entities_only/);
 });
 
-test("Odiseus can route an approved handoff to an existing conversation", () => {
+test("Odysseus can route an approved handoff to an existing conversation", () => {
   const instructions = assistantInstructions(
     {
       workspaceContext: {
@@ -274,7 +274,7 @@ test("Odiseus can route an approved handoff to an existing conversation", () => 
   );
 
   assert.match(instructions, /ODISEUS MODE/);
-  assert.match(instructions, /Odiseus, the user's AI employee/);
+  assert.match(instructions, /Odysseus, the user's AI employee/);
   assert.match(instructions, /assistant, engineer, and advisor/);
   assert.match(instructions, /post_to_conversation/);
   assert.match(instructions, /fieldops-chat/);

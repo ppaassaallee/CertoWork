@@ -797,6 +797,18 @@ service cloud.firestore {
         && incoming().workspaceId == resource.data.workspaceId;
       allow delete: if canAccessBoldiRecord(resource.data);
     }
+    match /odiseus_memory/{id} {
+      allow create: if canAccessBoldiRecord(incoming())
+        && incoming().text is string
+        && incoming().text.size() > 0
+        && incoming().text.size() <= 2000;
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
     match /boldi_profiles/{userId} {
       allow read, write: if isSignedIn() && userId == request.auth.uid;
     }
