@@ -7,6 +7,9 @@ import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
+// TODO: Replace with the Google Calendar appointment schedule URL.
+const DEMO_BOOKING_URL = "PLACEHOLDER_CALENDAR_URL";
+
 function SignIn() {
   const { signIn, signInWithEmail, requestBetaAccess, resetPasswordForEmail, authError } = useAuth();
   const [submitting, setSubmitting] = useState(false);
@@ -91,10 +94,25 @@ function SignIn() {
       <div className="do-signin-bg" aria-hidden="true" />
       <div className="do-signin-vignette" aria-hidden="true" />
       <header>
-        <div className="do-brand"><span className="do-logo">C</span><span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span></div>
+        <div className="do-brand">
+          <span className="do-logo">
+            <svg aria-hidden="true" viewBox="0 0 32 32">
+              <path
+                d="M24 7H12.5A5.5 5.5 0 0 0 7 12.5v7A5.5 5.5 0 0 0 12.5 25H24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="butt"
+                strokeLinejoin="round"
+                strokeWidth="7"
+              />
+            </svg>
+          </span>
+          <span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span>
+        </div>
         <nav aria-label="Certo Work access">
           <button disabled={submitting} onClick={() => resetPanel("signin")} type="button">Sign in</button>
           <button disabled={submitting} onClick={() => resetPanel("access")} type="button">Beta access</button>
+          <a href={DEMO_BOOKING_URL} rel="noopener" target="_blank">Book demo</a>
         </nav>
       </header>
       <div className="do-signin-hero">
@@ -121,7 +139,7 @@ function SignIn() {
           {(authError || error) && <p className="do-signin-error" role="alert">{authError || error}</p>}
           <div className="do-signin-proof">
             <span><Check size={13} /> Invite-only workspaces</span>
-            <span><Check size={13} /> Human approval</span>
+            <span><Check size={13} /> You approve every change</span>
             <span><Check size={13} /> Built for delivery teams</span>
           </div>
           <p className="do-signin-pricing">
@@ -148,6 +166,9 @@ function SignIn() {
                   <Mail size={15} /> Request beta
                 </button>
               </div>
+              <a className="do-signin-alternate" href={DEMO_BOOKING_URL} rel="noopener" target="_blank">
+                Or book a 30-min demo →
+              </a>
             </>
           )}
           {mode === "signin" && (
