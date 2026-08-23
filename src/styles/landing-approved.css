@@ -1,0 +1,460 @@
+/* Approved Certo Work landing. Keep visually unchanged; additions only. */
+
+.do-signin-alternate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: #52645a;
+  font: inherit;
+  font-size: calc(12px * var(--cw-text-scale));
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.do-access-card .do-signin-alternate {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: calc(9px * var(--cw-text-scale));
+}
+.do-signin-alternate:hover {
+  color: #123f2f;
+}
+.do-access-card .do-signin-alternate:hover {
+  color: var(--surface-0);
+}
+.do-signin-alternate:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+.do-signin {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #090b09;
+  color: var(--surface-0) af0;
+}
+.do-signin-bg {
+  position: absolute;
+  display: block;
+  inset: 0;
+  background-image: url("/certo-work-hero.png");
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.01);
+}
+.do-signin-vignette {
+  position: absolute;
+  display: block;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(5, 7, 5, 0.88) 0%,
+      rgba(7, 9, 7, 0.66) 36%,
+      rgba(7, 9, 7, 0.24) 62%,
+      rgba(5, 7, 5, 0.5) 100%
+    ),
+    linear-gradient(
+      0deg,
+      rgba(4, 5, 4, 0.72) 0%,
+      transparent 38%,
+      rgba(4, 5, 4, 0.24) 100%
+    );
+}
+.do-signin > header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 0;
+  background: transparent;
+  padding: 0 clamp(22px, 4.8vw, 64px);
+}
+.do-signin .do-brand {
+  color: var(--surface-0);
+}
+.do-signin .do-logo {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--surface-0);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 10px 28px rgba(0, 0, 0, 0.18);
+}
+.do-signin .do-brand strong {
+  color: var(--surface-0);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.do-signin .do-brand small {
+  color: rgba(255, 255, 255, 0.58);
+  letter-spacing: 0.08em;
+}
+.do-signin nav {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+.do-signin nav button,
+.do-signin nav a {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: 600 calc(8px * var(--cw-text-scale))/1 var(--font-display);
+  letter-spacing: 0.22em;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.do-signin nav button:hover,
+.do-signin nav a:hover {
+  color: var(--surface-0);
+}
+.do-signin nav button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+.do-signin-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: calc(100dvh - 132px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: end;
+  gap: clamp(34px, 7vw, 112px);
+  width: min(1340px, calc(100vw - 84px));
+  margin: 0 auto;
+  padding: 6vh 0 8vh;
+}
+.do-signin-copy {
+  max-width: 760px;
+  padding-bottom: 3vh;
+}
+.do-signin-copy h1 {
+  margin: 18px 0 0;
+  color: var(--surface-0);
+  font: 500 clamp(58px, 8.2vw, 118px)/0.88 var(--font-display);
+  letter-spacing: -0.085em;
+  text-wrap: balance;
+}
+.do-signin-copy > p {
+  max-width: 610px;
+  margin: 24px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: calc(15px * var(--cw-text-scale));
+  line-height: 1.72;
+}
+.do-signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+.do-signin-button,
+.do-signin-secondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 999px;
+  padding: 0 17px;
+  font-size: calc(9px * var(--cw-text-scale));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    transform 0.18s,
+    background 0.18s,
+    border-color 0.18s;
+}
+.do-signin-button {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: var(--surface-0);
+  color: #143729;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.25);
+}
+.do-signin-button svg:last-child {
+  margin-left: 4px;
+}
+.do-signin-button:hover,
+.do-signin-secondary:hover,
+.do-access-card form button:hover {
+  transform: translateY(-1px);
+}
+.do-signin-button:disabled,
+.do-signin-secondary:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+.do-signin-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--surface-0);
+  backdrop-filter: blur(14px);
+}
+.do-signin-error {
+  max-width: 540px;
+  margin: 16px 0 0;
+  border: 1px solid rgba(255, 181, 151, 0.35);
+  border-radius: 13px;
+  background: rgba(74, 25, 17, 0.32);
+  padding: 10px 12px;
+  color: #ffd8ca !important;
+  font-size: calc(9px * var(--cw-text-scale)) !important;
+}
+.do-signin-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 22px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: calc(8px * var(--cw-text-scale));
+  font-weight: 600;
+}
+.do-signin-proof span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.do-signin-proof svg {
+  color: #c7e5d1;
+}
+.do-access-card {
+  align-self: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 28px;
+  background: rgba(10, 15, 11, 0.46);
+  padding: 24px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px);
+}
+.do-access-card > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #d6eadc;
+  font-size: calc(8px * var(--cw-text-scale));
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.do-access-card h2 {
+  margin: 28px 0 0;
+  color: var(--surface-0);
+  font: 650 calc(25px * var(--cw-text-scale))/1 var(--font-display);
+  letter-spacing: -0.04em;
+}
+.do-access-card p {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: calc(10px * var(--cw-text-scale));
+  line-height: 1.65;
+}
+.do-access-card form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+.do-access-choice {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+.do-access-choice .do-signin-button,
+.do-access-choice .do-signin-secondary {
+  width: 100%;
+  min-height: 43px;
+}
+.do-access-card label {
+  display: grid;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: calc(7.5px * var(--cw-text-scale));
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.do-access-card input {
+  height: 43px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0 15px;
+  color: var(--surface-0);
+  outline: none;
+}
+.do-access-card input::placeholder {
+  color: rgba(255, 255, 255, 0.38);
+}
+.do-access-card input:focus {
+  border-color: rgba(210, 236, 219, 0.72);
+  box-shadow: 0 0 0 3px rgba(210, 236, 219, 0.12);
+}
+.do-access-card form button {
+  display: inline-flex;
+  height: 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #dfece2;
+  color: #153628;
+  font-size: calc(9px * var(--cw-text-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s;
+}
+.do-access-pending {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  margin-top: 20px;
+  border: 1px solid rgba(207, 233, 214, 0.32);
+  border-radius: 18px;
+  background: rgba(223, 236, 226, 0.12);
+  padding: 15px;
+  color: var(--surface-0);
+}
+.do-access-pending svg {
+  color: #dfece2;
+}
+.do-access-pending strong {
+  font-size: calc(12px * var(--cw-text-scale));
+}
+.do-access-pending small,
+.do-access-note {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: calc(8px * var(--cw-text-scale));
+  line-height: 1.45;
+}
+.do-access-note {
+  display: block;
+  margin-top: 15px;
+}
+.do-access-note button {
+  border: 0;
+  background: transparent;
+  color: #dfece2;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.do-signin-notice {
+  margin: 14px 0 0;
+  border: 1px solid rgba(207, 233, 214, 0.32);
+  border-radius: 14px;
+  background: rgba(223, 236, 226, 0.12);
+  padding: 10px 12px;
+  color: #ecfff1 !important;
+  font-size: calc(9px * var(--cw-text-scale)) !important;
+  line-height: 1.45;
+}
+.do-signin footer {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  height: 56px;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 250, 240, 0.94);
+  padding: 0 clamp(22px, 4.8vw, 64px);
+  color: #27312b;
+  font-size: calc(8px * var(--cw-text-scale));
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.do-signin footer span:nth-child(2) {
+  color: #66716a;
+}
+.do-signin footer span:last-child {
+  justify-self: end;
+}
+.do-signin .do-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.do-signin-copy > .do-kicker,
+.do-signin-pricing .do-kicker {
+  color: #527462;
+}
+.do-signin-copy > p.do-signin-pricing {
+  max-width: 610px;
+  margin: 15px 0 0;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: var(--text-body-sm) !important;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .do-signin {
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+  .do-signin > header {
+    height: 68px;
+    padding: 0 20px;
+  }
+  .do-signin nav {
+    gap: 14px;
+  }
+  .do-signin nav button,
+  .do-signin nav a {
+    font-size: calc(7px * var(--cw-text-scale));
+    letter-spacing: 0.16em;
+  }
+  .do-signin-hero {
+    display: block;
+    width: calc(100% - 40px);
+    min-height: auto;
+    padding: 56px 0 30px;
+  }
+  .do-signin-copy {
+    padding-bottom: 0;
+  }
+  .do-signin-copy h1 {
+    font-size: calc(54px * var(--cw-text-scale));
+    line-height: 0.94;
+  }
+  .do-signin-copy > p {
+    font-size: calc(12px * var(--cw-text-scale));
+  }
+  .do-access-card {
+    margin-top: 36px;
+    padding: 20px;
+  }
+  .do-signin footer {
+    position: relative;
+    height: auto;
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 7px;
+    padding: 16px 20px;
+  }
+  .do-signin footer span:last-child {
+    justify-self: start;
+  }
+}
+.do-signin-copy h1 {
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 500;
+  line-height: 0.92;
+}
+.do-signin-copy :is(h1, h1 *) {
+  font-size: clamp(48px, 7vw, 96px) !important;
+  font-weight: 500 !important;
+}
