@@ -2,9 +2,12 @@
 
 Under Prompt-1 `/agents`:
 
-- Agents library (Odysseus, Portfolio Reporter, Risk Monitor)
-- New Agent outcome builder
-- Automations + Activity routes preserved
-- No More / War Room / Command Center nouns
+- **Bordered agent list** (not floating cards): status badge (semaforo), right-side metric, meaningful icon
+- Odysseus metric prefers amber **pending approvals** (links to Approvals) else **runs today**
+- Platform section removed — Automations + Activity are footer links
+- Activity lines: verb + actor + result + relative time (`agentId`, `actionCount`, `result`, `createdAt`)
+- Single page CTA: **New agent**
+- Breadcrumb on library home: `Agents` only (not `Agents > Odysseus`)
+- Display name from `ODISEUS_NAME` (`src/lib/odiseus.ts`)
 
-Files: `src/components/agents/AgentsLibrary.tsx`
+Files: `src/components/agents/AgentsLibrary.tsx`, `src/lib/agentActivity.ts`, `src/lib/odiseusActivity.ts`

@@ -108,4 +108,13 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="my-work-shell"/);
   assert.match(agents, /data-testid="agents-home"/);
   assert.match(agents, /data-testid="agents-library"/);
+  assert.match(agents, /do-agents-list/);
+  assert.match(agents, /do-agents-row/);
+  assert.match(agents, /New agent/);
+  assert.doesNotMatch(agents, />\s*Platform\s*</);
+  // Agents library home breadcrumb is Agents only — no forced Odysseus segment.
+  assert.match(
+    source,
+    /lens\.section === "automations"[\s\S]*lens\.section === "activity"[\s\S]*: \[\]/,
+  );
 });

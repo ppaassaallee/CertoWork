@@ -30,6 +30,7 @@ import {
   Coffee
 } from "./ui/Icon";
 import { logHabit, deleteHabitLog } from "../lib/habits";
+import { NOTION_COLORS } from "../lib/chartColors";
 import { NotebookShell, NotebookActionBar, NotebookPage, NotebookRibbon, NotebookSection, NotebookSectionHeader, NotebookCallout, NotebookField } from "./notebook/NotebookComponents";
 
 interface StrokePoint {
@@ -45,10 +46,10 @@ interface Stroke {
 }
 
 const TIME_BLOCK_DEFS = [
-  { id: "morning_focus", name: "Morning Focus", hours: "08:00 - 11:00", description: "Golden focus window. Protect for ONE Thing.", bgColor: "#FEFBE8", border: "border-amber-100", textColor: "text-amber-800" },
-  { id: "midday_admin", name: "Mid-day Admin", hours: "11:00 - 13:00", description: "Administrative actions, quick responses, messages.", bgColor: "#EFF6FF", border: "border-blue-100", textColor: "text-blue-800" },
-  { id: "afternoon_deep", name: "Afternoon Deep Work", hours: "14:00 - 17:00", description: "Collaboration, meetings, secondary execution.", bgColor: "#EEF2FF", border: "border-indigo-100", textColor: "text-indigo-800" },
-  { id: "evening_strategy", name: "Evening Strategy", hours: "17:00 - 18:30", description: "Daily shutdown, reflection, plan tomorrow.", bgColor: "#FAF5FF", border: "border-purple-100", textColor: "text-purple-800" }
+  { id: "morning_focus", name: "Morning Focus", hours: "08:00 - 11:00", description: "Golden focus window. Protect for ONE Thing.", bgColor: "var(--status-warning-soft)", border: "border-amber-100", textColor: "text-amber-800" },
+  { id: "midday_admin", name: "Mid-day Admin", hours: "11:00 - 13:00", description: "Administrative actions, quick responses, messages.", bgColor: "var(--status-info-soft)", border: "border-blue-100", textColor: "text-blue-800" },
+  { id: "afternoon_deep", name: "Afternoon Deep Work", hours: "14:00 - 17:00", description: "Collaboration, meetings, secondary execution.", bgColor: "var(--status-info-soft)", border: "border-indigo-100", textColor: "text-indigo-800" },
+  { id: "evening_strategy", name: "Evening Strategy", hours: "17:00 - 18:30", description: "Daily shutdown, reflection, plan tomorrow.", bgColor: "var(--accent-soft)", border: "border-purple-100", textColor: "text-purple-800" }
 ];
 
 export function NotebookPlanner() {
@@ -75,7 +76,7 @@ export function NotebookPlanner() {
 
   // Pencil mode states
   const [pencilMode, setPencilMode] = useState(false);
-  const [pencilColor, setPencilColor] = useState("#2563EB"); // Default royal blue pen
+  const [pencilColor, setPencilColor] = useState<string>(NOTION_COLORS.accent);
   const [pencilWidth, setPencilWidth] = useState(2);
   const [pencilOnlyMode, setPencilOnlyMode] = useState(false);
   const [stylusDetected, setStylusDetected] = useState(false);
@@ -767,10 +768,10 @@ export function NotebookPlanner() {
               <span className="text-xs font-bold text-gray-700 mr-2">✏️ Pencil Shelf:</span>
               
               <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
-                <button onClick={() => setPencilColor("#2563EB")} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === '#2563EB' ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: '#2563EB' }} title="Blue Pen" />
-                <button onClick={() => setPencilColor("#10B981")} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === '#10B981' ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: '#10B981' }} title="Green Marker" />
-                <button onClick={() => setPencilColor("#EF4444")} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === '#EF4444' ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: '#EF4444' }} title="Red Correction" />
-                <button onClick={() => setPencilColor("#111827")} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === '#111827' ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: '#111827' }} title="Black Pencil" />
+                <button onClick={() => setPencilColor(NOTION_COLORS.accent)} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === NOTION_COLORS.accent ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: NOTION_COLORS.accent }} title="Blue Pen" />
+                <button onClick={() => setPencilColor(NOTION_COLORS.success)} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === NOTION_COLORS.success ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: NOTION_COLORS.success }} title="Green Marker" />
+                <button onClick={() => setPencilColor(NOTION_COLORS.danger)} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === NOTION_COLORS.danger ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: NOTION_COLORS.danger }} title="Red Correction" />
+                <button onClick={() => setPencilColor(NOTION_COLORS.ink)} className={`w-6 h-6 rounded-full border border-white m-0.5 ${pencilColor === NOTION_COLORS.ink ? 'ring-2 ring-black' : ''}`} style={{ backgroundColor: NOTION_COLORS.ink }} title="Black Pencil" />
               </div>
 
               <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
@@ -843,11 +844,11 @@ export function NotebookPlanner() {
                
                {/* Core Focus */}
                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 py-1 px-2.5 bg-amber-100 text-[#78350F] text-[9px] font-extrabold uppercase rounded-bl-3xl tracking-widest font-mono">
+            <div className="absolute top-0 right-0 py-1 px-2.5 bg-amber-100 text-[var(--status-danger)] text-[9px] font-extrabold uppercase rounded-bl-3xl tracking-widest font-mono">
               Core One Thing
             </div>
             
-            <h4 className="text-sm font-extrabold uppercase tracking-widest text-[#855D28] mb-3 flex items-center gap-1.5 font-mono">
+            <h4 className="text-sm font-extrabold uppercase tracking-widest text-[var(--status-warning)] mb-3 flex items-center gap-1.5 font-mono">
               <Award className="w-4 h-4 text-amber-600 animate-bounce" /> The ONE Thing
             </h4>
             
@@ -858,7 +859,7 @@ export function NotebookPlanner() {
                     type="checkbox" 
                     checked={oneThingTask.status === "done"}
                     onChange={() => handleToggleTaskStatus(oneThingTask.id, oneThingTask.status)}
-                    className="w-5 h-5 accent-[#78350F] rounded cursor-pointer shrink-0"
+                    className="w-5 h-5 accent-[var(--status-danger)] rounded cursor-pointer shrink-0"
                   />
                   <span className={`text-sm font-bold leading-snug ${oneThingTask.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-900 font-sans'}`}>
                     {oneThingTask.title}
@@ -885,7 +886,7 @@ export function NotebookPlanner() {
                     await updateDoc(doc(db, "tasks", id), { isOneThing: true });
                     setOneThingTaskId(id);
                   }}
-                  className="w-full bg-white border border-[#E9DFCF] p-2 text-xs font-bold rounded-xl text-amber-900 outline-none shadow-sm cursor-pointer"
+                  className="w-full bg-white border border-[var(--status-warning-soft)] p-2 text-xs font-bold rounded-xl text-amber-900 outline-none shadow-sm cursor-pointer"
                 >
                   <option value="">Select ONE Thing to focus on...</option>
                   {regularTasks.filter(t => t.status === 'open').map(t => (
@@ -954,7 +955,7 @@ export function NotebookPlanner() {
                     {/* Quick Add Inside Time Block Form */}
                     <button
                       onClick={() => setQuickTaskBlock(quickTaskBlock === tblk.id ? "" : tblk.id)}
-                      className="text-[10px] text-[#846A49] hover:underline font-bold flex items-center gap-1 self-start mt-1 font-mono"
+                      className="text-[10px] text-[var(--status-warning)] hover:underline font-bold flex items-center gap-1 self-start mt-1 font-mono"
                     >
                       <Plus className="w-3 h-3" /> Quick-allocate task
                     </button>
@@ -1059,7 +1060,7 @@ export function NotebookPlanner() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button 
                         onClick={() => handleMoveToTomorrow(t.id)}
-                        className="text-[9px] text-[#846A49] font-bold uppercase hover:bg-[#FAF5EB] px-1 hover:rounded"
+                        className="text-[9px] text-[var(--status-warning)] font-bold uppercase hover:bg-[var(--status-warning-soft)] px-1 hover:rounded"
                       >
                         → Today
                       </button>
@@ -1086,8 +1087,8 @@ export function NotebookPlanner() {
              <div className="p-6">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Habits mini Matrix */}
-            <div className="bg-white rounded-3xl p-5 border border-[#E9DFCF] shadow-sm">
-              <h4 className="font-serif text-xl font-bold text-[#846A49] border-b border-dashed border-[#DFCDB3] pb-2 mb-3" style={{ fontFamily: '"Caveat", cursive' }}>
+            <div className="bg-white rounded-3xl p-5 border border-[var(--status-warning-soft)] shadow-sm">
+              <h4 className="font-serif text-xl font-bold text-[var(--status-warning)] border-b border-dashed border-[var(--status-warning-soft)] pb-2 mb-3" style={{ fontFamily: '"Caveat", cursive' }}>
                 Habit Matrix Tracker
               </h4>
               <div className="space-y-2">
@@ -1119,13 +1120,13 @@ export function NotebookPlanner() {
             </div>
 
             {/* Daily Athletic Workouts */}
-            <div className="bg-white rounded-3xl p-5 border border-[#E9DFCF] shadow-sm">
-              <h4 className="font-serif text-xl font-bold text-[#846A49] border-b border-dashed border-[#DFCDB3] pb-2 mb-3" style={{ fontFamily: '"Caveat", cursive' }}>
+            <div className="bg-white rounded-3xl p-5 border border-[var(--status-warning-soft)] shadow-sm">
+              <h4 className="font-serif text-xl font-bold text-[var(--status-warning)] border-b border-dashed border-[var(--status-warning-soft)] pb-2 mb-3" style={{ fontFamily: '"Caveat", cursive' }}>
                 Physical Workout
               </h4>
               <div className="space-y-2">
                 {workouts.map((w) => (
-                  <div key={w.id} className="p-3 bg-[#EEF2FF] border border-indigo-100 rounded-xl flex items-center justify-between gap-2">
+                  <div key={w.id} className="p-3 bg-[var(--status-info-soft)] border border-indigo-100 rounded-xl flex items-center justify-between gap-2">
                     <div>
                       <span className="text-xs font-bold text-gray-900 leading-snug">{w.title}</span>
                       <div className="text-[9px] text-indigo-700 font-mono mt-0.5 capitalize">{w.type} • {w.durationMinutes || 45} mins</div>

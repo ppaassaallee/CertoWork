@@ -81,7 +81,7 @@ export function NotesWorkspace({
   const [newSectionTitle, setNewSectionTitle] = useState("");
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [inkOpen, setInkOpen] = useState(false);
-  const [inkColor, setInkColor] = useState("#1f4838");
+  const [inkColor, setInkColor] = useState("var(--accent)");
   const [inkWidth, setInkWidth] = useState(2.5);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -536,7 +536,7 @@ export function NotesWorkspace({
               {inkOpen && (
                 <div className="do-notes-ink">
                   <div className="do-notes-ink-tools">
-                    {["#1f4838", "#2563eb", "#d06d4a", "#111827"].map((color) => (
+                    {["var(--accent)", "var(--accent)", "var(--status-danger)", "var(--text-primary)"].map((color) => (
                       <button aria-label={`Ink color ${color}`} className={inkColor === color ? "is-active" : ""} key={color} onClick={() => setInkColor(color)} style={{ background: color }} type="button" />
                     ))}
                     <button className={inkWidth === 2.5 ? "is-active" : ""} onClick={() => setInkWidth(2.5)} type="button">Fine</button>
