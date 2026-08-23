@@ -11,6 +11,7 @@ import {
   Archive,
   ArrowUp,
   BookOpen,
+  Bot,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   ChevronRight,
   Circle,
   Folder,
+  HelpCircle,
   Inbox,
   Home,
   ListTodo,
@@ -245,7 +247,8 @@ export type CenterView =
   | "notes"
   | "strategy"
   | "portfolio"
-  | "project";
+  | "project"
+  | "agents";
 
 export function DelivereeWorkspace() {
   const {
@@ -303,7 +306,6 @@ export function DelivereeWorkspace() {
       ? window.localStorage.getItem("certo-sidebar-collapsed") === "true"
       : false,
   );
-  const [moreOpen, setMoreOpen] = useState(false);
   const [sidebarSections, setSidebarSections] = useState<{
     projects: boolean;
     favorites: boolean;
@@ -348,15 +350,21 @@ export function DelivereeWorkspace() {
       ? "approvals"
       : lens.kind === "settings"
         ? "settings"
-        : lens.kind === "more"
+        : lens.kind === "agents"
           ? lens.section === "automations"
             ? "skills"
-            : lens.section === "updates"
+            : lens.section === "activity"
               ? "digest"
-              : lens.section === "workspace"
-                ? "workspace"
-                : null
-          : null
+              : null
+          : lens.kind === "more"
+            ? lens.section === "automations"
+              ? "skills"
+              : lens.section === "updates"
+                ? "digest"
+                : lens.section === "workspace"
+                  ? "workspace"
+                  : null
+            : null
   ) as Panel;
   const setPanel = (next: Panel) => {
     setSidebarOpen(false);
@@ -365,14 +373,14 @@ export function DelivereeWorkspace() {
       return;
     }
     if (next === "today") navigate("/home");
-    else if (next === "projects") navigate("/work");
+    else if (next === "projects") navigate("/projects");
     else if (next === "project") {
       const id = projectConsoleId || (lens.kind === "project" ? lens.projectId : null);
-      navigate(id ? `/work/projects/${id}` : "/work");
+      navigate(id ? `/work/projects/${id}` : "/projects");
     } else if (next === "approvals") navigate("/approvals");
-    else if (next === "skills") navigate("/more/automations");
-    else if (next === "digest") navigate("/more/updates");
-    else if (next === "workspace") navigate("/more/workspace");
+    else if (next === "skills") navigate("/agents/automations");
+    else if (next === "digest") navigate("/agents/activity");
+    else if (next === "workspace") navigate("/workspace");
     else if (next === "settings") navigate("/settings");
   };
   const centerView: CenterView =
@@ -382,22 +390,27 @@ export function DelivereeWorkspace() {
         : lens.tab === "strategy"
           ? "strategy"
           : "project"
-      : lens.kind === "work"
-        ? lens.section === "issues"
-          ? "items"
-          : "portfolio"
-        : "conversation";
+      : lens.kind === "my-work"
+        ? "items"
+        : lens.kind === "work"
+          ? lens.section === "issues"
+            ? "items"
+            : "portfolio"
+          : lens.kind === "agents"
+            ? "agents"
+            : "conversation";
   const goCenterView = (next: CenterView) => {
     const projectId =
       (lens.kind === "project" ? lens.projectId : null) || projectConsoleId;
-    if (next === "portfolio") navigate("/work");
+    if (next === "portfolio") navigate("/projects");
     else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
     else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
-    else if (next === "items") navigate("/work/tasks");
+    else if (next === "items") navigate("/my-work");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
+    else if (next === "agents") navigate("/agents");
     else navigate("/home");
   };
   const projectConsoleInitialTab =
@@ -2908,16 +2921,36 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/home"),
       },
       {
-        id: "nav-work",
-        label: "Go to Work",
+        id: "nav-my-work",
+        label: "Go to My Work",
         group: "Navigate",
-        onSelect: () => navigate("/work"),
+        onSelect: () => navigate("/my-work"),
+      },
+      {
+        id: "nav-projects",
+        label: "Go to Projects",
+        group: "Navigate",
+        keywords: "work portfolio command center",
+        onSelect: () => navigate("/projects"),
+      },
+      {
+        id: "nav-agents",
+        label: "Go to Agents",
+        group: "Navigate",
+        keywords: "odysseus ai automations",
+        onSelect: () => navigate("/agents"),
       },
       {
         id: "nav-approvals",
         label: "Go to Approvals",
         group: "Navigate",
         onSelect: () => navigate("/approvals"),
+      },
+      {
+        id: "nav-workspace",
+        label: "Workspace & team",
+        group: "Navigate",
+        onSelect: () => navigate("/workspace"),
       },
       {
         id: "nav-settings",
@@ -2929,28 +2962,31 @@ export function DelivereeWorkspace() {
         id: "odiseus",
         label: "Open Odysseus",
         group: "Actions",
-        keywords: "ai employee hire",
-        onSelect: () => openChiefOfStaff(),
+        keywords: "ai employee hire agent",
+        onSelect: () => {
+          void openChiefOfStaff();
+          navigate("/agents");
+        },
+      },
+      {
+        id: "quick-capture",
+        label: "Quick Capture",
+        group: "Create",
+        onSelect: () => {
+          setComposer("Capture this: ");
+          navigate("/home");
+        },
       },
       {
         id: "new-conversation",
         label: "New conversation",
-        group: "Actions",
+        group: "Create",
         onSelect: () => void createConversation(),
-      },
-      {
-        id: "command-center",
-        label: "Open Command Center",
-        group: "Actions",
-        onSelect: () => {
-          goCenterView("portfolio");
-          setPanel(null);
-        },
       },
       {
         id: "new-project",
         label: "Create project",
-        group: "Actions",
+        group: "Create",
         onSelect: () => setProjectWizardOpen(true),
       },
     ];
@@ -2966,14 +3002,13 @@ export function DelivereeWorkspace() {
   }, [
     activeProjects,
     createConversation,
-    goCenterView,
     navigate,
     openChiefOfStaff,
     openProjectRecord,
   ]);
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" ? "settings" : lens.kind === "project" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -2997,16 +3032,18 @@ export function DelivereeWorkspace() {
           <button
             className="do-brand"
             onClick={() => {
-              navigate("/");
-              setSidebarOpen(false);
+              setWorkspaceOpen((open) => !open);
             }}
             type="button"
+            aria-label="Workspace switcher"
+            title="Workspace switcher"
           >
             <span className="do-logo">C</span>
-            <span>
-              <strong>Certo Work</strong>
-              <small>Think. Choose. Move.</small>
+            <span className="do-brand-copy">
+              <strong>{workspace?.name || "Certo Work"}</strong>
+              <small>Certo Work</small>
             </span>
+            <ChevronDown className="do-brand-chevron" size={13} />
           </button>
           <button
             aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
@@ -3027,9 +3064,24 @@ export function DelivereeWorkspace() {
           </button>
         </div>
 
+        <button
+          className="do-sidebar-search"
+          data-testid="sidebar-search"
+          onClick={() => {
+            setCommandPaletteOpen(true);
+            setSidebarOpen(false);
+          }}
+          type="button"
+        >
+          <Search size={14} />
+          <span>{t("headerSearch")}</span>
+          <kbd>⌘K</kbd>
+        </button>
+
         <nav className="do-nav-primary" aria-label="Primary">
           <button
             className={`do-nav-item is-home ${lens.kind === "home" ? "is-active" : ""}`}
+            data-testid="nav-home"
             onClick={() => {
               navigate("/home");
               setSidebarOpen(false);
@@ -3040,18 +3092,44 @@ export function DelivereeWorkspace() {
             <span>{t("navHome")}</span>
           </button>
           <button
-            className={`do-nav-item is-work ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
+            className={`do-nav-item is-my-work ${lens.kind === "my-work" ? "is-active" : ""}`}
+            data-testid="nav-my-work"
             onClick={() => {
-              navigate("/work");
+              navigate("/my-work");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <CheckCircle2 size="sm" />
+            <span>{t("navMyWork")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-projects ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
+            data-testid="nav-projects"
+            onClick={() => {
+              navigate("/projects");
               setSidebarOpen(false);
             }}
             type="button"
           >
             <Folder size="sm" />
-            <span>{t("navWork")}</span>
+            <span>{t("navProjects")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-agents ${lens.kind === "agents" ? "is-active" : ""}`}
+            data-testid="nav-agents"
+            onClick={() => {
+              navigate("/agents");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Bot size="sm" />
+            <span>{t("navAgents")}</span>
           </button>
           <button
             className={`do-nav-item is-approvals ${lens.kind === "approvals" ? "is-active" : ""}`}
+            data-testid="nav-approvals"
             onClick={() => {
               navigate("/approvals");
               setSidebarOpen(false);
@@ -3068,39 +3146,6 @@ export function DelivereeWorkspace() {
               </em>
             )}
           </button>
-          <button
-            className={`do-nav-item is-settings ${lens.kind === "settings" ? "is-active" : ""}`}
-            onClick={() => {
-              navigate("/settings");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Settings size="sm" />
-            <span>{t("navSettings")}</span>
-          </button>
-          <button
-            className={`do-nav-item ${lens.kind === "more" || moreOpen ? "is-active" : ""}`}
-            onClick={() => setMoreOpen((open) => !open)}
-            type="button"
-          >
-            <MoreHorizontal size="sm" />
-            <span>{t("navMore")}</span>
-            <ChevronDown size="sm" />
-          </button>
-          {moreOpen && (
-            <>
-              <button className="do-nav-item" onClick={() => { navigate("/more/automations"); setSidebarOpen(false); }} type="button">
-                <WandSparkles size="sm" /><span>{t("moreAutomations")}</span>
-              </button>
-              <button className="do-nav-item" onClick={() => { navigate("/more/updates"); setSidebarOpen(false); }} type="button">
-                <Mail size="sm" /><span>{t("moreUpdates")}</span>
-              </button>
-              <button className="do-nav-item" onClick={() => { navigate("/more/workspace"); setSidebarOpen(false); }} type="button">
-                <Users size="sm" /><span>{t("moreWorkspace")}</span>
-              </button>
-            </>
-          )}
         </nav>
 
         <button
@@ -3115,21 +3160,8 @@ export function DelivereeWorkspace() {
           ) : (
             <Plus size={15} />
           )}
-          <span>{creatingConversation ? "Starting…" : "New conversation"}</span>
+          <span>{creatingConversation ? "Starting…" : "New"}</span>
           <kbd>N</kbd>
-        </button>
-
-        <button
-          className="do-odiseus-hire"
-          onClick={openChiefOfStaff}
-          type="button"
-        >
-          <OdysseusMark size="md" />
-          <div>
-            <strong>{t("odiseusName")}</strong>
-            <small>{t("odiseusSidebarBlurb")}</small>
-          </div>
-          <ChevronRight size={13} />
         </button>
 
         <div className="do-sidebar-scroll">
@@ -3148,7 +3180,7 @@ export function DelivereeWorkspace() {
                 <span>Projects</span>
               </button>
               <button
-                aria-label="Open project command center"
+                aria-label="Open projects portfolio"
                 onClick={() => {
                   goCenterView("portfolio");
                   setPanel(null);
@@ -3156,7 +3188,7 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                Command center
+                All projects
               </button>
             </div>
             {sidebarSections.projects && (
@@ -3324,7 +3356,7 @@ export function DelivereeWorkspace() {
                   className={sidebarSections.conversations ? "" : "is-collapsed"}
                   size={13}
                 />
-                <span>Conversations</span>
+                <span>Recent</span>
               </button>
               <button
                 aria-label="Search conversations"
@@ -3432,6 +3464,46 @@ export function DelivereeWorkspace() {
           </div>
         </div>
 
+        <nav className="do-nav-admin" aria-label="Workspace administration">
+          <button
+            className={`do-nav-item ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
+            data-testid="nav-workspace"
+            onClick={() => {
+              navigate("/workspace");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Users size="sm" />
+            <span>{t("navWorkspace")}</span>
+          </button>
+          <button
+            className={`do-nav-item ${lens.kind === "settings" ? "is-active" : ""}`}
+            data-testid="nav-settings"
+            onClick={() => {
+              navigate("/settings");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Settings size="sm" />
+            <span>{t("navSettings")}</span>
+          </button>
+          <button
+            className="do-nav-item"
+            data-testid="nav-help"
+            onClick={() => {
+              setComposer("Help me understand Certo Work navigation: ");
+              navigate("/home");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <HelpCircle size="sm" />
+            <span>{t("navHelp")}</span>
+          </button>
+        </nav>
+
         <div className="do-account">
           <button
             onClick={() => setWorkspaceOpen((open) => !open)}
@@ -3441,8 +3513,8 @@ export function DelivereeWorkspace() {
               {memberAvatar(currentWorkspaceMember || {})}
             </span>
             <span>
-              <strong>{workspace?.name || "Certo Work"}</strong>
-              <small>{memberLabel(currentWorkspaceMember || { status: "active" })}</small>
+              <strong>{memberLabel(currentWorkspaceMember || { status: "active" })}</strong>
+              <small>{workspace?.name || "Certo Work"}</small>
             </span>
             <MoreHorizontal size={15} />
           </button>
@@ -3509,7 +3581,33 @@ export function DelivereeWorkspace() {
                   onClick: () => navigate("/home"),
                 },
                 ...(centerView === "portfolio"
-                  ? [{ label: "Command Center" }]
+                  ? [{ label: "Projects" }]
+                  : []),
+                ...(lens.kind === "my-work"
+                  ? [
+                      {
+                        label: "My Work",
+                        onClick: () => navigate("/my-work"),
+                      },
+                      ...(lens.section === "inbox"
+                        ? [{ label: "Inbox" }]
+                        : lens.section === "waiting"
+                          ? [{ label: "Waiting" }]
+                          : [{ label: "Assigned" }]),
+                    ]
+                  : []),
+                ...(lens.kind === "agents"
+                  ? [
+                      {
+                        label: "Agents",
+                        onClick: () => navigate("/agents"),
+                      },
+                      ...(lens.section === "automations"
+                        ? [{ label: "Automations" }]
+                        : lens.section === "activity"
+                          ? [{ label: "Activity" }]
+                          : [{ label: "Odysseus" }]),
+                    ]
                   : []),
                 ...(activeProject
                   ? [
@@ -3980,7 +4078,36 @@ export function DelivereeWorkspace() {
             </div>
           </>
         ) : centerView === "items" ? (
-          <WorkItemsCenter
+          <div className="do-my-work-shell" data-testid="my-work-shell">
+            {lens.kind === "my-work" && (
+              <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
+                <button
+                  className={lens.section === "assigned" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkAssigned")}
+                </button>
+                <button
+                  className={lens.section === "inbox" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work/inbox")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkInbox")}
+                </button>
+                <button
+                  className={lens.section === "waiting" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work/waiting")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkWaiting")}
+                </button>
+              </div>
+            )}
+            <WorkItemsCenter
             activeProject={routeOrPrimaryProject}
             onAddTask={addProjectTask}
             onAsk={(prompt) => {
@@ -4000,6 +4127,65 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
+          </div>
+        ) : centerView === "agents" ? (
+          <div className="do-agents-home" data-testid="agents-home">
+            <header className="do-agents-head">
+              <Bot size={22} />
+              <div>
+                <strong>{t("navAgents")}</strong>
+                <p>{t("emptyAgents")}</p>
+              </div>
+            </header>
+            <div className="do-agents-grid">
+              <button
+                className="do-agents-card"
+                onClick={() => void openChiefOfStaff()}
+                type="button"
+              >
+                <OdysseusMark size="md" />
+                <span>
+                  <strong>{t("agentsOdysseus")}</strong>
+                  <small>{t("odiseusSidebarBlurb")}</small>
+                </span>
+                <ChevronRight size={14} />
+              </button>
+              <button
+                className="do-agents-card"
+                onClick={() => navigate("/agents/automations")}
+                type="button"
+              >
+                <WandSparkles size={18} />
+                <span>
+                  <strong>{t("agentsAutomations")}</strong>
+                  <small>Skills and scheduled runs</small>
+                </span>
+                <ChevronRight size={14} />
+              </button>
+              <button
+                className="do-agents-card"
+                onClick={() => navigate("/agents/activity")}
+                type="button"
+              >
+                <Mail size={18} />
+                <span>
+                  <strong>{t("agentsActivity")}</strong>
+                  <small>Updates, digests, and follow-ups</small>
+                </span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+            {odiseusActivity.length > 0 && (
+              <section className="do-agents-recent">
+                <h3>Recent agent activity</h3>
+                <ul>
+                  {odiseusActivity.slice(0, 8).map((item: any) => (
+                    <li key={item.id}>{item.summary}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
         ) : centerView === "strategy" ? (
           <StrategyCenter
             goals={strategicGoals}
@@ -4426,7 +4612,7 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                Project command center
+                Project portfolio
               </button>
             </>
           )}
