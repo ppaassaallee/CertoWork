@@ -22,8 +22,15 @@ export type HermesChatResult = {
   raw: unknown;
 };
 
+function normalizeBaseUrl(base: string) {
+  return String(base || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/v1$/i, "");
+}
+
 function joinUrl(base: string, path: string) {
-  return `${base.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${normalizeBaseUrl(base)}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 export class HermesClient {
