@@ -1,0 +1,587 @@
+/* Cinematic landing — scoped to .do-signin so the app stays Notion-white. */
+
+.do-signin {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #0b0c0a;
+  color: #f7f4ee;
+}
+
+.do-signin-bg,
+.do-signin-vignette,
+.do-signin-art {
+  display: block;
+}
+
+.do-signin-bg {
+  position: absolute;
+  inset: 0;
+  background-image: url("/certo-work-hero.jpg");
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.02);
+}
+
+.do-signin-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(8, 8, 7, 0.82) 0%,
+      rgba(8, 8, 7, 0.58) 34%,
+      rgba(8, 8, 7, 0.18) 62%,
+      rgba(8, 8, 7, 0.42) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(8, 8, 7, 0.28) 0%,
+      transparent 28%,
+      rgba(8, 8, 7, 0.18) 72%,
+      rgba(8, 8, 7, 0.55) 100%
+    );
+}
+
+.do-signin > header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 0;
+  background: transparent;
+  padding: 0 clamp(22px, 4.8vw, 64px);
+}
+
+.do-signin .do-brand,
+.do-signin .do-brand strong {
+  color: #f7f4ee;
+}
+
+.do-signin .do-logo {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f7f4ee;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.do-signin .do-logo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.do-signin .do-brand strong {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.do-signin .do-brand small {
+  color: rgba(247, 244, 238, 0.58);
+  letter-spacing: 0.08em;
+  font-size: 10px !important;
+}
+
+.do-signin nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.do-signin nav button,
+.do-signin nav a {
+  border: 0;
+  background: transparent;
+  color: rgba(247, 244, 238, 0.78);
+  font-family: var(--font-body);
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.2em !important;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.do-signin nav button:hover,
+.do-signin nav a:hover {
+  color: #f7f4ee;
+}
+
+.do-signin nav button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.do-signin-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: calc(100dvh - 120px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: end;
+  gap: clamp(34px, 7vw, 112px);
+  width: min(1340px, calc(100vw - 84px));
+  margin: 0 auto;
+  padding: 6vh 0 7vh;
+}
+
+.do-signin-copy {
+  max-width: 760px;
+  padding-bottom: 2vh;
+}
+
+.do-signin .do-kicker,
+.do-signin .do-signin-copy > .do-kicker {
+  color: #c9dfd0;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+}
+
+.do-signin-copy h1,
+.do-signin-copy :is(h1, h1 *) {
+  margin: 18px 0 0;
+  color: #f7f4ee !important;
+  font-family: var(--font-display) !important;
+  font-size: clamp(52px, 7.2vw, 96px) !important;
+  font-weight: 400 !important;
+  line-height: 0.92 !important;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.do-signin-copy > p {
+  max-width: 560px;
+  margin: 22px 0 0;
+  color: rgba(247, 244, 238, 0.78) !important;
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+  font-weight: 400 !important;
+}
+
+.do-signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.do-signin-button,
+.do-signin-secondary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    transform 0.18s,
+    background 0.18s,
+    border-color 0.18s;
+}
+
+.do-signin-button {
+  border: 1px solid rgba(247, 244, 238, 0.92);
+  background: #f7f4ee;
+  color: #1c2a22;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.25);
+}
+
+.do-signin-button svg:last-child {
+  margin-left: 4px;
+}
+
+.do-signin-button:hover,
+.do-signin-secondary:hover,
+.do-access-card form button:hover {
+  transform: translateY(-1px);
+}
+
+.do-signin-button:disabled,
+.do-signin-secondary:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+
+.do-signin-secondary {
+  border: 1px solid rgba(247, 244, 238, 0.28);
+  background: rgba(247, 244, 238, 0.08);
+  color: #f7f4ee;
+  backdrop-filter: blur(14px);
+}
+
+.do-signin-copy > .do-signin-invite {
+  margin-top: 12px;
+  text-align: left;
+}
+
+.do-signin-invite {
+  margin: 10px 0 0;
+  color: rgba(247, 244, 238, 0.62);
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+}
+
+.do-signin-error {
+  max-width: 540px;
+  margin: 16px 0 0;
+  border: 1px solid rgba(255, 181, 151, 0.35);
+  border-radius: 13px;
+  background: rgba(74, 25, 17, 0.32);
+  padding: 10px 12px;
+  color: #ffd8ca !important;
+  font-size: 12px !important;
+}
+
+.do-signin-proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 22px;
+  color: rgba(247, 244, 238, 0.68);
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.do-signin-proof span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px !important;
+}
+
+.do-signin-proof svg {
+  color: #c9dfd0;
+}
+
+.do-signin-pricing {
+  max-width: 560px;
+  margin: 18px 0 0;
+}
+
+.do-signin-pricing-lead {
+  display: block;
+  color: #c9dfd0;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.16em !important;
+  text-transform: uppercase;
+}
+
+.do-signin-pricing-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px 22px;
+  margin-top: 7px;
+  color: rgba(247, 244, 238, 0.88);
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.02em;
+}
+
+.do-signin-pricing-offer span + span {
+  position: relative;
+  padding-left: 22px;
+}
+
+.do-signin-pricing-offer span + span::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(247, 244, 238, 0.42);
+  transform: translateY(-50%);
+}
+
+.do-access-card {
+  align-self: center;
+  border: 1px solid rgba(247, 244, 238, 0.16);
+  border-radius: 24px;
+  background: rgba(10, 12, 10, 0.42);
+  color: #f7f4ee;
+  padding: 24px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px);
+}
+
+.do-access-card > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #c9dfd0;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.16em !important;
+  text-transform: uppercase;
+}
+
+.do-access-card h2,
+.do-access-card :is(h2, h2 *) {
+  margin: 22px 0 0;
+  color: #f7f4ee !important;
+  font-family: var(--font-display) !important;
+  font-size: 28px !important;
+  font-weight: 400 !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.03em;
+}
+
+.do-access-card p {
+  margin: 10px 0 0;
+  color: rgba(247, 244, 238, 0.68) !important;
+  font-size: 13px !important;
+  line-height: 1.65 !important;
+}
+
+.do-access-card form {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.do-access-choice {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.do-access-choice .do-signin-button,
+.do-access-choice .do-signin-secondary {
+  width: 100%;
+  min-height: 43px;
+}
+
+.do-access-choice .do-signin-invite,
+.do-access-card form .do-signin-invite {
+  margin: 2px 0 4px;
+  text-align: center;
+}
+
+.do-access-card label {
+  display: grid;
+  gap: 7px;
+  color: rgba(247, 244, 238, 0.62);
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.do-access-card input {
+  height: 43px;
+  border: 1px solid rgba(247, 244, 238, 0.2);
+  border-radius: 999px;
+  background: rgba(247, 244, 238, 0.1);
+  padding: 0 15px;
+  color: #f7f4ee;
+  outline: none;
+}
+
+.do-access-card input::placeholder {
+  color: rgba(247, 244, 238, 0.38);
+}
+
+.do-access-card input:focus {
+  border-color: rgba(201, 223, 208, 0.72);
+  box-shadow: 0 0 0 3px rgba(201, 223, 208, 0.12);
+}
+
+.do-access-card form button {
+  display: inline-flex;
+  height: 43px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #e7eee8;
+  color: #1c2a22;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: transform 0.18s;
+}
+
+.do-access-pending {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  margin-top: 20px;
+  border: 1px solid rgba(201, 223, 208, 0.32);
+  border-radius: 18px;
+  background: rgba(201, 223, 208, 0.1);
+  padding: 15px;
+  color: #f7f4ee;
+}
+
+.do-access-pending svg {
+  color: #c9dfd0;
+}
+
+.do-access-pending strong {
+  font-size: 13px !important;
+}
+
+.do-access-pending small,
+.do-access-note {
+  color: rgba(247, 244, 238, 0.62);
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+
+.do-access-note {
+  display: block;
+  margin-top: 15px;
+}
+
+.do-access-note button {
+  border: 0;
+  background: transparent;
+  color: #c9dfd0;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.do-signin-alternate {
+  color: rgba(247, 244, 238, 0.7);
+}
+
+.do-access-card .do-signin-alternate {
+  color: rgba(247, 244, 238, 0.7);
+  font-size: 12px !important;
+}
+
+.do-signin-alternate:hover,
+.do-access-card .do-signin-alternate:hover {
+  color: #f7f4ee;
+}
+
+.do-signin-notice {
+  margin: 14px 0 0;
+  border: 1px solid rgba(201, 223, 208, 0.32);
+  border-radius: 14px;
+  background: rgba(201, 223, 208, 0.1);
+  padding: 10px 12px;
+  color: #ecfff1 !important;
+  font-size: 12px !important;
+  line-height: 1.45;
+}
+
+.do-signin footer {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  height: 48px;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  border-top: 1px solid rgba(55, 53, 47, 0.08);
+  background: #f4f1ea;
+  padding: 0 clamp(22px, 4.8vw, 64px);
+  color: #37352f;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.do-signin footer span {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.do-signin footer span:nth-child(2) {
+  color: #6f6d66;
+}
+
+.do-signin footer span:last-child {
+  justify-self: end;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: #37352f;
+}
+
+@media (max-width: 900px) {
+  .do-signin {
+    min-height: 100dvh;
+    overflow-y: auto;
+  }
+
+  .do-signin > header {
+    height: 64px;
+    padding: 0 20px;
+  }
+
+  .do-signin nav {
+    gap: 14px;
+  }
+
+  .do-signin nav button,
+  .do-signin nav a {
+    font-size: 10px !important;
+    letter-spacing: 0.16em !important;
+  }
+
+  .do-signin-hero {
+    display: block;
+    width: calc(100% - 40px);
+    min-height: auto;
+    padding: 48px 0 28px;
+  }
+
+  .do-signin-copy {
+    padding-bottom: 0;
+  }
+
+  .do-signin-copy h1,
+  .do-signin-copy :is(h1, h1 *) {
+    font-size: 46px !important;
+    line-height: 0.96 !important;
+  }
+
+  .do-signin-copy > p {
+    font-size: 14px !important;
+  }
+
+  .do-access-card {
+    margin-top: 32px;
+    padding: 20px;
+  }
+
+  .do-signin footer {
+    position: relative;
+    height: auto;
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 7px;
+    padding: 16px 20px;
+  }
+
+  .do-signin footer span:last-child {
+    justify-self: start;
+  }
+}

@@ -135,6 +135,7 @@ function SignIn() {
               Request beta access
             </button>
           </div>
+          <p className="do-signin-invite">Invite only</p>
           {(authError || error) && <p className="do-signin-error" role="alert">{authError || error}</p>}
           <div className="do-signin-proof">
             <span><Check size={13} /> Invite-only workspaces</span>
@@ -142,8 +143,11 @@ function SignIn() {
             <span><Check size={13} /> Built for delivery teams</span>
           </div>
           <p className="do-signin-pricing">
-            <span className="do-kicker">Disruptive pricing.</span>{" "}
-            Use it completely free with your own subscriptions, API keys or via MCP. Pay only for what you use.
+            <span className="do-signin-pricing-lead">Disruptive pricing</span>
+            <span className="do-signin-pricing-offer">
+              <span>Unlimited users</span>
+              <span>$1 per month</span>
+            </span>
           </p>
         </section>
 
@@ -157,6 +161,7 @@ function SignIn() {
                 <button className="do-signin-button" onClick={() => resetPanel("signin")} type="button">
                   <LogIn size={15} /> Sign in
                 </button>
+                <p className="do-signin-invite">Invite only</p>
                 <button className="do-signin-secondary" onClick={() => resetPanel("access")} type="button">
                   <Mail size={15} /> Request beta
                 </button>
@@ -203,6 +208,7 @@ function SignIn() {
                   {submitting ? <Loader2 className="spin" size={15} /> : <LogIn size={15} />}
                   Sign in
                 </button>
+                <p className="do-signin-invite">Invite only</p>
               </form>
               <button className="do-signin-alternate" disabled={submitting} onClick={() => handleSignIn("popup")} type="button">
                 {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
@@ -308,7 +314,7 @@ function SignIn() {
       <footer>
         <span>Certo Work</span>
         <span>Odysseus · Projects · Approvals · Teams</span>
-        <span>Approval-first by design</span>
+        <span>Max productivity for you and your AI agents</span>
       </footer>
     </main>
   );
