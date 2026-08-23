@@ -472,7 +472,7 @@ export function WorkItemsCenter({
   onCreateControlledOption,
   onOpenProjectConsole,
   onCreateSprint,
-  onUpdateSprint,
+  onUpdateSprint: _onUpdateSprint,
   compact = false,
 }: Props) {
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
@@ -514,6 +514,12 @@ export function WorkItemsCenter({
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("certo-items-focus-list") === "true";
   });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [addItemOpen, setAddItemOpen] = useState(false);
+  const [addSprintOpen, setAddSprintOpen] = useState(false);
+  const [filterDraft, setFilterDraft] = useState("status");
   const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -1154,226 +1160,287 @@ export function WorkItemsCenter({
     );
   };
 
-  const activeControlCount = [
-    query.trim(),
-    projectFilter !== (activeProject?.id || "all"),
-    statusFilter !== "open",
-    priorityFilter !== "all",
-    typeFilter !== "all",
-    ownerFilter !== "all",
-    dateFilter !== "all",
-    tagFilter !== "all",
-  ].filter(Boolean).length;
-  const activeControlLabel = `${activeControlCount} filter${activeControlCount === 1 ? "" : "s"}`;
+  const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (projectFilter !== "all" && !activeProject) {
+    activeFilterChips.push({
+      key: "project",
+      label:
+        projectFilter === "no_project"
+          ? "No project"
+          : projectTitle(projects.find((p) => p.id === projectFilter) || { title: "Project" }),
+      clear: () => setProjectFilter("all"),
+    });
+  }
+  if (statusFilter !== "open") {
+    activeFilterChips.push({
+      key: "status",
+      label: statusFilter === "all" ? "All statuses" : displayStatus(statusFilter),
+      clear: () => setStatusFilter("open"),
+    });
+  }
+  if (priorityFilter !== "all") {
+    activeFilterChips.push({
+      key: "priority",
+      label: `Priority ${priorityFilter}`,
+      clear: () => setPriorityFilter("all"),
+    });
+  }
+  if (typeFilter !== "all") {
+    activeFilterChips.push({
+      key: "type",
+      label: workItemLabel(typeFilter as WorkItemKind),
+      clear: () => setTypeFilter("all"),
+    });
+  }
+  if (ownerFilter !== "all") {
+    activeFilterChips.push({ key: "owner", label: ownerFilter, clear: () => setOwnerFilter("all") });
+  }
+  if (dateFilter !== "all") {
+    activeFilterChips.push({
+      key: "date",
+      label: dueBucketLabels[dateFilter as keyof typeof dueBucketLabels] || dateFilter,
+      clear: () => setDateFilter("all"),
+    });
+  }
+  if (tagFilter !== "all") {
+    activeFilterChips.push({
+      key: "tag",
+      label: tags.find((tag) => tag.id === tagFilter)?.name || "Tag",
+      clear: () => setTagFilter("all"),
+    });
+  }
+  if (workCategoryFilter !== "all") {
+    activeFilterChips.push({
+      key: "category",
+      label: workCategoryFilter,
+      clear: () => setWorkCategoryFilter("all"),
+    });
+  }
+  if (productPhaseFilter !== "all") {
+    activeFilterChips.push({
+      key: "phase",
+      label: productPhaseFilter,
+      clear: () => setProductPhaseFilter("all"),
+    });
+  }
+  if (sprintFilter !== "all") {
+    activeFilterChips.push({
+      key: "sprint",
+      label:
+        sprintFilter === "none"
+          ? "No sprint"
+          : projectSprints.find((sprint) => sprint.id === sprintFilter)?.name || "Sprint",
+      clear: () => setSprintFilter("all"),
+    });
+  }
+
+  const blockedCount = filtered.filter((item) => canonicalStatus(item) === "blocked").length;
+  const priorityOneCount = filtered.filter((item) => priorityValue(item.priority) === "1").length;
+  const overdueCount = filtered.filter(
+    (item) => dueBucket(item.dueDate || item.targetDate) === "overdue",
+  ).length;
+  const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
     <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""}`} data-testid="work-items-center">
       <section className={`do-items-toolbar ${chromeCollapsed ? "is-compact" : ""}`}>
-        {!chromeCollapsed && <label className="do-items-search"><Search size={14} /><input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items, requirements, keys..." value={query} /></label>}
+        {!chromeCollapsed && (
+          <label className="do-items-search">
+            <Search size={14} />
+            <input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items…" value={query} />
+          </label>
+        )}
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
-        {chromeCollapsed && (
-          <div className="do-items-focus-status">
-            <strong>{filtered.length} items</strong>
-            <span>{groupBy === "actionBoard" ? "Action Board" : groupBy}</span>
-            <span>{activeControlLabel}</span>
-          </div>
-        )}
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
           <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
           <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
           {activeProject && <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
-        <button className="do-items-focus-toggle" onClick={() => setChromeCollapsed((current) => !current)} type="button">
-          <SlidersHorizontal size={13} />
-          {chromeCollapsed ? "Show controls" : "Focus list"}
-        </button>
-      </section>
-
-      {!chromeCollapsed && <>
-      <section className="do-items-filters" aria-label="Work item filters">
-        <select aria-label="Project filter" onChange={(event) => { setProjectFilter(event.target.value); setNewProjectId(event.target.value === "all" || event.target.value === "no_project" ? activeProject?.id || "" : event.target.value); }} value={projectFilter}>
-          <option value="all">All projects</option>
-          <option value="no_project">No project / errands</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-        </select>
-        <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-          <option value="open">Open · hide done</option>
-          <option value="all">All statuses</option>
-          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-        </select>
-        <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
-          <option value="all">Any priority</option>
-          {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>
-        <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
-          <option value="all">Any type</option>
-          {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
-        </select>
-        <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
-          <option value="all">Any owner</option>
-          {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
-        </select>
-        <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
-          <option value="all">Any date</option>
-          {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
-        </select>
-        <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
-          <option value="all">Any tag</option>
-          {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
-        </select>
-        <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
-          <option value="all">Any category</option>
-          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-        </select>
-        <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
-          <option value="all">Any product phase</option>
-          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
-        </select>
-        {activeProject && (
-          <>
-          <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
-            <option value="all">All sprints</option>
-            <option value="none">No sprint</option>
-            {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
-          </select>
-          {sprintFilter !== "all" && sprintFilter !== "none" && onUpdateSprint && (
-            <button
-              onClick={() => void onUpdateSprint(sprintFilter, { status: "completed" })}
-              type="button"
-            >
-              Complete sprint
-            </button>
-          )}
-          </>
-        )}
-        <select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}>
-          <option value="hierarchy">Hierarchy</option>
-          <option value="actionBoard">Action Board</option>
-          <option value="status">Status</option>
-          <option value="priority">Priority</option>
-          <option value="project">Project</option>
-          <option value="owner">Owner</option>
-          <option value="type">Type</option>
-          <option value="work_category">Work Category</option>
-          <option value="product_phase">Product Phase</option>
-          <option value="tag">Tag</option>
-          <option value="due">Due date</option>
-        </select>
-        <select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>
-          {sortOptions.map((option) => <option key={option.value} value={option.value}>Sort: {option.label}</option>)}
-        </select>
-        <select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>
-          {sortOptions.map((option) => <option key={option.value} value={option.value}>Then: {option.label}</option>)}
-        </select>
-      </section>
-      <details className="do-view-manager">
-        <summary>
-          <SlidersHorizontal size={13} /> Item views & columns
-        </summary>
-        <div className="do-view-manager-body">
-          <label>
-            Saved views
-            <select aria-label="Apply saved item view" onChange={(event) => applyItemView(event.target.value)} value="">
-              <option value="">Choose saved view</option>
-              {savedItemViews.map((saved) => <option key={saved.name} value={saved.name}>{saved.name}</option>)}
-            </select>
-          </label>
-          <label>
-            New view name
-            <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
-          </label>
-          <button onClick={saveItemView} type="button">Save current view</button>
-          <div className="do-column-picker">
-            {defaultItemColumns.filter((column) => column !== "title").map((column) => (
-              <label key={column}>
-                <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
-                {itemColumnLabels[column]}
-              </label>
-            ))}
-          </div>
-          <div className="do-column-widths">
-            <div>
-              <strong>Column widths</strong>
-              <button onClick={resetItemColumnWidths} type="button">
-                Reset
-              </button>
-            </div>
-            {visibleItemColumns.map((column) => (
-              <label key={`item-width-${column}`}>
-                <span>{itemColumnLabels[column]}</span>
-                <input
-                  aria-label={`${itemColumnLabels[column]} width`}
-                  max={420}
-                  min={72}
-                  onChange={(event) =>
-                    updateItemColumnWidth(column, Number(event.target.value))
+        <div className="do-items-toolbar-actions">
+          <div className="do-popover-anchor">
+            <button aria-expanded={viewsOpen} aria-label="Views" className={viewsOpen ? "is-active" : ""} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); }} type="button">Views</button>
+            {viewsOpen && (
+              <div className="do-popover" role="menu">
+                <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
+                <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
+                <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>
+                <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); setViewsOpen(false); }} type="button">Priority → project</button>
+                {savedItemViews.length > 0 && <hr />}
+                {savedItemViews.map((saved) => (
+                  <button key={saved.name} onClick={() => { applyItemView(saved.name); setViewsOpen(false); }} type="button">{saved.name}</button>
+                ))}
+                <hr />
+                <label>
+                  Save current view
+                  <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
+                </label>
+                <button onClick={() => { saveItemView(); setViewsOpen(false); }} type="button">Save view</button>
+                {defaultItemColumns.filter((column) => column !== "title").slice(0, 6).map((column) => (
+                  <label key={column} className="do-column-toggle">
+                    <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
+                    {itemColumnLabels[column]}
+                  </label>
+                ))}
+                <button onClick={resetItemColumnWidths} type="button">Reset column widths</button>
+                <button
+                  onClick={() =>
+                    visibleItemColumns.forEach((column) =>
+                      updateItemColumnWidth(
+                        column,
+                        defaultItemColumnPixels[column],
+                      ),
+                    )
                   }
-                  type="range"
-                  value={
-                    itemColumnPixels[column] || defaultItemColumnPixels[column]
-                  }
-                />
-                <small>
-                  {itemColumnPixels[column] || defaultItemColumnPixels[column]}
-                  px
-                </small>
-              </label>
-            ))}
-          </div>
-          {savedItemViews.length > 0 && (
-            <div className="do-saved-view-list">
-              {savedItemViews.map((saved) => (
-                <button key={saved.name} onClick={() => deleteItemView(saved.name)} type="button">
-                  Delete {saved.name}
+                  type="button"
+                >
+                  Apply default widths
                 </button>
-              ))}
-            </div>
+                {savedItemViews.map((saved) => (
+                  <button key={`del-${saved.name}`} onClick={() => deleteItemView(saved.name)} type="button">Delete {saved.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="do-popover-anchor">
+            <button aria-expanded={filterOpen} aria-label="Filter" className={activeFilterChips.length ? "is-active" : ""} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); }} type="button">
+              <SlidersHorizontal size={13} /> Filter{activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
+            </button>
+            {filterOpen && (
+              <div className="do-popover do-filter-popover">
+                <label>
+                  Add filter
+                  <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
+                    {!activeProject && <option value="project">Project</option>}
+                    <option value="status">Status</option>
+                    <option value="priority">Priority</option>
+                    <option value="type">Type</option>
+                    <option value="owner">Owner</option>
+                    <option value="date">Date</option>
+                    <option value="tag">Tag</option>
+                    <option value="category">Category</option>
+                    <option value="phase">Product phase</option>
+                    {activeProject && <option value="sprint">Sprint</option>}
+                  </select>
+                </label>
+                {filterDraft === "project" && (
+                  <select aria-label="Project filter" onChange={(event) => setProjectFilter(event.target.value)} value={projectFilter}>
+                    <option value="all">All projects</option>
+                    <option value="no_project">No project / errands</option>
+                    {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "status" && (
+                  <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                    <option value="open">Open · hide done</option>
+                    <option value="all">All statuses</option>
+                    {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "priority" && (
+                  <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
+                    <option value="all">Any priority</option>
+                    {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                  </select>
+                )}
+                {filterDraft === "type" && (
+                  <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
+                    <option value="all">Any type</option>
+                    {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+                  </select>
+                )}
+                {filterDraft === "owner" && (
+                  <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
+                    <option value="all">Any owner</option>
+                    {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                  </select>
+                )}
+                {filterDraft === "date" && (
+                  <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
+                    <option value="all">Any date</option>
+                    {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
+                  </select>
+                )}
+                {filterDraft === "tag" && (
+                  <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
+                    <option value="all">Any tag</option>
+                    {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+                  </select>
+                )}
+                {filterDraft === "category" && (
+                  <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
+                    <option value="all">Any category</option>
+                    {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                )}
+                {filterDraft === "phase" && (
+                  <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
+                    <option value="all">Any product phase</option>
+                    {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+                  </select>
+                )}
+                {filterDraft === "sprint" && activeProject && (
+                  <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
+                    <option value="all">All sprints</option>
+                    <option value="none">No sprint</option>
+                    {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="do-popover-anchor">
+            <button aria-expanded={sortOpen} aria-label="Sort" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); }} type="button">Sort</button>
+            {sortOpen && (
+              <div className="do-popover">
+                <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+                <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              </div>
+            )}
+          </div>
+          <button aria-label="Add item" className="do-button do-button-dark" onClick={() => setAddItemOpen((o) => !o)} type="button"><Plus size={13} /> Add item</button>
+          {activeProject && onCreateSprint && (
+            <button aria-label="Add sprint" className="do-button-secondary" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
           )}
+          <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
-      </details>
-      <div className="do-items-helpbar"><span>Group, then sort twice <InfoTip label="Two-level sorting" text="Group controls the visible sections. Primary sort orders items first; secondary sort breaks ties inside that order." /></span><span>Board <InfoTip label="Board view" text="A visual execution view for moving work through status. Backlog remains the source for hierarchy and planning." /></span><span>Assignees <InfoTip label="Multiple assignees" text="Select one or many workspace members. The first selected person is retained as the primary owner for compatibility." /></span></div>
-
-      <section className="do-sort-presets" aria-label="Sorting presets">
-        <button className={groupBy === "actionBoard" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); }} type="button">Action Board</button>
-        <button className={groupBy === "project" && primarySort === "project" && secondarySort === "priority" ? "is-active" : ""} onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); }} type="button">Project → priority</button>
-        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "due" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); }} type="button">Priority → date</button>
-        <button className={groupBy === "priority" && primarySort === "priority" && secondarySort === "project" ? "is-active" : ""} onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); }} type="button">Priority → project</button>
       </section>
 
-      <section className="do-items-create">
-        <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
-          <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
-          {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-        </select>
-        <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
-          {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
-        </select>
-        <select aria-label="New item parent" disabled={parentOptions.length === 0} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
-          <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
-          {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
-        </select>
-        <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
-        <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
-      </section>
-      {activeProject && onCreateSprint && (
+      {activeFilterChips.length > 0 && (
+        <div className="do-filter-chips" aria-label="Active filters">
+          {activeFilterChips.map((chip) => (
+            <button key={chip.key} onClick={chip.clear} type="button">{chip.label} <X size={12} /></button>
+          ))}
+          <button className="is-text" onClick={() => { if (!activeProject) setProjectFilter("all"); setStatusFilter("open"); setPriorityFilter("all"); setTypeFilter("all"); setOwnerFilter("all"); setDateFilter("all"); setTagFilter("all"); setWorkCategoryFilter("all"); setProductPhaseFilter("all"); setSprintFilter("all"); }} type="button">Clear all</button>
+        </div>
+      )}
+
+      {addItemOpen && (
         <section className="do-items-create">
-          <input aria-label="New sprint name" onChange={(event) => setSprintName(event.target.value)} placeholder="Sprint name" value={sprintName} />
-          <button
-            disabled={!sprintName.trim()}
-            onClick={async () => {
-              await onCreateSprint({ name: sprintName.trim(), projectId: activeProject.id, status: "planning" });
-              setSprintName("");
-            }}
-            type="button"
-          >
-            <Plus size={13} /> Create sprint
-          </button>
+          <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
+            <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+          </select>
+          <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
+            {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+          </select>
+          <select aria-label="New item parent" disabled={parentOptions.length === 0} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
+            <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
+            {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
+          </select>
+          <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
+          <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
         </section>
       )}
-      </>}
+      {addSprintOpen && activeProject && onCreateSprint && (
+        <section className="do-items-create">
+          <input aria-label="New sprint name" onChange={(event) => setSprintName(event.target.value)} placeholder="Sprint name" value={sprintName} />
+          <button disabled={!sprintName.trim()} onClick={async () => { await onCreateSprint({ name: sprintName.trim(), projectId: activeProject.id, status: "planning" }); setSprintName(""); setAddSprintOpen(false); }} type="button"><Plus size={13} /> Create sprint</button>
+        </section>
+      )}
 
       {selectedBulkIds.length > 0 && (
         <section className="do-items-bulk" aria-label="Bulk actions">
@@ -1445,10 +1512,19 @@ export function WorkItemsCenter({
       <div className={`do-items-layout ${selectedItem ? "has-detail" : ""}`}>
         <section className={`do-items-workspace is-${mode}`}>
           <div className="do-items-summary">
-            <span><strong>{filtered.length}</strong> shown</span>
-            <span><strong>{filtered.filter((item) => canonicalStatus(item) === "blocked").length}</strong> blocked</span>
-            <span><strong>{filtered.filter((item) => priorityValue(item.priority) === "1").length}</strong> priority 1</span>
-            <span><strong>{filtered.filter((item) => dueBucket(item.dueDate || item.targetDate) === "overdue").length}</strong> overdue</span>
+            {(summaryHasSignal || filtered.length > 0) && (
+              <span>
+                <strong>{filtered.length}</strong> shown
+                {summaryHasSignal && (
+                  <>
+                    {" · "}
+                    {blockedCount > 0 && <><strong>{blockedCount}</strong> blocked </>}
+                    {priorityOneCount > 0 && <><strong>{priorityOneCount}</strong> P1 </>}
+                    {overdueCount > 0 && <><strong>{overdueCount}</strong> overdue</>}
+                  </>
+                )}
+              </span>
+            )}
           </div>
           {mode === "list" && renderColumnHeader()}
           {mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
@@ -1464,7 +1540,20 @@ export function WorkItemsCenter({
                   {!collapsedGroups.includes(group) && <div>{items.map((item) => renderRow(item, items))}</div>}
                 </section>
               ))}
-              {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+              {filtered.length === 0 && (
+                <div className="do-items-empty">
+                  <ListChecks size={24} />
+                  <strong>No items here yet</strong>
+                  <span>Create the first item to start this backlog.</span>
+                  <button
+                    className="do-button do-button-dark"
+                    onClick={() => setAddItemOpen(true)}
+                    type="button"
+                  >
+                    Create first item
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

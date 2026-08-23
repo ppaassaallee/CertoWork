@@ -53,3 +53,47 @@ test("Odiseus tools refuse unknown project ids outside scope", () => {
   const result = executeOdiseusTool("get_project", { projectId: "missing" }, context);
   assert.match(result.result.error, /not found/i);
 });
+
+test("Odiseus recall_memory and remember_fact use workspace memory", () => {
+  const withMemory = {
+    ...context,
+    odiseusMemory: [
+      { id: "m1", text: "Prefer Spanish for status updates", kind: "preference", tags: ["lang"] },
+    ],
+  };
+  const recalled = executeOdiseusTool("recall_memory", { query: "spanish" }, withMemory);
+  assert.equal(recalled.result.count, 1);
+  const remembered = executeOdiseusTool(
+    "remember_fact",
+    { text: "Sprint reviews are Fridays", kind: "commitment" },
+    withMemory,
+  );
+  assert.equal(remembered.proposedActions[0].type, "create_odiseus_memory");
+});
+
+test("Odiseus run_skill returns an artifact from workspace skills", () => {
+  const withSkills = {
+    ...context,
+    skills: [
+      {
+        id: "s1",
+        name: "Risk sweep",
+        description: "Find open risks",
+        instructions: "List critical risks and owners.",
+      },
+    ],
+  };
+  const result = executeOdiseusTool("run_skill", { skillName: "risk" }, withSkills);
+  assert.equal(result.artifact.kind, "skill_run");
+  assert.match(result.artifact.body, /critical risks/i);
+});
+
+test("Odiseus list_schedules returns configured jobs", () => {
+  const withSchedules = {
+    ...context,
+    schedules: [{ id: "sch1", title: "Morning pulse", cron: "0 9 * * 1-5", enabled: true }],
+  };
+  const result = executeOdiseusTool("list_schedules", {}, withSchedules);
+  assert.equal(result.result.count, 1);
+  assert.equal(result.result.schedules[0].id, "sch1");
+});

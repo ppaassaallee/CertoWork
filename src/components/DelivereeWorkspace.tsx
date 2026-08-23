@@ -97,16 +97,20 @@ import { HomeAttention } from "../pages/HomeAttention";
 import { OdiseusBadge, OdiseusMark } from "./odiseus/OdiseusMark";
 import {
   OdiseusArtifactCard,
-  OdiseusEmptyHero,
+  OdiseusAgentHome,
   OdiseusWorkLog,
+  type OdiseusRunStep,
 } from "./odiseus/OdiseusWork";
+import { OdiseusSchedules } from "./odiseus/OdiseusSchedules";
+import { AppBreadcrumbs } from "./AppBreadcrumbs";
+import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
 import {
   ODISEUS_CONVERSATION_TITLE,
   ODISEUS_HANDOFF_PREFIX,
   ODISEUS_NAME,
 } from "../lib/odiseus";
 import { actionIdempotencyKey, normalizeOdiseusRun } from "../lib/odiseusJobs";
-import { recordOdiseusActivity } from "../lib/odiseusActivity";
+import { persistOdiseusRun, recordOdiseusActivitySafe } from "../lib/odiseusActivity";
 import {
   conversationIncludesProject,
   conversationProjectIds,
@@ -282,6 +286,13 @@ export function DelivereeWorkspace() {
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
   const [strategicMeasures, setStrategicMeasures] = useState<any[]>([]);
   const [strategicRecords, setStrategicRecords] = useState<any[]>([]);
+  const [odiseusMemory, setOdiseusMemory] = useState<any[]>([]);
+  const [odiseusActivity, setOdiseusActivity] = useState<any[]>([]);
+  const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
+  const [odiseusSchedules, setOdiseusSchedules] = useState<any[]>([]);
+  const [liveOdiseusSteps, setLiveOdiseusSteps] = useState<OdiseusRunStep[]>(
+    [],
+  );
   const [input, setInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [streamed, setStreamed] = useState("");
@@ -326,6 +337,7 @@ export function DelivereeWorkspace() {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
@@ -367,11 +379,9 @@ export function DelivereeWorkspace() {
     lens.kind === "project"
       ? lens.tab === "notes"
         ? "notes"
-        : lens.tab === "tasks"
-          ? "items"
-          : lens.tab === "strategy"
-            ? "strategy"
-            : "project"
+        : lens.tab === "strategy"
+          ? "strategy"
+          : "project"
       : lens.kind === "work"
         ? lens.section === "issues"
           ? "items"
@@ -383,11 +393,15 @@ export function DelivereeWorkspace() {
     if (next === "portfolio") navigate("/work");
     else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
     else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
-    else if (next === "items" && projectId) navigate(`/work/projects/${projectId}/tasks`);
-    else if (next === "items") navigate("/work");
+    // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
+    else if (next === "items" && projectId)
+      navigate(`/work/projects/${projectId}/tasks`);
+    else if (next === "items") navigate("/work/tasks");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else navigate("/home");
   };
+  const projectConsoleInitialTab =
+    lens.kind === "project" && lens.tab === "tasks" ? "items" : "brief";
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
@@ -560,6 +574,21 @@ export function DelivereeWorkspace() {
         false,
         true,
       ),
+      makeQuery("odiseus_memory", setOdiseusMemory, false, true),
+      makeQuery(
+        "odiseus_activity",
+        (items) =>
+          setOdiseusActivity(
+            items.sort(
+              (left, right) =>
+                timestamp(right.createdAt) - timestamp(left.createdAt),
+            ),
+          ),
+        false,
+        true,
+      ),
+      makeQuery("skills", setWorkspaceSkills, false, true),
+      makeQuery("scheduled_tasks", setOdiseusSchedules, false, true),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [user, workspace, workspaceMembers]);
@@ -967,12 +996,30 @@ export function DelivereeWorkspace() {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        createConversation();
+        setCommandPaletteOpen(true);
+      }
+      if (event.key === "Escape") {
+        if (commandPaletteOpen) {
+          event.preventDefault();
+          setCommandPaletteOpen(false);
+          return;
+        }
+        if (createMenuOpen) {
+          setCreateMenuOpen(false);
+          return;
+        }
+        if (panel) {
+          setPanel(null);
+          return;
+        }
+        if (sidebarOpen) {
+          setSidebarOpen(false);
+        }
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [createConversation]);
+  }, [commandPaletteOpen, createMenuOpen, panel, sidebarOpen]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -1134,6 +1181,7 @@ export function DelivereeWorkspace() {
     setSubmitting(true);
     setStreamed("");
     setNotice("");
+    setLiveOdiseusSteps([]);
     const localId = `local-${Date.now()}`;
     setMessages((current) => [
       ...current,
@@ -1188,6 +1236,9 @@ export function DelivereeWorkspace() {
         notebookEntries,
         userId: user.uid,
         workspaceId: workspace.id,
+        odiseusMemory,
+        skills: workspaceSkills,
+        schedules: odiseusSchedules,
       });
       const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);
@@ -1199,13 +1250,22 @@ export function DelivereeWorkspace() {
         conversationId: activeConversationId,
         messages: requestContext.messages,
         workspaceContext: requestContext.workspaceContext,
+        onStep: (step) => {
+          setLiveOdiseusSteps((current) => {
+            const without = current.filter((item) => item.id !== step.id);
+            return [...without, step];
+          });
+        },
       });
       const reply =
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
       const odiseusRun = normalizeOdiseusRun(result.run);
       await streamConversationReply(reply, setStreamed);
-      const runRef = await addDoc(collection(db, "odiseus_runs"), {
+      // Run/activity logs must never block the assistant reply. Missing
+      // Firestore rules for odiseus_* previously surfaced as a false
+      // "insufficient permissions" failure after a successful chat.
+      const runId = await persistOdiseusRun({
         userId: user.uid,
         workspaceId: workspace.id,
         conversationId: activeConversationId,
@@ -1217,8 +1277,6 @@ export function DelivereeWorkspace() {
         artifact: odiseusRun?.artifact || null,
         actionPlan: result.actionPlan || null,
         outcome: reply.slice(0, 2_000),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
       await addDoc(collection(db, "boldi_messages"), {
         userId: user.uid,
@@ -1231,25 +1289,25 @@ export function DelivereeWorkspace() {
         suggestedChips: result.suggestedChips || [],
         actionPlan: result.actionPlan || null,
         odiseusRun: odiseusRun
-          ? { ...odiseusRun, runId: runRef.id }
+          ? { ...odiseusRun, runId: runId || null }
           : null,
         provider: result.provider || null,
         judgment: nextJudgment,
         createdAt: serverTimestamp(),
       });
-      await recordOdiseusActivity({
+      await recordOdiseusActivitySafe({
         workspaceId: workspace.id,
         userId: user.uid,
         conversationId: activeConversationId,
         projectId: primaryProject?.id || null,
-        runId: runRef.id,
+        runId,
         action: "job_completed",
         summary:
           odiseusRun?.toolCount
             ? `Completed job using ${odiseusRun.toolCount} Certo tool step(s)`
             : "Completed Odiseus job",
         metadata: { stepCount: odiseusRun?.steps?.length || 0 },
-      }).catch(() => undefined);
+      });
       if (activeConversationId) {
         await updateDoc(doc(db, "boldi_conversations", activeConversationId), {
           title: conversationTitleForMessage(
@@ -1277,6 +1335,7 @@ export function DelivereeWorkspace() {
     } finally {
       setStreamed("");
       setSubmitting(false);
+      setLiveOdiseusSteps([]);
     }
   };
 
@@ -1298,8 +1357,28 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     let staged = 0;
+    let remembered = 0;
     for (const [index, action] of (plan.proposedActions || []).entries()) {
       const proposedChange = action.proposedChange || {};
+      if (String(action.type || "") === "create_odiseus_memory") {
+        const safetyLevel = Number(action.safetyLevel ?? plan.safetyLevel ?? 1);
+        const text = String(proposedChange.text || "").trim();
+        if (safetyLevel <= 1 && text) {
+          await addDoc(collection(db, "odiseus_memory"), {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            text: text.slice(0, 2_000),
+            kind: proposedChange.kind || "fact",
+            tags: Array.isArray(proposedChange.tags)
+              ? proposedChange.tags.slice(0, 12)
+              : [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          remembered += 1;
+          continue;
+        }
+      }
       const duplicateProject =
         String(action.type || "") === "create_project"
           ? findMatchingProject(
@@ -1358,19 +1437,38 @@ export function DelivereeWorkspace() {
       });
       staged += 1;
     }
-    await recordOdiseusActivity({
-      workspaceId: workspace.id,
-      userId: user.uid,
-      conversationId,
-      projectId: primaryProject?.id || null,
-      runId: message.odiseusRun?.runId || null,
-      action: "actions_staged",
-      summary: `Staged ${staged} action(s) for approval`,
-      approvalRequired: true,
-      approvedBy: user.uid,
-    }).catch(() => undefined);
-    setNotice("Pending change ready. Review it before anything changes.");
-    setPanel("approvals");
+    if (remembered > 0) {
+      await recordOdiseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "memory_saved",
+        summary: `Saved ${remembered} memory note(s)`,
+      });
+    }
+    if (staged > 0) {
+      await recordOdiseusActivitySafe({
+        workspaceId: workspace.id,
+        userId: user.uid,
+        conversationId,
+        projectId: primaryProject?.id || null,
+        runId: message.odiseusRun?.runId || null,
+        action: "actions_staged",
+        summary: `Staged ${staged} action(s) for approval`,
+        approvalRequired: true,
+        approvedBy: user.uid,
+      });
+      setNotice("Pending change ready. Review it before anything changes.");
+      setPanel("approvals");
+    } else if (remembered > 0) {
+      setNotice(
+        remembered > 1
+          ? `Odiseus remembered ${remembered} things.`
+          : "Odiseus remembered that.",
+      );
+    }
   };
 
   const rejectPlan = async (message: Message) => {
@@ -1383,7 +1481,7 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       }).catch(() => undefined);
     }
-    await recordOdiseusActivity({
+    await recordOdiseusActivitySafe({
       workspaceId: workspace.id,
       userId: user.uid,
       conversationId,
@@ -1393,7 +1491,7 @@ export function DelivereeWorkspace() {
       summary: "Rejected Odiseus proposed actions",
       approvalRequired: true,
       approvedBy: user.uid,
-    }).catch(() => undefined);
+    });
     setNotice("Odiseus will not apply those actions.");
   };
 
@@ -1550,6 +1648,20 @@ export function DelivereeWorkspace() {
           updatedAt: serverTimestamp(),
         });
         convertedToType = "daily_briefs";
+        convertedToId = created.id;
+      } else if (reviewType === "odiseus_memory") {
+        const text = String(proposed.text || "").trim();
+        if (!text) throw new Error("Memory text is required");
+        const created = await addDoc(collection(db, "odiseus_memory"), {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          text: text.slice(0, 2_000),
+          kind: proposed.kind || "fact",
+          tags: Array.isArray(proposed.tags) ? proposed.tags.slice(0, 12) : [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        convertedToType = "odiseus_memory";
         convertedToId = created.id;
       } else if (reviewType === "project_update") {
         if (!projectId) throw new Error("Project context is required");
@@ -2787,8 +2899,86 @@ export function DelivereeWorkspace() {
         "Create follow-ups for the biggest blockers",
       ];
 
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(() => {
+    const items: CommandPaletteItem[] = [
+      {
+        id: "nav-home",
+        label: "Go to Home",
+        group: "Navigate",
+        onSelect: () => navigate("/home"),
+      },
+      {
+        id: "nav-work",
+        label: "Go to Work",
+        group: "Navigate",
+        onSelect: () => navigate("/work"),
+      },
+      {
+        id: "nav-approvals",
+        label: "Go to Approvals",
+        group: "Navigate",
+        onSelect: () => navigate("/approvals"),
+      },
+      {
+        id: "nav-settings",
+        label: "Go to Settings",
+        group: "Navigate",
+        onSelect: () => navigate("/settings"),
+      },
+      {
+        id: "odiseus",
+        label: "Open Odiseus",
+        group: "Actions",
+        keywords: "ai employee hire",
+        onSelect: () => openChiefOfStaff(),
+      },
+      {
+        id: "new-conversation",
+        label: "New conversation",
+        group: "Actions",
+        onSelect: () => void createConversation(),
+      },
+      {
+        id: "command-center",
+        label: "Open Command Center",
+        group: "Actions",
+        onSelect: () => {
+          goCenterView("portfolio");
+          setPanel(null);
+        },
+      },
+      {
+        id: "new-project",
+        label: "Create project",
+        group: "Actions",
+        onSelect: () => setProjectWizardOpen(true),
+      },
+    ];
+    for (const project of activeProjects.slice(0, 30)) {
+      items.push({
+        id: `project-${project.id}`,
+        label: entityTitle(project),
+        group: "Projects",
+        onSelect: () => openProjectRecord(project),
+      });
+    }
+    return items;
+  }, [
+    activeProjects,
+    createConversation,
+    goCenterView,
+    navigate,
+    openChiefOfStaff,
+    openProjectRecord,
+  ]);
+
   return (
     <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" ? "settings" : lens.kind === "project" ? "work" : lens.kind}`}>
+      <CommandPalette
+        items={commandPaletteItems}
+        onClose={() => setCommandPaletteOpen(false)}
+        open={commandPaletteOpen}
+      />
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -2926,7 +3116,7 @@ export function DelivereeWorkspace() {
             <Plus size={15} />
           )}
           <span>{creatingConversation ? "Starting…" : "New conversation"}</span>
-          <kbd>⌘K</kbd>
+          <kbd>N</kbd>
         </button>
 
         <button
@@ -3006,37 +3196,37 @@ export function DelivereeWorkspace() {
                     className="do-project-context"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    <Star fill="currentColor" size={12} />
-                    <span className="do-project-title">{entityTitle(project)}</span>
-                  </button>
-                  <div className="do-project-meta">
                     <StatusLight
                       status={healthToStatus(health)}
                       label={false}
                       size="sm"
                     />
+                    <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
-                    <span className="do-project-actions">
-                      <button
-                        aria-label={`Archive ${entityTitle(project)}`}
-                        className="do-project-icon"
-                        onClick={() => void archiveProject(project)}
-                        type="button"
-                      >
-                        <Archive size={11} />
-                      </button>
-                      <button
-                        aria-label={`Delete ${entityTitle(project)}`}
-                        className="do-project-icon is-danger"
-                        onClick={() => void deleteProject(project)}
-                        type="button"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </span>
-                  </div>
+                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
                   );
                 })}
@@ -3075,37 +3265,37 @@ export function DelivereeWorkspace() {
                     className="do-project-context"
                     data-testid={`open-project-${project.id}`}
                     onClick={() => openProjectRecord(project)}
+                    title={entityTitle(project)}
                     type="button"
                   >
-                    <Folder size={12} />
-                    <span className="do-project-title">{entityTitle(project)}</span>
-                  </button>
-                  <div className="do-project-meta">
                     <StatusLight
                       status={healthToStatus(health)}
                       label={false}
                       size="sm"
                     />
+                    <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
-                    <span className="do-project-actions">
-                      <button
-                        aria-label={`Archive ${entityTitle(project)}`}
-                        className="do-project-icon"
-                        onClick={() => void archiveProject(project)}
-                        type="button"
-                      >
-                        <Archive size={11} />
-                      </button>
-                      <button
-                        aria-label={`Delete ${entityTitle(project)}`}
-                        className="do-project-icon is-danger"
-                        onClick={() => void deleteProject(project)}
-                        type="button"
-                      >
-                        <Trash2 size={11} />
-                      </button>
-                    </span>
-                  </div>
+                  </button>
+                  <span className="do-project-actions">
+                    <button
+                      aria-label={`Archive ${entityTitle(project)}`}
+                      className="do-project-icon"
+                      onClick={() => void archiveProject(project)}
+                      title={`Archive ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Archive size={11} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${entityTitle(project)}`}
+                      className="do-project-icon is-danger"
+                      onClick={() => void deleteProject(project)}
+                      title={`Delete ${entityTitle(project)}`}
+                      type="button"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </span>
                 </div>
                   );
                 })}
@@ -3312,20 +3502,43 @@ export function DelivereeWorkspace() {
             <Menu size={18} />
           </button>
           <div className="do-breadcrumb">
-            <span>{currentContextLabel}</span>
-            {selectedWorkItem && (
-              <>
-                <ChevronRight size={13} />
-                <strong>{entityTitle(selectedWorkItem)}</strong>
-              </>
-            )}
+            <AppBreadcrumbs
+              segments={[
+                {
+                  label: workspace?.name || "Workspace",
+                  onClick: () => navigate("/home"),
+                },
+                ...(centerView === "portfolio"
+                  ? [{ label: "Command Center" }]
+                  : []),
+                ...(activeProject
+                  ? [
+                      {
+                        label: entityTitle(activeProject),
+                        onClick: () => openProjectRecord(activeProject),
+                      },
+                    ]
+                  : lens.kind === "home"
+                    ? [{ label: "Home" }]
+                    : lens.kind === "approvals"
+                      ? [{ label: "Approvals" }]
+                      : lens.kind === "settings"
+                        ? [{ label: "Settings" }]
+                        : centerView === "conversation"
+                          ? [{ label: currentContextLabel || "Odiseus" }]
+                          : []),
+                ...(selectedWorkItem
+                  ? [{ label: entityTitle(selectedWorkItem) }]
+                  : []),
+              ]}
+            />
           </div>
           <div className="do-header-actions">
             <button
-              aria-label={t("headerSearch")}
+              aria-label="Open command palette"
               className="do-icon-button"
-              onClick={() => setSearchOpen((open) => !open)}
-              title={t("headerSearch")}
+              onClick={() => setCommandPaletteOpen(true)}
+              title="Command palette (⌘K)"
               type="button"
             >
               <Search size={15} />
@@ -3384,15 +3597,6 @@ export function DelivereeWorkspace() {
               Overview
             </button>
             <button
-              aria-selected={centerView === "items"}
-              className={centerView === "items" ? "is-active" : ""}
-              onClick={() => goCenterView("items")}
-              role="tab"
-              type="button"
-            >
-              Tasks
-            </button>
-            <button
               aria-selected={centerView === "notes"}
               className={centerView === "notes" ? "is-active" : ""}
               onClick={() => goCenterView("notes")}
@@ -3436,25 +3640,26 @@ export function DelivereeWorkspace() {
                         </p>
                       </div>
                     ) : (
-                      <OdiseusEmptyHero
-                        examples={openingPrompts}
-                        onExample={(prompt) => sendMessage(prompt)}
-                        subtitle={t("odiseusSubline")}
-                        title={t("odiseusWelcomePrompt")}
-                      />
-                    )}
-
-                    {!isFocusedConversation && (
-                      <HomeAttention
-                        projects={projects}
-                        tasks={tasks}
-                        risks={risks}
-                        reviewItems={reviewItems}
-                        todayTasks={todayTasks}
-                        onOpenProject={openProjectRecord}
-                        onOpenApprovals={() => setPanel("approvals")}
-                        onAsk={setComposer}
-                      />
+                      <>
+                        {!isFocusedConversation && (
+                          <HomeAttention
+                            projects={projects}
+                            tasks={tasks}
+                            risks={risks}
+                            reviewItems={reviewItems}
+                            todayTasks={todayTasks}
+                            onOpenProject={openProjectRecord}
+                            onOpenApprovals={() => setPanel("approvals")}
+                            onAsk={setComposer}
+                            activityItems={odiseusActivity}
+                          />
+                        )}
+                        <OdiseusAgentHome
+                          examples={openingPrompts}
+                          onExample={(prompt) => sendMessage(prompt)}
+                          pendingApprovals={reviewItems.length}
+                        />
+                      </>
                     )}
 
                     {isFocusedConversation && (
@@ -3612,7 +3817,7 @@ export function DelivereeWorkspace() {
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
-                              <OdiseusWorkLog steps={[]} working />
+                              <OdiseusWorkLog steps={liveOdiseusSteps} working />
                             )}
                           </div>
                         </div>
@@ -3845,6 +4050,7 @@ export function DelivereeWorkspace() {
                   item.projectId === consoleProject.id &&
                   item.status !== "archived",
               )}
+              initialTab={projectConsoleInitialTab}
               milestones={milestones.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
@@ -4141,11 +4347,11 @@ export function DelivereeWorkspace() {
                     </button>
                   );
                 })}
-                <span className="do-context-section-label">Tasks</span>
+                <span className="do-context-section-label">Items</span>
                 <input
-                  aria-label="Find tasks for this conversation"
+                  aria-label="Find items for this conversation"
                   onChange={(event) => setContextTaskSearch(event.target.value)}
-                  placeholder="Find a task"
+                  placeholder="Find an item"
                   value={contextTaskSearch}
                 />
                 {openTasks
@@ -4259,6 +4465,7 @@ export function DelivereeWorkspace() {
                   real skills.
                 </span>
               </div>
+              <OdiseusSchedules onRunNow={(prompt) => sendMessage(prompt)} />
             </>
           )}
 

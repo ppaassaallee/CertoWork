@@ -70,27 +70,33 @@ export function OdiseusArtifactCard({
   );
 }
 
-export function OdiseusEmptyHero({
-  title,
-  subtitle,
+/** Functional agent home chrome — queues render above via parent. */
+export function OdiseusAgentHome({
   examples,
   onExample,
+  pendingApprovals = 0,
 }: {
-  title: string;
-  subtitle: string;
   examples: string[];
   onExample: (prompt: string) => void;
+  pendingApprovals?: number;
 }) {
   return (
-    <div className="odiseus-empty-hero">
-      <OdiseusMark size="lg" />
-      <span className="do-context-eyebrow">Your AI employee</span>
-      <h1>{title}</h1>
-      <p>{subtitle}</p>
-      <div className="odiseus-trust-row">
-        <span>Investigates</span>
-        <span>Uses Certo tools</span>
-        <span>Asks before irreversible work</span>
+    <div className="odiseus-agent-home">
+      <div className="odiseus-agent-head">
+        <OdiseusMark size="md" />
+        <div>
+          <strong>Odiseus</strong>
+          <p>
+            Your AI employee · Ready
+            {pendingApprovals > 0
+              ? ` · ${pendingApprovals} waiting for approval`
+              : ""}
+          </p>
+          <small>
+            Proposes, then asks · Approval before irreversible work · Works
+            across your workspace
+          </small>
+        </div>
       </div>
       <div className="odiseus-example-jobs">
         {examples.map((example) => (
@@ -104,3 +110,16 @@ export function OdiseusEmptyHero({
 }
 
 export { OdiseusBadge };
+
+/** @deprecated Prefer OdiseusAgentHome */
+export function OdiseusEmptyHero({
+  examples,
+  onExample,
+}: {
+  title?: string;
+  subtitle?: string;
+  examples: string[];
+  onExample: (prompt: string) => void;
+}) {
+  return <OdiseusAgentHome examples={examples} onExample={onExample} />;
+}
