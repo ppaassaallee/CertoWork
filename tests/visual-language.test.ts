@@ -7,13 +7,13 @@ import { compactTagSummary } from "../src/components/CompactTagPicker";
 const read = (relativePath: string) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("live typography exposes Calm Authority hierarchy", async () => {
+test("live typography exposes the Notion five-token hierarchy", async () => {
   const tokens = await read("src/styles/certo-tokens.css");
   const css = await read("src/index.css");
   assert.match(tokens, /--font-body: "Inter"/);
-  assert.match(tokens, /--text-h1: calc\(2\.125rem/);
+  assert.match(tokens, /--text-primary: #37352f/);
+  assert.match(tokens, /--accent: #2383e2/);
   assert.match(tokens, /--text-h2: calc\(1\.75rem/);
-  assert.match(tokens, /--text-h3: calc\(1\.375rem/);
   assert.match(tokens, /--text-h4: calc\(1\.125rem/);
   assert.match(tokens, /--text-body: calc\(0\.875rem/);
   assert.match(tokens, /--text-body-sm: calc\(0\.8125rem/);
@@ -21,7 +21,8 @@ test("live typography exposes Calm Authority hierarchy", async () => {
   assert.match(css, /certo-tokens\.css/);
   assert.equal(css.includes("Manrope"), false);
   assert.equal(css.includes("DM Sans"), false);
-  assert.match(css, /font-size: var\(--text-ui\) !important/);
+  assert.equal(/font-size:\s*var\(--text-(?:h1|h3|body-lg|eyebrow|ui)\)/.test(css), false);
+  assert.match(css, /font-size: var\(--text-body-sm\) !important/);
   assert.match(css, /font-size: var\(--text-caption\) !important/);
 });
 

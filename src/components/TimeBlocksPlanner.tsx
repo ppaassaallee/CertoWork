@@ -183,7 +183,7 @@ export function TimeBlocksPlanner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FDFCFB]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--status-warning-soft)]">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
       </div>
     );
