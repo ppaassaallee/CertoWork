@@ -135,7 +135,6 @@ function SignIn() {
               Request beta access
             </button>
           </div>
-          <p className="do-signin-invite">Invite only</p>
           {(authError || error) && <p className="do-signin-error" role="alert">{authError || error}</p>}
           <div className="do-signin-proof">
             <span><Check size={13} /> Invite-only workspaces</span>
@@ -161,7 +160,6 @@ function SignIn() {
                 <button className="do-signin-button" onClick={() => resetPanel("signin")} type="button">
                   <LogIn size={15} /> Sign in
                 </button>
-                <p className="do-signin-invite">Invite only</p>
                 <button className="do-signin-secondary" onClick={() => resetPanel("access")} type="button">
                   <Mail size={15} /> Request beta
                 </button>
@@ -208,14 +206,15 @@ function SignIn() {
                   {submitting ? <Loader2 className="spin" size={15} /> : <LogIn size={15} />}
                   Sign in
                 </button>
-                <p className="do-signin-invite">Invite only</p>
               </form>
-              <button className="do-signin-alternate" disabled={submitting} onClick={() => handleSignIn("popup")} type="button">
-                {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
-              </button>
-              <button className="do-signin-alternate" disabled={submitting} onClick={() => resetPanel("reset")} type="button">
-                Forgot password?
-              </button>
+              <div className="do-signin-links">
+                <button className="do-signin-alternate" disabled={submitting} onClick={() => handleSignIn("popup")} type="button">
+                  {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
+                </button>
+                <button className="do-signin-alternate" disabled={submitting} onClick={() => resetPanel("reset")} type="button">
+                  Forgot password?
+                </button>
+              </div>
               <small className="do-access-note">Need access first? <button onClick={() => resetPanel("access")} type="button">Request beta access</button></small>
             </>
           )}

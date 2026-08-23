@@ -470,6 +470,20 @@
   color: rgba(247, 244, 238, 0.7);
 }
 
+.do-signin-links {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: 10px;
+}
+
+.do-access-card .do-signin-links .do-signin-alternate,
+.do-signin-links .do-signin-alternate {
+  display: flex;
+  width: 100%;
+  margin-top: 0;
+}
+
 .do-access-card .do-signin-alternate {
   color: rgba(247, 244, 238, 0.7);
   font-size: 12px !important;
