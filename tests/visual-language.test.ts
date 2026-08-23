@@ -51,7 +51,9 @@ test("header keeps command palette and create utilities", async () => {
 test("primary navigation uses consistent English labels", async () => {
   const source = await read("src/components/DelivereeWorkspace.tsx");
   assert.match(source, /navHome|Home/);
-  assert.match(source, /navWork|Work/);
+  assert.match(source, /navMyWork|My Work/);
+  assert.match(source, /navProjects|Projects/);
+  assert.match(source, /navAgents|Agents/);
   assert.match(source, /navApprovals|Approvals/);
   assert.equal(/Conversación|Ítems|Notas|Pendientes/.test(source), false);
 });

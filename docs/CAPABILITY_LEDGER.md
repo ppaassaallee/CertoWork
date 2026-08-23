@@ -4,7 +4,7 @@ This ledger is the non-destructive contract for the conversational MVP. A capabi
 
 | Capability | Canonical route | Status | Conversational enhancement |
 | --- | --- | --- | --- |
-| Odysseus (AI employee) | `/home`, Odysseus conversation | Enhanced | Tool loop, SSE work-log streaming, durable memory, skills invoke, schedules, approval-gated actions |
+| Odysseus (AI employee) | `/agents`, Odysseus conversation | Enhanced | Default agent under Agents; tool loop, SSE, memory, skills, schedules, approvals |
 | Today | `/today` | Preserved | Daily-plan prompt and capacity rail link |
 | Focus | `/today/focus` | Preserved | Available from Today and conversational planning |
 | Agenda / calendar | `/today/agenda` | Preserved | Included in preflight context where calendar records exist |

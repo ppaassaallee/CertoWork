@@ -7,19 +7,34 @@ export type MoreSection =
   | "warroom"
   | "knowledge"
   | "workspace";
+export type MyWorkSection = "assigned" | "inbox" | "waiting";
+export type AgentsSection = "home" | "automations" | "activity";
 
 export type DelivereeLens =
   | { kind: "home" }
+  | { kind: "my-work"; section: MyWorkSection }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
+  | { kind: "agents"; section: AgentsSection }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
   | { kind: "settings" }
   | { kind: "more"; section: MoreSection };
 
+const MORE_SECTIONS: MoreSection[] = [
+  "automations",
+  "updates",
+  "habits",
+  "workouts",
+  "warroom",
+  "knowledge",
+  "workspace",
+];
+
 export function resolveDelivereeLens(pathname: string): DelivereeLens {
   const path = pathname.replace(/\/+$/, "") || "/";
+
   const projectMatch = path.match(
-    /^\/work\/projects\/([^/]+)(?:\/(notes|tasks|strategy|overview))?$/,
+    /^\/(?:work\/)?projects\/([^/]+)(?:\/(notes|tasks|strategy|overview))?$/,
   );
   if (projectMatch && projectMatch[1] !== "health") {
     const tab = (projectMatch[2] || "overview") as ProjectTab;
@@ -31,6 +46,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
       tab: normalized,
     };
   }
+
   if (
     path === "/approvals" ||
     path.startsWith("/capture/review") ||
@@ -38,36 +54,71 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   ) {
     return { kind: "approvals" };
   }
+
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
   }
+
+  if (path === "/workspace" || path === "/more/workspace") {
+    return { kind: "more", section: "workspace" };
+  }
+
+  if (
+    path === "/agents" ||
+    path === "/agents/odysseus" ||
+    path === "/work/agent-workspace"
+  ) {
+    return { kind: "agents", section: "home" };
+  }
+  if (
+    path === "/agents/automations" ||
+    path === "/skills" ||
+    path === "/more/skills" ||
+    path === "/more/automations"
+  ) {
+    return { kind: "agents", section: "automations" };
+  }
+  if (path === "/agents/activity" || path === "/digest" || path === "/more/updates") {
+    return { kind: "agents", section: "activity" };
+  }
+
+  if (path === "/my-work" || path === "/my-work/assigned") {
+    return { kind: "my-work", section: "assigned" };
+  }
+  if (path === "/my-work/inbox") {
+    return { kind: "my-work", section: "inbox" };
+  }
+  if (path === "/my-work/waiting") {
+    return { kind: "my-work", section: "waiting" };
+  }
+
   if (path.startsWith("/more/")) {
     const section = path.slice("/more/".length) as MoreSection;
-    if (
-      ["automations", "updates", "habits", "workouts", "warroom", "knowledge", "workspace"].includes(
-        section,
-      )
-    ) {
+    if (MORE_SECTIONS.includes(section)) {
+      if (section === "automations") return { kind: "agents", section: "automations" };
+      if (section === "updates") return { kind: "agents", section: "activity" };
       return { kind: "more", section };
     }
   }
-  if (path === "/skills" || path === "/more/skills") {
-    return { kind: "more", section: "automations" };
+
+  if (
+    path.startsWith("/capture") ||
+    path === "/inbox" ||
+    path === "/rich-capture"
+  ) {
+    return { kind: "my-work", section: "inbox" };
   }
-  if (path === "/digest") {
-    return { kind: "more", section: "updates" };
-  }
-  if (path.startsWith("/capture") || path === "/inbox" || path === "/rich-capture") {
-    return { kind: "work", section: "intake" };
-  }
+
   if (
     path.startsWith("/work/action-board") ||
     path === "/action-board" ||
     path.startsWith("/work/tasks")
   ) {
-    return { kind: "work", section: "issues" };
+    return { kind: "my-work", section: "assigned" };
   }
+
   if (
+    path === "/projects" ||
     path === "/work" ||
     path.startsWith("/work/projects") ||
     path.startsWith("/work/delivery-os") ||
@@ -77,14 +128,25 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   ) {
     return { kind: "work", section: "portfolio" };
   }
+
   return { kind: "home" };
 }
 
 export function lensToPath(lens: DelivereeLens) {
+  if (lens.kind === "my-work") {
+    if (lens.section === "inbox") return "/my-work/inbox";
+    if (lens.section === "waiting") return "/my-work/waiting";
+    return "/my-work";
+  }
+  if (lens.kind === "agents") {
+    if (lens.section === "automations") return "/agents/automations";
+    if (lens.section === "activity") return "/agents/activity";
+    return "/agents";
+  }
   if (lens.kind === "work") {
-    if (lens.section === "issues") return "/work/tasks";
-    if (lens.section === "intake") return "/capture";
-    return "/work";
+    if (lens.section === "issues") return "/my-work";
+    if (lens.section === "intake") return "/my-work/inbox";
+    return "/projects";
   }
   if (lens.kind === "project") {
     const base = `/work/projects/${encodeURIComponent(lens.projectId)}`;
@@ -93,7 +155,10 @@ export function lensToPath(lens: DelivereeLens) {
   }
   if (lens.kind === "approvals") return "/approvals";
   if (lens.kind === "settings") return "/settings";
-  if (lens.kind === "more") return `/more/${lens.section}`;
+  if (lens.kind === "more") {
+    if (lens.section === "workspace") return "/workspace";
+    return `/more/${lens.section}`;
+  }
   return "/home";
 }
 
