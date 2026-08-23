@@ -147,6 +147,7 @@ export function actionLabel(type?: string) {
     create_followup: "Create follow-up",
     outbox_communication: "Draft update",
     kill_or_archive: "Archive item",
+    create_odiseus_memory: "Remember fact",
   };
   return labels[String(type || "")] || String(type || "Review change").replace(/_/g, " ");
 }

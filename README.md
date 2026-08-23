@@ -1,6 +1,6 @@
 # Certo Work — powered by Boldr AI
 
-Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Odiseus layer.
+Certo Work is a conversation-first personal operating system that preserves the existing COD, planning, projects, review, knowledge, health, and Boldr OS modules while adding an accountable Odysseus layer.
 
 ## Production hosting
 

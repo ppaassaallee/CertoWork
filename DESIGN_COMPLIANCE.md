@@ -49,7 +49,7 @@ SSOT: `src/styles/certo-tokens.css` + `DESIGN_LANGUAGE.md`.
 | Backlog | Filter wall | Filter/Sort/Views (Prompt 1) |
 | tabular-nums | Stat strip / finance | Applied to summary strong values |
 
-### 4. Odiseus
+### 4. Odysseus
 
 | Rule | Element | Fix |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ SSOT: `src/styles/certo-tokens.css` + `DESIGN_LANGUAGE.md`.
 | Exhaustive zero-hex in every CSS rule | War Room / fitness / notebook islands still carry specialty palette hues; migrating them is a dedicated pass without blocking Calm Authority on core delivery surfaces. |
 | Full Empty/Loading/Error on every legacy list | Core consoles covered; obscure modules still use older empties — migrate as those screens are touched. |
 | Skeleton loaders everywhere | Prompt asks skeletons over full-page spinners; conversation stream still uses work-log motion — swap in a follow-up. |
-| ES/EN chrome purity across every string | i18n keys exist for nav/Odiseus; deep project copy still English-first — language pass is separate product work. |
+| ES/EN chrome purity across every string | i18n keys exist for nav/Odysseus; deep project copy still English-first — language pass is separate product work. |
 | Tailwind shadcn HSL vars | Replaced with direct Certo token colors; leftover unused hsl theme keys removed from config. |
 
 ## How to verify
@@ -93,5 +93,5 @@ SSOT: `src/styles/certo-tokens.css` + `DESIGN_LANGUAGE.md`.
 2. Command Center → at most one filled primary; zero metrics muted.  
 3. Project console → compact header; Share not full-width green.  
 4. Backlog → Filter/Sort, not filter wall.  
-5. Odiseus → queues before chrome; one send primary.  
+5. Odysseus → queues before chrome; one send primary.  
 6. Tab through controls → accent focus ring visible.

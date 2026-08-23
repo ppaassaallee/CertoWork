@@ -1,8 +1,8 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 
-/** Persist a human-readable Odiseus activity row (no LLM traces). */
-export async function recordOdiseusActivity(input: {
+/** Persist a human-readable Odysseus activity row (no LLM traces). */
+export async function recordOdysseusActivity(input: {
   workspaceId: string;
   userId: string;
   conversationId?: string | null;
@@ -31,4 +31,60 @@ export async function recordOdiseusActivity(input: {
     metadata: input.metadata || null,
     createdAt: serverTimestamp(),
   });
+}
+
+/** Best-effort activity write — never blocks the chat reply. */
+export async function recordOdysseusActivitySafe(
+  input: Parameters<typeof recordOdysseusActivity>[0],
+) {
+  try {
+    await recordOdysseusActivity(input);
+  } catch (error) {
+    console.warn("Odysseus activity was not persisted:", error);
+  }
+}
+
+export type OdysseusRunPersistInput = {
+  userId: string;
+  workspaceId: string;
+  conversationId?: string | null;
+  projectId?: string | null;
+  request: string;
+  status?: string;
+  steps?: unknown[];
+  toolCount?: number;
+  artifact?: unknown;
+  actionPlan?: unknown;
+  outcome?: string;
+};
+
+/**
+ * Persist an Odysseus run log. Returns the doc id, or null when Firestore
+ * rejects the write (e.g. rules not deployed yet). Callers must still save
+ * the assistant message so chat does not look like a permission failure.
+ */
+export async function persistOdysseusRun(
+  input: OdysseusRunPersistInput,
+): Promise<string | null> {
+  try {
+    const runRef = await addDoc(collection(db, "odiseus_runs"), {
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId || null,
+      projectId: input.projectId || null,
+      request: input.request,
+      status: input.status || "completed",
+      steps: input.steps || [],
+      toolCount: input.toolCount || 0,
+      artifact: input.artifact || null,
+      actionPlan: input.actionPlan || null,
+      outcome: input.outcome || null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return runRef.id;
+  } catch (error) {
+    console.warn("Odysseus run was not persisted:", error);
+    return null;
+  }
 }

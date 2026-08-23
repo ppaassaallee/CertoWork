@@ -107,7 +107,7 @@ async function startServer() {
     res.json({
       openai: {
         configured: !!process.env.OPENAI_API_KEY,
-        description: "Primary Responses API adapter for structured Odiseus conversations."
+        description: "Primary Responses API adapter for structured Odysseus conversations."
       },
       gemini: {
         configured: !!process.env.GEMINI_API_KEY,
@@ -825,7 +825,7 @@ Respond in a JSON format matching this schema:
               id: docSnap.id,
               workspaceId,
               source: "conversation",
-              title: data.role === "user" ? "Prior user commitment" : "Prior Odiseus context",
+              title: data.role === "user" ? "Prior user commitment" : "Prior Odysseus context",
               body: String(data.content).slice(0, 4000),
               updatedAt: data.createdAt?.toDate?.() || null,
             });
@@ -920,7 +920,7 @@ Respond in a JSON format matching this schema:
         : null;
 
       const prompt = `You are ${assistantName}, a personal productivity strategist inspired by Carl Pullein’s COD, Time Sector System, Weekly Planning Matrix, 2+8 prioritization, and Perfect Week blueprint.
-      You are running inside ${principalDisplayName(req)}'s executive system, Gazelle, acting as Personal Odiseus.
+      You are running inside ${principalDisplayName(req)}'s executive system, Gazelle, acting as Personal Odysseus.
       
       ABSOLUTE RULES:
       - Never mention Breeze, HubSpot, or any external platform references.
@@ -2043,7 +2043,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { tasks, projects, goals, stakeholders, alerts, claritySession, dailyMetric } = req.body;
       
-      const prompt = `You are Gazelle, ${principalDisplayName(req)}'s Odiseus. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
+      const prompt = `You are Gazelle, ${principalDisplayName(req)}'s Odysseus. Generate an exceptional, cohesive Daily Executive briefing using the real workspace data provided.
       
       CURRENT DATE: ${new Date().toLocaleDateString()}
       ACTIVE STRATEGIC GOALS / WIGs:
@@ -2179,7 +2179,7 @@ Respond STRICTLY in a valid JSON schema:
     try {
       const { rawInput, title, meetingDate, projectContext } = req.body;
       
-      const prompt = `You are a masterful Odiseus and elite productivity strategist. Your task is to process this executive meeting transcript, raw notes, or notes dump into highly structured, actionable intelligence.
+      const prompt = `You are a masterful Odysseus and elite productivity strategist. Your task is to process this executive meeting transcript, raw notes, or notes dump into highly structured, actionable intelligence.
       
       MEETING TITLE: ${title || "Default Sync"}
       DATE: ${meetingDate || new Date().toLocaleDateString()}

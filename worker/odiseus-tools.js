@@ -1,5 +1,5 @@
 /**
- * Odiseus first-party tools — execute against the authorized workspaceContext
+ * Odysseus first-party tools — execute against the authorized workspaceContext
  * the client already scoped for this user. Never trust tools to invent records.
  */
 
@@ -137,6 +137,59 @@ export const ODISEUS_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    type: "function",
+    name: "recall_memory",
+    description: "Recall durable facts Odysseus previously remembered for this workspace.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Optional text filter" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "remember_fact",
+    description:
+      "Remember a durable workspace fact for future Odysseus sessions. Only store what the user affirmed.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        kind: { type: "string", enum: ["preference", "fact", "commitment", "context"] },
+        tags: { type: "array", items: { type: "string" } },
+      },
+      required: ["text"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "run_skill",
+    description: "Run a workspace skill by id or name and return guided output as an artifact.",
+    parameters: {
+      type: "object",
+      properties: {
+        skillId: { type: "string" },
+        skillName: { type: "string" },
+        focus: { type: "string", description: "Optional focus for this invocation" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "list_schedules",
+    description: "List Odysseus scheduled jobs the user has configured.",
+    parameters: {
+      type: "object",
+      properties: {},
+      additionalProperties: false,
+    },
+  },
 ];
 
 export const TOOL_LABELS = {
@@ -147,12 +200,19 @@ export const TOOL_LABELS = {
   get_activity_summary: "Summarizing portfolio attention",
   propose_followups: "Preparing follow-up actions",
   prepare_status_report: "Preparing project report",
+  recall_memory: "Recalling memory",
+  remember_fact: "Saving memory",
+  run_skill: "Running skill",
+  list_schedules: "Checking schedules",
 };
 
-export function executeOdiseusTool(name, args, workspaceContext) {
+export function executeOdysseusTool(name, args, workspaceContext) {
   const projects = asList(workspaceContext?.projects);
   const tasks = asList(workspaceContext?.tasks);
   const risks = asList(workspaceContext?.risks);
+  const memories = asList(workspaceContext?.odiseusMemory);
+  const skills = asList(workspaceContext?.skills);
+  const schedules = asList(workspaceContext?.schedules);
   const limit = Math.min(Number(args?.limit || 20) || 20, 50);
 
   if (name === "search_projects") {
@@ -371,6 +431,107 @@ export function executeOdiseusTool(name, args, workspaceContext) {
       proposedActions,
       artifact,
     };
+  }
+
+  if (name === "recall_memory") {
+    const query = String(args?.query || "").toLowerCase().trim();
+    const matched = memories
+      .filter((item) => !query || String(item.text || "").toLowerCase().includes(query) || asList(item.tags).join(" ").toLowerCase().includes(query))
+      .slice(0, limit)
+      .map((item) => ({
+        id: item.id,
+        text: item.text,
+        kind: item.kind || "fact",
+        tags: asList(item.tags),
+      }));
+    return { label: TOOL_LABELS.recall_memory, result: { count: matched.length, memories: matched } };
+  }
+
+  if (name === "remember_fact") {
+    const text = String(args?.text || "").trim();
+    if (!text) {
+      return { label: TOOL_LABELS.remember_fact, result: { error: "Nothing to remember." } };
+    }
+    const proposedActions = [
+      {
+        type: "create_odiseus_memory",
+        safetyLevel: 1,
+        confidence: 0.95,
+        reason: "Store a durable Odysseus memory for future sessions",
+        proposedChange: {
+          text: text.slice(0, 2_000),
+          kind: String(args?.kind || "fact"),
+          tags: asList(args?.tags).slice(0, 12),
+        },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.remember_fact,
+      result: { remembered: text.slice(0, 200), proposedActions },
+      proposedActions,
+    };
+  }
+
+  if (name === "run_skill") {
+    const skillId = String(args?.skillId || "").trim();
+    const skillName = String(args?.skillName || "").toLowerCase().trim();
+    const skill =
+      skills.find((item) => item.id === skillId) ||
+      skills.find((item) => String(item.name || item.title || "").toLowerCase() === skillName) ||
+      skills.find((item) => String(item.name || item.title || "").toLowerCase().includes(skillName));
+    if (!skill) {
+      return {
+        label: TOOL_LABELS.run_skill,
+        result: {
+          error: skills.length
+            ? "Skill not found in your workspace skill library."
+            : "No skills are loaded in this workspace yet.",
+          available: skills.slice(0, 12).map((item) => ({
+            id: item.id,
+            name: item.name || item.title,
+          })),
+        },
+      };
+    }
+    const focus = String(args?.focus || "").trim();
+    const title = `Skill · ${skill.name || skill.title || "Untitled"}`;
+    const body = [
+      `# ${title}`,
+      focus ? `\nFocus: ${focus}` : "",
+      "",
+      "## Skill instructions",
+      String(skill.instructions || skill.prompt || skill.description || "No instructions stored."),
+      "",
+      "## Suggested next moves",
+      "- Apply the skill output to the current project or conversation.",
+      "- Ask Odysseus to turn the result into approved follow-up actions.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const artifact = {
+      kind: "skill_run",
+      title,
+      summary: focus || String(skill.description || "Skill run").slice(0, 160),
+      body,
+      skillId: skill.id,
+    };
+    return {
+      label: TOOL_LABELS.run_skill,
+      result: { artifact, skillId: skill.id },
+      artifact,
+    };
+  }
+
+  if (name === "list_schedules") {
+    const items = schedules.slice(0, limit).map((item) => ({
+      id: item.id,
+      title: item.title || item.name || "Scheduled job",
+      cron: item.cron || item.schedule || null,
+      prompt: item.prompt || item.body || "",
+      enabled: item.enabled !== false,
+      lastRunAt: item.lastRunAt || null,
+    }));
+    return { label: TOOL_LABELS.list_schedules, result: { count: items.length, schedules: items } };
   }
 
   return { label: name, result: { error: `Unknown tool: ${name}` } };
