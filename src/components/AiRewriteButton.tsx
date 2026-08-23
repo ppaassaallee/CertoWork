@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, WandSparkles } from "lucide-react";
+import { Loader2, WandSparkles } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 
 export type RewriteFieldKind =
@@ -31,6 +31,9 @@ export function AiRewriteButton({
   const rewrite = async () => {
     const source = String(text || "").trim();
     if (!source || !user || !workspace || working) return;
+    if (!window.confirm("Rewrite this text with Certo AI? You can undo the change after it applies.")) {
+      return;
+    }
     setWorking(true);
     setError("");
     try {

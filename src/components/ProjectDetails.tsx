@@ -6,7 +6,7 @@ import {
   Calendar, Folder, Zap, Trash2, Link as LinkIcon,
   User, Tag, AlertTriangle, FileText, CheckCircle,
   TrendingUp, Bot, ShieldAlert, Sparkles, Archive, Rocket
-} from "lucide-react";
+} from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import {

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Database, AlertCircle } from "lucide-react";
+import { ChevronLeft, Database, AlertCircle } from "./ui/Icon";
 import { motion } from "motion/react";
 
 export function NotionConnector() {

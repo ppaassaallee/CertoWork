@@ -38,14 +38,15 @@ service cloud.firestore {
       return workspaceId + "_" + request.auth.uid;
     }
 
-    function isPortfolioViewerEmail() {
-      return request.auth.token.email != null
-        && request.auth.token.email in [
-          "cesar.a@getboldr.ai",
-          "cesar.ar@alliedglobal.com",
-          "rafael.f@getboldr.ai",
-          "rafael.f@alliedglobal.com"
-        ];
+    function isPortfolioViewer(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && exists(memberDoc(workspaceId))
+        && get(memberDoc(workspaceId)).data.status == "active"
+        && (
+          get(memberDoc(workspaceId)).data.portfolioViewer == true
+          || get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+        );
     }
 
     function isWorkspaceAdmin(workspaceId) {
@@ -98,7 +99,7 @@ service cloud.firestore {
         hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
         (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
-        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewerEmail())
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewer(data.workspaceId))
       );
     }
 
@@ -728,7 +729,10 @@ service cloud.firestore {
       return isSignedIn()
         && data.userId == request.auth.uid
         && data.workspaceId is string
-        && isWorkspaceMember(data.workspaceId);
+        && (
+          isWorkspaceMember(data.workspaceId)
+          || isWorkspaceOwner(data.workspaceId)
+        );
     }
     match /boldi_conversations/{id} {
       allow create: if canAccessBoldiRecord(incoming());
@@ -768,6 +772,36 @@ service cloud.firestore {
     }
     match /boldi_tool_runs/{id} {
       allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /odiseus_runs/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /odiseus_activity/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /odiseus_memory/{id} {
+      allow create: if canAccessBoldiRecord(incoming())
+        && incoming().text is string
+        && incoming().text.size() > 0
+        && incoming().text.size() <= 2000;
       allow get, list: if canAccessBoldiRecord(resource.data);
       allow update: if canAccessBoldiRecord(resource.data)
         && canAccessBoldiRecord(incoming())

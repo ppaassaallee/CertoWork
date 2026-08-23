@@ -3,13 +3,9 @@ import {
   AlertTriangle,
   Archive,
   ArrowLeft,
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   Circle,
   Copy,
   Download,
@@ -31,7 +27,7 @@ import {
   UserPlus,
   Users,
   X,
-} from "lucide-react";
+} from "./ui/Icon";
 import {
   PROJECT_HEALTH,
   PROJECT_STATUSES,
@@ -43,6 +39,7 @@ import {
   taskWorkLane,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import {
   financeAmount,
   financeCapacityAllocations,
@@ -115,6 +112,13 @@ type PortfolioColumnKey =
   | "stage"
   | "phase"
   | "status"
+  | "source_status"
+  | "contact"
+  | "qa_plan"
+  | "days_to_prod"
+  | "june_usd"
+  | "july_usd"
+  | "total_usd"
   | "health"
   | "progress"
   | "due"
@@ -133,9 +137,16 @@ const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   stage: "Stage",
   phase: "Phase",
   status: "Status",
+  source_status: "ESTADO",
+  contact: "OWNER / POC",
+  qa_plan: "QA PLAN",
+  days_to_prod: "DÍAS A PROD",
+  june_usd: "JUN USD",
+  july_usd: "JUL USD",
+  total_usd: "TOTAL USD",
   health: "Health",
   progress: "Progress",
-  due: "Due",
+  due: "PROD PLAN",
   solution_architect: "Solution Architect",
   project_manager: "Project Manager",
   economics: "Economics",
@@ -152,9 +163,16 @@ const defaultPortfolioColumns: PortfolioColumnKey[] = [
   "stage",
   "phase",
   "status",
+  "source_status",
+  "contact",
+  "qa_plan",
+  "days_to_prod",
   "health",
   "progress",
   "due",
+  "june_usd",
+  "july_usd",
+  "total_usd",
   "solution_architect",
   "project_manager",
   "economics",
@@ -171,6 +189,13 @@ const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
   stage: "105px",
   phase: "120px",
   status: "105px",
+  source_status: "140px",
+  contact: "150px",
+  qa_plan: "120px",
+  days_to_prod: "110px",
+  june_usd: "110px",
+  july_usd: "110px",
+  total_usd: "120px",
   health: "120px",
   progress: "100px",
   due: "130px",
@@ -211,7 +236,7 @@ function clampColumnWidth(value: number) {
 
 function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
   const current = value?.length ? [...value] : [...fallback];
-  (["work_category", "product_phase"] as T[]).forEach((column) => {
+  (["work_category", "product_phase", "source_status", "contact", "qa_plan", "days_to_prod", "june_usd", "july_usd", "total_usd"] as T[]).forEach((column) => {
     if (fallback.includes(column) && !current.includes(column)) current.push(column);
   });
   return fallback.filter((column) => current.includes(column));
@@ -233,11 +258,7 @@ function projectTitle(project: any) {
 }
 
 function healthClass(value: string) {
-  return value === "blocked"
-    ? "is-blocked"
-    : value === "at_risk"
-      ? "is-risk"
-      : "is-track";
+  return `status-tone-${healthToStatus(value)}`;
 }
 
 function EditableField({
@@ -325,22 +346,28 @@ function TeamPersonSelect({
   options: Array<{ id: string; name: string }>;
   onChange: (id: string, name: string) => void;
 }) {
+  const selected = options.find((option) => option.id === value);
   return (
-    <select
-      aria-label={label}
-      onChange={(event) => {
-        const id = event.target.value;
-        onChange(id, options.find((option) => option.id === id)?.name || "");
-      }}
-      value={value}
-    >
-      <option value="">Unassigned</option>
-      {options.map((option) => (
-        <option key={option.id} value={option.id}>
-          {option.name}
-        </option>
-      ))}
-    </select>
+    <label className={`do-assign-select ${value ? "" : "is-empty"}`}>
+      <span className="do-assign-avatar" aria-hidden="true">
+        {(selected?.name || "?").slice(0, 1).toUpperCase()}
+      </span>
+      <select
+        aria-label={label}
+        onChange={(event) => {
+          const id = event.target.value;
+          onChange(id, options.find((option) => option.id === id)?.name || "");
+        }}
+        value={value}
+      >
+        <option value="">Assign…</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -348,16 +375,19 @@ function EmptyState({
   icon,
   title,
   text,
+  action,
 }: {
   icon: React.ReactNode;
   title: string;
   text: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="do-project-empty">
       {icon}
       <strong>{title}</strong>
       <span>{text}</span>
+      {action}
     </div>
   );
 }
@@ -389,14 +419,6 @@ function workItemKind(item: any): WorkItemKind {
   return "pbi";
 }
 
-function workItemLabel(kind: WorkItemKind) {
-  return kind === "pbi" ? "PBI" : kind.charAt(0).toUpperCase() + kind.slice(1);
-}
-
-function workItemParentId(item: any) {
-  return String(item?.parentId || item?.featureId || item?.epicId || "");
-}
-
 function itemOrder(item: any, fallback = 0) {
   const value = Number(item?.order ?? item?.rank ?? item?.position);
   return Number.isFinite(value) ? value : fallback;
@@ -419,16 +441,6 @@ function sortWorkItems(items: any[]) {
       ) ||
       projectTitle(left).localeCompare(projectTitle(right)),
   );
-}
-
-function dateInputValue(value: any) {
-  if (!value) return "";
-  if (typeof value === "string")
-    return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : "";
-  if (value?.toDate) return value.toDate().toISOString().slice(0, 10);
-  if (value?.seconds)
-    return new Date(value.seconds * 1000).toISOString().slice(0, 10);
-  return "";
 }
 
 function priorityValue(value: any) {
@@ -1078,7 +1090,7 @@ export function ProjectRecordModal({
                 <div className="do-risk-list">
                   {risks.map((risk) => (
                     <div key={risk.id}>
-                      <span className="is-risk">
+                      <span className="status-tone-amber">
                         <AlertTriangle size={12} />
                       </span>
                       <div>
@@ -1094,7 +1106,7 @@ export function ProjectRecordModal({
                   ))}
                   {lanes.blocked.map((task) => (
                     <div key={`task-${task.id}`}>
-                      <span className="is-blocked">
+                      <span className="status-tone-red">
                         <Circle size={12} />
                       </span>
                       <div>
@@ -1312,6 +1324,17 @@ export function ProjectRecordModal({
   );
 }
 
+export type ProjectConsoleTab =
+  | "brief"
+  | "items"
+  | "plan"
+  | "work"
+  | "risks"
+  | "team"
+  | "costs"
+  | "docs"
+  | "codex";
+
 export function ProjectConsolePanel({
   project,
   tasks,
@@ -1324,6 +1347,7 @@ export function ProjectConsolePanel({
   sprints = [],
   currentUser = null,
   workspace = null,
+  initialTab = "brief",
   onAsk,
   onUpdateProject,
   onArchiveProject,
@@ -1357,6 +1381,8 @@ export function ProjectConsolePanel({
   sprints?: SprintRecord[];
   currentUser?: { uid?: string } | null;
   workspace?: { ownerId?: string } | null;
+  /** Deep-link into Items (same work as tasks / backlog). */
+  initialTab?: ProjectConsoleTab;
   onAsk: (prompt: string) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
@@ -1386,21 +1412,7 @@ export function ProjectConsolePanel({
   driveConnected?: boolean;
   driveMessage?: string;
 }) {
-  const [tab, setTab] = useState<
-    | "brief"
-    | "backlog"
-    | "plan"
-    | "work"
-    | "risks"
-    | "team"
-    | "costs"
-    | "docs"
-    | "codex"
-  >("brief");
-  const [headerCollapsed, setHeaderCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("certo-project-header-collapsed") === "true";
-  });
+  const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
   const [moreOpen, setMoreOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [shareMemberId, setShareMemberId] = useState("");
@@ -1410,10 +1422,6 @@ export function ProjectConsolePanel({
   const [docUrl, setDocUrl] = useState("");
   const [docError, setDocError] = useState("");
   const [shareLink, setShareLink] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
-  const [workTitle, setWorkTitle] = useState("");
-  const [workType, setWorkType] = useState<WorkItemKind>("pbi");
-  const [workParentId, setWorkParentId] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
   const [riskSeverity, setRiskSeverity] = useState("medium");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
@@ -1440,15 +1448,6 @@ export function ProjectConsolePanel({
     (item) => String(item.status || "").toLowerCase() !== "completed",
   );
   const blockedTasks = tasks.filter((task) => taskWorkLane(task) === "blocked");
-  const lanes = useMemo(
-    () => ({
-      backlog: tasks.filter((task) => taskWorkLane(task) === "backlog"),
-      in_progress: tasks.filter((task) => taskWorkLane(task) === "in_progress"),
-      blocked: blockedTasks,
-      done: tasks.filter((task) => taskWorkLane(task) === "done"),
-    }),
-    [blockedTasks, tasks],
-  );
   const hierarchy = useMemo(() => {
     const epics = sortWorkItems(
       tasks.filter((task) => workItemKind(task) === "epic"),
@@ -1475,52 +1474,33 @@ export function ProjectConsolePanel({
   }));
 
   useEffect(() => {
-    setTab("brief");
+    setTab(initialTab);
     setArchiveConfirm(false);
     setDeleteConfirm(false);
     setMoreOpen(false);
-  }, [project.id]);
+  }, [project.id, initialTab]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("certo-project-header-collapsed", String(headerCollapsed));
-  }, [headerCollapsed]);
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const map: Record<string, ProjectConsoleTab> = {
+        "1": "brief",
+        "2": "items",
+        "3": "team",
+        "4": "costs",
+        "5": "risks",
+        "6": "docs",
+      };
+      const next = map[event.key];
+      if (!next) return;
+      event.preventDefault();
+      setTab(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
-  const submitTask = async () => {
-    if (!taskTitle.trim()) return;
-    await onAddTask(taskTitle.trim(), "backlog");
-    setTaskTitle("");
-  };
-  const submitWorkItem = async () => {
-    if (!workTitle.trim()) return;
-    const parent = tasks.find((item) => item.id === workParentId);
-    const parentKind = parent ? workItemKind(parent) : null;
-    const patch: ProjectPatch = {
-      workItemType: workType,
-      itemType: workType,
-      taskType: workType,
-      parentId: workParentId || null,
-      epicId: parentKind === "epic" ? workParentId : parent?.epicId || null,
-      featureId:
-        parentKind === "feature" ? workParentId : parent?.featureId || null,
-      priority: null,
-      order: tasks.length,
-      rank: tasks.length,
-    };
-    await onAddTask(workTitle.trim(), "backlog", patch);
-    setWorkTitle("");
-  };
-  const moveWorkItem = async (items: any[], item: any, direction: -1 | 1) => {
-    const ordered = sortWorkItems(items);
-    const index = ordered.findIndex((candidate) => candidate.id === item.id);
-    const other = ordered[index + direction];
-    if (!other) return;
-    const currentOrder = itemOrder(item, index);
-    const otherOrder = itemOrder(other, index + direction);
-    await onUpdateTask(item.id, { order: otherOrder, rank: otherOrder });
-    await onUpdateTask(other.id, { order: currentOrder, rank: currentOrder });
-  };
   const datedEpics = hierarchy.epics
     .filter((epic) => taskWorkLane(epic) !== "done")
     .sort((left, right) =>
@@ -1559,122 +1539,6 @@ export function ProjectConsolePanel({
           (severityOrder[String(right.severity || "medium").toLowerCase()] ??
             2),
       )[0] || blockedTasks[0];
-  const parentOptions =
-    workType === "epic"
-      ? []
-      : workType === "feature"
-        ? hierarchy.epics
-        : workType === "subtask"
-          ? hierarchy.pbis
-          : [...hierarchy.features, ...hierarchy.epics];
-  const renderWorkItemRow = (item: any, peers: any[]) => {
-    const kind = workItemKind(item);
-    return (
-      <article className={`do-backlog-row is-${kind}`} key={item.id}>
-        <div className="do-backlog-rank">
-          <button
-            aria-label={`Move ${projectTitle(item)} up`}
-            onClick={() => moveWorkItem(peers, item, -1)}
-            type="button"
-          >
-            <ArrowUp size={12} />
-          </button>
-          <button
-            aria-label={`Move ${projectTitle(item)} down`}
-            onClick={() => moveWorkItem(peers, item, 1)}
-            type="button"
-          >
-            <ArrowDown size={12} />
-          </button>
-        </div>
-        <div className="do-backlog-title">
-          <span>
-            {item.key
-              ? `${workItemLabel(kind)} · ${item.key}`
-              : workItemLabel(kind)}
-          </span>
-          <InlineEdit
-            ariaLabel={`Title for ${projectTitle(item)}`}
-            onCommit={(title) => title && onUpdateTask(item.id, { title })}
-            placeholder="Untitled work item"
-            value={item.title || item.name}
-          />
-        </div>
-        <select
-          aria-label={`Status for ${projectTitle(item)}`}
-          onChange={(event) =>
-            onUpdateTask(item.id, { status: event.target.value })
-          }
-          value={canonicalWorkStatus(item)}
-        >
-          <option value="backlog">Backlog</option>
-          <option value="ready">Ready</option>
-          <option value="todo">To do</option>
-          <option value="in_progress">In progress</option>
-          <option value="in_review">In review</option>
-          <option value="blocked">Blocked</option>
-          <option value="done">Done</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <select
-          aria-label={`Priority for ${projectTitle(item)}`}
-          onChange={(event) =>
-            onUpdateTask(item.id, {
-              priority:
-                event.target.value === "N/A" ? null : event.target.value,
-            })
-          }
-          value={priorityValue(item.priority)}
-        >
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="N/A">N/A</option>
-        </select>
-        <MultiAssigneePicker
-          members={workspaceMembers}
-          onChange={(assigneeIds, assignees) =>
-            onUpdateTask(item.id, {
-              assigneeIds,
-              assignees,
-              owner: assignees[0] || "",
-              assignee: assignees[0] || "",
-            })
-          }
-          selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
-          selectedNames={
-            Array.isArray(item.assignees)
-              ? item.assignees
-              : [item.owner || item.assignee].filter(Boolean)
-          }
-        />
-        <input
-          aria-label={`Due date for ${projectTitle(item)}`}
-          defaultValue={dateInputValue(item.dueDate || item.targetDate)}
-          onBlur={(event) =>
-            onUpdateTask(item.id, { dueDate: event.target.value || null })
-          }
-          type="date"
-        />
-      </article>
-    );
-  };
-  const renderExecutableWithSubtasks = (item: any, peers: any[]) => {
-    const children = hierarchy.subtasks.filter(
-      (subtask) => workItemParentId(subtask) === item.id,
-    );
-    return (
-      <div className="do-backlog-executable" key={item.id}>
-        {renderWorkItemRow(item, peers)}
-        {children.length > 0 && (
-          <div className="do-backlog-subtasks">
-            {children.map((subtask) => renderWorkItemRow(subtask, children))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const allowDelete = Boolean(
     onDeleteProject &&
       canDeleteProject(
@@ -1693,183 +1557,156 @@ export function ProjectConsolePanel({
           <option key={owner} value={owner} />
         ))}
       </datalist>
-      {headerCollapsed ? (
-        <div className="do-console-compact">
-          <button aria-label="Expand project header" onClick={() => setHeaderCollapsed(false)} title="Expand" type="button">
-            <ChevronDown size={14} />
-          </button>
-          <strong>{projectTitle(project)}</strong>
-          <span>{projectStatusLabel(project.status)} · {deliveryStageLabels[deliveryStage(project)]}</span>
-          <div className="do-console-compact-actions">
-            <button aria-label="Add team member" onClick={() => setTab("team")} title="Add team member" type="button"><UserPlus size={14} /></button>
-            <button aria-label="Share project" onClick={() => setTab("team")} title="Share project" type="button"><Share2 size={14} /></button>
-            <button aria-label="Ask Certo" onClick={() => onAsk(`Give me the cleanest project update for ${projectTitle(project)}.`)} title="Ask Certo" type="button"><MessageSquare size={14} /></button>
-            <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button"><MoreHorizontal size={14} /></button>
-          </div>
-        </div>
-      ) : (
-        <>
-      <div className="do-console-hero">
-        <div>
-          <span className="do-project-card-kicker">PROJECT CONSOLE</span>
+      {/* Compact project header ≤96px — description lives in Overview only */}
+      <div className="do-console-band">
+        <div className="do-console-band-main">
           <InlineEdit
             ariaLabel="Project name"
             onCommit={(title) => title && update({ title, name: title })}
             placeholder="Project name"
             value={projectTitle(project)}
           />
-          <p>
-            {project.outcome ||
-              project.objective ||
-              project.description ||
-              "Define the outcome so every conversation and work item points to the same finish line."}
-          </p>
+          <div className="do-console-band-chips">
+            <span className={`do-chip do-chip-health ${healthClass(currentHealth)}`}>
+              {projectHealthLabel(currentHealth)}
+            </span>
+            <label className="do-chip do-chip-select">
+              <span className="sr-only">Delivery stage</span>
+              <select
+                aria-label="Project delivery stage"
+                onChange={(event) => update({ deliveryStage: event.target.value })}
+                value={deliveryStage(project)}
+              >
+                {DELIVERY_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {deliveryStageLabels[stage]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <ProjectStatusSelect onUpdate={update} project={project} />
+          </div>
+          <div className="do-console-stat-strip" aria-label="Project stats">
+            <span className={openTasks.length === 0 ? "is-muted" : ""}>
+              Open <strong>{openTasks.length}</strong>
+            </span>
+            <span
+              className={
+                hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length === 0
+                  ? "is-muted"
+                  : ""
+              }
+            >
+              Epics{" "}
+              <strong>
+                {hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length}
+              </strong>
+            </span>
+            <span
+              className={
+                blockedTasks.length + risks.length === 0 ? "is-muted" : "status-tone-amber"
+              }
+            >
+              Signals <strong>{blockedTasks.length + risks.length}</strong>
+            </span>
+            <span className={blockedTasks.length === 0 ? "is-muted" : "status-tone-red"}>
+              Blocked <strong>{blockedTasks.length}</strong>
+            </span>
+          </div>
         </div>
-        <div className="do-console-hero-actions">
-          <button aria-label="Collapse project header" onClick={() => setHeaderCollapsed(true)} title="Collapse" type="button">
-            <ChevronUp size={15} />
-          </button>
+        <div className="do-console-band-actions">
           <button
-            aria-label={
-              isProjectFavorite(project)
-                ? "Remove from favorites"
-                : "Add to favorites"
-            }
-            className={isProjectFavorite(project) ? "is-favorite" : ""}
-            onClick={() => update({ favorite: !isProjectFavorite(project) })}
+            aria-label="Download status report PDF"
+            className="do-button-secondary"
+            onClick={() => downloadProjectStatusReport(report)}
+            title="Download PDF"
             type="button"
           >
-            <Star
-              fill={isProjectFavorite(project) ? "currentColor" : "none"}
-              size={15}
-            />
+            <Download size={14} /> PDF
           </button>
-        </div>
-      </div>
-
-      <div className="do-console-metrics">
-        <div>
-          <strong>{openTasks.length}</strong>
-          <span>
-            Open{" "}
-            <InfoTip
-              label="Open work"
-              text="All PBIs, tasks, bugs and subtasks that are not completed or cancelled."
-            />
-          </span>
-        </div>
-        <div>
-          <strong>
-            {
-              hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done")
-                .length
-            }
-          </strong>
-          <span>
-            Open Epics{" "}
-            <InfoTip
-              label="Epics"
-              text="The major outcomes that automatically act as delivery checkpoints."
-            />
-          </span>
-        </div>
-        <div className={blockedTasks.length || risks.length ? "is-risk" : ""}>
-          <strong>{blockedTasks.length + risks.length}</strong>
-          <span>
-            Signals{" "}
-            <InfoTip
-              label="Risk signals"
-              text="Open risks plus blocked work items. Severity determines their effect on project health."
-            />
-          </span>
-        </div>
-        <div className={healthClass(currentHealth)}>
-          <strong>{projectHealthLabel(currentHealth)}</strong>
-          <span>
-            Health{" "}
-            <InfoTip
-              label="Project health"
-              text="Calculated from blocked work, risk severity, overdue delivery dates and any manual override."
-            />
-          </span>
-        </div>
-      </div>
-
-      <div className="do-console-controls">
-        <ProjectStatusSelect onUpdate={update} project={project} />
-        <label className="do-inline-control">
-          <span>
-            Stage{" "}
-            <InfoTip
-              label="Delivery stage"
-              text="Define clarifies the project; Onboarding aligns client and team; Build creates it; Deploy releases it; Operations runs and supports it."
-            />
-          </span>
-          <select
-            aria-label="Project delivery stage"
-            onChange={(event) => update({ deliveryStage: event.target.value })}
-            value={deliveryStage(project)}
+          <button
+            aria-label="Open team"
+            className="do-button-secondary"
+            onClick={() => setTab("team")}
+            title="Team"
+            type="button"
           >
-            {DELIVERY_STAGES.map((stage) => (
-              <option key={stage} value={stage}>
-                {deliveryStageLabels[stage]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <select
-          aria-label="Project method"
-          onChange={(event) => update({ methodology: event.target.value })}
-          value={methodology}
-        >
-          <option value="scrum">Scrum</option>
-          <option value="pmi">PMI</option>
-          <option value="hybrid">Hybrid</option>
-        </select>
-        <button
-          aria-label="Add team member"
-          onClick={() => setTab("team")}
-          title="Add team member"
-          type="button"
-        >
-          <UserPlus size={13} /> Team
-        </button>
-        <button
-          aria-label="Share project"
-          onClick={() => setTab("team")}
-          title="Share project"
-          type="button"
-        >
-          <Share2 size={13} /> Share
-        </button>
-        <button
-          aria-label="Ask Certo Work for a project update"
-          className="do-icon-button"
-          onClick={() =>
-            onAsk(
-              `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
-            )
-          }
-          title="Ask for project update"
-          type="button"
-        >
-          <MessageSquare size={14} />
-        </button>
-        <button aria-label="More project actions" onClick={() => setMoreOpen((open) => !open)} title="More" type="button">
-          <MoreHorizontal size={13} />
-        </button>
-        <button onClick={() => downloadProjectStatusReport(report)} title="Download status report" type="button">
-          <Download size={13} /> PDF
-        </button>
+            <UserPlus size={14} /> Team
+          </button>
+          <button
+            aria-label="Share project"
+            className="do-button-secondary"
+            onClick={() => setTab("team")}
+            title="Share"
+            type="button"
+          >
+            <Share2 size={14} />
+          </button>
+          <button
+            aria-label="Ask Odysseus for a project update"
+            className="do-button-secondary"
+            onClick={() =>
+              onAsk(
+                `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
+              )
+            }
+            title="Ask Odysseus"
+            type="button"
+          >
+            <MessageSquare size={14} />
+          </button>
+          <div className="do-console-more">
+            <button
+              aria-label="More actions"
+              className="do-button-secondary do-kebab"
+              onClick={() => setMoreOpen((open) => !open)}
+              title="More actions"
+              type="button"
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {moreOpen && (
+              <div className="do-account-menu do-console-more-menu">
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    update({ favorite: !isProjectFavorite(project) });
+                  }}
+                  type="button"
+                >
+                  {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
+                </button>
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setArchiveConfirm(true);
+                  }}
+                  type="button"
+                >
+                  Archive
+                </button>
+                {allowDelete && (
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setDeleteConfirm(true);
+                    }}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      </>
-      )}
 
-      <nav className="do-console-tabs" aria-label="Project console sections">
+      <nav className="do-console-tabs is-sticky" aria-label="Project console sections">
         {(
           [
             ["brief", "Overview"],
-            ["backlog", "Backlog"],
+            ["items", "Items"],
             ["team", "Team"],
             ["costs", "Costs"],
             ["risks", "Risks"],
@@ -1924,10 +1761,10 @@ export function ProjectConsolePanel({
               <small>
                 {nextMilestone?.dueDate ||
                   nextMilestone?.targetDate ||
-                  "Add a due date to the next Epic in Backlog."}
+                  "Add a due date to the next Epic in Items."}
               </small>
-              <button onClick={() => setTab("backlog")} type="button">
-                {nextMilestone ? "Open backlog" : "Create or date an Epic"}
+              <button onClick={() => setTab("items")} type="button">
+                {nextMilestone ? "Open items" : "Create or date an Epic"}
               </button>
             </article>
             <article>
@@ -1978,8 +1815,8 @@ export function ProjectConsolePanel({
         </div>
       )}
 
-      {tab === "backlog" && (
-        <div className="do-console-section">
+      {tab === "items" && (
+        <div className="do-console-section" data-testid="project-items">
           <WorkItemsCenter
             activeProject={project}
             compact
@@ -1998,260 +1835,6 @@ export function ProjectConsolePanel({
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
-        </div>
-      )}
-
-      {false && tab === "backlog" && (
-        <div className="do-console-section">
-          <section className="do-planning-session">
-            <div>
-              <span className="do-project-card-kicker">PLANNING SESSION</span>
-              <h4>
-                {methodology === "pmi" ? "Scope planning" : "Sprint planning"}
-              </h4>
-            </div>
-            <InlineEdit
-              ariaLabel="Planning session name"
-              onCommit={(planningSessionName) =>
-                update({ planningSessionName })
-              }
-              placeholder="Session name"
-              value={
-                project.planningSessionName || project.currentSprintName || ""
-              }
-            />
-            <input
-              aria-label="Planning start date"
-              defaultValue={dateInputValue(
-                project.sprintStartDate || project.planningStartDate,
-              )}
-              onBlur={(event) =>
-                update({ sprintStartDate: event.target.value || null })
-              }
-              type="date"
-            />
-            <input
-              aria-label="Planning end date"
-              defaultValue={dateInputValue(
-                project.sprintEndDate || project.planningEndDate,
-              )}
-              onBlur={(event) =>
-                update({ sprintEndDate: event.target.value || null })
-              }
-              type="date"
-            />
-            <button
-              onClick={() =>
-                onAsk(
-                  `Run a planning session for ${projectTitle(project)}. Use the current epics, features, PBIs, priorities, owners, risks, and dates. Help me decide the sprint or phase commitment.`,
-                )
-              }
-              type="button"
-            >
-              <Sparkles size={13} /> Plan session
-            </button>
-          </section>
-
-          <section className="do-backlog-add">
-            <select
-              aria-label="Work item type"
-              onChange={(event) => {
-                setWorkType(event.target.value as WorkItemKind);
-                setWorkParentId("");
-              }}
-              value={workType}
-            >
-              <option value="epic">Epic</option>
-              <option value="feature">Feature</option>
-              <option value="pbi">PBI</option>
-              <option value="story">Story</option>
-              <option value="task">Task</option>
-              <option value="bug">Bug</option>
-              <option value="subtask">Subtask</option>
-            </select>
-            <select
-              aria-label="Parent work item"
-              disabled={parentOptions.length === 0}
-              onChange={(event) => setWorkParentId(event.target.value)}
-              value={workParentId}
-            >
-              <option value="">
-                {workType === "epic"
-                  ? "No parent"
-                  : workType === "feature"
-                    ? "Choose epic"
-                    : workType === "subtask"
-                      ? "Choose executable parent"
-                      : "Choose feature or epic"}
-              </option>
-              {parentOptions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {workItemLabel(workItemKind(item))} · {projectTitle(item)}
-                </option>
-              ))}
-            </select>
-            <input
-              onChange={(event) => setWorkTitle(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && submitWorkItem()}
-              placeholder={`Add ${workItemLabel(workType)}...`}
-              value={workTitle}
-            />
-            <button
-              disabled={!workTitle.trim()}
-              onClick={submitWorkItem}
-              type="button"
-            >
-              <Plus size={13} /> Add
-            </button>
-          </section>
-
-          <div className="do-backlog-summary">
-            <span>
-              <strong>{hierarchy.epics.length}</strong> Epics
-            </span>
-            <span>
-              <strong>{hierarchy.features.length}</strong> Features
-            </span>
-            <span>
-              <strong>{hierarchy.pbis.length}</strong> Executable
-            </span>
-            <span>
-              <strong>{hierarchy.subtasks.length}</strong> Subtasks
-            </span>
-          </div>
-
-          <div className="do-backlog-tree">
-            {hierarchy.epics.map((epic) => {
-              const epicFeatures = hierarchy.features.filter(
-                (feature) =>
-                  workItemParentId(feature) === epic.id ||
-                  feature.epicId === epic.id,
-              );
-              const epicPbis = hierarchy.pbis.filter(
-                (pbi) =>
-                  (pbi.parentId === epic.id || pbi.epicId === epic.id) &&
-                  !pbi.featureId,
-              );
-              return (
-                <section className="do-backlog-epic" key={epic.id}>
-                  {renderWorkItemRow(epic, hierarchy.epics)}
-                  <div className="do-backlog-children">
-                    {epicFeatures.map((feature) => {
-                      const featurePbis = hierarchy.pbis.filter(
-                        (pbi) =>
-                          pbi.parentId === feature.id ||
-                          pbi.featureId === feature.id,
-                      );
-                      return (
-                        <div className="do-backlog-feature" key={feature.id}>
-                          {renderWorkItemRow(feature, epicFeatures)}
-                          <div className="do-backlog-children is-pbis">
-                            {featurePbis.map((pbi) =>
-                              renderExecutableWithSubtasks(pbi, featurePbis),
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {epicPbis.map((pbi) =>
-                      renderExecutableWithSubtasks(pbi, epicPbis),
-                    )}
-                  </div>
-                </section>
-              );
-            })}
-
-            {hierarchy.features
-              .filter((feature) => !workItemParentId(feature))
-              .map((feature) => {
-                const featurePbis = hierarchy.pbis.filter(
-                  (pbi) =>
-                    pbi.parentId === feature.id || pbi.featureId === feature.id,
-                );
-                return (
-                  <section
-                    className="do-backlog-epic is-unassigned"
-                    key={feature.id}
-                  >
-                    {renderWorkItemRow(
-                      feature,
-                      hierarchy.features.filter(
-                        (item) => !workItemParentId(item),
-                      ),
-                    )}
-                    <div className="do-backlog-children is-pbis">
-                      {featurePbis.map((pbi) =>
-                        renderExecutableWithSubtasks(pbi, featurePbis),
-                      )}
-                    </div>
-                  </section>
-                );
-              })}
-
-            {hierarchy.pbis.filter((pbi) => !workItemParentId(pbi)).length >
-              0 && (
-              <section className="do-backlog-epic is-unassigned">
-                <header>
-                  <strong>Unassigned PBIs</strong>
-                  <span>
-                    {
-                      hierarchy.pbis.filter((pbi) => !workItemParentId(pbi))
-                        .length
-                    }
-                  </span>
-                </header>
-                {hierarchy.pbis
-                  .filter((pbi) => !workItemParentId(pbi))
-                  .map((pbi) =>
-                    renderExecutableWithSubtasks(
-                      pbi,
-                      hierarchy.pbis.filter((item) => !workItemParentId(item)),
-                    ),
-                  )}
-              </section>
-            )}
-
-            {hierarchy.subtasks.filter(
-              (subtask) =>
-                !hierarchy.pbis.some(
-                  (item) => item.id === workItemParentId(subtask),
-                ),
-            ).length > 0 && (
-              <section className="do-backlog-epic is-unassigned">
-                <header>
-                  <strong>Unassigned subtasks</strong>
-                  <span>
-                    {
-                      hierarchy.subtasks.filter(
-                        (subtask) =>
-                          !hierarchy.pbis.some(
-                            (item) => item.id === workItemParentId(subtask),
-                          ),
-                      ).length
-                    }
-                  </span>
-                </header>
-                {hierarchy.subtasks
-                  .filter(
-                    (subtask) =>
-                      !hierarchy.pbis.some(
-                        (item) => item.id === workItemParentId(subtask),
-                      ),
-                  )
-                  .map((subtask) =>
-                    renderWorkItemRow(subtask, hierarchy.subtasks),
-                  )}
-              </section>
-            )}
-
-            {tasks.length === 0 && (
-              <EmptyState
-                icon={<ListChecks size={18} />}
-                title="No backlog yet"
-                text="Create epics, features, and PBIs here, or ask Certo Work to extract them from the PRD."
-              />
-            )}
-          </div>
         </div>
       )}
 
@@ -2279,7 +1862,7 @@ export function ProjectConsolePanel({
             </div>
             <InfoTip
               label="Epic checkpoints"
-              text="Every open Epic becomes a delivery checkpoint. Add its owner and due date in Backlog; the Brief updates automatically."
+              text="Every open Epic becomes a delivery checkpoint. Add its owner and due date in Items; Overview updates automatically."
             />
           </div>
           <div className="do-console-list">
@@ -2293,7 +1876,7 @@ export function ProjectConsolePanel({
                     {canonicalWorkStatus(epic)}
                   </small>
                 </span>
-                <button onClick={() => setTab("backlog")} type="button">
+                <button onClick={() => setTab("items")} type="button">
                   Edit
                 </button>
               </article>
@@ -2302,7 +1885,7 @@ export function ProjectConsolePanel({
               <EmptyState
                 icon={<Flag size={18} />}
                 title="No Epics yet"
-                text="Create the first Epic in Backlog; it will automatically appear here as a delivery checkpoint."
+                text="Create the first Epic in Items; it will automatically appear here as a delivery checkpoint."
               />
             )}
           </div>
@@ -2321,61 +1904,6 @@ export function ProjectConsolePanel({
               </div>
             </details>
           )}
-        </div>
-      )}
-
-      {tab === "work" && (
-        <div className="do-console-section">
-          <div className="do-project-inline-add do-console-add">
-            <input
-              onChange={(event) => setTaskTitle(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && submitTask()}
-              placeholder="Add work item..."
-              value={taskTitle}
-            />
-            <button
-              disabled={!taskTitle.trim()}
-              onClick={submitTask}
-              type="button"
-            >
-              <Plus size={13} /> Add
-            </button>
-          </div>
-          <div className="do-console-board">
-            {(
-              [
-                ["backlog", "Backlog"],
-                ["in_progress", "Doing"],
-                ["blocked", "Blocked"],
-                ["done", "Done"],
-              ] as const
-            ).map(([lane, label]) => (
-              <section key={lane}>
-                <header>
-                  <span>{label}</span>
-                  <small>{lanes[lane].length}</small>
-                </header>
-                {lanes[lane].slice(0, 8).map((task) => (
-                  <article key={task.id}>
-                    <strong>{task.title || task.name}</strong>
-                    <select
-                      aria-label={`Move ${task.title || "task"}`}
-                      onChange={(event) =>
-                        onUpdateTask(task.id, { status: event.target.value })
-                      }
-                      value={lane}
-                    >
-                      <option value="backlog">Backlog</option>
-                      <option value="in_progress">Doing</option>
-                      <option value="blocked">Blocked</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </article>
-                ))}
-                {lanes[lane].length === 0 && <p>No work here</p>}
-              </section>
-            ))}
-          </div>
         </div>
       )}
 
@@ -2457,6 +1985,8 @@ export function ProjectConsolePanel({
             </table>
           </div>
           <div className="do-team-access">
+            <h4 className="do-section-label">Sharing & access</h4>
+            <div className="do-team-access-row">
             <select
               aria-label="Share project with colleague"
               onChange={(event) => setShareMemberId(event.target.value)}
@@ -2490,6 +2020,7 @@ export function ProjectConsolePanel({
               Status link
             </button>
             {shareLink && <small className="do-team-share-url">{shareLink}</small>}
+            </div>
           </div>
         </div>
       )}
@@ -2520,7 +2051,7 @@ export function ProjectConsolePanel({
 
       {tab === "risks" && (
         <div className="do-console-section">
-          <div className="do-health-explainer">
+          <div className="do-status-explainer">
             <div>
               <span className="do-project-card-kicker">PROJECT HEALTH</span>
               <h4>{projectHealthLabel(currentHealth)}</h4>
@@ -2787,22 +2318,6 @@ export function ProjectConsolePanel({
         />
       )}
 
-      {moreOpen && (
-        <div className="do-console-more-menu">
-          <button onClick={() => { setArchiveConfirm(true); setMoreOpen(false); }} type="button">
-            <Archive size={13} /> Archive project
-          </button>
-          <hr />
-          <p>Danger zone</p>
-          {allowDelete ? (
-            <button className="is-quiet-danger" onClick={() => { setDeleteConfirm(true); setMoreOpen(false); }} type="button">
-              Delete project
-            </button>
-          ) : (
-            <small>Delete is limited to the Project Manager or workspace owner.</small>
-          )}
-        </div>
-      )}
       {(archiveConfirm || deleteConfirm || String(project.status || "").toLowerCase() === "deleted") && (
       <div className="do-console-danger">
         {String(project.status || "").toLowerCase() === "deleted" &&
@@ -3264,6 +2779,7 @@ function ProjectFinanceLedger({
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1);
   const [newYear, setNewYear] = useState(new Date().getFullYear());
   const [templateId, setTemplateId] = useState("none");
+  const [addPeriodOpen, setAddPeriodOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const monthOptions = Array.from({ length: 12 }, (_, index) => ({
     value: index + 1,
@@ -3591,73 +3107,11 @@ function ProjectFinanceLedger({
       </div>
 
       <div className="do-finance-add-period">
-        <label>
-          <span>New period</span>
-          <select
-            onChange={(event) =>
-              setNewKind(event.target.value as FinancePeriodKind)
-            }
-            value={newKind}
-          >
-            <option value="build">Build / change request</option>
-            <option value="monthly">Monthly operations</option>
-          </select>
-        </label>
-        {newKind === "build" && (
-          <label>
-            <span>Version or CR</span>
-            <input
-              onChange={(event) => setNewBuildLabel(event.target.value)}
-              placeholder="V1, V2, CR1…"
-              value={newBuildLabel}
-            />
-          </label>
-        )}
-        <div className="do-finance-month-picker">
-          <label>
-            <span>Period month</span>
-            <select
-              onChange={(event) => setNewMonth(Number(event.target.value))}
-              value={newMonth}
-            >
-              {monthOptions.map((month) => (
-                <option key={month.value} value={month.value}>
-                  {month.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Period year</span>
-            <select
-              onChange={(event) => setNewYear(Number(event.target.value))}
-              value={newYear}
-            >
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {newKind === "build" && (
-          <label>
-            <span>Cost template</span>
-            <select
-              onChange={(event) => setTemplateId(event.target.value)}
-              value={templateId}
-            >
-              <option value="none">Start empty</option>
-              {availableTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <button onClick={addPeriod} type="button">
+        <button
+          className="do-button do-button-dark"
+          onClick={() => setAddPeriodOpen(true)}
+          type="button"
+        >
           <Plus size={13} /> Add period
         </button>
         {periods.length === 0 &&
@@ -3665,7 +3119,7 @@ function ProjectFinanceLedger({
             (row: any) => row.plannedQty || row.actualQty || row.rate,
           ) && (
             <button
-              className="is-secondary"
+              className="do-button-secondary"
               onClick={migrateLegacy}
               type="button"
             >
@@ -3673,6 +3127,103 @@ function ProjectFinanceLedger({
             </button>
           )}
       </div>
+      {addPeriodOpen && (
+        <div className="do-sheet" role="dialog" aria-label="Add finance period">
+          <button
+            aria-label="Close"
+            className="do-sheet-scrim"
+            onClick={() => setAddPeriodOpen(false)}
+            type="button"
+          />
+          <div className="do-sheet-panel">
+            <header>
+              <h3>Add period</h3>
+              <button
+                aria-label="Close add period"
+                onClick={() => setAddPeriodOpen(false)}
+                title="Close"
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <label>
+              <span>Period type</span>
+              <select
+                onChange={(event) =>
+                  setNewKind(event.target.value as FinancePeriodKind)
+                }
+                value={newKind}
+              >
+                <option value="build">Build / change request</option>
+                <option value="monthly">Monthly operations</option>
+              </select>
+            </label>
+            {newKind === "build" && (
+              <label>
+                <span>Version or CR</span>
+                <input
+                  onChange={(event) => setNewBuildLabel(event.target.value)}
+                  placeholder="V1, V2, CR1…"
+                  value={newBuildLabel}
+                />
+              </label>
+            )}
+            <label>
+              <span>Period month</span>
+              <select
+                onChange={(event) => setNewMonth(Number(event.target.value))}
+                value={newMonth}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Period year</span>
+              <select
+                onChange={(event) => setNewYear(Number(event.target.value))}
+                value={newYear}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {newKind === "build" && (
+              <label>
+                <span>Cost template</span>
+                <select
+                  onChange={(event) => setTemplateId(event.target.value)}
+                  value={templateId}
+                >
+                  <option value="none">Start empty</option>
+                  {availableTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              className="do-button do-button-dark"
+              onClick={() => {
+                addPeriod();
+                setAddPeriodOpen(false);
+              }}
+              type="button"
+            >
+              Create period
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="do-finance-periods">
         {periods.map((period, periodIndex) => {
@@ -4327,9 +3878,22 @@ function ProjectFinanceLedger({
         })}
         {periods.length === 0 && (
           <EmptyState
-            icon={<FileText size={18} />}
+            icon={<FileText size={24} />}
             title="No financial periods yet"
-            text="Create Build V1, a change request, or the first operating month."
+            text="Start with Build V1 or the first operating month."
+            action={
+              <button
+                className="do-button do-button-dark"
+                onClick={() => {
+                  setNewKind("build");
+                  setNewBuildLabel("V1");
+                  setAddPeriodOpen(true);
+                }}
+                type="button"
+              >
+                Create Build V1
+              </button>
+            }
           />
         )}
       </div>
@@ -4427,6 +3991,13 @@ function projectDueDate(project: any) {
         "",
     ).slice(0, 10) || "No date"
   );
+}
+
+function projectMoney(value: unknown) {
+  if (value == null || value === "") return "—";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "—";
+  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function projectSortValue(
@@ -5085,13 +4656,16 @@ export function ProjectCommandCenter({
           >
             <LayoutGrid size={14} /> Dashboard
           </button>
-          <button
-            aria-label="Close command center"
-            onClick={onClose}
-            type="button"
-          >
-            <X size={19} />
-          </button>
+          {!templatesOpen && (
+            <button
+              aria-label="Close command center"
+              onClick={onClose}
+              title="Close"
+              type="button"
+            >
+              <X size={19} />
+            </button>
+          )}
         </div>
       </header>
       {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
@@ -5134,7 +4708,7 @@ export function ProjectCommandCenter({
           </strong>
           <span>In operations</span>
         </div>
-        <div className="is-risk">
+        <div className="status-tone-amber">
           <strong>
             {
               realProjects.filter(
@@ -5149,20 +4723,33 @@ export function ProjectCommandCenter({
           </strong>
           <span>Need attention</span>
         </div>
-        <div>
+        <div className={totals.plannedHours === 0 && totals.actualHours === 0 ? "is-muted" : ""}>
           <strong>
             {Math.round(totals.actualHours)}h /{" "}
             {Math.round(totals.plannedHours)}h
           </strong>
-          <span>Hours used / planned</span>
+          <span>
+            Hours used / planned
+            {totals.plannedHours === 0 && totals.actualHours === 0 ? (
+              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add planned hours</button></>
+            ) : null}
+          </span>
         </div>
-        <div>
+        <div className={totals.recurring === 0 ? "is-muted" : ""}>
           <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
-          <span>Monthly recurring</span>
+          <span>
+            Monthly recurring
+            {totals.recurring === 0 ? " · not configured" : ""}
+          </span>
         </div>
-        <div>
+        <div className={totals.initial === 0 ? "is-muted" : ""}>
           <strong>${Math.round(totals.initial).toLocaleString()}</strong>
-          <span>Initial investment</span>
+          <span>
+            Initial investment
+            {totals.initial === 0 ? (
+              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add costs</button></>
+            ) : null}
+          </span>
         </div>
       </div>
       <div className={`do-command-body do-command-body-${view}`}>
@@ -5188,6 +4775,7 @@ export function ProjectCommandCenter({
                     "Prepare a concise stakeholder portfolio update.",
                   ].map((question) => (
                     <button
+                      className="do-pm-prompt-card"
                       key={question}
                       onClick={() => onAsk(question)}
                       type="button"
@@ -5247,7 +4835,7 @@ export function ProjectCommandCenter({
                   </div>
                   <AlertTriangle size={15} />
                 </div>
-                <div className="do-health-summary">
+                <div className="do-status-summary">
                   {healthCounts.map(({ health, count }) => (
                     <button
                       key={health}
@@ -5261,11 +4849,12 @@ export function ProjectCommandCenter({
                       }}
                       type="button"
                     >
-                      <span
-                        className={`do-health-dot ${healthClass(health)}`}
+                      <StatusLight
+                        status={healthToStatus(health)}
+                        label={projectHealthLabel(health)}
+                        size="sm"
                       />
                       <strong>{count}</strong>
-                      <small>{projectHealthLabel(health)}</small>
                     </button>
                   ))}
                 </div>
@@ -5297,8 +4886,10 @@ export function ProjectCommandCenter({
                         onClick={() => onOpenProject(project)}
                         type="button"
                       >
-                        <span
-                          className={`do-health-dot ${healthClass(health)}`}
+                        <StatusLight
+                          status={healthToStatus(health)}
+                          label={false}
+                          size="sm"
                         />
                         <span>
                           <strong>{projectTitle(project)}</strong>
@@ -5404,9 +4995,11 @@ export function ProjectCommandCenter({
                     onClick={() => onOpenProject(project)}
                     type="button"
                   >
-                    <span className={healthClass(health)}>
-                      {projectHealthLabel(health)}
-                    </span>
+                    <StatusLight
+                      status={healthToStatus(health)}
+                      label={projectHealthLabel(health)}
+                      size="sm"
+                    />
                     <strong>{projectTitle(project)}</strong>
                     <small>
                       {
@@ -5891,6 +5484,16 @@ export function ProjectCommandCenter({
                     text="Administrative record state: Planning, Active, Paused, Completed or Archived."
                   />
                 </span>}
+                {columnSet.has("source_status") && <span>
+                  ESTADO{" "}
+                  <InfoTip
+                    label="ESTADO"
+                    text="Executive workbook status from the August 2026 master."
+                  />
+                </span>}
+                {columnSet.has("contact") && <span>OWNER / POC</span>}
+                {columnSet.has("qa_plan") && <span>QA PLAN</span>}
+                {columnSet.has("days_to_prod") && <span>DÍAS A PROD</span>}
                 {columnSet.has("health") && <span>
                   Health{" "}
                   <InfoTip
@@ -5906,12 +5509,15 @@ export function ProjectCommandCenter({
                   />
                 </span>}
                 {columnSet.has("due") && <span>
-                  Due{" "}
+                  PROD PLAN{" "}
                   <InfoTip
-                    label="Due date"
-                    text="Editable delivery date. A revised date is used when one exists."
+                    label="PROD PLAN"
+                    text="Committed production date from the executive workbook."
                   />
                 </span>}
+                {columnSet.has("june_usd") && <span>JUN USD</span>}
+                {columnSet.has("july_usd") && <span>JUL USD</span>}
+                {columnSet.has("total_usd") && <span>TOTAL USD</span>}
                 {columnSet.has("solution_architect") && <span>
                   Solution Architect{" "}
                   <InfoTip
@@ -6184,10 +5790,26 @@ export function ProjectCommandCenter({
                         ))}
                       </select>
                       )}
+                      {columnSet.has("source_status") && (
+                        <span>{project.sourceStatus || project.excel?.estado || "—"}</span>
+                      )}
+                      {columnSet.has("contact") && (
+                        <span>{project.contact || project.projectManager || "—"}</span>
+                      )}
+                      {columnSet.has("qa_plan") && (
+                        <span>{String(project.qaPlanDate || project.excel?.qaPlan || "").slice(0, 10) || "—"}</span>
+                      )}
+                      {columnSet.has("days_to_prod") && (
+                        <span>
+                          {project.daysToProd == null && project.excel?.diasAProd == null
+                            ? "—"
+                            : String(project.daysToProd ?? project.excel?.diasAProd)}
+                        </span>
+                      )}
                       {columnSet.has("health") && (
                       <select
                         aria-label={`Health for ${projectTitle(project)}`}
-                        className={`do-health-select ${healthClass(health)}`}
+                        className={`do-status-select ${healthClass(health)}`}
                         onChange={(event) =>
                           onUpdateProject(project.id, {
                             healthOverride:
@@ -6252,6 +5874,15 @@ export function ProjectCommandCenter({
                         }
                         type="date"
                       />
+                      )}
+                      {columnSet.has("june_usd") && (
+                        <span>{projectMoney(project.juneUsd ?? project.excel?.junUsd)}</span>
+                      )}
+                      {columnSet.has("july_usd") && (
+                        <span>{projectMoney(project.julyUsd ?? project.excel?.julUsd)}</span>
+                      )}
+                      {columnSet.has("total_usd") && (
+                        <span>{projectMoney(project.totalUsd ?? project.excel?.totalUsd)}</span>
                       )}
                       {columnSet.has("solution_architect") && (
                       <select

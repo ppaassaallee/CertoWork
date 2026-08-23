@@ -3,7 +3,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { BoldrBlocker } from './types';
-import { Plus, CheckCircle, AlertOctagon } from 'lucide-react';
+import { Plus, CheckCircle, AlertOctagon } from "../ui/Icon";
 
 const SEVERITIES = ["low", "medium", "high", "critical"] as const;
 

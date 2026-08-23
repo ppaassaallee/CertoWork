@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Search, Plus, Check, Loader2, X, Zap, Folder, Tag, User } from "lucide-react";
+import { Search, Plus, Check, Loader2, X, Zap, Folder, Tag, User } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
 export function normalizeEntityName(name: string): string {

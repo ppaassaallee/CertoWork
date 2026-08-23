@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Check, X, AlignLeft, AlertCircle, Loader2, ArrowRight, List as ListIcon, Calendar, Kanban, Users, Folder, Inbox, Activity, Trash, MoreHorizontal } from "lucide-react";
+import { Check, X, AlignLeft, AlertCircle, Loader2, ArrowRight, List as ListIcon, Calendar, Kanban, Users, Folder, Inbox, Activity, Trash, MoreHorizontal } from "./ui/Icon";
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";

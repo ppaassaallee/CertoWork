@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Clock, Layers, Award, ChevronLeft, ChevronRight, 
   Sparkles, Check, BookOpen, Brain, Star, ArrowRight, Plus, Trash2, Heart
-} from "lucide-react";
+} from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { 
   collection, query, where, onSnapshot, doc, setDoc, getDoc, serverTimestamp

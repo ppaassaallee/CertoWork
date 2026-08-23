@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Users, Link as LinkIcon, Shield, Activity, Database, Zap, ChevronRight, ArrowLeft } from "lucide-react";
+import { Users, Link as LinkIcon, Shield, Activity, Database, Zap, ChevronRight, ArrowLeft } from "../ui/Icon";
 import { useNavigate } from "react-router-dom";
 import { TextSizeControl } from "../TextSizeControl";
 

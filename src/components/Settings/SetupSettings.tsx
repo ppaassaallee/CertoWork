@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Zap, ArrowLeft } from "lucide-react";
+import { Zap, ArrowLeft } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../lib/firebase";

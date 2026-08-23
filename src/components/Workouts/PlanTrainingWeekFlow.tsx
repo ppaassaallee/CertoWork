@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, Loader2, X, Check, AlertTriangle, Info, Edit2 } from "lucide-react";
+import { Sparkles, Loader2, X, Check, AlertTriangle, Info, Edit2 } from "../ui/Icon";
 import { db } from "../../lib/firebase";
 import { collection, doc, writeBatch, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { FitnessProfile } from "../../types";

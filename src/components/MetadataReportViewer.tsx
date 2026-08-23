@@ -6,7 +6,7 @@ import {
   ChevronDown, 
   ChevronUp, 
   Layers
-} from "lucide-react";
+} from "./ui/Icon";
 
 interface MetadataReportViewerProps {
   report: {

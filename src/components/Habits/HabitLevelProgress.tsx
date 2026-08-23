@@ -1,4 +1,4 @@
-import { Trophy, Sparkles } from "lucide-react";
+import { Trophy, Sparkles } from "../ui/Icon";
 import { Habit, HabitLog } from "../../types";
 import { computeHabitStats, getGamificationLevel } from "../../lib/habitUtils";
 

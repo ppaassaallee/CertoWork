@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
-import { Users, Mail, UserMinus, Plus, ArrowLeft, Loader2, Edit3 } from "lucide-react";
+import { Users, Mail, UserMinus, Plus, ArrowLeft, Loader2, Edit3 } from "./ui/Icon";
 import { doc, updateDoc, arrayUnion, arrayRemove, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { motion, AnimatePresence } from "motion/react";

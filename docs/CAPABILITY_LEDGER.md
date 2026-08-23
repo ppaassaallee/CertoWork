@@ -4,7 +4,7 @@ This ledger is the non-destructive contract for the conversational MVP. A capabi
 
 | Capability | Canonical route | Status | Conversational enhancement |
 | --- | --- | --- | --- |
-| Chief of Staff | `/boldi` | Enhanced; primary home | Conversation history, suggestions, workspace context, judgment, citations, action proposals |
+| Odysseus (AI employee) | `/home`, Odysseus conversation | Enhanced | Tool loop, SSE work-log streaming, durable memory, skills invoke, schedules, approval-gated actions |
 | Today | `/today` | Preserved | Daily-plan prompt and capacity rail link |
 | Focus | `/today/focus` | Preserved | Available from Today and conversational planning |
 | Agenda / calendar | `/today/agenda` | Preserved | Included in preflight context where calendar records exist |
@@ -24,7 +24,8 @@ This ledger is the non-destructive contract for the conversational MVP. A capabi
 | Decisions | `/work/decisions` | Preserved | Supported as a typed proposal target |
 | Waiting For | `/work/waiting` | Preserved | Supported by existing generic record surface |
 | Presentations | `/work/presentations` | Preserved | Existing module retained |
-| Skills | `/work/skills` | Preserved redirect | Existing knowledge-backed skills remain available |
+| Skills | `/work/skills`, Odysseus `run_skill` | Enhanced | Knowledge-backed skills remain available; Odysseus can invoke them as artifacts |
+| Odysseus schedules | Automations panel | Enhanced | CRUD on `scheduled_tasks` with Run now into Odysseus chat |
 | Health actions | `/work/health` | Preserved | Existing records retained |
 | Daily shutdown | `/work/daily-shutdown` | Preserved | Existing ritual retained |
 | Planning hub | `/plan` | Preserved | Conversation can initiate realistic daily/weekly planning |

@@ -7,7 +7,7 @@ import {
   X,
   Target,
   CalendarCheck
-} from "lucide-react";
+} from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";

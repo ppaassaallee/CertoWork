@@ -18,7 +18,7 @@ import {
   Sparkles,
   Award,
   Compass
-} from "lucide-react";
+} from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { usePlatformCapabilities } from "../lib/capabilities";

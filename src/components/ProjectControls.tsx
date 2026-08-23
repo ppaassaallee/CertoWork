@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Info, Users } from "lucide-react";
+import { Info, Users } from "./ui/Icon";
 import {
   DEFAULT_MEMBER_EMOJI,
   MEMBER_EMOJI_CHOICES,

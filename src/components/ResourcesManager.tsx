@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { File, Plus, X, Loader2, Trash2, ExternalLink, Download } from "lucide-react";
+import { File, Plus, X, Loader2, Trash2, ExternalLink, Download } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { db } from "../lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
