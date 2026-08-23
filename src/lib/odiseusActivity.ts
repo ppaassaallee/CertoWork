@@ -10,6 +10,13 @@ export async function recordOdysseusActivity(input: {
   runId?: string | null;
   action: string;
   summary: string;
+  /** Stable agent id for list metrics + Activity copy (e.g. odysseus). */
+  agentId?: string | null;
+  agentName?: string | null;
+  /** How many proposed/applied actions this event covers. */
+  actionCount?: number | null;
+  /** Outcome for semáforo rendering: completed | rejected | proposed | failed. */
+  result?: string | null;
   entityType?: string;
   entityId?: string;
   approvalRequired?: boolean;
@@ -24,6 +31,13 @@ export async function recordOdysseusActivity(input: {
     runId: input.runId || null,
     action: input.action,
     summary: input.summary,
+    agentId: input.agentId || "odysseus",
+    agentName: input.agentName || null,
+    actionCount:
+      typeof input.actionCount === "number" && Number.isFinite(input.actionCount)
+        ? input.actionCount
+        : null,
+    result: input.result || null,
     entityType: input.entityType || null,
     entityId: input.entityId || null,
     approvalRequired: Boolean(input.approvalRequired),
