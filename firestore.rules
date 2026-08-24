@@ -340,6 +340,61 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(candidateId) && resource.data.userId == request.auth.uid;
     }
 
+    function canReadFeedbackReport(data) {
+      return data.userId == request.auth.uid
+        || (data.workspaceId is string && isWorkspaceAdmin(data.workspaceId));
+    }
+
+    function isValidFeedbackCreate(data) {
+      return data.keys().hasAll(['userId', 'workspaceId', 'createdBy', 'kind', 'title', 'status', 'createdAt'])
+        && data.userId is string && data.userId == request.auth.uid
+        && data.createdBy is string && data.createdBy == request.auth.uid
+        && data.workspaceId is string && isWorkspaceMember(data.workspaceId)
+        && data.kind in ['bug', 'feature']
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 500
+        && data.status == 'submitted'
+        && data.createdAt is timestamp
+        && (!('description' in data) || data.description is string && data.description.size() <= 8000)
+        && (!('projectId' in data) || data.projectId is string)
+        && (!('severity' in data) || data.severity in ['low', 'medium', 'high', ''])
+        && (!('reporterAlias' in data) || data.reporterAlias is string && data.reporterAlias.size() <= 64)
+        && (!('reporterEmoji' in data) || data.reporterEmoji is string && data.reporterEmoji.size() <= 16)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidFeedbackAdminUpdate(before, after) {
+      return after.userId == before.userId
+        && after.workspaceId == before.workspaceId
+        && after.createdBy == before.createdBy
+        && after.kind == before.kind
+        && after.title == before.title
+        && after.createdAt == before.createdAt
+        && after.status in ['submitted', 'triaged', 'converted', 'closed', 'wontfix']
+        && after.diff(before).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'adminNote', 'projectId', 'triagedAt',
+          'convertedToType', 'convertedToId', 'convertedBy', 'convertedAt'
+        ])
+        && (!('adminNote' in after) || after.adminNote is string && after.adminNote.size() <= 2000)
+        && (!('projectId' in after) || after.projectId is string)
+        && (!('updatedAt' in after) || after.updatedAt is timestamp)
+        && (!('triagedAt' in after) || after.triagedAt is timestamp)
+        && (!('convertedToType' in after) || after.convertedToType is string)
+        && (!('convertedToId' in after) || after.convertedToId is string)
+        && (!('convertedBy' in after) || after.convertedBy is string)
+        && (!('convertedAt' in after) || after.convertedAt is timestamp);
+    }
+
+    match /feedback_reports/{id} {
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadFeedbackReport(resource.data));
+      allow list: if isSignedIn() && canReadFeedbackReport(resource.data);
+      allow create: if isSignedIn() && isValidId(id) && isValidFeedbackCreate(incoming());
+      allow update: if isSignedIn() && isValidId(id)
+                    && resource.data.workspaceId is string
+                    && isWorkspaceAdmin(resource.data.workspaceId)
+                    && isValidFeedbackAdminUpdate(resource.data, incoming());
+      allow delete: if false;
+    }
+
     // Workspace-shared cost models used by the delivery control tower.
     match /cost_templates/{id} {
       allow get, list: if isSignedIn() && isValidId(id)

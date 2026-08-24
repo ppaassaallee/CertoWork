@@ -16,6 +16,7 @@ Do not trust `userId` / `workspaceId` from the client body on `/api/*`. Auth mid
 | `workspace_members` | `workspaceId`, `userId` | `workspaceId`, `userId`, `role`, `status` | Doc id is `${workspaceId}_${uid}`. Roles: `owner`, `admin`, `member`, `viewer`. `portfolioViewer: true` grants workspace-wide project read. |
 | `users` | `userId` (doc id) | auth uid | Signed-in user profile. |
 | `access_requests` | `userId` | `email`, `status` | Beta access queue. |
+| `feedback_reports` | `workspaceId`, `userId` | `workspaceId`, `kind`, `title`, `status` | Members create/read own. Admins read workspace queue and convert to `tasks` PBIs. Statuses: `submitted`, `triaged`, `converted`, `closed`, `wontfix`. Kinds: `bug`, `feature`. |
 
 ## Delivery OS (core)
 
