@@ -25,6 +25,7 @@ test("landing is a bounded scrollport so phones can scroll the page", () => {
   assert.match(css, /\.do-signin-vignette\s*\{[^}]*position:\s*fixed/s);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.do-signin-hero\s*\{[\s\S]*display:\s*block/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*min-height:\s*44px/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*\.do-signin nav button\.do-signin-nav-extra\s*\{[\s\S]*display:\s*none/);
   assert.match(css, /safe-area-inset-bottom/);
   assert.match(app, /do-signin-nav-extra/);
   assert.match(html, /viewport-fit=cover/);
