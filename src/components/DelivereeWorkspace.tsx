@@ -65,8 +65,6 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
-import { shouldReplacePureAiPortfolio } from "../lib/portfolioMasterImport";
-import { replacePureAiPortfolioFromMaster } from "../lib/runPortfolioMasterImport";
 import { AliasProfileEditor } from "./ProjectControls";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
@@ -470,9 +468,6 @@ export function DelivereeWorkspace() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const portfolioImportRef = useRef<ReturnType<
-    typeof replacePureAiPortfolioFromMaster
-  > | null>(null);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -661,48 +656,6 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!shouldReplacePureAiPortfolio(workspace)) return;
-    if (workspace.ownerId !== user.uid) return;
-    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (!portfolioImportRef.current) {
-      portfolioImportRef.current = replacePureAiPortfolioFromMaster({
-        db,
-        user,
-        workspace,
-        members: workspaceMembers,
-      });
-    }
-    let cancelled = false;
-    portfolioImportRef.current
-      .then((result) => {
-        if (cancelled) return;
-        if (result.skipped) {
-          portfolioImportRef.current = null;
-          return;
-        }
-        const missing = result.missingAliases.length
-          ? ` Missing aliases: ${result.missingAliases.join(", ")}.`
-          : "";
-        setNotice(
-          `Pure AI portfolio replaced with ${result.createdProjects} projects from the August 2026 master. Shared with ${result.sharedWith.join(", ") || "no matched users"}. Removed ${result.removedProjects} legacy projects.${missing}`,
-        );
-      })
-      .catch((reason) => {
-        portfolioImportRef.current = null;
-        if (cancelled) return;
-        setNotice(
-          reason instanceof Error
-            ? `Portfolio migration failed: ${reason.message}`
-            : "Portfolio migration failed. Open the Pure AI workspace as owner and retry.",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -2014,10 +1967,19 @@ export function DelivereeWorkspace() {
     projectId: string,
     patch: Record<string, unknown>,
   ) => {
-    await updateDoc(doc(db, "projects", projectId), {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await updateDoc(doc(db, "projects", projectId), {
+        ...patch,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Project update was not saved: ${reason.message}`
+          : "Project update was not saved. Check access and try again.",
+      );
+      throw reason;
+    }
   };
 
   const { createControlledOption, renameControlledOption } =

@@ -57,6 +57,9 @@ export async function replacePureAiPortfolioFromMaster(input: {
   const projectsSnap = await getDocs(
     query(collection(input.db, "projects"), where("workspaceId", "==", input.workspace.id)),
   );
+  if (projectsSnap.size > 0) {
+    return { skipped: true as const, reason: "portfolio-exists" };
+  }
   const tasksSnap = await getDocs(
     query(collection(input.db, "tasks"), where("workspaceId", "==", input.workspace.id)),
   );
