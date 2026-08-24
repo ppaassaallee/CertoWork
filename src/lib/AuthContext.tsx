@@ -257,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               emailLower: (u.email || "").toLowerCase(),
               role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
               status: "active",
-              portfolioViewer: isOwner,
+              ...(isOwner ? { portfolioViewer: true } : {}),
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {

@@ -17,6 +17,7 @@ Do not trust `userId` / `workspaceId` from the client body on `/api/*`. Auth mid
 | `users` | `userId` (doc id) | auth uid | Signed-in user profile. |
 | `access_requests` | `userId` | `email`, `status` | Beta access queue. |
 | `invoice_documents` | `workspaceId`, `shareToken` (doc id) | `workspaceId`, `title`, `amount`, `status`, `paymentStatus` | AP invoice queue. Members list workspace invoices. Finance operators (admin/owner or `financeAccess`) update lifecycle. Client portal can get/update by token: paid, rejected, exception. Statuses: `billed`, `sent`, `pending_approval`, `approved`, `paid`, `rejected`, `void`, `exception`. |
+| `feedback_reports` | `workspaceId`, `userId` | `workspaceId`, `kind`, `title`, `status` | Members create/read own. Admins read workspace queue and convert to `tasks` PBIs. Statuses: `submitted`, `triaged`, `converted`, `closed`, `wontfix`. Kinds: `bug`, `feature`. |
 
 ## Delivery OS (core)
 

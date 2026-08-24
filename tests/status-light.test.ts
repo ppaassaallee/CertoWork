@@ -21,6 +21,7 @@ test("primary nav labels stay in one language", () => {
   assert.equal(t("navHome", "en"), "Home");
   assert.equal(t("navApprovals", "en"), "Approvals");
   assert.equal(t("navInvoices", "en"), "Invoices");
+  assert.equal(t("navFeedback", "en"), "Feedback");
   assert.equal(t("moreAutomations", "en"), "Automations");
   assert.equal(t("moreUpdates", "en"), "Updates");
 });

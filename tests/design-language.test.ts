@@ -38,6 +38,29 @@ test("index.css imports the design language tokens", () => {
   assert.equal(css.includes("Manrope"), false);
 });
 
+test("project wizard create button stays a primary CTA", () => {
+  const css = readFileSync(resolve(root, "src/index.css"), "utf8");
+  const secondaryStart = css.indexOf("Calm Authority: accent discipline");
+  const primaryStart = css.indexOf(".do-items-create button:last-child");
+  assert.ok(secondaryStart >= 0 && primaryStart > secondaryStart);
+  const secondaryBlock = css.slice(secondaryStart, primaryStart);
+  assert.equal(secondaryBlock.includes(".do-skill-foot button:last-child"), false);
+  assert.match(css, /\.do-skill-foot button\.do-skill-create/);
+});
+
+test("header Create menu is anchored to the button, not the main pane bottom", () => {
+  const css = readFileSync(resolve(root, "src/index.css"), "utf8");
+  const workspace = readFileSync(resolve(root, "src/components/DelivereeWorkspace.tsx"), "utf8");
+  assert.match(css, /\.do-create-menu-list/);
+  assert.match(css, /\.do-create-menu-list \{[\s\S]*position:\s*fixed/);
+  assert.match(workspace, /do-create-menu-list/);
+  assert.match(workspace, /createPortal/);
+  assert.doesNotMatch(
+    workspace,
+    /createMenuOpen && \(\s*<div className="do-account-menu">/,
+  );
+});
+
 test("DESIGN_LANGUAGE.md documents accent usage rules", () => {
   const doc = readFileSync(resolve(root, "DESIGN_LANGUAGE.md"), "utf8");
   assert.match(doc, /Certo Calm Authority/);

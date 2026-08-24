@@ -44,6 +44,14 @@ test("canonical IA routes resolve to mental-model lenses", () => {
   });
   assert.deepEqual(resolveDelivereeLens("/approvals"), { kind: "approvals" });
   assert.deepEqual(resolveDelivereeLens("/invoices"), { kind: "invoices" });
+  assert.deepEqual(resolveDelivereeLens("/feedback"), {
+    kind: "feedback",
+    section: "submit",
+  });
+  assert.deepEqual(resolveDelivereeLens("/workspace/feedback"), {
+    kind: "feedback",
+    section: "queue",
+  });
 });
 
 test("legacy URLs alias into the new IA", () => {
@@ -86,6 +94,11 @@ test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/agents/automations");
   assert.equal(lensToPath({ kind: "more", section: "workspace" }), "/workspace");
   assert.equal(lensToPath({ kind: "invoices" }), "/invoices");
+  assert.equal(lensToPath({ kind: "feedback", section: "submit" }), "/feedback");
+  assert.equal(
+    lensToPath({ kind: "feedback", section: "queue" }),
+    "/workspace/feedback",
+  );
 });
 
 test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () => {
@@ -103,6 +116,7 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-agents"/);
   assert.match(source, /data-testid="nav-approvals"/);
   assert.match(source, /data-testid="nav-invoices"/);
+  assert.match(source, /data-testid="nav-feedback"/);
   assert.match(source, /data-testid="nav-workspace"/);
   assert.match(source, /data-testid="nav-settings"/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);

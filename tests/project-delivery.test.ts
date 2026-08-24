@@ -35,6 +35,29 @@ test("legacy project phases normalize into the controlled stage model", () => {
   );
 });
 
+test("Spanish Excel phases map to delivery stages instead of collapsing to Build", () => {
+  assert.equal(normalizeDeliveryStage({ phase: "Producción" }), "operations");
+  assert.equal(normalizeDeliveryStage({ phase: "Desarrollo" }), "build");
+  assert.equal(normalizeDeliveryStage({ phase: "Discovery" }), "onboarding");
+  assert.equal(normalizeDeliveryStage({ phase: "QA" }), "deploy");
+  assert.equal(normalizeDeliveryStage({ phase: "Diseño" }), "define");
+  assert.equal(
+    normalizeDeliveryStage({ deliveryStage: "operations", phase: "Desarrollo" }),
+    "operations",
+  );
+});
+
+test("a saved deliveryPhase wins over the Excel fase field", () => {
+  assert.equal(
+    deliveryPhase({
+      deliveryStage: "operations",
+      deliveryPhase: "live",
+      phase: "Desarrollo",
+    }),
+    "live",
+  );
+});
+
 test("an incompatible phase falls back to the first valid phase", () => {
   assert.equal(normalizeDeliveryPhase("development", "deploy"), "uat");
   assert.equal(phasesForStage("deploy").includes("uat"), true);

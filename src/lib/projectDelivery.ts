@@ -77,15 +77,24 @@ function token(value: unknown) {
 }
 
 export function normalizeDeliveryStage(project: any): DeliveryStage {
+  const explicit = token(project?.deliveryStage);
+  if ((DELIVERY_STAGES as readonly string[]).includes(explicit)) {
+    return explicit as DeliveryStage;
+  }
   const value = token(
-    project?.deliveryStage || project?.phase || project?.status || "build",
+    project?.deliveryStage ||
+      project?.phase ||
+      project?.sourceStatus ||
+      project?.status ||
+      "build",
   );
   if (
     value.includes("define") ||
     value.includes("idea") ||
     value.includes("diseno") ||
     value.includes("propuesta") ||
-    value.includes("hold")
+    value.includes("hold") ||
+    value === "tbc"
   )
     return "define";
   if (value.includes("onboard") || value.includes("discovery"))
@@ -94,11 +103,25 @@ export function normalizeDeliveryStage(project: any): DeliveryStage {
     value.includes("deploy") ||
     value.includes("pre_production") ||
     value.includes("preproduccion") ||
+    value.includes("pre_produccion") ||
     value === "qa"
   )
     return "deploy";
-  if (value.includes("operat") || value.includes("production"))
+  if (
+    value.includes("operat") ||
+    value.includes("production") ||
+    value.includes("produccion") ||
+    value.includes("end_of_life") ||
+    value === "eol"
+  )
     return "operations";
+  if (
+    value.includes("desarrollo") ||
+    value.includes("development") ||
+    value.includes("en_curso") ||
+    value.includes("in_progress")
+  )
+    return "build";
   return "build";
 }
 
@@ -140,7 +163,10 @@ export function normalizeDeliveryPhase(
 
 export function deliveryPhase(project: any): DeliveryPhase {
   const stage = normalizeDeliveryStage(project);
-  return normalizeDeliveryPhase(project?.phase, stage);
+  return normalizeDeliveryPhase(
+    project?.deliveryPhase || project?.phase,
+    stage,
+  );
 }
 
 export function deliveryPhaseLabel(project: any) {

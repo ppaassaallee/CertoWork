@@ -1,11 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -18,6 +20,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Flag,
   Folder,
   HelpCircle,
   Inbox,
@@ -63,8 +66,6 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
-import { shouldReplacePureAiPortfolio } from "../lib/portfolioMasterImport";
-import { replacePureAiPortfolioFromMaster } from "../lib/runPortfolioMasterImport";
 import { AliasProfileEditor } from "./ProjectControls";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
@@ -139,9 +140,19 @@ import {
 } from "../lib/invoiceDocuments";
 import { stripUndefinedValues } from "../lib/projectFinance";
 import { InvoiceCenter } from "./InvoiceCenter";
+import {
+  feedbackToTaskPatch,
+  isOpenFeedback,
+  type FeedbackKind,
+  type FeedbackReport,
+  type FeedbackSeverity,
+  type FeedbackStatus,
+} from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import { FeedbackCenter } from "./FeedbackCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
+import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
@@ -157,11 +168,15 @@ import {
 } from "../lib/accessControl";
 import {
   DELIVEREE_SKILLS,
+  defaultProjectWizardFirstAction,
   isProjectWizardInvocation,
   splitProjectWizardLines,
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
+import { useMobileCore } from "../hooks/useMobileCore";
+import { mobileCoreFallbackPath, mobileCoreTab } from "../lib/mobileCore";
 import type { NotebookEntry } from "../lib/notebookContext";
+import { type MagicProjectBlueprint, type MagicProjectItem } from "../lib/magicProject";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
 import { sendBoldiChat } from "../lib/conversationClient";
 import {
@@ -199,6 +214,7 @@ import {
   memberAvatar,
   memberHasAlias,
   memberLabel,
+  memberPublicLabel,
   memberStatusLabel,
   membershipPublicPatch,
   normalizeAlias,
@@ -267,7 +283,8 @@ export type CenterView =
   | "portfolio"
   | "project"
   | "agents"
-  | "invoices";
+  | "invoices"
+  | "feedback";
 
 export function DelivereeWorkspace() {
   const {
@@ -282,6 +299,7 @@ export function DelivereeWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
+  const mobileCore = useMobileCore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -305,6 +323,7 @@ export function DelivereeWorkspace() {
   const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
@@ -413,6 +432,8 @@ export function DelivereeWorkspace() {
           : "project"
       : lens.kind === "my-work"
         ? "items"
+        : lens.kind === "feedback"
+        ? "feedback"
         : lens.kind === "work"
           ? lens.section === "issues"
             ? "items"
@@ -435,6 +456,7 @@ export function DelivereeWorkspace() {
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
     else if (next === "invoices") navigate("/invoices");
+    else if (next === "feedback") navigate("/feedback");
     else navigate("/home");
   };
   const projectConsoleInitialTab =
@@ -448,6 +470,9 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  const [magicProjectOpen, setMagicProjectOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
   const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
   const [agentOutcomeDraft, setAgentOutcomeDraft] = useState("");
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
@@ -464,9 +489,6 @@ export function DelivereeWorkspace() {
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const portfolioImportRef = useRef<ReturnType<
-    typeof replacePureAiPortfolioFromMaster
-  > | null>(null);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -476,6 +498,10 @@ export function DelivereeWorkspace() {
     const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
     const canSeeWorkspacePortfolio =
       workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
+    const canTriageFeedback = canManageWorkspaceMembers(
+      currentMember?.role,
+      workspace.ownerId === user.uid,
+    );
     const mergeQueries = (
       name: string,
       queryClauses: any[][],
@@ -579,6 +605,22 @@ export function DelivereeWorkspace() {
       ),
       ...projectUnsubscribers,
       ...taskUnsubscribers,
+      ...mergeQueries(
+        "feedback_reports",
+        [
+          [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+          ...(canTriageFeedback
+            ? [[where("workspaceId", "==", workspace.id)]]
+            : []),
+        ],
+        (items) =>
+          setFeedbackReports(
+            (items as FeedbackReport[]).sort(
+              (left, right) =>
+                timestamp(right.createdAt) - timestamp(left.createdAt),
+            ),
+          ),
+      ),
       makeQuery("milestones", setMilestones),
       makeQuery("invoice_documents", (items) =>
         setInvoiceDocuments(items as InvoiceDocument[]),
@@ -638,48 +680,6 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!shouldReplacePureAiPortfolio(workspace)) return;
-    if (workspace.ownerId !== user.uid) return;
-    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (!portfolioImportRef.current) {
-      portfolioImportRef.current = replacePureAiPortfolioFromMaster({
-        db,
-        user,
-        workspace,
-        members: workspaceMembers,
-      });
-    }
-    let cancelled = false;
-    portfolioImportRef.current
-      .then((result) => {
-        if (cancelled) return;
-        if (result.skipped) {
-          portfolioImportRef.current = null;
-          return;
-        }
-        const missing = result.missingAliases.length
-          ? ` Missing aliases: ${result.missingAliases.join(", ")}.`
-          : "";
-        setNotice(
-          `Pure AI portfolio replaced with ${result.createdProjects} projects from the August 2026 master. Shared with ${result.sharedWith.join(", ") || "no matched users"}. Removed ${result.removedProjects} legacy projects.${missing}`,
-        );
-      })
-      .catch((reason) => {
-        portfolioImportRef.current = null;
-        if (cancelled) return;
-        setNotice(
-          reason instanceof Error
-            ? `Portfolio migration failed: ${reason.message}`
-            : "Portfolio migration failed. Open the Pure AI workspace as owner and retry.",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -1065,6 +1065,25 @@ export function DelivereeWorkspace() {
     }
   }, [creatingConversation, navigate, user, workspace]);
 
+  useLayoutEffect(() => {
+    if (!createMenuOpen) return;
+    const frame = () => {
+      const rect = createMenuRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCreateMenuPos({
+        top: Math.round(rect.bottom + 6),
+        right: Math.round(window.innerWidth - rect.right),
+      });
+    };
+    frame();
+    window.addEventListener("resize", frame);
+    window.addEventListener("scroll", frame, true);
+    return () => {
+      window.removeEventListener("resize", frame);
+      window.removeEventListener("scroll", frame, true);
+    };
+  }, [createMenuOpen]);
+
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -1081,6 +1100,10 @@ export function DelivereeWorkspace() {
           setCreateMenuOpen(false);
           return;
         }
+        if (magicProjectOpen) {
+          setMagicProjectOpen(false);
+          return;
+        }
         if (panel) {
           setPanel(null);
           return;
@@ -1092,7 +1115,15 @@ export function DelivereeWorkspace() {
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [commandPaletteOpen, createMenuOpen, panel, sidebarOpen]);
+  }, [commandPaletteOpen, createMenuOpen, magicProjectOpen, panel, sidebarOpen]);
+
+  useEffect(() => {
+    if (!mobileCore) return;
+    const fallback = mobileCoreFallbackPath(location.pathname);
+    if (fallback && fallback !== location.pathname) {
+      navigate(fallback, { replace: true });
+    }
+  }, [location.pathname, mobileCore, navigate]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -1969,10 +2000,19 @@ export function DelivereeWorkspace() {
     projectId: string,
     patch: Record<string, unknown>,
   ) => {
-    await updateDoc(doc(db, "projects", projectId), {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
+    try {
+      await updateDoc(doc(db, "projects", projectId), {
+        ...patch,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Project update was not saved: ${reason.message}`
+          : "Project update was not saved. Check access and try again.",
+      );
+      throw reason;
+    }
   };
 
   const syncInvoiceToProject = async (invoice: InvoiceDocument) => {
@@ -2705,7 +2745,7 @@ export function DelivereeWorkspace() {
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
-    await addDoc(collection(db, "tasks"), {
+    const created = await addDoc(collection(db, "tasks"), {
       ...patch,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -2729,6 +2769,98 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    return created.id;
+  };
+
+  const submitFeedbackReport = async (input: {
+    kind: FeedbackKind;
+    title: string;
+    description: string;
+    projectId: string;
+    severity: FeedbackSeverity | "";
+  }) => {
+    if (!user || !workspace) return;
+    try {
+      await addDoc(collection(db, "feedback_reports"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        createdBy: user.uid,
+        kind: input.kind,
+        title: input.title,
+        description: input.description,
+        status: "submitted",
+        projectId: input.projectId || "",
+        severity: input.kind === "bug" ? input.severity || "medium" : "",
+        reporterAlias: memberPublicLabel(currentWorkspaceMember || {}),
+        reporterEmoji: memberAvatar(currentWorkspaceMember || {}),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice(
+        input.kind === "bug"
+          ? "Bug submitted. Admins can convert it to a PBI from the feedback queue."
+          : "Feature request submitted. Admins can convert it to a PBI from the feedback queue.",
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not submit feedback.",
+      );
+    }
+  };
+
+  const updateFeedbackStatus = async (
+    report: FeedbackReport,
+    status: FeedbackStatus,
+    adminNote?: string,
+  ) => {
+    if (!workspace) return;
+    try {
+      await updateDoc(doc(db, "feedback_reports", report.id), {
+        status,
+        updatedAt: serverTimestamp(),
+        ...(status === "triaged" ? { triagedAt: serverTimestamp() } : {}),
+        ...(adminNote ? { adminNote } : {}),
+      });
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not update this report.",
+      );
+    }
+  };
+
+  const convertFeedbackToPbi = async (report: FeedbackReport, projectId: string) => {
+    try {
+      const taskId = await addProjectTask(
+        projectId,
+        report.title || "Untitled feedback",
+        "backlog",
+        {
+          ...feedbackToTaskPatch(report),
+          projectId: projectId || null,
+        },
+      );
+      if (!taskId) {
+        setNotice("Could not convert this report into a work item.");
+        return;
+      }
+      await updateDoc(doc(db, "feedback_reports", report.id), {
+        status: "converted",
+        projectId: projectId || "",
+        convertedToType: "tasks",
+        convertedToId: taskId,
+        convertedBy: user?.uid || "",
+        convertedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice("Converted to a backlog PBI.");
+      if (projectId) navigate(`/work/projects/${projectId}/tasks`);
+      else navigate("/my-work");
+      setSelectedWorkItemId(taskId);
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not convert this report.",
+      );
+    }
   };
 
   const updateProjectTask = async (
@@ -2877,7 +3009,7 @@ export function DelivereeWorkspace() {
     }
     await addProjectTask(
       projectRef.id,
-      draft.firstAction.trim().slice(0, 500),
+      defaultProjectWizardFirstAction(draft).slice(0, 500),
       "backlog",
       {
         source: "project_wizard",
@@ -2943,26 +3075,183 @@ export function DelivereeWorkspace() {
     });
     if (draft.firstMilestone.trim())
       await addProjectMilestone(projectId, draft.firstMilestone.trim());
-    await addProjectTask(
-      projectId,
-      draft.firstAction.trim().slice(0, 500),
-      "backlog",
-      {
-        source: "project_wizard",
-        priority: "1",
-        dueDate: targetDate || null,
-        workItemType: "task",
-        itemType: "task",
-        type: "task",
-        acceptanceCriteria: successCriteria.join("\n"),
-        definitionOfDone: draft.definitionOfDone.trim(),
-      },
-    );
+    if (draft.firstAction.trim()) {
+      await addProjectTask(
+        projectId,
+        draft.firstAction.trim().slice(0, 500),
+        "backlog",
+        {
+          source: "project_wizard",
+          priority: "1",
+          dueDate: targetDate || null,
+          workItemType: "task",
+          itemType: "task",
+          type: "task",
+          acceptanceCriteria: successCriteria.join("\n"),
+          definitionOfDone: draft.definitionOfDone.trim(),
+        },
+      );
+    }
     setProjectConsoleId(projectId);
     setPanel("project");
     goCenterView("conversation");
     navigate(`/work/projects/${projectId}`);
     setNotice(`${draft.title.trim()} updated with Project Wizard.`);
+  };
+
+  const createMagicProjectItems = async (
+    projectId: string,
+    items: MagicProjectItem[],
+    parentId: string,
+    parentKind: string | null,
+  ) => {
+    for (const item of items) {
+      if (!item.title) continue;
+      const createdId = await addProjectTask(projectId, item.title, "backlog", {
+        workItemType: item.kind,
+        itemType: item.kind,
+        type: item.kind,
+        parentId: parentId || null,
+        epicId: parentKind === "epic" ? parentId : null,
+        featureId: parentKind === "feature" ? parentId : null,
+        dueDate: item.dueDate || null,
+        source: "magic_project",
+      });
+      if (item.children?.length && createdId) {
+        await createMagicProjectItems(projectId, item.children, createdId, item.kind);
+      }
+    }
+  };
+
+  const createMagicProject = async (blueprint: MagicProjectBlueprint) => {
+    if (!user || !workspace) return;
+    const successCriteria = blueprint.successCriteria.filter(Boolean);
+    const targetDate = blueprint.noTargetDate ? "" : blueprint.targetDate;
+    const projectRef = await addDoc(collection(db, "projects"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
+      title: blueprint.title.trim(),
+      normalizedTitle: blueprint.title.trim().toLowerCase().replace(/\s+/g, " "),
+      description: blueprint.why.trim(),
+      outcome: blueprint.outcome.trim(),
+      objective: blueprint.outcome.trim(),
+      status: "planning",
+      health: "on_track",
+      methodology: blueprint.methodology,
+      projectManager: blueprint.owner.trim(),
+      targetDate,
+      dueDate: targetDate,
+      successCriteria,
+      definitionOfDone: blueprint.definitionOfDone.trim(),
+      createdFromSkill: "magic_project",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    for (const milestone of blueprint.milestones) {
+      await addProjectMilestone(projectRef.id, milestone.title);
+    }
+    for (const phase of blueprint.phases) {
+      await addProjectTask(projectRef.id, phase.title, "backlog", {
+        workItemType: "epic",
+        itemType: "epic",
+        type: "epic",
+        description: phase.description || "",
+        dueDate: phase.targetDate || null,
+        source: "magic_project",
+      });
+    }
+    await createMagicProjectItems(projectRef.id, blueprint.items, "", null);
+    await addProjectTask(projectRef.id, blueprint.kickoff.title, "backlog", {
+      workItemType: "pbi",
+      itemType: "pbi",
+      type: "pbi",
+      description: blueprint.kickoff.description || "Align on outcome, owners, and first next actions.",
+      dueDate: blueprint.kickoff.date || targetDate || null,
+      source: "magic_project",
+      gtdActionType: "next_action",
+    });
+    const meetings = blueprint.meetings.length
+      ? blueprint.meetings
+      : [{
+          title: `${blueprint.kickoff.title} meeting`,
+          date: blueprint.kickoff.date || targetDate,
+          description: blueprint.kickoff.description || "",
+        }];
+    for (const meeting of meetings) {
+      await addProjectTask(projectRef.id, meeting.title, "backlog", {
+        workItemType: "task",
+        itemType: "meeting",
+        type: "meeting",
+        description: meeting.description || "",
+        dueDate: meeting.date || null,
+        source: "magic_project",
+      });
+    }
+
+    const notebookRef = await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "notebook",
+      title: blueprint.title.trim(),
+      projectId: projectRef.id,
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    const sectionRef = await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "section",
+      title: "Definition",
+      notebookId: notebookRef.id,
+      projectId: projectRef.id,
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "note",
+      title: blueprint.noteTitle,
+      content: blueprint.noteContent || blueprint.sourceText,
+      notebookId: notebookRef.id,
+      sectionId: sectionRef.id,
+      projectId: projectRef.id,
+      tags: ["project-definition", "magic-project"],
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    const conversationRef = await addDoc(collection(db, "boldi_conversations"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: blueprint.title.trim(),
+      status: "active",
+      sourceContext: "project",
+      contextEntityId: projectRef.id,
+      conversationType: "project",
+      linkedProjectIds: [projectRef.id],
+      linkedTaskIds: [],
+      isChiefOfStaff: false,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setConversationId(conversationRef.id);
+    setMessages([]);
+    setProjectConsoleId(projectRef.id);
+    setPanel("project");
+    goCenterView("conversation");
+    navigate(`/work/projects/${projectRef.id}`);
+    setNotice(`${blueprint.title.trim()} created with Magic Project. Definition note, kickoff, and meetings are in place.`);
   };
 
   const resetWorkspaceData = async () => {
@@ -3159,6 +3448,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/invoices"),
       },
       {
+        id: "nav-feedback",
+        label: "Report a bug or feature",
+        group: "Navigate",
+        keywords: "feedback bug feature pbi request",
+        onSelect: () => navigate("/feedback"),
+      },
+      {
         id: "nav-workspace",
         label: "Workspace & team",
         group: "Navigate",
@@ -3200,6 +3496,25 @@ export function DelivereeWorkspace() {
         group: "Create",
         onSelect: () => setProjectWizardOpen(true),
       },
+      {
+        id: "report-bug",
+        label: "Report a bug",
+        group: "Create",
+        onSelect: () => navigate("/report-bug"),
+      },
+      {
+        id: "request-feature",
+        label: "Request a feature",
+        group: "Create",
+        onSelect: () => navigate("/feature-request"),
+      },
+      {
+        id: "feedback-queue",
+        label: "Open feedback queue",
+        group: "Navigate",
+        keywords: "admin triage pbi bug feature",
+        onSelect: () => navigate("/workspace/feedback"),
+      },
     ];
     for (const project of activeProjects.slice(0, 30)) {
       items.push({
@@ -3209,17 +3524,29 @@ export function DelivereeWorkspace() {
         onSelect: () => openProjectRecord(project),
       });
     }
-    return items;
+    if (!mobileCore) return items;
+    const mobileIds = new Set([
+      "nav-home",
+      "nav-my-work",
+      "nav-projects",
+      "quick-capture",
+      "new-conversation",
+      "new-project",
+    ]);
+    return items.filter(
+      (item) => mobileIds.has(item.id) || item.id.startsWith("project-"),
+    );
   }, [
     activeProjects,
     createConversation,
+    mobileCore,
     navigate,
     openChiefOfStaff,
     openProjectRecord,
   ]);
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -3327,7 +3654,7 @@ export function DelivereeWorkspace() {
             <span>{t("navProjects")}</span>
           </button>
           <button
-            className={`do-nav-item is-agents ${lens.kind === "agents" ? "is-active" : ""}`}
+            className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" ? "is-active" : ""}`}
             data-testid="nav-agents"
             onClick={() => {
               navigate("/agents");
@@ -3339,7 +3666,7 @@ export function DelivereeWorkspace() {
             <span>{t("navAgents")}</span>
           </button>
           <button
-            className={`do-nav-item is-approvals ${lens.kind === "approvals" ? "is-active" : ""}`}
+            className={`do-nav-item is-approvals do-mobile-advanced ${lens.kind === "approvals" ? "is-active" : ""}`}
             data-testid="nav-approvals"
             onClick={() => {
               navigate("/approvals");
@@ -3358,7 +3685,7 @@ export function DelivereeWorkspace() {
             )}
           </button>
           <button
-            className={`do-nav-item is-invoices ${lens.kind === "invoices" ? "is-active" : ""}`}
+            className={`do-nav-item is-invoices do-mobile-advanced ${lens.kind === "invoices" ? "is-active" : ""}`}
             data-testid="nav-invoices"
             onClick={() => {
               navigate("/invoices");
@@ -3375,6 +3702,24 @@ export function DelivereeWorkspace() {
                   invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length}
               </em>
             )}
+          </button>
+          <button
+            className={`do-nav-item is-feedback do-mobile-advanced ${lens.kind === "feedback" ? "is-active" : ""}`}
+            data-testid="nav-feedback"
+            onClick={() => {
+              navigate("/feedback");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Flag size="sm" />
+            <span>{t("navFeedback")}</span>
+            {canManageMembers &&
+              feedbackReports.filter((item) => isOpenFeedback(item.status)).length > 0 && (
+                <em className="do-nav-badge">
+                  {feedbackReports.filter((item) => isOpenFeedback(item.status)).length}
+                </em>
+              )}
           </button>
         </nav>
 
@@ -3469,7 +3814,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions">
+                  <span className="do-project-actions do-mobile-advanced">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -3538,7 +3883,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions">
+                  <span className="do-project-actions do-mobile-advanced">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -3694,7 +4039,7 @@ export function DelivereeWorkspace() {
           </div>
         </div>
 
-        <nav className="do-nav-admin" aria-label="Workspace administration">
+        <nav className="do-nav-admin do-mobile-advanced" aria-label="Workspace administration">
           <button
             className={`do-nav-item ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
             data-testid="nav-workspace"
@@ -3755,6 +4100,7 @@ export function DelivereeWorkspace() {
                 <TextSizeControl compact />
               </div>
               <button
+                className="do-mobile-advanced"
                 onClick={() => {
                   setPanel("workspace");
                   setWorkspaceOpen(false);
@@ -3776,6 +4122,7 @@ export function DelivereeWorkspace() {
                 <Settings size={14} /> Settings
               </button>
               <button
+                className="do-mobile-advanced"
                 onClick={() => {
                   setCleanSlateOpen(true);
                   setWorkspaceOpen(false);
@@ -3840,6 +4187,15 @@ export function DelivereeWorkspace() {
                     ]
                   : []),
                 ...(lens.kind === "invoices" ? [{ label: "Invoices" }] : []),
+                ...(lens.kind === "feedback"
+                  ? [
+                      {
+                        label: "Feedback",
+                        onClick: () => navigate("/feedback"),
+                      },
+                      ...(lens.section === "queue" ? [{ label: "Queue" }] : []),
+                    ]
+                  : []),
                 ...(activeProject
                   ? [
                       {
@@ -3872,8 +4228,10 @@ export function DelivereeWorkspace() {
             >
               <Search size={15} />
             </button>
-            <div className="do-create-menu">
+            <div className="do-create-menu" ref={createMenuRef}>
               <button
+                aria-expanded={createMenuOpen}
+                aria-haspopup="menu"
                 aria-label={t("headerCreate")}
                 className="cw-btn cw-btn-primary cw-btn-sm"
                 onClick={() => setCreateMenuOpen((open) => !open)}
@@ -3883,18 +4241,40 @@ export function DelivereeWorkspace() {
                 <Plus size={15} />
                 <span>{t("headerCreate")}</span>
               </button>
-              {createMenuOpen && (
-                <div className="do-account-menu">
-                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
-                    {t("createTask")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
-                    {t("createProject")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
-                    {t("createCapture")}
-                  </button>
-                </div>
+              {createMenuOpen && createPortal(
+                <>
+                  <button
+                    aria-label="Close create menu"
+                    className="do-create-menu-backdrop"
+                    onClick={() => setCreateMenuOpen(false)}
+                    type="button"
+                  />
+                  <div
+                    className="do-create-menu-list"
+                    role="menu"
+                    style={{ top: createMenuPos.top, right: createMenuPos.right }}
+                  >
+                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
+                      {t("createTask")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                      {t("createProject")}
+                    </button>
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
+                      {t("createMagicProject")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
+                      {t("createCapture")}
+                    </button>
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
+                      {t("createBug")}
+                    </button>
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
+                      {t("createFeature")}
+                    </button>
+                  </div>
+                </>,
+                document.body,
               )}
             </div>
           </div>
@@ -3936,7 +4316,7 @@ export function DelivereeWorkspace() {
             </button>
             <button
               aria-selected={centerView === "strategy"}
-              className={centerView === "strategy" ? "is-active" : ""}
+              className={`do-mobile-advanced ${centerView === "strategy" ? "is-active" : ""}`}
               onClick={() => goCenterView("strategy")}
               role="tab"
               type="button"
@@ -4340,7 +4720,7 @@ export function DelivereeWorkspace() {
             )}
             <WorkItemsCenter
             activeProject={null}
-            onAddTask={addProjectTask}
+            onAddTask={async (...args) => addProjectTask(...args)}
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
@@ -4371,6 +4751,34 @@ export function DelivereeWorkspace() {
             onPush={pushPendingInvoice}
             onUpdateStatus={updateInvoiceStatus}
             pending={pendingInvoiceQueue}
+          />
+        ) : centerView === "feedback" ? (
+          <FeedbackCenter
+            canManage={canManageMembers}
+            initialKind={
+              lens.kind === "feedback" && lens.intent ? lens.intent : "bug"
+            }
+            mode={
+              lens.kind === "feedback" &&
+              lens.section === "queue" &&
+              canManageMembers
+                ? "queue"
+                : "submit"
+            }
+            onConvert={convertFeedbackToPbi}
+            onOpenItem={(taskId) => {
+              setSelectedWorkItemId(taskId);
+              navigate("/my-work");
+            }}
+            onOpenQueue={() => navigate("/workspace/feedback")}
+            onSubmit={submitFeedbackReport}
+            onUpdateStatus={updateFeedbackStatus}
+            projects={projects}
+            reports={
+              lens.kind === "feedback" && lens.section === "queue" && canManageMembers
+                ? feedbackReports
+                : feedbackReports.filter((item) => item.userId === user?.uid)
+            }
           />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
@@ -4455,7 +4863,7 @@ export function DelivereeWorkspace() {
               onAddRisk={(title, patch) =>
                 addProjectRisk(consoleProject.id, title, patch)
               }
-              onAddTask={(title, status, patch) =>
+              onAddTask={async (title, status, patch) =>
                 addProjectTask(consoleProject.id, title, status, patch)
               }
               onArchiveProject={archiveProject}
@@ -4538,6 +4946,46 @@ export function DelivereeWorkspace() {
         )}
       </main>
 
+      <nav aria-label="Mobile core" className="do-mobile-dock">
+        <button
+          className={mobileCoreTab(location.pathname) === "home" ? "is-active" : ""}
+          onClick={() => navigate("/home")}
+          type="button"
+        >
+          <Home size={16} />
+          Home
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "my-work" ? "is-active" : ""}
+          onClick={() => navigate("/my-work")}
+          type="button"
+        >
+          <CheckCircle2 size={16} />
+          My Work
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "projects" ? "is-active" : ""}
+          onClick={() => navigate("/projects")}
+          type="button"
+        >
+          <Folder size={16} />
+          Projects
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "notes" ? "is-active" : ""}
+          onClick={() => {
+            const projectId =
+              (lens.kind === "project" ? lens.projectId : null) || projectConsoleId || activeProjects[0]?.id;
+            if (projectId) navigate(`/work/projects/${projectId}/notes`);
+            else navigate("/projects");
+          }}
+          type="button"
+        >
+          <BookOpen size={16} />
+          Notes
+        </button>
+      </nav>
+
       <aside
         className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`}
         aria-hidden={!panel}
@@ -4603,7 +5051,7 @@ export function DelivereeWorkspace() {
                 onAddRisk={(title, patch) =>
                   addProjectRisk(consoleProject.id, title, patch)
                 }
-                onAddTask={(title, status, patch) =>
+                onAddTask={async (title, status, patch) =>
                   addProjectTask(consoleProject.id, title, status, patch)
                 }
                 onArchiveProject={archiveProject}
@@ -5186,6 +5634,28 @@ export function DelivereeWorkspace() {
               </section>
               )}
 
+              {canManageMembers && (
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Feedback</span>
+                  <strong>
+                    {feedbackReports.filter((item) => isOpenFeedback(item.status)).length} open
+                    {" "}report
+                    {feedbackReports.filter((item) => isOpenFeedback(item.status)).length === 1 ? "" : "s"}
+                  </strong>
+                </div>
+                <p className="do-panel-intro">
+                  Bugs and feature requests from the workspace. Convert accepted ones into backlog PBIs.
+                </p>
+                <button
+                  onClick={() => navigate("/workspace/feedback")}
+                  type="button"
+                >
+                  Open feedback queue
+                </button>
+              </section>
+              )}
+
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Beta access</span>
@@ -5601,8 +6071,17 @@ export function DelivereeWorkspace() {
         isOpen={projectWizardOpen}
         onClose={() => setProjectWizardOpen(false)}
         onCreateProject={createProjectFromWizard}
+        onOpenMagicProject={() => {
+          setProjectWizardOpen(false);
+          setMagicProjectOpen(true);
+        }}
         onUpdateProject={updateProjectFromWizard}
         projects={activeProjects}
+      />
+      <MagicProjectModal
+        isOpen={magicProjectOpen}
+        onClose={() => setMagicProjectOpen(false)}
+        onCreate={createMagicProject}
       />
 
       {needsAlias && (

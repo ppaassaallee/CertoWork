@@ -3,10 +3,13 @@ import test from "node:test";
 import {
   DELIVEREE_SKILLS,
   EMPTY_PROJECT_WIZARD_DRAFT,
+  defaultProjectWizardFirstAction,
   isProjectWizardInvocation,
   isProjectWizardReady,
+  projectWizardBlockingFields,
   projectWizardDraftFromProject,
   projectWizardMissingFields,
+  seedProjectWizardDraft,
   splitProjectWizardLines,
 } from "../src/lib/delivereeSkills";
 
@@ -21,6 +24,8 @@ test("project wizard blocks vague projects until minimum clarity exists", () => 
   assert.ok(missing.includes("Project name"));
   assert.ok(missing.includes("Outcome"));
   assert.ok(missing.includes("First next action"));
+  assert.ok(projectWizardBlockingFields(EMPTY_PROJECT_WIZARD_DRAFT).includes("Project name"));
+  assert.equal(projectWizardBlockingFields(EMPTY_PROJECT_WIZARD_DRAFT).includes("First next action"), false);
   assert.equal(isProjectWizardReady(EMPTY_PROJECT_WIZARD_DRAFT), false);
 });
 
@@ -61,6 +66,27 @@ test("project wizard can prefill from an existing project", () => {
   assert.equal(draft.title, "KruOps");
   assert.equal(draft.methodology, "Scrum");
   assert.equal(draft.successCriteriaText, "Requirements mapped\nBacklog approved");
+});
+
+test("project wizard can create without a typed first next action", () => {
+  const draft = {
+    title: "FieldOps Pilot",
+    outcome: "Castillo Retail can run one complete technician assignment pilot.",
+    why: "It proves the operating model before expanding scope.",
+    methodology: "Hybrid" as const,
+    owner: "Alejandro",
+    targetDate: "2026-09-15",
+    noTargetDate: false,
+    firstMilestone: "",
+    firstAction: "",
+    successCriteriaText: "Pilot journey completed",
+    definitionOfDone: "The pilot is reviewed, documented, and ready for a go/no-go decision.",
+  };
+  assert.deepEqual(projectWizardMissingFields(draft), ["First next action"]);
+  assert.deepEqual(projectWizardBlockingFields(draft), []);
+  assert.equal(isProjectWizardReady(draft), true);
+  assert.equal(defaultProjectWizardFirstAction(draft), "Kick off FieldOps Pilot");
+  assert.equal(seedProjectWizardDraft(draft).firstAction, "Kick off FieldOps Pilot");
 });
 
 test("project wizard recognizes direct invocations", () => {

@@ -66,14 +66,16 @@ export function isPureAiWorkspace(workspace?: { name?: string | null } | null) {
   return name === "pure ai" || name === "pureai" || name.includes("pure ai");
 }
 
-export function shouldReplacePureAiPortfolio(workspace?: {
-  name?: string | null;
-  portfolioImportKey?: string | null;
-} | null) {
-  return (
-    isPureAiWorkspace(workspace) &&
-    String(workspace?.portfolioImportKey || "") !== PORTFOLIO_MASTER_IMPORT_KEY
-  );
+export function shouldReplacePureAiPortfolio(
+  workspace?: {
+    name?: string | null;
+    portfolioImportKey?: string | null;
+  } | null,
+) {
+  void workspace;
+  // Never auto-wipe a live workspace. The August 2026 import already ran; a
+  // retry deletes user stage/status edits and recreates everything as Build.
+  return false;
 }
 
 export function portfolioImportKey(row: Pick<PortfolioMasterRow, "bpo" | "client" | "project" | "technology" | "sourceRow">) {

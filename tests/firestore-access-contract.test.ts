@@ -54,6 +54,15 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(workspace, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
 });
 
+test("shared workspace members can update projects they can already see", () => {
+  const canWrite = ruleFn("canWriteProject");
+  assert.match(canWrite, /hasExplicitUserAccess\(data\)/);
+  assert.match(canWrite, /isWorkspaceMember\(data\.workspaceId\)/);
+  assert.match(canWrite, /!isWorkspaceViewer\(data\.workspaceId\)/);
+  assert.match(workspace, /Project update was not saved/);
+  assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
+});
+
 test("project sharing writes user ids that the rules can honor", () => {
   assert.match(projectSurfaces, /value=\{member\.userId \|\| member\.id\}/);
   assert.match(projectSurfaces, /visibleToUserIds: ids, sharedWithUserIds: ids/);
@@ -102,6 +111,15 @@ test("invoice documents are member-listed and finance-operated", () => {
   assert.match(rules, /match \/invoice_documents\/\{id\}/);
   assert.match(workspace, /doc\(db, "invoice_documents"/);
   assert.match(workspace, /pushPendingInvoice/);
+});
+
+test("feedback reports are member-created and admin-triaged", () => {
+  const canRead = ruleFn("canReadFeedbackReport");
+  assert.match(canRead, /data\.userId == request\.auth\.uid/);
+  assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
+  assert.match(rules, /match \/feedback_reports\/\{id\}/);
+  assert.match(workspace, /collection\(db, "feedback_reports"\)/);
+  assert.match(workspace, /convertFeedbackToPbi/);
 });
 
 test("personal Home context still excludes another member's assigned work", () => {

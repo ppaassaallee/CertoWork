@@ -100,6 +100,13 @@ test("keeps production rows visible and hold/eol mapped", () => {
   assert.equal(mapProductPhase("Desarrollo"), "Build");
   assert.equal(mapProductPhase("Producción"), "Grow");
   assert.equal(mapProductPhase("QA"), "Beta");
+  const production = masterRows.find((row) => row.phase === "Producción");
+  assert.ok(production);
+  const payload = buildPortfolioProjectPayload(production, {
+    userId: "owner-1",
+    workspaceId: "pure-ai",
+  });
+  assert.equal(payload.deliveryStage, "operations");
 });
 
 test("shares with alias users even when emails differ", () => {
@@ -118,10 +125,10 @@ test("shares with alias users even when emails differ", () => {
   assert.equal(memberMatchesShareAlias({ id: "x", alias: "cesar", userId: "1" }, "cesar"), true);
 });
 
-test("only replaces the Pure AI workspace until this workbook key is stored", () => {
+test("never auto-replaces a live Pure AI portfolio", () => {
   assert.equal(isPureAiWorkspace({ name: "Pure AI" }), true);
   assert.equal(isPureAiWorkspace({ name: "Delivery" }), false);
-  assert.equal(shouldReplacePureAiPortfolio({ name: "Pure AI" }), true);
+  assert.equal(shouldReplacePureAiPortfolio({ name: "Pure AI" }), false);
   assert.equal(
     shouldReplacePureAiPortfolio({
       name: "Pure AI",
