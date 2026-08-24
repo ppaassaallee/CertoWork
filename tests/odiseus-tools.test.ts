@@ -54,7 +54,7 @@ test("Odysseus tools refuse unknown project ids outside scope", () => {
   assert.match(result.result.error, /not found/i);
 });
 
-test("Odysseus recall_memory and remember_fact use workspace memory", () => {
+test("Odysseus recall_memory and remember_fact use personal memory", () => {
   const withMemory = {
     ...context,
     odiseusMemory: [

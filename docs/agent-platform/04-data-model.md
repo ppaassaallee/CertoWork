@@ -19,4 +19,7 @@
 ## Identity mapping
 ```text
 Certo Agent id  →  AgentRuntimeBinding.hermesProfile = cw-a-<opaque>
+Certo user+workspace  →  Hermes user / metadata.hermesProfile = cw-u-<workspace><user>
 ```
+
+Home, Odysseus memory, notebooks, and knowledge stay keyed by `userId + workspaceId`. Never share one Hermes session across teammates.

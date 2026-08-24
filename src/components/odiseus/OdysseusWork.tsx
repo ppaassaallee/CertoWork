@@ -93,8 +93,8 @@ export function OdysseusAgentHome({
               : ""}
           </p>
           <small>
-            Proposes, then asks · Approval before irreversible work · Works
-            across your workspace
+            Proposes, then asks · Approval before irreversible work · Personal
+            to you in this workspace
           </small>
         </div>
       </div>

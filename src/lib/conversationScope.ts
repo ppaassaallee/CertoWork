@@ -89,6 +89,35 @@ export function isStandaloneConversation(conversation?: ConversationScopeRecord 
   return conversationProjectIds(conversation).length === 0 && conversationTaskIds(conversation).length === 0;
 }
 
+export function isHomeConversation(conversation?: ConversationScopeRecord | null) {
+  if (!conversation) return false;
+  if (
+    conversation.conversationType === "chief_of_staff" ||
+    (conversation as { isChiefOfStaff?: boolean }).isChiefOfStaff
+  ) {
+    return true;
+  }
+  if (!isStandaloneConversation(conversation)) return false;
+  const source = String(conversation.sourceContext || "home").toLowerCase();
+  return source === "home" || source === "general" || source === "";
+}
+
+export function selectHomeConversation<T extends ConversationScopeRecord & { id?: string }>(
+  conversations: T[] = [],
+) {
+  const homeThreads = conversations.filter((conversation) => isHomeConversation(conversation));
+  return (
+    homeThreads.find(
+      (conversation) =>
+        conversation.conversationType === "chief_of_staff" ||
+        (conversation as { isChiefOfStaff?: boolean }).isChiefOfStaff,
+    ) ||
+    homeThreads.find((conversation) => String(conversation.sourceContext || "").toLowerCase() === "home") ||
+    homeThreads[0] ||
+    null
+  );
+}
+
 export function isProjectConversation(conversation?: ConversationScopeRecord | null) {
   return conversationProjectIds(conversation).length > 0;
 }

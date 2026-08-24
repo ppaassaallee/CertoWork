@@ -19,7 +19,48 @@ export function normalizeHermesBaseUrl(raw) {
     .replace(/\/v1$/i, "");
 }
 
-export async function tryHermesChat(env, { messages, agentId = "odysseus", traceId }) {
+/** Stable Hermes session key for one person inside one workspace. */
+export function hermesUserProfileId(workspaceId, userId) {
+  const compact = `${workspaceId || ""}:${userId || ""}`
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 40)
+    .toLowerCase();
+  return `cw-u-${compact || "unknown"}`;
+}
+
+export function buildHermesChatPayload({
+  messages,
+  agentId = "odysseus",
+  traceId,
+  userId,
+  workspaceId,
+  conversationId,
+}) {
+  const hermesProfile = hermesUserProfileId(workspaceId, userId);
+  return {
+    model: "hermes-agent",
+    messages: messages || [],
+    stream: false,
+    user: hermesProfile,
+    metadata: {
+      agentId,
+      traceId,
+      hermesProfile,
+      workspaceId: workspaceId || "",
+      conversationId: conversationId || "",
+      isolation: "personal_user",
+    },
+  };
+}
+
+export async function tryHermesChat(env, {
+  messages,
+  agentId = "odysseus",
+  traceId,
+  userId,
+  workspaceId,
+  conversationId,
+}) {
   if (!hermesRuntimeEnabled(env)) return null;
   const baseUrl = normalizeHermesBaseUrl(env.HERMES_BASE_URL || "http://127.0.0.1:8642");
   const apiKey = String(env.HERMES_API_SERVER_KEY || env.API_SERVER_KEY || "").trim();
@@ -31,12 +72,16 @@ export async function tryHermesChat(env, { messages, agentId = "odysseus", trace
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      model: "hermes-agent",
-      messages: messages || [],
-      stream: false,
-      metadata: { agentId, traceId },
-    }),
+    body: JSON.stringify(
+      buildHermesChatPayload({
+        messages,
+        agentId,
+        traceId,
+        userId,
+        workspaceId,
+        conversationId,
+      }),
+    ),
   });
   if (!res.ok) {
     return { error: `HERMES_${res.status}`, body: await res.text() };

@@ -171,3 +171,12 @@ export function opaqueHermesProfileId(agentId: string) {
     .toLowerCase();
   return `cw-a-${compact || "unknown"}`;
 }
+
+/** Stable Hermes session key for one person inside one workspace. */
+export function opaqueHermesUserProfileId(workspaceId?: string | null, userId?: string | null) {
+  const compact = `${workspaceId || ""}:${userId || ""}`
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 40)
+    .toLowerCase();
+  return `cw-u-${compact || "unknown"}`;
+}

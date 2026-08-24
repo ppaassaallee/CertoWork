@@ -137,3 +137,12 @@ test("opening a project record stays on the project URL, not Home", () => {
   assert.doesNotMatch(openMatch[0], /setPanel\(null\)/);
   assert.doesNotMatch(openMatch[0], /goCenterView\("project"\)/);
 });
+
+test("Home stays a personal conversation space", () => {
+  const source = readFileSync(
+    resolve("src/components/DelivereeWorkspace.tsx"),
+    "utf8",
+  );
+  assert.match(source, /selectHomeConversation\(sorted\)/);
+  assert.match(source, /privacyScope|personalActor/);
+});

@@ -183,9 +183,10 @@ service cloud.firestore {
     match /knowledge_items/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid
         && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow update, delete: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid);
+      allow update, delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid
+        && (!('userId' in incoming()) || incoming().userId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
     match /knowledge_folders/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;

@@ -7,9 +7,14 @@ import {
 } from "../src/lib/agent-platform/certoMcp";
 import { proposeAgentAction } from "../src/lib/agent-platform/actionExecutor";
 import { decideActionPolicy, riskForActionType } from "../src/lib/agent-platform/policy";
-import { opaqueHermesProfileId } from "../src/lib/agent-platform/types";
+import { opaqueHermesProfileId, opaqueHermesUserProfileId } from "../src/lib/agent-platform/types";
 import { normalizeCompletedRun } from "../src/lib/agent-platform/hermesAdapter";
-import { hermesRuntimeEnabled, normalizeHermesBaseUrl } from "../worker/runtime/hermesBridge.js";
+import {
+  buildHermesChatPayload,
+  hermesRuntimeEnabled,
+  hermesUserProfileId,
+  normalizeHermesBaseUrl,
+} from "../worker/runtime/hermesBridge.js";
 import { executeCertoMcpTool as workerMcp } from "../worker/mcp/certoMcp.js";
 
 test("policy defaults ask for mutations and deny privileged ops", () => {
@@ -96,6 +101,26 @@ test("proposeAgentAction requires approval for create_task", () => {
 
 test("hermes profile ids are opaque and stable-ish", () => {
   assert.equal(opaqueHermesProfileId("agent_ABC-123"), "cw-a-agentabc123");
+});
+
+test("Hermes user profiles stay isolated per workspace and user", () => {
+  const alejandro = opaqueHermesUserProfileId("ws-1", "user-alejandro");
+  const teammate = opaqueHermesUserProfileId("ws-1", "user-teammate");
+  const otherWorkspace = opaqueHermesUserProfileId("ws-2", "user-alejandro");
+  assert.equal(alejandro, hermesUserProfileId("ws-1", "user-alejandro"));
+  assert.notEqual(alejandro, teammate);
+  assert.notEqual(alejandro, otherWorkspace);
+  assert.match(alejandro, /^cw-u-/);
+  const payload = buildHermesChatPayload({
+    messages: [{ role: "user", content: "hi" }],
+    userId: "user-alejandro",
+    workspaceId: "ws-1",
+    conversationId: "home-1",
+  });
+  assert.equal(payload.user, alejandro);
+  assert.equal(payload.metadata.hermesProfile, alejandro);
+  assert.equal(payload.metadata.isolation, "personal_user");
+  assert.equal(payload.metadata.conversationId, "home-1");
 });
 
 test("normalized runtime events are product-safe", () => {
