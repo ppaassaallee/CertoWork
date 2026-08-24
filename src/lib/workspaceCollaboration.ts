@@ -12,6 +12,7 @@ export type WorkspaceMember = {
   role?: WorkspaceRole | string;
   status?: string;
   teamIds?: string[];
+  financeAccess?: boolean;
 };
 
 export type WorkspaceTeam = {
@@ -129,6 +130,14 @@ export function canManageWorkspaceMembers(role?: string, isOwner = false) {
   if (isOwner) return true;
   const value = String(role || "").toLowerCase();
   return value === "owner" || value === "admin";
+}
+
+export function canOperateInvoices(
+  role?: string,
+  isOwner = false,
+  financeAccess = false,
+) {
+  return canManageWorkspaceMembers(role, isOwner) || Boolean(financeAccess);
 }
 
 export function pendingMemberId(workspaceId: string, email: string) {

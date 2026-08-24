@@ -16,6 +16,7 @@ Do not trust `userId` / `workspaceId` from the client body on `/api/*`. Auth mid
 | `workspace_members` | `workspaceId`, `userId` | `workspaceId`, `userId`, `role`, `status` | Doc id is `${workspaceId}_${uid}`. Roles: `owner`, `admin`, `member`, `viewer`. `portfolioViewer: true` grants workspace-wide project read. |
 | `users` | `userId` (doc id) | auth uid | Signed-in user profile. |
 | `access_requests` | `userId` | `email`, `status` | Beta access queue. |
+| `invoice_documents` | `workspaceId`, `shareToken` (doc id) | `workspaceId`, `title`, `amount`, `status`, `paymentStatus` | AP invoice queue. Members list workspace invoices. Finance operators (admin/owner or `financeAccess`) update lifecycle. Client portal can get/update by token: paid, rejected, exception. Statuses: `billed`, `sent`, `pending_approval`, `approved`, `paid`, `rejected`, `void`, `exception`. |
 
 ## Delivery OS (core)
 

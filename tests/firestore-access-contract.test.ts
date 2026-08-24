@@ -95,6 +95,15 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(workspace, /workspace_members/);
 });
 
+test("invoice documents are member-listed and finance-operated", () => {
+  const operator = ruleFn("isFinanceOperator");
+  assert.match(operator, /isWorkspaceAdmin\(workspaceId\)/);
+  assert.match(operator, /financeAccess == true/);
+  assert.match(rules, /match \/invoice_documents\/\{id\}/);
+  assert.match(workspace, /doc\(db, "invoice_documents"/);
+  assert.match(workspace, /pushPendingInvoice/);
+});
+
 test("personal Home context still excludes another member's assigned work", () => {
   const actor = { userId: "user-a", memberId: "ws_user-a", email: "a@certo.work" };
   assert.equal(isPersonalWorkItem({ assigneeIds: ["ws_user-a"] }, actor), true);

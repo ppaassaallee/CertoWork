@@ -5,6 +5,7 @@ import { useAuth } from "./lib/AuthContext";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
+import { PublicInvoicePortal } from "./components/PublicInvoicePortal";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 // TODO: Replace with the Google Calendar appointment schedule URL.
@@ -363,8 +364,14 @@ export default function App() {
   const reportToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/report\/([^/]+)/) || [])[1] || "")
     : "";
+  const invoiceToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/invoice\/([^/]+)/) || [])[1] || "")
+    : "";
   if (reportToken) {
     return <PublicStatusReport token={reportToken} />;
+  }
+  if (invoiceToken) {
+    return <PublicInvoicePortal token={invoiceToken} />;
   }
   if (inviteToken && (!user || !workspace)) {
     return <InviteActivate token={inviteToken} />;

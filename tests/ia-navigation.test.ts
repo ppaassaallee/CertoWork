@@ -43,6 +43,7 @@ test("canonical IA routes resolve to mental-model lenses", () => {
     section: "workspace",
   });
   assert.deepEqual(resolveDelivereeLens("/approvals"), { kind: "approvals" });
+  assert.deepEqual(resolveDelivereeLens("/invoices"), { kind: "invoices" });
 });
 
 test("legacy URLs alias into the new IA", () => {
@@ -84,6 +85,7 @@ test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "agents", section: "home" }), "/agents");
   assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/agents/automations");
   assert.equal(lensToPath({ kind: "more", section: "workspace" }), "/workspace");
+  assert.equal(lensToPath({ kind: "invoices" }), "/invoices");
 });
 
 test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () => {
@@ -100,6 +102,7 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-projects"/);
   assert.match(source, /data-testid="nav-agents"/);
   assert.match(source, /data-testid="nav-approvals"/);
+  assert.match(source, /data-testid="nav-invoices"/);
   assert.match(source, /data-testid="nav-workspace"/);
   assert.match(source, /data-testid="nav-settings"/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);

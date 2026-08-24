@@ -33,6 +33,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Receipt,
   Search,
   Settings,
   ShieldCheck,
@@ -125,6 +126,19 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
+import {
+  applyInvoiceToFinancePeriods,
+  canTransitionInvoice,
+  isInvoiceOverdue,
+  nextInvoiceNumber,
+  paymentStatusForInvoice,
+  pendingInvoiceLines,
+  type InvoiceDocument,
+  type InvoiceStatus,
+  type PendingInvoiceLine,
+} from "../lib/invoiceDocuments";
+import { stripUndefinedValues } from "../lib/projectFinance";
+import { InvoiceCenter } from "./InvoiceCenter";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
@@ -177,6 +191,7 @@ import {
   canChangePasswordForProvider,
   canCreateWorkspace,
   canManageWorkspaceMembers,
+  canOperateInvoices,
   createInviteCode,
   isAssignableMember,
   isWorkspaceOwnerRole,
@@ -251,7 +266,8 @@ export type CenterView =
   | "strategy"
   | "portfolio"
   | "project"
-  | "agents";
+  | "agents"
+  | "invoices";
 
 export function DelivereeWorkspace() {
   const {
@@ -277,6 +293,8 @@ export function DelivereeWorkspace() {
   const [categories, setCategories] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
+  const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
+  const [invoiceBusyId, setInvoiceBusyId] = useState("");
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
     [],
   );
@@ -401,6 +419,8 @@ export function DelivereeWorkspace() {
             : "portfolio"
           : lens.kind === "agents"
             ? "agents"
+            : lens.kind === "invoices"
+              ? "invoices"
             : "conversation";
   const goCenterView = (next: CenterView) => {
     const projectId =
@@ -414,6 +434,7 @@ export function DelivereeWorkspace() {
     else if (next === "items") navigate("/my-work");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
+    else if (next === "invoices") navigate("/invoices");
     else navigate("/home");
   };
   const projectConsoleInitialTab =
@@ -559,6 +580,9 @@ export function DelivereeWorkspace() {
       ...projectUnsubscribers,
       ...taskUnsubscribers,
       makeQuery("milestones", setMilestones),
+      makeQuery("invoice_documents", (items) =>
+        setInvoiceDocuments(items as InvoiceDocument[]),
+      ),
       makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
       makeQuery("categories", setCategories),
@@ -919,6 +943,15 @@ export function DelivereeWorkspace() {
   const canManageMembers = canManageWorkspaceMembers(
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
+  );
+  const canOperateInvoiceQueue = canOperateInvoices(
+    currentWorkspaceMember?.role,
+    workspace?.ownerId === user?.uid,
+    currentWorkspaceMember?.financeAccess,
+  );
+  const pendingInvoiceQueue = useMemo(
+    () => pendingInvoiceLines(projects, invoiceDocuments),
+    [projects, invoiceDocuments],
   );
 
   useEffect(() => {
@@ -1938,6 +1971,131 @@ export function DelivereeWorkspace() {
   ) => {
     await updateDoc(doc(db, "projects", projectId), {
       ...patch,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const syncInvoiceToProject = async (invoice: InvoiceDocument) => {
+    if (!invoice.projectId || !invoice.entryId) return;
+    const project = projects.find((item) => item.id === invoice.projectId);
+    if (!project) return;
+    await updateProject(invoice.projectId, {
+      financePeriods: stripUndefinedValues(
+        applyInvoiceToFinancePeriods(project, invoice),
+      ),
+    });
+  };
+
+  const pushPendingInvoice = async (line: PendingInvoiceLine) => {
+    if (!user || !workspace) return;
+    setInvoiceBusyId(`${line.projectId}:${line.entryId}`);
+    try {
+      const token = createShareToken();
+      const invoiceNumber =
+        line.invoiceNumber ||
+        nextInvoiceNumber(invoiceDocuments.map((item) => String(item.invoiceNumber || "")));
+      const payload = {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        createdBy: user.uid,
+        shareToken: token,
+        projectId: line.projectId,
+        periodId: line.periodId,
+        entryId: line.entryId,
+        title: line.title,
+        description: `${line.projectTitle} · ${line.periodLabel}`,
+        clientName: line.clientName,
+        invoiceNumber,
+        amount: line.amount,
+        currency: line.currency || "USD",
+        issueDate: line.issueDate || new Date().toISOString().slice(0, 10),
+        dueDate: line.dueDate,
+        status: "billed" as InvoiceStatus,
+        paymentStatus: "unpaid" as const,
+        revoked: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      await setDoc(doc(db, "invoice_documents", token), payload);
+      await syncInvoiceToProject({
+        id: token,
+        ...payload,
+        status: "billed",
+      });
+      setNotice(`Pushed ${invoiceNumber} to the AP queue. Send it to the client when ready.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Could not push this invoice.");
+    } finally {
+      setInvoiceBusyId("");
+    }
+  };
+
+  const updateInvoiceStatus = async (
+    invoice: InvoiceDocument,
+    patch: {
+      status: InvoiceStatus;
+      settledAmount?: number;
+      settledDate?: string;
+      remittanceRef?: string;
+      exceptionCode?: string;
+      exceptionNote?: string;
+      rejectionReason?: string;
+      adminNote?: string;
+    },
+  ) => {
+    if (!canTransitionInvoice(invoice.status, patch.status, "finance")) {
+      setNotice("That status change is not allowed from this step.");
+      return;
+    }
+    setInvoiceBusyId(invoice.id);
+    try {
+      const overdue = isInvoiceOverdue({ ...invoice, status: patch.status });
+      const next: InvoiceDocument = {
+        ...invoice,
+        status: patch.status,
+        paymentStatus: paymentStatusForInvoice(
+          patch.status,
+          Number(patch.settledAmount || invoice.settledAmount || 0),
+          Number(invoice.amount || 0),
+          overdue,
+        ),
+        settledAmount: patch.settledAmount,
+        settledDate: patch.settledDate,
+        remittanceRef: patch.remittanceRef,
+        exceptionCode: patch.exceptionCode,
+        exceptionNote: patch.exceptionNote,
+        rejectionReason: patch.rejectionReason,
+        adminNote: patch.adminNote,
+      };
+      await updateDoc(doc(db, "invoice_documents", invoice.id), {
+        shareToken: invoice.shareToken || invoice.id,
+        status: next.status,
+        paymentStatus: next.paymentStatus,
+        settledAmount: Number(next.settledAmount || 0),
+        settledDate: next.settledDate || "",
+        remittanceRef: next.remittanceRef || "",
+        exceptionCode: next.exceptionCode || "",
+        exceptionNote: next.exceptionNote || "",
+        rejectionReason: next.rejectionReason || "",
+        adminNote: next.adminNote || "",
+        updatedAt: serverTimestamp(),
+      });
+      await syncInvoiceToProject(next);
+      setNotice(`${next.invoiceNumber || "Invoice"} is now ${String(patch.status).replace(/_/g, " ")}.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Could not update this invoice.");
+    } finally {
+      setInvoiceBusyId("");
+    }
+  };
+
+  const toggleMemberFinanceAccess = async (member: {
+    id?: string;
+    financeAccess?: boolean;
+  }) => {
+    if (!member.id || !canManageMembers) return;
+    await updateDoc(doc(db, "workspace_members", member.id), {
+      financeAccess: !member.financeAccess,
       updatedAt: serverTimestamp(),
     });
   };
@@ -2994,6 +3152,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/approvals"),
       },
       {
+        id: "nav-invoices",
+        label: "Open invoices",
+        group: "Navigate",
+        keywords: "finance billing ap ariba paid invoice portal",
+        onSelect: () => navigate("/invoices"),
+      },
+      {
         id: "nav-workspace",
         label: "Workspace & team",
         group: "Navigate",
@@ -3054,7 +3219,7 @@ export function DelivereeWorkspace() {
   ]);
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -3189,6 +3354,25 @@ export function DelivereeWorkspace() {
                 className={`do-nav-badge ${reviewItems.some((item) => Date.now() - timestamp(item.createdAt) > 48 * 3600 * 1000) ? "is-critical" : ""}`}
               >
                 {reviewItems.length}
+              </em>
+            )}
+          </button>
+          <button
+            className={`do-nav-item is-invoices ${lens.kind === "invoices" ? "is-active" : ""}`}
+            data-testid="nav-invoices"
+            onClick={() => {
+              navigate("/invoices");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Receipt size="sm" />
+            <span>{t("navInvoices")}</span>
+            {(pendingInvoiceQueue.length > 0 ||
+              invoiceDocuments.some((item) => isInvoiceOverdue(item))) && (
+              <em className="do-nav-badge">
+                {pendingInvoiceQueue.length +
+                  invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length}
               </em>
             )}
           </button>
@@ -3655,6 +3839,7 @@ export function DelivereeWorkspace() {
                           : []),
                     ]
                   : []),
+                ...(lens.kind === "invoices" ? [{ label: "Invoices" }] : []),
                 ...(activeProject
                   ? [
                       {
@@ -4174,6 +4359,19 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
           </div>
+        ) : centerView === "invoices" ? (
+          <InvoiceCenter
+            busyId={invoiceBusyId}
+            canOperate={canOperateInvoiceQueue}
+            invoices={invoiceDocuments}
+            onOpenProject={(projectId) => {
+              const project = projects.find((item) => item.id === projectId);
+              if (project) openProjectRecord(project);
+            }}
+            onPush={pushPendingInvoice}
+            onUpdateStatus={updateInvoiceStatus}
+            pending={pendingInvoiceQueue}
+          />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
             <AgentBuilderDraft
@@ -4968,6 +5166,26 @@ export function DelivereeWorkspace() {
                 </div>
               </section>
 
+              {canOperateInvoiceQueue && (
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Invoices</span>
+                  <strong>
+                    {pendingInvoiceQueue.length} ready to push
+                    {" · "}
+                    {invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length} overdue
+                  </strong>
+                </div>
+                <p className="do-panel-intro">
+                  Push pending project invoices into the AP queue. Finance marks billed, sent,
+                  approved, paid, rejected, void, or problem. Clients can confirm payment from a portal link.
+                </p>
+                <button onClick={() => navigate("/invoices")} type="button">
+                  Open invoice queue
+                </button>
+              </section>
+              )}
+
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Beta access</span>
@@ -5101,13 +5319,23 @@ export function DelivereeWorkspace() {
                           </select>
                         )}
                         {!isOwner && canManageMembers && (
-                          <button
-                            className="do-member-remove"
-                            onClick={() => removeWorkspaceMember(member)}
-                            type="button"
-                          >
-                            <UserMinus size={13} /> Remove
-                          </button>
+                          <>
+                            <label className="do-member-finance">
+                              <input
+                                checked={Boolean(member.financeAccess)}
+                                onChange={() => toggleMemberFinanceAccess(member)}
+                                type="checkbox"
+                              />
+                              Finance
+                            </label>
+                            <button
+                              className="do-member-remove"
+                              onClick={() => removeWorkspaceMember(member)}
+                              type="button"
+                            >
+                              <UserMinus size={13} /> Remove
+                            </button>
+                          </>
                         )}
                       </article>
                     );

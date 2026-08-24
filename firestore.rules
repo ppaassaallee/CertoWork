@@ -68,6 +68,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    function isFinanceOperator(workspaceId) {
+      return isWorkspaceAdmin(workspaceId)
+        || (
+          exists(memberDoc(workspaceId))
+          && get(memberDoc(workspaceId)).data.status == "active"
+          && get(memberDoc(workspaceId)).data.financeAccess == true
+        );
+    }
+
     function hasExplicitUserAccess(data) {
       return (
         ('visibleToUserIds' in data) &&
@@ -338,6 +347,97 @@ service cloud.firestore {
                     && incoming().userId == resource.data.userId
                     && incoming().createdAt == resource.data.createdAt;
       allow delete: if isSignedIn() && isValidId(candidateId) && resource.data.userId == request.auth.uid;
+    }
+
+    match /invoice_documents/{id} {
+      allow get: if isValidId(id) && resource.data.shareToken == id && resource.data.revoked != true;
+      allow list: if isSignedIn() && resource.data.workspaceId is string
+                  && isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isSignedIn() && isValidId(id) && isValidInvoiceCreate(incoming())
+                    && incoming().shareToken == id;
+      allow update: if isValidId(id) && resource.data.shareToken == id && resource.data.revoked != true
+                    && (
+                      (isSignedIn() && isFinanceOperator(resource.data.workspaceId)
+                        && isValidInvoiceFinanceUpdate(resource.data, incoming()))
+                      || isValidInvoiceClientUpdate(resource.data, incoming())
+                    );
+      allow delete: if false;
+    }
+
+    function isValidInvoiceCreate(data) {
+      return data.keys().hasAll(['userId', 'workspaceId', 'createdBy', 'shareToken', 'title', 'amount', 'currency', 'status', 'paymentStatus', 'createdAt'])
+        && data.userId is string && data.userId == request.auth.uid
+        && data.createdBy is string && data.createdBy == request.auth.uid
+        && data.workspaceId is string && isWorkspaceMember(data.workspaceId)
+        && data.shareToken is string && data.shareToken.size() >= 16
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 500
+        && data.amount is number && data.amount >= 0
+        && data.currency is string && data.currency.size() >= 3 && data.currency.size() <= 8
+        && data.status == 'billed'
+        && data.paymentStatus in ['unpaid', 'partial', 'paid', 'overdue']
+        && data.createdAt is timestamp
+        && (!('projectId' in data) || data.projectId is string)
+        && (!('periodId' in data) || data.periodId is string)
+        && (!('entryId' in data) || data.entryId is string)
+        && (!('invoiceNumber' in data) || data.invoiceNumber is string && data.invoiceNumber.size() <= 64)
+        && (!('clientName' in data) || data.clientName is string && data.clientName.size() <= 120)
+        && (!('description' in data) || data.description is string && data.description.size() <= 4000)
+        && (!('issueDate' in data) || data.issueDate is string)
+        && (!('dueDate' in data) || data.dueDate is string)
+        && (!('revoked' in data) || data.revoked == false)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidInvoiceFinanceUpdate(before, after) {
+      return after.userId == before.userId
+        && after.workspaceId == before.workspaceId
+        && after.createdBy == before.createdBy
+        && after.shareToken == before.shareToken
+        && after.createdAt == before.createdAt
+        && after.status in ['billed', 'sent', 'pending_approval', 'approved', 'paid', 'rejected', 'void', 'exception']
+        && after.paymentStatus in ['unpaid', 'partial', 'paid', 'overdue']
+        && after.diff(before).affectedKeys().hasOnly([
+          'status', 'paymentStatus', 'updatedAt', 'invoiceNumber', 'dueDate', 'issueDate',
+          'adminNote', 'exceptionCode', 'exceptionNote', 'rejectionReason', 'clientNote',
+          'remittanceRef', 'settledAmount', 'settledDate', 'revoked', 'clientUpdatedAt'
+        ])
+        && (!('invoiceNumber' in after) || after.invoiceNumber is string && after.invoiceNumber.size() <= 64)
+        && (!('adminNote' in after) || after.adminNote is string && after.adminNote.size() <= 2000)
+        && (!('exceptionNote' in after) || after.exceptionNote is string && after.exceptionNote.size() <= 2000)
+        && (!('rejectionReason' in after) || after.rejectionReason is string && after.rejectionReason.size() <= 2000)
+        && (!('clientNote' in after) || after.clientNote is string && after.clientNote.size() <= 2000)
+        && (!('remittanceRef' in after) || after.remittanceRef is string && after.remittanceRef.size() <= 120)
+        && (!('exceptionCode' in after) || after.exceptionCode in ['price_mismatch', 'quantity_mismatch', 'missing_receipt', 'missing_po', 'duplicate', 'tax', 'other', ''])
+        && (!('settledAmount' in after) || after.settledAmount is number)
+        && (!('settledDate' in after) || after.settledDate is string)
+        && (!('updatedAt' in after) || after.updatedAt is timestamp)
+        && (!('clientUpdatedAt' in after) || after.clientUpdatedAt is timestamp)
+        && (!('revoked' in after) || after.revoked is bool);
+    }
+
+    function isValidInvoiceClientUpdate(before, after) {
+      return after.userId == before.userId
+        && after.workspaceId == before.workspaceId
+        && after.createdBy == before.createdBy
+        && after.shareToken == before.shareToken
+        && after.createdAt == before.createdAt
+        && before.status in ['sent', 'pending_approval', 'approved', 'exception']
+        && after.status in ['paid', 'rejected', 'exception']
+        && after.paymentStatus in ['unpaid', 'partial', 'paid', 'overdue']
+        && after.diff(before).affectedKeys().hasOnly([
+          'status', 'paymentStatus', 'updatedAt', 'clientUpdatedAt', 'exceptionCode',
+          'exceptionNote', 'rejectionReason', 'clientNote', 'remittanceRef',
+          'settledAmount', 'settledDate'
+        ])
+        && (!('exceptionCode' in after) || after.exceptionCode in ['price_mismatch', 'quantity_mismatch', 'missing_receipt', 'missing_po', 'duplicate', 'tax', 'other', ''])
+        && (!('settledAmount' in after) || after.settledAmount is number)
+        && (!('settledDate' in after) || after.settledDate is string)
+        && (!('remittanceRef' in after) || after.remittanceRef is string && after.remittanceRef.size() <= 120)
+        && (!('clientNote' in after) || after.clientNote is string && after.clientNote.size() <= 2000)
+        && (!('exceptionNote' in after) || after.exceptionNote is string && after.exceptionNote.size() <= 2000)
+        && (!('rejectionReason' in after) || after.rejectionReason is string && after.rejectionReason.size() <= 2000)
+        && (!('updatedAt' in after) || after.updatedAt is timestamp)
+        && (!('clientUpdatedAt' in after) || after.clientUpdatedAt is timestamp);
     }
 
     // Workspace-shared cost models used by the delivery control tower.
