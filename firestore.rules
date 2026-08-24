@@ -19,7 +19,11 @@ service cloud.firestore {
     match /workspaces/{id} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && incoming().keys().hasAll(['ownerId', 'name', 'createdAt']) && incoming().ownerId == request.auth.uid;
-      allow update: if isSignedIn() && (resource.data.ownerId == request.auth.uid || (resource.data.members is list && request.auth.token.email != null && request.auth.token.email in resource.data.members)) && incoming().keys().hasAll(['ownerId', 'name', 'createdAt']) && incoming().ownerId == resource.data.ownerId && incoming().createdAt == resource.data.createdAt;
+      allow update: if isSignedIn()
+        && (resource.data.ownerId == request.auth.uid || (resource.data.members is list && request.auth.token.email != null && request.auth.token.email in resource.data.members))
+        && incoming().ownerId == resource.data.ownerId
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
+        && (!('createdAt' in resource.data) || incoming().createdAt == resource.data.createdAt);
       allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
     }
 
@@ -103,13 +107,23 @@ service cloud.firestore {
       );
     }
 
+    function isWorkspaceViewer(workspaceId) {
+      return isSignedIn()
+        && workspaceId != null
+        && exists(memberDoc(workspaceId))
+        && get(memberDoc(workspaceId)).data.status == "active"
+        && get(memberDoc(workspaceId)).data.role == "viewer";
+    }
+
     function canWriteProject(data) {
       return isSignedIn() && (
         data.userId == request.auth.uid ||
         (('createdBy' in data) && data.createdBy == request.auth.uid) ||
         (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
-        (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId))
+        (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && !isWorkspaceViewer(data.workspaceId))
       );
     }
 

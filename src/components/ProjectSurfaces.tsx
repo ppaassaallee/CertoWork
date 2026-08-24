@@ -5749,7 +5749,7 @@ export function ProjectCommandCenter({
                               : phasesForStage(nextStage)[0];
                             onUpdateProject(project.id, {
                               deliveryStage: nextStage,
-                              phase: nextPhase,
+                              deliveryPhase: nextPhase,
                             });
                           })()
                         }

@@ -54,6 +54,15 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(workspace, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
 });
 
+test("shared workspace members can update projects they can already see", () => {
+  const canWrite = ruleFn("canWriteProject");
+  assert.match(canWrite, /hasExplicitUserAccess\(data\)/);
+  assert.match(canWrite, /isWorkspaceMember\(data\.workspaceId\)/);
+  assert.match(canWrite, /!isWorkspaceViewer\(data\.workspaceId\)/);
+  assert.match(workspace, /Project update was not saved/);
+  assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
+});
+
 test("project sharing writes user ids that the rules can honor", () => {
   assert.match(projectSurfaces, /value=\{member\.userId \|\| member\.id\}/);
   assert.match(projectSurfaces, /visibleToUserIds: ids, sharedWithUserIds: ids/);
