@@ -32,24 +32,35 @@
 }
 .do-signin {
   position: relative;
-  min-height: 100dvh;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100dvh;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   background: #090b09;
   color: var(--surface-0) af0;
 }
 .do-signin-bg {
-  position: absolute;
+  position: fixed;
   display: block;
   inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background-image: url("/certo-work-hero.png");
   background-size: cover;
   background-position: center;
   transform: scale(1.01);
 }
 .do-signin-vignette {
-  position: absolute;
+  position: fixed;
   display: block;
   inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background:
     linear-gradient(
       90deg,
@@ -402,7 +413,9 @@
 }
 @media (max-width: 760px) {
   .do-signin {
-    min-height: 100dvh;
+    height: 100%;
+    max-height: 100dvh;
+    overflow-x: hidden;
     overflow-y: auto;
   }
   .do-signin > header {

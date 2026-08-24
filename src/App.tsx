@@ -112,7 +112,7 @@ function SignIn() {
         </div>
         <nav aria-label="Certo Work access">
           <button disabled={submitting} onClick={() => resetPanel("signin")} type="button">Sign in</button>
-          <button disabled={submitting} onClick={() => resetPanel("access")} type="button">Beta access</button>
+          <button className="do-signin-nav-extra" disabled={submitting} onClick={() => resetPanel("access")} type="button">Beta access</button>
           <a href={DEMO_BOOKING_URL} rel="noopener" target="_blank">Book demo</a>
         </nav>
       </header>
