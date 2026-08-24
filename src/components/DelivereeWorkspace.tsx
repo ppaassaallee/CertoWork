@@ -4154,7 +4154,7 @@ export function DelivereeWorkspace() {
               </div>
             )}
             <WorkItemsCenter
-            activeProject={routeOrPrimaryProject}
+            activeProject={null}
             onAddTask={addProjectTask}
             onAsk={(prompt) => {
               setComposer(prompt);
@@ -4262,6 +4262,7 @@ export function DelivereeWorkspace() {
               }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
+              onCreateControlledOption={createControlledOption}
               onCreateShareLink={async () => {
                 if (!user || !workspace) return;
                 const token = createShareToken();
@@ -4309,11 +4310,13 @@ export function DelivereeWorkspace() {
                 (item) => item.projectId === consoleProject.id,
               )}
               sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
+              tags={categories}
               tasks={tasks.filter(
                 (item) => item.projectId === consoleProject.id,
               )}
               workspace={workspace}
               workspaceMembers={workspaceMembers}
+              projects={projects}
             />
           ) : (
             <div className="do-panel-empty">
@@ -4407,6 +4410,7 @@ export function DelivereeWorkspace() {
                 }
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
+                onCreateControlledOption={createControlledOption}
                 onDeleteProject={deleteProject}
                 onRestoreProject={restoreProject}
                 onAsk={setComposer}
@@ -4417,10 +4421,13 @@ export function DelivereeWorkspace() {
                 risks={risks.filter(
                   (item) => item.projectId === consoleProject.id,
                 )}
+                sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
+                tags={categories}
                 tasks={tasks.filter(
                   (item) => item.projectId === consoleProject.id,
                 )}
                 workspaceMembers={workspaceMembers}
+                projects={projects}
               />
             ) : (
               <div className="do-panel-empty">

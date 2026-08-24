@@ -8896,6 +8896,37 @@ a {
   gap: 5px 9px;
   align-self: center;
 }
+.do-fields-popover {
+  min-width: 260px;
+  max-height: min(70vh, 420px);
+  overflow: auto;
+}
+.do-fields-popover > strong {
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 800;
+}
+.do-fields-popover > span {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.35;
+}
+.do-fields-popover .do-column-picker {
+  display: grid;
+  gap: 4px;
+}
+.do-column-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.do-column-toggle input {
+  width: auto;
+  margin: 0;
+}
 .do-column-picker label {
   display: inline-flex;
   grid-auto-flow: column;
