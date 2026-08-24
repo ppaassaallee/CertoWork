@@ -2982,12 +2982,6 @@ a {
   color: var(--text-primary);
   font-size: var(--text-caption);
 }
-  color: var(--surface-0);
-  padding: 8px 12px;
-  font-size: var(--text-caption);
-  font-weight: 600;
-  cursor: pointer;
-}
 .do-console-hero-actions {
   display: flex;
   gap: 6px;
