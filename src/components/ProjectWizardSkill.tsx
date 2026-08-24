@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, FolderPlus, Sparkles, WandSparkles, X } from "./ui/Icon";
 import {
   DELIVEREE_SKILLS,
   EMPTY_PROJECT_WIZARD_DRAFT,
+  PROJECT_WIZARD_OPTIONAL_FIELDS,
+  projectWizardBlockingFields,
   projectWizardDraftFromProject,
   projectWizardMissingFields,
+  seedProjectWizardDraft,
   splitProjectWizardLines,
   type ProjectMethodology,
   type ProjectWizardDraft,
+  type ProjectWizardMissingField,
   type ProjectWizardMode,
 } from "../lib/delivereeSkills";
 
@@ -43,7 +47,12 @@ export function ProjectWizardSkill({
   const [draft, setDraft] = useState<ProjectWizardDraft>(EMPTY_PROJECT_WIZARD_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const fieldRefs = useRef<Partial<Record<ProjectWizardMissingField, HTMLElement | null>>>({});
   const skill = DELIVEREE_SKILLS[0];
+
+  const bindField = (field: ProjectWizardMissingField) => (element: HTMLElement | null) => {
+    fieldRefs.current[field] = element;
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,6 +69,7 @@ export function ProjectWizardSkill({
   );
 
   const missing = projectWizardMissingFields(draft);
+  const blocking = projectWizardBlockingFields(draft);
   const criteriaCount = splitProjectWizardLines(draft.successCriteriaText).length;
 
   if (!isOpen) return null;
@@ -72,16 +82,28 @@ export function ProjectWizardSkill({
     setDraft(project ? projectWizardDraftFromProject(project) : EMPTY_PROJECT_WIZARD_DRAFT);
   };
 
+  const focusField = (field: ProjectWizardMissingField) => {
+    const element = fieldRefs.current[field];
+    element?.focus();
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   const save = async () => {
-    if (missing.length > 0 || saving) return;
+    if (saving) return;
+    if (blocking.length > 0) {
+      setError(`Complete: ${blocking[0]}.`);
+      focusField(blocking[0]);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
+      const payload = mode === "create" ? seedProjectWizardDraft(draft) : draft;
       if (mode === "update") {
         if (!selectedProject) throw new Error("Choose the project you want to update.");
-        await onUpdateProject(selectedProject.id, draft);
+        await onUpdateProject(selectedProject.id, payload);
       } else {
-        await onCreateProject(draft);
+        await onCreateProject(payload);
       }
       onClose();
     } catch (err) {
@@ -109,17 +131,18 @@ export function ProjectWizardSkill({
         <div className="do-skill-body">
           <aside className="do-skill-readiness">
             <span className="do-kicker">Minimum project clarity</span>
-            <h3>{missing.length === 0 ? "Ready to save" : `${missing.length} thing${missing.length === 1 ? "" : "s"} missing`}</h3>
+            <h3>{blocking.length === 0 ? "Ready to save" : `${blocking.length} thing${blocking.length === 1 ? "" : "s"} missing`}</h3>
             <p>
               This skill prevents vague projects by asking only the minimum needed to make the work usable by a team.
             </p>
             <div>
               {skill.minimalInputs.map((field) => {
                 const done = !missing.includes(field);
+                const optional = PROJECT_WIZARD_OPTIONAL_FIELDS.includes(field);
                 return (
                   <span className={done ? "is-done" : ""} key={field}>
                     {done ? <Check size={12} /> : <ChevronRight size={12} />}
-                    {field}
+                    {optional ? `${field} (optional)` : field}
                   </span>
                 );
               })}
@@ -171,6 +194,7 @@ export function ProjectWizardSkill({
                 <input
                   onChange={(event) => update({ title: event.target.value })}
                   placeholder="e.g. KruOps Marketplace"
+                  ref={bindField("Project name")}
                   value={draft.title}
                 />
               </label>
@@ -178,6 +202,7 @@ export function ProjectWizardSkill({
                 <span>Method</span>
                 <select
                   onChange={(event) => update({ methodology: event.target.value as ProjectMethodology })}
+                  ref={bindField("Method")}
                   value={draft.methodology}
                 >
                   <option value="Hybrid">Hybrid</option>
@@ -193,6 +218,7 @@ export function ProjectWizardSkill({
               <textarea
                 onChange={(event) => update({ outcome: event.target.value })}
                 placeholder="Describe the observable result, not the activity."
+                ref={bindField("Outcome")}
                 value={draft.outcome}
               />
             </label>
@@ -202,6 +228,7 @@ export function ProjectWizardSkill({
               <textarea
                 onChange={(event) => update({ why: event.target.value })}
                 placeholder="Strategic value, user/customer need, risk avoided, or business result."
+                ref={bindField("Why it matters")}
                 value={draft.why}
               />
             </label>
@@ -212,6 +239,7 @@ export function ProjectWizardSkill({
                 <input
                   onChange={(event) => update({ owner: event.target.value })}
                   placeholder="Person accountable for delivery"
+                  ref={bindField("Owner")}
                   value={draft.owner}
                 />
               </label>
@@ -220,6 +248,7 @@ export function ProjectWizardSkill({
                 <input
                   disabled={draft.noTargetDate}
                   onChange={(event) => update({ targetDate: event.target.value, noTargetDate: false })}
+                  ref={bindField("Target date or no-date decision")}
                   type="date"
                   value={draft.noTargetDate ? "" : draft.targetDate}
                 />
@@ -246,7 +275,8 @@ export function ProjectWizardSkill({
                 <span>First next action</span>
                 <input
                   onChange={(event) => update({ firstAction: event.target.value })}
-                  placeholder="Concrete first action the team can take"
+                  placeholder="Optional. If empty, we create one from the project name."
+                  ref={bindField("First next action")}
                   value={draft.firstAction}
                 />
               </label>
@@ -257,6 +287,7 @@ export function ProjectWizardSkill({
               <textarea
                 onChange={(event) => update({ successCriteriaText: event.target.value })}
                 placeholder="One per line. Example: Pilot user can create and assign work orders."
+                ref={bindField("Success criteria")}
                 value={draft.successCriteriaText}
               />
               <small>{criteriaCount} success criteri{criteriaCount === 1 ? "on" : "a"} captured</small>
@@ -267,6 +298,7 @@ export function ProjectWizardSkill({
               <textarea
                 onChange={(event) => update({ definitionOfDone: event.target.value })}
                 placeholder="What must be true before the project can be considered complete?"
+                ref={bindField("Definition of done")}
                 value={draft.definitionOfDone}
               />
             </label>
@@ -276,10 +308,21 @@ export function ProjectWizardSkill({
         </div>
 
         <footer className="do-skill-foot">
-          <span>{missing.length === 0 ? "Looks solid. This can become real work now." : `Complete: ${missing.join(", ")}`}</span>
+          <span>
+            {blocking.length > 0
+              ? `Complete: ${blocking.join(", ")}`
+              : missing.includes("First next action")
+                ? "Ready. We'll add a first next action from the project name."
+                : "Looks solid. This can become real work now."}
+          </span>
           <div>
             <button onClick={onClose} type="button">Cancel</button>
-            <button disabled={missing.length > 0 || saving} onClick={save} type="button">
+            <button
+              className="do-skill-create"
+              disabled={saving}
+              onClick={save}
+              type="button"
+            >
               {saving ? "Saving..." : mode === "update" ? "Update project" : "Create project"}
             </button>
           </div>
