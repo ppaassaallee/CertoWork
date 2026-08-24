@@ -592,7 +592,7 @@
     letter-spacing: 0.08em !important;
   }
 
-  .do-signin-nav-extra {
+  .do-signin nav button.do-signin-nav-extra {
     display: none;
   }
 
