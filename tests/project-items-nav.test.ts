@@ -27,7 +27,7 @@ test("project console exposes one Items tab, not a separate Tasks + Backlog pair
     /aria-label="Project console sections"[\s\S]*?<\/nav>/,
   );
   assert.ok(tabsMatch, "console tabs nav missing");
-  assert.match(tabsMatch[0], /\["items", "Items"\]/);
+  assert.match(tabsMatch[0], /\["items", "Items"(?:, false)?\]/);
   assert.doesNotMatch(tabsMatch[0], /\["backlog", "Backlog"\]/);
   assert.match(consoleSource, /data-testid="project-items"/);
 

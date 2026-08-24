@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Circle,
   CalendarRange,
+  Clipboard,
   Folder,
   GripVertical,
   ListChecks,
@@ -29,6 +30,8 @@ import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
+import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
+import { useMobileCore } from "../hooks/useMobileCore";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
@@ -82,7 +85,7 @@ type Props = {
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
-  onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<void> | void;
+  onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
@@ -487,6 +490,7 @@ export function WorkItemsCenter({
   onUpdateSprint: _onUpdateSprint,
   compact = false,
 }: Props) {
+  const mobileCore = useMobileCore();
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
@@ -532,6 +536,10 @@ export function WorkItemsCenter({
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addSprintOpen, setAddSprintOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteSaving, setPasteSaving] = useState(false);
+  const [pasteError, setPasteError] = useState("");
   const [filterDraft, setFilterDraft] = useState("status");
   const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
@@ -570,9 +578,11 @@ export function WorkItemsCenter({
       return defaultItemColumnPixels;
     }
   });
-  const itemColumnSet = new Set(visibleItemColumns);
+  const itemColumnSet = new Set(
+    mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
+  );
   const itemGridStyle = {
-    gridTemplateColumns: `20px 20px 28px ${visibleItemColumns
+    gridTemplateColumns: `20px 20px 28px ${[...itemColumnSet]
       .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
       .join(" ")}`,
   };
@@ -692,6 +702,10 @@ export function WorkItemsCenter({
     window.localStorage.setItem("certo-items-focus-list", String(chromeCollapsed));
   }, [chromeCollapsed]);
 
+  useEffect(() => {
+    if (mobileCore && mode !== "list") setMode("list");
+  }, [mobileCore, mode]);
+
   const owners = useMemo(
     () => [...new Set([
       ...workspaceMembers
@@ -754,6 +768,8 @@ export function WorkItemsCenter({
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
   const canCreate = Boolean(newTitle.trim());
+  const pasteTree = useMemo(() => parseBulkPasteItems(pasteText), [pasteText]);
+  const pasteCounts = useMemo(() => countBulkPasteItems(pasteTree), [pasteTree]);
 
   useEffect(() => {
     setDetailDescription(
@@ -792,6 +808,54 @@ export function WorkItemsCenter({
     });
     setNewTitle("");
     setNewParentId("");
+  };
+
+  const createBulkNodes = async (
+    nodes: BulkPasteNode[],
+    projectId: string,
+    parentId: string,
+    parentKind: WorkItemKind | null,
+    startOrder: number,
+  ) => {
+    let order = startOrder;
+    for (const node of nodes) {
+      const kind = parentId ? "subtask" : "pbi";
+      const createdId = await onAddTask(projectId, node.title, "backlog", {
+        workItemType: kind,
+        itemType: kind,
+        taskType: kind,
+        parentId: parentId || null,
+        epicId: parentKind === "epic" ? parentId : null,
+        featureId: parentKind === "feature" ? parentId : null,
+        source: "bulk_paste",
+        priority: null,
+        order,
+        rank: order,
+      });
+      order += 1;
+      if (node.children.length && createdId) {
+        order = await createBulkNodes(node.children, projectId, createdId, kind, order);
+      }
+    }
+    return order;
+  };
+
+  const createBulkItems = async () => {
+    const nodes = parseBulkPasteItems(pasteText);
+    if (!nodes.length || pasteSaving) return;
+    const projectId = newProjectId || baseProjectId;
+    setPasteSaving(true);
+    setPasteError("");
+    try {
+      const startOrder = tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length;
+      await createBulkNodes(nodes, projectId, "", null, startOrder);
+      setPasteText("");
+      setPasteOpen(false);
+    } catch (reason) {
+      setPasteError(reason instanceof Error ? reason.message : "Could not paste those items.");
+    } finally {
+      setPasteSaving(false);
+    }
   };
 
   const reorderItem = async (
@@ -970,7 +1034,7 @@ export function WorkItemsCenter({
       <span />
       <span />
       <span />
-      {visibleItemColumns.map((column) => (
+      {[...itemColumnSet].map((column) => (
         <strong key={column}>{itemColumnLabels[column]}</strong>
       ))}
     </div>
@@ -1299,13 +1363,13 @@ export function WorkItemsCenter({
         </datalist>
         <div className="do-items-mode" aria-label="Work item view">
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
-          <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
-          <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
-          <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>
+          <button aria-label="Kanban view" className={`do-mobile-advanced ${mode === "kanban" ? "is-active" : ""}`} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
+          <button aria-label="Gantt view" className={`do-mobile-advanced ${mode === "gantt" ? "is-active" : ""}`} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
+          <button aria-label="Epics view" className={`do-mobile-advanced ${mode === "epics" ? "is-active" : ""}`} onClick={() => setMode("epics")} type="button">Epics</button>
         </div>
         <div className="do-items-toolbar-actions">
           <div className="do-popover-anchor">
-            <button aria-expanded={viewsOpen} aria-label="Views" className={viewsOpen ? "is-active" : ""} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
+            <button aria-expanded={viewsOpen} aria-label="Views" className={`do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
             {viewsOpen && (
               <div className="do-popover" role="menu">
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
@@ -1346,7 +1410,7 @@ export function WorkItemsCenter({
             <button
               aria-expanded={fieldsOpen}
               aria-label="Fields"
-              className={fieldsOpen ? "is-active" : ""}
+              className={`do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
               data-testid="item-fields-button"
               onClick={() => { setFieldsOpen((o) => !o); setViewsOpen(false); setFilterOpen(false); setSortOpen(false); }}
               type="button"
@@ -1461,7 +1525,7 @@ export function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button aria-expanded={sortOpen} aria-label="Sort" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">Sort</button>
+            <button aria-expanded={sortOpen} aria-label="Sort" className="do-mobile-advanced" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">Sort</button>
             {sortOpen && (
               <div className="do-popover">
                 <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
@@ -1471,8 +1535,16 @@ export function WorkItemsCenter({
             )}
           </div>
           <button aria-label="Add item" className="do-button do-button-dark" onClick={() => setAddItemOpen((o) => !o)} type="button"><Plus size={13} /> Add item</button>
+          <button
+            aria-label="Paste bulk items"
+            className="do-button-secondary do-mobile-advanced"
+            onClick={() => { setPasteOpen(true); setPasteError(""); }}
+            type="button"
+          >
+            <Clipboard size={13} /> Paste bulk items
+          </button>
           {onCreateSprint && (
-            <button aria-label="Add sprint" className="do-button-secondary" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
+            <button aria-label="Add sprint" className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
           )}
           <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
@@ -1529,8 +1601,60 @@ export function WorkItemsCenter({
         </section>
       )}
 
+      {pasteOpen && (
+        <div aria-label="Paste bulk items" aria-modal="true" className="do-skill-layer" role="dialog">
+          <section className="do-skill-modal do-paste-modal">
+            <header className="do-skill-head">
+              <div className="do-skill-title">
+                <span><Clipboard size={18} /></span>
+                <div>
+                  <small>{activeProject ? projectTitle(activeProject) : "My Work"}</small>
+                  <h2>Paste bulk items</h2>
+                  <p>
+                    Each line becomes a PBI{activeProject ? " on this project" : " as a general item"}.
+                    Indent with Tab (or two spaces) to create a subtask under the line above.
+                  </p>
+                </div>
+              </div>
+              <button aria-label="Close paste bulk items" onClick={() => setPasteOpen(false)} type="button"><X size={18} /></button>
+            </header>
+            <div className="do-skill-body">
+              <label className="do-skill-field">
+                <span>Item list</span>
+                <textarea
+                  aria-label="Bulk item list"
+                  onChange={(event) => setPasteText(event.target.value)}
+                  placeholder={"Launch checkout\n\tMap payment errors\n\tWrite retry copy\nPilot store"}
+                  value={pasteText}
+                />
+                <small>
+                  {pasteCounts.pbis} PBI{pasteCounts.pbis === 1 ? "" : "s"}
+                  {pasteCounts.subtasks ? ` · ${pasteCounts.subtasks} subtask${pasteCounts.subtasks === 1 ? "" : "s"}` : ""}
+                  {activeProject ? ` · ${projectTitle(activeProject)}` : " · general items"}
+                </small>
+              </label>
+              {pasteError && <p className="do-skill-error">{pasteError}</p>}
+            </div>
+            <footer className="do-skill-foot">
+              <span>Paste from a doc, chat, or spreadsheet. Tabs keep the hierarchy.</span>
+              <div>
+                <button onClick={() => setPasteOpen(false)} type="button">Cancel</button>
+                <button
+                  className="do-skill-create"
+                  disabled={!pasteTree.length || pasteSaving}
+                  onClick={createBulkItems}
+                  type="button"
+                >
+                  {pasteSaving ? "Adding..." : "Add items"}
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
+
       {selectedBulkIds.length > 0 && (
-        <section className="do-items-bulk" aria-label="Bulk actions">
+        <section className="do-items-bulk do-mobile-advanced" aria-label="Bulk actions">
           <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
           <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
@@ -1661,13 +1785,13 @@ export function WorkItemsCenter({
             /><AiRewriteButton context={{ itemTitle: title(selectedItem), itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_description" onRewrite={(next) => { setDetailDescription(next); return onUpdateTask(selectedItem.id, { description: next }); }} text={detailDescription} /></div>
             <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
-            <label>GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
-            <label>Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
-            <label>Delivery Entity<ControlledSelect ariaLabel="Selected item delivery entity" onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(selectedItem, projects)} /></label>
-            <label>Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
-            <label>Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
-            <label>Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
-            <label>Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
+            <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
+            <label className="do-mobile-advanced">Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
+            <label className="do-mobile-advanced">Delivery Entity<ControlledSelect ariaLabel="Selected item delivery entity" onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(selectedItem, projects)} /></label>
+            <label className="do-mobile-advanced">Client Entity<ControlledSelect ariaLabel="Selected item client entity" onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(selectedItem.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(selectedItem, projects)} /></label>
+            <label className="do-mobile-advanced">Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+            <label className="do-mobile-advanced">Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
+            <label className="do-mobile-advanced">Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
             <MultiAssigneePicker
               label="Item assignees"
@@ -1677,10 +1801,10 @@ export function WorkItemsCenter({
               selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}
             />
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
-            <label>Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
-            <label>Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
+            <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
+            <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
-            <label>Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
+            <label className="do-mobile-advanced">Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
               <button onClick={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)} type="button"><ArrowRight size={13} /> Ask</button>

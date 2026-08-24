@@ -35,6 +35,7 @@ import {
   parseTags,
   type NotebookEntry,
 } from "../lib/notebookContext";
+import { plainNoteText, renderNoteMarkup } from "../lib/noteMarkup";
 
 type StrokePoint = { x: number; y: number; pressure?: number };
 type Stroke = { color: string; width: number; points: StrokePoint[] };
@@ -71,6 +72,7 @@ export function NotesWorkspace({
 }: NotesWorkspaceProps) {
   const { user, workspace } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const drawingRef = useRef<StrokePoint[]>([]);
   const [selectedNotebookId, setSelectedNotebookId] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState("");
@@ -209,6 +211,20 @@ export function NotesWorkspace({
     window.addEventListener("resize", () => drawStrokes(strokes), { once: true });
     return () => window.cancelAnimationFrame(frame);
   }, [inkOpen, strokes]);
+
+  const wrapSelection = (prefix: string, suffix = prefix) => {
+    const field = editorRef.current;
+    const start = field?.selectionStart ?? editor.content.length;
+    const end = field?.selectionEnd ?? editor.content.length;
+    const selected = editor.content.slice(start, end) || "text";
+    const next = `${editor.content.slice(0, start)}${prefix}${selected}${suffix}${editor.content.slice(end)}`;
+    setEditor((current) => ({ ...current, content: next }));
+    window.requestAnimationFrame(() => {
+      field?.focus();
+      const caret = start + prefix.length + selected.length + suffix.length;
+      field?.setSelectionRange(caret, caret);
+    });
+  };
 
   const createNotebook = async (title = newNotebookTitle || "New notebook") => {
     if (!user || !workspace) return;
@@ -480,7 +496,7 @@ export function NotesWorkspace({
               <FileText size={13} />
               <span>
                 <strong>{note.title || "Untitled note"}</strong>
-                <small>{(note.content || "Empty note").slice(0, 86)}</small>
+                <small>{plainNoteText(note.content || "Empty note").slice(0, 86) || "Empty note"}</small>
               </span>
             </button>
           ))}
@@ -503,8 +519,8 @@ export function NotesWorkspace({
               </div>
               <div className="do-notes-actions">
                 <button aria-label={inkOpen ? "Close handwriting" : "Handwrite"} className="do-icon-button" onClick={() => setInkOpen((open) => !open)} title={inkOpen ? "Close handwriting" : "Handwrite"} type="button"><PenLine size={14} /></button>
-                <button aria-label="Analyze note" className="do-icon-button" onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} title="Analyze note" type="button"><Sparkles size={14} /></button>
-                <button onClick={() => onAsk(`Extract actionable tasks, decisions, and follow-ups from this notebook note. Keep changes pending for approval:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button">Extract actions</button>
+                <button aria-label="Analyze note" className="do-icon-button do-mobile-advanced" onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} title="Analyze note" type="button"><Sparkles size={14} /></button>
+                <button className="do-mobile-advanced" onClick={() => onAsk(`Extract actionable tasks, decisions, and follow-ups from this notebook note. Keep changes pending for approval:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button">Extract actions</button>
               </div>
             </header>
 
@@ -553,12 +569,27 @@ export function NotesWorkspace({
                   />
                 </div>
               )}
-              <textarea
-                aria-label="Note content"
-                onChange={(event) => setEditor((current) => ({ ...current, content: event.target.value }))}
-                placeholder="Write notes here. Use tags so Certo Work can find them later."
-                value={editor.content}
-              />
+              <div className="do-notes-write">
+                <div className="do-notes-format" role="toolbar" aria-label="Note formatting">
+                  <button onClick={() => wrapSelection("**")} title="Bold" type="button"><strong>B</strong></button>
+                  <button onClick={() => wrapSelection("*")} title="Italic" type="button"><em>I</em></button>
+                  <button onClick={() => wrapSelection("`")} title="Code" type="button">Code</button>
+                  <button onClick={() => wrapSelection("~~")} title="Strikethrough" type="button"><s>S</s></button>
+                  <span>**bold** · *italic* · `code`</span>
+                </div>
+                <textarea
+                  aria-label="Note content"
+                  onChange={(event) => setEditor((current) => ({ ...current, content: event.target.value }))}
+                  placeholder="Write notes here. Use **bold**, *italic*, and lists. Tags help Certo Work find them later."
+                  ref={editorRef}
+                  value={editor.content}
+                />
+                {editor.content.trim() ? (
+                  <div aria-label="Formatted note" className="do-notes-preview">
+                    {renderNoteMarkup(editor.content)}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <footer className="do-notes-footer">

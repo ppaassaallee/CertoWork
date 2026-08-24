@@ -83,3 +83,11 @@ test("My Work keeps backlog features that used to require an active project", ()
     /\{activeProject && onCreateSprint && \(/,
   );
 });
+
+test("items and project backlog can paste a line-per-PBI list with tabbed subtasks", () => {
+  assert.match(workItems, /aria-label="Paste bulk items"/);
+  assert.match(workItems, /parseBulkPasteItems/);
+  assert.match(workItems, /workItemType: kind/);
+  assert.match(workspace, /activeProject=\{null\}/);
+  assert.match(projectSurfaces, /activeProject=\{project\}/);
+});

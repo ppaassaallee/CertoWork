@@ -20,6 +20,7 @@ type ProjectWizardSkillProps = {
   isOpen: boolean;
   onClose: () => void;
   onCreateProject: (draft: ProjectWizardDraft) => Promise<void>;
+  onOpenMagicProject?: () => void;
   onUpdateProject: (projectId: string, draft: ProjectWizardDraft) => Promise<void>;
   projects: any[];
 };
@@ -39,6 +40,7 @@ export function ProjectWizardSkill({
   isOpen,
   onClose,
   onCreateProject,
+  onOpenMagicProject,
   onUpdateProject,
   projects,
 }: ProjectWizardSkillProps) {
@@ -162,6 +164,11 @@ export function ProjectWizardSkill({
               >
                 <FolderPlus size={14} /> Create project
               </button>
+              {onOpenMagicProject && (
+                <button onClick={onOpenMagicProject} className="do-mobile-advanced" type="button">
+                  <WandSparkles size={14} /> Magic project
+                </button>
+              )}
               <button
                 className={mode === "update" ? "is-active" : ""}
                 disabled={projects.length === 0}
