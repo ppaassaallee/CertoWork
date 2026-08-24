@@ -35,7 +35,7 @@ export interface JudgmentContext {
   events?: JudgmentEvent[];
   goals?: Array<{ id?: string; title?: string; type?: string }>;
   dailyCapacityMinutes?: number;
-  scope?: "chief_of_staff" | "project_delivery";
+  scope?: "chief_of_staff" | "project_delivery" | "personal_home";
   activeProjectId?: string | null;
 }
 

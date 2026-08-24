@@ -7,6 +7,7 @@ import {
 } from "./conversationScope";
 import { buildProjectDocumentContext } from "./projectContext";
 import { buildNotebookContext, type NotebookEntry } from "./notebookContext";
+import { scopePersonalHomeRecords, type PersonalHomeActor } from "./personalHomeContext";
 
 type ConversationContextBuildParams = {
   text: string;
@@ -39,6 +40,9 @@ type ConversationContextBuildParams = {
   notebookEntries: NotebookEntry[];
   userId: string;
   workspaceId: string;
+  conversationId?: string | null;
+  currentMemberId?: string | null;
+  currentUserEmail?: string | null;
   odiseusMemory?: any[];
   skills?: any[];
   schedules?: any[];
@@ -103,23 +107,45 @@ export function buildConversationRequestContext({
   notebookEntries,
   userId,
   workspaceId,
+  conversationId,
+  currentMemberId,
+  currentUserEmail,
   odiseusMemory,
   skills,
   schedules,
 }: ConversationContextBuildParams): ConversationRequestContext {
-  const scopedTasks = isFocusedConversation ? projectTasks : openTasks;
-  const scopedProjects = isFocusedConversation ? contextProjects : activeProjects;
+  const actor: PersonalHomeActor = {
+    userId,
+    memberId: currentMemberId,
+    email: currentUserEmail,
+  };
+  const personalHome = isFocusedConversation
+    ? null
+    : scopePersonalHomeRecords({
+        openTasks,
+        activeProjects,
+        milestones,
+        risks,
+        todayTasks,
+        actor,
+      });
+  const scopedTasks = isFocusedConversation
+    ? projectTasks
+    : personalHome?.scopedTasks || [];
+  const scopedProjects = isFocusedConversation
+    ? contextProjects
+    : personalHome?.scopedProjects || [];
   const scopedMilestones = isFocusedConversation
     ? scopedByProject(milestones, contextProjectIds)
-    : milestones;
+    : personalHome?.scopedMilestones || [];
   const scopedRisks = isFocusedConversation
     ? scopedByProject(risks, contextProjectIds)
-    : risks;
+    : personalHome?.scopedRisks || [];
   const scopedTodayTasks = isFocusedConversation
     ? todayTasks.filter((task) =>
         scopedTasks.some((scopedTask) => scopedTask.id === task.id),
       )
-    : todayTasks;
+    : personalHome?.scopedTodayTasks || [];
   const previousLongProjectMessage = [...contextualMessages]
     .reverse()
     .find(
@@ -145,7 +171,7 @@ export function buildConversationRequestContext({
     loaded: true,
     scope: (isFocusedConversation
       ? "project_delivery"
-      : "chief_of_staff") as "chief_of_staff" | "project_delivery",
+      : "personal_home") as "chief_of_staff" | "project_delivery" | "personal_home",
     activeProjectId: primaryProject?.id || null,
   };
   const judgment = evaluateJudgment(text, workspaceSnapshot);
@@ -167,7 +193,10 @@ export function buildConversationRequestContext({
     workspaceContext: {
       ...workspaceSnapshot,
       judgment,
-      mode: isFocusedConversation ? "focused_delivery" : "chief_of_staff",
+      mode: isFocusedConversation ? "focused_delivery" : "personal_home",
+      privacyScope: isFocusedConversation ? "focused_delivery" : "personal_home",
+      workspaceRadar: isFocusedConversation ? [] : personalHome?.workspaceRadar || [],
+      currentMemberId: currentMemberId || null,
       activeProject: primaryProject,
       contextProjects,
       contextTasks,
@@ -216,6 +245,7 @@ export function buildConversationRequestContext({
       notebookNotes: notebookDocuments,
       userId,
       workspaceId,
+      conversationId: conversationId || null,
       odiseusMemory: (odiseusMemory || []).slice(0, 40).map((item) => ({
         id: item.id,
         text: item.text,

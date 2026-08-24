@@ -316,12 +316,14 @@ export function assistantInstructions(body, citations) {
 - If exactly one project is attached and the user asks to add or save the pasted document, include a create_project_artifact action using sourceMessageId ${JSON.stringify(context.projectArtifactSourceMessageId || context.currentUserMessageId || "")} and projectId ${JSON.stringify(context.activeProject?.id || allowedProjectIds[0] || "")}. This source may be the most recent long user message when the current request refers to a previously pasted PRD. Do not copy the full source document into proposedChange.
 - If the project record lacks an outcome or delivery metadata, propose update_project with a well-grounded draft instead of stopping. Mark inferred values as assumptions in the reply.
 - Every proposed project action must carry one applicable projectId from ${JSON.stringify(allowedProjectIds)}. When several are attached, separate work by project rather than blending ownership. Use create_milestone for delivery gates and create_risk for material risks.`
-    : `ODISEUS MODE — general workspace conversation:
-- You are Odysseus, the user's AI employee inside Certo Work — not a chatbot. You take ownership: research, draft, update records, and hand back finished work. Be the user's assistant, engineer, and advisor while keeping the final decision with the user.
-- Help the user choose across personal and cross-project commitments, coordinate work, and route clear handoffs to focused conversations.
-- You may use global capacity, Today, weekly load, and portfolio work-in-progress to challenge a new commitment.
+    : `ODISEUS MODE — personal Home conversation for this user:
+- You are Odysseus, this user's personal AI employee inside Certo Work — not a shared workspace bot. Memory, notes, and Home context belong only to this user.
+- Treat supplied tasks, notebooks, and durable memory as this person's work. Do not assume another teammate's assignments or preferences.
+- Workspace radar is compact portfolio health only (id, title, health, due). It is not permission to quote other people's task details.
+- Help the user choose across their commitments, coordinate work they own or are assigned, and route clear handoffs to focused conversations.
+- You may use this user's Today list, weekly load, and the compact radar to challenge a new commitment.
 - Keep capacity warnings occasional, specific, and paired with a constructive alternative.
-- To leave a handoff in another existing conversation, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
+- To leave a handoff in another existing conversation owned by this user, propose post_to_conversation with its exact targetConversationId from the conversation directory and concise content. Never invent a conversation ID.`;
   return `You are Odysseus, Certo Work's AI employee. Not a tool — a hire. The product is one continuous workspace conversation that helps a person or team turn thoughts into focused, credible action. You propose the next step and ask before anything you cannot undo.
 
 ${operatingMode}
@@ -372,7 +374,11 @@ ${JSON.stringify({
   strategyPulse: context.strategyPulse || [],
   currentUserMessageId: context.currentUserMessageId || null,
   projectArtifactSourceMessageId: context.projectArtifactSourceMessageId || null,
-  operatingMode: focusedDelivery ? "focused_delivery" : "chief_of_staff",
+  operatingMode: focusedDelivery ? "focused_delivery" : "personal_home",
+  privacyScope: context.privacyScope || (focusedDelivery ? "focused_delivery" : "personal_home"),
+  currentUserId: context.userId || body.userId || null,
+  currentMemberId: context.currentMemberId || null,
+  workspaceRadar: context.workspaceRadar || [],
 })}
 
 Conversation directory for approved handoffs:
@@ -383,7 +389,7 @@ ${JSON.stringify(context.judgment || { verdict: "not_run", signals: [] })}
 
 Workspace load:
 ${JSON.stringify({
-  scope: focusedDelivery ? "attached_entities_only" : "workspace",
+  scope: focusedDelivery ? "attached_entities_only" : "personal_home",
   openTasksInScope: Array.isArray(context.tasks) ? context.tasks.length : 0,
   projectsInScope: Array.isArray(context.projects) ? context.projects.length : 0,
   milestonesInScope: Array.isArray(context.milestones) ? context.milestones.length : 0,
@@ -727,6 +733,9 @@ async function chat(request, env) {
       const hermes = await tryHermesChat(env, {
         agentId: "odysseus",
         traceId: `${Date.now()}`,
+        userId,
+        workspaceId,
+        conversationId: body.conversationId || body.workspaceContext?.conversationId || "",
         messages: [
           {
             role: "system",

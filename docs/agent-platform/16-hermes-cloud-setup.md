@@ -96,6 +96,8 @@ Do **not** set `CERTO_RUNTIME_GATEWAY_*` for this path. Gateway is for self-host
 3. Ask: `Give me a short summary of my workspace.`
 4. If Hermes is reachable, the Worker uses `tryHermesChat`; otherwise it falls back / errors per flag path.
 
+Home is personal. `tryHermesChat` sends OpenAI `user` plus `metadata.hermesProfile` as `cw-u-<workspace><user>` so Nous/Hermes session memory does not blend teammates. Certo still owns Firestore `odiseus_memory`, conversations, and knowledge per `userId + workspaceId`.
+
 Rollback anytime:
 
 ```bash

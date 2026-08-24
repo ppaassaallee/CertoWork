@@ -61,7 +61,7 @@ export async function runOdysseusAgent({
   if (memoryNotes.length) {
     input.unshift({
       role: "user",
-      content: `Durable Odysseus memory for this workspace:\n${memoryNotes
+      content: `Durable Odysseus memory for this user in this workspace:\n${memoryNotes
         .map((item) => `- (${item.kind || "fact"}) ${item.text}`)
         .join("\n")}`,
     });

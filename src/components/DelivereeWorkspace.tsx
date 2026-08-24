@@ -121,8 +121,10 @@ import {
   conversationScopeType,
   conversationTaskIds,
   isStandaloneConversation,
+  selectHomeConversation,
   type ConversationScopeType,
 } from "../lib/conversationScope";
+import { isPersonalWorkItem } from "../lib/personalHomeContext";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
@@ -548,10 +550,7 @@ export function DelivereeWorkspace() {
           setConversations(sorted);
           setConversationId((current) => {
             if (current) return current;
-            const standalone = sorted.find((conversation) =>
-              isStandaloneConversation(conversation),
-            );
-            return standalone?.id || null;
+            return selectHomeConversation(sorted)?.id || null;
           });
         },
         true,
@@ -893,6 +892,19 @@ export function DelivereeWorkspace() {
         ),
     [openTasks, todayKey],
   );
+  const personalActor = useMemo(
+    () => ({
+      userId: user?.uid || "",
+      memberId:
+        user && workspace ? accessMemberId(workspace.id, user.uid) : "",
+      email: user?.email || "",
+    }),
+    [user?.email, user?.uid, workspace],
+  );
+  const personalTodayTasks = useMemo(
+    () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
+    [personalActor, todayTasks],
+  );
   const currentWorkspaceMember = useMemo(
     () =>
       workspaceMembers.find(
@@ -956,6 +968,18 @@ export function DelivereeWorkspace() {
       );
     });
   }, [activeProject, conversations]);
+
+  useEffect(() => {
+    if (lens.kind !== "home") return;
+    setConversationId((currentId) => {
+      if (!currentId) return selectHomeConversation(conversations)?.id || null;
+      const current = conversations.find(
+        (conversation) => conversation.id === currentId,
+      );
+      if (!current || isStandaloneConversation(current)) return currentId;
+      return selectHomeConversation(conversations)?.id || currentId;
+    });
+  }, [conversations, lens.kind]);
 
   const createConversation = useCallback(async () => {
     if (!user || !workspace || creatingConversation) return;
@@ -1041,17 +1065,22 @@ export function DelivereeWorkspace() {
     if (conversationId) return conversationId;
     if (!user || !workspace) throw new Error("Workspace is still loading");
     const projectIds = activeProject ? [activeProject.id] : [];
+    const homeThread = !activeProject && lens.kind === "home";
     const ref = await addDoc(collection(db, "boldi_conversations"), {
       userId: user.uid,
       workspaceId: workspace.id,
-      title: title.slice(0, 64) || "New conversation",
+      title: homeThread
+        ? ODISEUS_CONVERSATION_TITLE
+        : title.slice(0, 64) || "New conversation",
       status: "active",
       sourceContext: activeProject ? "project" : "home",
       contextEntityId: activeProject?.id || null,
-      conversationType: conversationScopeType(projectIds, []),
+      conversationType: homeThread
+        ? "chief_of_staff"
+        : conversationScopeType(projectIds, []),
       linkedProjectIds: projectIds,
       linkedTaskIds: [],
-      isChiefOfStaff: false,
+      isChiefOfStaff: homeThread,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -1060,15 +1089,9 @@ export function DelivereeWorkspace() {
     return ref.id;
   };
 
-  const openChiefOfStaff = async () => {
+  const openChiefOfStaff = async (href = "/home") => {
     if (!user || !workspace) return;
-    const existing =
-      conversations.find((conversation) => conversation.isChiefOfStaff) ||
-      conversations.find(
-        (conversation) =>
-          conversationProjectIds(conversation).length === 0 &&
-          conversationTaskIds(conversation).length === 0,
-      );
+    const existing = selectHomeConversation(conversations);
     if (existing) {
       if (
         !existing.isChiefOfStaff ||
@@ -1093,7 +1116,7 @@ export function DelivereeWorkspace() {
         );
       }
       setConversationId(existing.id);
-      navigate("/");
+      navigate(href);
       setSidebarOpen(false);
       return;
     }
@@ -1114,7 +1137,7 @@ export function DelivereeWorkspace() {
     });
     setConversationId(ref.id);
     setMessages([]);
-    navigate("/");
+    navigate(href);
     setSidebarOpen(false);
   };
 
@@ -1252,6 +1275,9 @@ export function DelivereeWorkspace() {
         notebookEntries,
         userId: user.uid,
         workspaceId: workspace.id,
+        conversationId: activeConversationId,
+        currentMemberId: personalActor.memberId,
+        currentUserEmail: personalActor.email,
         odiseusMemory,
         skills: workspaceSkills,
         schedules: odiseusSchedules,
@@ -2985,8 +3011,7 @@ export function DelivereeWorkspace() {
         group: "Actions",
         keywords: "ai employee hire agent",
         onSelect: () => {
-          void openChiefOfStaff();
-          navigate("/agents");
+          void openChiefOfStaff("/agents");
         },
       },
       {
@@ -3766,7 +3791,7 @@ export function DelivereeWorkspace() {
                             tasks={tasks}
                             risks={risks}
                             reviewItems={reviewItems}
-                            todayTasks={todayTasks}
+                            todayTasks={personalTodayTasks}
                             onOpenProject={openProjectRecord}
                             onOpenApprovals={() => setPanel("approvals")}
                             onAsk={setComposer}

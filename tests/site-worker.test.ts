@@ -264,7 +264,7 @@ test("Odysseus can route an approved handoff to an existing conversation", () =>
   const instructions = assistantInstructions(
     {
       workspaceContext: {
-        mode: "chief_of_staff",
+        mode: "personal_home",
         conversationDirectory: [{ id: "fieldops-chat", title: "FieldOps delivery", scope: "FieldOps" }],
         tasks: [],
         projects: [],
@@ -274,11 +274,13 @@ test("Odysseus can route an approved handoff to an existing conversation", () =>
   );
 
   assert.match(instructions, /ODISEUS MODE/);
-  assert.match(instructions, /Odysseus, the user's AI employee/);
-  assert.match(instructions, /assistant, engineer, and advisor/);
+  assert.match(instructions, /personal Home conversation for this user/);
+  assert.match(instructions, /this user's personal AI employee/);
+  assert.match(instructions, /not a shared workspace bot/);
   assert.match(instructions, /post_to_conversation/);
   assert.match(instructions, /fieldops-chat/);
   assert.match(instructions, /Never invent a conversation ID/);
+  assert.match(instructions, /personal_home/);
 });
 
 test("the current pasted PRD and the latest prior PRD remain available for follow-up", () => {
