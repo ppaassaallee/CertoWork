@@ -125,10 +125,10 @@ test("opening a project record stays on the project URL, not Home", () => {
     "utf8",
   );
   const openMatch = source.match(
-    /const openProjectRecord = \([\s\S]*?\n  \};/,
+    /const openProjectRecord = \([\s\S]*?\n {2}\};/,
   );
   const selectMatch = source.match(
-    /const selectProjectContext = \([\s\S]*?\n  \};/,
+    /const selectProjectContext = \([\s\S]*?\n {2}\};/,
   );
   assert.ok(openMatch, "openProjectRecord missing");
   assert.ok(selectMatch, "selectProjectContext missing");
