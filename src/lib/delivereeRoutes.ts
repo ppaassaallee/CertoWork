@@ -19,6 +19,7 @@ export type DelivereeLens =
   | { kind: "agents"; section: AgentsSection }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
+  | { kind: "invoices" }
   | { kind: "settings" }
   | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
   | { kind: "more"; section: MoreSection };
@@ -60,6 +61,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
+  }
+
+  if (path === "/invoices" || path === "/finance" || path === "/workspace/invoices") {
+    return { kind: "invoices" };
   }
 
   if (
@@ -177,6 +182,7 @@ export function lensToPath(lens: DelivereeLens) {
     return `${base}/${lens.tab}`;
   }
   if (lens.kind === "approvals") return "/approvals";
+  if (lens.kind === "invoices") return "/invoices";
   if (lens.kind === "settings") return "/settings";
   if (lens.kind === "feedback") {
     return lens.section === "queue" ? "/workspace/feedback" : "/feedback";

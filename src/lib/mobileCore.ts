@@ -20,6 +20,7 @@ export function mobileCoreFallbackPath(pathname: string): string | null {
     lens.kind === "approvals" ||
     lens.kind === "settings" ||
     lens.kind === "feedback" ||
+    lens.kind === "invoices" ||
     lens.kind === "more"
   ) {
     return "/home";

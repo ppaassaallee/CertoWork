@@ -21,6 +21,7 @@ test("mobile core sends power surfaces back to Home", () => {
   assert.equal(mobileCoreFallbackPath("/agents"), "/home");
   assert.equal(mobileCoreFallbackPath("/approvals"), "/home");
   assert.equal(mobileCoreFallbackPath("/feedback"), "/home");
+  assert.equal(mobileCoreFallbackPath("/invoices"), "/home");
   assert.equal(mobileCoreFallbackPath("/workspace"), "/home");
   assert.equal(mobileCoreFallbackPath("/settings"), "/home");
   assert.equal(mobileCoreFallbackPath("/more/warroom"), "/home");

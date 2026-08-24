@@ -34,6 +34,7 @@ export type WorkspaceMember = {
   displayName?: string;
   alias?: string;
   portfolioViewer?: boolean;
+  financeAccess?: boolean;
 };
 
 export type Project = {

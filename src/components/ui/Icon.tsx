@@ -183,6 +183,7 @@ export const Power = wrapped.Power;
 export const Redo2 = wrapped.Redo2;
 export const RefreshCw = wrapped.RefreshCw;
 export const Repeat = wrapped.Repeat;
+export const Receipt = wrapped.Receipt;
 export const Rocket = wrapped.Rocket;
 export const RotateCcw = wrapped.RotateCcw;
 export const Save = wrapped.Save;

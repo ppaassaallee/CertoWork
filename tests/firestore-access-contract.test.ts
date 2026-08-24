@@ -104,6 +104,15 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(workspace, /workspace_members/);
 });
 
+test("invoice documents are member-listed and finance-operated", () => {
+  const operator = ruleFn("isFinanceOperator");
+  assert.match(operator, /isWorkspaceAdmin\(workspaceId\)/);
+  assert.match(operator, /financeAccess == true/);
+  assert.match(rules, /match \/invoice_documents\/\{id\}/);
+  assert.match(workspace, /doc\(db, "invoice_documents"/);
+  assert.match(workspace, /pushPendingInvoice/);
+});
+
 test("feedback reports are member-created and admin-triaged", () => {
   const canRead = ruleFn("canReadFeedbackReport");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);

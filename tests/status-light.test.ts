@@ -20,6 +20,7 @@ test("task due dates map onto semáforo tones", () => {
 test("primary nav labels stay in one language", () => {
   assert.equal(t("navHome", "en"), "Home");
   assert.equal(t("navApprovals", "en"), "Approvals");
+  assert.equal(t("navInvoices", "en"), "Invoices");
   assert.equal(t("navFeedback", "en"), "Feedback");
   assert.equal(t("moreAutomations", "en"), "Automations");
   assert.equal(t("moreUpdates", "en"), "Updates");
@@ -27,6 +28,7 @@ test("primary nav labels stay in one language", () => {
 
 test("approvals and project tabs are URL screens", () => {
   assert.deepEqual(resolveDelivereeLens("/approvals"), { kind: "approvals" });
+  assert.deepEqual(resolveDelivereeLens("/invoices"), { kind: "invoices" });
   assert.deepEqual(resolveDelivereeLens("/work/projects/abc/notes"), {
     kind: "project",
     projectId: "abc",
