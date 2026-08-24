@@ -10,6 +10,8 @@ export type MoreSection =
 export type MyWorkSection = "assigned" | "inbox" | "waiting";
 export type AgentsSection = "home" | "automations" | "activity";
 
+export type FeedbackSection = "submit" | "queue";
+
 export type DelivereeLens =
   | { kind: "home" }
   | { kind: "my-work"; section: MyWorkSection }
@@ -18,6 +20,7 @@ export type DelivereeLens =
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
   | { kind: "settings" }
+  | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
   | { kind: "more"; section: MoreSection };
 
 const MORE_SECTIONS: MoreSection[] = [
@@ -57,6 +60,26 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
+  }
+
+  if (
+    path === "/workspace/feedback" ||
+    path === "/feedback/queue" ||
+    path === "/workspace/bugs"
+  ) {
+    return { kind: "feedback", section: "queue" };
+  }
+
+  if (path === "/report-bug") {
+    return { kind: "feedback", section: "submit", intent: "bug" };
+  }
+
+  if (path === "/feature-request") {
+    return { kind: "feedback", section: "submit", intent: "feature" };
+  }
+
+  if (path === "/feedback") {
+    return { kind: "feedback", section: "submit" };
   }
 
   if (path === "/workspace" || path === "/more/workspace") {
@@ -155,6 +178,9 @@ export function lensToPath(lens: DelivereeLens) {
   }
   if (lens.kind === "approvals") return "/approvals";
   if (lens.kind === "settings") return "/settings";
+  if (lens.kind === "feedback") {
+    return lens.section === "queue" ? "/workspace/feedback" : "/feedback";
+  }
   if (lens.kind === "more") {
     if (lens.section === "workspace") return "/workspace";
     return `/more/${lens.section}`;

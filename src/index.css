@@ -1236,6 +1236,134 @@ a {
   background: var(--status-danger-soft);
   color: var(--status-danger);
 }
+.do-feedback-center {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 4px 24px;
+}
+.do-feedback-head {
+  display: grid;
+  gap: 6px;
+  max-width: 720px;
+}
+.do-feedback-head h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+.do-feedback-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+.do-feedback-kind {
+  display: flex;
+  gap: 6px;
+}
+.do-feedback-kind button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.do-feedback-kind button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+.do-feedback-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.do-feedback-center textarea {
+  min-height: 110px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-0);
+  padding: 8px 9px;
+  color: var(--text-primary);
+  font: inherit;
+}
+.do-feedback-list {
+  display: grid;
+  gap: 8px;
+}
+.do-feedback-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  padding: 10px;
+}
+.do-feedback-row p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.do-feedback-row small {
+  color: var(--text-muted);
+}
+.do-feedback-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+.do-feedback-chip.is-bug {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+}
+.do-feedback-chip.is-feature {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.do-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.do-feedback-actions button,
+.do-feedback-row > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  padding: 6px 8px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  cursor: pointer;
+}
+.do-feedback-actions button.is-danger {
+  color: var(--status-danger);
+}
+.do-feedback-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
 .do-pending-invites {
   display: grid;
   gap: 4px;
@@ -7791,6 +7919,7 @@ a {
 .do-nav-item.is-projects.is-active,
 .do-nav-item.is-agents.is-active,
 .do-nav-item.is-approvals.is-active,
+.do-nav-item.is-feedback.is-active,
 .do-nav-item.is-settings.is-active {
   box-shadow: inset 3px 0 0 var(--accent);
 }

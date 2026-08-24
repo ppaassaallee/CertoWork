@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Flag,
   Folder,
   HelpCircle,
   Inbox,
@@ -125,8 +126,17 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
+import {
+  feedbackToTaskPatch,
+  isOpenFeedback,
+  type FeedbackKind,
+  type FeedbackReport,
+  type FeedbackSeverity,
+  type FeedbackStatus,
+} from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import { FeedbackCenter } from "./FeedbackCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
@@ -184,6 +194,7 @@ import {
   memberAvatar,
   memberHasAlias,
   memberLabel,
+  memberPublicLabel,
   memberStatusLabel,
   membershipPublicPatch,
   normalizeAlias,
@@ -251,7 +262,8 @@ export type CenterView =
   | "strategy"
   | "portfolio"
   | "project"
-  | "agents";
+  | "agents"
+  | "feedback";
 
 export function DelivereeWorkspace() {
   const {
@@ -287,6 +299,7 @@ export function DelivereeWorkspace() {
   const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
@@ -395,6 +408,8 @@ export function DelivereeWorkspace() {
           : "project"
       : lens.kind === "my-work"
         ? "items"
+        : lens.kind === "feedback"
+        ? "feedback"
         : lens.kind === "work"
           ? lens.section === "issues"
             ? "items"
@@ -414,6 +429,7 @@ export function DelivereeWorkspace() {
     else if (next === "items") navigate("/my-work");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
+    else if (next === "feedback") navigate("/feedback");
     else navigate("/home");
   };
   const projectConsoleInitialTab =
@@ -455,6 +471,10 @@ export function DelivereeWorkspace() {
     const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
     const canSeeWorkspacePortfolio =
       workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
+    const canTriageFeedback = canManageWorkspaceMembers(
+      currentMember?.role,
+      workspace.ownerId === user.uid,
+    );
     const mergeQueries = (
       name: string,
       queryClauses: any[][],
@@ -558,6 +578,22 @@ export function DelivereeWorkspace() {
       ),
       ...projectUnsubscribers,
       ...taskUnsubscribers,
+      ...mergeQueries(
+        "feedback_reports",
+        [
+          [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+          ...(canTriageFeedback
+            ? [[where("workspaceId", "==", workspace.id)]]
+            : []),
+        ],
+        (items) =>
+          setFeedbackReports(
+            (items as FeedbackReport[]).sort(
+              (left, right) =>
+                timestamp(right.createdAt) - timestamp(left.createdAt),
+            ),
+          ),
+      ),
       makeQuery("milestones", setMilestones),
       makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
@@ -2547,7 +2583,7 @@ export function DelivereeWorkspace() {
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
-    await addDoc(collection(db, "tasks"), {
+    const created = await addDoc(collection(db, "tasks"), {
       ...patch,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -2571,6 +2607,98 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    return created.id;
+  };
+
+  const submitFeedbackReport = async (input: {
+    kind: FeedbackKind;
+    title: string;
+    description: string;
+    projectId: string;
+    severity: FeedbackSeverity | "";
+  }) => {
+    if (!user || !workspace) return;
+    try {
+      await addDoc(collection(db, "feedback_reports"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        createdBy: user.uid,
+        kind: input.kind,
+        title: input.title,
+        description: input.description,
+        status: "submitted",
+        projectId: input.projectId || "",
+        severity: input.kind === "bug" ? input.severity || "medium" : "",
+        reporterAlias: memberPublicLabel(currentWorkspaceMember || {}),
+        reporterEmoji: memberAvatar(currentWorkspaceMember || {}),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice(
+        input.kind === "bug"
+          ? "Bug submitted. Admins can convert it to a PBI from the feedback queue."
+          : "Feature request submitted. Admins can convert it to a PBI from the feedback queue.",
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not submit feedback.",
+      );
+    }
+  };
+
+  const updateFeedbackStatus = async (
+    report: FeedbackReport,
+    status: FeedbackStatus,
+    adminNote?: string,
+  ) => {
+    if (!workspace) return;
+    try {
+      await updateDoc(doc(db, "feedback_reports", report.id), {
+        status,
+        updatedAt: serverTimestamp(),
+        ...(status === "triaged" ? { triagedAt: serverTimestamp() } : {}),
+        ...(adminNote ? { adminNote } : {}),
+      });
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not update this report.",
+      );
+    }
+  };
+
+  const convertFeedbackToPbi = async (report: FeedbackReport, projectId: string) => {
+    try {
+      const taskId = await addProjectTask(
+        projectId,
+        report.title || "Untitled feedback",
+        "backlog",
+        {
+          ...feedbackToTaskPatch(report),
+          projectId: projectId || null,
+        },
+      );
+      if (!taskId) {
+        setNotice("Could not convert this report into a work item.");
+        return;
+      }
+      await updateDoc(doc(db, "feedback_reports", report.id), {
+        status: "converted",
+        projectId: projectId || "",
+        convertedToType: "tasks",
+        convertedToId: taskId,
+        convertedBy: user?.uid || "",
+        convertedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice("Converted to a backlog PBI.");
+      if (projectId) navigate(`/work/projects/${projectId}/tasks`);
+      else navigate("/my-work");
+      setSelectedWorkItemId(taskId);
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not convert this report.",
+      );
+    }
   };
 
   const updateProjectTask = async (
@@ -2994,6 +3122,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/approvals"),
       },
       {
+        id: "nav-feedback",
+        label: "Report a bug or feature",
+        group: "Navigate",
+        keywords: "feedback bug feature pbi request",
+        onSelect: () => navigate("/feedback"),
+      },
+      {
         id: "nav-workspace",
         label: "Workspace & team",
         group: "Navigate",
@@ -3035,6 +3170,25 @@ export function DelivereeWorkspace() {
         group: "Create",
         onSelect: () => setProjectWizardOpen(true),
       },
+      {
+        id: "report-bug",
+        label: "Report a bug",
+        group: "Create",
+        onSelect: () => navigate("/report-bug"),
+      },
+      {
+        id: "request-feature",
+        label: "Request a feature",
+        group: "Create",
+        onSelect: () => navigate("/feature-request"),
+      },
+      {
+        id: "feedback-queue",
+        label: "Open feedback queue",
+        group: "Navigate",
+        keywords: "admin triage pbi bug feature",
+        onSelect: () => navigate("/workspace/feedback"),
+      },
     ];
     for (const project of activeProjects.slice(0, 30)) {
       items.push({
@@ -3054,7 +3208,7 @@ export function DelivereeWorkspace() {
   ]);
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -3191,6 +3345,24 @@ export function DelivereeWorkspace() {
                 {reviewItems.length}
               </em>
             )}
+          </button>
+          <button
+            className={`do-nav-item is-feedback ${lens.kind === "feedback" ? "is-active" : ""}`}
+            data-testid="nav-feedback"
+            onClick={() => {
+              navigate("/feedback");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Flag size="sm" />
+            <span>{t("navFeedback")}</span>
+            {canManageMembers &&
+              feedbackReports.filter((item) => isOpenFeedback(item.status)).length > 0 && (
+                <em className="do-nav-badge">
+                  {feedbackReports.filter((item) => isOpenFeedback(item.status)).length}
+                </em>
+              )}
           </button>
         </nav>
 
@@ -3655,6 +3827,15 @@ export function DelivereeWorkspace() {
                           : []),
                     ]
                   : []),
+                ...(lens.kind === "feedback"
+                  ? [
+                      {
+                        label: "Feedback",
+                        onClick: () => navigate("/feedback"),
+                      },
+                      ...(lens.section === "queue" ? [{ label: "Queue" }] : []),
+                    ]
+                  : []),
                 ...(activeProject
                   ? [
                       {
@@ -3708,6 +3889,12 @@ export function DelivereeWorkspace() {
                   </button>
                   <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
                     {t("createCapture")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
+                    {t("createBug")}
+                  </button>
+                  <button onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
+                    {t("createFeature")}
                   </button>
                 </div>
               )}
@@ -4155,7 +4342,9 @@ export function DelivereeWorkspace() {
             )}
             <WorkItemsCenter
             activeProject={null}
-            onAddTask={addProjectTask}
+            onAddTask={async (...args) => {
+              await addProjectTask(...args);
+            }}
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
@@ -4174,6 +4363,34 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
           </div>
+        ) : centerView === "feedback" ? (
+          <FeedbackCenter
+            canManage={canManageMembers}
+            initialKind={
+              lens.kind === "feedback" && lens.intent ? lens.intent : "bug"
+            }
+            mode={
+              lens.kind === "feedback" &&
+              lens.section === "queue" &&
+              canManageMembers
+                ? "queue"
+                : "submit"
+            }
+            onConvert={convertFeedbackToPbi}
+            onOpenItem={(taskId) => {
+              setSelectedWorkItemId(taskId);
+              navigate("/my-work");
+            }}
+            onOpenQueue={() => navigate("/workspace/feedback")}
+            onSubmit={submitFeedbackReport}
+            onUpdateStatus={updateFeedbackStatus}
+            projects={projects}
+            reports={
+              lens.kind === "feedback" && lens.section === "queue" && canManageMembers
+                ? feedbackReports
+                : feedbackReports.filter((item) => item.userId === user?.uid)
+            }
+          />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
             <AgentBuilderDraft
@@ -4257,9 +4474,9 @@ export function DelivereeWorkspace() {
               onAddRisk={(title, patch) =>
                 addProjectRisk(consoleProject.id, title, patch)
               }
-              onAddTask={(title, status, patch) =>
-                addProjectTask(consoleProject.id, title, status, patch)
-              }
+              onAddTask={async (title, status, patch) => {
+                await addProjectTask(consoleProject.id, title, status, patch);
+              }}
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onCreateControlledOption={createControlledOption}
@@ -4405,9 +4622,9 @@ export function DelivereeWorkspace() {
                 onAddRisk={(title, patch) =>
                   addProjectRisk(consoleProject.id, title, patch)
                 }
-                onAddTask={(title, status, patch) =>
-                  addProjectTask(consoleProject.id, title, status, patch)
-                }
+                onAddTask={async (title, status, patch) => {
+                  await addProjectTask(consoleProject.id, title, status, patch);
+                }}
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onCreateControlledOption={createControlledOption}
@@ -4967,6 +5184,28 @@ export function DelivereeWorkspace() {
                   ))}
                 </div>
               </section>
+
+              {canManageMembers && (
+              <section className="do-workspace-admin-card">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">Feedback</span>
+                  <strong>
+                    {feedbackReports.filter((item) => isOpenFeedback(item.status)).length} open
+                    {" "}report
+                    {feedbackReports.filter((item) => isOpenFeedback(item.status)).length === 1 ? "" : "s"}
+                  </strong>
+                </div>
+                <p className="do-panel-intro">
+                  Bugs and feature requests from the workspace. Convert accepted ones into backlog PBIs.
+                </p>
+                <button
+                  onClick={() => navigate("/workspace/feedback")}
+                  type="button"
+                >
+                  Open feedback queue
+                </button>
+              </section>
+              )}
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">

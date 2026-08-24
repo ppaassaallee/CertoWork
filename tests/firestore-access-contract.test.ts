@@ -95,6 +95,15 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(workspace, /workspace_members/);
 });
 
+test("feedback reports are member-created and admin-triaged", () => {
+  const canRead = ruleFn("canReadFeedbackReport");
+  assert.match(canRead, /data\.userId == request\.auth\.uid/);
+  assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
+  assert.match(rules, /match \/feedback_reports\/\{id\}/);
+  assert.match(workspace, /collection\(db, "feedback_reports"\)/);
+  assert.match(workspace, /convertFeedbackToPbi/);
+});
+
 test("personal Home context still excludes another member's assigned work", () => {
   const actor = { userId: "user-a", memberId: "ws_user-a", email: "a@certo.work" };
   assert.equal(isPersonalWorkItem({ assigneeIds: ["ws_user-a"] }, actor), true);
