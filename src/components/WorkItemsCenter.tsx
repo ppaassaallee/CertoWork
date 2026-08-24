@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Circle,
   CalendarRange,
+  Clipboard,
   Folder,
   GripVertical,
   ListChecks,
@@ -29,6 +30,7 @@ import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
+import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
 type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
@@ -82,7 +84,7 @@ type Props = {
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
-  onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<void> | void;
+  onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
@@ -532,6 +534,10 @@ export function WorkItemsCenter({
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addSprintOpen, setAddSprintOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteSaving, setPasteSaving] = useState(false);
+  const [pasteError, setPasteError] = useState("");
   const [filterDraft, setFilterDraft] = useState("status");
   const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
     if (typeof window === "undefined") return [];
@@ -754,6 +760,8 @@ export function WorkItemsCenter({
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
   const canCreate = Boolean(newTitle.trim());
+  const pasteTree = useMemo(() => parseBulkPasteItems(pasteText), [pasteText]);
+  const pasteCounts = useMemo(() => countBulkPasteItems(pasteTree), [pasteTree]);
 
   useEffect(() => {
     setDetailDescription(
@@ -792,6 +800,54 @@ export function WorkItemsCenter({
     });
     setNewTitle("");
     setNewParentId("");
+  };
+
+  const createBulkNodes = async (
+    nodes: BulkPasteNode[],
+    projectId: string,
+    parentId: string,
+    parentKind: WorkItemKind | null,
+    startOrder: number,
+  ) => {
+    let order = startOrder;
+    for (const node of nodes) {
+      const kind = parentId ? "subtask" : "pbi";
+      const createdId = await onAddTask(projectId, node.title, "backlog", {
+        workItemType: kind,
+        itemType: kind,
+        taskType: kind,
+        parentId: parentId || null,
+        epicId: parentKind === "epic" ? parentId : null,
+        featureId: parentKind === "feature" ? parentId : null,
+        source: "bulk_paste",
+        priority: null,
+        order,
+        rank: order,
+      });
+      order += 1;
+      if (node.children.length && createdId) {
+        order = await createBulkNodes(node.children, projectId, createdId, kind, order);
+      }
+    }
+    return order;
+  };
+
+  const createBulkItems = async () => {
+    const nodes = parseBulkPasteItems(pasteText);
+    if (!nodes.length || pasteSaving) return;
+    const projectId = newProjectId || baseProjectId;
+    setPasteSaving(true);
+    setPasteError("");
+    try {
+      const startOrder = tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length;
+      await createBulkNodes(nodes, projectId, "", null, startOrder);
+      setPasteText("");
+      setPasteOpen(false);
+    } catch (reason) {
+      setPasteError(reason instanceof Error ? reason.message : "Could not paste those items.");
+    } finally {
+      setPasteSaving(false);
+    }
   };
 
   const reorderItem = async (
@@ -1471,6 +1527,14 @@ export function WorkItemsCenter({
             )}
           </div>
           <button aria-label="Add item" className="do-button do-button-dark" onClick={() => setAddItemOpen((o) => !o)} type="button"><Plus size={13} /> Add item</button>
+          <button
+            aria-label="Paste bulk items"
+            className="do-button-secondary"
+            onClick={() => { setPasteOpen(true); setPasteError(""); }}
+            type="button"
+          >
+            <Clipboard size={13} /> Paste bulk items
+          </button>
           {onCreateSprint && (
             <button aria-label="Add sprint" className="do-button-secondary" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
           )}
@@ -1527,6 +1591,58 @@ export function WorkItemsCenter({
             <Plus size={13} /> Create sprint
           </button>
         </section>
+      )}
+
+      {pasteOpen && (
+        <div aria-label="Paste bulk items" aria-modal="true" className="do-skill-layer" role="dialog">
+          <section className="do-skill-modal do-paste-modal">
+            <header className="do-skill-head">
+              <div className="do-skill-title">
+                <span><Clipboard size={18} /></span>
+                <div>
+                  <small>{activeProject ? projectTitle(activeProject) : "My Work"}</small>
+                  <h2>Paste bulk items</h2>
+                  <p>
+                    Each line becomes a PBI{activeProject ? " on this project" : " as a general item"}.
+                    Indent with Tab (or two spaces) to create a subtask under the line above.
+                  </p>
+                </div>
+              </div>
+              <button aria-label="Close paste bulk items" onClick={() => setPasteOpen(false)} type="button"><X size={18} /></button>
+            </header>
+            <div className="do-skill-body">
+              <label className="do-skill-field">
+                <span>Item list</span>
+                <textarea
+                  aria-label="Bulk item list"
+                  onChange={(event) => setPasteText(event.target.value)}
+                  placeholder={"Launch checkout\n\tMap payment errors\n\tWrite retry copy\nPilot store"}
+                  value={pasteText}
+                />
+                <small>
+                  {pasteCounts.pbis} PBI{pasteCounts.pbis === 1 ? "" : "s"}
+                  {pasteCounts.subtasks ? ` · ${pasteCounts.subtasks} subtask${pasteCounts.subtasks === 1 ? "" : "s"}` : ""}
+                  {activeProject ? ` · ${projectTitle(activeProject)}` : " · general items"}
+                </small>
+              </label>
+              {pasteError && <p className="do-skill-error">{pasteError}</p>}
+            </div>
+            <footer className="do-skill-foot">
+              <span>Paste from a doc, chat, or spreadsheet. Tabs keep the hierarchy.</span>
+              <div>
+                <button onClick={() => setPasteOpen(false)} type="button">Cancel</button>
+                <button
+                  className="do-skill-create"
+                  disabled={!pasteTree.length || pasteSaving}
+                  onClick={createBulkItems}
+                  type="button"
+                >
+                  {pasteSaving ? "Adding..." : "Add items"}
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
       )}
 
       {selectedBulkIds.length > 0 && (

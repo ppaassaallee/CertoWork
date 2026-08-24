@@ -632,6 +632,94 @@ async function rewriteField(request, env) {
   }
 }
 
+export function magicProjectInstructions() {
+  return `You are Certo Work's Magic Project extractor. Read a pasted project definition and return one JSON object the product can execute.
+
+Return exactly this shape:
+{
+  "title": "",
+  "outcome": "",
+  "why": "",
+  "methodology": "Hybrid",
+  "owner": "",
+  "targetDate": "YYYY-MM-DD or empty",
+  "successCriteria": [""],
+  "definitionOfDone": "",
+  "phases": [{"title":"","description":"","targetDate":""}],
+  "milestones": [{"title":"","targetDate":""}],
+  "items": [{"title":"","kind":"epic|feature|pbi|task|subtask","dueDate":"","children":[]}],
+  "meetings": [{"title":"","date":"","time":"","durationMinutes":60,"description":""}],
+  "kickoff": {"title":"","date":"","description":""},
+  "noteTitle": "",
+  "noteContent": ""
+}
+
+Rules:
+- Preserve source language, names, dates, and facts. Do not invent owners, dates, or scope.
+- methodology must be Scrum, PMI, or Hybrid.
+- Top-level delivery work is kind "pbi". Nested/indented work is "subtask". Larger containers are "epic" or "feature".
+- Put the original source, lightly cleaned, into noteContent.
+- Always include a kickoff meeting/item.
+- If a field is unknown, use "" or [].
+- Return JSON only.`;
+}
+
+async function extractMagicProject(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId) {
+    return json({ error: "userId and workspaceId are required" }, 400);
+  }
+  const source = String(body.text || "").trim();
+  if (!source) return json({ error: "Project definition is required" }, 400);
+  if (source.length > 80_000) return json({ error: "Project definition is too long" }, 400);
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  if (!openaiIsConfigured(env)) {
+    return json({
+      error: "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.",
+      code: "OPENAI_NOT_CONFIGURED",
+      safeMode: true,
+    }, 503);
+  }
+  const model = openaiModelName(env);
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${openaiApiKey(env)}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        instructions: magicProjectInstructions(),
+        input: [{ role: "user", content: source }],
+        text: { format: { type: "json_object" } },
+        store: false,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      return json({ error: payload?.error?.message || `OpenAI request failed (${response.status})`, code: "OPENAI_REQUEST_FAILED" }, 502);
+    }
+    const blueprint = parseJsonObject(extractOpenAIText(payload));
+    if (!blueprint || typeof blueprint !== "object") throw new Error("OpenAI returned an empty project");
+    return json({ blueprint, provider: { provider: "openai", model } });
+  } catch (error) {
+    return json({
+      error: error instanceof Error ? error.message : "Magic Project is temporarily unavailable",
+      code: "MAGIC_PROJECT_UNAVAILABLE",
+    }, 502);
+  }
+}
+
 async function chat(request, env) {
   let body;
   try {
@@ -1060,6 +1148,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/certo/rewrite") {
       return rewriteField(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/certo/magic-project") {
+      return extractMagicProject(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);

@@ -528,7 +528,7 @@ export function ProjectRecordModal({
     title: string,
     status: WorkLane,
     patch?: ProjectPatch,
-  ) => Promise<void> | void;
+  ) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
@@ -1396,7 +1396,7 @@ export function ProjectConsolePanel({
     title: string,
     status: WorkLane,
     patch?: ProjectPatch,
-  ) => Promise<void> | void;
+  ) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: ProjectPatch) => Promise<void> | void;
   onAddRisk: (title: string, patch?: ProjectPatch) => Promise<void> | void;
   onCreateCostTemplate?: (template: any) => Promise<void> | void;

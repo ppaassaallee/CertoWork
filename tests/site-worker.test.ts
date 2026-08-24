@@ -5,6 +5,7 @@ import worker, {
   assistantInstructions,
   firebaseAuthProxyUrl,
   inferProjectTitleFromRequest,
+  magicProjectInstructions,
   normalizeConversationMessages,
   rewriteInstructions,
 } from "../worker/index.js";
@@ -228,6 +229,25 @@ test("inline AI rewriting preserves facts and rejects anonymous requests", async
         workspaceId: "workspace-1",
         fieldKind: "work_item_title",
         text: "fix login",
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
+test("magic project extraction rejects anonymous requests and asks for JSON structure", async () => {
+  const instructions = magicProjectInstructions();
+  assert.match(instructions, /kickoff/i);
+  assert.match(instructions, /successCriteria/);
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/certo/magic-project", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        text: "# Pilot\nOutcome: Prove assignment.",
       }),
     }),
     environment(),

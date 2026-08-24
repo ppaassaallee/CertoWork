@@ -1,11 +1,13 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -138,6 +140,7 @@ import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { FeedbackCenter } from "./FeedbackCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
+import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
@@ -159,6 +162,7 @@ import {
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
 import type { NotebookEntry } from "../lib/notebookContext";
+import { type MagicProjectBlueprint, type MagicProjectItem } from "../lib/magicProject";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
 import { sendBoldiChat } from "../lib/conversationClient";
 import {
@@ -444,6 +448,9 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  const [magicProjectOpen, setMagicProjectOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
   const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
   const [agentOutcomeDraft, setAgentOutcomeDraft] = useState("");
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
@@ -1069,6 +1076,25 @@ export function DelivereeWorkspace() {
     }
   }, [creatingConversation, navigate, user, workspace]);
 
+  useLayoutEffect(() => {
+    if (!createMenuOpen) return;
+    const frame = () => {
+      const rect = createMenuRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCreateMenuPos({
+        top: Math.round(rect.bottom + 6),
+        right: Math.round(window.innerWidth - rect.right),
+      });
+    };
+    frame();
+    window.addEventListener("resize", frame);
+    window.addEventListener("scroll", frame, true);
+    return () => {
+      window.removeEventListener("resize", frame);
+      window.removeEventListener("scroll", frame, true);
+    };
+  }, [createMenuOpen]);
+
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -1085,6 +1111,10 @@ export function DelivereeWorkspace() {
           setCreateMenuOpen(false);
           return;
         }
+        if (magicProjectOpen) {
+          setMagicProjectOpen(false);
+          return;
+        }
         if (panel) {
           setPanel(null);
           return;
@@ -1096,7 +1126,7 @@ export function DelivereeWorkspace() {
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [commandPaletteOpen, createMenuOpen, panel, sidebarOpen]);
+  }, [commandPaletteOpen, createMenuOpen, magicProjectOpen, panel, sidebarOpen]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -2938,6 +2968,161 @@ export function DelivereeWorkspace() {
     setNotice(`${draft.title.trim()} updated with Project Wizard.`);
   };
 
+  const createMagicProjectItems = async (
+    projectId: string,
+    items: MagicProjectItem[],
+    parentId: string,
+    parentKind: string | null,
+  ) => {
+    for (const item of items) {
+      if (!item.title) continue;
+      const createdId = await addProjectTask(projectId, item.title, "backlog", {
+        workItemType: item.kind,
+        itemType: item.kind,
+        type: item.kind,
+        parentId: parentId || null,
+        epicId: parentKind === "epic" ? parentId : null,
+        featureId: parentKind === "feature" ? parentId : null,
+        dueDate: item.dueDate || null,
+        source: "magic_project",
+      });
+      if (item.children?.length && createdId) {
+        await createMagicProjectItems(projectId, item.children, createdId, item.kind);
+      }
+    }
+  };
+
+  const createMagicProject = async (blueprint: MagicProjectBlueprint) => {
+    if (!user || !workspace) return;
+    const successCriteria = blueprint.successCriteria.filter(Boolean);
+    const targetDate = blueprint.noTargetDate ? "" : blueprint.targetDate;
+    const projectRef = await addDoc(collection(db, "projects"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
+      title: blueprint.title.trim(),
+      normalizedTitle: blueprint.title.trim().toLowerCase().replace(/\s+/g, " "),
+      description: blueprint.why.trim(),
+      outcome: blueprint.outcome.trim(),
+      objective: blueprint.outcome.trim(),
+      status: "planning",
+      health: "on_track",
+      methodology: blueprint.methodology,
+      projectManager: blueprint.owner.trim(),
+      targetDate,
+      dueDate: targetDate,
+      successCriteria,
+      definitionOfDone: blueprint.definitionOfDone.trim(),
+      createdFromSkill: "magic_project",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    for (const milestone of blueprint.milestones) {
+      await addProjectMilestone(projectRef.id, milestone.title);
+    }
+    for (const phase of blueprint.phases) {
+      await addProjectTask(projectRef.id, phase.title, "backlog", {
+        workItemType: "epic",
+        itemType: "epic",
+        type: "epic",
+        description: phase.description || "",
+        dueDate: phase.targetDate || null,
+        source: "magic_project",
+      });
+    }
+    await createMagicProjectItems(projectRef.id, blueprint.items, "", null);
+    await addProjectTask(projectRef.id, blueprint.kickoff.title, "backlog", {
+      workItemType: "pbi",
+      itemType: "pbi",
+      type: "pbi",
+      description: blueprint.kickoff.description || "Align on outcome, owners, and first next actions.",
+      dueDate: blueprint.kickoff.date || targetDate || null,
+      source: "magic_project",
+      gtdActionType: "next_action",
+    });
+    const meetings = blueprint.meetings.length
+      ? blueprint.meetings
+      : [{
+          title: `${blueprint.kickoff.title} meeting`,
+          date: blueprint.kickoff.date || targetDate,
+          description: blueprint.kickoff.description || "",
+        }];
+    for (const meeting of meetings) {
+      await addProjectTask(projectRef.id, meeting.title, "backlog", {
+        workItemType: "task",
+        itemType: "meeting",
+        type: "meeting",
+        description: meeting.description || "",
+        dueDate: meeting.date || null,
+        source: "magic_project",
+      });
+    }
+
+    const notebookRef = await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "notebook",
+      title: blueprint.title.trim(),
+      projectId: projectRef.id,
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    const sectionRef = await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "section",
+      title: "Definition",
+      notebookId: notebookRef.id,
+      projectId: projectRef.id,
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addDoc(collection(db, "notebook_entries"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      kind: "note",
+      title: blueprint.noteTitle,
+      content: blueprint.noteContent || blueprint.sourceText,
+      notebookId: notebookRef.id,
+      sectionId: sectionRef.id,
+      projectId: projectRef.id,
+      tags: ["project-definition", "magic-project"],
+      status: "active",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    const conversationRef = await addDoc(collection(db, "boldi_conversations"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      title: blueprint.title.trim(),
+      status: "active",
+      sourceContext: "project",
+      contextEntityId: projectRef.id,
+      conversationType: "project",
+      linkedProjectIds: [projectRef.id],
+      linkedTaskIds: [],
+      isChiefOfStaff: false,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setConversationId(conversationRef.id);
+    setMessages([]);
+    setProjectConsoleId(projectRef.id);
+    setPanel("project");
+    goCenterView("conversation");
+    navigate(`/work/projects/${projectRef.id}`);
+    setNotice(`${blueprint.title.trim()} created with Magic Project. Definition note, kickoff, and meetings are in place.`);
+  };
+
   const resetWorkspaceData = async () => {
     if (
       !user ||
@@ -3871,8 +4056,10 @@ export function DelivereeWorkspace() {
             >
               <Search size={15} />
             </button>
-            <div className="do-create-menu">
+            <div className="do-create-menu" ref={createMenuRef}>
               <button
+                aria-expanded={createMenuOpen}
+                aria-haspopup="menu"
                 aria-label={t("headerCreate")}
                 className="cw-btn cw-btn-primary cw-btn-sm"
                 onClick={() => setCreateMenuOpen((open) => !open)}
@@ -3882,24 +4069,40 @@ export function DelivereeWorkspace() {
                 <Plus size={15} />
                 <span>{t("headerCreate")}</span>
               </button>
-              {createMenuOpen && (
-                <div className="do-account-menu">
-                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
-                    {t("createTask")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
-                    {t("createProject")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
-                    {t("createCapture")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
-                    {t("createBug")}
-                  </button>
-                  <button onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
-                    {t("createFeature")}
-                  </button>
-                </div>
+              {createMenuOpen && createPortal(
+                <>
+                  <button
+                    aria-label="Close create menu"
+                    className="do-create-menu-backdrop"
+                    onClick={() => setCreateMenuOpen(false)}
+                    type="button"
+                  />
+                  <div
+                    className="do-create-menu-list"
+                    role="menu"
+                    style={{ top: createMenuPos.top, right: createMenuPos.right }}
+                  >
+                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
+                      {t("createTask")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                      {t("createProject")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
+                      {t("createMagicProject")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
+                      {t("createCapture")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
+                      {t("createBug")}
+                    </button>
+                    <button onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
+                      {t("createFeature")}
+                    </button>
+                  </div>
+                </>,
+                document.body,
               )}
             </div>
           </div>
@@ -4345,9 +4548,7 @@ export function DelivereeWorkspace() {
             )}
             <WorkItemsCenter
             activeProject={null}
-            onAddTask={async (...args) => {
-              await addProjectTask(...args);
-            }}
+            onAddTask={async (...args) => addProjectTask(...args)}
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
@@ -4477,9 +4678,9 @@ export function DelivereeWorkspace() {
               onAddRisk={(title, patch) =>
                 addProjectRisk(consoleProject.id, title, patch)
               }
-              onAddTask={async (title, status, patch) => {
-                await addProjectTask(consoleProject.id, title, status, patch);
-              }}
+              onAddTask={async (title, status, patch) =>
+                addProjectTask(consoleProject.id, title, status, patch)
+              }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onCreateControlledOption={createControlledOption}
@@ -4625,9 +4826,9 @@ export function DelivereeWorkspace() {
                 onAddRisk={(title, patch) =>
                   addProjectRisk(consoleProject.id, title, patch)
                 }
-                onAddTask={async (title, status, patch) => {
-                  await addProjectTask(consoleProject.id, title, status, patch);
-                }}
+                onAddTask={async (title, status, patch) =>
+                  addProjectTask(consoleProject.id, title, status, patch)
+                }
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onCreateControlledOption={createControlledOption}
@@ -5615,8 +5816,17 @@ export function DelivereeWorkspace() {
         isOpen={projectWizardOpen}
         onClose={() => setProjectWizardOpen(false)}
         onCreateProject={createProjectFromWizard}
+        onOpenMagicProject={() => {
+          setProjectWizardOpen(false);
+          setMagicProjectOpen(true);
+        }}
         onUpdateProject={updateProjectFromWizard}
         projects={activeProjects}
+      />
+      <MagicProjectModal
+        isOpen={magicProjectOpen}
+        onClose={() => setMagicProjectOpen(false)}
+        onCreate={createMagicProject}
       />
 
       {needsAlias && (
