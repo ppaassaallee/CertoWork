@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMobileCore } from "../hooks/useMobileCore";
 import {
   AlertTriangle,
   Archive,
@@ -536,6 +537,7 @@ export function ProjectRecordModal({
   const [tab, setTab] = useState<
     "overview" | "plan" | "work" | "risks" | "docs" | "team"
   >("overview");
+  const mobileCore = useMobileCore();
   const [taskTitle, setTaskTitle] = useState("");
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
@@ -552,6 +554,10 @@ export function ProjectRecordModal({
     }),
     [tasks],
   );
+
+  useEffect(() => {
+    if (mobileCore && tab !== "overview" && tab !== "work") setTab("overview");
+  }, [mobileCore, tab]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) =>
@@ -654,16 +660,16 @@ export function ProjectRecordModal({
         <nav className="do-project-tabs" aria-label="Project sections">
           {(
             [
-              ["overview", "Overview"],
-              ["plan", "Plan"],
-              ["work", "Work"],
-              ["risks", "Risks"],
-              ["docs", "Docs"],
-              ["team", "Team"],
+              ["overview", "Overview", false],
+              ["plan", "Plan", true],
+              ["work", "Work", false],
+              ["risks", "Risks", true],
+              ["docs", "Docs", true],
+              ["team", "Team", true],
             ] as const
-          ).map(([value, label]) => (
+          ).map(([value, label, advanced]) => (
             <button
-              className={tab === value ? "is-active" : ""}
+              className={`${tab === value ? "is-active" : ""} ${advanced ? "do-mobile-advanced" : ""}`}
               key={value}
               onClick={() => setTab(value)}
               type="button"
@@ -1286,7 +1292,7 @@ export function ProjectRecordModal({
                   <MessageSquare size={14} /> Plan with the team
                 </button>
               </section>
-              <section className="do-project-card do-project-danger">
+              <section className="do-project-card do-project-danger do-mobile-advanced">
                 <div>
                   <Archive size={16} />
                   <span>
@@ -1422,6 +1428,7 @@ export function ProjectConsolePanel({
     name: string,
   ) => Promise<string | void> | string | void;
 }) {
+  const mobileCore = useMobileCore();
   const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
   const [moreOpen, setMoreOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
@@ -1489,6 +1496,10 @@ export function ProjectConsolePanel({
     setDeleteConfirm(false);
     setMoreOpen(false);
   }, [project.id, initialTab]);
+
+  useEffect(() => {
+    if (mobileCore && tab !== "brief" && tab !== "items") setTab("brief");
+  }, [mobileCore, tab]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1627,7 +1638,7 @@ export function ProjectConsolePanel({
         <div className="do-console-band-actions">
           <button
             aria-label="Download status report PDF"
-            className="do-button-secondary"
+            className="do-button-secondary do-mobile-advanced"
             onClick={() => downloadProjectStatusReport(report)}
             title="Download PDF"
             type="button"
@@ -1636,7 +1647,7 @@ export function ProjectConsolePanel({
           </button>
           <button
             aria-label="Open team"
-            className="do-button-secondary"
+            className="do-button-secondary do-mobile-advanced"
             onClick={() => setTab("team")}
             title="Team"
             type="button"
@@ -1645,7 +1656,7 @@ export function ProjectConsolePanel({
           </button>
           <button
             aria-label="Share project"
-            className="do-button-secondary"
+            className="do-button-secondary do-mobile-advanced"
             onClick={() => setTab("team")}
             title="Share"
             type="button"
@@ -1665,7 +1676,7 @@ export function ProjectConsolePanel({
           >
             <MessageSquare size={14} />
           </button>
-          <div className="do-console-more">
+          <div className="do-console-more do-mobile-advanced">
             <button
               aria-label="More actions"
               className="do-button-secondary do-kebab"
@@ -1715,16 +1726,16 @@ export function ProjectConsolePanel({
       <nav className="do-console-tabs is-sticky" aria-label="Project console sections">
         {(
           [
-            ["brief", "Overview"],
-            ["items", "Items"],
-            ["team", "Team"],
-            ["costs", "Costs"],
-            ["risks", "Risks"],
-            ["docs", "Docs"],
+            ["brief", "Overview", false],
+            ["items", "Items", false],
+            ["team", "Team", true],
+            ["costs", "Costs", true],
+            ["risks", "Risks", true],
+            ["docs", "Docs", true],
           ] as const
-        ).map(([value, label]) => (
+        ).map(([value, label, advanced]) => (
           <button
-            className={tab === value ? "is-active" : ""}
+            className={`${tab === value ? "is-active" : ""} ${advanced ? "do-mobile-advanced" : ""}`}
             key={value}
             onClick={() => setTab(value)}
             type="button"

@@ -161,6 +161,8 @@ import {
   splitProjectWizardLines,
   type ProjectWizardDraft,
 } from "../lib/delivereeSkills";
+import { useMobileCore } from "../hooks/useMobileCore";
+import { mobileCoreFallbackPath, mobileCoreTab } from "../lib/mobileCore";
 import type { NotebookEntry } from "../lib/notebookContext";
 import { type MagicProjectBlueprint, type MagicProjectItem } from "../lib/magicProject";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
@@ -283,6 +285,7 @@ export function DelivereeWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
+  const mobileCore = useMobileCore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1127,6 +1130,14 @@ export function DelivereeWorkspace() {
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
   }, [commandPaletteOpen, createMenuOpen, magicProjectOpen, panel, sidebarOpen]);
+
+  useEffect(() => {
+    if (!mobileCore) return;
+    const fallback = mobileCoreFallbackPath(location.pathname);
+    if (fallback && fallback !== location.pathname) {
+      navigate(fallback, { replace: true });
+    }
+  }, [location.pathname, mobileCore, navigate]);
 
   const ensureConversation = async (title: string) => {
     if (conversationId) return conversationId;
@@ -3386,17 +3397,29 @@ export function DelivereeWorkspace() {
         onSelect: () => openProjectRecord(project),
       });
     }
-    return items;
+    if (!mobileCore) return items;
+    const mobileIds = new Set([
+      "nav-home",
+      "nav-my-work",
+      "nav-projects",
+      "quick-capture",
+      "new-conversation",
+      "new-project",
+    ]);
+    return items.filter(
+      (item) => mobileIds.has(item.id) || item.id.startsWith("project-"),
+    );
   }, [
     activeProjects,
     createConversation,
+    mobileCore,
     navigate,
     openChiefOfStaff,
     openProjectRecord,
   ]);
 
   return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -3504,7 +3527,7 @@ export function DelivereeWorkspace() {
             <span>{t("navProjects")}</span>
           </button>
           <button
-            className={`do-nav-item is-agents ${lens.kind === "agents" ? "is-active" : ""}`}
+            className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" ? "is-active" : ""}`}
             data-testid="nav-agents"
             onClick={() => {
               navigate("/agents");
@@ -3516,7 +3539,7 @@ export function DelivereeWorkspace() {
             <span>{t("navAgents")}</span>
           </button>
           <button
-            className={`do-nav-item is-approvals ${lens.kind === "approvals" ? "is-active" : ""}`}
+            className={`do-nav-item is-approvals do-mobile-advanced ${lens.kind === "approvals" ? "is-active" : ""}`}
             data-testid="nav-approvals"
             onClick={() => {
               navigate("/approvals");
@@ -3535,7 +3558,7 @@ export function DelivereeWorkspace() {
             )}
           </button>
           <button
-            className={`do-nav-item is-feedback ${lens.kind === "feedback" ? "is-active" : ""}`}
+            className={`do-nav-item is-feedback do-mobile-advanced ${lens.kind === "feedback" ? "is-active" : ""}`}
             data-testid="nav-feedback"
             onClick={() => {
               navigate("/feedback");
@@ -3645,7 +3668,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions">
+                  <span className="do-project-actions do-mobile-advanced">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -3714,7 +3737,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions">
+                  <span className="do-project-actions do-mobile-advanced">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -3870,7 +3893,7 @@ export function DelivereeWorkspace() {
           </div>
         </div>
 
-        <nav className="do-nav-admin" aria-label="Workspace administration">
+        <nav className="do-nav-admin do-mobile-advanced" aria-label="Workspace administration">
           <button
             className={`do-nav-item ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
             data-testid="nav-workspace"
@@ -3931,6 +3954,7 @@ export function DelivereeWorkspace() {
                 <TextSizeControl compact />
               </div>
               <button
+                className="do-mobile-advanced"
                 onClick={() => {
                   setPanel("workspace");
                   setWorkspaceOpen(false);
@@ -3952,6 +3976,7 @@ export function DelivereeWorkspace() {
                 <Settings size={14} /> Settings
               </button>
               <button
+                className="do-mobile-advanced"
                 onClick={() => {
                   setCleanSlateOpen(true);
                   setWorkspaceOpen(false);
@@ -4088,16 +4113,16 @@ export function DelivereeWorkspace() {
                     <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
                       {t("createProject")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
                       {t("createMagicProject")}
                     </button>
                     <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
                       {t("createCapture")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
                       {t("createBug")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); navigate("/feature-request"); }} type="button">
                       {t("createFeature")}
                     </button>
                   </div>
@@ -4144,7 +4169,7 @@ export function DelivereeWorkspace() {
             </button>
             <button
               aria-selected={centerView === "strategy"}
-              className={centerView === "strategy" ? "is-active" : ""}
+              className={`do-mobile-advanced ${centerView === "strategy" ? "is-active" : ""}`}
               onClick={() => goCenterView("strategy")}
               role="tab"
               type="button"
@@ -4760,6 +4785,46 @@ export function DelivereeWorkspace() {
           />
         )}
       </main>
+
+      <nav aria-label="Mobile core" className="do-mobile-dock">
+        <button
+          className={mobileCoreTab(location.pathname) === "home" ? "is-active" : ""}
+          onClick={() => navigate("/home")}
+          type="button"
+        >
+          <Home size={16} />
+          Home
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "my-work" ? "is-active" : ""}
+          onClick={() => navigate("/my-work")}
+          type="button"
+        >
+          <CheckCircle2 size={16} />
+          My Work
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "projects" ? "is-active" : ""}
+          onClick={() => navigate("/projects")}
+          type="button"
+        >
+          <Folder size={16} />
+          Projects
+        </button>
+        <button
+          className={mobileCoreTab(location.pathname) === "notes" ? "is-active" : ""}
+          onClick={() => {
+            const projectId =
+              (lens.kind === "project" ? lens.projectId : null) || projectConsoleId || activeProjects[0]?.id;
+            if (projectId) navigate(`/work/projects/${projectId}/notes`);
+            else navigate("/projects");
+          }}
+          type="button"
+        >
+          <BookOpen size={16} />
+          Notes
+        </button>
+      </nav>
 
       <aside
         className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`}

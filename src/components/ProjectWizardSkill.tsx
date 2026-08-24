@@ -165,7 +165,7 @@ export function ProjectWizardSkill({
                 <FolderPlus size={14} /> Create project
               </button>
               {onOpenMagicProject && (
-                <button onClick={onOpenMagicProject} type="button">
+                <button onClick={onOpenMagicProject} className="do-mobile-advanced" type="button">
                   <WandSparkles size={14} /> Magic project
                 </button>
               )}

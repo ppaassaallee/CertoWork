@@ -13381,3 +13381,63 @@ a {
   background: var(--surface-0);
   color: var(--text-muted);
 }
+
+.do-mobile-dock {
+  display: none;
+}
+.do-shell.is-mobile-core .do-mobile-advanced {
+  display: none !important;
+}
+.do-shell.is-mobile-core .do-mobile-dock {
+  position: fixed;
+  z-index: 70;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-0);
+  padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+}
+.do-shell.is-mobile-core .do-mobile-dock button {
+  display: flex;
+  min-height: 44px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+.do-shell.is-mobile-core .do-mobile-dock button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.do-shell.is-mobile-core {
+  padding-bottom: calc(58px + env(safe-area-inset-bottom));
+}
+.do-shell.is-mobile-core .do-sidebar-search kbd,
+.do-shell.is-mobile-core .do-new-conversation kbd {
+  display: none;
+}
+.do-shell.is-mobile-core .do-console-tabs {
+  grid-template-columns: 1fr 1fr;
+}
+.do-shell.is-mobile-core .do-items-mode,
+.do-shell.is-mobile-core .do-items-helpbar,
+.do-shell.is-mobile-core .do-nav-admin,
+.do-shell.is-mobile-core .do-console-insights,
+.do-shell.is-mobile-core .do-console-ask-grid {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .do-mobile-advanced {
+    display: none !important;
+  }
+}

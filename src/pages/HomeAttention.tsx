@@ -39,7 +39,7 @@ export function HomeAttention({
   return (
     <div className="do-home-attention" data-testid="home-attention">
       {reviewItems.length > 0 && (
-        <section className="do-attention-block is-amber">
+        <section className="do-attention-block is-amber do-mobile-advanced">
           <button className="do-attention-head" onClick={onOpenApprovals} type="button">
             <StatusLight status="amber" label={`${reviewItems.length} pending approvals`} />
             <ChevronRight size="sm" />
