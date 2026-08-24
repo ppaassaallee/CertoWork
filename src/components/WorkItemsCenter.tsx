@@ -58,6 +58,7 @@ type ItemSavedView = {
 };
 type ItemColumnKey =
   | "title"
+  | "project"
   | "delivery_entity"
   | "client_entity"
   | "tags"
@@ -68,7 +69,8 @@ type ItemColumnKey =
   | "gtd"
   | "bucket"
   | "assignees"
-  | "due";
+  | "due"
+  | "sprint";
 
 type Props = {
   activeProject: any | null;
@@ -131,6 +133,7 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
 
 const defaultItemColumns: ItemColumnKey[] = [
   "title",
+  "project",
   "delivery_entity",
   "client_entity",
   "tags",
@@ -142,10 +145,12 @@ const defaultItemColumns: ItemColumnKey[] = [
   "bucket",
   "assignees",
   "due",
+  "sprint",
 ];
 
 const itemColumnLabels: Record<ItemColumnKey, string> = {
   title: "Item",
+  project: "Project",
   delivery_entity: "Delivery Entity",
   client_entity: "Client Entity",
   tags: "Tags",
@@ -157,10 +162,12 @@ const itemColumnLabels: Record<ItemColumnKey, string> = {
   bucket: "Action Board",
   assignees: "Assignees",
   due: "Due",
+  sprint: "Sprint",
 };
 
 const itemColumnWidths: Record<ItemColumnKey, string> = {
   title: "minmax(210px, 1.25fr)",
+  project: "minmax(150px, .8fr)",
   delivery_entity: "minmax(145px, .75fr)",
   client_entity: "minmax(145px, .75fr)",
   tags: "minmax(130px, .7fr)",
@@ -172,6 +179,7 @@ const itemColumnWidths: Record<ItemColumnKey, string> = {
   bucket: "92px",
   assignees: "minmax(112px, .75fr)",
   due: "112px",
+  sprint: "minmax(120px, .7fr)",
 };
 
 function viewStorageKey(scope: string) {
@@ -196,6 +204,10 @@ const defaultItemColumnPixels = Object.fromEntries(
 
 function clampColumnWidth(value: number) {
   return Math.max(72, Math.min(420, Math.round(value)));
+}
+
+function selectableItemColumns() {
+  return defaultItemColumns.filter((column) => column !== "title");
 }
 
 function selectedItemColumns(value: ItemColumnKey[] | null) {
@@ -517,6 +529,7 @@ export function WorkItemsCenter({
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addSprintOpen, setAddSprintOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState("status");
@@ -849,6 +862,11 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
     const isDone = canonicalStatus(item) === "done";
+    const titleMeta = [
+      itemColumnSet.has("project") ? null : itemProjectTitle(item, projects),
+      children.length ? `${children.length} child item${children.length === 1 ? "" : "s"}` : null,
+      Array.isArray(item.dependencyIds) && item.dependencyIds.length ? `${item.dependencyIds.length} deps` : null,
+    ].filter(Boolean).join(" · ");
     return (
       <article
         className={`do-items-row is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
@@ -894,8 +912,20 @@ export function WorkItemsCenter({
         {itemColumnSet.has("title") && <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
           <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
           <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
-          <small>{itemProjectTitle(item, projects)}{children.length ? ` · ${children.length} child item${children.length === 1 ? "" : "s"}` : ""}{Array.isArray(item.dependencyIds) && item.dependencyIds.length ? ` · ${item.dependencyIds.length} deps` : ""}</small>
+          {titleMeta ? <small>{titleMeta}</small> : null}
         </button>}
+        {itemColumnSet.has("project") && (
+          <select
+            aria-label={`Project for ${title(item)}`}
+            onChange={(event) => onUpdateTask(item.id, { projectId: event.target.value || null })}
+            value={item.projectId || ""}
+          >
+            <option value="">No project / errand</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>{projectTitle(project)}</option>
+            ))}
+          </select>
+        )}
         {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
         {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
         {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
@@ -917,6 +947,20 @@ export function WorkItemsCenter({
         {itemColumnSet.has("bucket") && <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>}
         {itemColumnSet.has("assignees") && <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />}
         {itemColumnSet.has("due") && <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />}
+        {itemColumnSet.has("sprint") && (
+          <select
+            aria-label={`Sprint for ${title(item)}`}
+            onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
+            value={item.sprintId || ""}
+          >
+            <option value="">No sprint</option>
+            {sprints
+              .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
+              .map((sprint) => (
+                <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
+              ))}
+          </select>
+        )}
       </article>
     );
   };
@@ -1257,11 +1301,11 @@ export function WorkItemsCenter({
           <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
           <button aria-label="Kanban view" className={mode === "kanban" ? "is-active" : ""} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
           <button aria-label="Gantt view" className={mode === "gantt" ? "is-active" : ""} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
-          {activeProject && <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>}
+          <button aria-label="Epics view" className={mode === "epics" ? "is-active" : ""} onClick={() => setMode("epics")} type="button">Epics</button>
         </div>
         <div className="do-items-toolbar-actions">
           <div className="do-popover-anchor">
-            <button aria-expanded={viewsOpen} aria-label="Views" className={viewsOpen ? "is-active" : ""} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); }} type="button">Views</button>
+            <button aria-expanded={viewsOpen} aria-label="Views" className={viewsOpen ? "is-active" : ""} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
             {viewsOpen && (
               <div className="do-popover" role="menu">
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
@@ -1278,12 +1322,6 @@ export function WorkItemsCenter({
                   <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
                 </label>
                 <button onClick={() => { saveItemView(); setViewsOpen(false); }} type="button">Save view</button>
-                {defaultItemColumns.filter((column) => column !== "title").slice(0, 6).map((column) => (
-                  <label key={column} className="do-column-toggle">
-                    <input checked={visibleItemColumns.includes(column)} onChange={() => toggleItemColumn(column)} type="checkbox" />
-                    {itemColumnLabels[column]}
-                  </label>
-                ))}
                 <button onClick={resetItemColumnWidths} type="button">Reset column widths</button>
                 <button
                   onClick={() =>
@@ -1305,7 +1343,38 @@ export function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button aria-expanded={filterOpen} aria-label="Filter" className={activeFilterChips.length ? "is-active" : ""} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); }} type="button">
+            <button
+              aria-expanded={fieldsOpen}
+              aria-label="Fields"
+              className={fieldsOpen ? "is-active" : ""}
+              data-testid="item-fields-button"
+              onClick={() => { setFieldsOpen((o) => !o); setViewsOpen(false); setFilterOpen(false); setSortOpen(false); }}
+              type="button"
+            >
+              Fields
+            </button>
+            {fieldsOpen && (
+              <div className="do-popover do-fields-popover" data-testid="item-fields-picker" role="menu">
+                <strong>Item fields</strong>
+                <span>Show or add the same fields used in project backlog items.</span>
+                <div className="do-column-picker">
+                  {selectableItemColumns().map((column) => (
+                    <label key={column} className="do-column-toggle">
+                      <input
+                        aria-label={`${visibleItemColumns.includes(column) ? "Hide" : "Show"} ${itemColumnLabels[column]} field`}
+                        checked={visibleItemColumns.includes(column)}
+                        onChange={() => toggleItemColumn(column)}
+                        type="checkbox"
+                      />
+                      {itemColumnLabels[column]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="do-popover-anchor">
+            <button aria-expanded={filterOpen} aria-label="Filter" className={activeFilterChips.length ? "is-active" : ""} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">
               <SlidersHorizontal size={13} /> Filter{activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
             </button>
             {filterOpen && (
@@ -1313,7 +1382,7 @@ export function WorkItemsCenter({
                 <label>
                   Add filter
                   <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
-                    {!activeProject && <option value="project">Project</option>}
+                    <option value="project">Project</option>
                     <option value="status">Status</option>
                     <option value="priority">Priority</option>
                     <option value="type">Type</option>
@@ -1322,7 +1391,7 @@ export function WorkItemsCenter({
                     <option value="tag">Tag</option>
                     <option value="category">Category</option>
                     <option value="phase">Product phase</option>
-                    {activeProject && <option value="sprint">Sprint</option>}
+                    <option value="sprint">Sprint</option>
                   </select>
                 </label>
                 {filterDraft === "project" && (
@@ -1381,7 +1450,7 @@ export function WorkItemsCenter({
                     {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
                   </select>
                 )}
-                {filterDraft === "sprint" && activeProject && (
+                {filterDraft === "sprint" && (
                   <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
                     <option value="all">All sprints</option>
                     <option value="none">No sprint</option>
@@ -1392,7 +1461,7 @@ export function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button aria-expanded={sortOpen} aria-label="Sort" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); }} type="button">Sort</button>
+            <button aria-expanded={sortOpen} aria-label="Sort" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">Sort</button>
             {sortOpen && (
               <div className="do-popover">
                 <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
@@ -1402,7 +1471,7 @@ export function WorkItemsCenter({
             )}
           </div>
           <button aria-label="Add item" className="do-button do-button-dark" onClick={() => setAddItemOpen((o) => !o)} type="button"><Plus size={13} /> Add item</button>
-          {activeProject && onCreateSprint && (
+          {onCreateSprint && (
             <button aria-label="Add sprint" className="do-button-secondary" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
           )}
           <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
@@ -1435,10 +1504,28 @@ export function WorkItemsCenter({
           <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
         </section>
       )}
-      {addSprintOpen && activeProject && onCreateSprint && (
+      {addSprintOpen && onCreateSprint && (
         <section className="do-items-create">
+          {!activeProject && (
+            <select aria-label="New sprint project" onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
+              <option value="">Choose project</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+            </select>
+          )}
           <input aria-label="New sprint name" onChange={(event) => setSprintName(event.target.value)} placeholder="Sprint name" value={sprintName} />
-          <button disabled={!sprintName.trim()} onClick={async () => { await onCreateSprint({ name: sprintName.trim(), projectId: activeProject.id, status: "planning" }); setSprintName(""); setAddSprintOpen(false); }} type="button"><Plus size={13} /> Create sprint</button>
+          <button
+            disabled={!sprintName.trim() || !(activeProject?.id || newProjectId)}
+            onClick={async () => {
+              const projectId = activeProject?.id || newProjectId;
+              if (!projectId) return;
+              await onCreateSprint({ name: sprintName.trim(), projectId, status: "planning" });
+              setSprintName("");
+              setAddSprintOpen(false);
+            }}
+            type="button"
+          >
+            <Plus size={13} /> Create sprint
+          </button>
         </section>
       )}
 
@@ -1472,7 +1559,7 @@ export function WorkItemsCenter({
           >
             Assign
           </button>
-          {activeProject && (
+          {onCreateSprint && (
             <>
               <select aria-label="Bulk sprint" onChange={(event) => setBulkSprintId(event.target.value)} value={bulkSprintId}>
                 <option value="">Sprint</option>

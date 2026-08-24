@@ -1370,6 +1370,9 @@ export function ProjectConsolePanel({
   driveRoot = null,
   driveConnected = false,
   driveMessage = "",
+  tags = [],
+  onCreateControlledOption,
+  projects: workspaceProjects,
 }: {
   project: any;
   tasks: any[];
@@ -1412,6 +1415,12 @@ export function ProjectConsolePanel({
   driveRoot?: { id: string; name: string } | null;
   driveConnected?: boolean;
   driveMessage?: string;
+  tags?: TagLike[];
+  projects?: any[];
+  onCreateControlledOption?: (
+    group: "delivery_entity" | "client_entity" | "tag",
+    name: string,
+  ) => Promise<string | void> | string | void;
 }) {
   const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1825,14 +1834,16 @@ export function ProjectConsolePanel({
               onAddTask(title, status, { ...patch, projectId })
             }
             onAsk={onAsk}
+            onCreateControlledOption={onCreateControlledOption}
             onCreateSprint={onCreateSprint}
             onOpenProjectConsole={() => undefined}
             onSelectItem={setSelectedWorkItemId}
             onUpdateSprint={onUpdateSprint}
             onUpdateTask={onUpdateTask}
-            projects={[project]}
+            projects={workspaceProjects?.length ? workspaceProjects : [project]}
             selectedItemId={selectedWorkItemId}
             sprints={sprints}
+            tags={tags}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
