@@ -108,6 +108,10 @@ export function splitProjectWizardLines(value: string): string[] {
     .filter(Boolean);
 }
 
+export const PROJECT_WIZARD_OPTIONAL_FIELDS: readonly ProjectWizardMissingField[] = [
+  "First next action",
+];
+
 export function projectWizardMissingFields(draft: ProjectWizardDraft): ProjectWizardMissingField[] {
   const missing: ProjectWizardMissingField[] = [];
   if (!draft.title.trim()) missing.push("Project name");
@@ -122,8 +126,28 @@ export function projectWizardMissingFields(draft: ProjectWizardDraft): ProjectWi
   return missing;
 }
 
+export function projectWizardBlockingFields(draft: ProjectWizardDraft): ProjectWizardMissingField[] {
+  return projectWizardMissingFields(draft).filter(
+    (field) => !PROJECT_WIZARD_OPTIONAL_FIELDS.includes(field),
+  );
+}
+
+export function defaultProjectWizardFirstAction(draft: ProjectWizardDraft): string {
+  const explicit = draft.firstAction.trim();
+  if (explicit) return explicit;
+  const title = draft.title.trim();
+  return title ? `Kick off ${title}` : "Define the first next action";
+}
+
+export function seedProjectWizardDraft(draft: ProjectWizardDraft): ProjectWizardDraft {
+  return {
+    ...draft,
+    firstAction: defaultProjectWizardFirstAction(draft),
+  };
+}
+
 export function isProjectWizardReady(draft: ProjectWizardDraft) {
-  return projectWizardMissingFields(draft).length === 0;
+  return projectWizardBlockingFields(draft).length === 0;
 }
 
 export function isProjectWizardInvocation(text: string) {

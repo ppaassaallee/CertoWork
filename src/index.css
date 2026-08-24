@@ -6652,15 +6652,23 @@ a {
   font-weight: 600;
   cursor: pointer;
 }
+.do-skill-foot button.do-skill-create,
 .do-skill-foot button:last-child {
   border-color: var(--accent);
   background: var(--accent);
-  color: var(--surface-0);
+  color: var(--accent-on, var(--surface-0));
 }
 .do-skill-foot button:disabled {
   border-color: var(--border);
   background: var(--surface-2);
   color: var(--text-muted);
+  cursor: default;
+}
+.do-skill-foot button.do-skill-create:disabled {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-on, var(--surface-0));
+  opacity: 0.55;
   cursor: default;
 }
 
@@ -12920,7 +12928,6 @@ a {
 .do-codex-launch-actions button,
 .do-codex-work-scope > button,
 .do-skill-field button.is-active,
-.do-skill-foot button:last-child,
 .do-alias-gate button[type="submit"],
 .do-recovery button:first-child,
 .do-public-report-bar button {
@@ -12936,6 +12943,7 @@ a {
 .do-send,
 .do-button.do-button-dark,
 .cw-btn-primary,
+.do-skill-foot button.do-skill-create,
 .do-approval-item button:last-child,
 .do-notes-empty button {
   background: var(--accent) !important;

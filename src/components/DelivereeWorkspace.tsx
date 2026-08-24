@@ -153,6 +153,7 @@ import {
 } from "../lib/accessControl";
 import {
   DELIVEREE_SKILLS,
+  defaultProjectWizardFirstAction,
   isProjectWizardInvocation,
   splitProjectWizardLines,
   type ProjectWizardDraft,
@@ -2847,7 +2848,7 @@ export function DelivereeWorkspace() {
     }
     await addProjectTask(
       projectRef.id,
-      draft.firstAction.trim().slice(0, 500),
+      defaultProjectWizardFirstAction(draft).slice(0, 500),
       "backlog",
       {
         source: "project_wizard",
@@ -2913,21 +2914,23 @@ export function DelivereeWorkspace() {
     });
     if (draft.firstMilestone.trim())
       await addProjectMilestone(projectId, draft.firstMilestone.trim());
-    await addProjectTask(
-      projectId,
-      draft.firstAction.trim().slice(0, 500),
-      "backlog",
-      {
-        source: "project_wizard",
-        priority: "1",
-        dueDate: targetDate || null,
-        workItemType: "task",
-        itemType: "task",
-        type: "task",
-        acceptanceCriteria: successCriteria.join("\n"),
-        definitionOfDone: draft.definitionOfDone.trim(),
-      },
-    );
+    if (draft.firstAction.trim()) {
+      await addProjectTask(
+        projectId,
+        draft.firstAction.trim().slice(0, 500),
+        "backlog",
+        {
+          source: "project_wizard",
+          priority: "1",
+          dueDate: targetDate || null,
+          workItemType: "task",
+          itemType: "task",
+          type: "task",
+          acceptanceCriteria: successCriteria.join("\n"),
+          definitionOfDone: draft.definitionOfDone.trim(),
+        },
+      );
+    }
     setProjectConsoleId(projectId);
     setPanel("project");
     goCenterView("conversation");
