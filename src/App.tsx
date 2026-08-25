@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "./components/ui/Icon";
 import { useAuth } from "./lib/AuthContext";
+import { googleSignInBrowserAdvice, preferredGoogleSignInMethod } from "./lib/authFlow";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
@@ -23,13 +24,15 @@ function SignIn() {
   const [accessRequested, setAccessRequested] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const browserAdvice = googleSignInBrowserAdvice();
 
-  const handleSignIn = async (method: 'popup' | 'redirect' = 'popup') => {
+  const handleSignIn = async () => {
+    const method = preferredGoogleSignInMethod();
     setSubmitting(true);
-    setRedirecting(method === 'redirect');
+    setRedirecting(method === "redirect");
     setError("");
     try {
-      await signIn(method);
+      await signIn();
     } catch (reason) {
       // AuthContext provides a precise, browser-safe message for the error.
       setError(reason instanceof Error ? reason.message : "Sign-in could not be completed.");
@@ -210,9 +213,10 @@ function SignIn() {
                 </button>
               </form>
               <div className="do-signin-links">
-                <button className="do-signin-alternate" disabled={submitting} onClick={() => handleSignIn("popup")} type="button">
+                <button className="do-signin-alternate" disabled={submitting} onClick={() => void handleSignIn()} type="button">
                   {redirecting ? "Opening secure sign-in…" : "Continue with Google"}
                 </button>
+                {browserAdvice ? <small className="do-access-note">{browserAdvice}</small> : null}
                 <button className="do-signin-alternate" disabled={submitting} onClick={() => resetPanel("reset")} type="button">
                   Forgot password?
                 </button>

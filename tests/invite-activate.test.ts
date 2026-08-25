@@ -100,6 +100,7 @@ test("invite screen signs in existing users and offers Google or reset instead o
   const source = readFileSync(join(root, "src/components/InviteActivate.tsx"), "utf8");
   assert.match(source, /resolveInviteAuthSession/);
   assert.match(source, /Continue with Google/);
+  assert.match(source, /googleSignInBrowserAdvice/);
   assert.match(source, /Send password reset/);
   assert.match(source, /current-password/);
   assert.doesNotMatch(source, /setError\(reason instanceof Error \? reason\.message/);

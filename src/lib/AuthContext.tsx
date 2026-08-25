@@ -21,6 +21,8 @@ import {
   AUTH_BOOT_TIMEOUT_MS,
   AUTH_POPUP_TIMEOUT_MS,
   authErrorMessage,
+  preferredGoogleSignInMethod,
+  shouldFallbackGoogleSignInToRedirect,
   withAuthTimeout,
 } from './authFlow';
 import { looksLikeEmail, membershipPublicPatch } from './workspaceCollaboration';
@@ -390,22 +392,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signIn = async (method: 'popup' | 'redirect' = 'popup') => {
+  const signIn = async (method?: 'popup' | 'redirect') => {
     setAuthError('');
+    const chosen = method ?? preferredGoogleSignInMethod();
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
       await setPersistence(auth, browserLocalPersistence);
-      if (method === 'redirect') {
+      if (chosen === 'redirect') {
         await signInWithRedirect(auth, provider);
         return;
       }
-      await withAuthTimeout(
-        signInWithPopup(auth, provider),
-        AUTH_POPUP_TIMEOUT_MS,
-        'Google sign-in',
-      );
+      try {
+        await withAuthTimeout(
+          signInWithPopup(auth, provider),
+          AUTH_POPUP_TIMEOUT_MS,
+          'Google sign-in',
+        );
+      } catch (reason) {
+        if (shouldFallbackGoogleSignInToRedirect(reason)) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw reason;
+      }
     } catch (reason) {
       const message = authErrorMessage(reason);
       setAuthError(message);
