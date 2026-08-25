@@ -44,10 +44,40 @@ export async function startCollabSso(input: {
   workspaceId: string;
   email: string;
   displayName: string;
+  company?: string;
   projectId?: string;
   projects?: Array<{ id: string; name: string }>;
 }): Promise<CollabSsoResult> {
-  const response = await fetch("/api/collab/sso", {
+  return postCollab("sso", input);
+}
+
+export async function syncCollabRooms(input: {
+  token: string;
+  userId: string;
+  workspaceId: string;
+  email: string;
+  displayName: string;
+  company?: string;
+  projectId?: string;
+  projects?: Array<{ id: string; name: string }>;
+}): Promise<CollabSsoResult> {
+  return postCollab("rooms", input);
+}
+
+async function postCollab(
+  path: "sso" | "rooms",
+  input: {
+    token: string;
+    userId: string;
+    workspaceId: string;
+    email: string;
+    displayName: string;
+    company?: string;
+    projectId?: string;
+    projects?: Array<{ id: string; name: string }>;
+  },
+): Promise<CollabSsoResult> {
+  const response = await fetch(`/api/collab/${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${input.token}`,
@@ -58,6 +88,7 @@ export async function startCollabSso(input: {
       workspaceId: input.workspaceId,
       email: input.email,
       displayName: input.displayName,
+      company: input.company || "",
       projectId: input.projectId || "",
       projects: input.projects || [],
     }),

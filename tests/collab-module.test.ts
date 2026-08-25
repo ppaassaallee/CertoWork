@@ -15,7 +15,9 @@ import {
   productHomePath,
 } from "../src/lib/collabModule";
 import {
+  applyCollabBranding,
   collabStatusPayload,
+  isCertoCollabBrandPath,
   isChatwootProxyPath,
   provisionCollabSso,
   proxyChatwoot,
@@ -125,10 +127,10 @@ test("SSO login URLs are rewritten onto the public Certo Work origin", async () 
       "https://certo.work/app/login?email=ana%40certo.work&sso_auth_token=abc",
     );
     assert.equal(result.userId, 9);
-    assert.equal(calls[0], "POST https://chatwoot.internal:3000/platform/api/v1/users");
-    assert.equal(calls[1], "POST https://chatwoot.internal:3000/platform/api/v1/accounts/7/account_users");
-    assert.equal(calls[2], "GET https://chatwoot.internal:3000/platform/api/v1/users/9/login");
-    assert.equal(calls[3], "POST https://chatwoot.internal:3000/platform/api/v1/users/9/token");
+    assert.ok(calls.includes("POST https://chatwoot.internal:3000/platform/api/v1/users"));
+    assert.ok(calls.includes("POST https://chatwoot.internal:3000/platform/api/v1/accounts/7/account_users"));
+    assert.ok(calls.includes("GET https://chatwoot.internal:3000/platform/api/v1/users/9/login"));
+    assert.ok(calls.includes("POST https://chatwoot.internal:3000/platform/api/v1/users/9/token"));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -242,6 +244,11 @@ test("worker serves Chatwoot from certo.work and leaves Work routes on the SPA",
           if (pathname === "/approvals") {
             return new Response("work-spa", { headers: { "content-type": "text/html" } });
           }
+          if (pathname === "/certo-mark.svg") {
+            return new Response("<svg id='certo-mark'></svg>", {
+              headers: { "content-type": "image/svg+xml" },
+            });
+          }
           return new Response("missing", { status: 404 });
         },
       },
@@ -254,6 +261,8 @@ test("worker serves Chatwoot from certo.work and leaves Work routes on the SPA",
     assert.equal(await proxied.text(), "desk");
     const work = await worker.fetch(new Request("https://certo.work/approvals"), env);
     assert.equal(await work.text(), "work-spa");
+    const logo = await worker.fetch(new Request("https://certo.work/brand-assets/logo.svg"), env);
+    assert.equal(await logo.text(), "<svg id='certo-mark'></svg>");
     const status = await worker.fetch(new Request("https://certo.work/api/collab/status"), env);
     assert.deepEqual(await status.json(), {
       configured: true,
@@ -265,6 +274,69 @@ test("worker serves Chatwoot from certo.work and leaves Work routes on the SPA",
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("SSO can return the desk before project rooms are synced", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    calls.push(`${init?.method || "GET"} ${path}`);
+    if (path.endsWith("/platform/api/v1/users") && init?.method === "POST") {
+      return Response.json({ id: 9, email: "ana@certo.work" });
+    }
+    if (path.includes("/account_users")) {
+      return Response.json({ user_id: 9, role: "administrator" });
+    }
+    if (path.endsWith("/login")) {
+      return Response.json({
+        url: "https://chatwoot.internal:3000/app/login?email=ana%40certo.work&sso_auth_token=abc",
+      });
+    }
+    if (path.includes("/platform/api/v1/users/9") && init?.method === "PATCH") {
+      return Response.json({ id: 9 });
+    }
+    if (path.includes("/accounts/7") && init?.method === "PATCH") {
+      return Response.json({ id: 7 });
+    }
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await provisionCollabSso(
+      {
+        CHATWOOT_URL: "https://chatwoot.internal:3000",
+        CHATWOOT_PLATFORM_TOKEN: "tok",
+        CHATWOOT_ACCOUNT_ID: "7",
+      },
+      { email: "ana@certo.work", displayName: "Ana", company: "Certo", userId: "uid-1", workspaceId: "ws-1" },
+      "https://certo.work",
+      { syncRooms: false },
+    );
+    assert.equal(
+      result.url,
+      "https://certo.work/app/login?email=ana%40certo.work&sso_auth_token=abc",
+    );
+    assert.equal(result.rooms.length, 0);
+    assert.equal(calls.some((item) => item.includes("/inboxes")), false);
+    assert.equal(calls.some((item) => item.includes("/token")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Chatwoot HTML is branded as Certo Work and project rooms can collapse", () => {
+  const html = applyCollabBranding(`<!DOCTYPE html><html><head>
+    <title>Chatwoot</title>
+    <link href="/brand-assets/logo_thumbnail.svg">
+    <script>window.globalConfig = {"LOGO":"/brand-assets/logo.svg","LOGO_DARK":"/brand-assets/logo_dark.svg","LOGO_THUMBNAIL":"/brand-assets/logo_thumbnail.svg","INSTALLATION_NAME":"Chatwoot","BRAND_NAME":"Chatwoot"}</script>
+    </head><body>Room · Atlas</body></html>`);
+  assert.match(html, /<title>Certo Work<\/title>/);
+  assert.match(html, /"INSTALLATION_NAME":"Certo Work"/);
+  assert.match(html, /\/certo-mark\.svg/);
+  assert.match(html, /certo-collab-brand/);
+  assert.match(html, /data-certo-project-room/);
+  assert.equal(isCertoCollabBrandPath("/brand-assets/logo.svg"), true);
+  assert.equal(isCertoCollabBrandPath("/app"), false);
 });
 
 test("location and cookie helpers never emit a collab subdomain", () => {
@@ -286,9 +358,13 @@ test("live shell mounts Chat Collab as a separate product on certo.work", () => 
   assert.match(workspace, /ChatCollabModule/);
   assert.match(workspace, /data-testid="header-collab"/);
   assert.match(workspace, /nav-collab/);
+  assert.match(workspace, /CertoMark/);
   assert.match(collab, /data-testid="chat-collab-module"/);
   assert.match(collab, /data-testid="chat-collab-setup"/);
   assert.match(collab, /data-testid="collab-room-select"/);
+  assert.match(collab, /data-testid="collab-rooms-collapse"/);
+  assert.match(collab, /syncCollabRooms/);
+  assert.doesNotMatch(collab, /1800/);
   assert.match(collab, /certo\.work/);
   assert.equal(collab.includes("collab.certo.work"), false);
 });

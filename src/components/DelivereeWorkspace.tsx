@@ -69,6 +69,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
 import { ChatCollabModule } from "./ChatCollabModule";
+import { CertoMark } from "./CertoMark";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { collabProjectPath } from "../lib/collabModule";
 import { useAuth } from "../lib/AuthContext";
@@ -4047,7 +4048,9 @@ export function DelivereeWorkspace() {
             aria-label="Workspace switcher"
             title="Workspace switcher"
           >
-            <span className="do-logo">C</span>
+            <span className="do-logo">
+              <CertoMark size={18} />
+            </span>
             <span className="do-brand-copy">
               <strong>{workspace?.name || "Certo Work"}</strong>
               <small>Certo Work</small>
