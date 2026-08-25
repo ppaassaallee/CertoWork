@@ -262,6 +262,7 @@ test("worker serves Chatwoot from certo.work and leaves Work routes on the SPA",
     const work = await worker.fetch(new Request("https://certo.work/approvals"), env);
     assert.equal(await work.text(), "work-spa");
     const logo = await worker.fetch(new Request("https://certo.work/brand-assets/logo.svg"), env);
+    assert.equal(logo.headers.get("content-type"), "image/svg+xml");
     assert.equal(await logo.text(), "<svg id='certo-mark'></svg>");
     const status = await worker.fetch(new Request("https://certo.work/api/collab/status"), env);
     assert.deepEqual(await status.json(), {

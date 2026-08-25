@@ -1367,7 +1367,14 @@ const worker = {
       }
     }
     if (request.method === "GET" && isCertoCollabBrandPath(url.pathname)) {
-      return serveAsset(new Request(new URL("/certo-mark.svg", request.url), request), env);
+      const mark = new URL("/certo-mark.svg", request.url);
+      return serveAsset(
+        new Request(mark.toString(), {
+          method: "GET",
+          headers: { accept: "image/svg+xml" },
+        }),
+        env,
+      );
     }
     if (isChatwootProxyPath(url.pathname)) {
       return proxyChatwoot(request, env);
