@@ -118,12 +118,21 @@ export function isWaitingWorkItem(item: Record<string, unknown> | null | undefin
   return value === "waiting" || value === "waiting_for" || value === "delegated";
 }
 
+/** My Work is a view. It never deletes records. */
+export function isMyWorkItem(
+  item: Record<string, unknown> | null | undefined,
+  actor: MyWorkActor,
+  members: WorkspaceMember[] = [],
+) {
+  return isAssignedToActor(item, actor, members) || isCreatedByActor(item, actor);
+}
+
 export function isMyWorkInboxItem(
   item: Record<string, unknown> | null | undefined,
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  return isCreatedByActor(item, actor) && !itemHasAssignees(item) && !isAssignedToActor(item, actor, members);
+  return isMyWorkItem(item, actor, members) && !itemHasAssignees(item) && !isWaitingWorkItem(item);
 }
 
 export function isMyWorkAssignedItem(
@@ -131,7 +140,7 @@ export function isMyWorkAssignedItem(
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  return isAssignedToActor(item, actor, members);
+  return isMyWorkItem(item, actor, members);
 }
 
 export function filterMyWorkTasks(
@@ -140,17 +149,21 @@ export function filterMyWorkTasks(
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  if (section === "inbox") {
-    return tasks.filter((item) => isMyWorkInboxItem(item, actor, members));
-  }
+  const mine = tasks.filter((item) => isMyWorkItem(item, actor, members));
   if (section === "waiting") {
-    return tasks.filter(
-      (item) => isAssignedToActor(item, actor, members) && isWaitingWorkItem(item),
-    );
+    return mine.filter((item) => isWaitingWorkItem(item));
   }
-  return tasks.filter(
-    (item) => isAssignedToActor(item, actor, members) && !isWaitingWorkItem(item),
-  );
+  if (section === "inbox") {
+    return mine.filter((item) => isMyWorkInboxItem(item, actor, members));
+  }
+  return mine.filter((item) => !isWaitingWorkItem(item));
+}
+
+export function needsCreatorAssigneeRestore(
+  item: Record<string, unknown> | null | undefined,
+  actor: MyWorkActor,
+) {
+  return Boolean(item?.id) && isCreatedByActor(item, actor) && !itemHasAssignees(item);
 }
 
 export function creatorAssigneePatch(actor: MyWorkActor, members: WorkspaceMember[] = []) {
