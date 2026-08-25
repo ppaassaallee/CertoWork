@@ -352,7 +352,10 @@ test("location and cookie helpers never emit a collab subdomain", () => {
   assert.equal(rewriteChatwootCookie("session=1; Domain=collab.certo.work; Path=/"), "session=1; Path=/");
 });
 
-test("live shell mounts Chat Collab as a separate product on certo.work", () => {
+test("Chatwoot brand-asset paths are handled by the Worker before the SPA", () => {
+  const wrangler = readFileSync(resolve("wrangler.jsonc"), "utf8");
+  assert.match(wrangler, /\/brand-assets\/\*/);
+});
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
   const collab = readFileSync(resolve("src/components/ChatCollabModule.tsx"), "utf8");
   assert.match(workspace, /ProductSwitcher/);
