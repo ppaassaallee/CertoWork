@@ -133,6 +133,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
+import { filterMyWorkTasks, withCreatorAssignee } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -951,6 +952,16 @@ export function DelivereeWorkspace() {
   const personalTodayTasks = useMemo(
     () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
     [personalActor, todayTasks],
+  );
+  const myWorkTasks = useMemo(
+    () =>
+      filterMyWorkTasks(
+        tasks,
+        lens.kind === "my-work" ? lens.section : "assigned",
+        personalActor,
+        workspaceMembers,
+      ),
+    [lens, personalActor, tasks, workspaceMembers],
   );
 
   useEffect(() => {
@@ -1996,13 +2007,18 @@ export function DelivereeWorkspace() {
         }
       } else {
         let collectionName = "tasks";
+        const assigned = withCreatorAssignee(proposed, {
+          userId: user.uid,
+          memberId: accessMemberId(workspace.id, user.uid),
+          email: user.email,
+        }, workspaceMembers);
         let payload: Record<string, unknown> = {
-          ...proposed,
+          ...assigned,
           userId: user.uid,
           workspaceId: workspace.id,
           projectId,
           ...buildTaskAccessPatch({
-            task: proposed,
+            task: assigned,
             workspaceId: workspace.id,
             userId: user.uid,
             email: user.email,
@@ -2089,23 +2105,32 @@ export function DelivereeWorkspace() {
         const projectId =
           String(proposed.projectId || primaryProject?.id || "").trim() || null;
         if (type === "create_task") {
+          const assigned = withCreatorAssignee(proposed, {
+            userId: user.uid,
+            memberId: accessMemberId(workspace.id, user.uid),
+            email: user.email,
+          }, workspaceMembers);
           await addDoc(collection(db, "tasks"), {
             userId: user.uid,
             workspaceId: workspace.id,
             ...(projectId ? { projectId } : {}),
             ...buildTaskAccessPatch({
-              task: proposed,
+              task: assigned,
               workspaceId: workspace.id,
               userId: user.uid,
               email: user.email,
               members: workspaceMembers,
             }),
-            title: String(proposed.title || proposed.name || "Untitled").trim() || "Untitled",
-            description: String(proposed.description || "").slice(0, 4000),
-            status: String(proposed.status || "open"),
-            priority: proposed.priority ?? null,
-            dueDate: proposed.dueDate || null,
-            timeSector: proposed.timeSector || "today",
+            title: String(assigned.title || assigned.name || "Untitled").trim() || "Untitled",
+            description: String(assigned.description || "").slice(0, 4000),
+            status: String(assigned.status || "open"),
+            priority: assigned.priority ?? null,
+            dueDate: assigned.dueDate || null,
+            timeSector: assigned.timeSector || "today",
+            assigneeIds: assigned.assigneeIds,
+            assignees: assigned.assignees,
+            owner: assigned.owner,
+            assignee: assigned.assignee,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -3108,13 +3133,19 @@ export function DelivereeWorkspace() {
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
+    const actor = {
+      userId: user.uid,
+      memberId: accessMemberId(workspace.id, user.uid),
+      email: user.email,
+    };
+    const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
     const created = await addDoc(collection(db, "tasks"), {
-      ...patch,
+      ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
       projectId,
       ...buildTaskAccessPatch({
-        task: patch,
+        task: assigned,
         workspaceId: workspace.id,
         userId: user.uid,
         email: user.email,
@@ -5145,7 +5176,7 @@ export function DelivereeWorkspace() {
             selectedItemId={selectedWorkItemId}
             sprints={sprints}
             tags={categories}
-            tasks={tasks}
+            tasks={myWorkTasks}
             workspaceMembers={workspaceMembers}
           />
           </div>

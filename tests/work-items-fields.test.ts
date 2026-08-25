@@ -38,7 +38,7 @@ test("My Work uses the same unscoped item center as project backlog", () => {
   );
   assert.ok(myWork, "My Work shell is missing WorkItemsCenter");
   assert.match(myWork[0], /activeProject=\{null\}/);
-  assert.match(myWork[0], /tasks=\{tasks\}/);
+  assert.match(myWork[0], /tasks=\{myWorkTasks\}/);
   assert.match(myWork[0], /tags=\{categories\}/);
   assert.match(myWork[0], /onCreateSprint=\{createSprint\}/);
 

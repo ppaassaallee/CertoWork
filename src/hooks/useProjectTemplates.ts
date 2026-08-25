@@ -21,6 +21,7 @@ import {
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
 } from "../lib/accessControl";
+import { withCreatorAssignee } from "../lib/myWorkItems";
 import type { WorkspaceMember } from "../lib/workspaceCollaboration";
 import type { TemplateApplication } from "../components/ProjectTemplatesPanel";
 import type {
@@ -199,19 +200,25 @@ export function useProjectTemplates({
         ...issuedItemKeys,
       ]);
       issuedItemKeys.push(itemKey);
+      const assignedItem = withCreatorAssignee(item, {
+        userId: user.uid,
+        memberId: `${workspace.id}_${user.uid}`,
+        email: user.email,
+      }, workspaceMembers);
       batch.set(taskRef, {
         userId: user.uid,
         workspaceId: workspace.id,
         projectId: projectRef.id,
         ...buildTaskAccessPatch({
-          task: item,
+          task: assignedItem,
           workspaceId: workspace.id,
           userId: user.uid,
           email: user.email,
+          members: workspaceMembers,
         }),
-        title: item.title,
-        normalizedTitle: String(item.title).trim().toLowerCase().replace(/\s+/g, " "),
-        description: item.description || "",
+        title: assignedItem.title,
+        normalizedTitle: String(assignedItem.title).trim().toLowerCase().replace(/\s+/g, " "),
+        description: assignedItem.description || "",
         key: itemKey,
         type: canonicalType,
         workItemType: canonicalType,
@@ -219,13 +226,13 @@ export function useProjectTemplates({
         parentId: parentRef?.id || null,
         epicId: parentKind === "epic" ? parentRef?.id || null : null,
         featureId: parentKind === "feature" ? parentRef?.id || null : null,
-        priority: item.priority || null,
+        priority: assignedItem.priority || null,
         status: "backlog",
-        startDate: item.startDate || null,
-        dueDate: item.dueDate || null,
-        assigneeIds: item.assigneeIds || [],
-        assignees: item.assignees || [],
-        owner: item.owner || "",
+        startDate: assignedItem.startDate || null,
+        dueDate: assignedItem.dueDate || null,
+        assigneeIds: assignedItem.assigneeIds || [],
+        assignees: assignedItem.assignees || [],
+        owner: assignedItem.owner || "",
         order: Number(item.order ?? index),
         rank: Number(item.order ?? index),
         source: "project_template",
