@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
@@ -210,7 +210,7 @@ const defaultItemColumnPixels = Object.fromEntries(
 ) as Record<ItemColumnKey, number>;
 
 function clampColumnWidth(value: number) {
-  return Math.max(72, Math.min(420, Math.round(value)));
+  return Math.max(56, Math.min(720, Math.round(value)));
 }
 
 function selectableItemColumns() {
@@ -287,9 +287,7 @@ function workItemKind(item: any): WorkItemKind {
 
 function workItemLabel(kind: WorkItemKind) {
   if (kind === "pbi") return "PBI";
-  if (kind === "story") return "Story PBI";
-  if (kind === "bug") return "Bug PBI";
-  if (kind === "task") return "Task PBI";
+  if (kind === "subtask") return "Subtask";
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
@@ -930,11 +928,6 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
     const isDone = canonicalStatus(item) === "done";
-    const titleMeta = [
-      itemColumnSet.has("project") ? null : itemProjectTitle(item, projects),
-      children.length ? `${children.length} child item${children.length === 1 ? "" : "s"}` : null,
-      Array.isArray(item.dependencyIds) && item.dependencyIds.length ? `${item.dependencyIds.length} deps` : null,
-    ].filter(Boolean).join(" · ");
     return (
       <article
         className={`do-items-row is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
@@ -977,11 +970,21 @@ export function WorkItemsCenter({
         >
           <GripVertical size={14} />
         </button>
-        {itemColumnSet.has("title") && <button className="do-items-title" onClick={() => onSelectItem(item.id)} type="button">
-          <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
-          <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
-          {titleMeta ? <small>{titleMeta}</small> : null}
-        </button>}
+        {itemColumnSet.has("title") && (
+          <div className="do-items-title">
+            <button
+              aria-label={`${workItemLabel(kind)} ${title(item)}`}
+              className={`do-items-type-flag is-${kind}`}
+              data-testid="item-type-flag"
+              onClick={() => onSelectItem(item.id)}
+              type="button"
+            >
+              {workItemLabel(kind)}
+            </button>
+            <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
+            {children.length ? <small>{children.length}</small> : null}
+          </div>
+        )}
         {itemColumnSet.has("project") && (
           <select
             aria-label={`Project for ${title(item)}`}
@@ -1003,7 +1006,7 @@ export function WorkItemsCenter({
         {itemColumnSet.has("product_phase") && <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
           {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
         </select>}
-        {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
+        {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
           {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
         </select>}
         {itemColumnSet.has("priority") && <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
@@ -1033,16 +1036,90 @@ export function WorkItemsCenter({
     );
   };
 
+  const startColumnResize = (column: ItemColumnKey, event: ReactPointerEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth = itemColumnPixels[column] || defaultItemColumnPixels[column];
+    handle.setPointerCapture(event.pointerId);
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (move: PointerEvent) => {
+      move.preventDefault();
+      updateItemColumnWidth(column, startWidth + (move.clientX - startX));
+    };
+    const onUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      handle.releasePointerCapture(event.pointerId);
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+  };
+
   const renderColumnHeader = () => (
     <div className="do-items-column-head" style={itemGridStyle}>
       <span />
       <span />
       <span />
       {[...itemColumnSet].map((column) => (
-        <strong key={column}>{itemColumnLabels[column]}</strong>
+        <strong key={column}>
+          {itemColumnLabels[column]}
+          <span
+            aria-label={`Resize ${itemColumnLabels[column]} column`}
+            className="do-items-col-resizer"
+            data-testid="item-column-resizer"
+            onPointerDown={(event) => startColumnResize(column, event)}
+            role="separator"
+          />
+        </strong>
       ))}
     </div>
   );
+
+  const toggleGroup = (group: string) => {
+    setCollapsedGroups((current) => current.includes(group)
+      ? current.filter((item) => item !== group)
+      : [...current, group]);
+  };
+
+  const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
+    const kind = workItemKind(item);
+    const collapsed = collapsedGroups.includes(groupKey);
+    return (
+      <header className={`do-items-section-head is-${kind}`} data-testid="item-section-head">
+        <button
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
+          className="do-items-section-toggle"
+          onClick={() => toggleGroup(groupKey)}
+          type="button"
+        >
+          <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
+        </button>
+        <button
+          aria-label={`${workItemLabel(kind)} ${title(item)}`}
+          className={`do-items-type-flag is-${kind}`}
+          data-testid="item-type-flag"
+          onClick={() => onSelectItem(item.id)}
+          type="button"
+        >
+          {workItemLabel(kind)}
+        </button>
+        <h3>
+          <button onClick={() => onSelectItem(item.id)} type="button">
+            {title(item)}
+          </button>
+        </h3>
+        {childCount ? <small>{childCount}</small> : null}
+      </header>
+    );
+  };
 
   const renderHierarchy = () => {
     const epics = filtered.filter((item) => workItemKind(item) === "epic");
@@ -1053,25 +1130,29 @@ export function WorkItemsCenter({
     return (
       <div className="do-items-tree">
         {epics.map((epic) => {
+          const groupKey = `epic:${epic.id}`;
+          const collapsed = collapsedGroups.includes(groupKey);
           const epicFeatures = features.filter((feature) => parentId(feature) === epic.id || feature.epicId === epic.id);
           const epicExecutables = executables.filter((item) => (parentId(item) === epic.id || item.epicId === epic.id) && !item.featureId);
           return (
-            <section className="do-items-parent" key={epic.id}>
-              {renderRow(epic, epics)}
-              <div className="do-items-children">
-                {epicFeatures.map((feature) => {
-                  const featureExecutables = executables.filter((item) => parentId(item) === feature.id || item.featureId === feature.id);
-                  return (
-                    <div className="do-items-parent is-feature" key={feature.id}>
-                      {renderRow(feature, epicFeatures)}
-                      <div className="do-items-children">
-                        {featureExecutables.map((item) => <div key={item.id}>{renderRow(item, featureExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
+            <section className="do-items-parent is-epic-section" key={epic.id}>
+              {renderSectionHead(epic, groupKey, epicFeatures.length + epicExecutables.length)}
+              {collapsed ? null : (
+                <div className="do-items-children">
+                  {epicFeatures.map((feature) => {
+                    const featureExecutables = executables.filter((item) => parentId(item) === feature.id || item.featureId === feature.id);
+                    return (
+                      <div className="do-items-parent is-feature" key={feature.id}>
+                        {renderRow(feature, epicFeatures)}
+                        <div className="do-items-children">
+                          {featureExecutables.map((item) => <div key={item.id}>{renderRow(item, featureExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-                {epicExecutables.map((item) => <div key={item.id}>{renderRow(item, epicExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
-              </div>
+                    );
+                  })}
+                  {epicExecutables.map((item) => <div key={item.id}>{renderRow(item, epicExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
+                </div>
+              )}
             </section>
           );
         })}
@@ -1084,7 +1165,15 @@ export function WorkItemsCenter({
             </section>
           );
         })}
-        {orphanExecutables.length > 0 && <section className="do-items-parent is-orphan"><header>Unassigned executable work</header>{orphanExecutables.map((item) => renderRow(item, orphanExecutables))}</section>}
+        {orphanExecutables.length > 0 && (
+          <section className="do-items-parent is-orphan">
+            <header className="do-items-section-head">
+              <h3>Unassigned</h3>
+              <small>{orphanExecutables.length}</small>
+            </header>
+            {orphanExecutables.map((item) => renderRow(item, orphanExecutables))}
+          </section>
+        )}
         {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI, task or bug for this context.</span></div>}
       </div>
     );
@@ -1111,21 +1200,14 @@ export function WorkItemsCenter({
     }, {});
   }, [filtered, groupBy, projects, tags]);
 
-  const toggleGroup = (group: string) => {
-    setCollapsedGroups((current) => current.includes(group)
-      ? current.filter((item) => item !== group)
-      : [...current, group]);
-  };
-
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
     const due = dateInputValue(item.dueDate || item.targetDate);
     return (
       <article className={`do-kanban-card is-${kind} ${selectedItemId === item.id ? "is-selected" : ""}`} key={item.id}>
         <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
-          <span>{item.key ? `${workItemLabel(kind)} · ${item.key}` : workItemLabel(kind)}</span>
+          <span className={`do-items-type-flag is-${kind}`} data-testid="item-type-flag">{workItemLabel(kind)}</span>
           <strong>{title(item)}</strong>
-          <small>{itemProjectTitle(item, projects)}</small>
         </button>
         <div className="do-kanban-card-meta">
           <select aria-label={`Status for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
@@ -1753,7 +1835,7 @@ export function WorkItemsCenter({
                 return left.localeCompare(right);
               }).map(([group, items]) => (
                 <section className="do-items-group" key={group}>
-                  <button onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
+                  <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
                   {!collapsedGroups.includes(group) && <div>{items.map((item) => renderRow(item, items))}</div>}
                 </section>
               ))}

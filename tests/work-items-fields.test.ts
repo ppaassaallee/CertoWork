@@ -91,3 +91,27 @@ test("items and project backlog can paste a line-per-PBI list with tabbed subtas
   assert.match(workspace, /activeProject=\{null\}/);
   assert.match(projectSurfaces, /activeProject=\{project\}/);
 });
+
+test("items list hides unique keys and shows an inline type flag", () => {
+  assert.match(workItems, /do-items-type-flag is-\$\{kind\}/);
+  assert.match(workItems, /data-testid="item-type-flag"/);
+  assert.match(workItems, /do-items-section-head/);
+  assert.doesNotMatch(workItems, /workItemLabel\(kind\)\} · \$\{item\.key\}/);
+  assert.doesNotMatch(workItems, /item\.key \? `\$\{workItemLabel/);
+});
+
+test("items and backlog columns can be resized from the header edge", () => {
+  assert.match(workItems, /startColumnResize/);
+  assert.match(workItems, /data-testid="item-column-resizer"/);
+  assert.match(workItems, /cursor = "col-resize"/);
+});
+
+test("items list CSS is Asana-like: inline flags, pills, and no boxed fields", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(css, /\.do-items-title \{\s*display: flex/);
+  assert.match(css, /\.do-items-col-resizer/);
+  assert.match(css, /\.do-items-status-pill/);
+  assert.match(css, /\.do-items-section-head/);
+  assert.match(css, /\.do-items-row select,\s*\.do-items-row input \{\s*[\s\S]*?border: 0;/);
+  assert.match(css, /\.do-items-row \{\s*[\s\S]*?border-bottom: 1px solid var\(--border\)/);
+});
