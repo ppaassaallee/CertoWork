@@ -35,6 +35,7 @@ import {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Phone,
   Plus,
   Receipt,
   Search,
@@ -106,6 +107,7 @@ import {
   OdysseusWorkLog,
   type OdysseusRunStep,
 } from "./odiseus/OdysseusWork";
+import { OdysseusVoiceCall } from "./odiseus/OdysseusVoiceCall";
 import { OdysseusSchedules } from "./odiseus/OdysseusSchedules";
 import { AppBreadcrumbs } from "./AppBreadcrumbs";
 import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
@@ -486,9 +488,11 @@ export function DelivereeWorkspace() {
   const [newTeamName, setNewTeamName] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voiceCallOpen, setVoiceCallOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const voiceSessionRef = useRef(false);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -1270,14 +1274,18 @@ export function DelivereeWorkspace() {
     else navigate("/");
   };
 
-  const sendMessage = async (explicit?: string) => {
+  const sendMessage = async (
+    explicit?: string,
+    options?: { voiceSession?: boolean },
+  ) => {
     const text = String(explicit || input).trim();
-    if (!text || !user || !workspace || submitting) return;
+    if (!text || !user || !workspace || submitting) return null;
+    const voiceSession = Boolean(options?.voiceSession || voiceSessionRef.current);
     if (isProjectWizardInvocation(text)) {
       setInput("");
       setActionMenuOpen(false);
       setProjectWizardOpen(true);
-      return;
+      return null;
     }
     setInput("");
     setActionMenuOpen(false);
@@ -1291,6 +1299,7 @@ export function DelivereeWorkspace() {
       { id: localId, role: "user", content: text, createdAt: Date.now() },
     ]);
     let activeConversationId: string | null = conversationId;
+    let outcome: { reply: string; actionPlan: any } | null = null;
     try {
       activeConversationId = await ensureConversation(text);
       const userMessageRef = await addDoc(collection(db, "boldi_messages"), {
@@ -1299,7 +1308,7 @@ export function DelivereeWorkspace() {
         conversationId: activeConversationId,
         role: "user",
         content: text,
-        inputType: "text",
+        inputType: voiceSession ? "voice" : "text",
         contextType: conversationScopeType(
           directContextProjectIds,
           contextTaskIds,
@@ -1355,7 +1364,10 @@ export function DelivereeWorkspace() {
         workspaceId: workspace.id,
         conversationId: activeConversationId,
         messages: requestContext.messages,
-        workspaceContext: requestContext.workspaceContext,
+        workspaceContext: {
+          ...requestContext.workspaceContext,
+          voiceSession,
+        },
         onStep: (step) => {
           setLiveOdysseusSteps((current) => {
             const without = current.filter((item) => item.id !== step.id);
@@ -1367,7 +1379,9 @@ export function DelivereeWorkspace() {
         result.reply ||
         "I reviewed the workspace, but there is no response to display.";
       const odiseusRun = normalizeOdysseusRun(result.run);
-      await streamConversationReply(reply, setStreamed);
+      if (!voiceSession) {
+        await streamConversationReply(reply, setStreamed);
+      }
       // Run/activity logs must never block the assistant reply. Missing
       // Firestore rules for odiseus_* previously surfaced as a false
       // "insufficient permissions" failure after a successful chat.
@@ -1390,7 +1404,7 @@ export function DelivereeWorkspace() {
         conversationId: activeConversationId,
         role: "assistant",
         content: reply,
-        inputType: "text",
+        inputType: voiceSession ? "voice" : "text",
         citations: result.citations || [],
         suggestedChips: result.suggestedChips || [],
         actionPlan: result.actionPlan || null,
@@ -1430,9 +1444,12 @@ export function DelivereeWorkspace() {
           updatedAt: serverTimestamp(),
         });
       }
+      outcome = { reply, actionPlan: result.actionPlan || null };
     } catch (error) {
       const reply = assistantFallbackReply(error);
-      await streamConversationReply(reply, setStreamed);
+      if (!voiceSession) {
+        await streamConversationReply(reply, setStreamed);
+      }
       setMessages((current) => [
         ...current.filter((message) => message.id !== localId),
         { id: localId, role: "user", content: text, createdAt: Date.now() },
@@ -1444,15 +1461,18 @@ export function DelivereeWorkspace() {
           offline: true,
         },
       ]);
+      outcome = { reply, actionPlan: null };
     } finally {
       setStreamed("");
       setSubmitting(false);
       setLiveOdysseusSteps([]);
     }
+    return outcome;
   };
 
-  const stagePlan = async (message: Message) => {
-    if (!user || !workspace || !message.actionPlan) return;
+  const stagePlan = async (message: Message, options?: { silent?: boolean }) => {
+    const empty = { staged: 0, remembered: 0, candidates: [] as any[] };
+    if (!user || !workspace || !message.actionPlan) return empty;
     const plan = message.actionPlan;
     const planRef = await addDoc(collection(db, "boldi_action_plans"), {
       userId: user.uid,
@@ -1470,6 +1490,7 @@ export function DelivereeWorkspace() {
     });
     let staged = 0;
     let remembered = 0;
+    const candidates: any[] = [];
     for (const [index, action] of (plan.proposedActions || []).entries()) {
       const proposedChange = action.proposedChange || {};
       if (String(action.type || "") === "create_odiseus_memory") {
@@ -1518,23 +1539,25 @@ export function DelivereeWorkspace() {
         ),
       );
       if (!existing.empty) continue;
-      await addDoc(collection(db, "review_candidates"), {
+      const title =
+        reviewType === "project"
+          ? proposedTitle(proposedChange, actionLabel(actionType))
+          : proposedChange?.title || actionLabel(actionType);
+      const proposed = {
+        ...proposedChange,
+        projectId,
+        ...(duplicateProject ? { id: duplicateProject.id } : {}),
+      };
+      const candidateRef = await addDoc(collection(db, "review_candidates"), {
         userId: user.uid,
         workspaceId: workspace.id,
         createdBy: user.uid,
-        title:
-          reviewType === "project"
-            ? proposedTitle(proposedChange, actionLabel(actionType))
-            : proposedChange?.title || actionLabel(actionType),
+        title,
         type: reviewType,
         why: action.reason || "Proposed by Odysseus",
         action: actionLabel(actionType),
         confidence: Number(action.confidence || 0.8) >= 0.8 ? "high" : "medium",
-        proposed: {
-          ...proposedChange,
-          projectId,
-          ...(duplicateProject ? { id: duplicateProject.id } : {}),
-        },
+        proposed,
         projectId,
         source: duplicateProject
           ? `${plan.summary || "Odysseus"} · Existing project recognized; converted create_project to update_project.`
@@ -1546,6 +1569,13 @@ export function DelivereeWorkspace() {
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+      });
+      candidates.push({
+        id: candidateRef.id,
+        type: reviewType,
+        title,
+        proposed,
+        projectId,
       });
       staged += 1;
     }
@@ -1576,15 +1606,18 @@ export function DelivereeWorkspace() {
         approvalRequired: true,
         approvedBy: user.uid,
       });
-      setNotice("Pending change ready. Review it before anything changes.");
-      setPanel("approvals");
-    } else if (remembered > 0) {
+      if (!options?.silent) {
+        setNotice("Pending change ready. Review it before anything changes.");
+        setPanel("approvals");
+      }
+    } else if (remembered > 0 && !options?.silent) {
       setNotice(
         remembered > 1
           ? `${ODISEUS_NAME} remembered ${remembered} things.`
           : `${ODISEUS_NAME} remembered that.`,
       );
     }
+    return { staged, remembered, candidates };
   };
 
   const rejectPlan = async (message: Message) => {
@@ -1969,6 +2002,44 @@ export function DelivereeWorkspace() {
         "That pending change could not be processed. It is still waiting for you.",
       );
     }
+  };
+
+  const applyVoicePlans = async (plans: any[]) => {
+    let applied = 0;
+    for (const plan of plans) {
+      if (!plan?.proposedActions?.length) continue;
+      const staged = await stagePlan(
+        { id: "", role: "assistant", content: "", actionPlan: plan },
+        { silent: true },
+      );
+      for (const candidate of staged.candidates) {
+        await processReview(candidate, "approve");
+        applied += 1;
+      }
+    }
+    setNotice(
+      applied > 0
+        ? `${ODISEUS_NAME} applied ${applied} update${applied === 1 ? "" : "s"}.`
+        : "Nothing was applied.",
+    );
+    return applied;
+  };
+
+  const startVoiceCall = () => {
+    voiceSessionRef.current = true;
+    try {
+      recognitionRef.current?.abort?.();
+    } catch {
+      /* dictation mic may already be idle */
+    }
+    setIsListening(false);
+    void openChiefOfStaff("/home");
+    setVoiceCallOpen(true);
+  };
+
+  const closeVoiceCall = () => {
+    voiceSessionRef.current = false;
+    setVoiceCallOpen(false);
   };
 
   const setComposer = (value: string) => {
@@ -3476,6 +3547,13 @@ export function DelivereeWorkspace() {
         },
       },
       {
+        id: "talk-odysseus",
+        label: "Talk with Odysseus",
+        group: "Actions",
+        keywords: "voice call speak microphone conversation",
+        onSelect: startVoiceCall,
+      },
+      {
         id: "quick-capture",
         label: "Quick Capture",
         group: "Create",
@@ -3532,6 +3610,7 @@ export function DelivereeWorkspace() {
       "quick-capture",
       "new-conversation",
       "new-project",
+      "talk-odysseus",
     ]);
     return items.filter(
       (item) => mobileIds.has(item.id) || item.id.startsWith("project-"),
@@ -3543,6 +3622,7 @@ export function DelivereeWorkspace() {
     navigate,
     openChiefOfStaff,
     openProjectRecord,
+    startVoiceCall,
   ]);
 
   return (
@@ -4367,6 +4447,7 @@ export function DelivereeWorkspace() {
                           examples={openingPrompts}
                           onExample={(prompt) => sendMessage(prompt)}
                           pendingApprovals={reviewItems.length}
+                          onTalk={startVoiceCall}
                         />
                       </>
                     )}
@@ -4483,7 +4564,9 @@ export function DelivereeWorkspace() {
                                   }
                                   message={message}
                                   onReject={rejectPlan}
-                                  onStage={stagePlan}
+                                  onStage={async (message) => {
+                                    await stagePlan(message);
+                                  }}
                                   projects={projects}
                                 />
                               )}
@@ -4666,6 +4749,14 @@ export function DelivereeWorkspace() {
                         {isListening ? <MicOff size={16} /> : <Mic size={16} />}
                       </button>
                     )}
+                    <button
+                      aria-label="Talk with Odysseus"
+                      className={voiceCallOpen ? "is-active" : ""}
+                      onClick={startVoiceCall}
+                      type="button"
+                    >
+                      <Phone size={16} />
+                    </button>
                   </div>
                   <button
                     aria-label="Send message"
@@ -4985,6 +5076,19 @@ export function DelivereeWorkspace() {
           Notes
         </button>
       </nav>
+
+      {createPortal(
+        <OdysseusVoiceCall
+          activeProject={primaryProject || activeProject}
+          liveSteps={liveOdysseusSteps}
+          onApplyPlans={applyVoicePlans}
+          onClose={closeVoiceCall}
+          onSendTurn={(text) => sendMessage(text, { voiceSession: true })}
+          open={voiceCallOpen}
+          projects={projects}
+        />,
+        document.body,
+      )}
 
       <aside
         className={`do-panel ${panel ? "is-open" : ""} ${panel === "project" ? "is-project-console" : ""}`}
