@@ -164,3 +164,12 @@ test("voice apply writes tasks directly and stages review candidates by userId",
   const block = rules.slice(start, rules.indexOf("match /review_candidates", start));
   assert.match(block, /idempotencyKey/);
 });
+
+test("item view memory is user-owned on the existing preferences document", () => {
+  const memory = readFileSync(resolve("src/lib/itemViewMemory.ts"), "utf8");
+  assert.match(memory, /ITEM_VIEW_PREFS_COLLECTION = "user_action_board_preferences"/);
+  assert.match(memory, /itemSavedViews/);
+  assert.match(memory, /itemLastSessions/);
+  assert.match(rules, /match \/user_action_board_preferences\/\{prefId\}/);
+  assert.match(rules, /incoming\(\)\.userId == request\.auth\.uid/);
+});

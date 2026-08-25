@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
@@ -36,48 +36,30 @@ import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import { useMobileCore } from "../hooks/useMobileCore";
+import { useAuth } from "../lib/AuthContext";
+import {
+  itemViewSurface,
+  normalizeItemViewFilters,
+  pullRemoteItemViewMemory,
+  pushRemoteItemViewMemory,
+  readLastItemSession,
+  readLastItemSessions,
+  readNamedItemViews,
+  upsertNamedItemView,
+  writeLastItemSession,
+  writeNamedItemViews,
+  type ItemColumnKey,
+  type ItemGroupBy,
+  type ItemSavedView,
+  type ItemSortBy,
+  type ItemViewFilters,
+  type ItemViewSession,
+  type WorkItemsViewMode,
+} from "../lib/itemViewMemory";
 
 type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
-type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
-type GroupBy = "hierarchy" | "actionBoard" | "status" | "priority" | "project" | "owner" | "type" | "due" | "tag" | "work_category" | "product_phase";
-type SortBy = "rank" | "project" | "priority" | "due" | "title" | "status" | "owner" | "type" | "delivery_entity" | "client_entity" | "work_category" | "product_phase";
-type ItemViewFilters = {
-  mode: WorkItemsViewMode;
-  projectFilter: string;
-  statusFilter: string;
-  priorityFilter: string;
-  typeFilter: string;
-  ownerFilter: string;
-  dateFilter: string;
-  tagFilter: string;
-  workCategoryFilter: string;
-  productPhaseFilter: string;
-  groupBy: GroupBy;
-  primarySort: SortBy;
-  secondarySort: SortBy;
-  query: string;
-};
-type ItemSavedView = {
-  name: string;
-  columns: ItemColumnKey[];
-  widths?: Partial<Record<ItemColumnKey, number>>;
-  filters?: Partial<ItemViewFilters>;
-};
-type ItemColumnKey =
-  | "title"
-  | "project"
-  | "delivery_entity"
-  | "client_entity"
-  | "tags"
-  | "work_category"
-  | "product_phase"
-  | "status"
-  | "priority"
-  | "gtd"
-  | "bucket"
-  | "assignees"
-  | "due"
-  | "sprint";
+type GroupBy = ItemGroupBy;
+type SortBy = ItemSortBy;
 
 type Props = {
   activeProject: any | null;
@@ -188,14 +170,6 @@ const itemColumnWidths: Record<ItemColumnKey, string> = {
   due: "112px",
   sprint: "minmax(120px, .7fr)",
 };
-
-function viewStorageKey(scope: string) {
-  return `certo-${scope}-view-config`;
-}
-
-function viewWidthsStorageKey(scope: string) {
-  return `certo-${scope}-column-widths`;
-}
 
 function widthFromTemplate(value: string) {
   const match = value.match(/(\d+)px/);
@@ -493,6 +467,13 @@ export function WorkItemsCenter({
   compact = false,
 }: Props) {
   const mobileCore = useMobileCore();
+  const { user, workspace } = useAuth();
+  const viewerId = user?.uid || "";
+  const workspaceId = workspace?.id || "";
+  const surface = itemViewSurface(activeProject?.id);
+  const viewHydrated = useRef(false);
+  const skipPersist = useRef(true);
+  const remotePushTimer = useRef<number | null>(null);
   const [mode, setMode] = useState<WorkItemsViewMode>("list");
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
@@ -528,6 +509,8 @@ export function WorkItemsCenter({
   const [kanbanError, setKanbanError] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
   const [itemViewName, setItemViewName] = useState("");
+  const [viewSaveError, setViewSaveError] = useState("");
+  const [viewSaveNotice, setViewSaveNotice] = useState("");
   const [chromeCollapsed, setChromeCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("certo-items-focus-list") === "true";
@@ -543,43 +526,9 @@ export function WorkItemsCenter({
   const [pasteSaving, setPasteSaving] = useState(false);
   const [pasteError, setPasteError] = useState("");
   const [filterDraft, setFilterDraft] = useState("status");
-  const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(window.localStorage.getItem(viewStorageKey("items")) || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [visibleItemColumns, setVisibleItemColumns] = useState<ItemColumnKey[]>(
-    () => {
-      if (typeof window === "undefined") return defaultItemColumns;
-      try {
-        const stored = JSON.parse(
-          window.localStorage.getItem(viewStorageKey("items-current")) || "null",
-        );
-        return selectedItemColumns(Array.isArray(stored) && stored.length ? stored : null);
-      } catch {
-        return defaultItemColumns;
-      }
-    },
-  );
-  const [itemColumnPixels, setItemColumnPixels] = useState<
-    Record<ItemColumnKey, number>
-  >(() => {
-    if (typeof window === "undefined") return defaultItemColumnPixels;
-    try {
-      return {
-        ...defaultItemColumnPixels,
-        ...JSON.parse(
-          window.localStorage.getItem(viewWidthsStorageKey("items-current")) ||
-            "{}",
-        ),
-      };
-    } catch {
-      return defaultItemColumnPixels;
-    }
-  });
+  const [savedItemViews, setSavedItemViews] = useState<ItemSavedView[]>([]);
+  const [visibleItemColumns, setVisibleItemColumns] = useState<ItemColumnKey[]>(defaultItemColumns);
+  const [itemColumnPixels, setItemColumnPixels] = useState<Record<ItemColumnKey, number>>(defaultItemColumnPixels);
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
@@ -603,99 +552,183 @@ export function WorkItemsCenter({
     primarySort,
     secondarySort,
     query,
+    sprintFilter,
+  };
+
+  const applyViewSession = (session: ItemViewSession | null) => {
+    const filters = normalizeItemViewFilters(session?.filters, activeProject?.id);
+    setVisibleItemColumns(selectedItemColumns(session?.columns?.length ? session.columns : defaultItemColumns));
+    setItemColumnPixels({ ...defaultItemColumnPixels, ...(session?.widths || {}) });
+    setMode(filters.mode);
+    setProjectFilter(activeProject?.id || filters.projectFilter || "all");
+    setStatusFilter(filters.statusFilter);
+    setPriorityFilter(filters.priorityFilter);
+    setTypeFilter(filters.typeFilter);
+    setOwnerFilter(filters.ownerFilter);
+    setDateFilter(filters.dateFilter);
+    setTagFilter(filters.tagFilter);
+    setWorkCategoryFilter(filters.workCategoryFilter);
+    setProductPhaseFilter(filters.productPhaseFilter);
+    setGroupBy(filters.groupBy);
+    setPrimarySort(filters.primarySort);
+    setSecondarySort(filters.secondarySort);
+    setSprintFilter(filters.sprintFilter || "all");
+  };
+
+  const persistRemoteMemory = (views: ItemSavedView[], sessions: Record<string, ItemViewSession>) => {
+    if (!viewerId || !workspaceId) return;
+    if (remotePushTimer.current) window.clearTimeout(remotePushTimer.current);
+    remotePushTimer.current = window.setTimeout(() => {
+      pushRemoteItemViewMemory(viewerId, workspaceId, { views, sessions }).catch(() => undefined);
+    }, 500);
   };
 
   const updateItemColumnWidth = (column: ItemColumnKey, value: number) => {
-    setItemColumnPixels((current) => {
-      const next = { ...current, [column]: clampColumnWidth(value) };
-      window.localStorage.setItem(
-        viewWidthsStorageKey("items-current"),
-        JSON.stringify(next),
-      );
-      return next;
-    });
+    setItemColumnPixels((current) => ({ ...current, [column]: clampColumnWidth(value) }));
   };
 
   const resetItemColumnWidths = () => {
     setItemColumnPixels(defaultItemColumnPixels);
-    window.localStorage.setItem(
-      viewWidthsStorageKey("items-current"),
-      JSON.stringify(defaultItemColumnPixels),
-    );
   };
 
   const toggleItemColumn = (column: ItemColumnKey) => {
     if (column === "title") return;
-    setVisibleItemColumns((current) => {
-      const next = current.includes(column)
+    setVisibleItemColumns((current) => (
+      current.includes(column)
         ? current.filter((candidate) => candidate !== column)
         : defaultItemColumns.filter((candidate) =>
             [...current, column].includes(candidate),
-          );
-      window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(next));
-      return next;
-    });
+          )
+    ));
   };
   const saveItemView = () => {
     const name = itemViewName.trim();
-    if (!name) return;
-    const next = [
-      ...savedItemViews.filter((candidate) => candidate.name !== name),
-      {
-        name,
-        columns: visibleItemColumns,
-        widths: itemColumnPixels,
-        filters: currentItemViewFilters,
-      },
-    ];
+    if (!name) {
+      setViewSaveError("Name this view first");
+      setViewSaveNotice("");
+      return false;
+    }
+    if (!viewerId) {
+      setViewSaveError("Sign in to save views for your user");
+      setViewSaveNotice("");
+      return false;
+    }
+    const nextView: ItemSavedView = {
+      name,
+      columns: visibleItemColumns,
+      widths: itemColumnPixels,
+      filters: currentItemViewFilters,
+    };
+    const next = upsertNamedItemView(savedItemViews, nextView);
     setSavedItemViews(next);
-    window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
+    writeNamedItemViews(viewerId, next);
+    persistRemoteMemory(next, writeLastItemSession(viewerId, surface, {
+      columns: visibleItemColumns,
+      widths: itemColumnPixels,
+      filters: currentItemViewFilters,
+    }));
     setItemViewName("");
+    setViewSaveError("");
+    setViewSaveNotice(`Saved “${name}”`);
+    return true;
   };
   const applyItemView = (name: string) => {
     const saved = savedItemViews.find((candidate) => candidate.name === name);
     if (!saved) return;
-    setVisibleItemColumns(selectedItemColumns(saved.columns));
-    if (saved.widths) {
-      const nextWidths = { ...defaultItemColumnPixels, ...saved.widths };
-      setItemColumnPixels(nextWidths);
-      window.localStorage.setItem(
-        viewWidthsStorageKey("items-current"),
-        JSON.stringify(nextWidths),
-      );
-    }
-    if (saved.filters) {
-      setMode(saved.filters.mode || "list");
-      setProjectFilter(saved.filters.projectFilter || activeProject?.id || "all");
-      setStatusFilter(saved.filters.statusFilter || "open");
-      setPriorityFilter(saved.filters.priorityFilter || "all");
-      setTypeFilter(saved.filters.typeFilter || "all");
-      setOwnerFilter(saved.filters.ownerFilter || "all");
-      setDateFilter(saved.filters.dateFilter || "all");
-      setTagFilter(saved.filters.tagFilter || "all");
-      setWorkCategoryFilter(saved.filters.workCategoryFilter || "all");
-      setProductPhaseFilter(saved.filters.productPhaseFilter || "all");
-      setGroupBy(saved.filters.groupBy || (activeProject ? "hierarchy" : "project"));
-      setPrimarySort(saved.filters.primarySort || "project");
-      setSecondarySort(saved.filters.secondarySort || "priority");
-      setQuery(saved.filters.query || "");
-    }
-    window.localStorage.setItem(viewStorageKey("items-current"), JSON.stringify(saved.columns));
+    applyViewSession({
+      columns: saved.columns,
+      widths: saved.widths,
+      filters: normalizeItemViewFilters(saved.filters, activeProject?.id),
+    });
+    setViewsOpen(false);
   };
   const deleteItemView = (name: string) => {
     const next = savedItemViews.filter((candidate) => candidate.name !== name);
     setSavedItemViews(next);
-    window.localStorage.setItem(viewStorageKey("items"), JSON.stringify(next));
+    if (viewerId) {
+      writeNamedItemViews(viewerId, next);
+      persistRemoteMemory(next, readLastItemSessions(viewerId));
+    }
   };
 
   useEffect(() => {
-    setProjectFilter(activeProject?.id || "all");
     setNewProjectId(activeProject?.id || "");
-    setGroupBy(activeProject ? "hierarchy" : "project");
-    setPrimarySort("project");
-    setSecondarySort("priority");
     onSelectItem(null);
   }, [activeProject?.id]);
+
+  useEffect(() => {
+    skipPersist.current = true;
+    viewHydrated.current = false;
+    if (!viewerId) return;
+    const localViews = readNamedItemViews(viewerId);
+    setSavedItemViews(localViews);
+    applyViewSession(readLastItemSession(viewerId, surface));
+    viewHydrated.current = true;
+    let cancelled = false;
+    if (!workspaceId) return;
+    pullRemoteItemViewMemory(viewerId, workspaceId)
+      .then((remote) => {
+        if (cancelled || !remote) return;
+        const mergedViews = [...localViews];
+        for (const view of remote.views) {
+          if (!mergedViews.some((candidate) => candidate.name === view.name)) mergedViews.push(view);
+        }
+        if (mergedViews.length !== localViews.length) {
+          setSavedItemViews(mergedViews);
+          writeNamedItemViews(viewerId, mergedViews);
+        }
+        if (!readLastItemSession(viewerId, surface) && remote.sessions[surface]) {
+          skipPersist.current = true;
+          applyViewSession(remote.sessions[surface]);
+          writeLastItemSession(viewerId, surface, remote.sessions[surface]);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId, workspaceId, surface]);
+
+  useEffect(() => {
+    if (!viewerId || !viewHydrated.current) return;
+    if (skipPersist.current) {
+      skipPersist.current = false;
+      return;
+    }
+    const session: ItemViewSession = {
+      columns: visibleItemColumns,
+      widths: itemColumnPixels,
+      filters: {
+        ...currentItemViewFilters,
+        query: "",
+      },
+    };
+    persistRemoteMemory(savedItemViews, writeLastItemSession(viewerId, surface, session));
+  }, [
+    viewerId,
+    surface,
+    visibleItemColumns,
+    itemColumnPixels,
+    mode,
+    projectFilter,
+    statusFilter,
+    priorityFilter,
+    typeFilter,
+    ownerFilter,
+    dateFilter,
+    tagFilter,
+    workCategoryFilter,
+    productPhaseFilter,
+    groupBy,
+    primarySort,
+    secondarySort,
+    sprintFilter,
+    savedItemViews,
+  ]);
+
+  useEffect(() => () => {
+    if (remotePushTimer.current) window.clearTimeout(remotePushTimer.current);
+  }, []);
 
   useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, workCategoryFilter, productPhaseFilter, query]);
 
@@ -1457,21 +1490,47 @@ export function WorkItemsCenter({
           <div className="do-popover-anchor">
             <button aria-expanded={viewsOpen} aria-label="Views" className={`do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
             {viewsOpen && (
-              <div className="do-popover" role="menu">
+              <div className="do-popover do-items-views-popover" role="menu">
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
                 <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
                 <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>
                 <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("project"); setViewsOpen(false); }} type="button">Priority → project</button>
-                {savedItemViews.length > 0 && <hr />}
-                {savedItemViews.map((saved) => (
-                  <button key={saved.name} onClick={() => { applyItemView(saved.name); setViewsOpen(false); }} type="button">{saved.name}</button>
-                ))}
-                <hr />
-                <label>
-                  Save current view
-                  <input onChange={(event) => setItemViewName(event.target.value)} placeholder="Backlog grooming" value={itemViewName} />
-                </label>
-                <button onClick={() => { saveItemView(); setViewsOpen(false); }} type="button">Save view</button>
+                {savedItemViews.length > 0 && (
+                  <>
+                    <strong className="do-items-views-label">Saved views</strong>
+                    {savedItemViews.map((saved) => (
+                      <div className="do-items-saved-view" key={saved.name}>
+                        <button onClick={() => applyItemView(saved.name)} type="button">{saved.name}</button>
+                        <button aria-label={`Delete ${saved.name} view`} onClick={() => deleteItemView(saved.name)} type="button">Delete</button>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <form
+                  className="do-items-save-view"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveItemView();
+                  }}
+                >
+                  <label>
+                    Name and save this view
+                    <input
+                      aria-label="Saved view name"
+                      data-testid="item-view-name"
+                      onChange={(event) => {
+                        setItemViewName(event.target.value);
+                        setViewSaveError("");
+                        setViewSaveNotice("");
+                      }}
+                      placeholder="Backlog grooming"
+                      value={itemViewName}
+                    />
+                  </label>
+                  {viewSaveError ? <p className="do-items-view-error">{viewSaveError}</p> : null}
+                  {viewSaveNotice ? <p className="do-items-view-notice">{viewSaveNotice}</p> : null}
+                  <button data-testid="item-save-view" type="submit">Save view</button>
+                </form>
                 <button onClick={resetItemColumnWidths} type="button">Reset column widths</button>
                 <button
                   onClick={() =>
@@ -1486,9 +1545,6 @@ export function WorkItemsCenter({
                 >
                   Apply default widths
                 </button>
-                {savedItemViews.map((saved) => (
-                  <button key={`del-${saved.name}`} onClick={() => deleteItemView(saved.name)} type="button">Delete {saved.name}</button>
-                ))}
               </div>
             )}
           </div>

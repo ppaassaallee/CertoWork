@@ -3063,13 +3063,45 @@ a {
   font-size: var(--text-caption);
 }
 .do-popover select,
-.do-popover button {
+.do-popover button,
+.do-popover input {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-0);
   padding: 7px 8px;
   text-align: left;
+}
+.do-popover button {
   cursor: pointer;
+}
+.do-items-views-popover {
+  min-width: 260px;
+}
+.do-items-views-label {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.do-items-saved-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+}
+.do-items-save-view {
+  display: grid;
+  gap: 6px;
+}
+.do-items-view-error,
+.do-items-view-notice {
+  margin: 0;
+  font-size: var(--text-caption);
+}
+.do-items-view-error {
+  color: var(--status-danger);
+}
+.do-items-view-notice {
+  color: var(--status-success);
 }
 .do-popover button.is-active {
   border-color: var(--accent);

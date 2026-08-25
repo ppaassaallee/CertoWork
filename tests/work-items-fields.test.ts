@@ -7,6 +7,10 @@ const workItems = readFileSync(
   resolve("src/components/WorkItemsCenter.tsx"),
   "utf8",
 );
+const itemViewMemory = readFileSync(
+  resolve("src/lib/itemViewMemory.ts"),
+  "utf8",
+);
 const workspace = readFileSync(
   resolve("src/components/DelivereeWorkspace.tsx"),
   "utf8",
@@ -56,8 +60,8 @@ test("item field picker exposes every backlog field, including Project", () => {
   assert.match(workItems, /data-testid="item-fields-button"/);
   assert.match(workItems, /data-testid="item-fields-picker"/);
   assert.match(workItems, /selectableItemColumns\(\)/);
-  assert.match(workItems, /\| "project"/);
-  assert.match(workItems, /\| "sprint"/);
+  assert.match(itemViewMemory, /\| "project"/);
+  assert.match(itemViewMemory, /\| "sprint"/);
   assert.match(workItems, /aria-label=\{`Project for \$\{title\(item\)\}`\}/);
   assert.match(workItems, /aria-label=\{`Sprint for \$\{title\(item\)\}`\}/);
 
@@ -114,4 +118,18 @@ test("items list CSS is Asana-like: inline flags, pills, and no boxed fields", (
   assert.match(css, /\.do-items-section-head/);
   assert.match(css, /\.do-items-row select,\s*\.do-items-row input \{\s*[\s\S]*?border: 0;/);
   assert.match(css, /\.do-items-row \{\s*[\s\S]*?border-bottom: 1px solid var\(--border\)/);
+});
+
+test("items and backlog keep last sort and named views per signed-in user", () => {
+  assert.match(workItems, /writeLastItemSession\(viewerId, surface/);
+  assert.match(workItems, /readLastItemSession\(viewerId, surface\)/);
+  assert.match(workItems, /upsertNamedItemView/);
+  assert.match(workItems, /data-testid="item-save-view"/);
+  assert.match(workItems, /data-testid="item-view-name"/);
+  assert.match(workItems, /Name this view first/);
+  assert.doesNotMatch(
+    workItems,
+    /setGroupBy\(activeProject \? "hierarchy" : "project"\);\s*setPrimarySort\("project"\);\s*setSecondarySort\("priority"\);/,
+  );
+  assert.doesNotMatch(workItems, /saveItemView\(\); setViewsOpen\(false\)/);
 });
