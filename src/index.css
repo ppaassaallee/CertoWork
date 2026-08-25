@@ -465,7 +465,8 @@ a {
   background: var(--accent-soft);
   box-shadow: 0 0 0 8px var(--surface-1);
 }
-.odiseus-voice-orb.is-listening {
+.odiseus-voice-orb.is-listening,
+.odiseus-voice-orb.is-wrapping {
   animation: odiseus-voice-pulse 1.4s ease-in-out infinite;
 }
 .odiseus-voice-status {
@@ -560,6 +561,34 @@ a {
 .odiseus-voice-review li strong {
   display: block;
   color: var(--text-primary);
+}
+.odiseus-voice-notes {
+  width: 100%;
+  max-height: 140px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  text-align: left;
+}
+.odiseus-voice-notes li {
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.odiseus-voice-review li label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.odiseus-voice-review li input {
+  margin-top: 3px;
 }
 @keyframes odiseus-voice-pulse {
   0%, 100% { box-shadow: 0 0 0 8px var(--surface-1); }

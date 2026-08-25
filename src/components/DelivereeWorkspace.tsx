@@ -183,6 +183,10 @@ import {
   buildAppleWidgetSnapshot,
   createAppleWidgetToken,
 } from "../lib/appleWidget";
+import {
+  buildVoiceWrapUpMessage,
+  transcribeVoiceAudio,
+} from "../lib/voiceConversation";
 import type { NotebookEntry } from "../lib/notebookContext";
 import { type MagicProjectBlueprint, type MagicProjectItem } from "../lib/magicProject";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
@@ -1325,12 +1329,14 @@ export function DelivereeWorkspace() {
 
   const sendMessage = async (
     explicit?: string,
-    options?: { voiceSession?: boolean },
+    options?: { voiceSession?: boolean; voiceWrapUp?: boolean },
   ) => {
     const text = String(explicit || input).trim();
-    if (!text || !user || !workspace || submitting) return null;
     const voiceSession = Boolean(options?.voiceSession || voiceSessionRef.current);
-    if (isProjectWizardInvocation(text)) {
+    const voiceWrapUp = Boolean(options?.voiceWrapUp);
+    if (!text || !user || !workspace) return null;
+    if (submitting && !voiceWrapUp) return null;
+    if (!voiceWrapUp && isProjectWizardInvocation(text)) {
       setInput("");
       setActionMenuOpen(false);
       setProjectWizardOpen(true);
@@ -1416,6 +1422,7 @@ export function DelivereeWorkspace() {
         workspaceContext: {
           ...requestContext.workspaceContext,
           voiceSession,
+          voiceWrapUp,
         },
         onStep: (step) => {
           setLiveOdysseusSteps((current) => {
@@ -5183,7 +5190,17 @@ export function DelivereeWorkspace() {
           liveSteps={liveOdysseusSteps}
           onApplyPlans={applyVoicePlans}
           onClose={closeVoiceCall}
-          onSendTurn={(text) => sendMessage(text, { voiceSession: true })}
+          onTranscribe={async (blob) => {
+            if (!user) return "";
+            const token = await user.getIdToken();
+            return transcribeVoiceAudio({ token, userId: user.uid, blob });
+          }}
+          onWrapUp={(transcript) =>
+            sendMessage(buildVoiceWrapUpMessage(transcript), {
+              voiceSession: true,
+              voiceWrapUp: true,
+            })
+          }
           open={voiceCallOpen}
           projects={projects}
         />,

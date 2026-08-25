@@ -12,6 +12,10 @@ import { OdysseusWorkLog, type OdysseusRunStep } from "./OdysseusWork";
 import {
   collectVoiceActions,
   createSpeechRecognition,
+  finalSpeechFromEvent,
+  joinVoiceNotes,
+  planFromSelectedActions,
+  preferredRecorderMime,
   speakText,
   speechRecognitionSupported,
   stopSpeaking,
@@ -31,7 +35,8 @@ export function OdysseusVoiceCall({
   activeProject = null,
   liveSteps = [],
   onClose,
-  onSendTurn,
+  onTranscribe,
+  onWrapUp,
   onApplyPlans,
 }: {
   open: boolean;
@@ -39,24 +44,32 @@ export function OdysseusVoiceCall({
   activeProject?: any | null;
   liveSteps?: OdysseusRunStep[];
   onClose: () => void;
-  onSendTurn: (text: string) => Promise<VoiceTurnResult>;
+  onTranscribe?: (blob: Blob) => Promise<string>;
+  onWrapUp: (transcript: string) => Promise<VoiceTurnResult>;
   onApplyPlans: (plans: any[]) => Promise<number>;
 }) {
   const [phase, setPhase] = useState<VoiceCallPhase>("listening");
   const [interim, setInterim] = useState("");
   const [heard, setHeard] = useState("");
+  const [notes, setNotes] = useState<string[]>([]);
   const [reply, setReply] = useState("");
   const [error, setError] = useState("");
   const [appliedCount, setAppliedCount] = useState(0);
   const [pending, setPending] = useState<VoicePendingAction[]>([]);
-  const plansRef = useRef<any[]>([]);
   const phaseRef = useRef<VoiceCallPhase>("listening");
+  const notesRef = useRef<string[]>([]);
   const recognitionRef = useRef<any>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
   const openRef = useRef(false);
   const startingRef = useRef(false);
-  const sendTurnRef = useRef(onSendTurn);
+  const wrappingRef = useRef(false);
+  const wrapUpRef = useRef(onWrapUp);
+  const transcribeRef = useRef(onTranscribe);
   const applyPlansRef = useRef(onApplyPlans);
-  sendTurnRef.current = onSendTurn;
+  wrapUpRef.current = onWrapUp;
+  transcribeRef.current = onTranscribe;
   applyPlansRef.current = onApplyPlans;
 
   const setCallPhase = (next: VoiceCallPhase) => {
@@ -72,12 +85,39 @@ export function OdysseusVoiceCall({
     }
   };
 
+  const stopRecording = () => {
+    const recorder = recorderRef.current;
+    const stream = streamRef.current;
+    recorderRef.current = null;
+    streamRef.current = null;
+    return new Promise<Blob | null>((resolve) => {
+      if (!recorder || recorder.state === "inactive") {
+        stream?.getTracks().forEach((track) => track.stop());
+        const chunks = chunksRef.current;
+        chunksRef.current = [];
+        resolve(chunks.length ? new Blob(chunks, { type: recorder?.mimeType || chunks[0]?.type || "audio/webm" }) : null);
+        return;
+      }
+      recorder.onstop = () => {
+        stream?.getTracks().forEach((track) => track.stop());
+        const chunks = chunksRef.current;
+        chunksRef.current = [];
+        resolve(chunks.length ? new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || "audio/webm" }) : null);
+      };
+      try {
+        recorder.stop();
+      } catch {
+        stream?.getTracks().forEach((track) => track.stop());
+        resolve(null);
+      }
+    });
+  };
+
   const listen = () => {
     if (!openRef.current || phaseRef.current !== "listening") return;
     const recognition = recognitionRef.current;
     if (!recognition || startingRef.current) return;
     startingRef.current = true;
-    setInterim("");
     setError("");
     try {
       recognition.start();
@@ -86,150 +126,204 @@ export function OdysseusVoiceCall({
     }
   };
 
-  useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
+  const appendNotes = (pieces: string[]) => {
+    const next = [...notesRef.current];
+    for (const piece of pieces) {
+      const text = piece.replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      if (next[next.length - 1] === text) continue;
+      next.push(text);
+    }
+    if (next.length === notesRef.current.length) return;
+    notesRef.current = next;
+    setNotes(next);
+    setHeard(next[next.length - 1] || "");
+  };
 
   useEffect(() => {
     openRef.current = open;
     if (!open) {
+      wrappingRef.current = false;
       stopSpeaking();
       stopListening();
+      void stopRecording();
       setCallPhase("listening");
       setInterim("");
       setHeard("");
+      setNotes([]);
+      notesRef.current = [];
       setReply("");
       setError("");
       setAppliedCount(0);
       setPending([]);
-      plansRef.current = [];
       return;
     }
 
-    if (!speechRecognitionSupported()) {
-      setError("Voice conversation needs Chrome, Edge, or Safari, with microphone access.");
-      return;
-    }
+    setReply(VOICE_GREETING);
+    setCallPhase("listening");
 
-    const recognition = createSpeechRecognition();
-    if (!recognition) {
-      setError("This browser cannot start a voice conversation.");
-      return;
-    }
-    recognitionRef.current = recognition;
-    recognition.onstart = () => {
-      startingRef.current = false;
-    };
-    recognition.onend = () => {
-      startingRef.current = false;
-      if (openRef.current && phaseRef.current === "listening") {
-        window.setTimeout(() => listen(), 180);
-      }
-    };
-    recognition.onerror = (event: any) => {
-      startingRef.current = false;
-      const code = String(event?.error || "");
-      if (code === "not-allowed" || code === "service-not-allowed") {
-        setError("Microphone access is blocked. Allow the mic, then try again.");
-        setCallPhase("review");
-        return;
-      }
-      if (openRef.current && phaseRef.current === "listening" && code !== "aborted") {
-        window.setTimeout(() => listen(), 280);
-      }
-    };
-    recognition.onresult = (event: any) => {
-      const pieces = Array.from(event.results || []) as Array<{ isFinal?: boolean; 0?: { transcript?: string } }>;
-      const live = pieces.map((result) => result[0]?.transcript || "").join(" ").trim();
-      setInterim(live);
-      const last = pieces[pieces.length - 1];
-      if (!last?.isFinal) return;
-      const transcript = live;
-      if (!transcript) return;
-      void handleTurn(transcript);
-    };
-
-    setCallPhase("speaking");
+    let cancelled = false;
     void (async () => {
-      setReply(VOICE_GREETING);
-      await speakText(VOICE_GREETING);
-      if (!openRef.current) return;
-      setCallPhase("listening");
-      listen();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        if (cancelled || !openRef.current) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (typeof MediaRecorder === "undefined") return;
+        const mime = preferredRecorderMime();
+        const recorder = mime
+          ? new MediaRecorder(stream, { mimeType: mime })
+          : new MediaRecorder(stream);
+        chunksRef.current = [];
+        recorder.ondataavailable = (event) => {
+          if (event.data?.size) chunksRef.current.push(event.data);
+        };
+        try {
+          recorder.start(4000);
+        } catch {
+          recorder.start();
+        }
+        recorderRef.current = recorder;
+      } catch {
+        if (!cancelled) {
+          setError("Microphone access is blocked. Allow the mic, then try again.");
+        }
+      }
     })();
 
+    if (speechRecognitionSupported()) {
+      const recognition = createSpeechRecognition();
+      if (recognition) {
+        recognitionRef.current = recognition;
+        recognition.onstart = () => {
+          startingRef.current = false;
+        };
+        recognition.onend = () => {
+          startingRef.current = false;
+          if (openRef.current && phaseRef.current === "listening") {
+            window.setTimeout(() => listen(), 160);
+          }
+        };
+        recognition.onerror = (event: any) => {
+          startingRef.current = false;
+          const code = String(event?.error || "");
+          if (code === "not-allowed" || code === "service-not-allowed") {
+            setError("Microphone access is blocked. Allow the mic, then try again.");
+            return;
+          }
+          if (openRef.current && phaseRef.current === "listening" && code !== "aborted") {
+            window.setTimeout(() => listen(), 240);
+          }
+        };
+        recognition.onresult = (event: any) => {
+          if (phaseRef.current !== "listening") return;
+          const { interim: live, finals } = finalSpeechFromEvent(event);
+          setInterim(live);
+          if (finals.length) appendNotes(finals);
+        };
+        listen();
+      }
+    }
+
     return () => {
+      cancelled = true;
       stopSpeaking();
       try {
-        recognition.abort();
+        recognitionRef.current?.abort?.();
       } catch {
         /* ignore */
       }
       recognitionRef.current = null;
+      void stopRecording();
     };
-    // Mount/unmount with open only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const handleTurn = async (transcript: string) => {
-    if (phaseRef.current !== "listening") return;
+  const endCall = async () => {
+    if (wrappingRef.current) return;
+    wrappingRef.current = true;
+    stopSpeaking();
     stopListening();
-    setHeard(transcript);
+    setCallPhase("wrapping");
     setInterim("");
-    setCallPhase("thinking");
+    setError("");
+    const recording = await stopRecording();
+    let transcript = joinVoiceNotes(notesRef.current);
+    if (recording && transcribeRef.current) {
+      try {
+        const recorded = await transcribeRef.current(recording);
+        if (recorded) {
+          transcript = recorded;
+          notesRef.current = recorded
+            .split(/(?<=[.!?])\s+/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+          setNotes(notesRef.current);
+        }
+      } catch (reason) {
+        if (!transcript) {
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "I could not transcribe the recording.",
+          );
+        }
+      }
+    }
+    if (!openRef.current) return;
+    if (!transcript) {
+      const message = "I didn't catch any speech. Check the microphone, then talk again.";
+      setReply(message);
+      setPending([]);
+      setCallPhase("review");
+      await speakText(message);
+      return;
+    }
     try {
-      const result = await sendTurnRef.current(transcript);
+      const result = await wrapUpRef.current(transcript);
+      if (!openRef.current) return;
       const nextReply =
         result?.reply ||
-        "I heard you, but I could not complete that turn. Nothing was changed.";
-      if (result?.actionPlan?.proposedActions?.length) {
-        plansRef.current = [...plansRef.current, result.actionPlan];
-        setPending(collectVoiceActions(plansRef.current, projects, activeProject));
-      }
+        "I captured your notes. Review each task before anything is added.";
+      const nextPending = collectVoiceActions(
+        result?.actionPlan ? [result.actionPlan] : [],
+        projects,
+        activeProject,
+      );
       setReply(nextReply);
-      if (!openRef.current) return;
-      setCallPhase("speaking");
+      setPending(nextPending);
+      setCallPhase("review");
       await speakText(nextReply);
-      if (!openRef.current) return;
-      setCallPhase("listening");
-      listen();
     } catch (reason) {
       const message =
         reason instanceof Error
           ? reason.message
-          : "I could not complete that turn. Nothing was changed.";
+          : "I captured notes but could not build the action plan.";
       setError(message);
       setReply(message);
-      if (!openRef.current) return;
-      setCallPhase("speaking");
-      await speakText(message);
-      if (!openRef.current) return;
-      setCallPhase("listening");
-      listen();
-    }
-  };
-
-  const endCall = () => {
-    stopSpeaking();
-    stopListening();
-    if (plansRef.current.some((plan) => plan?.proposedActions?.length)) {
-      setPending(collectVoiceActions(plansRef.current, projects, activeProject));
+      setPending([]);
       setCallPhase("review");
-      return;
     }
-    onClose();
   };
 
   const apply = async () => {
+    const plan = planFromSelectedActions(pending);
+    if (!plan) {
+      onClose();
+      return;
+    }
     setCallPhase("applying");
     try {
-      const count = await applyPlansRef.current(plansRef.current);
+      const count = await applyPlansRef.current([plan]);
       setAppliedCount(count);
       setCallPhase("done");
       await speakText(
         count > 0
-          ? `Done. I applied ${count} update${count === 1 ? "" : "s"}.`
-          : "Done. There was nothing to apply.",
+          ? `Done. I added ${count} task${count === 1 ? "" : "s"} after your approval.`
+          : "Done. Nothing was applied.",
       );
     } catch (reason) {
       setError(
@@ -245,18 +339,18 @@ export function OdysseusVoiceCall({
 
   const status =
     phase === "listening"
-      ? "Listening"
+      ? "Listening — taking notes"
       : phase === "paused"
         ? "Paused"
-        : phase === "thinking"
-        ? "Odysseus is working"
-        : phase === "speaking"
-          ? "Odysseus is speaking"
+        : phase === "wrapping"
+          ? "Checking what I captured"
           : phase === "review"
-            ? "Ready to apply updates"
+            ? "Approve each task"
             : phase === "applying"
-              ? "Applying updates"
+              ? "Adding approved tasks"
               : "Updates applied";
+
+  const reviewing = phase === "wrapping" || phase === "review" || phase === "applying" || phase === "done";
 
   return (
     <div className="odiseus-voice-scrim" role="dialog" aria-label="Talk with Odysseus" data-testid="odiseus-voice-call">
@@ -278,18 +372,19 @@ export function OdysseusVoiceCall({
 
         {error ? <p className="odiseus-voice-error" role="alert">{error}</p> : null}
 
-        {phase !== "review" && phase !== "applying" && phase !== "done" ? (
+        {!reviewing ? (
           <>
             <p className="odiseus-voice-heard">
-              {interim || heard || "Say what should change on a task or project."}
+              {interim || heard || "Talk. I’ll listen and take notes — no interview."}
             </p>
-            {reply ? <p className="odiseus-voice-reply">{reply}</p> : null}
-            <OdysseusWorkLog steps={liveSteps} working={phase === "thinking"} />
-            {pending.length > 0 ? (
-              <p className="odiseus-voice-pending">
-                {pending.length} change{pending.length === 1 ? "" : "s"} ready when you hang up
-              </p>
+            {notes.length > 0 ? (
+              <ul className="odiseus-voice-notes" data-testid="odiseus-voice-notes">
+                {notes.map((note, index) => (
+                  <li key={`${index}-${note.slice(0, 24)}`}>{note}</li>
+                ))}
+              </ul>
             ) : null}
+            {reply ? <p className="odiseus-voice-reply">{reply}</p> : null}
             <div className="odiseus-voice-actions">
               {phase === "listening" ? (
                 <button
@@ -305,7 +400,6 @@ export function OdysseusVoiceCall({
                 </button>
               ) : (
                 <button
-                  disabled={phase === "thinking" || phase === "speaking"}
                   onClick={() => {
                     setCallPhase("listening");
                     listen();
@@ -316,7 +410,7 @@ export function OdysseusVoiceCall({
                   Resume
                 </button>
               )}
-              <button className="is-end" onClick={endCall} type="button">
+              <button className="is-end" onClick={() => void endCall()} type="button">
                 <PhoneOff size={16} />
                 End conversation
               </button>
@@ -324,34 +418,68 @@ export function OdysseusVoiceCall({
           </>
         ) : (
           <div className="odiseus-voice-review">
-            {phase === "done" ? (
+            {phase === "wrapping" ? (
+              <>
+                <p className="odiseus-voice-reply">Checking the notes against what you said…</p>
+                <OdysseusWorkLog steps={liveSteps} working />
+              </>
+            ) : phase === "done" ? (
               <p className="odiseus-voice-reply">
                 {appliedCount > 0
-                  ? `Applied ${appliedCount} update${appliedCount === 1 ? "" : "s"} to your workspace.`
+                  ? `Added ${appliedCount} task${appliedCount === 1 ? "" : "s"} after you approved each one.`
                   : "Nothing needed applying."}
               </p>
             ) : (
               <>
                 <p className="odiseus-voice-reply">
-                  Odysseus will apply these updates now. Nothing changes until you confirm.
+                  {reply || "Approve each task. Nothing is added until you confirm it."}
                 </p>
-                <ul>
-                  {pending.map((action, index) => (
-                    <li key={`${action.type}-${index}`}>
-                      <Check size={12} />
-                      <span>
-                        <strong>{action.type}</strong>
-                        {action.title}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {notes.length > 0 ? (
+                  <p className="odiseus-voice-pending">
+                    Captured {notes.length} note{notes.length === 1 ? "" : "s"}
+                  </p>
+                ) : null}
+                {pending.length ? (
+                  <ul>
+                    {pending.map((action) => (
+                      <li key={action.id}>
+                        <label>
+                          <input
+                            checked={action.selected}
+                            disabled={phase === "applying"}
+                            onChange={() =>
+                              setPending((current) =>
+                                current.map((item) =>
+                                  item.id === action.id
+                                    ? { ...item, selected: !item.selected }
+                                    : item,
+                                ),
+                              )
+                            }
+                            type="checkbox"
+                          />
+                          <span>
+                            <strong>{action.type}</strong>
+                            {action.title}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="odiseus-voice-pending">No tasks to add from what I captured.</p>
+                )}
               </>
             )}
             <div className="odiseus-voice-actions">
               {phase === "done" ? (
                 <button className="is-primary" onClick={onClose} type="button">
                   Close
+                </button>
+              ) : phase === "wrapping" ? (
+                <button disabled type="button">
+                  <Loader2 className="spin" size={16} />
+                  Wrapping up
                 </button>
               ) : (
                 <>
@@ -360,12 +488,12 @@ export function OdysseusVoiceCall({
                   </button>
                   <button
                     className="is-primary"
-                    disabled={phase === "applying" || pending.length === 0}
+                    disabled={phase === "applying" || pending.every((item) => !item.selected)}
                     onClick={() => void apply()}
                     type="button"
                   >
                     {phase === "applying" ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
-                    Apply updates
+                    Apply selected
                   </button>
                 </>
               )}

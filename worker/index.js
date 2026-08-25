@@ -17,8 +17,10 @@ const FIREBASE_JWKS_URL =
 const FIRESTORE_DATABASE_ID = "ai-studio-0db18e51-58a2-4763-a4d7-3fced116347d";
 const FIREBASE_WEB_API_KEY = "AIzaSyDa-1rva5k-ky_f6L4A6lenqz8cBUP6Hn4";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
+const MAX_AUDIO_BYTES = 8_000_000;
 const MAX_MESSAGES = 40;
 
 export function openaiApiKey(env = {}) {
@@ -114,6 +116,66 @@ export async function loadAppleWidgetSnapshot(token, env = {}) {
   const data = decodeFirestoreDocument(payload.fields || {});
   if (!data || data.revoked === true || data.token !== clean) return null;
   return normalizeAppleWidgetSnapshot(data.snapshot);
+}
+
+export async function transcribeVoice(request, env = {}) {
+  if (!openaiIsConfigured(env)) {
+    return json(
+      { error: "Voice transcription is not configured.", code: "OPENAI_NOT_CONFIGURED" },
+      503,
+    );
+  }
+  const identity = platformIdentity(request);
+  if (!identity) {
+    const authorization = request.headers.get("authorization") || "";
+    if (!authorization.startsWith("Bearer ")) {
+      return json({ error: "Authentication required" }, 401);
+    }
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ error: "Audio is required" }, 400);
+  }
+  const userId = String(form.get("userId") || "");
+  const file = form.get("file");
+  if (!identity) {
+    const authorization = request.headers.get("authorization") || "";
+    try {
+      await verifyFirebaseToken(
+        authorization.slice("Bearer ".length),
+        userId,
+        env.FIREBASE_PROJECT_ID || FIREBASE_PROJECT_ID,
+      );
+    } catch (error) {
+      return json(
+        { error: error instanceof Error ? error.message : "Authentication failed" },
+        401,
+      );
+    }
+  }
+  if (!file || typeof file === "string") return json({ error: "Audio is required" }, 400);
+  const size = Number(file.size || 0);
+  if (size < 80) return json({ text: "" });
+  if (size > MAX_AUDIO_BYTES) return json({ error: "Recording is too large" }, 413);
+  const openaiForm = new FormData();
+  openaiForm.append("file", file, file.name || "speech.webm");
+  openaiForm.append("model", "whisper-1");
+  openaiForm.append("response_format", "json");
+  const response = await fetch(OPENAI_TRANSCRIPTIONS_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${openaiApiKey(env)}` },
+    body: openaiForm,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return json(
+      { error: payload?.error?.message || "The recording could not be transcribed." },
+      502,
+    );
+  }
+  return json({ text: String(payload.text || "").trim() });
 }
 
 function withSecurityHeaders(response) {
@@ -404,7 +466,7 @@ Product behavior:
 - Organize work by when it needs attention: Today, This Week, Later, or a real calendar block.
 - For a daily plan, use two must-dos, up to eight should-dos, and optional could-dos. Reduce the plan when capacity is tight.
 - Protect core work from admin, meetings, and low-value activity. Prefer finishing over starting.
-${context.voiceSession ? `- VOICE CONVERSATION: the user is speaking live. Keep reply to 1-3 short spoken sentences. No markdown, lists, headings, or code. Confirm what you will change. Ask at most one question if a required fact is missing. Put every task and project mutation in actionPlan as you go; the product applies them when the user ends the call.` : ""}
+${context.voiceWrapUp ? `- VOICE WRAP-UP: the live conversation ended. You were a quiet note-taker. Read the transcript carefully. Recap what you heard in 2-4 spoken sentences, say if anything sounded incomplete, then put every concrete next action in actionPlan as create_task (or update_task when it clearly matches an existing task). Set timeSector to today, this-week, or later. No markdown. Do not interview. At most one clarifying question if a required fact is missing for every item. Never claim tasks were already created.` : context.voiceSession ? `- VOICE CONVERSATION: you are a quiet assistant taking notes. Listen. Do not interview. Speak at most one short sentence. Do not ask questions unless a single missing fact blocks every next action. Do not return an actionPlan until wrap-up unless the user explicitly asks to apply now.` : ""}
 - Use projects as context for outcomes, tasks, decisions, owners, dependencies, risks, milestones, and delivery. When the user asks for team planning, support a lightweight Scrum backlog/sprint flow or PMI lifecycle without unnecessary ceremony.
 - When strategic goals and measures are supplied, distinguish the Objective (direction), outcome measures (measurable results), lead measures (predictive actions the team can influence), and weekly commitments. A linked Project, Epic, or PBI may serve as execution evidence or a lead measure, but do not confuse activity completion with a business outcome.
 - Treat Gems as recognition backed by the supplied audit ledger. Never invent a balance, prize, Boost, or redemption and never recommend gaming the system with low-value activity.
@@ -1225,6 +1287,9 @@ const worker = {
           500,
         );
       }
+    }
+    if (request.method === "POST" && url.pathname === "/api/voice/transcribe") {
+      return transcribeVoice(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/boldi/chat") {
       return chat(request, env);
