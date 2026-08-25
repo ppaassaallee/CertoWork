@@ -7,6 +7,7 @@ import worker, {
   inferProjectTitleFromRequest,
   magicProjectInstructions,
   normalizeConversationMessages,
+  rewriteFirebaseAuthLocation,
   rewriteInstructions,
 } from "../worker/index.js";
 
@@ -76,6 +77,23 @@ test("Firebase auth helpers are resolved through the legacy Firebase host", () =
       "https://gazelle-boldr-ai.boldrai-3640.chatgpt.site/__/auth/handler?providerId=google.com",
     ),
     "https://gen-lang-client-0277783597.firebaseapp.com/__/auth/handler?providerId=google.com",
+  );
+});
+
+test("Firebase auth redirects stay on the public Certo Work origin", () => {
+  assert.equal(
+    rewriteFirebaseAuthLocation(
+      "https://gen-lang-client-0277783597.firebaseapp.com/__/auth/handler?state=abc",
+      "https://certo.work/__/auth/handler",
+    ),
+    "https://certo.work/__/auth/handler?state=abc",
+  );
+  assert.equal(
+    rewriteFirebaseAuthLocation(
+      "https://gen-lang-client-0277783597.web.app/__/auth/iframe?apiKey=test",
+      "https://certo.work/__/auth/iframe",
+    ),
+    "https://certo.work/__/auth/iframe?apiKey=test",
   );
 });
 

@@ -9,13 +9,16 @@ import {
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { resolveFirebaseAuthDomain } from './authFlow';
 
-// Keep the Firebase-hosted auth helper as the canonical Google OAuth redirect.
-// Certo Work itself is served from Cloudflare, but Google sign-in must use a
-// redirect URI registered on the Firebase-created OAuth client. Using the
-// custom app domain here causes redirect_uri_mismatch unless the Firebase auth
-// handler is also hosted and registered there.
-const app = initializeApp(firebaseConfig);
+// Production uses the current hostname as authDomain so Google returns to the
+// same origin that stored the sign-in state. Cloudflare already proxies
+// `/__/auth/*` to Firebase. Localhost keeps the Firebase-hosted domain because
+// the Vite app does not serve that handler.
+const app = initializeApp({
+  ...firebaseConfig,
+  authDomain: resolveFirebaseAuthDomain(firebaseConfig.authDomain),
+});
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const storage = getStorage(app);
 

@@ -20,7 +20,7 @@ import {
 import { Loader2, LogIn, Mail, ShieldCheck } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
 import { auth, db } from "../lib/firebase";
-import { authErrorCode } from "../lib/authFlow";
+import { googleSignInBrowserAdvice } from "../lib/authFlow";
 import {
   existingAccountInviteMessage,
   inviteActivateErrorMessage,
@@ -46,6 +46,7 @@ export function InviteActivate({ token }: Props) {
   const [existingAccount, setExistingAccount] = useState(false);
   const acceptedFor = useRef("");
   const submittingRef = useRef(false);
+  const browserAdvice = googleSignInBrowserAdvice();
 
   useEffect(() => {
     setError("");
@@ -198,22 +199,8 @@ export function InviteActivate({ token }: Props) {
     setError("");
     setNotice("");
     try {
-      try {
-        await signIn("popup");
-      } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "";
-        const code = authErrorCode(reason);
-        if (
-          code === "popup-blocked" ||
-          code === "popup-closed-by-user" ||
-          /blocked|full-page|timed out/i.test(message)
-        ) {
-          await signIn("redirect");
-          return;
-        }
-        throw reason;
-      }
-      await acceptSignedInUser();
+      await signIn();
+      if (auth.currentUser) await acceptSignedInUser();
     } catch (reason) {
       setError(inviteActivateErrorMessage(reason));
     } finally {
@@ -306,6 +293,7 @@ export function InviteActivate({ token }: Props) {
           <button className="do-signin-alternate" disabled={submitting} onClick={() => void activateWithGoogle()} type="button">
             Continue with Google
           </button>
+          {browserAdvice ? <small className="do-access-note">{browserAdvice}</small> : null}
           <button className="do-signin-alternate" disabled={submitting} onClick={() => void sendReset()} type="button">
             <Mail size={14} /> Send password reset
           </button>

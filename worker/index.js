@@ -195,6 +195,23 @@ export function firebaseAuthProxyUrl(requestUrl) {
   return upstream.toString();
 }
 
+export function rewriteFirebaseAuthLocation(location, requestUrl) {
+  if (!location) return location;
+  const publicOrigin = new URL(requestUrl).origin;
+  try {
+    const next = new URL(location, publicOrigin);
+    if (next.hostname.endsWith(".firebaseapp.com") || next.hostname.endsWith(".web.app")) {
+      return `${publicOrigin}${next.pathname}${next.search}${next.hash}`;
+    }
+  } catch {
+    // Keep the original header if it is not a valid URL.
+  }
+  if (location.startsWith(FIREBASE_AUTH_ORIGIN)) {
+    return location.replace(FIREBASE_AUTH_ORIGIN, publicOrigin);
+  }
+  return location;
+}
+
 async function proxyFirebaseAuth(request) {
   const upstreamUrl = firebaseAuthProxyUrl(request.url);
   const upstreamResponse = await fetch(new Request(upstreamUrl, request), {
@@ -202,9 +219,8 @@ async function proxyFirebaseAuth(request) {
   });
   const response = new Response(upstreamResponse.body, upstreamResponse);
   const location = response.headers.get("location");
-  if (location?.startsWith(FIREBASE_AUTH_ORIGIN)) {
-    const publicOrigin = new URL(request.url).origin;
-    response.headers.set("location", location.replace(FIREBASE_AUTH_ORIGIN, publicOrigin));
+  if (location) {
+    response.headers.set("location", rewriteFirebaseAuthLocation(location, request.url));
   }
   response.headers.set("cache-control", "no-store");
   return response;
