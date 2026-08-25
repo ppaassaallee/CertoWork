@@ -10,6 +10,7 @@ import {
 
 test("canonical IA routes resolve to mental-model lenses", () => {
   assert.deepEqual(resolveDelivereeLens("/home"), { kind: "home" });
+  assert.deepEqual(resolveDelivereeLens("/collab"), { kind: "collab" });
   assert.deepEqual(resolveDelivereeLens("/my-work"), {
     kind: "my-work",
     section: "assigned",
@@ -119,6 +120,7 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-feedback"/);
   assert.match(source, /data-testid="nav-workspace"/);
   assert.match(source, /data-testid="nav-settings"/);
+  assert.match(source, /ProductSwitcher/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);
   assert.doesNotMatch(source, /do-odiseus-hire/);
   assert.match(source, /data-testid="sidebar-search"/);

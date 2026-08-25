@@ -1,6 +1,7 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
+import { collabStatusPayload, provisionCollabSso } from "./collab.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1088,6 +1089,7 @@ function capabilities(env) {
         ? "OneDrive connector credentials are present."
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
+    collab: collabStatusPayload(env),
   };
 }
 
@@ -1318,6 +1320,27 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/api/collab/status") {
+      return json(collabStatusPayload(env));
+    }
+    if (request.method === "POST" && url.pathname === "/api/collab/sso") {
+      try {
+        const body = await readJson(request);
+        await authorize(request, body, env);
+        const result = await provisionCollabSso(env, body);
+        return json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
+        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
+        return json(
+          {
+            error: message,
+            configured: collabStatusPayload(env).configured,
+          },
+          status,
+        );
+      }
     }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {

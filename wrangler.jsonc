@@ -28,6 +28,8 @@
     "FIREBASE_PROJECT_ID": "gen-lang-client-0277783597",
     "CERTO_EMAIL_FROM": "support@certo.work",
     "CERTO_EMAIL_FROM_NAME": "Certo Work",
-    "CERTO_EMAIL_REPLY_TO": "support@certo.work"
+    "CERTO_EMAIL_REPLY_TO": "support@certo.work",
+    "CHATWOOT_URL": "",
+    "CHATWOOT_ACCOUNT_ID": ""
   }
 }
