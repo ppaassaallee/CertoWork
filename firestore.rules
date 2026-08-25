@@ -1143,6 +1143,25 @@ service cloud.firestore {
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().workspaceId is string && isWorkspaceMember(incoming().workspaceId);
       allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
     }
+    match /widget_tokens/{id} {
+      allow get: if resource.data.revoked != true
+        && resource.data.token == id
+        && resource.data.snapshot is map;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().token == id
+        && incoming().workspaceId is string
+        && incoming().snapshot is map
+        && incoming().revoked == false;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid
+        && incoming().userId == resource.data.userId
+        && incoming().token == resource.data.token
+        && incoming().workspaceId == resource.data.workspaceId
+        && incoming().snapshot is map
+        && incoming().revoked is bool;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
     match /project_status_shares/{id} {
       allow get: if resource.data.revoked != true
         && resource.data.token == id

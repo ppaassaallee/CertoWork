@@ -14,6 +14,8 @@ const FIREBASE_PROJECT_ID = "gen-lang-client-0277783597";
 const FIREBASE_AUTH_ORIGIN = "https://gen-lang-client-0277783597.firebaseapp.com";
 const FIREBASE_JWKS_URL =
   "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const FIRESTORE_DATABASE_ID = "ai-studio-0db18e51-58a2-4763-a4d7-3fced116347d";
+const FIREBASE_WEB_API_KEY = "AIzaSyDa-1rva5k-ky_f6L4A6lenqz8cBUP6Hn4";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
@@ -45,6 +47,73 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: { ...jsonHeaders, ...extraHeaders },
   });
+}
+
+export function decodeFirestoreValue(value) {
+  if (!value || typeof value !== "object") return null;
+  if (value.stringValue != null) return value.stringValue;
+  if (value.integerValue != null) return Number(value.integerValue);
+  if (value.doubleValue != null) return value.doubleValue;
+  if (value.booleanValue != null) return value.booleanValue;
+  if (value.nullValue !== undefined) return null;
+  if (value.timestampValue) return value.timestampValue;
+  if (value.mapValue?.fields) return decodeFirestoreDocument(value.mapValue.fields);
+  if (value.arrayValue) return (value.arrayValue.values || []).map(decodeFirestoreValue);
+  return null;
+}
+
+export function decodeFirestoreDocument(fields = {}) {
+  const result = {};
+  for (const [key, value] of Object.entries(fields)) {
+    result[key] = decodeFirestoreValue(value);
+  }
+  return result;
+}
+
+function asWidgetTasks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => item && typeof item === "object")
+    .map((item) => {
+      const title = String(item.title || "Untitled").trim() || "Untitled";
+      const task = {
+        id: String(item.id || title),
+        title,
+      };
+      const project = String(item.project || "").trim();
+      if (project) task.project = project;
+      return task;
+    });
+}
+
+export function normalizeAppleWidgetSnapshot(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  return {
+    workspaceName: String(raw.workspaceName || "Certo Work").slice(0, 80),
+    dateLabel: String(raw.dateLabel || "Today"),
+    dateKey: String(raw.dateKey || ""),
+    mustDos: asWidgetTasks(raw.mustDos).slice(0, 2),
+    shouldDos: asWidgetTasks(raw.shouldDos).slice(0, 8),
+    pendingApprovals: Math.max(0, Number(raw.pendingApprovals) || 0),
+    odysseusLine: String(raw.odysseusLine || ""),
+    updatedAt: Number(raw.updatedAt) || 0,
+  };
+}
+
+export async function loadAppleWidgetSnapshot(token, env = {}) {
+  const clean = String(token || "").trim();
+  if (!/^[a-zA-Z0-9]{16,80}$/.test(clean)) return null;
+  const projectId = env.FIREBASE_PROJECT_ID || FIREBASE_PROJECT_ID;
+  const databaseId = env.FIRESTORE_DATABASE_ID || FIRESTORE_DATABASE_ID;
+  const apiKey = env.FIREBASE_WEB_API_KEY || FIREBASE_WEB_API_KEY;
+  const url =
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${encodeURIComponent(databaseId)}/documents/widget_tokens/${encodeURIComponent(clean)}?key=${apiKey}`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const payload = await response.json();
+  const data = decodeFirestoreDocument(payload.fields || {});
+  if (!data || data.revoked === true || data.token !== clean) return null;
+  return normalizeAppleWidgetSnapshot(data.snapshot);
 }
 
 function withSecurityHeaders(response) {
@@ -1143,6 +1212,19 @@ const worker = {
       const identity = platformIdentity(request);
       if (!identity) return json({ authenticated: false }, 401);
       return json({ authenticated: true, provider: "codex-sites", user: identity });
+    }
+    if (request.method === "GET" && url.pathname.startsWith("/api/widget/")) {
+      const token = decodeURIComponent(url.pathname.slice("/api/widget/".length).split("/")[0] || "");
+      try {
+        const snapshot = await loadAppleWidgetSnapshot(token, env);
+        if (!snapshot) return json({ error: "Widget unavailable" }, 404);
+        return json({ snapshot });
+      } catch (error) {
+        return json(
+          { error: error instanceof Error ? error.message : "Widget unavailable" },
+          500,
+        );
+      }
     }
     if (request.method === "POST" && url.pathname === "/api/boldi/chat") {
       return chat(request, env);
