@@ -31,8 +31,8 @@ export function isExistingAccountCreateError(reason: unknown) {
 }
 
 export function readNamedInputValue(form: HTMLFormElement | null, name: string, fallback = "") {
-  const field = form?.elements.namedItem(name);
-  const fromDom = field && "value" in field ? String((field as HTMLInputElement).value || "") : "";
+  const field = form?.elements.namedItem(name) as { value?: string } | null;
+  const fromDom = field && typeof field.value === "string" ? field.value : "";
   return (fromDom || fallback).trim();
 }
 
