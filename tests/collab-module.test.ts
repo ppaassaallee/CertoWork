@@ -7,6 +7,8 @@ import { lensToPath, resolveDelivereeLens } from "../src/lib/delivereeRoutes";
 import { mobileCoreFallbackPath } from "../src/lib/mobileCore";
 import {
   chatwootOrigin,
+  collabProjectIdFromLocation,
+  collabProjectPath,
   isCollabPath,
   isConfiguredCollab,
   productFromPath,
@@ -32,6 +34,9 @@ test("Chat Collab is a separate lens from work surfaces", () => {
   assert.equal(productFromPath("/collab"), "collab");
   assert.equal(productHomePath("work"), "/home");
   assert.equal(productHomePath("collab"), "/collab");
+  assert.equal(collabProjectPath("p1"), "/collab/projects/p1");
+  assert.equal(collabProjectIdFromLocation("/collab/projects/p1"), "p1");
+  assert.equal(collabProjectIdFromLocation("/collab", "?project=p1"), "p1");
 });
 
 test("mobile core does not bounce Chat Collab back to Home", () => {
@@ -93,12 +98,15 @@ test("SSO login URLs are rewritten onto the public Certo Work origin", async () 
       return Response.json({ id: 9, email: "ana@certo.work" });
     }
     if (path.includes("/account_users")) {
-      return Response.json({ user_id: 9, role: "agent" });
+      return Response.json({ user_id: 9, role: "administrator" });
     }
     if (path.endsWith("/login")) {
       return Response.json({
         url: "https://chatwoot.internal:3000/app/login?email=ana%40certo.work&sso_auth_token=abc",
       });
+    }
+    if (path.endsWith("/token") && init?.method === "POST") {
+      return Response.json({ access_token: "user-token" });
     }
     return Response.json({ error: "unexpected" }, { status: 500 });
   }) as typeof fetch;
@@ -120,6 +128,72 @@ test("SSO login URLs are rewritten onto the public Certo Work origin", async () 
     assert.equal(calls[0], "POST https://chatwoot.internal:3000/platform/api/v1/users");
     assert.equal(calls[1], "POST https://chatwoot.internal:3000/platform/api/v1/accounts/7/account_users");
     assert.equal(calls[2], "GET https://chatwoot.internal:3000/platform/api/v1/users/9/login");
+    assert.equal(calls[3], "POST https://chatwoot.internal:3000/platform/api/v1/users/9/token");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("SSO creates project rooms and rewrites the desk onto certo.work", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.endsWith("/platform/api/v1/users") && init?.method === "POST") {
+      return Response.json({ id: 9, email: "ana@certo.work" });
+    }
+    if (path.includes("/account_users")) {
+      const body = JSON.parse(String(init?.body || "{}"));
+      assert.equal(body.role, "administrator");
+      return Response.json({ user_id: 9, role: "administrator" });
+    }
+    if (path.endsWith("/login")) {
+      return Response.json({
+        url: "https://chatwoot.internal:3000/app/login?email=ana%40certo.work&sso_auth_token=abc",
+      });
+    }
+    if (path.endsWith("/token") && init?.method === "POST") {
+      return Response.json({ access_token: "user-token" });
+    }
+    if (path.endsWith("/inboxes") && init?.method === "POST") {
+      return Response.json({ id: 21, name: "Room · Atlas" });
+    }
+    if (path.endsWith("/inboxes")) {
+      return Response.json({ payload: [] });
+    }
+    if (path.includes("/contacts/search")) {
+      return Response.json({ payload: [] });
+    }
+    if (path.endsWith("/contacts") && init?.method === "POST") {
+      return Response.json({ payload: { contact: { id: 31, identifier: "certo:project:p1" } } });
+    }
+    if (path.includes("/conversations") && init?.method === "POST") {
+      return Response.json({ id: 41, display_id: 4 });
+    }
+    if (path.includes("/conversations")) {
+      return Response.json({ data: { payload: [] } });
+    }
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await provisionCollabSso(
+      {
+        CHATWOOT_URL: "https://chatwoot.internal:3000",
+        CHATWOOT_PLATFORM_TOKEN: "tok",
+        CHATWOOT_ACCOUNT_ID: "7",
+      },
+      {
+        email: "ana@certo.work",
+        displayName: "Ana",
+        userId: "uid-1",
+        workspaceId: "ws-1",
+        projectId: "p1",
+        projects: [{ id: "p1", name: "Atlas" }],
+      },
+      "https://certo.work",
+    );
+    assert.equal(result.roomUrl, "https://certo.work/app/accounts/7/conversations/4");
+    assert.equal(result.rooms?.[0]?.projectId, "p1");
+    assert.equal(result.rooms?.[0]?.path, "/app/accounts/7/conversations/4");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -214,7 +288,7 @@ test("live shell mounts Chat Collab as a separate product on certo.work", () => 
   assert.match(workspace, /nav-collab/);
   assert.match(collab, /data-testid="chat-collab-module"/);
   assert.match(collab, /data-testid="chat-collab-setup"/);
-  assert.match(collab, /data-testid="chat-collab-frame"/);
+  assert.match(collab, /data-testid="collab-room-select"/);
   assert.match(collab, /certo\.work/);
   assert.equal(collab.includes("collab.certo.work"), false);
 });

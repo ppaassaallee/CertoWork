@@ -6,8 +6,19 @@ export type CollabStatus = {
   mount?: string;
 };
 
+export type CollabRoom = {
+  projectId: string;
+  name: string;
+  inboxId?: number | string;
+  conversationId?: number | string;
+  path?: string;
+  url?: string;
+};
+
 export type CollabSsoResult = {
   url?: string;
+  roomUrl?: string;
+  rooms?: CollabRoom[];
   error?: string;
   configured?: boolean;
 };
@@ -33,6 +44,8 @@ export async function startCollabSso(input: {
   workspaceId: string;
   email: string;
   displayName: string;
+  projectId?: string;
+  projects?: Array<{ id: string; name: string }>;
 }): Promise<CollabSsoResult> {
   const response = await fetch("/api/collab/sso", {
     method: "POST",
@@ -45,6 +58,8 @@ export async function startCollabSso(input: {
       workspaceId: input.workspaceId,
       email: input.email,
       displayName: input.displayName,
+      projectId: input.projectId || "",
+      projects: input.projects || [],
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as CollabSsoResult;
@@ -54,5 +69,10 @@ export async function startCollabSso(input: {
       error: payload.error || "Chat Collab could not sign you in.",
     };
   }
-  return { url: payload.url, configured: true };
+  return {
+    url: payload.url,
+    roomUrl: payload.roomUrl,
+    rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+    configured: true,
+  };
 }

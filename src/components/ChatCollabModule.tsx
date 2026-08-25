@@ -1,23 +1,41 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, MessageSquare } from "./ui/Icon";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { useAuth } from "../lib/AuthContext";
-import { isConfiguredCollab } from "../lib/collabModule";
-import { loadCollabStatus, startCollabSso, type CollabStatus } from "../lib/collabClient";
+import {
+  collabProjectIdFromLocation,
+  collabProjectPath,
+  isConfiguredCollab,
+} from "../lib/collabModule";
+import { loadCollabStatus, startCollabSso, type CollabRoom, type CollabStatus } from "../lib/collabClient";
 import { t } from "../lib/i18n";
+
+type ProjectRef = { id: string; name: string };
 
 type Props = {
   workspaceName?: string;
+  projects?: ProjectRef[];
 };
 
-export function ChatCollabModule({ workspaceName }: Props) {
+export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, workspace } = useAuth();
   const [status, setStatus] = useState<CollabStatus | null>(null);
   const [embedUrl, setEmbedUrl] = useState("");
+  const [rooms, setRooms] = useState<CollabRoom[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const selectedProjectId = collabProjectIdFromLocation(location.pathname, location.search);
+
+  const projectList = useMemo(
+    () =>
+      projects
+        .map((project) => ({ id: String(project.id || "").trim(), name: String(project.name || "Project").trim() || "Project" }))
+        .filter((project) => project.id),
+    [projects],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -42,13 +60,21 @@ export function ChatCollabModule({ workspaceName }: Props) {
           workspaceId: workspace.id,
           email: user.email,
           displayName: user.displayName || workspaceName || "Certo Work",
+          projectId: selectedProjectId,
+          projects: projectList,
         });
         if (cancelled) return;
         if (!sso.url) {
           setError(sso.error || "Chat Collab could not sign you in.");
           return;
         }
+        setRooms(sso.rooms || []);
         setEmbedUrl(sso.url);
+        if (sso.roomUrl) {
+          window.setTimeout(() => {
+            if (!cancelled) setEmbedUrl(sso.roomUrl || "");
+          }, 1800);
+        }
       } catch (reason) {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : "Chat Collab is unavailable.");
@@ -61,7 +87,7 @@ export function ChatCollabModule({ workspaceName }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [user, workspace, workspaceName]);
+  }, [user, workspace, workspaceName, selectedProjectId, projectList]);
 
   const configured = isConfiguredCollab(status);
 
@@ -74,6 +100,22 @@ export function ChatCollabModule({ workspaceName }: Props) {
           <strong>{t("productCollab")}</strong>
           <small>{workspaceName || "Certo Work"}</small>
         </span>
+        {rooms.length > 0 && (
+          <label className="do-collab-room-picker">
+            <span>Project room</span>
+            <select
+              data-testid="collab-room-select"
+              onChange={(event) => navigate(collabProjectPath(event.target.value))}
+              value={selectedProjectId || rooms[0]?.projectId || ""}
+            >
+              {rooms.map((room) => (
+                <option key={room.projectId} value={room.projectId}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
           <ArrowLeft size={14} />
           {t("productBackToWork")}
@@ -91,15 +133,9 @@ export function ChatCollabModule({ workspaceName }: Props) {
             <MessageSquare size={22} />
             <h1>Chat Collab opens on certo.work</h1>
             <p>
-              Switch Work and Collab in the rail. There is no collab subdomain.
-              Project management stays on Certo Work. The desk is proxied on this
-              same hostname after the private Chatwoot backend is connected.
+              Switch Work and Collab in the rail. Each Certo Work project gets a
+              room in the desk. There is no collab subdomain.
             </p>
-            <ul>
-              <li><code>CHATWOOT_URL</code> — private Chatwoot origin, reachable from Cloudflare</li>
-              <li><code>CHATWOOT_PLATFORM_TOKEN</code> — Platform App access token</li>
-              <li><code>CHATWOOT_ACCOUNT_ID</code> — Chatwoot account for this workspace</li>
-            </ul>
             <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
               {t("productBackToWork")}
             </button>

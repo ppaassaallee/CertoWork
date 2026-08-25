@@ -2,6 +2,9 @@ node_modules/
 dist/
 work/
 chatwoot/
+!ops/chatwoot/
+ops/chatwoot/.env
+ops/chatwoot/.secrets.json
 outputs/
 .env
 .env.*

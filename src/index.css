@@ -14072,6 +14072,23 @@ a {
   margin: 0;
   width: min(280px, 52vw);
 }
+.do-collab-room-picker {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.do-collab-room-picker select {
+  max-width: min(240px, 36vw);
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  padding: 0 8px;
+}
 .do-collab-rail-copy {
   display: flex;
   min-width: 0;

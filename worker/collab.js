@@ -123,12 +123,12 @@ function randomPassword() {
   return `Cw.${raw}9!`;
 }
 
-async function chatwootRequest(env, path, { method = "GET", body } = {}) {
+async function chatwootRequest(env, path, { method = "GET", body, accessToken } = {}) {
   const { origin, token } = chatwootConfig(env);
   const response = await fetch(`${origin}${path}`, {
     method,
     headers: {
-      api_access_token: token,
+      api_access_token: accessToken || token,
       "content-type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -139,6 +139,151 @@ async function chatwootRequest(env, path, { method = "GET", body } = {}) {
     throw new Error(message);
   }
   return payload;
+}
+
+export function projectRoomIdentifier(projectId) {
+  return `certo:project:${String(projectId || "").trim()}`;
+}
+
+export function projectRoomName(name) {
+  const title = String(name || "Project").trim() || "Project";
+  return `Room · ${title}`.slice(0, 80);
+}
+
+export function normalizeCollabProjects(input) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const projects = [];
+  for (const item of input) {
+    const id = String(item?.id || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    projects.push({
+      id,
+      name: String(item?.name || item?.title || "Project").trim() || "Project",
+    });
+    if (projects.length >= 40) break;
+  }
+  return projects;
+}
+
+function asList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.payload)) return payload.payload;
+  if (Array.isArray(payload?.data?.payload)) return payload.data.payload;
+  return [];
+}
+
+function conversationDisplayId(conversation) {
+  return conversation?.display_id || conversation?.id || conversation?.payload?.display_id || "";
+}
+
+export function projectRoomPath(accountId, conversation) {
+  const displayId = conversationDisplayId(conversation);
+  if (!accountId || !displayId) return "";
+  return `/app/accounts/${accountId}/conversations/${displayId}`;
+}
+
+async function ensureProjectInbox(env, accessToken, accountId, project) {
+  const inboxes = asList(await chatwootRequest(env, `/api/v1/accounts/${accountId}/inboxes`, { accessToken }));
+  const existing = inboxes.find((inbox) => {
+    const attrs = inbox?.additional_attributes || inbox?.channel?.additional_attributes || {};
+    return attrs.certoProjectId === project.id || inbox?.name === projectRoomName(project.name);
+  });
+  if (existing?.id) return existing;
+  const created = await chatwootRequest(env, `/api/v1/accounts/${accountId}/inboxes`, {
+    method: "POST",
+    accessToken,
+    body: {
+      name: projectRoomName(project.name),
+      enable_auto_assignment: false,
+      additional_attributes: { certoProjectId: project.id, certoRoom: true },
+      channel: {
+        type: "api",
+        webhook_url: "",
+        hmac_mandatory: false,
+        additional_attributes: { certoProjectId: project.id },
+      },
+    },
+  });
+  return created?.payload || created;
+}
+
+async function ensureProjectContact(env, accessToken, accountId, inboxId, project) {
+  const identifier = projectRoomIdentifier(project.id);
+  const search = asList(
+    await chatwootRequest(
+      env,
+      `/api/v1/accounts/${accountId}/contacts/search?q=${encodeURIComponent(identifier)}`,
+      { accessToken },
+    ),
+  );
+  const existing = search.find((contact) => contact?.identifier === identifier);
+  if (existing?.id) return existing;
+  const created = await chatwootRequest(env, `/api/v1/accounts/${accountId}/contacts`, {
+    method: "POST",
+    accessToken,
+    body: {
+      inbox_id: inboxId,
+      name: project.name,
+      identifier,
+      custom_attributes: { certoProjectId: project.id },
+    },
+  });
+  return created?.payload?.contact || created?.payload || created;
+}
+
+async function ensureProjectConversation(env, accessToken, accountId, inboxId, contactId, project) {
+  const conversations = asList(
+    await chatwootRequest(env, `/api/v1/accounts/${accountId}/conversations?inbox_id=${inboxId}`, {
+      accessToken,
+    }),
+  );
+  if (conversations[0]) return conversations[0];
+  const created = await chatwootRequest(env, `/api/v1/accounts/${accountId}/conversations`, {
+    method: "POST",
+    accessToken,
+    body: {
+      inbox_id: inboxId,
+      contact_id: contactId,
+      source_id: projectRoomIdentifier(project.id),
+      status: "open",
+      additional_attributes: { certoProjectId: project.id },
+      message: { content: `Project room for ${project.name}`, private: true },
+    },
+  });
+  return created?.payload || created;
+}
+
+export async function syncProjectRooms(env, { accessToken, accountId, projects, publicOrigin }) {
+  const siteOrigin = publicOriginFrom(publicOrigin);
+  const rooms = [];
+  for (const project of normalizeCollabProjects(projects)) {
+    const inbox = await ensureProjectInbox(env, accessToken, accountId, project);
+    const inboxId = inbox?.id;
+    if (!inboxId) continue;
+    const contact = await ensureProjectContact(env, accessToken, accountId, inboxId, project);
+    const contactId = contact?.id;
+    if (!contactId) continue;
+    const conversation = await ensureProjectConversation(
+      env,
+      accessToken,
+      accountId,
+      inboxId,
+      contactId,
+      project,
+    );
+    const path = projectRoomPath(accountId, conversation);
+    rooms.push({
+      projectId: project.id,
+      name: project.name,
+      inboxId,
+      conversationId: conversationDisplayId(conversation),
+      path,
+      url: path && siteOrigin ? `${siteOrigin}${path}` : "",
+    });
+  }
+  return rooms;
 }
 
 export async function provisionCollabSso(env, input, publicOrigin = "") {
@@ -175,15 +320,39 @@ export async function provisionCollabSso(env, input, publicOrigin = "") {
 
   await chatwootRequest(env, `/platform/api/v1/accounts/${config.accountId}/account_users`, {
     method: "POST",
-    body: { user_id: userId, role: "agent" },
+    body: { user_id: userId, role: "administrator" },
   });
 
   const login = await chatwootRequest(env, `/platform/api/v1/users/${userId}/login`);
   if (!login?.url) throw new Error("Chatwoot did not return a sign-in link.");
   const siteOrigin = publicOriginFrom(publicOrigin);
+  const url = rewriteChatwootLocation(login.url, config.origin, siteOrigin || config.origin);
+
+  let rooms = [];
+  const selectedProjectId = String(input.projectId || "").trim();
+  try {
+    const tokenPayload = await chatwootRequest(env, `/platform/api/v1/users/${userId}/token`, {
+      method: "POST",
+    });
+    const accessToken = tokenPayload?.access_token;
+    if (accessToken) {
+      rooms = await syncProjectRooms(env, {
+        accessToken,
+        accountId: config.accountId,
+        projects: input.projects,
+        publicOrigin: siteOrigin,
+      });
+    }
+  } catch {
+    rooms = [];
+  }
+
+  const selected = rooms.find((room) => room.projectId === selectedProjectId) || rooms[0] || null;
   return {
-    url: rewriteChatwootLocation(login.url, config.origin, siteOrigin || config.origin),
+    url,
     userId,
+    rooms,
+    roomUrl: selected?.url || "",
   };
 }
 
