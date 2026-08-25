@@ -356,6 +356,8 @@ test("Chatwoot brand-asset paths are handled by the Worker before the SPA", () =
   const wrangler = readFileSync(resolve("wrangler.jsonc"), "utf8");
   assert.match(wrangler, /\/brand-assets\/\*/);
 });
+
+test("live shell mounts Chat Collab as a separate product on certo.work", () => {
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
   const collab = readFileSync(resolve("src/components/ChatCollabModule.tsx"), "utf8");
   assert.match(workspace, /ProductSwitcher/);
