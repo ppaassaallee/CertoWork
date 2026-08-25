@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isProjectConversation, isStandaloneConversation } from "../src/lib/conversationScope";
-import { inviteActivationPath, inviteIsExpired, inviteIsUsable } from "../src/lib/inviteLifecycle";
+import { inviteActivationPath, inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../src/lib/inviteLifecycle";
 import { kanbanColumnForStatus, statusForKanbanColumn } from "../src/lib/kanbanBoard";
 import { canDeleteProject } from "../src/lib/projectPermissions";
 import {
@@ -45,6 +45,7 @@ test("project resources reject files over 20MB and accept https links", () => {
 
 test("invite tokens expire after 14 days and used invites are not reusable", () => {
   assert.equal(inviteActivationPath("abc"), "/invite/abc");
+  assert.equal(inviteDirectoryUrl("abc"), "https://certo.work/invite/abc");
   assert.equal(inviteIsUsable({ status: "pending" }), true);
   assert.equal(inviteIsUsable({ status: "accepted" }), false);
   assert.equal(inviteIsExpired({ createdAt: Date.now() - 15 * 24 * 60 * 60 * 1000 }), true);

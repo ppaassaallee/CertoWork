@@ -64,11 +64,13 @@ test("shared workspace members can update projects they can already see", () => 
 });
 
 test("project sharing writes user ids that the rules can honor", () => {
-  assert.match(projectSurfaces, /value=\{member\.userId \|\| member\.id\}/);
-  assert.match(projectSurfaces, /visibleToUserIds: ids, sharedWithUserIds: ids/);
-  assert.match(workItems, /sharedWithUserIds: shared, visibleToUserIds:/);
+  assert.match(projectSurfaces, /collaborationShareGrant/);
+  assert.match(projectSurfaces, /withCollaboratorAccess/);
+  assert.match(workItems, /withCollaboratorAccess/);
+  assert.match(workItems, /collaborationShareGrant/);
   const explicit = ruleFn("hasExplicitUserAccess");
   assert.match(explicit, /request\.auth\.uid in data\.visibleToUserIds/);
+  assert.match(explicit, /request\.auth\.token\.email in data\.visibleToEmails/);
 });
 
 test("knowledge and document reads stay owner-scoped in rules and queries", () => {
@@ -101,6 +103,8 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(rules, /function isWorkspaceMember\(workspaceId\)/);
   assert.match(rules, /function isPortfolioViewer\(workspaceId\)/);
   assert.match(rules, /match \/workspace_members\/\{memberId\}/);
+  assert.match(rules, /isWorkspaceAdmin\(incoming\(\)\.workspaceId\)/);
+  assert.match(rules, /match \/access_requests\/\{id\}/);
   assert.match(workspace, /workspace_members/);
 });
 

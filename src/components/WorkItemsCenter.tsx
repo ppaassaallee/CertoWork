@@ -25,6 +25,10 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
+import {
+  collaborationShareGrant,
+  withCollaboratorAccess,
+} from "../lib/collaborationAccess";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, kanbanColumnForStatus, statusForKanbanColumn } from "../lib/kanbanBoard";
@@ -1702,15 +1706,17 @@ export function WorkItemsCenter({
           <select aria-label="Share item with colleague" onChange={(event) => setBulkShareId(event.target.value)} value={bulkShareId}>
             <option value="">Share with</option>
             {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
-              <option key={`share-${member.id}`} value={member.userId || member.id}>{memberName(member)}</option>
+              <option key={`share-${member.id}`} value={member.id}>{memberName(member)}</option>
             ))}
           </select>
           <button
             disabled={!bulkShareId}
             onClick={() => Promise.all(selectedBulkIds.map((id) => {
               const item = tasks.find((task) => task.id === id);
-              const shared = [...new Set([...(item?.sharedWithUserIds || []), bulkShareId])];
-              return onUpdateTask(id, { sharedWithUserIds: shared, visibleToUserIds: [...new Set([...(item?.visibleToUserIds || []), bulkShareId])] });
+              const member = workspaceMembers.find((candidate) => candidate.id === bulkShareId);
+              if (!item || !member) return Promise.resolve();
+              const grant = collaborationShareGrant(member);
+              return onUpdateTask(id, withCollaboratorAccess(item, grant));
             }))}
             type="button"
           >

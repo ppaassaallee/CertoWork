@@ -3,6 +3,11 @@ export function inviteActivationPath(token?: string | null) {
   return value ? `/invite/${encodeURIComponent(value)}` : "/";
 }
 
+export function inviteDirectoryUrl(token?: string | null, origin = "https://certo.work") {
+  const path = inviteActivationPath(token);
+  return path === "/" ? origin : `${origin}${path}`;
+}
+
 function asMillis(value: any) {
   if (!value) return 0;
   if (typeof value === "number") return value;

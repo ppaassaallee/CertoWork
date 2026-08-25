@@ -28,7 +28,7 @@ import {
   resolveInviteAuthSession,
 } from "../lib/inviteActivate";
 import { inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
-import { membershipPublicPatch } from "../lib/workspaceCollaboration";
+import { membershipPublicPatch, pendingMemberId } from "../lib/workspaceCollaboration";
 
 type Props = {
   token: string;
@@ -101,6 +101,16 @@ export function InviteActivate({ token }: Props) {
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+    }
+    const pendingId = pendingMemberId(workspaceId, invitedEmail || current.email);
+    if (pendingId && pendingId !== memberId) {
+      await updateDoc(doc(db, "workspace_members", pendingId), {
+        status: "accepted",
+        acceptedUserId: current.uid,
+        acceptedMemberId: memberId,
+        acceptedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
     }
     setNotice("Account activated. Opening Certo Work…");
     window.setTimeout(() => {

@@ -78,6 +78,91 @@ export function memberPublicLabel(member: Pick<WorkspaceMember, "alias" | "displ
   );
 }
 
+export function memberManageLabel(
+  member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
+) {
+  return (
+    normalizeAlias(member.alias) ||
+    normalizeAlias(member.displayName) ||
+    normalizeInviteEmail(member.email || member.emailLower || "") ||
+    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Teammate")
+  );
+}
+
+export function inviteManageLabel(invite: {
+  email?: string | null;
+  emailLower?: string | null;
+  displayName?: string | null;
+}) {
+  return (
+    normalizeAlias(invite.displayName) ||
+    normalizeInviteEmail(invite.email || invite.emailLower || "") ||
+    "Pending invite"
+  );
+}
+
+export function isInvitedMember(
+  member: Pick<WorkspaceMember, "status" | "userId">,
+) {
+  const status = String(member.status || "").toLowerCase();
+  return (
+    status === "invited" ||
+    status === "pending" ||
+    String(member.userId || "").startsWith("pending:")
+  );
+}
+
+export function activeDirectoryMembers(members: WorkspaceMember[] = []) {
+  return members.filter((member) => isAssignableMember(member) && !isInvitedMember(member));
+}
+
+export type PendingInviteRow = {
+  key: string;
+  email: string;
+  role?: string;
+  invite?: Record<string, any> | null;
+  member?: WorkspaceMember | null;
+  deliveryStatus?: string;
+};
+
+export function pendingInviteDirectory(
+  members: WorkspaceMember[] = [],
+  invites: Array<Record<string, any>> = [],
+): PendingInviteRow[] {
+  const rows = new Map<string, PendingInviteRow>();
+  for (const invite of invites) {
+    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
+    if (!email) continue;
+    rows.set(email, {
+      key: String(invite.id || email),
+      email,
+      role: invite.role,
+      invite,
+      member: null,
+      deliveryStatus: invite.emailDeliveryStatus,
+    });
+  }
+  for (const member of members) {
+    if (!isInvitedMember(member)) continue;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    if (!email) continue;
+    const current = rows.get(email);
+    if (current) {
+      current.member = member;
+      current.role = current.role || member.role;
+      continue;
+    }
+    rows.set(email, {
+      key: member.id || email,
+      email,
+      role: member.role,
+      invite: null,
+      member,
+    });
+  }
+  return [...rows.values()].sort((left, right) => left.email.localeCompare(right.email));
+}
+
 export function memberLabel(member: Pick<WorkspaceMember, "alias" | "displayName" | "status">) {
   return memberPublicLabel(member);
 }

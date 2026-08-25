@@ -1111,14 +1111,40 @@ service cloud.firestore {
       allow delete: if isValidId(id) && canAccessUserOwnedRecord(resource.data);
     }
 
+    match /access_requests/{id} {
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.userId == request.auth.uid ||
+        id == request.auth.uid
+      );
+      allow list: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     match /workspace_members/{memberId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)));
-      allow create, update: if isSignedIn() && (
+      allow create: if isSignedIn() && (
         incoming().userId == request.auth.uid && (
           get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
           (request.auth.token.email != null && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.members)
         ) ||
-        get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid
+        get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
+        isWorkspaceAdmin(incoming().workspaceId)
+      );
+      allow update: if isSignedIn() && (
+        incoming().userId == request.auth.uid && (
+          get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
+          (request.auth.token.email != null && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.members)
+        ) ||
+        get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
+        isWorkspaceAdmin(incoming().workspaceId) ||
+        (
+          request.auth.token.email != null &&
+          resource.data.emailLower == request.auth.token.email &&
+          incoming().workspaceId == resource.data.workspaceId
+        )
       );
       allow delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
