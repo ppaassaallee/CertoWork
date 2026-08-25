@@ -89,14 +89,14 @@ export function ChatCollabModule({ workspaceName }: Props) {
         {!loading && !configured && (
           <div className="do-collab-state" data-testid="chat-collab-setup">
             <MessageSquare size={22} />
-            <h1>Chat Collab is ready to mount</h1>
+            <h1>Chat Collab opens on certo.work</h1>
             <p>
-              This module opens your Chatwoot desk beside Certo Work. Project
-              management stays on Certo Work. Add the Chatwoot origin, platform
-              token, and account id as Cloudflare secrets, then reopen Chat Collab.
+              Switch Work and Collab in the rail. There is no collab subdomain.
+              Project management stays on Certo Work. The desk is proxied on this
+              same hostname after the private Chatwoot backend is connected.
             </p>
             <ul>
-              <li><code>CHATWOOT_URL</code> — public Chatwoot origin, e.g. https://collab.certo.work</li>
+              <li><code>CHATWOOT_URL</code> — private Chatwoot origin, reachable from Cloudflare</li>
               <li><code>CHATWOOT_PLATFORM_TOKEN</code> — Platform App access token</li>
               <li><code>CHATWOOT_ACCOUNT_ID</code> — Chatwoot account for this workspace</li>
             </ul>

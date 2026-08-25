@@ -12,7 +12,25 @@
     "run_worker_first": [
       "/api/*",
       "/__/auth/*",
-      "/mcp/*"
+      "/mcp/*",
+      "/app",
+      "/app/*",
+      "/auth",
+      "/auth/*",
+      "/cable",
+      "/cable/*",
+      "/platform/*",
+      "/survey/*",
+      "/packs/*",
+      "/vite/*",
+      "/rails/*",
+      "/omniauth/*",
+      "/super_admin/*",
+      "/installation/*",
+      "/hc/*",
+      "/webhooks/*",
+      "/public/api/*",
+      "/widget"
     ]
   },
   "routes": [

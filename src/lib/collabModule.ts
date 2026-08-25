@@ -20,5 +20,5 @@ export function chatwootOrigin(value: string) {
 }
 
 export function isConfiguredCollab(status: { configured?: boolean; origin?: string } | null) {
-  return Boolean(status?.configured && chatwootOrigin(status.origin || ""));
+  return Boolean(status?.configured);
 }

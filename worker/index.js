@@ -1,7 +1,12 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
-import { collabStatusPayload, provisionCollabSso } from "./collab.js";
+import {
+  collabStatusPayload,
+  isChatwootProxyPath,
+  provisionCollabSso,
+  proxyChatwoot,
+} from "./collab.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1322,13 +1327,13 @@ const worker = {
       return sendInviteEmail(request, env);
     }
     if (request.method === "GET" && url.pathname === "/api/collab/status") {
-      return json(collabStatusPayload(env));
+      return json(collabStatusPayload(env, url.origin));
     }
     if (request.method === "POST" && url.pathname === "/api/collab/sso") {
       try {
         const body = await readJson(request);
         await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body);
+        const result = await provisionCollabSso(env, body, url.origin);
         return json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
@@ -1336,11 +1341,14 @@ const worker = {
         return json(
           {
             error: message,
-            configured: collabStatusPayload(env).configured,
+            configured: collabStatusPayload(env, url.origin).configured,
           },
           status,
         );
       }
+    }
+    if (isChatwootProxyPath(url.pathname)) {
+      return proxyChatwoot(request, env);
     }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {

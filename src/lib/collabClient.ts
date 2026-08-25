@@ -3,6 +3,7 @@ export type CollabStatus = {
   origin: string;
   accountId: string;
   ready: boolean;
+  mount?: string;
 };
 
 export type CollabSsoResult = {
@@ -22,6 +23,7 @@ export async function loadCollabStatus(): Promise<CollabStatus> {
     origin: String(payload.origin || ""),
     accountId: String(payload.accountId || ""),
     ready: Boolean(payload.ready),
+    mount: payload.mount,
   };
 }
 

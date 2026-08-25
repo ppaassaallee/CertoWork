@@ -87,7 +87,7 @@ test("Chat Collab status is public and unconfigured by default", async () => {
     environment(),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), collabStatusPayload({}));
+  assert.deepEqual(await response.json(), collabStatusPayload({}, "https://gazelle.test"));
 });
 
 test("Chat Collab SSO requires authentication", async () => {
