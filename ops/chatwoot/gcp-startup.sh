@@ -48,6 +48,8 @@ for _ in $(seq 1 30); do
   sleep 4
 done
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml run --rm rails bundle exec rails db:chatwoot_prepare
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml stop rails sidekiq || true
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml rm -f rails sidekiq || true
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d --force-recreate --no-deps rails sidekiq
 for _ in $(seq 1 60); do
   if curl -sf -o /dev/null http://127.0.0.1:3000/; then
