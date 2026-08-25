@@ -9,8 +9,20 @@ export type CollabStatus = {
 export type CollabRoom = {
   projectId: string;
   name: string;
+  kind?: "project" | "channel";
   inboxId?: number | string;
   conversationId?: number | string;
+  lastActivityAt?: number;
+  path?: string;
+  url?: string;
+};
+
+export type CollabChannel = {
+  id: string;
+  name: string;
+  kind?: "channel";
+  inboxId?: number | string;
+  lastActivityAt?: number;
   path?: string;
   url?: string;
 };
@@ -19,6 +31,7 @@ export type CollabSsoResult = {
   url?: string;
   roomUrl?: string;
   rooms?: CollabRoom[];
+  channels?: CollabChannel[];
   error?: string;
   configured?: boolean;
 };
@@ -104,6 +117,7 @@ async function postCollab(
     url: payload.url,
     roomUrl: payload.roomUrl,
     rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
+    channels: Array.isArray(payload.channels) ? payload.channels : [],
     configured: true,
   };
 }
