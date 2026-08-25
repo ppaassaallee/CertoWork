@@ -47,7 +47,7 @@
     "CERTO_EMAIL_FROM": "support@certo.work",
     "CERTO_EMAIL_FROM_NAME": "Certo Work",
     "CERTO_EMAIL_REPLY_TO": "support@certo.work",
-    "CHATWOOT_URL": "http://136.64.233.250:3000",
+    "CHATWOOT_URL": "http://136.64.233.250.sslip.io:3000",
     "CHATWOOT_ACCOUNT_ID": "1"
   }
 }
