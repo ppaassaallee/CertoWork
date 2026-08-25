@@ -3,7 +3,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y docker.io docker-compose-v2 openssl
+apt-get install -y docker.io docker-compose-v2 openssl curl
 systemctl enable --now docker
 
 install -d -m 0755 /opt/chatwoot
@@ -49,3 +49,9 @@ for _ in $(seq 1 30); do
 done
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml run --rm rails bundle exec rails db:chatwoot_prepare
 docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d
+for _ in $(seq 1 60); do
+  if curl -sf -o /dev/null http://127.0.0.1:3000/; then
+    break
+  fi
+  sleep 5
+done
