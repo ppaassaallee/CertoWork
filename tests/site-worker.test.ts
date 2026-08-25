@@ -303,8 +303,8 @@ test("Odysseus can route an approved handoff to an existing conversation", () =>
   assert.match(instructions, /personal_home/);
 });
 
-test("voice conversation asks Odysseus for spoken replies and action plans", () => {
-  const instructions = assistantInstructions(
+test("voice conversation asks Odysseus to listen and wrap up into tasks", () => {
+  const live = assistantInstructions(
     {
       workspaceContext: {
         mode: "personal_home",
@@ -315,9 +315,21 @@ test("voice conversation asks Odysseus for spoken replies and action plans", () 
     },
     [],
   );
-  assert.match(instructions, /VOICE CONVERSATION/);
-  assert.match(instructions, /short spoken sentences/);
-  assert.match(instructions, /ends the call/);
+  assert.match(live, /VOICE CONVERSATION/);
+  assert.match(live, /quiet assistant taking notes/);
+  const wrap = assistantInstructions(
+    {
+      workspaceContext: {
+        mode: "personal_home",
+        voiceSession: true,
+        voiceWrapUp: true,
+        tasks: [],
+        projects: [],
+      },
+    },
+    [],
+  );
+  assert.match(wrap, /VOICE WRAP-UP/);
 });
 
 test("the current pasted PRD and the latest prior PRD remain available for follow-up", () => {
