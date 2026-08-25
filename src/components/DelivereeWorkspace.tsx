@@ -3899,6 +3899,7 @@ export function DelivereeWorkspace() {
       "nav-home",
       "nav-my-work",
       "nav-projects",
+      "nav-settings",
       "quick-capture",
       "new-conversation",
       "new-project",
@@ -4411,9 +4412,9 @@ export function DelivereeWorkspace() {
           </div>
         </div>
 
-        <nav className="do-nav-admin do-mobile-advanced" aria-label="Workspace administration">
+        <nav className="do-nav-admin" aria-label="Workspace administration">
           <button
-            className={`do-nav-item ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
+            className={`do-nav-item do-mobile-advanced ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
             data-testid="nav-workspace"
             onClick={() => {
               navigate("/workspace");
@@ -4437,7 +4438,7 @@ export function DelivereeWorkspace() {
             <span>{t("navSettings")}</span>
           </button>
           <button
-            className="do-nav-item"
+            className="do-nav-item do-mobile-advanced"
             data-testid="nav-help"
             onClick={() => {
               setComposer("Help me understand Certo Work navigation: ");
@@ -4591,6 +4592,18 @@ export function DelivereeWorkspace() {
             />
           </div>
           <div className="do-header-actions">
+            {mobileCore && (
+              <button
+                aria-label={t("navSettings")}
+                className={`do-icon-button ${lens.kind === "settings" ? "is-active" : ""}`}
+                data-testid="header-settings"
+                onClick={() => navigate("/settings")}
+                title={t("navSettings")}
+                type="button"
+              >
+                <Settings size={15} />
+              </button>
+            )}
             <button
               aria-label="Open command palette"
               className="do-icon-button"

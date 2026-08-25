@@ -15,6 +15,7 @@ test("mobile core keeps Home, My Work, Projects, and Notes", () => {
   assert.equal(mobileCoreTab("/my-work"), "my-work");
   assert.equal(mobileCoreTab("/projects"), "projects");
   assert.equal(mobileCoreTab("/work/projects/abc/notes"), "notes");
+  assert.equal(mobileCoreTab("/settings"), null);
 });
 
 test("mobile core sends power surfaces back to Home", () => {
@@ -23,7 +24,7 @@ test("mobile core sends power surfaces back to Home", () => {
   assert.equal(mobileCoreFallbackPath("/feedback"), "/home");
   assert.equal(mobileCoreFallbackPath("/invoices"), "/home");
   assert.equal(mobileCoreFallbackPath("/workspace"), "/home");
-  assert.equal(mobileCoreFallbackPath("/settings"), "/home");
+  assert.equal(mobileCoreFallbackPath("/settings"), null);
   assert.equal(mobileCoreFallbackPath("/more/warroom"), "/home");
   assert.equal(mobileCoreFallbackPath("/work/projects/abc/strategy"), "/work/projects/abc");
   assert.equal(mobileCoreFallbackPath("/my-work"), null);
@@ -41,6 +42,13 @@ test("mobile core hides advanced chrome in the live shell", () => {
   assert.match(workspace, /mobileCoreFallbackPath/);
   assert.match(workspace, /mobileIds/);
   assert.match(workspace, /talk-odysseus/);
+  assert.match(workspace, /header-settings/);
+  assert.match(workspace, /"nav-settings"/);
+  assert.doesNotMatch(
+    workspace,
+    /do-nav-admin do-mobile-advanced/,
+  );
+  assert.match(css, /\.do-shell\.is-mobile-core \.do-panel \{[\s\S]*width: 100%/);
   assert.match(items, /do-mobile-advanced/);
   assert.match(items, /\["title", "status", "priority", "due"\]/);
 });
