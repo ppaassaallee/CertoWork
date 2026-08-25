@@ -169,6 +169,7 @@ import {
   isPortfolioViewerMember,
   normalizeAccessEmail,
 } from "../lib/accessControl";
+import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
   DELIVEREE_SKILLS,
   defaultProjectWizardFirstAction,
@@ -1992,6 +1993,7 @@ export function DelivereeWorkspace() {
             workspaceId: workspace.id,
             userId: user.uid,
             email: user.email,
+            members: workspaceMembers,
           }),
           title:
             reviewType === "project"
@@ -2083,6 +2085,7 @@ export function DelivereeWorkspace() {
               workspaceId: workspace.id,
               userId: user.uid,
               email: user.email,
+              members: workspaceMembers,
             }),
             title: String(proposed.title || proposed.name || "Untitled").trim() || "Untitled",
             description: String(proposed.description || "").slice(0, 4000),
@@ -2233,8 +2236,16 @@ export function DelivereeWorkspace() {
     patch: Record<string, unknown>,
   ) => {
     try {
+      const current = projects.find((item) => item.id === projectId) || {};
+      const next = { ...current, ...patch };
       await updateDoc(doc(db, "projects", projectId), {
         ...patch,
+        ...buildProjectCollaboratorAccessPatch({
+          project: next,
+          members: workspaceMembers,
+          actorUserId: user?.uid || String(next.userId || ""),
+          actorEmail: user?.email || "",
+        }),
         updatedAt: serverTimestamp(),
       });
     } catch (reason) {
@@ -2473,11 +2484,16 @@ export function DelivereeWorkspace() {
 
   const inviteWorkspaceMember = async () => {
     if (!user || !workspace) return;
+    if (!canManageMembers) {
+      setNotice("Only the workspace owner or an admin can invite people.");
+      return;
+    }
     const email = normalizeInviteEmail(inviteEmail);
     if (!email || !email.includes("@")) {
       setNotice("Add a valid email to invite someone.");
       return;
     }
+    try {
     const currentMembers = [
       ...new Set([
         ...(workspace.members || []).map((item) => String(item).toLowerCase()),
@@ -2561,6 +2577,13 @@ export function DelivereeWorkspace() {
         ? `Invite sent to ${email}. They should sign in with that exact email.`
         : `Invite saved for ${email}, but no email was sent yet: ${emailWarning}. Copy the message from Pending invites and send it manually.`,
     );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Invite could not be saved: ${reason.message}`
+          : "Invite could not be saved. Check workspace access and try again.",
+      );
+    }
   };
 
   const copyInviteMessage = async (invite: any) => {
@@ -2987,6 +3010,7 @@ export function DelivereeWorkspace() {
         workspaceId: workspace.id,
         userId: user.uid,
         email: user.email,
+        members: workspaceMembers,
       }),
       title,
       normalizedTitle: title.trim().toLowerCase().replace(/\s+/g, " "),
@@ -3108,6 +3132,7 @@ export function DelivereeWorkspace() {
         workspaceId: workspace?.id || String(next.workspaceId || ""),
         userId: user?.uid || String(next.userId || ""),
         email: user?.email || "",
+        members: workspaceMembers,
       }),
       updatedAt: serverTimestamp(),
     });
@@ -5850,6 +5875,7 @@ export function DelivereeWorkspace() {
                 </div>
               </section>
 
+              {canManageMembers && (
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Invite</span>
@@ -5896,6 +5922,7 @@ export function DelivereeWorkspace() {
                   ))}
                 </div>
               </section>
+              )}
 
               {canOperateInvoiceQueue && (
               <section className="do-workspace-admin-card">

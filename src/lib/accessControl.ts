@@ -1,3 +1,5 @@
+import { collaboratorAccessFromMembers, type CollaborationMember } from "./collaborationAccess";
+
 export function normalizeAccessEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
@@ -38,11 +40,13 @@ export function buildTaskAccessPatch({
   workspaceId,
   userId,
   email,
+  members = [],
 }: {
   task?: Record<string, unknown>;
   workspaceId: string;
   userId: string;
   email?: string | null;
+  members?: CollaborationMember[];
 }) {
   const assigneeIds = Array.isArray(task?.assigneeIds)
     ? (task?.assigneeIds as unknown[]).map((item) => String(item))
@@ -56,15 +60,17 @@ export function buildTaskAccessPatch({
   const sharedWithUserIds = Array.isArray(task?.sharedWithUserIds)
     ? (task?.sharedWithUserIds as unknown[]).map((item) => String(item))
     : [];
+  const collaborators = collaboratorAccessFromMembers(members, assigneeIds);
   return {
     visibility: String(task?.visibility || "private"),
-    visibleToUserIds: unique([userId, ...explicitUserIds, ...sharedWithUserIds]),
-    visibleToEmails: unique([normalizeAccessEmail(email), ...explicitEmails]),
-    sharedWithUserIds: unique(sharedWithUserIds),
+    visibleToUserIds: unique([userId, ...explicitUserIds, ...sharedWithUserIds, ...collaborators.userIds]),
+    visibleToEmails: unique([normalizeAccessEmail(email), ...explicitEmails, ...collaborators.emails]),
+    sharedWithUserIds: unique([...sharedWithUserIds, ...collaborators.userIds]),
     assigneeIds,
     accessMemberIds: unique([
       activeWorkspaceMemberId(workspaceId, userId),
       ...assigneeIds,
+      ...collaborators.memberIds,
     ]),
   };
 }

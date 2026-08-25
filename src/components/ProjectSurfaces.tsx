@@ -70,6 +70,11 @@ import {
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
+import {
+  collaborationShareGrant,
+  shareableEmail,
+  withCollaboratorAccess,
+} from "../lib/collaborationAccess";
 import { AiRewriteButton, type RewriteFieldKind } from "./AiRewriteButton";
 import {
   ProjectTemplatesPanel,
@@ -2017,16 +2022,21 @@ export function ProjectConsolePanel({
             >
               <option value="">Share with…</option>
               {activeMembers.map((member) => (
-                <option key={`share-${member.id}`} value={member.userId || member.id}>
+                <option key={`share-${member.id}`} value={member.id}>
                   {memberName(member)}
+                  {String(member.status || "") === "invited" ? " (invited)" : ""}
                 </option>
               ))}
             </select>
             <button
               disabled={!shareMemberId}
               onClick={() => {
-                const ids = [...new Set([...(project.visibleToUserIds || []), shareMemberId])];
-                update({ visibleToUserIds: ids, sharedWithUserIds: ids });
+                const member = activeMembers.find((item) => item.id === shareMemberId);
+                if (!member) return;
+                const grant = collaborationShareGrant(member);
+                update({
+                  ...withCollaboratorAccess(project, grant),
+                });
                 setShareMemberId("");
               }}
               type="button"
@@ -2044,6 +2054,25 @@ export function ProjectConsolePanel({
             </button>
             {shareLink && <small className="do-team-share-url">{shareLink}</small>}
             </div>
+            {(() => {
+              const sharedNames = activeMembers
+                .filter((member) => {
+                  const email = shareableEmail(member);
+                  return (
+                    (Array.isArray(project.visibleToUserIds) &&
+                      project.visibleToUserIds.includes(member.userId)) ||
+                    (Array.isArray(project.sharedWithUserIds) &&
+                      project.sharedWithUserIds.includes(member.userId)) ||
+                    (Array.isArray(project.visibleToEmails) &&
+                      email &&
+                      project.visibleToEmails.includes(email))
+                  );
+                })
+                .map((member) => memberName(member));
+              return sharedNames.length ? (
+                <small>Shared with {sharedNames.join(", ")}</small>
+              ) : null;
+            })()}
           </div>
         </div>
       )}
