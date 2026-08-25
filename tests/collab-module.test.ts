@@ -337,8 +337,12 @@ test("Chatwoot HTML is branded as Certo Work and project rooms can collapse", ()
   assert.match(html, /certo-collab-brand/);
   assert.match(html, /Search project rooms/);
   assert.match(html, /data-certo-scroll-fix/);
+  assert.match(html, /data-certo-channel-children/);
+  assert.match(html, /data-certo-sidebar-nav/);
+  assert.match(html, /max-height: min\(56vh, 32rem\)/);
   assert.match(html, /Project rooms/);
-  assert.doesNotMatch(html, /#app \{ overflow: hidden; \}/);
+  assert.match(html, /Other channels/);
+  assert.match(html, /#app \{ overflow: hidden !important; \}/);
   assert.equal(isCertoCollabBrandPath("/brand-assets/logo.svg"), true);
   assert.equal(isCertoCollabBrandPath("/app"), false);
 });

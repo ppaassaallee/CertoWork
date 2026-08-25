@@ -187,7 +187,7 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
               aria-label="Search project rooms"
               data-testid="collab-room-search"
               onChange={(event) => setRoomQuery(event.target.value)}
-              placeholder="Search project rooms"
+              placeholder="Find a project room"
               type="search"
               value={roomQuery}
             />

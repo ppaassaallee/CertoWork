@@ -64,5 +64,6 @@ test("Chat Collab exposes a searchable project-room section next to other channe
   assert.match(collab, /Other channels/);
   assert.match(collab, /partitionCollabDesk/);
   assert.match(css, /do-collab-nav-scroll/);
+  assert.match(css, /do-collab-stage/);
   assert.match(css, /overflow-y: auto/);
 });

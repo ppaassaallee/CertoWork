@@ -162,7 +162,7 @@ export function normalizeCollabProjects(input) {
       id,
       name: String(item?.name || item?.title || "Project").trim() || "Project",
     });
-    if (projects.length >= 40) break;
+    if (projects.length >= 120) break;
   }
   return projects;
 }
@@ -474,18 +474,60 @@ export function isCertoCollabBrandPath(pathname) {
 }
 
 const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
-  html, body, #app { height: 100%; min-height: 0; }
-  [data-certo-scroll-fix="1"] {
+  html, body, #app {
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+  }
+  #app { overflow: hidden !important; }
+  aside.flex.flex-col,
+  aside[class*="h-full"] {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  aside nav,
+  [data-certo-sidebar-nav="1"] {
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    flex-grow: 1 !important;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: auto !important;
+    scrollbar-width: thin !important;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: block !important;
+    width: 8px;
+    height: 8px;
+  }
+  .no-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(27, 28, 29, 0.28);
+    border-radius: 8px;
+  }
+  [data-certo-scroll-fix="1"],
+  [data-certo-channel-children="1"] {
+    display: flex !important;
+    flex-direction: column;
+    max-height: min(56vh, 32rem);
     overflow-y: auto !important;
     min-height: 0 !important;
     overscroll-behavior: contain;
     touch-action: pan-y;
+    scrollbar-width: thin;
   }
   #certo-collab-channel-tools {
+    order: 0;
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px 10px 10px;
+    gap: 6px;
+    margin: 4px 0 6px;
+    padding: 8px 8px 10px;
+    background: inherit;
   }
   #certo-channel-search {
     width: 100%;
@@ -496,13 +538,18 @@ const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
     font-size: 12px;
   }
   [data-certo-section] {
-    margin: 8px 10px 4px;
+    order: 3;
+    margin: 8px 4px 4px;
     color: #6b7280;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
+  [data-certo-section="projects"] { order: 1; }
+  [data-certo-room-kind="project"] { order: 2; }
+  [data-certo-section="other"] { order: 3; }
+  [data-certo-room-kind="channel"] { order: 4; }
   [data-certo-room-kind="project"].is-certo-hidden,
   [data-certo-room-kind="project"][hidden] { display: none !important; }
 </style>
@@ -521,113 +568,137 @@ const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
   function textOf(node) {
     return String((node && node.textContent) || "").replace(/\\s+/g, " ").trim();
   }
-  function unlockOverflow(start) {
-    var current = start;
-    while (current && current !== document.documentElement) {
-      var style = window.getComputedStyle(current);
-      if (/(hidden|clip)/.test(style.overflowY) || /(hidden|clip)/.test(style.overflow)) {
-        current.style.setProperty("overflow-y", "auto", "important");
-        current.style.setProperty("min-height", "0", "important");
-        current.setAttribute("data-certo-scroll-fix", "1");
-      }
-      current = current.parentElement;
+  function isProjectRoomText(value) {
+    return /^Room\\s*·/.test(String(value || ""));
+  }
+  function rowLabel(row) {
+    var titled = row.querySelector && row.querySelector("[title]");
+    var title = (titled && titled.getAttribute("title")) || (row.getAttribute && row.getAttribute("title")) || "";
+    return String(title || textOf(row)).replace(/\\s+/g, " ").trim();
+  }
+  function pinSidebarScroller() {
+    var asides = document.querySelectorAll("aside");
+    for (var i = 0; i < asides.length; i += 1) {
+      var aside = asides[i];
+      var nav = aside.querySelector("nav");
+      if (!nav) continue;
+      aside.style.setProperty("overflow", "hidden", "important");
+      aside.style.setProperty("min-height", "0", "important");
+      nav.style.setProperty("overflow-y", "auto", "important");
+      nav.style.setProperty("min-height", "0", "important");
+      nav.style.setProperty("flex-grow", "1", "important");
+      nav.style.setProperty("scrollbar-width", "thin", "important");
+      nav.setAttribute("data-certo-sidebar-nav", "1");
     }
   }
-  function isProjectRoomText(value) {
-    return /^Room\\s*·/.test(value);
+  function listFromHeader(header) {
+    if (!header) return null;
+    var group = header.closest("li") || header.parentElement;
+    if (!group) return null;
+    var lists = group.querySelectorAll(":scope > ul");
+    return lists.length ? lists[lists.length - 1] : group.querySelector("ul");
   }
-  function findChannelsHeading() {
-    var nodes = document.querySelectorAll("button, a, h2, h3, h4, span, p, div");
+  function findChannelsList() {
+    var titled = document.querySelector('[title="Channels"][role="button"], [title="Channels"]');
+    var fromTitle = listFromHeader(titled);
+    if (fromTitle) return fromTitle;
+    var nodes = document.querySelectorAll("button, a, h2, h3, span, p, div");
     for (var i = 0; i < nodes.length; i += 1) {
-      var label = textOf(nodes[i]);
-      if (label === "Channels" || label === "Inboxes") return nodes[i];
+      var node = nodes[i];
+      if (node.closest && node.closest("#certo-collab-channel-tools")) continue;
+      var label = textOf(node);
+      if (label !== "Channels" && !/^Channels\\s+\\d+$/.test(label)) continue;
+      if (label.length > 24) continue;
+      var list = listFromHeader(node);
+      if (list) return list;
     }
     return null;
   }
-  function channelListRoot(heading) {
-    var panel = heading.closest("aside, nav, section, li, div") || heading.parentElement;
-    if (!panel) return heading.parentElement;
-    return panel.querySelector("ul, [role='list']") || panel;
+  function attachNode(parent, node, before) {
+    if (!parent || !node) return node;
+    var target = before || parent.firstChild;
+    if (node.parentNode === parent && node === target) return node;
+    var input = node.querySelector && node.querySelector("input");
+    var active = document.activeElement === input ? input : null;
+    var start = active ? active.selectionStart : 0;
+    var end = active ? active.selectionEnd : 0;
+    parent.insertBefore(node, target);
+    if (active) {
+      active.focus();
+      try { active.setSelectionRange(start, end); } catch (error) {}
+    }
+    return node;
   }
   function ensureTools(list) {
     if (!list) return null;
     var tools = document.getElementById("certo-collab-channel-tools");
-    if (tools) return tools;
-    tools = document.createElement("div");
-    tools.id = "certo-collab-channel-tools";
-    tools.innerHTML = '<label>Project rooms<input id="certo-channel-search" placeholder="Search project rooms" type="search" /></label>';
-    list.insertBefore(tools, list.firstChild);
-    var input = tools.querySelector("input");
-    input.addEventListener("input", function () {
-      filterProjectRooms(input.value);
-    });
+    if (!tools) {
+      tools = document.createElement("li");
+      tools.id = "certo-collab-channel-tools";
+      tools.innerHTML = '<label>Project rooms<input id="certo-channel-search" placeholder="Search project rooms" type="search" /></label>';
+      var input = tools.querySelector("input");
+      input.addEventListener("input", function () {
+        filterProjectRooms(input.value);
+      });
+    }
+    attachNode(list, tools, list.firstChild);
     return tools;
   }
-  function ensureSection(list, id, title, beforeNode) {
-    var existing = list.querySelector('[data-certo-section="' + id + '"]');
-    if (existing) return existing;
-    var heading = document.createElement("p");
-    heading.setAttribute("data-certo-section", id);
-    heading.textContent = title;
-    list.insertBefore(heading, beforeNode || null);
+  function ensureSection(list, id, title) {
+    var heading = list.querySelector('[data-certo-section="' + id + '"]');
+    if (!heading) {
+      heading = document.createElement("li");
+      heading.setAttribute("data-certo-section", id);
+      heading.textContent = title;
+    }
+    attachNode(list, heading, null);
     return heading;
   }
   function markRows(list) {
-    var rows = list.querySelectorAll("a, button, li");
-    var firstProject = null;
-    var firstOther = null;
+    var rows = list.querySelectorAll(":scope > li, :scope > a");
+    var hasProject = false;
+    var hasOther = false;
     for (var i = 0; i < rows.length; i += 1) {
       var row = rows[i];
-      if (row.closest("#certo-collab-channel-tools") || row.hasAttribute("data-certo-section")) continue;
-      var label = textOf(row);
+      if (row.id === "certo-collab-channel-tools" || row.hasAttribute("data-certo-section")) continue;
+      var label = rowLabel(row);
       if (!label || label === "Channels" || label === "Inboxes" || label.length > 90) continue;
+      if (label === "Project rooms" || label === "Other channels") continue;
       if (isProjectRoomText(label)) {
         row.setAttribute("data-certo-room-kind", "project");
-        if (!firstProject) firstProject = row;
-      } else if (row.getAttribute("href") || row.closest("ul, [role='list']")) {
-        if (label === "Project rooms" || label === "Other channels") continue;
+        hasProject = true;
+      } else {
         row.setAttribute("data-certo-room-kind", "channel");
-        if (!firstOther) firstOther = row;
+        hasOther = true;
       }
     }
-    if (firstProject) ensureSection(list, "projects", "Project rooms", firstProject);
-    if (firstOther) ensureSection(list, "other", "Other channels", firstOther);
+    if (hasProject) ensureSection(list, "projects", "Project rooms");
+    if (hasOther) ensureSection(list, "other", "Other channels");
   }
   function filterProjectRooms(query) {
     var needle = String(query || "").trim().toLowerCase();
     var rows = document.querySelectorAll('[data-certo-room-kind="project"]');
     for (var i = 0; i < rows.length; i += 1) {
       var row = rows[i];
-      var match = !needle || textOf(row).toLowerCase().indexOf(needle) !== -1;
+      var match = !needle || rowLabel(row).toLowerCase().indexOf(needle) !== -1;
       row.classList.toggle("is-certo-hidden", !match);
       if (match) row.removeAttribute("hidden");
       else row.setAttribute("hidden", "hidden");
     }
   }
   function enhanceChannels() {
-    var heading = findChannelsHeading();
-    if (!heading) return;
-    unlockOverflow(heading);
-    var list = channelListRoot(heading);
+    pinSidebarScroller();
+    var list = findChannelsList();
     if (!list) return;
-    unlockOverflow(list);
-    var isList = list.tagName === "UL" || list.getAttribute("role") === "list";
-    if (isList || list.querySelector("[data-certo-room-kind], a, button")) {
-      list.style.minHeight = "0";
-      list.style.overflowY = "auto";
-      list.setAttribute("data-certo-channel-list", "1");
-      if (isList) {
-        list.style.display = "flex";
-        list.style.flexDirection = "column";
-      }
-      ensureTools(list);
-      markRows(list);
-      var input = document.getElementById("certo-channel-search");
-      if (input) filterProjectRooms(input.value);
-    }
-    if (/inbox|settings|channel/i.test(location.pathname)) {
-      unlockOverflow(document.querySelector("main") || document.body);
-    }
+    list.setAttribute("data-certo-channel-children", "1");
+    list.setAttribute("data-certo-scroll-fix", "1");
+    list.style.setProperty("max-height", "min(56vh, 32rem)", "important");
+    list.style.setProperty("overflow-y", "auto", "important");
+    list.style.setProperty("min-height", "0", "important");
+    ensureTools(list);
+    markRows(list);
+    var input = document.getElementById("certo-channel-search");
+    if (input) filterProjectRooms(input.value);
   }
   var skipArmed = true;
   function skipOnboarding() {
