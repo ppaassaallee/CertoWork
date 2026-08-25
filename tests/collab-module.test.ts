@@ -335,7 +335,10 @@ test("Chatwoot HTML is branded as Certo Work and project rooms can collapse", ()
   assert.match(html, /"INSTALLATION_NAME":"Certo Work"/);
   assert.match(html, /\/certo-mark\.svg/);
   assert.match(html, /certo-collab-brand/);
-  assert.match(html, /data-certo-project-room/);
+  assert.match(html, /Search project rooms/);
+  assert.match(html, /data-certo-scroll-fix/);
+  assert.match(html, /Project rooms/);
+  assert.doesNotMatch(html, /#app \{ overflow: hidden; \}/);
   assert.equal(isCertoCollabBrandPath("/brand-assets/logo.svg"), true);
   assert.equal(isCertoCollabBrandPath("/app"), false);
 });
@@ -369,6 +372,7 @@ test("live shell mounts Chat Collab as a separate product on certo.work", () => 
   assert.match(collab, /data-testid="chat-collab-setup"/);
   assert.match(collab, /data-testid="collab-room-select"/);
   assert.match(collab, /data-testid="collab-rooms-collapse"/);
+  assert.match(collab, /data-testid="collab-room-search"/);
   assert.match(collab, /syncCollabRooms/);
   assert.doesNotMatch(collab, /1800/);
   assert.match(collab, /certo\.work/);

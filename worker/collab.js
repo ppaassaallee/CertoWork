@@ -276,37 +276,81 @@ async function ensureProjectConversation(env, accessToken, accountId, inboxId, c
   return created?.payload || created;
 }
 
+function conversationActivityMs(conversation) {
+  const value =
+    conversation?.last_activity_at ??
+    conversation?.timestamp ??
+    conversation?.created_at ??
+    conversation?.updated_at;
+  if (value == null || value === "") return 0;
+  if (typeof value === "number") return value > 1e12 ? value : value * 1000;
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function inboxIsProjectRoom(inbox) {
+  const attrs = inbox?.additional_attributes || inbox?.channel?.additional_attributes || {};
+  const name = String(inbox?.name || "");
+  return Boolean(attrs.certoProjectId || attrs.certoRoom) || name.startsWith("Room ·");
+}
+
+export function otherChannelPath(accountId, inboxId) {
+  if (!accountId || !inboxId) return "";
+  return `/app/accounts/${accountId}/inbox/${inboxId}`;
+}
+
 export async function syncProjectRooms(env, { accessToken, accountId, projects, publicOrigin }) {
   const siteOrigin = publicOriginFrom(publicOrigin);
   const list = normalizeCollabProjects(projects);
-  if (!list.length) return [];
   const inboxes = await loadAccountInboxes(env, accessToken, accountId);
-  const rooms = await mapPool(list, 5, async (project) => {
-    const inbox = await ensureProjectInbox(env, accessToken, accountId, project, inboxes);
-    const inboxId = inbox?.id;
-    if (!inboxId) return null;
-    const contact = await ensureProjectContact(env, accessToken, accountId, inboxId, project);
-    const contactId = contact?.id;
-    if (!contactId) return null;
-    const conversation = await ensureProjectConversation(
-      env,
-      accessToken,
-      accountId,
-      inboxId,
-      contactId,
-      project,
-    );
-    const path = projectRoomPath(accountId, conversation);
-    return {
-      projectId: project.id,
-      name: project.name,
-      inboxId,
-      conversationId: conversationDisplayId(conversation),
-      path,
-      url: path && siteOrigin ? `${siteOrigin}${path}` : "",
-    };
-  });
-  return rooms.filter(Boolean);
+  const rooms = list.length
+    ? (
+        await mapPool(list, 5, async (project) => {
+          const inbox = await ensureProjectInbox(env, accessToken, accountId, project, inboxes);
+          const inboxId = inbox?.id;
+          if (!inboxId) return null;
+          const contact = await ensureProjectContact(env, accessToken, accountId, inboxId, project);
+          const contactId = contact?.id;
+          if (!contactId) return null;
+          const conversation = await ensureProjectConversation(
+            env,
+            accessToken,
+            accountId,
+            inboxId,
+            contactId,
+            project,
+          );
+          const path = projectRoomPath(accountId, conversation);
+          return {
+            projectId: project.id,
+            name: project.name,
+            kind: "project",
+            inboxId,
+            conversationId: conversationDisplayId(conversation),
+            lastActivityAt: conversationActivityMs(conversation),
+            path,
+            url: path && siteOrigin ? `${siteOrigin}${path}` : "",
+          };
+        })
+      ).filter(Boolean)
+    : [];
+  const channels = inboxes
+    .filter((inbox) => !inboxIsProjectRoom(inbox))
+    .map((inbox) => {
+      const path = otherChannelPath(accountId, inbox.id);
+      return {
+        id: String(inbox.id),
+        name: String(inbox.name || "Channel"),
+        kind: "channel",
+        inboxId: inbox.id,
+        lastActivityAt: conversationActivityMs(inbox),
+        path,
+        url: path && siteOrigin ? `${siteOrigin}${path}` : "",
+      };
+    });
+  rooms.sort((left, right) => (right.lastActivityAt || 0) - (left.lastActivityAt || 0));
+  channels.sort((left, right) => (right.lastActivityAt || 0) - (left.lastActivityAt || 0));
+  return { rooms, channels };
 }
 
 async function applyPlatformProfile(env, { userId, accountId, displayName, company }) {
@@ -385,6 +429,7 @@ export async function provisionCollabSso(env, input, publicOrigin = "", options 
   });
 
   let rooms = [];
+  let channels = [];
   const selectedProjectId = String(input.projectId || "").trim();
   const syncRooms = options.syncRooms !== false;
   if (syncRooms) {
@@ -394,15 +439,18 @@ export async function provisionCollabSso(env, input, publicOrigin = "", options 
       });
       const accessToken = tokenPayload?.access_token;
       if (accessToken) {
-        rooms = await syncProjectRooms(env, {
+        const desk = await syncProjectRooms(env, {
           accessToken,
           accountId: config.accountId,
           projects: input.projects,
           publicOrigin: siteOrigin,
         });
+        rooms = desk.rooms || [];
+        channels = desk.channels || [];
       }
     } catch {
       rooms = [];
+      channels = [];
     }
   }
 
@@ -411,6 +459,7 @@ export async function provisionCollabSso(env, input, publicOrigin = "", options 
     url,
     userId,
     rooms,
+    channels,
     roomUrl: selected?.url || "",
   };
 }
@@ -425,10 +474,37 @@ export function isCertoCollabBrandPath(pathname) {
 }
 
 const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
-  [data-certo-project-room="1"] { display: none !important; }
-  .onboarding-wrap, .auth--onboarding, [data-testid="onboarding"], .installation-onboarding {
-    display: none !important;
+  html, body, #app { height: 100%; min-height: 0; }
+  [data-certo-scroll-fix="1"] {
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
+  #certo-collab-channel-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px 10px;
+  }
+  #certo-channel-search {
+    width: 100%;
+    height: 32px;
+    border: 1px solid #d9d8d4;
+    border-radius: 8px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  [data-certo-section] {
+    margin: 8px 10px 4px;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  [data-certo-room-kind="project"].is-certo-hidden,
+  [data-certo-room-kind="project"][hidden] { display: none !important; }
 </style>
 <script id="certo-collab-brand-script">
 (function () {
@@ -445,37 +521,144 @@ const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
   function textOf(node) {
     return String((node && node.textContent) || "").replace(/\\s+/g, " ").trim();
   }
-  function isProjectRoom(node) {
-    return /^Room\\s*·/.test(textOf(node));
-  }
-  function hideProjectRooms() {
-    const nodes = document.querySelectorAll("a, button, li, span, p");
-    for (const node of nodes) {
-      if (node.childElementCount > 6) continue;
-      if (!isProjectRoom(node)) continue;
-      const row = node.closest("a, li, button") || node;
-      row.setAttribute("data-certo-project-room", "1");
+  function unlockOverflow(start) {
+    var current = start;
+    while (current && current !== document.documentElement) {
+      var style = window.getComputedStyle(current);
+      if (/(hidden|clip)/.test(style.overflowY) || /(hidden|clip)/.test(style.overflow)) {
+        current.style.setProperty("overflow-y", "auto", "important");
+        current.style.setProperty("min-height", "0", "important");
+        current.setAttribute("data-certo-scroll-fix", "1");
+      }
+      current = current.parentElement;
     }
   }
+  function isProjectRoomText(value) {
+    return /^Room\\s*·/.test(value);
+  }
+  function findChannelsHeading() {
+    var nodes = document.querySelectorAll("button, a, h2, h3, h4, span, p, div");
+    for (var i = 0; i < nodes.length; i += 1) {
+      var label = textOf(nodes[i]);
+      if (label === "Channels" || label === "Inboxes") return nodes[i];
+    }
+    return null;
+  }
+  function channelListRoot(heading) {
+    var panel = heading.closest("aside, nav, section, li, div") || heading.parentElement;
+    if (!panel) return heading.parentElement;
+    return panel.querySelector("ul, [role='list']") || panel;
+  }
+  function ensureTools(list) {
+    if (!list) return null;
+    var tools = document.getElementById("certo-collab-channel-tools");
+    if (tools) return tools;
+    tools = document.createElement("div");
+    tools.id = "certo-collab-channel-tools";
+    tools.innerHTML = '<label>Project rooms<input id="certo-channel-search" placeholder="Search project rooms" type="search" /></label>';
+    list.insertBefore(tools, list.firstChild);
+    var input = tools.querySelector("input");
+    input.addEventListener("input", function () {
+      filterProjectRooms(input.value);
+    });
+    return tools;
+  }
+  function ensureSection(list, id, title, beforeNode) {
+    var existing = list.querySelector('[data-certo-section="' + id + '"]');
+    if (existing) return existing;
+    var heading = document.createElement("p");
+    heading.setAttribute("data-certo-section", id);
+    heading.textContent = title;
+    list.insertBefore(heading, beforeNode || null);
+    return heading;
+  }
+  function markRows(list) {
+    var rows = list.querySelectorAll("a, button, li");
+    var firstProject = null;
+    var firstOther = null;
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i];
+      if (row.closest("#certo-collab-channel-tools") || row.hasAttribute("data-certo-section")) continue;
+      var label = textOf(row);
+      if (!label || label === "Channels" || label === "Inboxes" || label.length > 90) continue;
+      if (isProjectRoomText(label)) {
+        row.setAttribute("data-certo-room-kind", "project");
+        if (!firstProject) firstProject = row;
+      } else if (row.getAttribute("href") || row.closest("ul, [role='list']")) {
+        if (label === "Project rooms" || label === "Other channels") continue;
+        row.setAttribute("data-certo-room-kind", "channel");
+        if (!firstOther) firstOther = row;
+      }
+    }
+    if (firstProject) ensureSection(list, "projects", "Project rooms", firstProject);
+    if (firstOther) ensureSection(list, "other", "Other channels", firstOther);
+  }
+  function filterProjectRooms(query) {
+    var needle = String(query || "").trim().toLowerCase();
+    var rows = document.querySelectorAll('[data-certo-room-kind="project"]');
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i];
+      var match = !needle || textOf(row).toLowerCase().indexOf(needle) !== -1;
+      row.classList.toggle("is-certo-hidden", !match);
+      if (match) row.removeAttribute("hidden");
+      else row.setAttribute("hidden", "hidden");
+    }
+  }
+  function enhanceChannels() {
+    var heading = findChannelsHeading();
+    if (!heading) return;
+    unlockOverflow(heading);
+    var list = channelListRoot(heading);
+    if (!list) return;
+    unlockOverflow(list);
+    var isList = list.tagName === "UL" || list.getAttribute("role") === "list";
+    if (isList || list.querySelector("[data-certo-room-kind], a, button")) {
+      list.style.minHeight = "0";
+      list.style.overflowY = "auto";
+      list.setAttribute("data-certo-channel-list", "1");
+      if (isList) {
+        list.style.display = "flex";
+        list.style.flexDirection = "column";
+      }
+      ensureTools(list);
+      markRows(list);
+      var input = document.getElementById("certo-channel-search");
+      if (input) filterProjectRooms(input.value);
+    }
+    if (/inbox|settings|channel/i.test(location.pathname)) {
+      unlockOverflow(document.querySelector("main") || document.body);
+    }
+  }
+  var skipArmed = true;
   function skipOnboarding() {
-    const buttons = document.querySelectorAll("button, a");
-    for (const button of buttons) {
-      if (/^(skip|continue to dashboard|later)$/i.test(textOf(button))) {
-        button.click();
+    if (!skipArmed) return;
+    var buttons = document.querySelectorAll("button, a");
+    for (var i = 0; i < buttons.length; i += 1) {
+      if (/^(skip|continue to dashboard|later)$/i.test(textOf(buttons[i]))) {
+        skipArmed = false;
+        buttons[i].click();
         break;
       }
     }
   }
-  const apply = function () {
-    hideProjectRooms();
+  var timer = 0;
+  function apply() {
+    enhanceChannels();
     skipOnboarding();
-  };
+  }
+  function schedule() {
+    if (timer) return;
+    timer = window.setTimeout(function () {
+      timer = 0;
+      apply();
+    }, 120);
+  }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", apply);
   } else {
     apply();
   }
-  new MutationObserver(apply).observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
 })();
 </script>`;
 
