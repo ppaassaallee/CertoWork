@@ -184,12 +184,31 @@ export function projectRoomPath(accountId, conversation) {
   return `/app/accounts/${accountId}/conversations/${displayId}`;
 }
 
-async function ensureProjectInbox(env, accessToken, accountId, project) {
-  const inboxes = asList(await chatwootRequest(env, `/api/v1/accounts/${accountId}/inboxes`, { accessToken }));
-  const existing = inboxes.find((inbox) => {
-    const attrs = inbox?.additional_attributes || inbox?.channel?.additional_attributes || {};
-    return attrs.certoProjectId === project.id || inbox?.name === projectRoomName(project.name);
+async function mapPool(items, limit, mapper) {
+  const output = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length || 1)) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      output[index] = await mapper(items[index], index);
+    }
   });
+  await Promise.all(workers);
+  return output;
+}
+
+async function loadAccountInboxes(env, accessToken, accountId) {
+  return asList(await chatwootRequest(env, `/api/v1/accounts/${accountId}/inboxes`, { accessToken }));
+}
+
+function inboxMatchesProject(inbox, project) {
+  const attrs = inbox?.additional_attributes || inbox?.channel?.additional_attributes || {};
+  return attrs.certoProjectId === project.id || inbox?.name === projectRoomName(project.name);
+}
+
+async function ensureProjectInbox(env, accessToken, accountId, project, inboxes) {
+  const existing = (inboxes || []).find((inbox) => inboxMatchesProject(inbox, project));
   if (existing?.id) return existing;
   const created = await chatwootRequest(env, `/api/v1/accounts/${accountId}/inboxes`, {
     method: "POST",
@@ -206,7 +225,9 @@ async function ensureProjectInbox(env, accessToken, accountId, project) {
       },
     },
   });
-  return created?.payload || created;
+  const inbox = created?.payload || created;
+  if (inbox?.id) inboxes.push(inbox);
+  return inbox;
 }
 
 async function ensureProjectContact(env, accessToken, accountId, inboxId, project) {
@@ -257,14 +278,16 @@ async function ensureProjectConversation(env, accessToken, accountId, inboxId, c
 
 export async function syncProjectRooms(env, { accessToken, accountId, projects, publicOrigin }) {
   const siteOrigin = publicOriginFrom(publicOrigin);
-  const rooms = [];
-  for (const project of normalizeCollabProjects(projects)) {
-    const inbox = await ensureProjectInbox(env, accessToken, accountId, project);
+  const list = normalizeCollabProjects(projects);
+  if (!list.length) return [];
+  const inboxes = await loadAccountInboxes(env, accessToken, accountId);
+  const rooms = await mapPool(list, 5, async (project) => {
+    const inbox = await ensureProjectInbox(env, accessToken, accountId, project, inboxes);
     const inboxId = inbox?.id;
-    if (!inboxId) continue;
+    if (!inboxId) return null;
     const contact = await ensureProjectContact(env, accessToken, accountId, inboxId, project);
     const contactId = contact?.id;
-    if (!contactId) continue;
+    if (!contactId) return null;
     const conversation = await ensureProjectConversation(
       env,
       accessToken,
@@ -274,19 +297,44 @@ export async function syncProjectRooms(env, { accessToken, accountId, projects, 
       project,
     );
     const path = projectRoomPath(accountId, conversation);
-    rooms.push({
+    return {
       projectId: project.id,
       name: project.name,
       inboxId,
       conversationId: conversationDisplayId(conversation),
       path,
       url: path && siteOrigin ? `${siteOrigin}${path}` : "",
-    });
-  }
-  return rooms;
+    };
+  });
+  return rooms.filter(Boolean);
 }
 
-export async function provisionCollabSso(env, input, publicOrigin = "") {
+async function applyPlatformProfile(env, { userId, accountId, displayName, company }) {
+  const name = String(displayName || company || "Certo Work").trim();
+  const accountName = String(company || name).trim();
+  try {
+    await chatwootRequest(env, `/platform/api/v1/users/${userId}`, {
+      method: "PATCH",
+      body: {
+        name,
+        display_name: name,
+        ui_settings: { is_onboarding_viewed: true, onboarded: true },
+      },
+    });
+  } catch {
+    // Profile branding is best-effort; SSO still continues.
+  }
+  try {
+    await chatwootRequest(env, `/platform/api/v1/accounts/${accountId}`, {
+      method: "PATCH",
+      body: { name: accountName || "Certo Work" },
+    });
+  } catch {
+    // Account rename is best-effort.
+  }
+}
+
+export async function provisionCollabSso(env, input, publicOrigin = "", options = {}) {
   const config = chatwootConfig(env);
   if (!config.configured) {
     const error = new Error("Chat Collab is not configured.");
@@ -296,6 +344,7 @@ export async function provisionCollabSso(env, input, publicOrigin = "") {
   }
   const email = String(input.email || "").trim().toLowerCase();
   const displayName = String(input.displayName || email || "Certo Work").trim();
+  const company = String(input.company || "").trim();
   if (!email) {
     const error = new Error("A signed-in email is required for Chat Collab.");
     error.status = 400;
@@ -312,6 +361,7 @@ export async function provisionCollabSso(env, input, publicOrigin = "") {
       custom_attributes: {
         certoUserId: input.userId || "",
         certoWorkspaceId: input.workspaceId || "",
+        certoCompany: company,
       },
     },
   });
@@ -327,24 +377,33 @@ export async function provisionCollabSso(env, input, publicOrigin = "") {
   if (!login?.url) throw new Error("Chatwoot did not return a sign-in link.");
   const siteOrigin = publicOriginFrom(publicOrigin);
   const url = rewriteChatwootLocation(login.url, config.origin, siteOrigin || config.origin);
+  await applyPlatformProfile(env, {
+    userId,
+    accountId: config.accountId,
+    displayName,
+    company,
+  });
 
   let rooms = [];
   const selectedProjectId = String(input.projectId || "").trim();
-  try {
-    const tokenPayload = await chatwootRequest(env, `/platform/api/v1/users/${userId}/token`, {
-      method: "POST",
-    });
-    const accessToken = tokenPayload?.access_token;
-    if (accessToken) {
-      rooms = await syncProjectRooms(env, {
-        accessToken,
-        accountId: config.accountId,
-        projects: input.projects,
-        publicOrigin: siteOrigin,
+  const syncRooms = options.syncRooms !== false;
+  if (syncRooms) {
+    try {
+      const tokenPayload = await chatwootRequest(env, `/platform/api/v1/users/${userId}/token`, {
+        method: "POST",
       });
+      const accessToken = tokenPayload?.access_token;
+      if (accessToken) {
+        rooms = await syncProjectRooms(env, {
+          accessToken,
+          accountId: config.accountId,
+          projects: input.projects,
+          publicOrigin: siteOrigin,
+        });
+      }
+    } catch {
+      rooms = [];
     }
-  } catch {
-    rooms = [];
   }
 
   const selected = rooms.find((room) => room.projectId === selectedProjectId) || rooms[0] || null;
@@ -354,6 +413,85 @@ export async function provisionCollabSso(env, input, publicOrigin = "") {
     rooms,
     roomUrl: selected?.url || "",
   };
+}
+
+export function isCertoCollabBrandPath(pathname) {
+  const path = String(pathname || "");
+  return (
+    path === "/brand-assets/logo.svg" ||
+    path === "/brand-assets/logo_dark.svg" ||
+    path === "/brand-assets/logo_thumbnail.svg"
+  );
+}
+
+const COLLAB_BRAND_HEAD = `<style id="certo-collab-brand">
+  [data-certo-project-room="1"] { display: none !important; }
+  .onboarding-wrap, .auth--onboarding, [data-testid="onboarding"], .installation-onboarding {
+    display: none !important;
+  }
+</style>
+<script id="certo-collab-brand-script">
+(function () {
+  try {
+    if (window.globalConfig) {
+      window.globalConfig.INSTALLATION_NAME = "Certo Work";
+      window.globalConfig.BRAND_NAME = "Certo Work";
+      window.globalConfig.LOGO = "/certo-mark.svg";
+      window.globalConfig.LOGO_DARK = "/certo-mark.svg";
+      window.globalConfig.LOGO_THUMBNAIL = "/certo-mark.svg";
+      window.globalConfig.BRAND_URL = "https://certo.work";
+    }
+  } catch (error) {}
+  function textOf(node) {
+    return String((node && node.textContent) || "").replace(/\\s+/g, " ").trim();
+  }
+  function isProjectRoom(node) {
+    return /^Room\\s*·/.test(textOf(node));
+  }
+  function hideProjectRooms() {
+    const nodes = document.querySelectorAll("a, button, li, span, p");
+    for (const node of nodes) {
+      if (node.childElementCount > 6) continue;
+      if (!isProjectRoom(node)) continue;
+      const row = node.closest("a, li, button") || node;
+      row.setAttribute("data-certo-project-room", "1");
+    }
+  }
+  function skipOnboarding() {
+    const buttons = document.querySelectorAll("button, a");
+    for (const button of buttons) {
+      if (/^(skip|continue to dashboard|later)$/i.test(textOf(button))) {
+        button.click();
+        break;
+      }
+    }
+  }
+  const apply = function () {
+    hideProjectRooms();
+    skipOnboarding();
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", apply);
+  } else {
+    apply();
+  }
+  new MutationObserver(apply).observe(document.documentElement, { childList: true, subtree: true });
+})();
+</script>`;
+
+export function applyCollabBranding(html) {
+  let next = String(html || "");
+  next = next.replace(/<title>\s*Chatwoot\s*<\/title>/i, "<title>Certo Work</title>");
+  next = next.replace(/"INSTALLATION_NAME":"Chatwoot"/g, '"INSTALLATION_NAME":"Certo Work"');
+  next = next.replace(/"BRAND_NAME":"Chatwoot"/g, '"BRAND_NAME":"Certo Work"');
+  next = next.replace(/"LOGO":"\/brand-assets\/logo\.svg"/g, '"LOGO":"/certo-mark.svg"');
+  next = next.replace(/"LOGO_DARK":"\/brand-assets\/logo_dark\.svg"/g, '"LOGO_DARK":"/certo-mark.svg"');
+  next = next.replace(/"LOGO_THUMBNAIL":"\/brand-assets\/logo_thumbnail\.svg"/g, '"LOGO_THUMBNAIL":"/certo-mark.svg"');
+  next = next.replace(/href="\/brand-assets\/logo_thumbnail\.svg"/g, 'href="/certo-mark.svg"');
+  if (next.includes("</head>") && !next.includes('id="certo-collab-brand"')) {
+    next = next.replace("</head>", `${COLLAB_BRAND_HEAD}</head>`);
+  }
+  return next;
 }
 
 function shouldRewriteChatwootBody(contentType) {
@@ -454,10 +592,12 @@ export async function proxyChatwoot(request, env) {
     });
   }
 
-  const text = await upstreamResponse.text();
+  const text = applyCollabBranding(
+    rewriteChatwootPublicUrl(await upstreamResponse.text(), config.origin, incoming.origin),
+  );
   responseHeaders.delete("content-encoding");
   responseHeaders.delete("content-length");
-  return new Response(rewriteChatwootPublicUrl(text, config.origin, incoming.origin), {
+  return new Response(text, {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,

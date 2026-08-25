@@ -4,6 +4,8 @@ import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkl
 import { useAuth } from "./lib/AuthContext";
 import { googleSignInBrowserAdvice, preferredGoogleSignInMethod } from "./lib/authFlow";
 import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
+import { PlatformOnboardingModal } from "./components/PlatformOnboardingModal";
+import { CertoMark } from "./components/CertoMark";
 import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
 import { PublicInvoicePortal } from "./components/PublicInvoicePortal";
@@ -101,16 +103,7 @@ function SignIn() {
       <header>
         <div className="do-brand">
           <span className="do-logo">
-            <svg aria-hidden="true" viewBox="0 0 32 32">
-              <path
-                d="M24 7H12.5A5.5 5.5 0 0 0 7 12.5v7A5.5 5.5 0 0 0 12.5 25H24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="butt"
-                strokeLinejoin="round"
-                strokeWidth="7"
-              />
-            </svg>
+            <CertoMark size={22} />
           </span>
           <span><strong>Certo Work</strong><small>Think. Choose. Move.</small></span>
         </div>
@@ -331,7 +324,9 @@ function WorkspaceRecovery() {
 
   return (
     <main className="do-recovery">
-      <span className="do-logo">C</span>
+      <span className="do-logo">
+        <CertoMark size={18} />
+      </span>
       <h1>{workspaceLoading ? "Opening your workspace…" : "We couldn’t open your workspace."}</h1>
       <p>{workspaceError || "This should only take a few seconds. You can retry without losing any data."}</p>
       <div>
@@ -382,7 +377,15 @@ export default function App() {
     return <PublicAppleWidget token={widgetToken} />;
   }
   if (loading) {
-    return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
+    return (
+      <div className="do-loading">
+        <span className="do-logo">
+          <CertoMark size={18} />
+        </span>
+        <Loader2 className="spin" size={18} />
+        <p>Opening Certo Work…</p>
+      </div>
+    );
   }
   if (inviteToken) {
     return <InviteActivate token={inviteToken} />;
@@ -392,6 +395,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <PlatformOnboardingModal />
       <Routes>
         <Route path="*" element={<DelivereeWorkspace />} />
       </Routes>

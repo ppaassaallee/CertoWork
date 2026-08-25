@@ -4,6 +4,7 @@ import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
 import {
   collabStatusPayload,
   isChatwootProxyPath,
+  isCertoCollabBrandPath,
   provisionCollabSso,
   proxyChatwoot,
 } from "./collab.js";
@@ -1333,7 +1334,7 @@ const worker = {
       try {
         const body = await readJson(request);
         await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body, url.origin);
+        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: false });
         return json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
@@ -1346,6 +1347,27 @@ const worker = {
           status,
         );
       }
+    }
+    if (request.method === "POST" && url.pathname === "/api/collab/rooms") {
+      try {
+        const body = await readJson(request);
+        await authorize(request, body, env);
+        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: true });
+        return json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
+        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
+        return json(
+          {
+            error: message,
+            configured: collabStatusPayload(env, url.origin).configured,
+          },
+          status,
+        );
+      }
+    }
+    if (request.method === "GET" && isCertoCollabBrandPath(url.pathname)) {
+      return serveAsset(new Request(new URL("/certo-mark.svg", request.url), request), env);
     }
     if (isChatwootProxyPath(url.pathname)) {
       return proxyChatwoot(request, env);
