@@ -4,9 +4,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  creatorAssigneePatch,
   filterMyWorkTasks,
   isAssignedToActor,
-  isMyWorkInboxItem,
+  needsCreatorAssigneeRestore,
   withCreatorAssignee,
 } from "../src/lib/myWorkItems";
 
@@ -34,13 +35,20 @@ const agustin = {
   status: "active",
 };
 
-test("Assigned to me only includes items where this user is an assignee", () => {
+test("Assigned keeps items I created even when they were stored without assignees", () => {
   const assigned = {
     id: "mine",
     title: "TASK-1",
     assigneeIds: ["ws_user-alejandro"],
     assignees: ["Alejandro"],
     createdBy: "user-alejandro",
+  };
+  const myUnassigned = {
+    id: "errand",
+    title: "Buy milk",
+    assigneeIds: [],
+    createdBy: "user-alejandro",
+    userId: "user-alejandro",
   };
   const unassigned = {
     id: "open",
@@ -65,18 +73,21 @@ test("Assigned to me only includes items where this user is an assignee", () => 
   assert.equal(isAssignedToActor(teammate, actor, [alejandro, agustin]), false);
 
   const assignedTab = filterMyWorkTasks(
-    [assigned, unassigned, teammate],
+    [assigned, myUnassigned, unassigned, teammate],
     "assigned",
     actor,
     [alejandro, agustin],
   );
   assert.deepEqual(
-    assignedTab.map((item) => item.id),
-    ["mine"],
+    assignedTab.map((item) => item.id).sort(),
+    ["errand", "mine"],
   );
+  assert.equal(assignedTab.includes(myUnassigned), true);
+  assert.equal(assignedTab.includes(unassigned), false);
+  assert.equal(assignedTab.includes(teammate), false);
 });
 
-test("unassigned items I created land in Inbox, not Assigned", () => {
+test("My Work filtering never mutates or drops the source record object", () => {
   const capture = {
     id: "errand",
     title: "Buy milk",
@@ -84,15 +95,9 @@ test("unassigned items I created land in Inbox, not Assigned", () => {
     userId: "user-alejandro",
     assigneeIds: [],
   };
-  assert.equal(isMyWorkInboxItem(capture, actor, [alejandro]), true);
-  assert.deepEqual(
-    filterMyWorkTasks([capture], "assigned", actor, [alejandro]).map((item) => item.id),
-    [],
-  );
-  assert.deepEqual(
-    filterMyWorkTasks([capture], "inbox", actor, [alejandro]).map((item) => item.id),
-    ["errand"],
-  );
+  const [visible] = filterMyWorkTasks([capture], "assigned", actor, [alejandro]);
+  assert.equal(visible, capture);
+  assert.equal(needsCreatorAssigneeRestore(capture, actor), true);
 });
 
 test("creating an item without assignees assigns the creator", () => {
@@ -143,7 +148,39 @@ test("waiting tab only shows assigned waiting-for items", () => {
 
 test("My Work passes a filtered task list instead of the whole workspace", () => {
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  const helpers = readFileSync(resolve("src/lib/myWorkItems.ts"), "utf8");
   assert.match(workspace, /filterMyWorkTasks/);
   assert.match(workspace, /tasks=\{myWorkTasks\}/);
   assert.match(workspace, /withCreatorAssignee/);
+  assert.match(workspace, /needsCreatorAssigneeRestore/);
+  assert.match(workspace, /updateDoc\(doc\(db, "tasks", item\.id\)/);
+  assert.match(helpers, /My Work is a view\. It never deletes records\./);
+  assert.doesNotMatch(helpers, /deleteDoc/);
+});
+
+test("self-created items without createdBy still belong in Assigned", () => {
+  const legacy = {
+    id: "legacy",
+    title: "Old capture",
+    userId: "user-alejandro",
+    assigneeIds: [],
+  };
+  assert.deepEqual(
+    filterMyWorkTasks([legacy], "assigned", actor, [alejandro]).map((item) => item.id),
+    ["legacy"],
+  );
+  assert.equal(needsCreatorAssigneeRestore(legacy, actor), true);
+});
+
+test("teammate unassigned items are not restored onto my assignee list", () => {
+  const theirs = {
+    id: "open",
+    title: "TASK-3",
+    userId: "user-agustin",
+    createdBy: "user-agustin",
+    assigneeIds: [],
+  };
+  assert.equal(needsCreatorAssigneeRestore(theirs, actor), false);
+  assert.deepEqual(filterMyWorkTasks([theirs], "assigned", actor, [alejandro, agustin]), []);
+  assert.deepEqual(creatorAssigneePatch(actor, [alejandro]).assigneeIds, ["ws_user-alejandro"]);
 });

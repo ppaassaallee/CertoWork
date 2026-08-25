@@ -54,6 +54,19 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(workspace, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
 });
 
+test("task records keep createdBy immutable and restrict delete to the record owner", () => {
+  const start = rules.indexOf("match /tasks/{taskId} {");
+  assert.ok(start >= 0, "tasks match block missing");
+  const end = rules.indexOf("\n    }", start);
+  const block = rules.slice(start, end);
+  assert.match(block, /incoming\(\)\.createdBy == resource\.data\.createdBy/);
+  assert.match(block, /resource\.data\.userId == request\.auth\.uid/);
+  assert.match(block, /resource\.data\.createdBy == request\.auth\.uid/);
+  assert.match(block, /Work items are archived or cancelled in product/);
+  assert.match(workspace, /needsCreatorAssigneeRestore/);
+  assert.match(workspace, /My Work is a view: never delete records/);
+});
+
 test("shared workspace members can update projects they can already see", () => {
   const canWrite = ruleFn("canWriteProject");
   assert.match(canWrite, /hasExplicitUserAccess\(data\)/);

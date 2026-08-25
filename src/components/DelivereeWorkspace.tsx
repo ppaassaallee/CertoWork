@@ -134,7 +134,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, withCreatorAssignee } from "../lib/myWorkItems";
+import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -514,6 +514,7 @@ export function DelivereeWorkspace() {
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceSessionRef = useRef(false);
+  const restoredCreatorAssignees = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -964,6 +965,39 @@ export function DelivereeWorkspace() {
       ),
     [lens, personalActor, tasks, workspaceMembers],
   );
+
+  useEffect(() => {
+    if (!user || !workspace) return;
+    const pending = tasks
+      .filter(
+        (item) =>
+          needsCreatorAssigneeRestore(item, personalActor) &&
+          !restoredCreatorAssignees.current.has(item.id),
+      )
+      .slice(0, 40);
+    if (!pending.length) return;
+    const patch = creatorAssigneePatch(personalActor, workspaceMembers);
+    if (!patch.assigneeIds.length && !patch.assignees.length) return;
+    for (const item of pending) restoredCreatorAssignees.current.add(item.id);
+    // Additive restore only. My Work is a view: never delete records to change a filter.
+    void Promise.all(
+      pending.map((item) =>
+        updateDoc(doc(db, "tasks", item.id), {
+          ...patch,
+          ...buildTaskAccessPatch({
+            task: { ...item, ...patch },
+            workspaceId: workspace.id,
+            userId: user.uid,
+            email: user.email,
+            members: workspaceMembers,
+          }),
+          updatedAt: serverTimestamp(),
+        }),
+      ),
+    ).catch(() => {
+      for (const item of pending) restoredCreatorAssignees.current.delete(item.id);
+    });
+  }, [personalActor, tasks, user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) {

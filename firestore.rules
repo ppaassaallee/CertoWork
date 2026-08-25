@@ -739,8 +739,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
                     && isValidTask(incoming())
                     && incoming().userId == resource.data.userId
-                    && incoming().createdAt == resource.data.createdAt;
-      allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data);
+                    && incoming().createdAt == resource.data.createdAt
+                    && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy);
+      // Work items are archived or cancelled in product; delete is owner-only so a
+      // view/filter change or workspace-admin pass cannot wipe another person's records.
+      allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
+                    && (resource.data.userId == request.auth.uid
+                        || (('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid));
     }
 
     // New Modules: Habits, Workouts, Analytics
