@@ -6,6 +6,7 @@ import { DelivereeWorkspace } from "./components/DelivereeWorkspace";
 import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
 import { PublicInvoicePortal } from "./components/PublicInvoicePortal";
+import { PublicAppleWidget } from "./components/PublicAppleWidget";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 // TODO: Replace with the Google Calendar appointment schedule URL.
@@ -355,9 +356,6 @@ export default function App() {
     applyCertoTextSize(getStoredCertoTextSize());
   }, []);
 
-  if (loading) {
-    return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
-  }
   const inviteToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/invite\/([^/]+)/) || [])[1] || "")
     : "";
@@ -367,11 +365,20 @@ export default function App() {
   const invoiceToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/invoice\/([^/]+)/) || [])[1] || "")
     : "";
+  const widgetToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/widget\/([^/]+)/) || [])[1] || "")
+    : "";
   if (reportToken) {
     return <PublicStatusReport token={reportToken} />;
   }
   if (invoiceToken) {
     return <PublicInvoicePortal token={invoiceToken} />;
+  }
+  if (widgetToken) {
+    return <PublicAppleWidget token={widgetToken} />;
+  }
+  if (loading) {
+    return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
   }
   if (inviteToken && (!user || !workspace)) {
     return <InviteActivate token={inviteToken} />;

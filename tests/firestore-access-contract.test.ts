@@ -127,3 +127,9 @@ test("personal Home context still excludes another member's assigned work", () =
   assert.equal(isPersonalWorkItem({ assigneeIds: ["ws_user-a"] }, actor), true);
   assert.equal(isPersonalWorkItem({ userId: "user-b", title: "Theirs" }, actor), false);
 });
+
+test("Apple widget tokens are publicly readable and owner-updated", () => {
+  assert.match(rules, /match \/widget_tokens\/\{id\}/);
+  assert.match(workspace, /APPLE_WIDGET_COLLECTION/);
+  assert.match(workspace, /buildAppleWidgetSnapshot/);
+});

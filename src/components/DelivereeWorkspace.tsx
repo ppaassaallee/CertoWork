@@ -98,6 +98,7 @@ import {
   timestamp,
 } from "../lib/workspaceDisplay";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
+import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { HomeAttention } from "../pages/HomeAttention";
 import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
@@ -177,6 +178,11 @@ import {
 } from "../lib/delivereeSkills";
 import { useMobileCore } from "../hooks/useMobileCore";
 import { mobileCoreFallbackPath, mobileCoreTab } from "../lib/mobileCore";
+import {
+  APPLE_WIDGET_COLLECTION,
+  buildAppleWidgetSnapshot,
+  createAppleWidgetToken,
+} from "../lib/appleWidget";
 import type { NotebookEntry } from "../lib/notebookContext";
 import { type MagicProjectBlueprint, type MagicProjectItem } from "../lib/magicProject";
 import { buildConversationRequestContext } from "../lib/conversationContextBuilder";
@@ -489,6 +495,9 @@ export function DelivereeWorkspace() {
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceCallOpen, setVoiceCallOpen] = useState(false);
+  const [widgetToken, setWidgetToken] = useState("");
+  const [widgetBusy, setWidgetBusy] = useState(false);
+  const [widgetError, setWidgetError] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -933,6 +942,46 @@ export function DelivereeWorkspace() {
     () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
     [personalActor, todayTasks],
   );
+
+  useEffect(() => {
+    if (!user || !workspace) {
+      setWidgetToken("");
+      return;
+    }
+    let active = true;
+    void getDocs(
+      query(collection(db, APPLE_WIDGET_COLLECTION), where("userId", "==", user.uid)),
+    )
+      .then((snapshot) => {
+        const match = snapshot.docs
+          .map((item) => ({ id: item.id, ...(item.data() as any) }))
+          .find((item) => item.workspaceId === workspace.id && item.revoked !== true);
+        if (active) setWidgetToken(String(match?.token || ""));
+      })
+      .catch(() => {
+        if (active) setWidgetToken("");
+      });
+    return () => {
+      active = false;
+    };
+  }, [user, workspace]);
+
+  useEffect(() => {
+    if (!user || !workspace || !widgetToken) return;
+    const snapshot = buildAppleWidgetSnapshot({
+      tasks: personalTodayTasks,
+      projects,
+      pendingApprovals: reviewItems.length,
+      workspaceName: workspace.name || "Certo Work",
+    });
+    const handle = window.setTimeout(() => {
+      void updateDoc(doc(db, APPLE_WIDGET_COLLECTION, widgetToken), {
+        snapshot,
+        updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+    }, 900);
+    return () => window.clearTimeout(handle);
+  }, [personalTodayTasks, projects, reviewItems.length, user, widgetToken, workspace]);
   const currentWorkspaceMember = useMemo(
     () =>
       workspaceMembers.find(
@@ -2040,6 +2089,57 @@ export function DelivereeWorkspace() {
   const closeVoiceCall = () => {
     voiceSessionRef.current = false;
     setVoiceCallOpen(false);
+  };
+
+  const enableAppleWidget = async () => {
+    if (!user || !workspace) return;
+    setWidgetBusy(true);
+    setWidgetError("");
+    try {
+      const token = createAppleWidgetToken();
+      const snapshot = buildAppleWidgetSnapshot({
+        tasks: personalTodayTasks,
+        projects,
+        pendingApprovals: reviewItems.length,
+        workspaceName: workspace.name || "Certo Work",
+      });
+      await setDoc(doc(db, APPLE_WIDGET_COLLECTION, token), {
+        token,
+        userId: user.uid,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name || "Certo Work",
+        snapshot,
+        revoked: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setWidgetToken(token);
+    } catch (reason) {
+      setWidgetError(
+        reason instanceof Error ? reason.message : "The Apple widget could not be created.",
+      );
+    } finally {
+      setWidgetBusy(false);
+    }
+  };
+
+  const revokeAppleWidget = async () => {
+    if (!widgetToken) return;
+    setWidgetBusy(true);
+    setWidgetError("");
+    try {
+      await updateDoc(doc(db, APPLE_WIDGET_COLLECTION, widgetToken), {
+        revoked: true,
+        updatedAt: serverTimestamp(),
+      });
+      setWidgetToken("");
+    } catch (reason) {
+      setWidgetError(
+        reason instanceof Error ? reason.message : "The Apple widget could not be revoked.",
+      );
+    } finally {
+      setWidgetBusy(false);
+    }
   };
 
   const setComposer = (value: string) => {
@@ -5543,6 +5643,14 @@ export function DelivereeWorkspace() {
                 </div>
                 <TextSizeControl />
               </section>
+              <AppleWidgetSettings
+                busy={widgetBusy}
+                enabled={Boolean(widgetToken)}
+                error={widgetError}
+                onEnable={() => void enableAppleWidget()}
+                onRevoke={() => void revokeAppleWidget()}
+                token={widgetToken}
+              />
               <ControlledListsSettings
                 categories={categories}
                 onBack={() => setPanel(null)}
