@@ -15,6 +15,7 @@ import {
   Search,
   SlidersHorizontal,
   Square,
+  Trash,
   X,
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
@@ -541,7 +542,7 @@ export function WorkItemsCenter({
   const itemGridStyle = {
     gridTemplateColumns: `20px 20px 28px ${[...itemColumnSet]
       .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
-      .join(" ")}`,
+      .join(" ")} 28px`,
   };
   const currentItemViewFilters: ItemViewFilters = {
     mode,
@@ -1001,6 +1002,103 @@ export function WorkItemsCenter({
     });
   };
 
+  const archiveItem = (item: any) => {
+    // Product delete archives the record. Do not hard-delete task documents.
+    if (selectedItemId === item.id) onSelectItem(null);
+    setSelectedBulkIds((current) => current.filter((id) => id !== item.id));
+    return onUpdateTask(item.id, {
+      status: "archived",
+      archivedAt: new Date().toISOString(),
+    });
+  };
+
+  const renderDeleteButton = (item: any) => (
+    <button
+      aria-label={`Delete ${title(item)}`}
+      className="do-items-delete"
+      data-testid="item-delete"
+      onClick={(event) => {
+        event.stopPropagation();
+        void archiveItem(item);
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+      title={`Delete ${title(item)}`}
+      type="button"
+    >
+      <Trash size={14} />
+    </button>
+  );
+
+  const renderTitleCell = (item: any, kind: WorkItemKind, childCount: number) => (
+    itemColumnSet.has("title") ? (
+      <div className="do-items-title">
+        <button
+          aria-label={`${workItemLabel(kind)} ${title(item)}`}
+          className={`do-items-type-flag is-${kind}`}
+          data-testid="item-type-flag"
+          onClick={() => onSelectItem(item.id)}
+          type="button"
+        >
+          {workItemLabel(kind)}
+        </button>
+        <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
+        {childCount ? <small>{childCount}</small> : null}
+      </div>
+    ) : null
+  );
+
+  const renderFieldCells = (item: any) => (
+    <>
+      {itemColumnSet.has("project") && (
+        <select
+          aria-label={`Project for ${title(item)}`}
+          onChange={(event) => onUpdateTask(item.id, { projectId: event.target.value || null })}
+          value={item.projectId || ""}
+        >
+          <option value="">No project / errand</option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>{projectTitle(project)}</option>
+          ))}
+        </select>
+      )}
+      {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
+      {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
+      {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
+      {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
+        {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+      </select>}
+      {itemColumnSet.has("product_phase") && <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
+        {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+      </select>}
+      {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
+        {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+      </select>}
+      {itemColumnSet.has("priority") && <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
+        {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+      </select>}
+      {itemColumnSet.has("gtd") && <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
+        {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
+      </select>}
+      {itemColumnSet.has("bucket") && <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>}
+      {itemColumnSet.has("assignees") && <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />}
+      {itemColumnSet.has("due") && <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />}
+      {itemColumnSet.has("sprint") && (
+        <select
+          aria-label={`Sprint for ${title(item)}`}
+          onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
+          value={item.sprintId || ""}
+        >
+          <option value="">No sprint</option>
+          {sprints
+            .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
+            .map((sprint) => (
+              <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
+            ))}
+        </select>
+      )}
+    </>
+  );
+
   const renderRow = (item: any, peers: any[]) => {
     const kind = workItemKind(item);
     const children = tasks.filter((candidate) => parentId(candidate) === item.id);
@@ -1047,68 +1145,9 @@ export function WorkItemsCenter({
         >
           <GripVertical size={14} />
         </button>
-        {itemColumnSet.has("title") && (
-          <div className="do-items-title">
-            <button
-              aria-label={`${workItemLabel(kind)} ${title(item)}`}
-              className={`do-items-type-flag is-${kind}`}
-              data-testid="item-type-flag"
-              onClick={() => onSelectItem(item.id)}
-              type="button"
-            >
-              {workItemLabel(kind)}
-            </button>
-            <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
-            {children.length ? <small>{children.length}</small> : null}
-          </div>
-        )}
-        {itemColumnSet.has("project") && (
-          <select
-            aria-label={`Project for ${title(item)}`}
-            onChange={(event) => onUpdateTask(item.id, { projectId: event.target.value || null })}
-            value={item.projectId || ""}
-          >
-            <option value="">No project / errand</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>{projectTitle(project)}</option>
-            ))}
-          </select>
-        )}
-        {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
-        {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
-        {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
-        {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
-          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-        </select>}
-        {itemColumnSet.has("product_phase") && <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
-          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
-        </select>}
-        {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
-          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-        </select>}
-        {itemColumnSet.has("priority") && <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
-          {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>}
-        {itemColumnSet.has("gtd") && <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
-          {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
-        </select>}
-        {itemColumnSet.has("bucket") && <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>}
-        {itemColumnSet.has("assignees") && <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />}
-        {itemColumnSet.has("due") && <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />}
-        {itemColumnSet.has("sprint") && (
-          <select
-            aria-label={`Sprint for ${title(item)}`}
-            onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
-            value={item.sprintId || ""}
-          >
-            <option value="">No sprint</option>
-            {sprints
-              .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
-              .map((sprint) => (
-                <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
-              ))}
-          </select>
-        )}
+        {renderTitleCell(item, kind, children.length)}
+        {renderFieldCells(item)}
+        {renderDeleteButton(item)}
       </article>
     );
   };
@@ -1182,6 +1221,7 @@ export function WorkItemsCenter({
           />
         </strong>
       ))}
+      <span />
     </div>
   );
 
@@ -1194,8 +1234,13 @@ export function WorkItemsCenter({
   const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
     const kind = workItemKind(item);
     const collapsed = collapsedGroups.includes(groupKey);
+    const isDone = canonicalStatus(item) === "done";
     return (
-      <header className={`do-items-section-head is-${kind}`} data-testid="item-section-head">
+      <header
+        className={`do-items-row do-items-section-head is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
+        data-testid="item-section-head"
+        style={itemGridStyle}
+      >
         <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
@@ -1205,21 +1250,13 @@ export function WorkItemsCenter({
         >
           <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
         </button>
-        <button
-          aria-label={`${workItemLabel(kind)} ${title(item)}`}
-          className={`do-items-type-flag is-${kind}`}
-          data-testid="item-type-flag"
-          onClick={() => onSelectItem(item.id)}
-          type="button"
-        >
-          {workItemLabel(kind)}
+        <button aria-label={`Select ${title(item)} for bulk editing`} className={`do-items-select ${selectedBulkIds.includes(item.id) ? "is-selected" : ""}`} onClick={() => toggleBulk(item.id)} title="Select for bulk editing" type="button">
+          {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
         </button>
-        <h3>
-          <button onClick={() => onSelectItem(item.id)} type="button">
-            {title(item)}
-          </button>
-        </h3>
-        {childCount ? <small>{childCount}</small> : null}
+        <span />
+        {renderTitleCell(item, kind, childCount)}
+        {renderFieldCells(item)}
+        {renderDeleteButton(item)}
       </header>
     );
   };
@@ -1327,6 +1364,7 @@ export function WorkItemsCenter({
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
             <strong>{title(item)}</strong>
           </button>
+          {renderDeleteButton(item)}
         </div>
         <div className="do-kanban-card-pills" onPointerDown={stopCardDrag}>
           <span className={`do-items-type-flag is-${kind}`} data-testid="item-type-flag">{workItemLabel(kind)}</span>
@@ -2065,7 +2103,10 @@ export function WorkItemsCenter({
           <aside className="do-item-detail" aria-label="Selected work item detail">
             <div className="do-item-detail-head">
               <span>{workItemLabel(workItemKind(selectedItem))}</span>
-              <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>
+              <div className="do-item-detail-head-actions">
+                {renderDeleteButton(selectedItem)}
+                <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>
+              </div>
             </div>
             <div className="do-ai-inline-field"><InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} /><AiRewriteButton context={{ itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={(next) => onUpdateTask(selectedItem.id, { title: next })} text={title(selectedItem)} /></div>
             <div className="do-ai-description-field"><textarea

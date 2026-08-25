@@ -4998,6 +4998,9 @@ a {
   margin-top: 0;
   border-top: 0;
 }
+.do-items-section-head.do-items-row .do-items-title input {
+  font-weight: 700;
+}
 .do-items-section-toggle,
 .do-items-section-head > svg {
   display: grid;
@@ -5168,6 +5171,21 @@ a {
   outline: 2px solid rgba(36, 81, 61, 0.24);
   outline-offset: -2px;
   background: var(--accent-soft);
+}
+.do-items-delete {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.do-items-delete:hover,
+.do-items-delete:focus-visible {
+  color: var(--status-danger);
 }
 .do-items-title {
   display: flex;
@@ -5498,6 +5516,9 @@ a {
   align-items: flex-start;
   gap: 8px;
 }
+.do-kanban-card-head .do-items-delete {
+  margin-top: 0;
+}
 .do-kanban-card-head .do-items-check {
   margin-top: 1px;
 }
@@ -5658,6 +5679,20 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.do-item-detail-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.do-item-detail-head .do-items-delete {
+  background: transparent;
+  color: var(--text-muted);
+}
+.do-item-detail-head .do-items-delete:hover,
+.do-item-detail-head .do-items-delete:focus-visible {
+  background: transparent;
+  color: var(--status-danger);
 }
 .do-item-detail-head span {
   color: var(--accent);
@@ -12991,12 +13026,12 @@ a {
     padding: 10px;
   }
   .do-items-row {
-    grid-template-columns: 22px 22px 31px minmax(0, 1fr) 76px 58px;
+    grid-template-columns: 22px 22px 31px minmax(0, 1fr) 76px 58px 22px;
   }
   .do-items-when,
   .do-items-row > input,
   .do-items-row > .cw-multi-assignee {
-    grid-column: 4 / -1;
+    grid-column: 4 / -2;
   }
   .do-items-row > input[type="date"] {
     min-width: 0;

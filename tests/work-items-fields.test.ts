@@ -150,3 +150,20 @@ test("kanban board uses Asana-style cards, pills, and resizable columns", () => 
   assert.match(css, /\.do-kanban-col-resizer/);
   assert.match(css, /cursor: col-resize/);
 });
+
+test("any item including epics can be deleted with a grey-to-red bin", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(workItems, /data-testid="item-delete"/);
+  assert.match(workItems, /status: "archived"/);
+  assert.match(workItems, /archivedAt:/);
+  assert.match(workItems, /renderDeleteButton\(item\)/);
+  assert.match(workItems, /renderDeleteButton\(selectedItem\)/);
+  assert.match(workItems, /renderFieldCells\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"/);
+  assert.match(workItems, /renderTitleCell\(item, kind, childCount\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderFieldCells\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderDeleteButton\(item\)/);
+  assert.doesNotMatch(workItems, /deleteDoc/);
+  assert.match(css, /\.do-items-delete \{[\s\S]*?color: var\(--text-muted\)/);
+  assert.match(css, /\.do-items-delete:hover[\s\S]*?color: var\(--status-danger\)/);
+});
