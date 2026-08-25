@@ -340,7 +340,7 @@ export function DelivereeWorkspace() {
           token,
           userId: user.uid,
           workspaceId: workspace.id,
-          email: user.email,
+          email: user.email || "",
           displayName: user.displayName || workspace.name || "Certo Work",
           company: workspace.name || "",
         });
