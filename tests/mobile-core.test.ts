@@ -40,6 +40,7 @@ test("mobile core hides advanced chrome in the live shell", () => {
   assert.match(workspace, /useMobileCore/);
   assert.match(workspace, /mobileCoreFallbackPath/);
   assert.match(workspace, /mobileIds/);
+  assert.match(workspace, /talk-odysseus/);
   assert.match(items, /do-mobile-advanced/);
   assert.match(items, /\["title", "status", "priority", "due"\]/);
 });

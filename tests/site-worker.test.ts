@@ -303,6 +303,23 @@ test("Odysseus can route an approved handoff to an existing conversation", () =>
   assert.match(instructions, /personal_home/);
 });
 
+test("voice conversation asks Odysseus for spoken replies and action plans", () => {
+  const instructions = assistantInstructions(
+    {
+      workspaceContext: {
+        mode: "personal_home",
+        voiceSession: true,
+        tasks: [],
+        projects: [],
+      },
+    },
+    [],
+  );
+  assert.match(instructions, /VOICE CONVERSATION/);
+  assert.match(instructions, /short spoken sentences/);
+  assert.match(instructions, /ends the call/);
+});
+
 test("the current pasted PRD and the latest prior PRD remain available for follow-up", () => {
   const prd = "P".repeat(120_000);
   const olderPrd = "O".repeat(30_000);

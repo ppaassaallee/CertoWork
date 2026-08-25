@@ -47,7 +47,10 @@ export async function runOdysseusAgent({
     {
       role: "user",
       content:
-        "Odysseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval. Use recall_memory before inventing preferences. Use remember_fact only for durable facts the user affirmed.",
+        "Odysseus operating contract: use Certo.Work tools for facts. Do not invent records. Prefer tools over guessing. When finished, return exactly one valid JSON object matching the instructions (reply, optional actionPlan, suggestedChips, citations). Never claim mutations already happened — mutations go in actionPlan for approval. Use recall_memory before inventing preferences. Use remember_fact only for durable facts the user affirmed." +
+        (workspaceContext?.voiceSession
+          ? " Voice conversation: keep replies spoken and short. Put task and project mutations in actionPlan as you go."
+          : ""),
     },
     ...messages.map((message) => ({
       role: message.role,

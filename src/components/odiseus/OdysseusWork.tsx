@@ -75,10 +75,12 @@ export function OdysseusAgentHome({
   examples,
   onExample,
   pendingApprovals = 0,
+  onTalk,
 }: {
   examples: string[];
   onExample: (prompt: string) => void;
   pendingApprovals?: number;
+  onTalk?: () => void;
 }) {
   return (
     <div className="odiseus-agent-home">
@@ -93,11 +95,16 @@ export function OdysseusAgentHome({
               : ""}
           </p>
           <small>
-            Proposes, then asks · Approval before irreversible work · Personal
+            Talk, then apply · Approval before irreversible work · Personal
             to you in this workspace
           </small>
         </div>
       </div>
+      {onTalk ? (
+        <button className="odiseus-talk-launch" onClick={onTalk} type="button">
+          Talk with Odysseus
+        </button>
+      ) : null}
       <div className="odiseus-example-jobs">
         {examples.map((example) => (
           <button key={example} onClick={() => onExample(example)} type="button">

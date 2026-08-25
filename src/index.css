@@ -399,6 +399,172 @@ a {
   border-color: var(--border);
   background: var(--surface-1);
 }
+.odiseus-talk-launch {
+  justify-self: start;
+  min-height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface-0);
+  padding: 8px 16px;
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.odiseus-voice-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(12, 14, 12, 0.52);
+}
+.odiseus-voice-call {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--surface-0);
+  padding: 18px 18px 20px;
+  color: var(--text-primary);
+  box-shadow: 0 24px 70px rgba(24, 40, 30, 0.22);
+}
+.odiseus-voice-call > header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+.odiseus-voice-call > header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.odiseus-voice-call > header button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.odiseus-voice-orb {
+  display: grid;
+  width: 88px;
+  height: 88px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 8px var(--surface-1);
+}
+.odiseus-voice-orb.is-listening {
+  animation: odiseus-voice-pulse 1.4s ease-in-out infinite;
+}
+.odiseus-voice-status {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+}
+.odiseus-voice-heard,
+.odiseus-voice-reply,
+.odiseus-voice-pending {
+  width: 100%;
+  margin: 0;
+  text-align: center;
+}
+.odiseus-voice-heard {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+.odiseus-voice-reply {
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+.odiseus-voice-pending,
+.odiseus-voice-error {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.odiseus-voice-error {
+  color: var(--status-danger);
+}
+.odiseus-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+.odiseus-voice-actions button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  padding: 0 14px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.odiseus-voice-actions button.is-listening,
+.odiseus-voice-actions button.is-end {
+  color: var(--status-danger);
+}
+.odiseus-voice-actions button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface-0);
+}
+.odiseus-voice-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.odiseus-voice-review {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+.odiseus-voice-review ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.odiseus-voice-review li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.odiseus-voice-review li strong {
+  display: block;
+  color: var(--text-primary);
+}
+@keyframes odiseus-voice-pulse {
+  0%, 100% { box-shadow: 0 0 0 8px var(--surface-1); }
+  50% { box-shadow: 0 0 0 14px var(--accent-soft); }
+}
 .odiseus-work-log {
   margin-top: 12px;
   border: 1px solid var(--border);
@@ -12313,6 +12479,19 @@ a {
   }
   .do-composer-note {
     display: none;
+  }
+  .odiseus-voice-scrim {
+    padding: 0;
+    background: var(--surface-0);
+  }
+  .odiseus-voice-call {
+    width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   }
   .do-quick-actions {
     width: min(280px, 90vw);
