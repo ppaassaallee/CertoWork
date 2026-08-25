@@ -10,9 +10,8 @@ import {
 } from "../lib/collabModule";
 import {
   loadCollabStatus,
-  startCollabSso,
+  openCollabDesk,
   syncCollabRooms,
-  type CollabRoom,
   type CollabStatus,
 } from "../lib/collabClient";
 import { t } from "../lib/i18n";
@@ -23,6 +22,8 @@ type Props = {
   workspaceName?: string;
   projects?: ProjectRef[];
 };
+
+const COLLAB_DESK = "/app";
 
 export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   const navigate = useNavigate();
@@ -35,7 +36,6 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   const selectedProjectId = collabProjectIdFromLocation(location.pathname, location.search);
   const openedFor = useRef("");
   const roomsSyncedFor = useRef("");
-  const roomsRef = useRef<CollabRoom[]>([]);
 
   const projectList = useMemo(
     () =>
@@ -81,34 +81,27 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
           company: workspaceName || "",
         };
         if (!alreadyOpen) {
-          const sso = await startCollabSso({
+          const desk = await openCollabDesk({
             ...identity,
             projectId: selectedProjectId,
           });
           if (cancelled) return;
-          if (!sso.url) {
-            setError(sso.error || "Chat Collab could not sign you in.");
+          if (desk.error && !desk.url) {
+            setError(desk.error);
             return;
           }
           openedFor.current = key;
-          setEmbedUrl(sso.url);
+          setEmbedUrl(COLLAB_DESK);
           setLoading(false);
         }
-        if (roomsSyncedFor.current === projectSignature) {
-          const selected = roomsRef.current.find((room) => room.projectId === selectedProjectId);
-          if (selected?.url) setEmbedUrl(selected.url);
-          return;
-        }
-        const nextRooms = await syncCollabRooms({
+        if (roomsSyncedFor.current === projectSignature) return;
+        await syncCollabRooms({
           ...identity,
           projectId: selectedProjectId,
           projects: projectList,
         });
         if (cancelled) return;
         roomsSyncedFor.current = projectSignature;
-        roomsRef.current = nextRooms.rooms || [];
-        const selected = nextRooms.rooms?.find((room) => room.projectId === selectedProjectId);
-        if (selected?.url) setEmbedUrl(selected.url);
       } catch (reason) {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : "Chat Collab is unavailable.");

@@ -72,6 +72,7 @@ import { ChatCollabModule } from "./ChatCollabModule";
 import { CertoMark } from "./CertoMark";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { collabProjectPath } from "../lib/collabModule";
+import { warmCollabSession } from "../lib/collabClient";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -320,7 +321,37 @@ export function DelivereeWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
+  const onCollab = lens.kind === "collab";
+  const [workOpened, setWorkOpened] = useState(() => !onCollab);
+  const [collabOpened, setCollabOpened] = useState(() => onCollab);
   const mobileCore = useMobileCore();
+  useEffect(() => {
+    if (onCollab) setCollabOpened(true);
+    else setWorkOpened(true);
+  }, [onCollab]);
+  useEffect(() => {
+    if (!user?.email || !workspace) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        if (cancelled) return;
+        await warmCollabSession({
+          token,
+          userId: user.uid,
+          workspaceId: workspace.id,
+          email: user.email,
+          displayName: user.displayName || workspace.name || "Certo Work",
+          company: workspace.name || "",
+        });
+      } catch {
+        // The desk still opens from the Collab tab if warming fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, workspace]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -4004,19 +4035,7 @@ export function DelivereeWorkspace() {
     startVoiceCall,
   ]);
 
-  if (lens.kind === "collab") {
-    return (
-      <ChatCollabModule
-        projects={activeProjects.map((project) => ({
-          id: String(project.id),
-          name: entityTitle(project),
-        }))}
-        workspaceName={workspace?.name}
-      />
-    );
-  }
-
-  return (
+  const workPane = (
     <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
@@ -6690,5 +6709,26 @@ export function DelivereeWorkspace() {
         </div>
       )}
     </div>
+  );
+
+  return (
+    <>
+      {workOpened ? (
+        <div aria-hidden={onCollab} className="do-product-pane" hidden={onCollab}>
+          {workPane}
+        </div>
+      ) : null}
+      {collabOpened ? (
+        <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
+          <ChatCollabModule
+            projects={activeProjects.map((project) => ({
+              id: String(project.id),
+              name: entityTitle(project),
+            }))}
+            workspaceName={workspace?.name}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }

@@ -122,8 +122,9 @@ test("SSO login URLs are rewritten onto the public Certo Work origin", async () 
       { email: "ana@certo.work", displayName: "Ana", userId: "uid-1", workspaceId: "ws-1" },
       "https://certo.work",
     );
+    assert.equal(result.url, "https://certo.work/app");
     assert.equal(
-      result.url,
+      result.loginUrl,
       "https://certo.work/app/login?email=ana%40certo.work&sso_auth_token=abc",
     );
     assert.equal(result.userId, 9);
@@ -193,6 +194,7 @@ test("SSO creates project rooms and rewrites the desk onto certo.work", async ()
       },
       "https://certo.work",
     );
+    assert.equal(result.url, "https://certo.work/app");
     assert.equal(result.roomUrl, "https://certo.work/app/accounts/7/conversations/4");
     assert.equal(result.rooms?.[0]?.projectId, "p1");
     assert.equal(result.rooms?.[0]?.path, "/app/accounts/7/conversations/4");
@@ -315,6 +317,10 @@ test("SSO can return the desk before project rooms are synced", async () => {
     );
     assert.equal(
       result.url,
+      "https://certo.work/app",
+    );
+    assert.equal(
+      result.loginUrl,
       "https://certo.work/app/login?email=ana%40certo.work&sso_auth_token=abc",
     );
     assert.equal(result.rooms.length, 0);
@@ -371,12 +377,42 @@ test("live shell mounts Chat Collab as a separate product on certo.work", () => 
   assert.match(workspace, /data-testid="header-collab"/);
   assert.match(workspace, /nav-collab/);
   assert.match(workspace, /CertoMark/);
+  assert.match(workspace, /do-product-pane/);
+  assert.match(workspace, /collabOpened/);
+  assert.match(workspace, /warmCollabSession/);
   assert.match(collab, /data-testid="chat-collab-module"/);
   assert.match(collab, /data-testid="chat-collab-setup"/);
   assert.match(collab, /data-testid="chat-collab-frame"/);
+  assert.match(collab, /openCollabDesk/);
+  assert.match(collab, /["']\/app["']/);
   assert.match(collab, /syncCollabRooms/);
   assert.doesNotMatch(collab, /do-collab-nav/);
   assert.doesNotMatch(collab, /1800/);
   assert.match(collab, /certo\.work/);
   assert.equal(collab.includes("collab.certo.work"), false);
+});
+
+test("existing Chatwoot cookies open the desk without a login URL", async () => {
+  const originalFetch = globalThis.fetch;
+  const { openCollabDesk } = await import("../src/lib/collabClient");
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string | URL) => {
+    const path = String(url);
+    calls.push(path);
+    if (path.endsWith("/api/v1/profile")) return new Response("{}", { status: 200 });
+    return new Response("unexpected", { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await openCollabDesk({
+      token: "t",
+      userId: "uid-1",
+      workspaceId: "ws-1",
+      email: "ana@certo.work",
+      displayName: "Ana",
+    });
+    assert.equal(result.url, "/app");
+    assert.equal(calls.some((item) => item.includes("/api/collab/sso")), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

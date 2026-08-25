@@ -14070,6 +14070,9 @@ a {
 .do-shell.is-sidebar-collapsed .do-product-switch {
   display: none;
 }
+.do-product-pane[hidden] {
+  display: none !important;
+}
 .do-collab-shell {
   display: flex;
   width: 100%;

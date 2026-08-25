@@ -29,12 +29,81 @@ export type CollabChannel = {
 
 export type CollabSsoResult = {
   url?: string;
+  loginUrl?: string;
   roomUrl?: string;
   rooms?: CollabRoom[];
   channels?: CollabChannel[];
   error?: string;
   configured?: boolean;
 };
+
+const COLLAB_DESK_PATH = "/app";
+
+export async function collabSessionIsReady() {
+  try {
+    const profile = await fetch("/api/v1/profile", {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (profile.ok) return true;
+    if (profile.status === 401 || profile.status === 403) return false;
+    const desk = await fetch(COLLAB_DESK_PATH, {
+      credentials: "include",
+      redirect: "manual",
+    });
+    const location = desk.headers.get("location") || "";
+    return (
+      desk.ok ||
+      (desk.status >= 300 &&
+        desk.status < 400 &&
+        !/login|sign[_-]?in/i.test(location))
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function consumeCollabLogin(loginUrl: string) {
+  const target = String(loginUrl || "").trim();
+  if (!target) return;
+  await fetch(target, { credentials: "include", redirect: "follow" });
+}
+
+export async function openCollabDesk(input: {
+  token: string;
+  userId: string;
+  workspaceId: string;
+  email: string;
+  displayName: string;
+  company?: string;
+  projectId?: string;
+  projects?: Array<{ id: string; name: string }>;
+}): Promise<CollabSsoResult> {
+  if (await collabSessionIsReady()) {
+    return { url: COLLAB_DESK_PATH, configured: true };
+  }
+  const sso = await startCollabSso(input);
+  const loginUrl = sso.loginUrl || (sso.url && /\/app\/login/.test(sso.url) ? sso.url : "");
+  if (!loginUrl) return sso;
+  await consumeCollabLogin(loginUrl);
+  return {
+    ...sso,
+    url: COLLAB_DESK_PATH,
+    configured: true,
+  };
+}
+
+export async function warmCollabSession(input: {
+  token: string;
+  userId: string;
+  workspaceId: string;
+  email: string;
+  displayName: string;
+  company?: string;
+}) {
+  if (!input.email || !input.userId) return;
+  await openCollabDesk(input);
+}
 
 export async function loadCollabStatus(): Promise<CollabStatus> {
   const response = await fetch("/api/collab/status");
@@ -115,6 +184,7 @@ async function postCollab(
   }
   return {
     url: payload.url,
+    loginUrl: payload.loginUrl,
     roomUrl: payload.roomUrl,
     rooms: Array.isArray(payload.rooms) ? payload.rooms : [],
     channels: Array.isArray(payload.channels) ? payload.channels : [],

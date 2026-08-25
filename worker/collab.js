@@ -455,12 +455,14 @@ export async function provisionCollabSso(env, input, publicOrigin = "", options 
   }
 
   const selected = rooms.find((room) => room.projectId === selectedProjectId) || rooms[0] || null;
+  const deskUrl = siteOrigin ? `${siteOrigin}/app` : "/app";
   return {
-    url,
+    url: deskUrl,
+    loginUrl: url,
     userId,
     rooms,
     channels,
-    roomUrl: selected?.url || "",
+    roomUrl: selected?.url || deskUrl,
   };
 }
 
