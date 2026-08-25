@@ -97,6 +97,7 @@ import {
   timeAgo,
   timestamp,
 } from "../lib/workspaceDisplay";
+import { inviteDirectoryUrl, inviteIsExpired } from "../lib/inviteLifecycle";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
@@ -215,6 +216,7 @@ import {
 import {
   WORKSPACE_LIMIT,
   WORKSPACE_ROLES,
+  activeDirectoryMembers,
   activeMemberId,
   canChangePasswordForProvider,
   canCreateWorkspace,
@@ -223,10 +225,10 @@ import {
   createInviteCode,
   isAssignableMember,
   isWorkspaceOwnerRole,
-  memberAssignmentValue,
   memberAvatar,
   memberHasAlias,
   memberLabel,
+  memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
   membershipPublicPatch,
@@ -234,6 +236,7 @@ import {
   normalizeInviteEmail,
   normalizeMemberEmoji,
   passwordProviderMessage,
+  pendingInviteDirectory,
   pendingMemberId,
   roleLabel,
   suggestedAlias,
@@ -1010,6 +1013,14 @@ export function DelivereeWorkspace() {
   const pendingInvoiceQueue = useMemo(
     () => pendingInvoiceLines(projects, invoiceDocuments),
     [projects, invoiceDocuments],
+  );
+  const directoryMembers = useMemo(
+    () => activeDirectoryMembers(workspaceMembers),
+    [workspaceMembers],
+  );
+  const pendingInvites = useMemo(
+    () => pendingInviteDirectory(workspaceMembers, workspaceInvites),
+    [workspaceMembers, workspaceInvites],
   );
 
   useEffect(() => {
@@ -2538,44 +2549,18 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    let emailSent = false;
-    let emailWarning = "";
-    try {
-      const token = await user.getIdToken();
-      const result = await sendWorkspaceInviteEmail({
-        token,
-        userId: user.uid,
-        workspaceId: workspace.id,
-        workspaceName: workspace.name || "Certo Work",
-        toEmail: email,
-        role: inviteRole,
-        inviterName: user.displayName,
-        inviterEmail: user.email,
-        inviteToken,
-      });
-      emailSent = Boolean(result.sent);
-      if (!emailSent) emailWarning = result.error || "Brevo is not configured yet.";
-      await updateDoc(doc(db, "agent_invites", inviteRef.id), {
-        emailDeliveryStatus: emailSent ? "sent" : "not_sent",
-        emailDeliveryError: emailSent ? "" : emailWarning,
-        emailSentAt: emailSent ? serverTimestamp() : null,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      emailWarning =
-        error instanceof Error ? error.message : "Invite email could not be sent.";
-      await updateDoc(doc(db, "agent_invites", inviteRef.id), {
-        emailDeliveryStatus: "failed",
-        emailDeliveryError: emailWarning,
-        updatedAt: serverTimestamp(),
-      });
-    }
+    const result = await deliverWorkspaceInvite({
+      email,
+      role: inviteRole,
+      inviteToken,
+      inviteId: inviteRef.id,
+    });
     setInviteEmail("");
     await reloadWorkspaces();
     setNotice(
-      emailSent
+      result.sent
         ? `Invite sent to ${email}. They should sign in with that exact email.`
-        : `Invite saved for ${email}, but no email was sent yet: ${emailWarning}. Copy the message from Pending invites and send it manually.`,
+        : `Invite saved for ${email}, but no email was sent yet: ${result.warning} Copy the link from Pending invites if you need to send it manually.`,
     );
     } catch (reason) {
       setNotice(
@@ -2590,9 +2575,130 @@ export function DelivereeWorkspace() {
     const message = inviteMessage(invite);
     try {
       await navigator.clipboard.writeText(message);
-      setNotice(`Invite message copied.`);
+      setNotice("Invite message copied.");
     } catch {
       setNotice(message);
+    }
+  };
+
+  const copyInviteLink = async (invite: any) => {
+    const url = inviteDirectoryUrl(invite?.inviteToken);
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice("Invite link copied.");
+    } catch {
+      setNotice(url);
+    }
+  };
+
+  const deliverWorkspaceInvite = async ({
+    email,
+    role,
+    inviteToken,
+    inviteId,
+  }: {
+    email: string;
+    role: string;
+    inviteToken: string;
+    inviteId: string;
+  }) => {
+    if (!user || !workspace) {
+      return { sent: false, warning: "Sign in to send the invite email." };
+    }
+    try {
+      const token = await user.getIdToken();
+      const result = await sendWorkspaceInviteEmail({
+        token,
+        userId: user.uid,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name || "Certo Work",
+        toEmail: email,
+        role,
+        inviterName: user.displayName,
+        inviterEmail: user.email,
+        inviteToken,
+      });
+      const sent = Boolean(result.sent);
+      const warning = sent ? "" : result.error || "Brevo is not configured yet.";
+      await updateDoc(doc(db, "agent_invites", inviteId), {
+        emailDeliveryStatus: sent ? "sent" : "not_sent",
+        emailDeliveryError: sent ? "" : warning,
+        emailSentAt: sent ? serverTimestamp() : null,
+        updatedAt: serverTimestamp(),
+      });
+      return { sent, warning };
+    } catch (error) {
+      const warning =
+        error instanceof Error ? error.message : "Invite email could not be sent.";
+      await updateDoc(doc(db, "agent_invites", inviteId), {
+        emailDeliveryStatus: "failed",
+        emailDeliveryError: warning,
+        updatedAt: serverTimestamp(),
+      });
+      return { sent: false, warning };
+    }
+  };
+
+  const resendWorkspaceInvite = async (row: {
+    email: string;
+    role?: string;
+    invite?: Record<string, any> | null;
+    member?: WorkspaceMember | null;
+  }) => {
+    if (!user || !workspace) return;
+    if (!canManageMembers) {
+      setNotice("Only the workspace owner or an admin can resend invites.");
+      return;
+    }
+    const email = normalizeInviteEmail(row.email);
+    const role = String(row.role || row.invite?.role || row.member?.role || "member");
+    try {
+      let inviteId = String(row.invite?.id || "");
+      let inviteToken = String(row.invite?.inviteToken || "");
+      if (!inviteId || inviteIsExpired(row.invite) || !inviteToken) {
+        inviteToken = createInviteCode();
+        if (inviteId) {
+          await updateDoc(doc(db, "agent_invites", inviteId), {
+            inviteToken,
+            status: "pending",
+            expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const inviteRef = await addDoc(collection(db, "agent_invites"), {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            email,
+            emailLower: email,
+            role,
+            inviteType: "workspace_member",
+            inviteToken,
+            status: "pending",
+            expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          inviteId = inviteRef.id;
+        }
+      }
+      const result = await deliverWorkspaceInvite({
+        email,
+        role,
+        inviteToken,
+        inviteId,
+      });
+      setNotice(
+        result.sent
+          ? `Invite resent to ${email}.`
+          : `Invite saved for ${email}, but no email was sent yet: ${result.warning}`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Invite could not be resent: ${reason.message}`
+          : "Invite could not be resent.",
+      );
     }
   };
 
@@ -5988,9 +6094,14 @@ export function DelivereeWorkspace() {
                       </span>
                       <div>
                         <strong>
-                          {normalizeAlias(request.displayName) || "Pending user"}
+                          {normalizeAlias(request.displayName) ||
+                            normalizeInviteEmail(request.email || request.emailLower || "") ||
+                            "Pending user"}
                         </strong>
                         <small>
+                          {normalizeInviteEmail(request.email || request.emailLower || "") ||
+                            "No email"}
+                          {" · "}
                           {request.provider || "email/password"} ·{" "}
                           {timeAgo(request.requestedAt || request.updatedAt)}
                         </small>
@@ -6054,32 +6165,33 @@ export function DelivereeWorkspace() {
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Members</span>
-                  <strong>{workspaceMembers.length} people</strong>
+                  <strong>{directoryMembers.length} people</strong>
                 </div>
                 <div className="do-member-list">
-                  {workspaceMembers
-                    .filter((member) => isAssignableMember(member))
-                    .map((member) => {
+                  {directoryMembers.map((member) => {
                     const isOwner =
                       isWorkspaceOwnerRole(member.role) ||
                       member.userId === workspace?.ownerId;
+                    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+                    const label = memberManageLabel(member);
                     return (
                       <article key={member.id}>
                         <span className="do-member-avatar">
                           {memberAvatar(member)}
                         </span>
                         <div>
-                          <strong>{memberLabel(member)}</strong>
+                          <strong>{label}</strong>
                           <small>
                             {memberStatusLabel(member.status)}
                             {member.userId === user?.uid ? " · You" : ""}
+                            {email && email !== label.toLowerCase() ? ` · ${email}` : ""}
                           </small>
                         </div>
                         {isOwner ? (
                           <em>Owner</em>
                         ) : (
                           <select
-                            aria-label={`Role for ${memberLabel(member)}`}
+                            aria-label={`Role for ${label}`}
                             onChange={(event) =>
                               updateMemberRole(
                                 member,
@@ -6120,7 +6232,7 @@ export function DelivereeWorkspace() {
                       </article>
                     );
                   })}
-                  {workspaceMembers.length === 0 && (
+                  {directoryMembers.length === 0 && (
                     <div className="do-panel-empty">
                       <Users size={20} />
                       <strong>No members yet.</strong>
@@ -6131,36 +6243,73 @@ export function DelivereeWorkspace() {
                     </div>
                   )}
                 </div>
-                {workspaceInvites.length > 0 && (
-                  <div className="do-pending-invites">
+                <div className="do-pending-invites">
+                  <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pending invites</span>
-                    {workspaceInvites.map((invite) => (
-                      <div className="do-pending-invite-row" key={invite.id}>
-                        <small>
-                          Pending invite · {roleLabel(invite.role)}
-                          {invite.emailDeliveryStatus
-                            ? ` · email ${String(invite.emailDeliveryStatus).replace(/_/g, " ")}`
-                            : ""}
-                        </small>
-                        <button
-                          onClick={() => copyInviteMessage(invite)}
-                          type="button"
-                        >
-                          Copy message
-                        </button>
-                        {canManageMembers && (
-                          <button
-                            className="do-member-remove"
-                            onClick={() => revokeWorkspaceInvite(invite)}
-                            type="button"
-                          >
-                            Revoke
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    <strong>{pendingInvites.length} waiting</strong>
                   </div>
-                )}
+                  {pendingInvites.map((row) => {
+                    const invite = row.invite;
+                    const delivery = String(row.deliveryStatus || invite?.emailDeliveryStatus || "")
+                      .replace(/_/g, " ");
+                    return (
+                      <article className="do-pending-invite-row" key={row.key}>
+                        <div>
+                          <strong>{row.email}</strong>
+                          <small>
+                            {roleLabel(row.role)} · Invited
+                            {delivery ? ` · email ${delivery}` : " · email not sent yet"}
+                            {inviteIsExpired(invite) ? " · expired" : ""}
+                          </small>
+                        </div>
+                        {canManageMembers && (
+                          <div className="do-pending-invite-actions">
+                            <button
+                              onClick={() => void resendWorkspaceInvite(row)}
+                              type="button"
+                            >
+                              <Mail size={13} /> Resend
+                            </button>
+                            {invite?.inviteToken && (
+                              <button
+                                onClick={() => void copyInviteLink(invite)}
+                                type="button"
+                              >
+                                Copy link
+                              </button>
+                            )}
+                            <button
+                              onClick={() => void copyInviteMessage(invite || { email: row.email })}
+                              type="button"
+                            >
+                              Copy message
+                            </button>
+                            <button
+                              className="do-member-remove"
+                              onClick={() =>
+                                invite
+                                  ? revokeWorkspaceInvite(invite)
+                                  : row.member
+                                    ? removeWorkspaceMember(row.member)
+                                    : undefined
+                              }
+                              type="button"
+                            >
+                              Remove invite
+                            </button>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                  {pendingInvites.length === 0 && (
+                    <div className="do-panel-empty">
+                      <Mail size={20} />
+                      <strong>No pending invites.</strong>
+                      <span>New invites show the person’s email here until they join.</span>
+                    </div>
+                  )}
+                </div>
               </section>
 
               <section className="do-workspace-admin-card">
@@ -6213,7 +6362,7 @@ export function DelivereeWorkspace() {
                                 onClick={() => toggleTeamMember(team, member)}
                                 type="button"
                               >
-                                {memberAssignmentValue(member) || "Member"}
+                                {memberManageLabel(member)}
                               </button>
                             );
                           })}

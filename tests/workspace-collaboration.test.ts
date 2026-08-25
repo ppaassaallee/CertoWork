@@ -12,12 +12,14 @@ import {
   memberAvatar,
   memberHasAlias,
   memberMatchesSelection,
+  memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
   membershipPublicPatch,
   normalizeAlias,
   normalizeInviteEmail,
   passwordProviderMessage,
+  pendingInviteDirectory,
   pendingMemberId,
   roleLabel,
 } from "../src/lib/workspaceCollaboration";
@@ -83,4 +85,54 @@ test("password change guidance follows the sign-in provider", () => {
   assert.equal(canChangePasswordForProvider(["google.com"]), false);
   assert.match(passwordProviderMessage(["password"]), /reset link/i);
   assert.match(passwordProviderMessage(["google.com"]), /Google Account/i);
+});
+
+test("workspace admin labels show invite emails instead of unknown user", () => {
+  assert.equal(
+    memberManageLabel({
+      status: "invited",
+      email: "agustin@getboldr.ai",
+    }),
+    "agustin@getboldr.ai",
+  );
+  assert.equal(
+    memberPublicLabel({
+      status: "invited",
+      email: "agustin@getboldr.ai",
+    }),
+    "Invited teammate",
+  );
+});
+
+test("pending invite directory keeps invited people visible until they join", () => {
+  const rows = pendingInviteDirectory(
+    [
+      {
+        id: "ws_invite_agustin_getboldr_ai",
+        email: "agustin@getboldr.ai",
+        status: "invited",
+        role: "member",
+        userId: "pending:agustin@getboldr.ai",
+      },
+      {
+        id: "ws_owner",
+        email: "ana@certo.work",
+        status: "active",
+        alias: "Ana",
+      },
+    ],
+    [
+      {
+        id: "inv-1",
+        email: "agustin@getboldr.ai",
+        role: "member",
+        inviteType: "workspace_member",
+        emailDeliveryStatus: "sent",
+      },
+    ],
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].email, "agustin@getboldr.ai");
+  assert.equal(rows[0].invite?.id, "inv-1");
+  assert.equal(rows[0].member?.id, "ws_invite_agustin_getboldr_ai");
 });
