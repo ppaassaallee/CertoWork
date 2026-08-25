@@ -6,6 +6,7 @@ import {
   buildVoiceWrapUpMessage,
   collectVoiceActions,
   finalSpeechFromEvent,
+  firestorePermissionMessage,
   joinVoiceNotes,
   pickNaturalVoice,
   planFromSelectedActions,
@@ -56,6 +57,13 @@ test("voice wrap-up asks Odysseus to recap, flag gaps, and create tasks", () => 
   assert.equal(joinVoiceNotes(["  Call the lawyer. ", "", "Block time"]), "Call the lawyer. Block time");
 });
 
+test("Firestore permission errors stay actionable instead of raw SDK text", () => {
+  assert.match(
+    firestorePermissionMessage(new Error("Missing or insufficient permissions.")),
+    /couldn't save that task/i,
+  );
+});
+
 test("selected voice actions become the plan that can be applied", () => {
   const actions = collectVoiceActions([
     {
@@ -94,6 +102,7 @@ test("voice conversation is wired as a listener with wrap-up and per-item approv
   assert.match(workspace, /transcribeVoiceAudio/);
   assert.match(overlay, /data-testid="odiseus-voice-call"/);
   assert.match(overlay, /Apply selected/);
+  assert.match(overlay, /firestorePermissionMessage/);
   assert.match(overlay, /End conversation/);
   assert.match(overlay, /onWrapUp/);
   assert.match(overlay, /taking notes/);
