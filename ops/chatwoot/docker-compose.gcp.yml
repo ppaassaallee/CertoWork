@@ -1,4 +1,4 @@
 services:
   rails:
-    ports:
+    ports: !override
       - "3000:3000"
