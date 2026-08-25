@@ -1,24 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, MessageSquare, Search } from "./ui/Icon";
+import { ArrowLeft, Loader2, MessageSquare } from "./ui/Icon";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { CertoMark } from "./CertoMark";
 import { useAuth } from "../lib/AuthContext";
 import {
   collabProjectIdFromLocation,
-  collabProjectPath,
   isConfiguredCollab,
 } from "../lib/collabModule";
 import {
   loadCollabStatus,
   startCollabSso,
   syncCollabRooms,
-  type CollabChannel,
   type CollabRoom,
   type CollabStatus,
 } from "../lib/collabClient";
-import { partitionCollabDesk, type CollabDeskItem } from "../lib/collabRooms";
-import { timeAgo } from "../lib/workspaceDisplay";
 import { t } from "../lib/i18n";
 
 type ProjectRef = { id: string; name: string };
@@ -28,40 +24,18 @@ type Props = {
   projects?: ProjectRef[];
 };
 
-function asDeskItems(rooms: CollabRoom[], channels: CollabChannel[]): CollabDeskItem[] {
-  return [
-    ...rooms.map((room) => ({
-      id: room.projectId,
-      projectId: room.projectId,
-      name: room.name,
-      kind: "project" as const,
-      url: room.url,
-      lastActivityAt: Number(room.lastActivityAt || 0),
-    })),
-    ...channels.map((channel) => ({
-      id: String(channel.id || channel.inboxId || channel.name),
-      name: channel.name,
-      kind: "channel" as const,
-      url: channel.url,
-      lastActivityAt: Number(channel.lastActivityAt || 0),
-    })),
-  ];
-}
-
 export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, workspace } = useAuth();
   const [status, setStatus] = useState<CollabStatus | null>(null);
   const [embedUrl, setEmbedUrl] = useState("");
-  const [rooms, setRooms] = useState<CollabRoom[]>([]);
-  const [channels, setChannels] = useState<CollabChannel[]>([]);
-  const [roomQuery, setRoomQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const selectedProjectId = collabProjectIdFromLocation(location.pathname, location.search);
   const openedFor = useRef("");
   const roomsSyncedFor = useRef("");
+  const roomsRef = useRef<CollabRoom[]>([]);
 
   const projectList = useMemo(
     () =>
@@ -121,7 +95,7 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
           setLoading(false);
         }
         if (roomsSyncedFor.current === projectSignature) {
-          const selected = rooms.find((room) => room.projectId === selectedProjectId);
+          const selected = roomsRef.current.find((room) => room.projectId === selectedProjectId);
           if (selected?.url) setEmbedUrl(selected.url);
           return;
         }
@@ -132,8 +106,7 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
         });
         if (cancelled) return;
         roomsSyncedFor.current = projectSignature;
-        if (nextRooms.rooms?.length) setRooms(nextRooms.rooms);
-        setChannels(nextRooms.channels || []);
+        roomsRef.current = nextRooms.rooms || [];
         const selected = nextRooms.rooms?.find((room) => room.projectId === selectedProjectId);
         if (selected?.url) setEmbedUrl(selected.url);
       } catch (reason) {
@@ -151,18 +124,6 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   }, [projectList, projectSignature, selectedProjectId, user, workspace, workspaceName]);
 
   const configured = isConfiguredCollab(status);
-  const desk = useMemo(
-    () => partitionCollabDesk(asDeskItems(rooms, channels), roomQuery),
-    [channels, roomQuery, rooms],
-  );
-
-  const openItem = (item: CollabDeskItem) => {
-    if (!item.url) return;
-    setEmbedUrl(item.url);
-    if (item.kind === "project" && item.projectId) {
-      navigate(collabProjectPath(item.projectId));
-    }
-  };
 
   return (
     <div className="do-collab-shell" data-testid="chat-collab-module">
@@ -180,60 +141,6 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
         </button>
       </header>
       <div className="do-collab-body">
-        <aside className="do-collab-nav" data-testid="collab-rooms-collapse">
-          <label className="do-collab-search">
-            <Search size={14} />
-            <input
-              aria-label="Search project rooms"
-              data-testid="collab-room-search"
-              onChange={(event) => setRoomQuery(event.target.value)}
-              placeholder="Find a project room"
-              type="search"
-              value={roomQuery}
-            />
-          </label>
-          <div className="do-collab-nav-scroll">
-            <section>
-              <h2>Project rooms</h2>
-              {desk.projectRooms.length ? (
-                <ul>
-                  {desk.projectRooms.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        className={item.projectId === selectedProjectId ? "is-active" : ""}
-                        data-testid="collab-room-select"
-                        onClick={() => openItem(item)}
-                        type="button"
-                      >
-                        <span>{item.name}</span>
-                        {item.lastActivityAt ? <small>{timeAgo(item.lastActivityAt)}</small> : null}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>{roomQuery.trim() ? "No matching project rooms." : "Project rooms will appear here."}</p>
-              )}
-            </section>
-            <section data-testid="collab-other-channels">
-              <h2>Other channels</h2>
-              {desk.otherChannels.length ? (
-                <ul>
-                  {desk.otherChannels.map((item) => (
-                    <li key={item.id}>
-                      <button onClick={() => openItem(item)} type="button">
-                        <span>{item.name}</span>
-                        {item.lastActivityAt ? <small>{timeAgo(item.lastActivityAt)}</small> : null}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>Sessions and non-project channels stay here.</p>
-              )}
-            </section>
-          </div>
-        </aside>
         <main className="do-collab-stage">
           {loading && !embedUrl && (
             <div className="do-collab-state">

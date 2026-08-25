@@ -56,14 +56,15 @@ test("project rooms stay separate from other channels and can be searched", () =
   assert.equal(collabItemMatches(atlas, "atl"), true);
 });
 
-test("Chat Collab exposes a searchable project-room section next to other channels", () => {
+test("Chatwoot Channels keeps project rooms searchable without a Certo left bar", () => {
   const collab = readFileSync(resolve("src/components/ChatCollabModule.tsx"), "utf8");
+  const worker = readFileSync(resolve("worker/collab.js"), "utf8");
   const css = readFileSync(resolve("src/index.css"), "utf8");
-  assert.match(collab, /data-testid="collab-room-search"/);
-  assert.match(collab, /Project rooms/);
-  assert.match(collab, /Other channels/);
-  assert.match(collab, /partitionCollabDesk/);
-  assert.match(css, /do-collab-nav-scroll/);
+  assert.doesNotMatch(collab, /do-collab-nav/);
+  assert.match(worker, /Search project rooms/);
+  assert.match(worker, /Project rooms/);
+  assert.match(worker, /Other channels/);
+  assert.match(worker, /arrangeList/);
   assert.match(css, /do-collab-stage/);
-  assert.match(css, /overflow-y: auto/);
+  assert.doesNotMatch(worker, /max-height: min\(56vh, 32rem\)/);
 });

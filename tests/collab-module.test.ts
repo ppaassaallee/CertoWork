@@ -336,13 +336,12 @@ test("Chatwoot HTML is branded as Certo Work and project rooms can collapse", ()
   assert.match(html, /\/certo-mark\.svg/);
   assert.match(html, /certo-collab-brand/);
   assert.match(html, /Search project rooms/);
-  assert.match(html, /data-certo-scroll-fix/);
   assert.match(html, /data-certo-channel-children/);
   assert.match(html, /data-certo-sidebar-nav/);
-  assert.match(html, /max-height: min\(56vh, 32rem\)/);
   assert.match(html, /Project rooms/);
   assert.match(html, /Other channels/);
   assert.match(html, /#app \{ overflow: hidden !important; \}/);
+  assert.doesNotMatch(html, /max-height: min\(56vh, 32rem\)/);
   assert.equal(isCertoCollabBrandPath("/brand-assets/logo.svg"), true);
   assert.equal(isCertoCollabBrandPath("/app"), false);
 });
@@ -374,10 +373,9 @@ test("live shell mounts Chat Collab as a separate product on certo.work", () => 
   assert.match(workspace, /CertoMark/);
   assert.match(collab, /data-testid="chat-collab-module"/);
   assert.match(collab, /data-testid="chat-collab-setup"/);
-  assert.match(collab, /data-testid="collab-room-select"/);
-  assert.match(collab, /data-testid="collab-rooms-collapse"/);
-  assert.match(collab, /data-testid="collab-room-search"/);
+  assert.match(collab, /data-testid="chat-collab-frame"/);
   assert.match(collab, /syncCollabRooms/);
+  assert.doesNotMatch(collab, /do-collab-nav/);
   assert.doesNotMatch(collab, /1800/);
   assert.match(collab, /certo\.work/);
   assert.equal(collab.includes("collab.certo.work"), false);
