@@ -30,7 +30,9 @@
       "/hc/*",
       "/webhooks/*",
       "/public/api/*",
-      "/widget"
+      "/widget",
+      "/brand-assets",
+      "/brand-assets/*"
     ]
   },
   "routes": [
