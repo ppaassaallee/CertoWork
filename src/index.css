@@ -14019,3 +14019,123 @@ a {
 .do-apple-widget-page.is-standalone .do-apple-widget.is-mac {
   width: min(380px, 94vw);
 }
+
+.do-product-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 8px 10px 0;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.do-product-switch button {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-product-switch button.is-active {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.do-shell.is-sidebar-collapsed .do-product-switch {
+  display: none;
+}
+.do-collab-shell {
+  display: flex;
+  width: 100%;
+  height: 100dvh;
+  flex-direction: column;
+  background: var(--surface-0);
+}
+.do-collab-rail {
+  display: flex;
+  min-height: 52px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+}
+.do-collab-rail .do-product-switch {
+  margin: 0;
+  width: min(280px, 52vw);
+}
+.do-collab-rail-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+.do-collab-rail-copy strong {
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+}
+.do-collab-rail-copy small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.do-collab-back {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-collab-stage {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+.do-collab-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--surface-1);
+}
+.do-collab-state {
+  display: grid;
+  width: min(560px, calc(100% - 40px));
+  align-content: start;
+  gap: 12px;
+  margin: auto;
+  padding: 24px 0;
+  color: var(--text-secondary);
+}
+.do-collab-state h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-h2);
+}
+.do-collab-state p,
+.do-collab-state ul {
+  margin: 0;
+  line-height: 1.5;
+}
+.do-collab-state code {
+  font-size: 12px;
+}
+.do-collab-shell .do-collab-state .do-collab-back {
+  margin-left: 0;
+  justify-self: start;
+}

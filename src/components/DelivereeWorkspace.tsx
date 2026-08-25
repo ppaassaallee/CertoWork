@@ -68,6 +68,8 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
+import { ChatCollabModule } from "./ChatCollabModule";
+import { ProductSwitcher } from "./ProductSwitcher";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -3824,6 +3826,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/workspace"),
       },
       {
+        id: "nav-collab",
+        label: "Open Chat Collab",
+        group: "Navigate",
+        keywords: "chat slack teams chatwoot messages",
+        onSelect: () => navigate("/collab"),
+      },
+      {
         id: "nav-settings",
         label: "Go to Settings",
         group: "Navigate",
@@ -3899,6 +3908,7 @@ export function DelivereeWorkspace() {
       "nav-home",
       "nav-my-work",
       "nav-projects",
+      "nav-collab",
       "quick-capture",
       "new-conversation",
       "new-project",
@@ -3916,6 +3926,10 @@ export function DelivereeWorkspace() {
     openProjectRecord,
     startVoiceCall,
   ]);
+
+  if (lens.kind === "collab") {
+    return <ChatCollabModule workspaceName={workspace?.name} />;
+  }
 
   return (
     <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
@@ -3938,6 +3952,7 @@ export function DelivereeWorkspace() {
         className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`}
         data-testid="primary-sidebar"
       >
+        <ProductSwitcher product="work" />
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -4591,6 +4606,18 @@ export function DelivereeWorkspace() {
             />
           </div>
           <div className="do-header-actions">
+            {mobileCore && (
+              <button
+                aria-label={t("productCollab")}
+                className="do-icon-button"
+                data-testid="header-collab"
+                onClick={() => navigate("/collab")}
+                title={t("productCollab")}
+                type="button"
+              >
+                <MessageSquare size={15} />
+              </button>
+            )}
             <button
               aria-label="Open command palette"
               className="do-icon-button"

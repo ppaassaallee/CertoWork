@@ -10,6 +10,7 @@ import worker, {
   rewriteFirebaseAuthLocation,
   rewriteInstructions,
 } from "../worker/index.js";
+import { collabStatusPayload } from "../worker/collab.js";
 
 function environment(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,6 +79,27 @@ test("Firebase auth helpers are resolved through the legacy Firebase host", () =
     ),
     "https://gen-lang-client-0277783597.firebaseapp.com/__/auth/handler?providerId=google.com",
   );
+});
+
+test("Chat Collab status is public and unconfigured by default", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/collab/status"),
+    environment(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), collabStatusPayload({}, "https://gazelle.test"));
+});
+
+test("Chat Collab SSO requires authentication", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/collab/sso", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
 });
 
 test("Firebase auth redirects stay on the public Certo Work origin", () => {

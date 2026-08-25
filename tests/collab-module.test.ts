@@ -1,0 +1,220 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { lensToPath, resolveDelivereeLens } from "../src/lib/delivereeRoutes";
+import { mobileCoreFallbackPath } from "../src/lib/mobileCore";
+import {
+  chatwootOrigin,
+  isCollabPath,
+  isConfiguredCollab,
+  productFromPath,
+  productHomePath,
+} from "../src/lib/collabModule";
+import {
+  collabStatusPayload,
+  isChatwootProxyPath,
+  provisionCollabSso,
+  proxyChatwoot,
+  rewriteChatwootCookie,
+  rewriteChatwootLocation,
+} from "../worker/collab.js";
+import worker from "../worker/index.js";
+
+test("Chat Collab is a separate lens from work surfaces", () => {
+  assert.deepEqual(resolveDelivereeLens("/collab"), { kind: "collab" });
+  assert.deepEqual(resolveDelivereeLens("/collab/c/12"), { kind: "collab" });
+  assert.equal(lensToPath({ kind: "collab" }), "/collab");
+  assert.equal(isCollabPath("/collab"), true);
+  assert.equal(isCollabPath("/home"), false);
+  assert.equal(productFromPath("/projects"), "work");
+  assert.equal(productFromPath("/collab"), "collab");
+  assert.equal(productHomePath("work"), "/home");
+  assert.equal(productHomePath("collab"), "/collab");
+});
+
+test("mobile core does not bounce Chat Collab back to Home", () => {
+  assert.equal(mobileCoreFallbackPath("/collab"), null);
+  assert.equal(mobileCoreFallbackPath("/home"), null);
+});
+
+test("collab status never exposes the Chatwoot platform token or private origin", () => {
+  assert.deepEqual(collabStatusPayload({}), {
+    configured: false,
+    origin: "",
+    accountId: "",
+    ready: false,
+    mount: "same-origin",
+  });
+  const payload = collabStatusPayload(
+    {
+      CHATWOOT_URL: "https://chatwoot.internal:3000/",
+      CHATWOOT_PLATFORM_TOKEN: "secret-token",
+      CHATWOOT_ACCOUNT_ID: "42",
+    },
+    "https://certo.work/collab",
+  );
+  assert.equal(payload.configured, true);
+  assert.equal(payload.origin, "https://certo.work");
+  assert.equal(payload.accountId, "42");
+  assert.equal(payload.mount, "same-origin");
+  assert.equal(JSON.stringify(payload).includes("secret-token"), false);
+  assert.equal(JSON.stringify(payload).includes("chatwoot.internal"), false);
+  assert.equal(isConfiguredCollab(payload), true);
+  assert.equal(chatwootOrigin("https://certo.work/"), "https://certo.work");
+});
+
+test("Chatwoot proxy paths stay on certo.work and do not steal Work routes", () => {
+  assert.equal(isChatwootProxyPath("/app"), true);
+  assert.equal(isChatwootProxyPath("/app/login"), true);
+  assert.equal(isChatwootProxyPath("/auth/sign_in"), true);
+  assert.equal(isChatwootProxyPath("/cable"), true);
+  assert.equal(isChatwootProxyPath("/api/v1/accounts/1/conversations"), true);
+  assert.equal(isChatwootProxyPath("/widget"), true);
+  assert.equal(isChatwootProxyPath("/approvals"), false);
+  assert.equal(isChatwootProxyPath("/apple"), false);
+  assert.equal(isChatwootProxyPath("/home"), false);
+  assert.equal(isChatwootProxyPath("/collab"), false);
+  assert.equal(isChatwootProxyPath("/__/auth/handler"), false);
+  assert.equal(isChatwootProxyPath("/api/collab/status"), false);
+  assert.equal(isChatwootProxyPath("/api/boldi/chat"), false);
+  assert.equal(isChatwootProxyPath("/widget/apple-token"), false);
+  assert.equal(isChatwootProxyPath("/api/widget/apple-token"), false);
+});
+
+test("SSO login URLs are rewritten onto the public Certo Work origin", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    const path = String(url);
+    calls.push(`${init?.method || "GET"} ${path}`);
+    if (path.endsWith("/platform/api/v1/users") && init?.method === "POST") {
+      return Response.json({ id: 9, email: "ana@certo.work" });
+    }
+    if (path.includes("/account_users")) {
+      return Response.json({ user_id: 9, role: "agent" });
+    }
+    if (path.endsWith("/login")) {
+      return Response.json({
+        url: "https://chatwoot.internal:3000/app/login?email=ana%40certo.work&sso_auth_token=abc",
+      });
+    }
+    return Response.json({ error: "unexpected" }, { status: 500 });
+  }) as typeof fetch;
+  try {
+    const result = await provisionCollabSso(
+      {
+        CHATWOOT_URL: "https://chatwoot.internal:3000",
+        CHATWOOT_PLATFORM_TOKEN: "tok",
+        CHATWOOT_ACCOUNT_ID: "7",
+      },
+      { email: "ana@certo.work", displayName: "Ana", userId: "uid-1", workspaceId: "ws-1" },
+      "https://certo.work",
+    );
+    assert.equal(
+      result.url,
+      "https://certo.work/app/login?email=ana%40certo.work&sso_auth_token=abc",
+    );
+    assert.equal(result.userId, 9);
+    assert.equal(calls[0], "POST https://chatwoot.internal:3000/platform/api/v1/users");
+    assert.equal(calls[1], "POST https://chatwoot.internal:3000/platform/api/v1/accounts/7/account_users");
+    assert.equal(calls[2], "GET https://chatwoot.internal:3000/platform/api/v1/users/9/login");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("proxy rewrites Chatwoot redirects and cookies onto certo.work", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL) => {
+    assert.equal(String(url), "https://chatwoot.internal:3000/app/login?sso_auth_token=abc");
+    return new Response("<html>https://chatwoot.internal:3000/app</html>", {
+      status: 302,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        location: "https://chatwoot.internal:3000/app/accounts/7/dashboard",
+        "set-cookie": "cw_d_session_info=abc; Domain=chatwoot.internal; Path=/",
+      },
+    });
+  }) as typeof fetch;
+  try {
+    const response = await proxyChatwoot(
+      new Request("https://certo.work/app/login?sso_auth_token=abc"),
+      { CHATWOOT_URL: "https://chatwoot.internal:3000" },
+    );
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("location"), "https://certo.work/app/accounts/7/dashboard");
+    assert.equal(response.headers.get("set-cookie"), "cw_d_session_info=abc; Path=/");
+    assert.equal(await response.text(), "<html>https://certo.work/app</html>");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("worker serves Chatwoot from certo.work and leaves Work routes on the SPA", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string | URL) => {
+    if (String(url).startsWith("https://chatwoot.internal:3000/app")) {
+      return new Response("desk", { headers: { "content-type": "text/html" } });
+    }
+    return new Response("missing", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const env = {
+      ASSETS: {
+        async fetch(request: Request) {
+          const pathname = new URL(request.url).pathname;
+          if (pathname === "/approvals") {
+            return new Response("work-spa", { headers: { "content-type": "text/html" } });
+          }
+          return new Response("missing", { status: 404 });
+        },
+      },
+      CHATWOOT_URL: "https://chatwoot.internal:3000",
+      CHATWOOT_PLATFORM_TOKEN: "tok",
+      CHATWOOT_ACCOUNT_ID: "7",
+    };
+    const proxied = await worker.fetch(new Request("https://certo.work/app/login"), env);
+    assert.equal(proxied.status, 200);
+    assert.equal(await proxied.text(), "desk");
+    const work = await worker.fetch(new Request("https://certo.work/approvals"), env);
+    assert.equal(await work.text(), "work-spa");
+    const status = await worker.fetch(new Request("https://certo.work/api/collab/status"), env);
+    assert.deepEqual(await status.json(), {
+      configured: true,
+      origin: "https://certo.work",
+      accountId: "7",
+      ready: true,
+      mount: "same-origin",
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("location and cookie helpers never emit a collab subdomain", () => {
+  assert.equal(
+    rewriteChatwootLocation(
+      "https://chatwoot.internal:3000/app/login",
+      "https://chatwoot.internal:3000",
+      "https://certo.work",
+    ),
+    "https://certo.work/app/login",
+  );
+  assert.equal(rewriteChatwootCookie("session=1; Domain=collab.certo.work; Path=/"), "session=1; Path=/");
+});
+
+test("live shell mounts Chat Collab as a separate product on certo.work", () => {
+  const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  const collab = readFileSync(resolve("src/components/ChatCollabModule.tsx"), "utf8");
+  assert.match(workspace, /ProductSwitcher/);
+  assert.match(workspace, /ChatCollabModule/);
+  assert.match(workspace, /data-testid="header-collab"/);
+  assert.match(workspace, /nav-collab/);
+  assert.match(collab, /data-testid="chat-collab-module"/);
+  assert.match(collab, /data-testid="chat-collab-setup"/);
+  assert.match(collab, /data-testid="chat-collab-frame"/);
+  assert.match(collab, /certo\.work/);
+  assert.equal(collab.includes("collab.certo.work"), false);
+});
