@@ -70,6 +70,7 @@ import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
 import { ChatCollabModule } from "./ChatCollabModule";
 import { ProductSwitcher } from "./ProductSwitcher";
+import { collabProjectPath } from "../lib/collabModule";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -3863,6 +3864,13 @@ export function DelivereeWorkspace() {
         keywords: "chat slack teams chatwoot messages",
         onSelect: () => navigate("/collab"),
       },
+      ...activeProjects.slice(0, 12).map((project) => ({
+        id: `nav-collab-room-${project.id}`,
+        label: `Open room · ${entityTitle(project)}`,
+        group: "Navigate",
+        keywords: "chat collab room chatwoot",
+        onSelect: () => navigate(collabProjectPath(String(project.id))),
+      })),
       {
         id: "nav-settings",
         label: "Go to Settings",
@@ -3946,7 +3954,10 @@ export function DelivereeWorkspace() {
       "talk-odysseus",
     ]);
     return items.filter(
-      (item) => mobileIds.has(item.id) || item.id.startsWith("project-"),
+      (item) =>
+        mobileIds.has(item.id) ||
+        item.id.startsWith("project-") ||
+        item.id.startsWith("nav-collab-room-"),
     );
   }, [
     activeProjects,
@@ -3959,7 +3970,15 @@ export function DelivereeWorkspace() {
   ]);
 
   if (lens.kind === "collab") {
-    return <ChatCollabModule workspaceName={workspace?.name} />;
+    return (
+      <ChatCollabModule
+        projects={activeProjects.map((project) => ({
+          id: String(project.id),
+          name: entityTitle(project),
+        }))}
+        workspaceName={workspace?.name}
+      />
+    );
   }
 
   return (
@@ -4642,7 +4661,13 @@ export function DelivereeWorkspace() {
                 aria-label={t("productCollab")}
                 className="do-icon-button"
                 data-testid="header-collab"
-                onClick={() => navigate("/collab")}
+                onClick={() =>
+                  navigate(
+                    lens.kind === "project"
+                      ? collabProjectPath(lens.projectId)
+                      : "/collab",
+                  )
+                }
                 title={t("productCollab")}
                 type="button"
               >
