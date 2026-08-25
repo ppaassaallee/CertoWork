@@ -380,7 +380,7 @@ export default function App() {
   if (loading) {
     return <div className="do-loading"><span className="do-logo">C</span><Loader2 className="spin" size={18} /><p>Opening Certo Work…</p></div>;
   }
-  if (inviteToken && (!user || !workspace)) {
+  if (inviteToken) {
     return <InviteActivate token={inviteToken} />;
   }
   if (!user) return <SignIn />;
