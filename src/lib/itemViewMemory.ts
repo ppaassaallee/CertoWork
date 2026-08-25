@@ -70,12 +70,14 @@ export type ItemSavedView = {
   name: string;
   columns: ItemColumnKey[];
   widths?: Partial<Record<ItemColumnKey, number>>;
+  kanbanWidths?: Record<string, number>;
   filters?: Partial<ItemViewFilters>;
 };
 
 export type ItemViewSession = {
   columns: ItemColumnKey[];
   widths?: Partial<Record<ItemColumnKey, number>>;
+  kanbanWidths?: Record<string, number>;
   filters: ItemViewFilters;
 };
 
@@ -239,12 +241,23 @@ export function normalizeItemViewFilters(
   };
 }
 
+function asKanbanWidths(value: unknown): Record<string, number> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const next: Record<string, number> = {};
+  for (const [key, width] of Object.entries(value as Record<string, unknown>)) {
+    const numeric = Number(width);
+    if (key && Number.isFinite(numeric)) next[key] = numeric;
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
 function normalizeSession(value: unknown, projectId?: string | null): ItemViewSession | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as ItemViewSession;
   return {
     columns: asColumns(raw.columns) || [],
     widths: asWidths(raw.widths),
+    kanbanWidths: asKanbanWidths(raw.kanbanWidths),
     filters: normalizeItemViewFilters(raw.filters, projectId),
   };
 }
@@ -258,6 +271,7 @@ function normalizeSavedView(value: unknown): ItemSavedView | null {
     name,
     columns: asColumns(raw.columns) || [],
     widths: asWidths(raw.widths),
+    kanbanWidths: asKanbanWidths(raw.kanbanWidths),
     filters: raw.filters ? normalizeItemViewFilters(raw.filters) : undefined,
   };
 }

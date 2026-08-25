@@ -133,3 +133,20 @@ test("items and backlog keep last sort and named views per signed-in user", () =
   );
   assert.doesNotMatch(workItems, /saveItemView\(\); setViewsOpen\(false\)/);
 });
+
+test("kanban board uses Asana-style cards, pills, and resizable columns", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(workItems, /data-testid="kanban-card"/);
+  assert.match(workItems, /do-kanban-card-pills/);
+  assert.match(workItems, /do-kanban-add-task/);
+  assert.match(workItems, /data-testid="kanban-column-resizer"/);
+  assert.match(workItems, /startKanbanColumnResize/);
+  assert.match(workItems, /createKanbanItem/);
+  assert.doesNotMatch(
+    workItems,
+    /do-kanban-card[\s\S]{0,800}GTD action type for/,
+  );
+  assert.match(css, /\.do-kanban-card-pills/);
+  assert.match(css, /\.do-kanban-col-resizer/);
+  assert.match(css, /cursor: col-resize/);
+});
