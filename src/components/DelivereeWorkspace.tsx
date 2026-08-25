@@ -1587,14 +1587,20 @@ export function DelivereeWorkspace() {
         type: actionType,
         proposedChange,
       });
-      const existing = await getDocs(
-        query(
-          collection(db, "review_candidates"),
-          where("workspaceId", "==", workspace.id),
-          where("idempotencyKey", "==", idempotencyKey),
-        ),
-      );
-      if (!existing.empty) continue;
+      let alreadyStaged = false;
+      try {
+        const existing = await getDocs(
+          query(
+            collection(db, "review_candidates"),
+            where("userId", "==", user.uid),
+            where("idempotencyKey", "==", idempotencyKey),
+          ),
+        );
+        alreadyStaged = !existing.empty;
+      } catch {
+        alreadyStaged = false;
+      }
+      if (alreadyStaged) continue;
       const title =
         reviewType === "project"
           ? proposedTitle(proposedChange, actionLabel(actionType))
@@ -1620,8 +1626,6 @@ export function DelivereeWorkspace() {
           : plan.summary || "Odysseus",
         sourceType: "odiseus",
         sourceId: planRef.id,
-        idempotencyKey,
-        safetyLevel: Number(action.safetyLevel || plan.safetyLevel || 2),
         status: "pending",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -2061,21 +2065,71 @@ export function DelivereeWorkspace() {
   };
 
   const applyVoicePlans = async (plans: any[]) => {
+    if (!user || !workspace) return 0;
     let applied = 0;
     for (const plan of plans) {
-      if (!plan?.proposedActions?.length) continue;
-      const staged = await stagePlan(
-        { id: "", role: "assistant", content: "", actionPlan: plan },
-        { silent: true },
-      );
-      for (const candidate of staged.candidates) {
-        await processReview(candidate, "approve");
-        applied += 1;
+      for (const action of plan?.proposedActions || []) {
+        const type = String(action.type || "");
+        const proposed = action.proposedChange || {};
+        const projectId =
+          String(proposed.projectId || primaryProject?.id || "").trim() || null;
+        if (type === "create_task") {
+          await addDoc(collection(db, "tasks"), {
+            userId: user.uid,
+            workspaceId: workspace.id,
+            ...(projectId ? { projectId } : {}),
+            ...buildTaskAccessPatch({
+              task: proposed,
+              workspaceId: workspace.id,
+              userId: user.uid,
+              email: user.email,
+            }),
+            title: String(proposed.title || proposed.name || "Untitled").trim() || "Untitled",
+            description: String(proposed.description || "").slice(0, 4000),
+            status: String(proposed.status || "open"),
+            priority: proposed.priority ?? null,
+            dueDate: proposed.dueDate || null,
+            timeSector: proposed.timeSector || "today",
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          applied += 1;
+          continue;
+        }
+        if (type === "update_task" || type === "reschedule_task") {
+          const targetId = String(proposed.taskId || proposed.id || "").trim();
+          if (!targetId) continue;
+          const patch = Object.fromEntries(
+            ["title", "description", "status", "priority", "dueDate", "timeSector", "projectId"]
+              .filter((field) => proposed[field] !== undefined)
+              .map((field) => [field, proposed[field]]),
+          );
+          await updateDoc(doc(db, "tasks", targetId), {
+            ...patch,
+            updatedAt: serverTimestamp(),
+          });
+          applied += 1;
+          continue;
+        }
+        const staged = await stagePlan(
+          {
+            id: "",
+            role: "assistant",
+            content: "",
+            actionPlan: { ...plan, proposedActions: [action] },
+          },
+          { silent: true },
+        );
+        for (const candidate of staged.candidates) {
+          await processReview(candidate, "approve");
+          if (candidate.id) applied += 1;
+        }
       }
     }
     setNotice(
       applied > 0
-        ? `${ODISEUS_NAME} applied ${applied} update${applied === 1 ? "" : "s"}.`
+        ? `${ODISEUS_NAME} added ${applied} task${applied === 1 ? "" : "s"} from the call.`
         : "Nothing was applied.",
     );
     return applied;

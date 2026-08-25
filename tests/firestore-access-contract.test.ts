@@ -133,3 +133,17 @@ test("Apple widget tokens are publicly readable and owner-updated", () => {
   assert.match(workspace, /APPLE_WIDGET_COLLECTION/);
   assert.match(workspace, /buildAppleWidgetSnapshot/);
 });
+
+test("voice apply writes tasks directly and stages review candidates by userId", () => {
+  assert.match(workspace, /applyVoicePlans/);
+  assert.match(workspace, /collection\(db, "tasks"\)/);
+  assert.match(workspace, /where\("userId", "==", user\.uid\)/);
+  assert.match(workspace, /where\("idempotencyKey", "==", idempotencyKey\)/);
+  assert.doesNotMatch(
+    workspace,
+    /where\("workspaceId", "==", workspace\.id\),\s*where\("idempotencyKey"/,
+  );
+  const start = rules.indexOf("function isValidReviewCandidate(");
+  const block = rules.slice(start, rules.indexOf("match /review_candidates", start));
+  assert.match(block, /idempotencyKey/);
+});

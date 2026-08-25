@@ -318,7 +318,7 @@ service cloud.firestore {
     // Review Candidates
     function isValidReviewCandidate(data) {
        return data.keys().hasAll(['userId', 'title', 'type', 'why', 'source', 'proposed', 'confidence', 'action', 'status', 'createdAt']) 
-        && data.keys().hasOnly(['userId', 'title', 'type', 'why', 'source', 'proposed', 'confidence', 'action', 'status', 'createdAt', 'actionCategory', 'priority', 'dueDate', 'projectId', 'owner', 'workspaceId', 'createdBy', 'sourceType', 'sourceId', 'agentRunId', 'updatedAt', 'approvedAt', 'approvedBy', 'convertedToType', 'convertedToId', 'originalReviewPayload', 'sourceReviewItemId', 'deletedAt', 'sourceItemId', 'linkedEntityType', 'linkedEntityId'])
+        && data.keys().hasOnly(['userId', 'title', 'type', 'why', 'source', 'proposed', 'confidence', 'action', 'status', 'createdAt', 'actionCategory', 'priority', 'dueDate', 'projectId', 'owner', 'workspaceId', 'createdBy', 'sourceType', 'sourceId', 'agentRunId', 'updatedAt', 'approvedAt', 'approvedBy', 'convertedToType', 'convertedToId', 'originalReviewPayload', 'sourceReviewItemId', 'deletedAt', 'sourceItemId', 'linkedEntityType', 'linkedEntityId', 'idempotencyKey', 'safetyLevel'])
         && data.userId is string && data.userId == request.auth.uid
         && data.title is string && data.title.size() <= 500
         && data.type is string && data.type.size() <= 50
@@ -349,7 +349,9 @@ service cloud.firestore {
         && (!('owner' in data) || data.owner is string)
         && (!('sourceItemId' in data) || data.sourceItemId is string)
         && (!('linkedEntityType' in data) || data.linkedEntityType is string)
-        && (!('linkedEntityId' in data) || data.linkedEntityId is string);
+        && (!('linkedEntityId' in data) || data.linkedEntityId is string)
+        && (!('idempotencyKey' in data) || data.idempotencyKey is string)
+        && (!('safetyLevel' in data) || data.safetyLevel is number);
     }
     match /review_candidates/{candidateId} {
       allow get: if isSignedIn() && isValidId(candidateId) && (resource == null || resource.data.userId == request.auth.uid);

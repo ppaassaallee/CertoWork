@@ -13,6 +13,7 @@ import {
   collectVoiceActions,
   createSpeechRecognition,
   finalSpeechFromEvent,
+  firestorePermissionMessage,
   joinVoiceNotes,
   planFromSelectedActions,
   preferredRecorderMime,
@@ -326,11 +327,7 @@ export function OdysseusVoiceCall({
           : "Done. Nothing was applied.",
       );
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Those updates could not be applied.",
-      );
+      setError(firestorePermissionMessage(reason));
       setCallPhase("review");
     }
   };

@@ -276,4 +276,12 @@ export function stopSpeaking() {
   }
 }
 
+export function firestorePermissionMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/insufficient permissions|permission-denied/i.test(message)) {
+    return "I couldn't save that task. Check workspace access, then tap Apply selected again.";
+  }
+  return message.trim() || "Those updates could not be applied.";
+}
+
 export const VOICE_GREETING = "I'm listening. Talk it through — I'll take notes.";
