@@ -160,10 +160,22 @@ test("any item including epics can be deleted with a grey-to-red bin", () => {
   assert.match(workItems, /renderDeleteButton\(selectedItem\)/);
   assert.match(workItems, /renderFieldCells\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"/);
-  assert.match(workItems, /renderTitleCell\(item, kind, childCount\)/);
+  assert.match(workItems, /renderTitleCell\(item, kind, childCount/);
   assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderFieldCells\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderDeleteButton\(item\)/);
   assert.doesNotMatch(workItems, /deleteDoc/);
   assert.match(css, /\.do-items-delete \{[\s\S]*?color: var\(--text-muted\)/);
   assert.match(css, /\.do-items-delete:hover[\s\S]*?color: var\(--status-danger\)/);
+});
+
+test("list hierarchy nests children under epics and opens an expanded item popup", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(workItems, /data-testid="item-tree-node"/);
+  assert.match(workItems, /data-testid="item-tree-toggle"/);
+  assert.match(workItems, /hierarchyChildren/);
+  assert.match(workItems, /renderForest/);
+  assert.match(workItems, /data-testid="item-expanded-modal"/);
+  assert.match(workItems, /createPortal/);
+  assert.match(css, /\.do-item-modal-backdrop/);
+  assert.match(css, /\.do-item-modal \{/);
 });

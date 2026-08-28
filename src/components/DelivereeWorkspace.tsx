@@ -476,10 +476,10 @@ export function DelivereeWorkspace() {
     else if (next === "settings") navigate("/settings");
   };
   const centerView: CenterView =
-    lens.kind === "project"
-      ? lens.tab === "notes"
-        ? "notes"
-        : lens.tab === "strategy"
+    lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
+      ? "notes"
+      : lens.kind === "project"
+      ? lens.tab === "strategy"
           ? "strategy"
           : "project"
       : lens.kind === "my-work"
@@ -500,7 +500,10 @@ export function DelivereeWorkspace() {
       (lens.kind === "project" ? lens.projectId : null) || projectConsoleId;
     if (next === "portfolio") navigate("/projects");
     else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
-    else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
+    else if (next === "notes") {
+      if (projectId && lens.kind === "project") navigate(`/work/projects/${projectId}/notes`);
+      else navigate("/notes");
+    }
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -4036,7 +4039,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -4145,6 +4148,18 @@ export function DelivereeWorkspace() {
           >
             <Folder size="sm" />
             <span>{t("navProjects")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-notes ${lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes") ? "is-active" : ""}`}
+            data-testid="nav-notes"
+            onClick={() => {
+              navigate("/notes");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <BookOpen size="sm" />
+            <span>{t("navNotes")}</span>
           </button>
           <button
             className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" ? "is-active" : ""}`}
@@ -4665,6 +4680,9 @@ export function DelivereeWorkspace() {
                           ? [{ label: "Waiting" }]
                           : [{ label: "Assigned" }]),
                     ]
+                  : []),
+                ...(lens.kind === "notes"
+                  ? [{ label: "Notes" }]
                   : []),
                 ...(lens.kind === "agents"
                   ? [
@@ -5495,12 +5513,7 @@ export function DelivereeWorkspace() {
         </button>
         <button
           className={mobileCoreTab(location.pathname) === "notes" ? "is-active" : ""}
-          onClick={() => {
-            const projectId =
-              (lens.kind === "project" ? lens.projectId : null) || projectConsoleId || activeProjects[0]?.id;
-            if (projectId) navigate(`/work/projects/${projectId}/notes`);
-            else navigate("/projects");
-          }}
+          onClick={() => navigate("/notes")}
           type="button"
         >
           <BookOpen size={16} />

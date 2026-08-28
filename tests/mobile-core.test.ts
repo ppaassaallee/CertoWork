@@ -14,6 +14,7 @@ test("mobile core keeps Home, My Work, Projects, and Notes", () => {
   assert.equal(mobileCoreTab("/home"), "home");
   assert.equal(mobileCoreTab("/my-work"), "my-work");
   assert.equal(mobileCoreTab("/projects"), "projects");
+  assert.equal(mobileCoreTab("/notes"), "notes");
   assert.equal(mobileCoreTab("/work/projects/abc/notes"), "notes");
 });
 

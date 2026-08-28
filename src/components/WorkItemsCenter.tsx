@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
@@ -36,6 +37,11 @@ import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, ka
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
+import {
+  hierarchyChildren,
+  hierarchyRoots,
+  sortHierarchySiblings,
+} from "../lib/itemHierarchy";
 import { useMobileCore } from "../hooks/useMobileCore";
 import { useAuth } from "../lib/AuthContext";
 import {
@@ -489,7 +495,7 @@ export function WorkItemsCenter({
   const [tagFilter, setTagFilter] = useState("all");
   const [workCategoryFilter, setWorkCategoryFilter] = useState("all");
   const [productPhaseFilter, setProductPhaseFilter] = useState("all");
-  const [groupBy, setGroupBy] = useState<GroupBy>(activeProject ? "hierarchy" : "project");
+  const [groupBy, setGroupBy] = useState<GroupBy>("hierarchy");
   const [primarySort, setPrimarySort] = useState<SortBy>("project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
   const [newType, setNewType] = useState<WorkItemKind>("pbi");
@@ -828,6 +834,15 @@ export function WorkItemsCenter({
     );
   }, [selectedItem?.id, selectedItem?.description, selectedItem?.definitionOfDone]);
 
+  useEffect(() => {
+    if (!selectedItemId) return undefined;
+    const onKey = (event: { key: string }) => {
+      if (event.key === "Escape") onSelectItem(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onSelectItem, selectedItemId]);
+
   const createItem = async () => {
     const projectId = newProjectId || baseProjectId;
     if (!newTitle.trim()) return;
@@ -1029,9 +1044,29 @@ export function WorkItemsCenter({
     </button>
   );
 
-  const renderTitleCell = (item: any, kind: WorkItemKind, childCount: number) => (
+  const renderTitleCell = (
+    item: any,
+    kind: WorkItemKind,
+    childCount: number,
+    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; showToggle?: boolean },
+  ) => (
     itemColumnSet.has("title") ? (
-      <div className="do-items-title">
+      <div className="do-items-title" style={tree?.depth ? { paddingLeft: tree.depth * 16 } : undefined}>
+        {tree?.showToggle !== false && tree && tree.childCount > 0 ? (
+          <button
+            aria-expanded={!tree.collapsed}
+            aria-label={`${tree.collapsed ? "Expand" : "Collapse"} ${title(item)}`}
+            className="do-items-section-toggle"
+            data-testid="item-tree-toggle"
+            onClick={(event) => {
+              event.stopPropagation();
+              tree.onToggle();
+            }}
+            type="button"
+          >
+            <ChevronDown className={tree.collapsed ? "is-collapsed" : ""} size={14} />
+          </button>
+        ) : tree ? <span className="do-items-tree-spacer" /> : null}
         <button
           aria-label={`${workItemLabel(kind)} ${title(item)}`}
           className={`do-items-type-flag is-${kind}`}
@@ -1099,9 +1134,13 @@ export function WorkItemsCenter({
     </>
   );
 
-  const renderRow = (item: any, peers: any[]) => {
+  const renderRow = (
+    item: any,
+    peers: any[],
+    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void },
+  ) => {
     const kind = workItemKind(item);
-    const children = tasks.filter((candidate) => parentId(candidate) === item.id);
+    const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
     const isDone = canonicalStatus(item) === "done";
     return (
       <article
@@ -1145,7 +1184,7 @@ export function WorkItemsCenter({
         >
           <GripVertical size={14} />
         </button>
-        {renderTitleCell(item, kind, children.length)}
+        {renderTitleCell(item, kind, childCount, tree)}
         {renderFieldCells(item)}
         {renderDeleteButton(item)}
       </article>
@@ -1244,8 +1283,9 @@ export function WorkItemsCenter({
         <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
-          className="do-items-section-toggle"
-          onClick={() => toggleGroup(groupKey)}
+            className="do-items-section-toggle"
+            data-testid="item-tree-toggle"
+            onClick={() => toggleGroup(groupKey)}
           type="button"
         >
           <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
@@ -1254,70 +1294,51 @@ export function WorkItemsCenter({
           {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
         </button>
         <span />
-        {renderTitleCell(item, kind, childCount)}
+        {renderTitleCell(item, kind, childCount, { depth: 0, childCount, collapsed, onToggle: () => toggleGroup(groupKey), showToggle: false })}
         {renderFieldCells(item)}
         {renderDeleteButton(item)}
       </header>
     );
   };
 
-  const renderHierarchy = () => {
-    const epics = filtered.filter((item) => workItemKind(item) === "epic");
-    const features = filtered.filter((item) => workItemKind(item) === "feature");
-    const executables = filtered.filter((item) => ["pbi", "story", "task", "bug"].includes(workItemKind(item)));
-    const subtasks = filtered.filter((item) => workItemKind(item) === "subtask");
-    const orphanExecutables = executables.filter((item) => !parentId(item));
+  const renderForest = (items: any[]) => {
+    const walk = (item: any, depth: number, ancestors: Set<string>) => {
+      if (ancestors.has(item.id)) return null;
+      const children = sortHierarchySiblings(hierarchyChildren(items, item.id));
+      const groupKey = `node:${item.id}`;
+      const collapsed = collapsedGroups.includes(groupKey);
+      const kind = workItemKind(item);
+      const nextAncestors = new Set(ancestors);
+      nextAncestors.add(item.id);
+      const tree = {
+        depth,
+        childCount: children.length,
+        collapsed,
+        onToggle: () => toggleGroup(groupKey),
+      };
+      return (
+        <div className={`do-items-tree-node do-items-parent is-${kind}${kind === "epic" && depth === 0 ? " is-epic-section" : ""}`} data-depth={depth} data-testid="item-tree-node" key={item.id}>
+          {kind === "epic" && depth === 0
+            ? renderSectionHead(item, groupKey, children.length)
+            : renderRow(item, items, tree)}
+          {!collapsed && children.length > 0 && (
+            <div className="do-items-children">
+              {children.map((child) => walk(child, depth + 1, nextAncestors))}
+            </div>
+          )}
+        </div>
+      );
+    };
+    const roots = sortHierarchySiblings(hierarchyRoots(items));
     return (
       <div className="do-items-tree">
-        {epics.map((epic) => {
-          const groupKey = `epic:${epic.id}`;
-          const collapsed = collapsedGroups.includes(groupKey);
-          const epicFeatures = features.filter((feature) => parentId(feature) === epic.id || feature.epicId === epic.id);
-          const epicExecutables = executables.filter((item) => (parentId(item) === epic.id || item.epicId === epic.id) && !item.featureId);
-          return (
-            <section className="do-items-parent is-epic-section" key={epic.id}>
-              {renderSectionHead(epic, groupKey, epicFeatures.length + epicExecutables.length)}
-              {collapsed ? null : (
-                <div className="do-items-children">
-                  {epicFeatures.map((feature) => {
-                    const featureExecutables = executables.filter((item) => parentId(item) === feature.id || item.featureId === feature.id);
-                    return (
-                      <div className="do-items-parent is-feature" key={feature.id}>
-                        {renderRow(feature, epicFeatures)}
-                        <div className="do-items-children">
-                          {featureExecutables.map((item) => <div key={item.id}>{renderRow(item, featureExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {epicExecutables.map((item) => <div key={item.id}>{renderRow(item, epicExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}
-                </div>
-              )}
-            </section>
-          );
-        })}
-        {features.filter((feature) => !parentId(feature)).map((feature) => {
-          const featureExecutables = executables.filter((item) => parentId(item) === feature.id || item.featureId === feature.id);
-          return (
-            <section className="do-items-parent" key={feature.id}>
-              {renderRow(feature, features)}
-              <div className="do-items-children">{featureExecutables.map((item) => <div key={item.id}>{renderRow(item, featureExecutables)}<div className="do-items-subtasks">{subtasks.filter((subtask) => parentId(subtask) === item.id).map((subtask) => renderRow(subtask, subtasks))}</div></div>)}</div>
-            </section>
-          );
-        })}
-        {orphanExecutables.length > 0 && (
-          <section className="do-items-parent is-orphan">
-            <header className="do-items-section-head">
-              <h3>Unassigned</h3>
-              <small>{orphanExecutables.length}</small>
-            </header>
-            {orphanExecutables.map((item) => renderRow(item, orphanExecutables))}
-          </section>
-        )}
-        {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI, task or bug for this context.</span></div>}
+        {roots.map((item) => walk(item, 0, new Set()))}
+        {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI, task or bug for this context.</span></div>}
       </div>
     );
   };
+
+  const renderHierarchy = () => renderForest(filtered);
 
   const grouped = useMemo(() => {
     const keyFor = (item: any) => {
@@ -1677,6 +1698,7 @@ export function WorkItemsCenter({
             <button aria-expanded={viewsOpen} aria-label="Views" className={`do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
+                <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("list"); setViewsOpen(false); }} type="button">Epic hierarchy</button>
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
                 <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
                 <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>
@@ -2050,7 +2072,7 @@ export function WorkItemsCenter({
         </section>
       )}
 
-      <div className={`do-items-layout ${selectedItem ? "has-detail" : ""}`}>
+      <div className="do-items-layout">
         <section className={`do-items-workspace is-${mode}`}>
           <div className="do-items-summary">
             {(summaryHasSignal || filtered.length > 0) && (
@@ -2078,7 +2100,7 @@ export function WorkItemsCenter({
               }).map(([group, items]) => (
                 <section className="do-items-group" key={group}>
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
-                  {!collapsedGroups.includes(group) && <div>{items.map((item) => renderRow(item, items))}</div>}
+                  {!collapsedGroups.includes(group) && renderForest(items)}
                 </section>
               ))}
               {filtered.length === 0 && (
@@ -2099,8 +2121,18 @@ export function WorkItemsCenter({
           )}
         </section>
 
-        {selectedItem && (
-          <aside className="do-item-detail" aria-label="Selected work item detail">
+        {selectedItem && createPortal(
+          <div
+            className="do-item-modal-backdrop"
+            data-testid="item-expanded-modal"
+            onClick={() => onSelectItem(null)}
+          >
+            <aside
+              aria-label={`${workItemLabel(workItemKind(selectedItem))} expanded view`}
+              className="do-item-detail do-item-modal"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
             <div className="do-item-detail-head">
               <span>{workItemLabel(workItemKind(selectedItem))}</span>
               <div className="do-item-detail-head-actions">
@@ -2142,7 +2174,9 @@ export function WorkItemsCenter({
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
               <button onClick={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)} type="button"><ArrowRight size={13} /> Ask</button>
             </div>
-          </aside>
+            </aside>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

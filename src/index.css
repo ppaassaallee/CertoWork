@@ -5037,6 +5037,13 @@ a {
   font-size: var(--text-caption);
   font-weight: 500;
 }
+.do-items-tree-spacer {
+  width: 16px;
+  flex-shrink: 0;
+}
+.do-items-tree-node {
+  min-width: 0;
+}
 .do-items-children {
   display: grid;
   gap: 0;
@@ -5736,6 +5743,26 @@ a {
   grid-template-columns: 1fr 1fr;
   gap: 7px;
   margin-top: 4px;
+}
+.do-item-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(28, 27, 23, 0.45);
+}
+.do-item-modal {
+  width: min(720px, 100%);
+  max-height: min(88vh, 860px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-left-width: 1px;
+  border-radius: 16px;
+  background: var(--surface-0);
+  box-shadow: 0 24px 80px rgba(28, 27, 23, 0.28);
+  padding: 18px 20px 22px;
 }
 .do-field-label {
   display: flex !important;

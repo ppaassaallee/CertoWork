@@ -43,6 +43,7 @@ test("canonical IA routes resolve to mental-model lenses", () => {
     kind: "more",
     section: "workspace",
   });
+  assert.deepEqual(resolveDelivereeLens("/notes"), { kind: "notes" });
   assert.deepEqual(resolveDelivereeLens("/approvals"), { kind: "approvals" });
   assert.deepEqual(resolveDelivereeLens("/invoices"), { kind: "invoices" });
   assert.deepEqual(resolveDelivereeLens("/feedback"), {
@@ -90,6 +91,7 @@ test("legacy URLs alias into the new IA", () => {
 test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "my-work", section: "assigned" }), "/my-work");
   assert.equal(lensToPath({ kind: "my-work", section: "inbox" }), "/my-work/inbox");
+  assert.equal(lensToPath({ kind: "notes" }), "/notes");
   assert.equal(lensToPath({ kind: "work", section: "portfolio" }), "/projects");
   assert.equal(lensToPath({ kind: "agents", section: "home" }), "/agents");
   assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/agents/automations");
@@ -114,6 +116,9 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-home"/);
   assert.match(source, /data-testid="nav-my-work"/);
   assert.match(source, /data-testid="nav-projects"/);
+  const notes = readFileSync(resolve("src/components/NotesWorkspace.tsx"), "utf8");
+  assert.match(source, /data-testid="nav-notes"/);
+  assert.match(notes, /data-testid="notes-workspace"/);
   assert.match(source, /data-testid="nav-agents"/);
   assert.match(source, /data-testid="nav-approvals"/);
   assert.match(source, /data-testid="nav-invoices"/);

@@ -208,7 +208,7 @@ export function defaultItemViewFilters(projectId?: string | null): ItemViewFilte
     tagFilter: "all",
     workCategoryFilter: "all",
     productPhaseFilter: "all",
-    groupBy: projectId ? "hierarchy" : "project",
+    groupBy: "hierarchy",
     primarySort: "project",
     secondarySort: "priority",
     query: "",

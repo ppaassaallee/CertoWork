@@ -409,7 +409,7 @@ export function NotesWorkspace({
   };
 
   return (
-    <section className="do-notes-center">
+    <section className="do-notes-center" data-testid="notes-workspace">
       <aside className="do-notes-nav">
         <div className="do-notes-create">
           <input

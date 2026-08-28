@@ -23,6 +23,7 @@ export type DelivereeLens =
   | { kind: "settings" }
   | { kind: "collab" }
   | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
+  | { kind: "notes" }
   | { kind: "more"; section: MoreSection };
 
 const MORE_SECTIONS: MoreSection[] = [
@@ -125,6 +126,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "my-work", section: "waiting" };
   }
 
+  if (path === "/notes" || path.startsWith("/notes/")) {
+    return { kind: "notes" };
+  }
+
   if (path.startsWith("/more/")) {
     const section = path.slice("/more/".length) as MoreSection;
     if (MORE_SECTIONS.includes(section)) {
@@ -193,6 +198,7 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "feedback") {
     return lens.section === "queue" ? "/workspace/feedback" : "/feedback";
   }
+  if (lens.kind === "notes") return "/notes";
   if (lens.kind === "more") {
     if (lens.section === "workspace") return "/workspace";
     return `/more/${lens.section}`;
