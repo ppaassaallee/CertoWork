@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import worker, {
@@ -398,4 +400,22 @@ test("create project requests keep the explicit project name instead of the gene
     "Castillo Retail Pilot",
   );
   assert.equal(inferProjectTitleFromRequest("create a project"), "");
+});
+
+test("Wrangler config serves the SPA and API on Workers Static Assets", () => {
+  const wrangler = readFileSync(resolve("wrangler.jsonc"), "utf8");
+  assert.match(wrangler, /"name": "certo-work"/);
+  assert.match(wrangler, /"directory": "\.\/dist\/client"/);
+  assert.match(wrangler, /"not_found_handling": "single-page-application"/);
+  assert.match(wrangler, /"workers_dev": true/);
+  assert.match(wrangler, /"\/api\/\*"/);
+});
+
+test("GitHub Actions deploys the Worker with Wrangler", () => {
+  const workflow = readFileSync(resolve(".github/workflows/deploy-cloudflare.yml"), "utf8");
+  assert.match(workflow, /cloudflare\/wrangler-action@v3/);
+  assert.match(workflow, /CLOUDFLARE_API_TOKEN/);
+  assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /command: deploy/);
 });

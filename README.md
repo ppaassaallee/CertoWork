@@ -14,14 +14,19 @@ the app. For a real product URL, deploy to Cloudflare and point DNS there.
 
 Cloudflare production deploy:
 
-1. Configure secrets:
+1. Configure Worker secrets:
    - `npx wrangler secret put OPENAI_API_KEY`
-2. Build and deploy:
+2. Build and deploy from a machine with Wrangler auth:
    - `npm run deploy:cloudflare`
-3. Add custom domains in Cloudflare Workers:
+3. Or deploy from GitHub Actions: add repository secrets
+   `CLOUDFLARE_API_TOKEN` (Workers Edit) and `CLOUDFLARE_ACCOUNT_ID`,
+   then push to `main` or run **Deploy Cloudflare**.
+4. After `workers.dev` looks good, attach custom domains in the Worker
+   settings (do this in the dashboard so deploy still works before the
+   zone is on the account):
    - `certo.work`
    - `www.certo.work`
-4. Add these domains to Firebase Authentication authorized domains:
+5. Add these domains to Firebase Authentication authorized domains:
    - `certo.work`
    - `www.certo.work`
    - the generated `*.workers.dev` preview hostname, if used
