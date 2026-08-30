@@ -416,10 +416,8 @@ test("Wrangler config serves the SPA and API on Workers Static Assets", () => {
 
 test("GitHub Actions deploys the Worker with Wrangler", () => {
   const workflow = readFileSync(resolve(".github/workflows/deploy-cloudflare.yml"), "utf8");
-  assert.match(workflow, /cloudflare\/wrangler-action@v3/);
   assert.match(workflow, /CLOUDFLARE_API_TOKEN/);
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
   assert.match(workflow, /npm run build/);
-  assert.match(workflow, /command: deploy/);
-  assert.match(workflow, /wranglerVersion: "4\.127\.1"/);
+  assert.match(workflow, /wrangler@4\.127\.1 deploy/);
 });
