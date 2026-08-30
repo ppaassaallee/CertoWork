@@ -6,6 +6,7 @@ import {
   appendStatusHistory,
   asKanbanSwimlane,
   calendarWeekDays,
+  canAcceptWipDrop,
   checklistProgress,
   cumulativeFlowSeries,
   cycleTimeMs,
@@ -17,17 +18,24 @@ import {
   leadTimeMs,
   mentionNames,
   parseKanbanDroppable,
+  stackedAreaLayers,
   subtaskProgress,
   swimlaneKeyFor,
   swimlaneMovePatch,
   uniqueSwimlanes,
   wipCaption,
+  wipTone,
 } from "../src/lib/kanbanFeatures";
 
-test("WIP limits flag a column only when a cap is set and exceeded", () => {
+test("WIP limits flag a column at capacity and reject extra drops", () => {
   assert.equal(isWipOver(4, 0), false);
   assert.equal(isWipOver(3, 3), false);
   assert.equal(isWipOver(4, 3), true);
+  assert.equal(canAcceptWipDrop("backlog", "doing", 3, 3), false);
+  assert.equal(canAcceptWipDrop("doing", "doing", 3, 3), true);
+  assert.equal(canAcceptWipDrop("backlog", "doing", 2, 3), true);
+  assert.equal(wipTone(3, 3), "limit");
+  assert.equal(wipTone(4, 3), "over");
   assert.equal(wipCaption(4, 3), "4/3");
   assert.equal(wipCaption(2, 0), "2");
 });
@@ -138,4 +146,13 @@ test("status history appends a column change without duplicating the last event"
   assert.equal(again.length, 1);
   assert.equal(moved.length, 2);
   assert.equal(moved[1].column, "done");
+});
+
+test("stacked area layers keep done under in-progress", () => {
+  const layers = stackedAreaLayers([
+    { date: "2026-08-20", backlog: 2, doing: 1, blocked: 0, done: 1 },
+    { date: "2026-08-21", backlog: 1, doing: 2, blocked: 0, done: 2 },
+  ]);
+  assert.match(layers.done, /,/);
+  assert.match(layers.backlog, /,/);
 });

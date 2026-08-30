@@ -724,6 +724,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    match /kanban_board_presence/{presenceId} {
+      allow read: if isSignedIn() && resource.data.workspaceId is string && isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().workspaceId is string
+        && incoming().surface is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     // Tasks
     function isValidTask(data) {
        return data.keys().hasAll(['userId', 'title', 'status', 'createdAt'])

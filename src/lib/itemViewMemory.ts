@@ -14,7 +14,7 @@ export const LEGACY_NAMED_VIEWS_KEY = "certo-items-view-config";
 export const LEGACY_COLUMNS_KEY = "certo-items-current-view-config";
 export const LEGACY_WIDTHS_KEY = "certo-items-current-column-widths";
 
-export type WorkItemsViewMode = "list" | "kanban" | "calendar" | "gantt" | "epics";
+export type WorkItemsViewMode = "list" | "kanban" | "calendar" | "flow" | "gantt" | "epics";
 export type ItemGroupBy =
   | "hierarchy"
   | "actionBoard"
@@ -102,7 +102,7 @@ export type ItemViewMemory = {
   sessions: Record<string, ItemViewSession>;
 };
 
-const VIEW_MODES: WorkItemsViewMode[] = ["list", "kanban", "calendar", "gantt", "epics"];
+const VIEW_MODES: WorkItemsViewMode[] = ["list", "kanban", "calendar", "flow", "gantt", "epics"];
 const GROUP_BY: ItemGroupBy[] = [
   "hierarchy",
   "actionBoard",

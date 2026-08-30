@@ -144,10 +144,10 @@ test("items and backlog keep last sort and named views per signed-in user", () =
   assert.doesNotMatch(workItems, /saveItemView\(\); setViewsOpen\(false\)/);
 });
 
-test("kanban board uses Asana-style cards, pills, and resizable columns", () => {
+test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(workItems, /data-testid="kanban-card"/);
-  assert.match(workItems, /do-kanban-card-pills/);
+  assert.match(workItems, /do-kanban-priority-stripe/);
   assert.match(workItems, /do-kanban-add-task/);
   assert.match(workItems, /data-testid="kanban-column-resizer"/);
   assert.match(workItems, /startKanbanColumnResize/);
@@ -158,16 +158,19 @@ test("kanban board uses Asana-style cards, pills, and resizable columns", () => 
   assert.match(workItems, /data-testid="kanban-calendar"/);
   assert.match(workItems, /data-testid="item-checklist"/);
   assert.match(workItems, /data-testid="item-comments"/);
+  assert.match(workItems, /data-testid="kanban-add-rule"/);
+  assert.match(workItems, /canAcceptWipDrop/);
   assert.match(workItems, /WIP limit/);
   assert.match(workItems, /Calendar view/);
+  assert.match(workItems, /Flow analytics/);
   assert.doesNotMatch(
     workItems,
     /do-kanban-card[\s\S]{0,800}GTD action type for/,
   );
-  assert.match(css, /\.do-kanban-card-pills/);
+  assert.match(css, /\.do-kanban-priority-stripe/);
   assert.match(css, /\.do-kanban-col-resizer/);
-  assert.match(css, /\.do-kanban-column\.is-wip-over/);
-  assert.match(css, /\.do-kanban-cfd/);
+  assert.match(css, /\.do-kanban-column\.is-drop-ok/);
+  assert.match(css, /\.do-kanban-cfd-area/);
   assert.match(css, /cursor: col-resize/);
 });
 

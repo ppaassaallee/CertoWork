@@ -173,3 +173,10 @@ test("item view memory is user-owned on the existing preferences document", () =
   assert.match(rules, /match \/user_action_board_preferences\/\{prefId\}/);
   assert.match(rules, /incoming\(\)\.userId == request\.auth\.uid/);
 });
+
+test("kanban presence is workspace-member scoped", () => {
+  assert.match(rules, /match \/kanban_board_presence\/\{presenceId\}/);
+  assert.match(rules, /isWorkspaceMember\(incoming\(\)\.workspaceId\)/);
+  const presence = readFileSync(resolve("src/lib/kanbanPresence.ts"), "utf8");
+  assert.match(presence, /KANBAN_PRESENCE_COLLECTION = "kanban_board_presence"/);
+});

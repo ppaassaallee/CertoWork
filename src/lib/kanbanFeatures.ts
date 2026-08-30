@@ -201,6 +201,27 @@ export function isWipOver(count: number, limit?: number | null) {
   return Number(limit) > 0 && count > Number(limit);
 }
 
+export function isWipAtCapacity(count: number, limit?: number | null) {
+  return Number(limit) > 0 && count >= Number(limit);
+}
+
+export function wipTone(count: number, limit?: number | null): "ok" | "limit" | "over" {
+  if (!(Number(limit) > 0)) return "ok";
+  if (count > Number(limit)) return "over";
+  if (count >= Number(limit)) return "limit";
+  return "ok";
+}
+
+export function canAcceptWipDrop(
+  sourceColumn: string,
+  destColumn: string,
+  destCount: number,
+  limit?: number | null,
+) {
+  if (!destColumn || destColumn === "calendar" || sourceColumn === destColumn) return true;
+  return !isWipAtCapacity(destCount, limit);
+}
+
 export function wipCaption(count: number, limit?: number | null) {
   return Number(limit) > 0 ? `${count}/${limit}` : String(count);
 }
@@ -278,6 +299,15 @@ export function formatDuration(ms: number | null) {
   if (hours < 24) return `${Math.max(1, Math.round(hours))}h`;
   const days = hours / 24;
   return `${days >= 10 ? Math.round(days) : days.toFixed(1)}d`;
+}
+
+export function formatDurationLong(ms: number | null) {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
+  const hours = ms / 3_600_000;
+  if (hours < 24) return `${Math.max(1, Math.round(hours))} hours`;
+  const days = hours / 24;
+  const value = days >= 10 ? String(Math.round(days)) : days.toFixed(1);
+  return `${value} days`;
 }
 
 export function averageDuration(values: Array<number | null>) {
@@ -419,4 +449,66 @@ export function swimlaneMovePatch(
     return project ? { projectId: project.id } : {};
   }
   return {};
+}
+
+export type KanbanActivityEntry = {
+  id: string;
+  at: string;
+  kind: "system" | "comment";
+  text: string;
+  author?: string;
+};
+
+export function activityThread(item: any): KanbanActivityEntry[] {
+  const history = Array.isArray(item?.statusHistory) ? item.statusHistory : [];
+  const comments = Array.isArray(item?.comments) ? item.comments : [];
+  const events: KanbanActivityEntry[] = [
+    ...history.map((entry: KanbanStatusEvent, index: number) => ({
+      id: `sys-${entry.at}-${index}`,
+      at: String(entry.at || ""),
+      kind: "system" as const,
+      text: `Card moved to ${entry.column || entry.status}`,
+    })),
+    ...comments.map((entry: KanbanComment) => ({
+      id: String(entry.id || entry.at),
+      at: String(entry.at || ""),
+      kind: "comment" as const,
+      text: String(entry.text || ""),
+      author: entry.author,
+    })),
+  ];
+  return events.sort((left, right) => left.at.localeCompare(right.at));
+}
+
+export function stackedAreaLayers(series: CumulativeFlowPoint[], width = 320, height = 120) {
+  const max = Math.max(1, ...series.map((point) => point.backlog + point.doing + point.blocked + point.done));
+  const last = Math.max(1, series.length - 1);
+  const xAt = (index: number) => (index / last) * width;
+  const yAt = (value: number) => height - (value / max) * height;
+  const band = (lower: number[], upper: number[]) => {
+    const top = upper.map((value, index) => `${xAt(index).toFixed(1)},${yAt(value).toFixed(1)}`).join(" ");
+    const bottom = [...lower].reverse().map((_, index) => {
+      const idx = lower.length - 1 - index;
+      return `${xAt(idx).toFixed(1)},${yAt(lower[idx]).toFixed(1)}`;
+    }).join(" ");
+    return `${top} ${bottom}`;
+  };
+  const zeros = series.map(() => 0);
+  const done = series.map((point) => point.done);
+  const blocked = series.map((point, index) => done[index] + point.blocked);
+  const doing = series.map((point, index) => blocked[index] + point.doing);
+  const backlog = series.map((point, index) => doing[index] + point.backlog);
+  return {
+    width,
+    height,
+    done: band(zeros, done),
+    blocked: band(done, blocked),
+    doing: band(blocked, doing),
+    backlog: band(doing, backlog),
+  };
+}
+
+export function commentMentionsViewer(text: string, aliases: string[]) {
+  const mentioned = mentionNames(text).map((name) => name.toLowerCase());
+  return aliases.some((alias) => mentioned.includes(String(alias || "").toLowerCase()));
 }
