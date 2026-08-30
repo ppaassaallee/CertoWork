@@ -5423,6 +5423,8 @@ a {
   border-bottom: 0;
   padding: 6px 8px 10px;
   color: var(--text-primary);
+  border-radius: 10px 10px 0 0;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 .do-kanban-column > header strong {
   min-width: 0;
@@ -5597,6 +5599,7 @@ a {
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   min-height: 22px;
   color: var(--text-muted);
   font-size: var(--text-caption);
@@ -5746,6 +5749,14 @@ a {
   background: color-mix(in srgb, var(--status-warning-soft) 40%, transparent);
   border-radius: 12px;
 }
+.do-kanban-column.is-wip-limit > header {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+.do-kanban-column.is-wip-over > header {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+}
 .do-kanban-column.is-drop-ok {
   box-shadow: inset 0 0 0 2px var(--accent);
   background: var(--accent-soft);
@@ -5753,6 +5764,24 @@ a {
 .do-kanban-column.is-drop-blocked {
   box-shadow: inset 0 0 0 2px var(--status-danger);
   background: var(--status-danger-soft);
+}
+.do-kanban-card.is-wip-bounce {
+  animation: kanban-wip-bounce 0.45s ease;
+}
+@keyframes kanban-wip-bounce {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(4px); }
+}
+.do-kanban-mention-alert {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  font-size: var(--text-caption);
 }
 .do-kanban-card.is-compact {
   position: relative;
@@ -5845,9 +5874,19 @@ a {
 .do-item-comments article.is-system {
   border-left-color: var(--border-strong);
   color: var(--text-muted);
+  font-style: italic;
+  background: transparent;
 }
 .do-item-comments article.is-comment {
   border-left-color: var(--accent);
+  background: var(--surface-2);
+  border-radius: 0 10px 10px 0;
+  padding: 8px 10px;
+}
+.do-item-comments .is-mention {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 700;
 }
 .do-kanban-card-meta {
   display: flex;

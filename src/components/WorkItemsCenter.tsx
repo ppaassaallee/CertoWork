@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -44,6 +44,7 @@ import {
   averageDuration,
   calendarWeekDays,
   canAcceptWipDrop,
+  checklistCaption,
   checklistItems,
   checklistProgress,
   commentMentionsViewer,
@@ -53,8 +54,10 @@ import {
   extractUrls,
   formatDurationLong,
   itemDueKey,
+  itemMentionsViewer,
   leadTimeMs,
   mentionNames,
+  mentionSegments,
   newChecklistItem,
   parseKanbanDroppable,
   stackedAreaLayers,
@@ -582,6 +585,8 @@ export function WorkItemsCenter({
   const [checklistDraft, setChecklistDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [bouncingId, setBouncingId] = useState<string | null>(null);
+  const bounceTimer = useRef<number | null>(null);
   const [boardViewers, setBoardViewers] = useState<KanbanPresence[]>([]);
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
@@ -901,6 +906,22 @@ export function WorkItemsCenter({
   const draggingColumn = draggingId
     ? kanbanColumnForStatus(canonicalStatus(tasks.find((item) => item.id === draggingId)))
     : "";
+  const viewerAliases = useMemo(() => {
+    const self = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
+    return [self ? memberName(self) : "", user?.displayName, user?.email]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+  }, [user?.displayName, user?.email, viewerId, workspaceMembers]);
+  const mentionAlertItem = useMemo(
+    () => filtered.find((item) => itemMentionsViewer(item, viewerAliases)) || null,
+    [filtered, viewerAliases],
+  );
+
+  const bounceCard = (id: string) => {
+    setBouncingId(id);
+    if (bounceTimer.current) window.clearTimeout(bounceTimer.current);
+    bounceTimer.current = window.setTimeout(() => setBouncingId(null), 480);
+  };
 
   useEffect(() => {
     if (!workspaceId || !viewerId) return;
@@ -1105,6 +1126,7 @@ export function WorkItemsCenter({
       const sourceColumn = kanbanColumnForStatus(canonicalStatus(item));
       const destCount = columnCounts[parsed.columnKey] || 0;
       if (!canAcceptWipDrop(sourceColumn, parsed.columnKey, destCount, kanbanWipLimits[parsed.columnKey])) {
+        bounceCard(item.id);
         setKanbanError(`${kanbanColumnLabels[parsed.columnKey] || deliveryColumn.label} is at its WIP limit (${kanbanWipLimits[parsed.columnKey]}).`);
         return;
       }
@@ -1542,7 +1564,7 @@ export function WorkItemsCenter({
       return names.some((name: string) => String(name || "").toLowerCase() === viewer.displayName.toLowerCase());
     });
     return (
-      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`} data-testid="kanban-card" key={item.id}>
+      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""}`} data-testid="kanban-card" key={item.id}>
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
         <div className="do-kanban-card-head">
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
@@ -1571,6 +1593,7 @@ export function WorkItemsCenter({
             />
           </span>
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
+            <Calendar size={12} aria-hidden="true" />
             <time>{dueText || "Date"}</time>
             <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
           </label>
@@ -1703,6 +1726,11 @@ export function WorkItemsCenter({
         onDragStart={(start: DragStart) => setDraggingId(start.draggableId)}
       >
         {kanbanError && <p className="do-signin-error" data-testid="kanban-wip-reject" role="alert">{kanbanError}</p>}
+        {mentionAlertItem && (
+          <p className="do-kanban-mention-alert" data-testid="kanban-mention-alert" role="status">
+            You were mentioned on {title(mentionAlertItem)}.
+          </p>
+        )}
         {kanbanSwimlane === "none" ? (
           <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
             {visibleColumns.map((column) => renderKanbanColumnBody(column.key, column.title, column.items, column.key))}
@@ -2594,6 +2622,12 @@ export function WorkItemsCenter({
             <label>Repeat<select aria-label="Repeat item" onChange={(event) => onUpdateTask(selectedItem.id, { recurrenceType: event.target.value || "none", isRoutineTask: Boolean(event.target.value && event.target.value !== "none"), recurrenceStatus: event.target.value && event.target.value !== "none" ? "active" : "ended" })} value={selectedItem.recurrenceType || "none"}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="workdays">Workdays</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
             <section className="do-item-checklist" data-testid="item-checklist">
               <strong>Checklist</strong>
+              {checklistItems(selectedItem).length > 0 && (
+                <span className="do-kanban-progress" data-testid="item-checklist-progress" title="Checklist">
+                  <i style={{ width: `${checklistProgress(checklistItems(selectedItem)).percent}%` }} />
+                  <em>{checklistCaption(checklistItems(selectedItem))}</em>
+                </span>
+              )}
               {checklistItems(selectedItem).map((entry) => (
                 <label key={entry.id}>
                   <input
@@ -2639,7 +2673,13 @@ export function WorkItemsCenter({
               {activityThread(selectedItem).map((entry) => (
                 <article className={entry.kind === "system" ? "is-system" : "is-comment"} key={entry.id}>
                   <span>{entry.kind === "system" ? "System" : entry.author || "Teammate"} · {dateLabel(new Date(entry.at))}</span>
-                  <p>{entry.text}</p>
+                  <p>
+                    {mentionSegments(entry.text).map((part, index) => (
+                      part.mention
+                        ? <em className="is-mention" key={`${entry.id}-${index}`}>{part.text}</em>
+                        : <Fragment key={`${entry.id}-${index}`}>{part.text}</Fragment>
+                    ))}
+                  </p>
                 </article>
               ))}
               <form

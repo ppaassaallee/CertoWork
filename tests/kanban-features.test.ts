@@ -7,6 +7,7 @@ import {
   asKanbanSwimlane,
   calendarWeekDays,
   canAcceptWipDrop,
+  checklistCaption,
   checklistProgress,
   cumulativeFlowSeries,
   cycleTimeMs,
@@ -16,7 +17,9 @@ import {
   formatDuration,
   isWipOver,
   leadTimeMs,
+  itemMentionsViewer,
   mentionNames,
+  mentionSegments,
   parseKanbanDroppable,
   stackedAreaLayers,
   subtaskProgress,
@@ -79,6 +82,13 @@ test("checklist and subtask progress stay on the parent card", () => {
     ]),
     { done: 1, total: 2, percent: 50 },
   );
+  assert.equal(
+    checklistCaption([
+      { id: "1", text: "Write", done: true },
+      { id: "2", text: "Review", done: false },
+    ]),
+    "1/2 completed",
+  );
   assert.deepEqual(
     subtaskProgress({ id: "epic-1" }, [
       { id: "c1", parentId: "epic-1", status: "done" },
@@ -133,6 +143,19 @@ test("calendar weeks start Monday and comments extract mentions and links", () =
   assert.equal(days.length, 7);
   assert.equal(days[0].key, "2026-08-24");
   assert.deepEqual(mentionNames("Ping @Ana and @Bo."), ["Ana", "Bo"]);
+  assert.deepEqual(
+    mentionSegments("Ping @Ana now."),
+    [
+      { text: "Ping ", mention: false },
+      { text: "@Ana", mention: true },
+      { text: " now.", mention: false },
+    ],
+  );
+  assert.equal(
+    itemMentionsViewer({ mentionedNames: ["Ana"], comments: [{ text: "hi" }] }, ["Ana"]),
+    true,
+  );
+  assert.equal(itemMentionsViewer({ comments: [{ text: "Ping @Bo" }] }, ["Ana"]), false);
   assert.deepEqual(extractUrls("See https://certo.work/docs and more"), ["https://certo.work/docs"]);
   assert.equal(asKanbanSwimlane("assignee"), "assignee");
   assert.equal(asKanbanSwimlane("nope"), "none");

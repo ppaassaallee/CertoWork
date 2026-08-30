@@ -512,3 +512,26 @@ export function commentMentionsViewer(text: string, aliases: string[]) {
   const mentioned = mentionNames(text).map((name) => name.toLowerCase());
   return aliases.some((alias) => mentioned.includes(String(alias || "").toLowerCase()));
 }
+
+export function mentionSegments(text: string): Array<{ text: string; mention: boolean }> {
+  return String(text || "")
+    .split(/(@[A-Za-z][\w-]*)/g)
+    .filter((part) => part.length > 0)
+    .map((part) => ({ text: part, mention: part.startsWith("@") }));
+}
+
+export function itemMentionsViewer(item: any, aliases: string[]) {
+  const stored = Array.isArray(item?.mentionedNames)
+    ? item.mentionedNames.map((name: unknown) => `@${name}`).join(" ")
+    : "";
+  const comments = Array.isArray(item?.comments)
+    ? item.comments.map((entry: KanbanComment) => String(entry?.text || "")).join(" ")
+    : "";
+  return commentMentionsViewer(`${stored} ${comments}`, aliases);
+}
+
+export function checklistCaption(items: KanbanChecklistItem[]) {
+  const { done, total } = checklistProgress(items);
+  if (!total) return "";
+  return `${done}/${total} completed`;
+}
