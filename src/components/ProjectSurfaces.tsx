@@ -543,10 +543,10 @@ export function ProjectRecordModal({
     "overview" | "plan" | "work" | "risks" | "docs" | "team"
   >("overview");
   const mobileCore = useMobileCore();
-  const [taskTitle, setTaskTitle] = useState("");
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const methodology = String(project.methodology || "scrum").toLowerCase();
   const currentHealth = projectHealth(project, tasks, risks);
   const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
@@ -572,11 +572,6 @@ export function ProjectRecordModal({
   }, [onClose]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
-  const submitTask = async () => {
-    if (!taskTitle.trim()) return;
-    await onAddTask(taskTitle.trim(), "backlog");
-    setTaskTitle("");
-  };
 
   return (
     <div
@@ -992,7 +987,7 @@ export function ProjectRecordModal({
           )}
 
           {tab === "work" && (
-            <div className="do-project-work">
+            <div className="do-project-work" data-testid="project-work-kanban">
               <div className="do-work-toolbar">
                 <div>
                   <span className="do-project-card-kicker">TEAM EXECUTION</span>
@@ -1002,64 +997,22 @@ export function ProjectRecordModal({
                       : "Work breakdown & delivery flow"}
                   </h2>
                 </div>
-                <div className="do-project-inline-add">
-                  <input
-                    onChange={(event) => setTaskTitle(event.target.value)}
-                    onKeyDown={(event) => event.key === "Enter" && submitTask()}
-                    placeholder="Add a work item…"
-                    value={taskTitle}
-                  />
-                  <button
-                    disabled={!taskTitle.trim()}
-                    onClick={submitTask}
-                    type="button"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                </div>
               </div>
-              <div className="do-work-board">
-                {(
-                  [
-                    ["backlog", "Backlog"],
-                    ["in_progress", "In progress"],
-                    ["blocked", "Blocked"],
-                    ["done", "Done"],
-                  ] as const
-                ).map(([lane, label]) => (
-                  <section className={`do-work-lane is-${lane}`} key={lane}>
-                    <header>
-                      <span>{label}</span>
-                      <small>{lanes[lane].length}</small>
-                    </header>
-                    <div>
-                      {lanes[lane].map((task) => (
-                        <article key={task.id}>
-                          <strong>{task.title || task.name}</strong>
-                          {task.assignee && <small>{task.assignee}</small>}
-                          <select
-                            aria-label={`Move ${task.title || "task"}`}
-                            onChange={(event) =>
-                              onUpdateTask(task.id, {
-                                status: event.target.value,
-                              })
-                            }
-                            value={lane}
-                          >
-                            <option value="backlog">Backlog</option>
-                            <option value="in_progress">In progress</option>
-                            <option value="blocked">Blocked</option>
-                            <option value="done">Done</option>
-                          </select>
-                        </article>
-                      ))}
-                      {lanes[lane].length === 0 && (
-                        <span className="do-lane-empty">No work here</span>
-                      )}
-                    </div>
-                  </section>
-                ))}
-              </div>
+              <WorkItemsCenter
+                activeProject={project}
+                compact
+                forceMode="kanban"
+                onAddTask={(projectId, title, status, patch) =>
+                  onAddTask(title, status, { ...patch, projectId })
+                }
+                onAsk={onAsk}
+                onOpenProjectConsole={() => undefined}
+                onSelectItem={setSelectedWorkItemId}
+                onUpdateTask={onUpdateTask}
+                projects={[project]}
+                selectedItemId={selectedWorkItemId}
+                tasks={tasks}
+              />
             </div>
           )}
 

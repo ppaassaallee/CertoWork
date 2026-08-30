@@ -55,6 +55,16 @@ test("My Work uses the same unscoped item center as project backlog", () => {
   assert.match(projectItems[0], /projects=\{workspaceProjects/);
 });
 
+test("project Work tab uses the same Kanban center as Items", () => {
+  const projectWork = projectSurfaces.match(
+    /data-testid="project-work-kanban"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
+  );
+  assert.ok(projectWork, "project Work tab is missing WorkItemsCenter");
+  assert.match(projectWork[0], /forceMode="kanban"/);
+  assert.match(projectWork[0], /activeProject=\{project\}/);
+  assert.match(workItems, /forceMode/);
+});
+
 test("item field picker exposes every backlog field, including Project", () => {
   assert.doesNotMatch(workItems, /\.slice\(0,\s*6\)/);
   assert.match(workItems, /data-testid="item-fields-button"/);
@@ -134,20 +144,33 @@ test("items and backlog keep last sort and named views per signed-in user", () =
   assert.doesNotMatch(workItems, /saveItemView\(\); setViewsOpen\(false\)/);
 });
 
-test("kanban board uses Asana-style cards, pills, and resizable columns", () => {
+test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(workItems, /data-testid="kanban-card"/);
-  assert.match(workItems, /do-kanban-card-pills/);
+  assert.match(workItems, /do-kanban-priority-stripe/);
   assert.match(workItems, /do-kanban-add-task/);
   assert.match(workItems, /data-testid="kanban-column-resizer"/);
   assert.match(workItems, /startKanbanColumnResize/);
   assert.match(workItems, /createKanbanItem/);
+  assert.match(workItems, /data-testid="kanban-swimlane"/);
+  assert.match(workItems, /data-testid="kanban-board-settings"/);
+  assert.match(workItems, /data-testid="kanban-analytics"/);
+  assert.match(workItems, /data-testid="kanban-calendar"/);
+  assert.match(workItems, /data-testid="item-checklist"/);
+  assert.match(workItems, /data-testid="item-comments"/);
+  assert.match(workItems, /data-testid="kanban-add-rule"/);
+  assert.match(workItems, /canAcceptWipDrop/);
+  assert.match(workItems, /WIP limit/);
+  assert.match(workItems, /Calendar view/);
+  assert.match(workItems, /Flow analytics/);
   assert.doesNotMatch(
     workItems,
     /do-kanban-card[\s\S]{0,800}GTD action type for/,
   );
-  assert.match(css, /\.do-kanban-card-pills/);
+  assert.match(css, /\.do-kanban-priority-stripe/);
   assert.match(css, /\.do-kanban-col-resizer/);
+  assert.match(css, /\.do-kanban-column\.is-drop-ok/);
+  assert.match(css, /\.do-kanban-cfd-area/);
   assert.match(css, /cursor: col-resize/);
 });
 

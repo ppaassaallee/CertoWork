@@ -40,11 +40,12 @@ test("saving a named view replaces the same name and keeps sort", () => {
 
 test("normalize restores a valid last-used sort instead of the mount default", () => {
   const restored = normalizeItemViewFilters(
-    { primarySort: "due", secondarySort: "title", groupBy: "priority", mode: "list" },
+    { primarySort: "due", secondarySort: "title", groupBy: "priority", mode: "calendar" },
     null,
   );
   assert.equal(restored.primarySort, "due");
   assert.equal(restored.secondarySort, "title");
   assert.equal(restored.groupBy, "priority");
+  assert.equal(restored.mode, "calendar");
   assert.equal(restored.projectFilter, "all");
 });
