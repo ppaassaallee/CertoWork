@@ -421,4 +421,5 @@ test("GitHub Actions deploys the Worker with Wrangler", () => {
   assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /command: deploy/);
+  assert.match(workflow, /wranglerVersion: "4\.127\.1"/);
 });
