@@ -3,16 +3,20 @@ import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import {
   ArrowRight,
+  BarChart3,
+  Calendar,
+  CalendarRange,
   Check,
   ChevronDown,
   Circle,
-  CalendarRange,
   Clipboard,
+  Clock,
   Folder,
   GripVertical,
   ListChecks,
   Kanban,
   Plus,
+  Repeat,
   Search,
   SlidersHorizontal,
   Square,
@@ -34,6 +38,38 @@ import {
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn } from "../lib/kanbanBoard";
+import {
+  KANBAN_SWIMLANES,
+  appendStatusHistory,
+  applyKanbanAutomations,
+  averageDuration,
+  calendarWeekDays,
+  checklistItems,
+  checklistProgress,
+  cumulativeFlowSeries,
+  cycleTimeMs,
+  encodeKanbanDroppable,
+  estimateLabel,
+  extractUrls,
+  formatDuration,
+  isWipOver,
+  itemDueKey,
+  leadTimeMs,
+  loggedHoursValue,
+  mentionNames,
+  newChecklistItem,
+  parseKanbanDroppable,
+  subtaskProgress,
+  swimlaneKeyFor,
+  swimlaneMovePatch,
+  uniqueSwimlanes,
+  wipCaption,
+  type KanbanAutomationRule,
+  type KanbanComment,
+  type KanbanSwimlaneBy,
+} from "../lib/kanbanFeatures";
+import { getNextOccurrence } from "../lib/recurrence-utils";
+import type { RecurrenceType } from "../types";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
@@ -85,6 +121,7 @@ type Props = {
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
   onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
   compact?: boolean;
+  forceMode?: WorkItemsViewMode;
 };
 
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
@@ -475,6 +512,7 @@ export function WorkItemsCenter({
   onCreateSprint,
   onUpdateSprint: _onUpdateSprint,
   compact = false,
+  forceMode,
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
@@ -542,6 +580,15 @@ export function WorkItemsCenter({
   const [kanbanColumnPixels, setKanbanColumnPixels] = useState<Record<string, number>>({});
   const [kanbanDraftColumn, setKanbanDraftColumn] = useState<string | null>(null);
   const [kanbanDraftTitle, setKanbanDraftTitle] = useState("");
+  const [kanbanSwimlane, setKanbanSwimlane] = useState<KanbanSwimlaneBy>("none");
+  const [kanbanWipLimits, setKanbanWipLimits] = useState<Record<string, number>>({});
+  const [kanbanColumnLabels, setKanbanColumnLabels] = useState<Record<string, string>>({});
+  const [kanbanAutomations, setKanbanAutomations] = useState<KanbanAutomationRule[]>([]);
+  const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [calendarAnchor, setCalendarAnchor] = useState(() => new Date());
+  const [checklistDraft, setChecklistDraft] = useState("");
+  const [commentDraft, setCommentDraft] = useState("");
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
@@ -587,6 +634,11 @@ export function WorkItemsCenter({
     setSecondarySort(filters.secondarySort);
     setSprintFilter(filters.sprintFilter || "all");
     setKanbanColumnPixels(session?.kanbanWidths || {});
+    setKanbanSwimlane(session?.kanbanSwimlane || "none");
+    setKanbanWipLimits(session?.kanbanWipLimits || {});
+    setKanbanColumnLabels(session?.kanbanColumnLabels || {});
+    setKanbanAutomations(session?.kanbanAutomations || []);
+    if (forceMode) setMode(forceMode);
   };
 
   const persistRemoteMemory = (views: ItemSavedView[], sessions: Record<string, ItemViewSession>) => {
@@ -636,6 +688,10 @@ export function WorkItemsCenter({
       columns: visibleItemColumns,
       widths: itemColumnPixels,
       kanbanWidths: kanbanColumnPixels,
+      kanbanSwimlane,
+      kanbanWipLimits,
+      kanbanColumnLabels,
+      kanbanAutomations,
       filters: currentItemViewFilters,
     };
     const next = upsertNamedItemView(savedItemViews, nextView);
@@ -644,6 +700,11 @@ export function WorkItemsCenter({
     persistRemoteMemory(next, writeLastItemSession(viewerId, surface, {
       columns: visibleItemColumns,
       widths: itemColumnPixels,
+      kanbanWidths: kanbanColumnPixels,
+      kanbanSwimlane,
+      kanbanWipLimits,
+      kanbanColumnLabels,
+      kanbanAutomations,
       filters: currentItemViewFilters,
     }));
     setItemViewName("");
@@ -658,6 +719,10 @@ export function WorkItemsCenter({
       columns: saved.columns,
       widths: saved.widths,
       kanbanWidths: saved.kanbanWidths,
+      kanbanSwimlane: saved.kanbanSwimlane,
+      kanbanWipLimits: saved.kanbanWipLimits,
+      kanbanColumnLabels: saved.kanbanColumnLabels,
+      kanbanAutomations: saved.kanbanAutomations,
       filters: normalizeItemViewFilters(saved.filters, activeProject?.id),
     });
     setViewsOpen(false);
@@ -719,6 +784,10 @@ export function WorkItemsCenter({
       columns: visibleItemColumns,
       widths: itemColumnPixels,
       kanbanWidths: kanbanColumnPixels,
+      kanbanSwimlane,
+      kanbanWipLimits,
+      kanbanColumnLabels,
+      kanbanAutomations,
       filters: {
         ...currentItemViewFilters,
         query: "",
@@ -731,6 +800,10 @@ export function WorkItemsCenter({
     visibleItemColumns,
     itemColumnPixels,
     kanbanColumnPixels,
+    kanbanSwimlane,
+    kanbanWipLimits,
+    kanbanColumnLabels,
+    kanbanAutomations,
     mode,
     projectFilter,
     statusFilter,
@@ -760,8 +833,9 @@ export function WorkItemsCenter({
   }, [chromeCollapsed]);
 
   useEffect(() => {
-    if (mobileCore && mode !== "list") setMode("list");
-  }, [mobileCore, mode]);
+    if (forceMode && mode !== forceMode) setMode(forceMode);
+    else if (!forceMode && mobileCore && mode !== "list") setMode("list");
+  }, [forceMode, mobileCore, mode]);
 
   const owners = useMemo(
     () => [...new Set([
@@ -990,14 +1064,43 @@ export function WorkItemsCenter({
     if (!result.destination) return;
     const item = tasks.find((candidate) => candidate.id === result.draggableId);
     if (!item) return;
-    const previous = { status: item.status, order: item.order, rank: item.rank };
-    const nextStatus = statusForKanbanColumn(result.destination.droppableId, item.status);
+    const previous = {
+      status: item.status,
+      order: item.order,
+      rank: item.rank,
+      dueDate: item.dueDate || null,
+      assignee: item.assignee || "",
+      owner: item.owner || "",
+      assignees: item.assignees || [],
+      priority: item.priority ?? null,
+      projectId: item.projectId || null,
+      completedAt: item.completedAt || null,
+      statusHistory: item.statusHistory || [],
+    };
+    const parsed = parseKanbanDroppable(result.destination.droppableId);
+    const deliveryColumn = KANBAN_COLUMNS.find((column) => column.key === parsed.columnKey);
+    const patch: Record<string, unknown> = {
+      order: result.destination.index,
+      rank: result.destination.index,
+    };
+    if (parsed.columnKey === "calendar") {
+      patch.dueDate = parsed.swimlaneKey === "unscheduled" ? null : parsed.swimlaneKey;
+    } else {
+      if (deliveryColumn) {
+        const nextStatus = statusForKanbanColumn(parsed.columnKey, item.status);
+        patch.status = nextStatus;
+        patch.statusHistory = appendStatusHistory(item, nextStatus, parsed.columnKey);
+        if (nextStatus === "done" || nextStatus === "cancelled") {
+          patch.completedAt = item.completedAt || new Date().toISOString();
+        } else if (canonicalStatus(item) === "done") {
+          patch.completedAt = null;
+        }
+        Object.assign(patch, applyKanbanAutomations(item, parsed.columnKey, kanbanAutomations));
+      }
+      Object.assign(patch, swimlaneMovePatch(kanbanSwimlane, parsed.swimlaneKey, projects));
+    }
     try {
-      await onUpdateTask(item.id, {
-        status: nextStatus,
-        order: result.destination.index,
-        rank: result.destination.index,
-      });
+      await onUpdateTask(item.id, patch);
       setKanbanError("");
     } catch (reason) {
       await onUpdateTask(item.id, previous);
@@ -1009,11 +1112,46 @@ export function WorkItemsCenter({
     setSelectedBulkIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
 
-  const toggleDone = (item: any) => {
+  const toggleDone = async (item: any) => {
     const isDone = canonicalStatus(item) === "done";
-    onUpdateTask(item.id, {
-      status: isDone ? "backlog" : "done",
+    const nextStatus = isDone ? "backlog" : "done";
+    await onUpdateTask(item.id, {
+      status: nextStatus,
       completedAt: isDone ? null : new Date().toISOString(),
+      statusHistory: appendStatusHistory(item, nextStatus, isDone ? "backlog" : "done"),
+    });
+    if (isDone) return;
+    const recurrenceType = (item.recurrenceType || item.recurrence || "none") as RecurrenceType;
+    if (!recurrenceType || recurrenceType === "none") return;
+    const due = dateInputValue(item.dueDate || item.targetDate) || new Date().toISOString().slice(0, 10);
+    const nextDue = getNextOccurrence(
+      item.recurrenceAnchorDate || due,
+      item.occurrenceDate || due,
+      new Date(),
+      {
+        type: recurrenceType,
+        interval: item.recurrenceInterval || 1,
+        unit: item.recurrenceUnit || "days",
+      },
+    );
+    if (!nextDue) return;
+    await onAddTask(item.projectId || "", title(item), "backlog", {
+      workItemType: workItemKind(item),
+      itemType: item.itemType,
+      parentId: item.parentId || null,
+      recurrenceType,
+      recurrenceInterval: item.recurrenceInterval || 1,
+      recurrenceUnit: item.recurrenceUnit || "days",
+      recurrenceAnchorDate: item.recurrenceAnchorDate || due,
+      recurrenceStatus: "active",
+      isRoutineTask: true,
+      recurringSeriesId: item.recurringSeriesId || item.id,
+      dueDate: nextDue,
+      occurrenceDate: nextDue,
+      priority: item.priority ?? null,
+      assigneeIds: item.assigneeIds || [],
+      assignees: item.assignees || [],
+      owner: item.owner || item.assignee || "",
     });
   };
 
@@ -1370,13 +1508,18 @@ export function WorkItemsCenter({
     const labels = tagLabels(item, tags).slice(0, 2);
     const dueText = due ? dateLabel(new Date(`${due}T00:00:00`)) : "";
     const stopCardDrag = (event: { stopPropagation: () => void }) => event.stopPropagation();
+    const checks = checklistProgress(checklistItems(item));
+    const children = subtaskProgress(item, tasks);
+    const estimate = estimateLabel(item);
+    const logged = loggedHoursValue(item);
+    const urls = extractUrls(String(item.description || ""));
     return (
       <article className={`do-kanban-card is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`} data-testid="kanban-card" key={item.id}>
         <div className="do-kanban-card-head">
           <button
             aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`}
             className={`do-items-check ${isDone ? "is-done" : ""}`}
-            onClick={() => toggleDone(item)}
+            onClick={() => void toggleDone(item)}
             onPointerDown={stopCardDrag}
             type="button"
           >
@@ -1389,7 +1532,7 @@ export function WorkItemsCenter({
         </div>
         <div className="do-kanban-card-pills" onPointerDown={stopCardDrag}>
           <span className={`do-items-type-flag is-${kind}`} data-testid="item-type-flag">{workItemLabel(kind)}</span>
-          <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${status}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={status}>
+          <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${status}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value, statusHistory: appendStatusHistory(item, event.target.value, kanbanColumnForStatus(event.target.value)) })} value={status}>
             {workStatuses.map((value) => <option key={value} value={value}>{displayStatus(value)}</option>)}
           </select>
           <select aria-label={`Priority for ${title(item)}`} className={`do-kanban-priority-pill is-${priority === "N/A" ? "none" : priority}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priority}>
@@ -1397,6 +1540,21 @@ export function WorkItemsCenter({
           </select>
           {labels.map((label) => <span className="do-kanban-tag-pill" key={label}>{label}</span>)}
         </div>
+        {(checks.total > 0 || children.total > 0 || estimate || logged || urls.length > 0 || item.recurrenceType && item.recurrenceType !== "none") && (
+          <div className="do-kanban-card-meta" onPointerDown={stopCardDrag}>
+            {checks.total > 0 && (
+              <span className="do-kanban-progress" title="Checklist">
+                <i style={{ width: `${checks.percent}%` }} />
+                <em>{checks.done}/{checks.total}</em>
+              </span>
+            )}
+            {children.total > 0 && <span>{children.done}/{children.total} subtasks</span>}
+            {estimate && <span>{estimate}</span>}
+            {logged > 0 && <span>{logged}h logged</span>}
+            {urls.length > 0 && <span>{urls.length} link{urls.length === 1 ? "" : "s"}</span>}
+            {item.recurrenceType && item.recurrenceType !== "none" && <span className="do-kanban-repeat"><Repeat size={11} /> Repeat</span>}
+          </div>
+        )}
         <div className="do-kanban-card-foot" onPointerDown={stopCardDrag}>
           <MultiAssigneePicker
             compact
@@ -1415,6 +1573,95 @@ export function WorkItemsCenter({
     );
   };
 
+  const renderKanbanColumnBody = (columnKey: string, columnTitle: string, items: any[], droppableId: string, wipCount = items.length) => (
+    <Droppable droppableId={droppableId} key={droppableId}>
+      {(provided) => (
+        <section
+          className={`do-kanban-column ${isWipOver(wipCount, kanbanWipLimits[columnKey]) ? "is-wip-over" : ""}`}
+          data-testid="kanban-column"
+          ref={provided.innerRef}
+          style={{ "--kanban-col-width": `${kanbanColumnPixels[columnKey] || DEFAULT_KANBAN_COLUMN_WIDTH}px` } as CSSProperties}
+          {...provided.droppableProps}
+        >
+          <header>
+            <strong>{kanbanColumnLabels[columnKey] || columnTitle}</strong>
+            <span className={isWipOver(wipCount, kanbanWipLimits[columnKey]) ? "is-wip-over" : ""} title={kanbanWipLimits[columnKey] ? "Work in progress limit" : "Cards in this column"}>
+              {wipCaption(wipCount, kanbanWipLimits[columnKey])}
+            </span>
+            <button
+              aria-label={`Add item to ${columnTitle}`}
+              className="do-kanban-column-add"
+              onClick={() => {
+                setKanbanDraftColumn(droppableId);
+                setKanbanDraftTitle("");
+              }}
+              type="button"
+            >
+              <Plus size={14} />
+            </button>
+            <span
+              aria-label={`Resize ${columnTitle} column`}
+              className="do-kanban-col-resizer"
+              data-testid="kanban-column-resizer"
+              onPointerDown={(event) => startKanbanColumnResize(columnKey, event)}
+              role="separator"
+            />
+          </header>
+          <div>
+            {items.map((item, index) => (
+              <Draggable draggableId={item.id} index={index} key={item.id}>
+                {(drag) => (
+                  <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                    {renderBoardCard(item)}
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+            {kanbanDraftColumn === droppableId ? (
+              <form
+                className="do-kanban-draft"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void createKanbanItem(columnKey);
+                }}
+              >
+                <input
+                  aria-label={`New item in ${columnTitle}`}
+                  autoFocus
+                  data-testid="kanban-draft-title"
+                  onBlur={() => {
+                    if (!kanbanDraftTitle.trim()) setKanbanDraftColumn(null);
+                  }}
+                  onChange={(event) => setKanbanDraftTitle(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      setKanbanDraftColumn(null);
+                      setKanbanDraftTitle("");
+                    }
+                  }}
+                  placeholder="Write a task name"
+                  value={kanbanDraftTitle}
+                />
+              </form>
+            ) : (
+              <button
+                className="do-kanban-add-task"
+                onClick={() => {
+                  setKanbanDraftColumn(droppableId);
+                  setKanbanDraftTitle("");
+                }}
+                type="button"
+              >
+                <Plus size={14} /> Add task
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+    </Droppable>
+  );
+
   const renderKanban = () => {
     const useDeliveryBoard = Boolean(activeProject) || groupBy === "hierarchy" || groupBy === "status";
     const columns = useDeliveryBoard && groupBy !== "actionBoard"
@@ -1432,99 +1679,131 @@ export function WorkItemsCenter({
           return left.title.localeCompare(right.title);
         });
     const visibleColumns = columns.filter((column) => column.items.length > 0 || (useDeliveryBoard && groupBy !== "actionBoard"));
+    const lanes = uniqueSwimlanes(filtered, kanbanSwimlane, projects);
 
     return (
       <DragDropContext onDragEnd={(result) => void persistKanbanMove(result)}>
         {kanbanError && <p className="do-signin-error" role="alert">{kanbanError}</p>}
-        <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
-          {visibleColumns.map((column) => (
-            <Droppable droppableId={column.key} key={column.key}>
+        {kanbanSwimlane === "none" ? (
+          <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
+            {visibleColumns.map((column) => renderKanbanColumnBody(column.key, column.title, column.items, column.key))}
+            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+          </div>
+        ) : (
+          <div className="do-kanban-swim-board" data-testid="kanban-board">
+            {lanes.map((lane) => (
+              <div className="do-kanban-swimlane" data-testid="kanban-swimlane" key={lane.key || "all"}>
+                <h3>{lane.label}</h3>
+                <div className="do-kanban-board">
+                  {visibleColumns.map((column) => {
+                    const laneItems = column.items.filter((item) => swimlaneKeyFor(item, kanbanSwimlane, projects) === lane.key);
+                    return renderKanbanColumnBody(
+                      column.key,
+                      column.title,
+                      laneItems,
+                      encodeKanbanDroppable(column.key, lane.key),
+                      column.items.length,
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+          </div>
+        )}
+      </DragDropContext>
+    );
+  };
+
+  const renderCalendar = () => {
+    const days = calendarWeekDays(calendarAnchor);
+    const datedIds = new Set(days.flatMap((day) => filtered.filter((item) => itemDueKey(item) === day.key).map((item) => item.id)));
+    const unscheduled = filtered.filter((item) => !datedIds.has(item.id) && !itemDueKey(item));
+    const shiftWeek = (delta: number) => {
+      const next = new Date(calendarAnchor);
+      next.setDate(next.getDate() + delta * 7);
+      setCalendarAnchor(next);
+    };
+    return (
+      <DragDropContext onDragEnd={(result) => void persistKanbanMove(result)}>
+        <div className="do-kanban-calendar" data-testid="kanban-calendar">
+          <div className="do-kanban-calendar-nav">
+            <button onClick={() => shiftWeek(-1)} type="button">Previous week</button>
+            <strong>{days[0].label} – {days[6].label}</strong>
+            <button onClick={() => setCalendarAnchor(new Date())} type="button">This week</button>
+            <button onClick={() => shiftWeek(1)} type="button">Next week</button>
+          </div>
+          <div className="do-kanban-calendar-grid">
+            {days.map((day) => {
+              const items = filtered.filter((item) => itemDueKey(item) === day.key);
+              return (
+                <Droppable droppableId={encodeKanbanDroppable("calendar", day.key)} key={day.key}>
+                  {(provided) => (
+                    <section className="do-kanban-calendar-day" ref={provided.innerRef} {...provided.droppableProps}>
+                      <header><strong>{day.label}</strong><span>{items.length}</span></header>
+                      {items.map((item, index) => (
+                        <Draggable draggableId={item.id} index={index} key={item.id}>
+                          {(drag) => (
+                            <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                              {renderBoardCard(item)}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </section>
+                  )}
+                </Droppable>
+              );
+            })}
+            <Droppable droppableId={encodeKanbanDroppable("calendar", "unscheduled")}>
               {(provided) => (
-                <section
-                  className="do-kanban-column"
-                  ref={provided.innerRef}
-                  style={{ "--kanban-col-width": `${kanbanColumnPixels[column.key] || DEFAULT_KANBAN_COLUMN_WIDTH}px` } as CSSProperties}
-                  {...provided.droppableProps}
-                >
-                  <header>
-                    <strong>{column.title}</strong>
-                    <span>{column.items.length}</span>
-                    <button
-                      aria-label={`Add item to ${column.title}`}
-                      className="do-kanban-column-add"
-                      onClick={() => {
-                        setKanbanDraftColumn(column.key);
-                        setKanbanDraftTitle("");
-                      }}
-                      type="button"
-                    >
-                      <Plus size={14} />
-                    </button>
-                    <span
-                      aria-label={`Resize ${column.title} column`}
-                      className="do-kanban-col-resizer"
-                      data-testid="kanban-column-resizer"
-                      onPointerDown={(event) => startKanbanColumnResize(column.key, event)}
-                      role="separator"
-                    />
-                  </header>
-                  <div>
-                    {column.items.map((item, index) => (
-                      <Draggable draggableId={item.id} index={index} key={item.id}>
-                        {(drag) => (
-                          <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
-                            {renderBoardCard(item)}
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                    {kanbanDraftColumn === column.key ? (
-                      <form
-                        className="do-kanban-draft"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          void createKanbanItem(column.key);
-                        }}
-                      >
-                        <input
-                          aria-label={`New item in ${column.title}`}
-                          autoFocus
-                          data-testid="kanban-draft-title"
-                          onBlur={() => {
-                            if (!kanbanDraftTitle.trim()) setKanbanDraftColumn(null);
-                          }}
-                          onChange={(event) => setKanbanDraftTitle(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape") {
-                              setKanbanDraftColumn(null);
-                              setKanbanDraftTitle("");
-                            }
-                          }}
-                          placeholder="Write a task name"
-                          value={kanbanDraftTitle}
-                        />
-                      </form>
-                    ) : (
-                      <button
-                        className="do-kanban-add-task"
-                        onClick={() => {
-                          setKanbanDraftColumn(column.key);
-                          setKanbanDraftTitle("");
-                        }}
-                        type="button"
-                      >
-                        <Plus size={14} /> Add task
-                      </button>
-                    )}
-                  </div>
+                <section className="do-kanban-calendar-day is-unscheduled" ref={provided.innerRef} {...provided.droppableProps}>
+                  <header><strong>Unscheduled</strong><span>{unscheduled.length}</span></header>
+                  {unscheduled.map((item, index) => (
+                    <Draggable draggableId={item.id} index={index} key={item.id}>
+                      {(drag) => (
+                        <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                          {renderBoardCard(item)}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
                 </section>
               )}
             </Droppable>
-          ))}
-          {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+          </div>
         </div>
       </DragDropContext>
+    );
+  };
+
+  const renderAnalytics = () => {
+    const series = cumulativeFlowSeries(filtered, 14);
+    const max = Math.max(1, ...series.map((point) => point.backlog + point.doing + point.blocked + point.done));
+    const cycle = averageDuration(filtered.map(cycleTimeMs));
+    const lead = averageDuration(filtered.map(leadTimeMs));
+    const wipNow = filtered.filter((item) => ["in_progress", "in_review"].includes(canonicalStatus(item))).length;
+    return (
+      <section className="do-kanban-analytics" data-testid="kanban-analytics">
+        <div className="do-kanban-metrics">
+          <article><span>Cycle time</span><strong>{formatDuration(cycle)}</strong></article>
+          <article><span>Lead time</span><strong>{formatDuration(lead)}</strong></article>
+          <article><span>In progress</span><strong>{wipNow}</strong></article>
+        </div>
+        <div className="do-kanban-cfd" aria-label="Cumulative flow">
+          {series.map((point) => (
+            <div className="do-kanban-cfd-col" key={point.date} title={`${point.date}: ${point.backlog} backlog, ${point.doing} doing, ${point.blocked} blocked, ${point.done} done`}>
+              <div className="is-done" style={{ height: `${(point.done / max) * 100}%` }} />
+              <div className="is-blocked" style={{ height: `${(point.blocked / max) * 100}%` }} />
+              <div className="is-doing" style={{ height: `${(point.doing / max) * 100}%` }} />
+              <div className="is-backlog" style={{ height: `${(point.backlog / max) * 100}%` }} />
+            </div>
+          ))}
+        </div>
+        <p>Cumulative flow over the last 14 days. Cycle time is start to done; lead time is created to done.</p>
+      </section>
     );
   };
 
@@ -1688,17 +1967,128 @@ export function WorkItemsCenter({
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
         <div className="do-items-mode" aria-label="Work item view">
-          <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>
+          {!forceMode && <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>}
           <button aria-label="Kanban view" className={`do-mobile-advanced ${mode === "kanban" ? "is-active" : ""}`} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
-          <button aria-label="Gantt view" className={`do-mobile-advanced ${mode === "gantt" ? "is-active" : ""}`} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>
-          <button aria-label="Epics view" className={`do-mobile-advanced ${mode === "epics" ? "is-active" : ""}`} onClick={() => setMode("epics")} type="button">Epics</button>
+          <button aria-label="Calendar view" className={`do-mobile-advanced ${mode === "calendar" ? "is-active" : ""}`} onClick={() => setMode("calendar")} type="button"><Calendar size={14} /> Calendar</button>
+          {!forceMode && <button aria-label="Gantt view" className={`do-mobile-advanced ${mode === "gantt" ? "is-active" : ""}`} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>}
+          {!forceMode && <button aria-label="Epics view" className={`do-mobile-advanced ${mode === "epics" ? "is-active" : ""}`} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
+        {(mode === "kanban" || mode === "calendar") && (
+          <div className="do-kanban-board-tools">
+            <label>
+              Swimlanes
+              <select
+                aria-label="Kanban swimlanes"
+                data-testid="kanban-swimlane"
+                onChange={(event) => setKanbanSwimlane(event.target.value as KanbanSwimlaneBy)}
+                value={kanbanSwimlane}
+              >
+                {KANBAN_SWIMLANES.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+              </select>
+            </label>
+            <div className="do-popover-anchor">
+              <button
+                aria-expanded={boardSettingsOpen}
+                className={boardSettingsOpen ? "is-active" : ""}
+                data-testid="kanban-board-settings"
+                onClick={() => { setBoardSettingsOpen((open) => !open); setAnalyticsOpen(false); }}
+                type="button"
+              >
+                <SlidersHorizontal size={14} /> Board
+              </button>
+              {boardSettingsOpen && (
+                <div className="do-popover do-kanban-settings" data-testid="kanban-settings">
+                  <strong>WIP limits</strong>
+                  {KANBAN_COLUMNS.map((column) => (
+                    <label key={column.key}>
+                      {kanbanColumnLabels[column.key] || column.label}
+                      <input
+                        aria-label={`WIP limit for ${column.label}`}
+                        inputMode="numeric"
+                        min={0}
+                        onChange={(event) => setKanbanWipLimits((current) => ({ ...current, [column.key]: Number(event.target.value) || 0 }))}
+                        type="number"
+                        value={kanbanWipLimits[column.key] || ""}
+                      />
+                    </label>
+                  ))}
+                  <strong>Column names</strong>
+                  {KANBAN_COLUMNS.map((column) => (
+                    <label key={`label-${column.key}`}>
+                      {column.label}
+                      <input
+                        aria-label={`Rename ${column.label}`}
+                        onChange={(event) => setKanbanColumnLabels((current) => ({ ...current, [column.key]: event.target.value }))}
+                        placeholder={column.label}
+                        value={kanbanColumnLabels[column.key] || ""}
+                      />
+                    </label>
+                  ))}
+                  <strong>When a card moves</strong>
+                  {KANBAN_COLUMNS.map((column) => {
+                    const rule = kanbanAutomations.find((candidate) => candidate.whenColumn === column.key) || { id: column.key, whenColumn: column.key };
+                    return (
+                      <div className="do-kanban-automation" key={`auto-${column.key}`}>
+                        <span>→ {kanbanColumnLabels[column.key] || column.label}</span>
+                        <select
+                          aria-label={`Set priority when moved to ${column.label}`}
+                          onChange={(event) => {
+                            const setPriority = event.target.value || undefined;
+                            setKanbanAutomations((current) => {
+                              const rest = current.filter((candidate) => candidate.whenColumn !== column.key);
+                              const next = { ...rule, setPriority };
+                              if (!next.setPriority && !next.setAssignee) return rest;
+                              return [...rest, next];
+                            });
+                          }}
+                          value={rule.setPriority || ""}
+                        >
+                          <option value="">Keep priority</option>
+                          <option value="1">Set P1</option>
+                          <option value="2">Set P2</option>
+                          <option value="3">Set P3</option>
+                          <option value="none">Clear priority</option>
+                        </select>
+                        <select
+                          aria-label={`Assign when moved to ${column.label}`}
+                          onChange={(event) => {
+                            const setAssignee = event.target.value || undefined;
+                            setKanbanAutomations((current) => {
+                              const rest = current.filter((candidate) => candidate.whenColumn !== column.key);
+                              const next = { ...rule, setAssignee };
+                              if (!next.setPriority && !next.setAssignee) return rest;
+                              return [...rest, next];
+                            });
+                          }}
+                          value={rule.setAssignee || ""}
+                        >
+                          <option value="">Keep assignee</option>
+                          {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <button
+              aria-pressed={analyticsOpen}
+              className={analyticsOpen ? "is-active" : ""}
+              data-testid="kanban-analytics-toggle"
+              onClick={() => { setAnalyticsOpen((open) => !open); setBoardSettingsOpen(false); }}
+              type="button"
+            >
+              <BarChart3 size={14} /> Flow
+            </button>
+          </div>
+        )}
         <div className="do-items-toolbar-actions">
           <div className="do-popover-anchor">
             <button aria-expanded={viewsOpen} aria-label="Views" className={`do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
                 <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("list"); setViewsOpen(false); }} type="button">Epic hierarchy</button>
+                <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("calendar"); setViewsOpen(false); }} type="button">Calendar week</button>
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
                 <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
                 <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>
@@ -2089,8 +2479,9 @@ export function WorkItemsCenter({
               </span>
             )}
           </div>
+          {analyticsOpen && (mode === "kanban" || mode === "calendar") && renderAnalytics()}
           {mode === "list" && renderColumnHeader()}
-          {mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : groupBy === "hierarchy" ? renderHierarchy() : (
+          {mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(groupBy, left);
@@ -2148,7 +2539,7 @@ export function WorkItemsCenter({
               placeholder="Description, acceptance criteria, notes..."
               value={detailDescription}
             /><AiRewriteButton context={{ itemTitle: title(selectedItem), itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_description" onRewrite={(next) => { setDetailDescription(next); return onUpdateTask(selectedItem.id, { description: next }); }} text={detailDescription} /></div>
-            <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
+            <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value, statusHistory: appendStatusHistory(selectedItem, event.target.value, kanbanColumnForStatus(event.target.value)), completedAt: event.target.value === "done" ? selectedItem.completedAt || new Date().toISOString() : null })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label className="do-mobile-advanced">Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
@@ -2170,6 +2561,96 @@ export function WorkItemsCenter({
             <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
             <label className="do-mobile-advanced">Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
+            <div className="do-item-estimate-row">
+              <label>Story points<input aria-label="Story points" inputMode="numeric" onBlur={(event) => onUpdateTask(selectedItem.id, { storyPoints: event.target.value ? Number(event.target.value) : null })} defaultValue={selectedItem.storyPoints ?? ""} type="number" /></label>
+              <label>Estimate (h)<input aria-label="Estimate hours" inputMode="decimal" onBlur={(event) => onUpdateTask(selectedItem.id, { estimateHours: event.target.value ? Number(event.target.value) : null })} defaultValue={selectedItem.estimateHours ?? ""} type="number" /></label>
+              <label>Logged (h)<input aria-label="Logged hours" inputMode="decimal" onBlur={(event) => onUpdateTask(selectedItem.id, { loggedHours: event.target.value ? Number(event.target.value) : null })} defaultValue={selectedItem.loggedHours ?? ""} type="number" /></label>
+            </div>
+            <label>Repeat<select aria-label="Repeat item" onChange={(event) => onUpdateTask(selectedItem.id, { recurrenceType: event.target.value || "none", isRoutineTask: Boolean(event.target.value && event.target.value !== "none"), recurrenceStatus: event.target.value && event.target.value !== "none" ? "active" : "ended" })} value={selectedItem.recurrenceType || "none"}><option value="none">Does not repeat</option><option value="daily">Daily</option><option value="workdays">Workdays</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+            <section className="do-item-checklist" data-testid="item-checklist">
+              <strong>Checklist</strong>
+              {checklistItems(selectedItem).map((entry) => (
+                <label key={entry.id}>
+                  <input
+                    checked={entry.done}
+                    onChange={() => onUpdateTask(selectedItem.id, {
+                      checklist: checklistItems(selectedItem).map((candidate) => candidate.id === entry.id ? { ...candidate, done: !candidate.done } : candidate),
+                    })}
+                    type="checkbox"
+                  />
+                  <span>{entry.text}</span>
+                  <button
+                    aria-label={`Remove ${entry.text}`}
+                    onClick={() => onUpdateTask(selectedItem.id, {
+                      checklist: checklistItems(selectedItem).filter((candidate) => candidate.id !== entry.id),
+                    })}
+                    type="button"
+                  >
+                    <X size={12} />
+                  </button>
+                </label>
+              ))}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const text = checklistDraft.trim();
+                  if (!text) return;
+                  onUpdateTask(selectedItem.id, {
+                    checklist: [...checklistItems(selectedItem), newChecklistItem(text, checklistItems(selectedItem))],
+                  });
+                  setChecklistDraft("");
+                }}
+              >
+                <input
+                  aria-label="Add checklist item"
+                  onChange={(event) => setChecklistDraft(event.target.value)}
+                  placeholder="Add a checklist item"
+                  value={checklistDraft}
+                />
+              </form>
+            </section>
+            <section className="do-item-comments" data-testid="item-comments">
+              <strong>Comments</strong>
+              {(Array.isArray(selectedItem.comments) ? selectedItem.comments : []).map((entry: KanbanComment) => (
+                <article key={entry.id}>
+                  <span>{entry.author || "Teammate"} · {dateLabel(new Date(entry.at))}</span>
+                  <p>{entry.text}</p>
+                </article>
+              ))}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const text = commentDraft.trim();
+                  if (!text) return;
+                  const author = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
+                  const next: KanbanComment = {
+                    id: `comment-${Date.now()}`,
+                    at: new Date().toISOString(),
+                    author: author ? memberName(author) : "Me",
+                    text,
+                  };
+                  onUpdateTask(selectedItem.id, {
+                    comments: [...(Array.isArray(selectedItem.comments) ? selectedItem.comments : []), next],
+                    mentionedNames: mentionNames(text),
+                  });
+                  setCommentDraft("");
+                }}
+              >
+                <input
+                  aria-label="Add a comment"
+                  onChange={(event) => setCommentDraft(event.target.value)}
+                  placeholder="Comment and @mention a teammate"
+                  value={commentDraft}
+                />
+              </form>
+            </section>
+            <section className="do-item-activity" data-testid="item-activity">
+              <strong>Activity</strong>
+              {(Array.isArray(selectedItem.statusHistory) ? selectedItem.statusHistory : []).slice().reverse().map((entry: { status: string; column?: string; at: string }, index: number) => (
+                <p key={`${entry.at}-${index}`}><Clock size={11} /> Moved to {entry.column || displayStatus(entry.status)} · {dateLabel(new Date(entry.at))}</p>
+              ))}
+              {extractUrls(detailDescription).map((url) => <a href={url} key={url} rel="noreferrer" target="_blank">{url}</a>)}
+            </section>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
               <button onClick={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)} type="button"><ArrowRight size={13} /> Ask</button>

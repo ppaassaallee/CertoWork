@@ -1,12 +1,20 @@
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import {
+  asAutomations,
+  asColumnLabels,
+  asKanbanSwimlane,
+  asWipLimits,
+  type KanbanAutomationRule,
+  type KanbanSwimlaneBy,
+} from "./kanbanFeatures";
 
 export const ITEM_VIEW_PREFS_COLLECTION = "user_action_board_preferences";
 export const LEGACY_NAMED_VIEWS_KEY = "certo-items-view-config";
 export const LEGACY_COLUMNS_KEY = "certo-items-current-view-config";
 export const LEGACY_WIDTHS_KEY = "certo-items-current-column-widths";
 
-export type WorkItemsViewMode = "list" | "kanban" | "gantt" | "epics";
+export type WorkItemsViewMode = "list" | "kanban" | "calendar" | "gantt" | "epics";
 export type ItemGroupBy =
   | "hierarchy"
   | "actionBoard"
@@ -71,6 +79,10 @@ export type ItemSavedView = {
   columns: ItemColumnKey[];
   widths?: Partial<Record<ItemColumnKey, number>>;
   kanbanWidths?: Record<string, number>;
+  kanbanSwimlane?: KanbanSwimlaneBy;
+  kanbanWipLimits?: Record<string, number>;
+  kanbanColumnLabels?: Record<string, string>;
+  kanbanAutomations?: KanbanAutomationRule[];
   filters?: Partial<ItemViewFilters>;
 };
 
@@ -78,6 +90,10 @@ export type ItemViewSession = {
   columns: ItemColumnKey[];
   widths?: Partial<Record<ItemColumnKey, number>>;
   kanbanWidths?: Record<string, number>;
+  kanbanSwimlane?: KanbanSwimlaneBy;
+  kanbanWipLimits?: Record<string, number>;
+  kanbanColumnLabels?: Record<string, string>;
+  kanbanAutomations?: KanbanAutomationRule[];
   filters: ItemViewFilters;
 };
 
@@ -86,7 +102,7 @@ export type ItemViewMemory = {
   sessions: Record<string, ItemViewSession>;
 };
 
-const VIEW_MODES: WorkItemsViewMode[] = ["list", "kanban", "gantt", "epics"];
+const VIEW_MODES: WorkItemsViewMode[] = ["list", "kanban", "calendar", "gantt", "epics"];
 const GROUP_BY: ItemGroupBy[] = [
   "hierarchy",
   "actionBoard",
@@ -258,6 +274,10 @@ function normalizeSession(value: unknown, projectId?: string | null): ItemViewSe
     columns: asColumns(raw.columns) || [],
     widths: asWidths(raw.widths),
     kanbanWidths: asKanbanWidths(raw.kanbanWidths),
+    kanbanSwimlane: asKanbanSwimlane(raw.kanbanSwimlane),
+    kanbanWipLimits: asWipLimits(raw.kanbanWipLimits),
+    kanbanColumnLabels: asColumnLabels(raw.kanbanColumnLabels),
+    kanbanAutomations: asAutomations(raw.kanbanAutomations),
     filters: normalizeItemViewFilters(raw.filters, projectId),
   };
 }
@@ -272,6 +292,10 @@ function normalizeSavedView(value: unknown): ItemSavedView | null {
     columns: asColumns(raw.columns) || [],
     widths: asWidths(raw.widths),
     kanbanWidths: asKanbanWidths(raw.kanbanWidths),
+    kanbanSwimlane: asKanbanSwimlane(raw.kanbanSwimlane),
+    kanbanWipLimits: asWipLimits(raw.kanbanWipLimits),
+    kanbanColumnLabels: asColumnLabels(raw.kanbanColumnLabels),
+    kanbanAutomations: asAutomations(raw.kanbanAutomations),
     filters: raw.filters ? normalizeItemViewFilters(raw.filters) : undefined,
   };
 }

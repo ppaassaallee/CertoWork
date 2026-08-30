@@ -367,6 +367,10 @@ export interface Task {
   blocked?: boolean;
   blockedReason?: string;
   source?: 'manual' | 'boldi' | 'import' | 'github' | 'hermes' | 'api' | 'codex';
+  checklist?: Array<{ id: string; text: string; done: boolean }>;
+  comments?: Array<{ id: string; at: string; author: string; text: string }>;
+  statusHistory?: Array<{ status: string; column?: string; at: string }>;
+  loggedHours?: number | null;
   codexStatus?: string;
   codexRunId?: string | null;
   codexTaskReference?: string | null;
