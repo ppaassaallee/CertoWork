@@ -5606,7 +5606,7 @@ a {
   cursor: pointer;
 }
 .do-kanban-card-due.is-empty {
-  opacity: 0;
+  opacity: 0.4;
 }
 .do-kanban-card:hover .do-kanban-card-due.is-empty {
   opacity: 1;
@@ -5793,7 +5793,7 @@ a {
   top: 8px;
   bottom: 8px;
   left: 0;
-  width: 3px;
+  width: 4px;
   border-radius: 999px;
   background: var(--status-neutral);
 }
