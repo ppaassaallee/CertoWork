@@ -923,6 +923,17 @@ export function WorkItemsCenter({
     bounceTimer.current = window.setTimeout(() => setBouncingId(null), 480);
   };
 
+  const rejectWipMove = (item: any, destColumn: string) => {
+    const sourceColumn = kanbanColumnForStatus(canonicalStatus(item));
+    if (canAcceptWipDrop(sourceColumn, destColumn, columnCounts[destColumn] || 0, kanbanWipLimits[destColumn])) {
+      return false;
+    }
+    bounceCard(item.id);
+    const deliveryColumn = KANBAN_COLUMNS.find((column) => column.key === destColumn);
+    setKanbanError(`${kanbanColumnLabels[destColumn] || deliveryColumn?.label || destColumn} is at its WIP limit (${kanbanWipLimits[destColumn]}).`);
+    return true;
+  };
+
   useEffect(() => {
     if (!workspaceId || !viewerId) return;
     const self = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
@@ -1122,15 +1133,7 @@ export function WorkItemsCenter({
     };
     const parsed = parseKanbanDroppable(result.destination.droppableId);
     const deliveryColumn = KANBAN_COLUMNS.find((column) => column.key === parsed.columnKey);
-    if (deliveryColumn) {
-      const sourceColumn = kanbanColumnForStatus(canonicalStatus(item));
-      const destCount = columnCounts[parsed.columnKey] || 0;
-      if (!canAcceptWipDrop(sourceColumn, parsed.columnKey, destCount, kanbanWipLimits[parsed.columnKey])) {
-        bounceCard(item.id);
-        setKanbanError(`${kanbanColumnLabels[parsed.columnKey] || deliveryColumn.label} is at its WIP limit (${kanbanWipLimits[parsed.columnKey]}).`);
-        return;
-      }
-    }
+    if (deliveryColumn && rejectWipMove(item, parsed.columnKey)) return;
     const patch: Record<string, unknown> = {
       order: result.destination.index,
       rank: result.destination.index,
@@ -2592,7 +2595,11 @@ export function WorkItemsCenter({
               placeholder="Description, acceptance criteria, notes..."
               value={detailDescription}
             /><AiRewriteButton context={{ itemTitle: title(selectedItem), itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_description" onRewrite={(next) => { setDetailDescription(next); return onUpdateTask(selectedItem.id, { description: next }); }} text={detailDescription} /></div>
-            <label>Status<select onChange={(event) => onUpdateTask(selectedItem.id, { status: event.target.value, statusHistory: appendStatusHistory(selectedItem, event.target.value, kanbanColumnForStatus(event.target.value)), completedAt: event.target.value === "done" ? selectedItem.completedAt || new Date().toISOString() : null })} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
+            <label>Status<select onChange={(event) => {
+              const nextStatus = event.target.value;
+              if (rejectWipMove(selectedItem, kanbanColumnForStatus(nextStatus))) return;
+              onUpdateTask(selectedItem.id, { status: nextStatus, statusHistory: appendStatusHistory(selectedItem, nextStatus, kanbanColumnForStatus(nextStatus)), completedAt: nextStatus === "done" ? selectedItem.completedAt || new Date().toISOString() : null });
+            }} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label className="do-mobile-advanced">Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
