@@ -3422,32 +3422,44 @@ export function DelivereeWorkspace() {
   };
 
   const addProjectDocument = async (projectId: string, payload: Record<string, unknown>) => {
-    if (!user || !workspace) return;
+    if (!user || !workspace) {
+      throw new Error("Sign in to add a document.");
+    }
     let url = String(payload.url || "");
     const file = payload.file as File | undefined;
-    if (file) {
-      if (!isAllowedProjectResourceSize(file.size)) {
-        setNotice("Files must be 20 MB or smaller.");
-        return;
+    try {
+      if (file) {
+        if (!isAllowedProjectResourceSize(file.size)) {
+          throw new Error("Files must be 20 MB or smaller.");
+        }
+        const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
+        const fileRef = ref(storage, path);
+        await uploadBytes(fileRef, file);
+        url = await getDownloadURL(fileRef);
       }
-      const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
-      const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file);
-      url = await getDownloadURL(fileRef);
+      await addDoc(collection(db, "knowledge_items"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        projectId,
+        title: payload.title || file?.name || "Untitled",
+        resourceType: payload.resourceType || "note",
+        url,
+        content: payload.body || "",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice("Document saved.");
+    } catch (reason) {
+      const message =
+        reason instanceof Error && /permission/i.test(reason.message)
+          ? "This account cannot save documents in this workspace yet. Sign out and sign back in, then try again."
+          : reason instanceof Error
+            ? reason.message
+            : "The document could not be saved.";
+      setNotice(message);
+      throw new Error(message);
     }
-    await addDoc(collection(db, "knowledge_items"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      projectId,
-      title: payload.title || file?.name || "Untitled",
-      resourceType: payload.resourceType || "note",
-      url,
-      content: payload.body || "",
-      status: "active",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice("Document saved.");
   };
 
   const connectProjectDrive = async () => {
