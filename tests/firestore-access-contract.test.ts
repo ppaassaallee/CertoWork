@@ -130,6 +130,17 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(workspace, /workspace_members/);
 });
 
+test("firebase.json deploys rules and indexes to the named production database", () => {
+  const config = JSON.parse(readFileSync(resolve("firebase.json"), "utf8"));
+  const firestore = Array.isArray(config.firestore) ? config.firestore[0] : config.firestore;
+  assert.equal(firestore.database, "ai-studio-0db18e51-58a2-4763-a4d7-3fced116347d");
+  assert.equal(firestore.rules, "firestore.rules");
+  assert.equal(firestore.indexes, "firestore.indexes.json");
+  const workflow = readFileSync(resolve(".github/workflows/deploy-firestore.yml"), "utf8");
+  assert.match(workflow, /firebase-tools@14\.27\.0 deploy --only firestore/);
+  assert.match(workflow, /FIREBASE_TOKEN/);
+});
+
 test("invoice documents are member-listed and finance-operated", () => {
   const operator = ruleFn("isFinanceOperator");
   assert.match(operator, /isWorkspaceAdmin\(workspaceId\)/);
