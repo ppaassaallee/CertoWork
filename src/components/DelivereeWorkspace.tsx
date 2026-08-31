@@ -6331,7 +6331,7 @@ export function DelivereeWorkspace() {
                         <span className="do-member-avatar">
                           {memberAvatar(member)}
                         </span>
-                        <div>
+                        <div className="do-member-identity">
                           <strong>{label}</strong>
                           <small>
                             {memberStatusLabel(member.status)}
@@ -6339,48 +6339,50 @@ export function DelivereeWorkspace() {
                             {email && email !== label.toLowerCase() ? ` · ${email}` : ""}
                           </small>
                         </div>
-                        {isOwner ? (
-                          <em>Owner</em>
-                        ) : (
-                          <select
-                            aria-label={`Role for ${label}`}
-                            onChange={(event) =>
-                              updateMemberRole(
-                                member,
-                                event.target.value as
-                                  | "admin"
-                                  | "member"
-                                  | "viewer",
-                              )
-                            }
-                            value={String(member.role || "member")}
-                          >
-                            {WORKSPACE_ROLES.map((role) => (
-                              <option key={role.value} value={role.value}>
-                                {role.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        {!isOwner && canManageMembers && (
-                          <>
-                            <label className="do-member-finance">
-                              <input
-                                checked={Boolean(member.financeAccess)}
-                                onChange={() => toggleMemberFinanceAccess(member)}
-                                type="checkbox"
-                              />
-                              Finance
-                            </label>
-                            <button
-                              className="do-member-remove"
-                              onClick={() => removeWorkspaceMember(member)}
-                              type="button"
+                        <div className="do-member-actions">
+                          {isOwner ? (
+                            <em>Owner</em>
+                          ) : (
+                            <select
+                              aria-label={`Role for ${label}`}
+                              onChange={(event) =>
+                                updateMemberRole(
+                                  member,
+                                  event.target.value as
+                                    | "admin"
+                                    | "member"
+                                    | "viewer",
+                                )
+                              }
+                              value={String(member.role || "member")}
                             >
-                              <UserMinus size={13} /> Remove
-                            </button>
-                          </>
-                        )}
+                              {WORKSPACE_ROLES.map((role) => (
+                                <option key={role.value} value={role.value}>
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {!isOwner && canManageMembers && (
+                            <>
+                              <label className="do-member-finance">
+                                <input
+                                  checked={Boolean(member.financeAccess)}
+                                  onChange={() => toggleMemberFinanceAccess(member)}
+                                  type="checkbox"
+                                />
+                                Finance
+                              </label>
+                              <button
+                                className="do-member-remove"
+                                onClick={() => removeWorkspaceMember(member)}
+                                type="button"
+                              >
+                                <UserMinus size={13} /> Remove
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </article>
                     );
                   })}
