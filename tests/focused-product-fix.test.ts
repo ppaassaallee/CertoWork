@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isProjectConversation, isStandaloneConversation } from "../src/lib/conversationScope";
-import { inviteActivationPath, inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../src/lib/inviteLifecycle";
+import { inviteActivationPath, inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteShouldCloseOnJoin } from "../src/lib/inviteLifecycle";
 import { kanbanColumnForStatus, statusForKanbanColumn } from "../src/lib/kanbanBoard";
 import { canDeleteProject } from "../src/lib/projectPermissions";
 import {
@@ -48,8 +48,12 @@ test("invite tokens expire after 14 days and used invites are not reusable", () 
   assert.equal(inviteDirectoryUrl("abc"), "https://certo.work/invite/abc");
   assert.equal(inviteIsUsable({ status: "pending" }), true);
   assert.equal(inviteIsUsable({ status: "accepted" }), false);
+  assert.equal(inviteIsExpired(null), false);
   assert.equal(inviteIsExpired({ createdAt: Date.now() - 15 * 24 * 60 * 60 * 1000 }), true);
   assert.equal(inviteIsExpired({ expiresAt: Date.now() + 60_000 }), false);
+  assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "ws-1", inviteType: "workspace_member" }, "ws-1"), true);
+  assert.equal(inviteShouldCloseOnJoin({ status: "accepted", workspaceId: "ws-1" }, "ws-1"), false);
+  assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "other" }, "ws-1"), false);
 });
 
 test("home recency keeps six recent projects", () => {

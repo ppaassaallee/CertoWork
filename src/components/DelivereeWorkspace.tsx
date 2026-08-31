@@ -6411,7 +6411,7 @@ export function DelivereeWorkspace() {
                           <small>
                             {roleLabel(row.role)} · Invited
                             {delivery ? ` · email ${delivery}` : " · email not sent yet"}
-                            {inviteIsExpired(invite) ? " · expired" : ""}
+                            {invite && inviteIsExpired(invite) ? " · expired" : ""}
                           </small>
                         </div>
                         {canManageMembers && (

@@ -18,7 +18,7 @@ function asMillis(value: any) {
 }
 
 export function inviteIsExpired(invite: { createdAt?: any; expiresAt?: any } | null | undefined, now = Date.now()) {
-  if (!invite) return true;
+  if (!invite) return false;
   const expires = asMillis(invite.expiresAt);
   if (expires && expires < now) return true;
   const created = asMillis(invite.createdAt);
@@ -29,4 +29,14 @@ export function inviteIsExpired(invite: { createdAt?: any; expiresAt?: any } | n
 export function inviteIsUsable(invite: { status?: string } | null | undefined) {
   const status = String(invite?.status || "pending").toLowerCase();
   return ["pending", "sent", "invited"].includes(status);
+}
+
+export function inviteShouldCloseOnJoin(
+  invite: { status?: string; inviteType?: string; workspaceId?: string } | null | undefined,
+  workspaceId: string,
+) {
+  if (!invite || !workspaceId) return false;
+  if (invite.workspaceId && String(invite.workspaceId) !== workspaceId) return false;
+  if (invite.inviteType && String(invite.inviteType) !== "workspace_member") return false;
+  return inviteIsUsable(invite);
 }

@@ -136,6 +136,25 @@ export function isInvitedMember(
   );
 }
 
+export function isJoinedWorkspaceMember(
+  member: Pick<WorkspaceMember, "status" | "userId">,
+) {
+  const status = String(member.status || "active").toLowerCase();
+  if (["removed", "rejected", "revoked", "invited", "pending"].includes(status)) return false;
+  const userId = String(member.userId || "");
+  return Boolean(userId) && !userId.startsWith("pending:");
+}
+
+export function joinedWorkspaceEmails(members: WorkspaceMember[] = []) {
+  const emails = new Set<string>();
+  for (const member of members) {
+    if (!isJoinedWorkspaceMember(member)) continue;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    if (email) emails.add(email);
+  }
+  return emails;
+}
+
 export function activeDirectoryMembers(members: WorkspaceMember[] = []) {
   return members.filter((member) => isAssignableMember(member) && !isInvitedMember(member));
 }
@@ -153,10 +172,13 @@ export function pendingInviteDirectory(
   members: WorkspaceMember[] = [],
   invites: Array<Record<string, any>> = [],
 ): PendingInviteRow[] {
+  const joinedEmails = joinedWorkspaceEmails(members);
   const rows = new Map<string, PendingInviteRow>();
   for (const invite of invites) {
     const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
-    if (!email) continue;
+    if (!email || joinedEmails.has(email)) continue;
+    const status = String(invite.status || "pending").toLowerCase();
+    if (["accepted", "revoked", "rejected"].includes(status)) continue;
     rows.set(email, {
       key: String(invite.id || email),
       email,
@@ -169,7 +191,7 @@ export function pendingInviteDirectory(
   for (const member of members) {
     if (!isInvitedMember(member)) continue;
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
-    if (!email) continue;
+    if (!email || joinedEmails.has(email)) continue;
     const current = rows.get(email);
     if (current) {
       current.member = member;
