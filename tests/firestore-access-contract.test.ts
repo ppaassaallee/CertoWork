@@ -180,3 +180,17 @@ test("kanban presence is workspace-member scoped", () => {
   const presence = readFileSync(resolve("src/lib/kanbanPresence.ts"), "utf8");
   assert.match(presence, /KANBAN_PRESENCE_COLLECTION = "kanban_board_presence"/);
 });
+
+test("workspaces are tenant-private and do not allow every signed-in user to read names", () => {
+  const start = rules.indexOf("match /workspaces/{id} {");
+  assert.ok(start >= 0, "workspaces match block missing");
+  const end = rules.indexOf("\n    }", start);
+  const block = rules.slice(start, end);
+  assert.doesNotMatch(block, /allow read: if isSignedIn\(\);/);
+  assert.match(block, /resource\.data\.ownerId == request\.auth\.uid/);
+  assert.match(block, /workspaceListsAuthEmail/);
+  assert.match(block, /workspace_members/);
+  const auth = readFileSync(resolve("src/lib/AuthContext.tsx"), "utf8");
+  assert.match(auth, /canSeeWorkspaceDocument/);
+  assert.doesNotMatch(auth, /activeWorkspaceName\) \|\| 'Workspace'/);
+});

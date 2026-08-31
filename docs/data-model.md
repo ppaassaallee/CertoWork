@@ -12,7 +12,7 @@ Do not trust `userId` / `workspaceId` from the client body on `/api/*`. Auth mid
 
 | Collection | Owner fields | Required keys | Notes / rules |
 |---|---|---|---|
-| `workspaces` | `ownerId` | `ownerId`, `name`, `createdAt` | Owner create/update/delete. Members may read. |
+| `workspaces` | `ownerId` | `ownerId`, `name`, `createdAt` | Owner create/update/delete. Only the owner, an email in `members`, or an active `workspace_members` row may read — including the workspace name. Signed-in strangers must not list other companies' workspaces. |
 | `workspace_members` | `workspaceId`, `userId` | `workspaceId`, `userId`, `role`, `status` | Doc id is `${workspaceId}_${uid}`. Roles: `owner`, `admin`, `member`, `viewer`. `portfolioViewer: true` grants workspace-wide project read. |
 | `users` | `userId` (doc id) | auth uid | Signed-in user profile. |
 | `access_requests` | `userId` | `email`, `status` | Beta access queue. |

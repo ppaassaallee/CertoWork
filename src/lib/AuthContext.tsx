@@ -25,7 +25,7 @@ import {
   shouldFallbackGoogleSignInToRedirect,
   withAuthTimeout,
 } from './authFlow';
-import { looksLikeEmail, membershipPublicPatch } from './workspaceCollaboration';
+import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -107,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setWorkspaceError('');
     try {
       const wsMap = new Map();
+      const memberWorkspaceIds = new Set<string>();
       let lookupSucceeded = false;
 
       // Query owned workspaces
@@ -128,16 +129,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fetchPromises = snapMemberships.docs.map(async (mDoc) => {
           const mData = mDoc.data();
           const wsId = mData.workspaceId;
-          if (wsId && !wsMap.has(wsId)) {
-            try {
-              const wsRef = doc(db, 'workspaces', wsId);
-              const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Workspace ${wsId} lookup`);
-              if (wsSnap.exists()) {
-                wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
-              }
-            } catch (eGetWs) {
-              console.error(`Failed to load workspace document ${wsId}:`, eGetWs);
+          if (!wsId || mData.status === "removed") return;
+          memberWorkspaceIds.add(wsId);
+          if (wsMap.has(wsId)) return;
+          try {
+            const wsRef = doc(db, 'workspaces', wsId);
+            const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Workspace ${wsId} lookup`);
+            if (wsSnap.exists()) {
+              wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
             }
+          } catch (eGetWs) {
+            console.error(`Failed to load workspace document ${wsId}:`, eGetWs);
           }
         });
         await Promise.allSettled(fetchPromises);
@@ -190,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const mData = mDoc.data();
             const wsId = mData.workspaceId;
             if (!wsId || mData.status === 'removed') return;
+            memberWorkspaceIds.add(wsId);
             try {
               const wsRef = doc(db, 'workspaces', wsId);
               const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Invited workspace ${wsId} lookup`);
@@ -232,7 +235,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      const allWs = Array.from(wsMap.values()) as Workspace[];
+      const allWs = (Array.from(wsMap.values()) as Workspace[]).filter((ws) =>
+        canSeeWorkspaceDocument(ws, u, memberWorkspaceIds),
+      );
       
       if (allWs.length > 0) {
         const storedId = localStorage.getItem('activeWorkspaceId');
@@ -332,14 +337,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       if (u) {
         setAuthError('');
-        const storedId = localStorage.getItem('activeWorkspaceId');
-        if (storedId) {
-          setWorkspaceState((current) => current || {
-            id: storedId,
-            name: localStorage.getItem('activeWorkspaceName') || 'Workspace',
-            ownerId: u.uid,
-          });
-        }
         setLoading(false);
         setWorkspaceLoading(true);
         try {
