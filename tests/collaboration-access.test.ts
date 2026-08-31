@@ -103,6 +103,7 @@ test("project share and item share look up members by id instead of pending user
   assert.match(workspace, /resendWorkspaceInvite/);
   assert.match(workspace, /Remove invite/);
   assert.match(workspace, /pendingInviteDirectory/);
+  assert.match(workspace, /do-member-actions/);
   assert.match(workspace, /invite && inviteIsExpired\(invite\)/);
   assert.match(invite, /pendingMemberId/);
   assert.match(invite, /acceptedMemberId/);
