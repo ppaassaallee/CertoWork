@@ -173,8 +173,11 @@ import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
-  isPortfolioViewerMember,
   normalizeAccessEmail,
+  projectAccessEmails,
+  projectAccessLookupIds,
+  projectAccessNameValues,
+  shouldTryWorkspacePortfolioQuery,
 } from "../lib/accessControl";
 import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
@@ -558,8 +561,23 @@ export function DelivereeWorkspace() {
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
     const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
-    const canSeeWorkspacePortfolio =
-      workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
+    const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
+      isOwner: workspace.ownerId === user.uid,
+      member: currentMember,
+    });
+    const roleLookupIds = projectAccessLookupIds({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      email: user.email,
+      memberIds: [memberId, currentMember?.id],
+    }).slice(0, 10);
+    const roleEmails = projectAccessEmails(user.email);
+    const roleNames = projectAccessNameValues({
+      alias: currentMember?.alias,
+      displayName: currentMember?.displayName,
+      email: currentMember?.email || user.email,
+      emailLower: currentMember?.emailLower || emailLower,
+    }).slice(0, 10);
     const canTriageFeedback = canManageWorkspaceMembers(
       currentMember?.role,
       workspace.ownerId === user.uid,
@@ -587,7 +605,8 @@ export function DelivereeWorkspace() {
             );
             publish();
           },
-          () => {
+          (error) => {
+            console.error(`Firestore ${name} query ${index} failed`, error);
             buckets.set(index, []);
             publish();
           },
@@ -613,24 +632,50 @@ export function DelivereeWorkspace() {
           callback(
             snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
           ),
-        () => callback([]),
+        (error) => {
+          console.error(`Firestore ${name} query failed`, error);
+          callback([]);
+        },
       );
     };
+    const projectRoleClauses = [
+      [where("userId", "==", user.uid)],
+      [where("visibleToUserIds", "array-contains", user.uid)],
+      ...roleEmails.map((email) => [where("visibleToEmails", "array-contains", email)]),
+      ...(roleLookupIds.length
+        ? [
+            [where("teamMemberIds", "array-contains-any", roleLookupIds)],
+            [where("sponsorIds", "array-contains-any", roleLookupIds)],
+            [where("projectManagerId", "in", roleLookupIds)],
+            [where("productOwnerId", "in", roleLookupIds)],
+          ]
+        : []),
+      ...(roleNames.length
+        ? [
+            [where("projectManager", "in", roleNames), where("workspaceId", "==", workspace.id)],
+            [where("contact", "in", roleNames), where("workspaceId", "==", workspace.id)],
+          ]
+        : []),
+    ];
+    let cancelled = false;
+    const extraUnsubscribers: Array<() => void> = [];
+    const startRoleProjectQueries = () => {
+      if (cancelled) return;
+      extraUnsubscribers.push(...mergeQueries("projects", projectRoleClauses, setProjects));
+    };
     const projectUnsubscribers = canSeeWorkspacePortfolio
-      ? [makeQuery("projects", setProjects)]
-      : mergeQueries(
-          "projects",
-          [
-            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-            [where("visibleToUserIds", "array-contains", user.uid)],
-            [where("visibleToEmails", "array-contains", emailLower)],
-            [where("teamMemberIds", "array-contains", memberId)],
-            [where("sponsorIds", "array-contains", memberId)],
-            [where("projectManagerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-            [where("productOwnerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-          ],
-          setProjects,
-        );
+      ? [
+          onSnapshot(
+            query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
+            (snapshot) =>
+              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+            (error) => {
+              console.error("Workspace projects query failed; falling back to role queries", error);
+              startRoleProjectQueries();
+            },
+          ),
+        ]
+      : mergeQueries("projects", projectRoleClauses, setProjects);
     const taskUnsubscribers =
       workspace.ownerId === user.uid
         ? [makeQuery("tasks", setTasks)]
@@ -733,7 +778,11 @@ export function DelivereeWorkspace() {
       makeQuery("skills", setWorkspaceSkills, false, true),
       makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {

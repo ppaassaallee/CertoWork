@@ -36,7 +36,7 @@ Canonical health: `on_track` \| `at_risk` \| `blocked`. Canonical project status
 | `categories` | `workspaceId` | `workspaceId`, `name` | Controlled lists |
 | `stakeholders` | `workspaceId` | `workspaceId` | — |
 
-Project read is allowed for the record owner, explicit `visibleToUserIds` / `visibleToEmails`, role assignees, workspace admins, and any joined workspace member who is not a `viewer`. Viewers need `portfolioViewer` or a direct assignment.
+Project read is allowed for the record owner, explicit `visibleToUserIds` / `visibleToEmails`, role assignees (`projectManagerId` / `productOwnerId` may be the membership id, auth uid, or email), workspace admins, and any joined workspace member who is not a `viewer`. Viewers need `portfolioViewer` or a direct assignment. The client lists the workspace `projects` query first and falls back to those role queries if the wide query is denied.
 
 ## Conversations and approvals
 

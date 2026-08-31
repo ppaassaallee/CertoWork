@@ -123,6 +123,20 @@ test("shares with alias users even when emails differ", () => {
   assert.ok(share.emails.includes("jose@getboldr.ai"));
   assert.ok(share.emails.includes("rafael.f@getboldr.ai"));
   assert.equal(memberMatchesShareAlias({ id: "x", alias: "cesar", userId: "1" }, "cesar"), true);
+  assert.equal(
+    memberMatchesShareAlias(
+      { id: "ws_regine", userId: "u-regine", email: "regine.gg@alliedglobal.com", status: "active" },
+      "regina",
+    ),
+    true,
+  );
+  assert.equal(
+    memberMatchesShareAlias(
+      { id: "ws_gmail", userId: "u-gmail", email: "reginaguardia@gmail.com", status: "active" },
+      "regina",
+    ),
+    true,
+  );
 });
 
 test("never auto-replaces a live Pure AI portfolio", () => {

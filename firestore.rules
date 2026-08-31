@@ -117,17 +117,35 @@ service cloud.firestore {
         request.auth.token.email != null &&
         ('visibleToEmails' in data) &&
         data.visibleToEmails is list &&
-        request.auth.token.email in data.visibleToEmails
+        (
+          request.auth.token.email in data.visibleToEmails ||
+          (authEmailLower() != "" && authEmailLower() in data.visibleToEmails)
+        )
+      );
+    }
+
+    function isSelfRoleId(workspaceId, value) {
+      return value is string && (
+        value == activeWorkspaceMemberId(workspaceId) ||
+        value == request.auth.uid ||
+        (request.auth.token.email != null && value == request.auth.token.email) ||
+        (authEmailLower() != "" && value == authEmailLower())
       );
     }
 
     function hasProjectRoleAccess(data) {
       return ('workspaceId' in data) && data.workspaceId is string && (
-        (('projectManagerId' in data) && data.projectManagerId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('productOwnerId' in data) && data.productOwnerId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('sponsorId' in data) && data.sponsorId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('sponsorIds' in data) && data.sponsorIds is list && activeWorkspaceMemberId(data.workspaceId) in data.sponsorIds) ||
-        (('teamMemberIds' in data) && data.teamMemberIds is list && activeWorkspaceMemberId(data.workspaceId) in data.teamMemberIds)
+        (('projectManagerId' in data) && isSelfRoleId(data.workspaceId, data.projectManagerId)) ||
+        (('productOwnerId' in data) && isSelfRoleId(data.workspaceId, data.productOwnerId)) ||
+        (('sponsorId' in data) && isSelfRoleId(data.workspaceId, data.sponsorId)) ||
+        (('sponsorIds' in data) && data.sponsorIds is list && (
+          activeWorkspaceMemberId(data.workspaceId) in data.sponsorIds ||
+          request.auth.uid in data.sponsorIds
+        )) ||
+        (('teamMemberIds' in data) && data.teamMemberIds is list && (
+          activeWorkspaceMemberId(data.workspaceId) in data.teamMemberIds ||
+          request.auth.uid in data.teamMemberIds
+        ))
       );
     }
 
