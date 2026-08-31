@@ -31,6 +31,9 @@ test("project read rules and client queries stay aligned", () => {
   assert.match(canRead, /hasProjectRoleAccess\(data\)/);
   assert.match(canRead, /isPortfolioViewer\(data\.workspaceId\)/);
   assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
+  assert.match(canRead, /!isWorkspaceViewer\(data\.workspaceId\)/);
+  assert.match(rules, /isJoinedMemberStatus/);
+  assert.match(rules, /status == "accepted"/);
 
   assert.match(workspace, /canSeeWorkspacePortfolio/);
   assert.match(workspace, /where\("userId", "==", user\.uid\)/);

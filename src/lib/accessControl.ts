@@ -4,12 +4,17 @@ export function normalizeAccessEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+export function grantsWorkspacePortfolioAccess(role?: string | null) {
+  return String(role || "member").toLowerCase() !== "viewer";
+}
+
 export function isPortfolioViewerMember(member?: {
   role?: string | null;
   portfolioViewer?: boolean | null;
 } | null) {
-  const role = String(member?.role || "").toLowerCase();
-  return role === "owner" || role === "admin" || Boolean(member?.portfolioViewer);
+  if (!member) return false;
+  if (member.portfolioViewer) return true;
+  return grantsWorkspacePortfolioAccess(member.role);
 }
 
 export function activeWorkspaceMemberId(workspaceId: string, userId: string) {

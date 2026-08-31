@@ -89,6 +89,7 @@ export function InviteActivate({ token }: Props) {
         ...membershipPublicPatch({ displayName: displayName || current.displayName }),
         role: invite.role || "member",
         status: "active",
+        portfolioViewer: String(invite.role || "member").toLowerCase() !== "viewer",
         acceptedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

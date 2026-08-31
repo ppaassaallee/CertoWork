@@ -52,10 +52,14 @@ service cloud.firestore {
     }
 
     // Helper to check if user belongs to workspace
+    function isJoinedMemberStatus(status) {
+      return status == "active" || status == "accepted";
+    }
+
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() && workspaceId != null
         && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active";
+        && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status);
     }
 
     function activeWorkspaceMemberId(workspaceId) {
@@ -63,13 +67,11 @@ service cloud.firestore {
     }
 
     function isPortfolioViewer(workspaceId) {
-      return isSignedIn()
-        && workspaceId != null
-        && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active"
+      return isWorkspaceMember(workspaceId)
         && (
           get(memberDoc(workspaceId)).data.portfolioViewer == true
-          || get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+          || get(memberDoc(workspaceId)).data.role in ["owner", "admin", "member"]
+          || !("role" in get(memberDoc(workspaceId)).data)
         );
     }
 
@@ -80,10 +82,15 @@ service cloud.firestore {
           get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid ||
           (
             exists(memberDoc(workspaceId)) &&
-            get(memberDoc(workspaceId)).data.status == "active" &&
+            isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status) &&
             get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
           )
         );
+    }
+
+    function isWorkspaceViewer(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && get(memberDoc(workspaceId)).data.role == "viewer";
     }
 
     function isWorkspaceOwner(workspaceId) {
@@ -96,7 +103,7 @@ service cloud.firestore {
       return isWorkspaceAdmin(workspaceId)
         || (
           exists(memberDoc(workspaceId))
-          && get(memberDoc(workspaceId)).data.status == "active"
+          && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status)
           && get(memberDoc(workspaceId)).data.financeAccess == true
         );
     }
@@ -132,16 +139,9 @@ service cloud.firestore {
         hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
         (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && !isWorkspaceViewer(data.workspaceId)) ||
         (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewer(data.workspaceId))
       );
-    }
-
-    function isWorkspaceViewer(workspaceId) {
-      return isSignedIn()
-        && workspaceId != null
-        && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active"
-        && get(memberDoc(workspaceId)).data.role == "viewer";
     }
 
     function canWriteProject(data) {

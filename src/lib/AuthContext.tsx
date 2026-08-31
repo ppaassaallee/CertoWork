@@ -27,6 +27,7 @@ import {
 } from './authFlow';
 import { inviteShouldCloseOnJoin } from './inviteLifecycle';
 import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
+import { grantsWorkspacePortfolioAccess } from './accessControl';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -171,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
               role: (ws as any).roles?.[emailLower] || "member",
               status: "active",
+              portfolioViewer: grantsWorkspacePortfolioAccess((ws as any).roles?.[emailLower] || "member"),
               acceptedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
@@ -224,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }),
                 role: mData.role || "member",
                 status: "active",
+                portfolioViewer: grantsWorkspacePortfolioAccess(mData.role || "member"),
                 invitedBy: mData.invitedBy || "",
                 acceptedAt: serverTimestamp(),
                 createdAt: serverTimestamp(),
@@ -281,6 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const memberId = `${ws.id}_${u.uid}`;
             const memberRef = doc(db, 'workspace_members', memberId);
             const isOwner = ws.ownerId === u.uid;
+            const role = isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member");
             
             await withTimeout(setDoc(memberRef, {
               id: memberId,
@@ -288,9 +292,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               userId: u.uid,
               email: u.email || "",
               emailLower: (u.email || "").toLowerCase(),
-              role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
+              role,
               status: "active",
-              ...(isOwner ? { portfolioViewer: true } : {}),
+              portfolioViewer: grantsWorkspacePortfolioAccess(role),
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {

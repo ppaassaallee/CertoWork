@@ -16,6 +16,7 @@ import {
   memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
+  memberVisibleEmail,
   membershipPublicPatch,
   normalizeAlias,
   normalizeInviteEmail,
@@ -125,12 +126,24 @@ test("workspace admin labels show invite emails instead of unknown user", () => 
     "agustin@getboldr.ai",
   );
   assert.equal(
+    memberManageLabel(
+      {
+        status: "invited",
+        email: "agustin@getboldr.ai",
+      },
+      false,
+    ),
+    "Invited teammate",
+  );
+  assert.equal(
     memberPublicLabel({
       status: "invited",
       email: "agustin@getboldr.ai",
     }),
     "Invited teammate",
   );
+  assert.equal(memberVisibleEmail({ email: "ana@example.com" }, false), "");
+  assert.equal(memberVisibleEmail({ email: "Ana@Example.com" }, true), "ana@example.com");
 });
 
 test("pending invite directory keeps invited people visible until they join", () => {

@@ -237,6 +237,7 @@ import {
   memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
+  memberVisibleEmail,
   membershipPublicPatch,
   normalizeAlias,
   normalizeInviteEmail,
@@ -1084,6 +1085,9 @@ export function DelivereeWorkspace() {
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
   );
+  const canSeeMemberEmails =
+    workspace?.ownerId === user?.uid ||
+    isWorkspaceOwnerRole(currentWorkspaceMember?.role);
   const canOperateInvoiceQueue = canOperateInvoices(
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
@@ -2577,6 +2581,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: user.displayName }),
         role: "owner",
         status: "active",
+        portfolioViewer: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
@@ -2621,6 +2626,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({}),
         role: inviteRole,
         status: "invited",
+        portfolioViewer: inviteRole !== "viewer",
         invitedBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -2854,6 +2860,7 @@ export function DelivereeWorkspace() {
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
     await updateDoc(doc(db, "workspace_members", member.id), {
       role,
+      portfolioViewer: role !== "viewer",
       updatedAt: serverTimestamp(),
     });
     if (email) {
@@ -3019,6 +3026,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: request.displayName }),
         role,
         status: "active",
+        portfolioViewer: role !== "viewer",
         approvedBy: user.uid,
         approvedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -6244,12 +6252,15 @@ export function DelivereeWorkspace() {
                       <div>
                         <strong>
                           {normalizeAlias(request.displayName) ||
-                            normalizeInviteEmail(request.email || request.emailLower || "") ||
+                            (canSeeMemberEmails
+                              ? normalizeInviteEmail(request.email || request.emailLower || "")
+                              : "") ||
                             "Pending user"}
                         </strong>
                         <small>
-                          {normalizeInviteEmail(request.email || request.emailLower || "") ||
-                            "No email"}
+                          {canSeeMemberEmails
+                            ? normalizeInviteEmail(request.email || request.emailLower || "") || "No email"
+                            : "Access request"}
                           {" · "}
                           {request.provider || "email/password"} ·{" "}
                           {timeAgo(request.requestedAt || request.updatedAt)}
@@ -6321,15 +6332,15 @@ export function DelivereeWorkspace() {
                     const isOwner =
                       isWorkspaceOwnerRole(member.role) ||
                       member.userId === workspace?.ownerId;
-                    const email = normalizeInviteEmail(member.email || member.emailLower || "");
-                    const label = memberManageLabel(member);
+                    const email = memberVisibleEmail(member, canSeeMemberEmails);
+                    const label = memberManageLabel(member, canSeeMemberEmails);
                     return (
                       <article key={member.id}>
                         <span className="do-member-avatar">
                           {memberAvatar(member)}
                         </span>
                         <div className="do-member-identity">
-                          <strong>{label}</strong>
+                          <strong data-testid="member-directory-name">{label}</strong>
                           <small>
                             {memberStatusLabel(member.status)}
                             {member.userId === user?.uid ? " · You" : ""}
@@ -6406,10 +6417,16 @@ export function DelivereeWorkspace() {
                     return (
                       <article className="do-pending-invite-row" key={row.key}>
                         <div>
-                          <strong>{row.email}</strong>
+                          <strong>
+                            {canSeeMemberEmails ? row.email : "Pending invite"}
+                          </strong>
                           <small>
                             {roleLabel(row.role)} · Invited
-                            {delivery ? ` · email ${delivery}` : " · email not sent yet"}
+                            {canSeeMemberEmails
+                              ? delivery
+                                ? ` · email ${delivery}`
+                                : " · email not sent yet"
+                              : ""}
                             {invite && inviteIsExpired(invite) ? " · expired" : ""}
                           </small>
                         </div>
@@ -6513,7 +6530,7 @@ export function DelivereeWorkspace() {
                                 onClick={() => toggleTeamMember(team, member)}
                                 type="button"
                               >
-                                {memberManageLabel(member)}
+                                {memberManageLabel(member, canSeeMemberEmails)}
                               </button>
                             );
                           })}
