@@ -226,6 +226,8 @@ test("portfolio list opens a project from the title and renames on double-click"
   assert.match(projectSurfaces, /data-testid="project-title-open"/);
   assert.match(projectSurfaces, /data-testid="project-title-rename"/);
   assert.match(projectSurfaces, /onDoubleClick/);
+  assert.match(projectSurfaces, /event.stopPropagation\(\)/);
+  assert.match(projectSurfaces, /isTypingTarget/);
   assert.match(projectSurfaces, /onOpen=\{\(\) => onOpenProject\(project\)\}/);
   assert.match(projectSurfaces, /data-testid="projects-select-all-header"/);
   assert.match(projectSurfaces, /toggleSelectAllProjects/);

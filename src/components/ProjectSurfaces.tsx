@@ -265,6 +265,17 @@ function projectTitle(project: any) {
   return project?.title || project?.name || "Untitled project";
 }
 
+function isTypingTarget(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  const type = String((target as HTMLInputElement).type || "text").toLowerCase();
+  return !["button", "submit", "reset", "checkbox", "radio", "file", "image"].includes(type);
+}
+
 function healthClass(value: string) {
   return `status-tone-${healthToStatus(value)}`;
 }
@@ -561,6 +572,8 @@ function ProjectTitleCell({
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
             if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
               setDraft(name);
               setEditing(false);
             }
@@ -664,8 +677,10 @@ export function ProjectRecordModal({
   }, [mobileCore, tab]);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) =>
-      event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTypingTarget(event)) return;
+      onClose();
+    };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
@@ -4637,8 +4652,10 @@ export function ProjectCommandCenter({
     .sort((left, right) => right.count - left.count);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) =>
-      event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTypingTarget(event)) return;
+      onClose();
+    };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
