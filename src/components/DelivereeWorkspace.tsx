@@ -102,7 +102,7 @@ import {
   timeAgo,
   timestamp,
 } from "../lib/workspaceDisplay";
-import { inviteDirectoryUrl, inviteIsExpired } from "../lib/inviteLifecycle";
+import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
@@ -785,11 +785,7 @@ export function DelivereeWorkspace() {
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }))
               .filter(
-                (invite: any) =>
-                  invite.inviteType === "workspace_member" &&
-                  !["accepted", "revoked"].includes(
-                    String(invite.status || "").toLowerCase(),
-                  ),
+                (invite: any) => invite.inviteType === "workspace_member",
               ),
           ),
         () => setWorkspaceInvites([]),
@@ -2938,6 +2934,7 @@ export function DelivereeWorkspace() {
       });
       const matchingInvites = workspaceInvites.filter(
         (invite) =>
+          inviteIsUsable(invite) &&
           normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
       );
       for (const invite of matchingInvites) {

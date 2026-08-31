@@ -238,7 +238,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }), 5_000, `Mark invite ${wsId} accepted`);
               }
               await Promise.all(inviteSnaps.map(async (inviteDoc) => {
-                if (!inviteShouldCloseOnJoin(inviteDoc.data(), wsId)) return;
+                const inviteData = inviteDoc.data() as {
+                  status?: string;
+                  inviteType?: string;
+                  workspaceId?: string;
+                };
+                if (!inviteShouldCloseOnJoin(inviteData, wsId)) return;
                 await withTimeout(updateDoc(inviteDoc.ref, {
                   status: "accepted",
                   acceptedBy: u.uid,
