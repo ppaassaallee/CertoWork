@@ -167,6 +167,7 @@ export const MessageSquareText = wrapped.MessageSquareText;
 export const Mic = wrapped.Mic;
 export const MicOff = wrapped.MicOff;
 export const Minimize2 = wrapped.Minimize2;
+export const Minus = wrapped.Minus;
 export const Moon = wrapped.Moon;
 export const MoreHorizontal = wrapped.MoreHorizontal;
 export const MoreVertical = wrapped.MoreVertical;

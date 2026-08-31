@@ -202,3 +202,37 @@ test("list hierarchy nests children under epics and opens an expanded item popup
   assert.match(css, /\.do-item-modal-backdrop/);
   assert.match(css, /\.do-item-modal \{/);
 });
+
+test("items and backlog can select all visible rows and bulk-edit assignee, date, and project", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(workItems, /data-testid=\{testId\}/);
+  assert.match(workItems, /data-testid="items-select-all-summary"/);
+  assert.match(workItems, /renderSelectAll\("items-select-all-bulk"\)/);
+  assert.match(workItems, /data-testid="item-bulk-select"/);
+  assert.match(workItems, /toggleSelectAllVisible/);
+  assert.match(workItems, /<option value="none">Unassigned<\/option>/);
+  assert.match(workItems, /bulkAssigneeId === "none" \? "Unassign"/);
+  assert.match(workItems, /assigneeIds: \[\],/);
+  assert.match(workItems, />Clear date</);
+  assert.match(workItems, /<option value="none">Remove from project<\/option>/);
+  assert.match(workItems, />Apply project</);
+  assert.match(css, /\.do-items-select-all/);
+  assert.match(css, /\.do-items-select-all-label/);
+});
+
+test("portfolio list opens a project from the title and renames on double-click", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(projectSurfaces, /function ProjectTitleCell/);
+  assert.match(projectSurfaces, /data-testid="project-title-open"/);
+  assert.match(projectSurfaces, /data-testid="project-title-rename"/);
+  assert.match(projectSurfaces, /onDoubleClick/);
+  assert.match(projectSurfaces, /onOpen=\{\(\) => onOpenProject\(project\)\}/);
+  assert.match(projectSurfaces, /data-testid="projects-select-all-header"/);
+  assert.match(projectSurfaces, /toggleSelectAllProjects/);
+  assert.match(projectSurfaces, /<option value="none">Unassigned<\/option>/);
+  assert.match(projectSurfaces, /Unassign PM/);
+  assert.match(projectSurfaces, /Bulk project due date/);
+  assert.match(projectSurfaces, /Click the name to open the project/);
+  assert.doesNotMatch(projectSurfaces, /Edit the name directly/);
+  assert.match(css, /\.do-command-project-title-open/);
+});

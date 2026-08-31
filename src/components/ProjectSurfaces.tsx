@@ -17,6 +17,7 @@ import {
   Link as LinkIcon,
   ListChecks,
   MessageSquare,
+  Minus,
   MoreHorizontal,
   Plus,
   Search,
@@ -503,6 +504,104 @@ function InlineEdit({
       placeholder={placeholder}
       value={draft}
     />
+  );
+}
+
+function projectMetaLine(project: any) {
+  return `${project.demo ? "DEMO · " : ""}${project.projectKey || "No key"} · ${
+    project.serviceLine || project.projectType || project.category || "Delivery"
+  }`;
+}
+
+function ProjectTitleCell({
+  project,
+  onOpen,
+  onRename,
+}: {
+  project: any;
+  onOpen: () => void;
+  onRename: (title: string) => void;
+}) {
+  const name = projectTitle(project);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const clickTimer = useRef<number | null>(null);
+  useEffect(() => setDraft(name), [name]);
+  useEffect(
+    () => () => {
+      if (clickTimer.current) window.clearTimeout(clickTimer.current);
+    },
+    [],
+  );
+
+  const beginRename = () => {
+    if (clickTimer.current) {
+      window.clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    if (project.demo) return;
+    setDraft(name);
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <span className="do-command-project-title">
+        <input
+          aria-label={`Rename ${name}`}
+          autoFocus
+          data-testid="project-title-rename"
+          onBlur={() => {
+            const next = draft.trim();
+            setEditing(false);
+            if (next && next !== name) onRename(next);
+            else setDraft(name);
+          }}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              setDraft(name);
+              setEditing(false);
+            }
+          }}
+          value={draft}
+        />
+        <small>{projectMetaLine(project)}</small>
+      </span>
+    );
+  }
+
+  return (
+    <span className="do-command-project-title">
+      <button
+        aria-label={`Open ${name}`}
+        className="do-command-project-title-open"
+        data-testid="project-title-open"
+        onClick={(event) => {
+          if (event.detail > 1) return;
+          if (event.detail === 0) {
+            onOpen();
+            return;
+          }
+          if (clickTimer.current) window.clearTimeout(clickTimer.current);
+          clickTimer.current = window.setTimeout(() => {
+            clickTimer.current = null;
+            onOpen();
+          }, 280);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          beginRename();
+        }}
+        title="Click to open · Double-click to rename"
+        type="button"
+      >
+        {name}
+      </button>
+      <small>{projectMetaLine(project)}</small>
+    </span>
   );
 }
 
@@ -4182,6 +4281,7 @@ export function ProjectCommandCenter({
   const [bulkStage, setBulkStage] = useState<DeliveryStage>("build");
   const [bulkManagerId, setBulkManagerId] = useState("");
   const [bulkTeamId, setBulkTeamId] = useState("");
+  const [bulkDueDate, setBulkDueDate] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -4447,6 +4547,24 @@ export function ProjectCommandCenter({
     }
     return projectTitle(left).localeCompare(projectTitle(right));
   });
+  const visibleProjectIds = sortedFiltered.map((project) => project.id);
+  const allVisibleProjectsSelected =
+    visibleProjectIds.length > 0 &&
+    visibleProjectIds.every((id) => selectedProjectIds.includes(id));
+  const someVisibleProjectsSelected = visibleProjectIds.some((id) =>
+    selectedProjectIds.includes(id),
+  );
+  const toggleSelectAllProjects = () => {
+    if (allVisibleProjectsSelected) {
+      setSelectedProjectIds((current) =>
+        current.filter((id) => !visibleProjectIds.includes(id)),
+      );
+      return;
+    }
+    setSelectedProjectIds((current) => [
+      ...new Set([...current, ...visibleProjectIds]),
+    ]);
+  };
   const openProjects = portfolio.filter(
     (project) =>
       !["completed", "archived", "done", "deleted", "cancelled"].includes(
@@ -5105,6 +5223,17 @@ export function ProjectCommandCenter({
           {selectedProjectIds.length > 0 && (
             <div className="do-items-bulk" aria-label="Project bulk actions">
               <span>{selectedProjectIds.length} selected</span>
+              <button
+                aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
+                className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
+                data-testid="projects-select-all"
+                disabled={visibleProjectIds.length === 0}
+                onClick={toggleSelectAllProjects}
+                type="button"
+              >
+                {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
+              </button>
+              <button onClick={() => setSelectedProjectIds([])} type="button">Clear</button>
               <select aria-label="Bulk project status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>
                 {PROJECT_STATUSES.map((status) => (
                   <option key={status} value={status}>{projectStatusLabel(status)}</option>
@@ -5117,8 +5246,43 @@ export function ProjectCommandCenter({
                 ))}
               </select>
               <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { deliveryStage: bulkStage })))} type="button">Change stage</button>
+              <input
+                aria-label="Bulk project due date"
+                onChange={(event) => setBulkDueDate(event.target.value)}
+                type="date"
+                value={bulkDueDate}
+              />
+              <button
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) =>
+                    onUpdateProject(id, {
+                      revisedDueDate: bulkDueDate || null,
+                      dueDate: bulkDueDate || null,
+                      targetDate: bulkDueDate || null,
+                    }),
+                  ))
+                }
+                type="button"
+              >
+                Apply date
+              </button>
+              <button
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) =>
+                    onUpdateProject(id, {
+                      revisedDueDate: null,
+                      dueDate: null,
+                      targetDate: null,
+                    }),
+                  ))
+                }
+                type="button"
+              >
+                Clear date
+              </button>
               <select aria-label="Bulk project manager" onChange={(event) => setBulkManagerId(event.target.value)} value={bulkManagerId}>
                 <option value="">Project manager</option>
+                <option value="none">Unassigned</option>
                 {activeMemberOptions.map((member) => (
                   <option key={member.id} value={member.id}>{member.name}</option>
                 ))}
@@ -5126,12 +5290,15 @@ export function ProjectCommandCenter({
               <button
                 disabled={!bulkManagerId}
                 onClick={() => {
+                  if (bulkManagerId === "none") {
+                    return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: null, projectManager: "" })));
+                  }
                   const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
                   return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: bulkManagerId, projectManager: member?.name || "" })));
                 }}
                 type="button"
               >
-                Assign PM
+                {bulkManagerId === "none" ? "Unassign PM" : "Assign PM"}
               </button>
               <select aria-label="Bulk add team member" onChange={(event) => setBulkTeamId(event.target.value)} value={bulkTeamId}>
                 <option value="">Add team member</option>
@@ -5433,10 +5600,21 @@ export function ProjectCommandCenter({
             <div className="do-command-table">
               <div className="do-command-table-head" style={portfolioGridStyle}>
                 {columnSet.has("project") && <span>
+                  <button
+                    aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
+                    className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
+                    data-testid="projects-select-all-header"
+                    disabled={visibleProjectIds.length === 0}
+                    onClick={toggleSelectAllProjects}
+                    title={allVisibleProjectsSelected ? "Deselect all" : "Select all visible projects"}
+                    type="button"
+                  >
+                    {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
+                  </button>
                   Project{" "}
                   <InfoTip
                     label="Project"
-                    text="Edit the name directly. The stable project key remains underneath."
+                    text="Click the name to open the project. Double-click to rename. The stable project key remains underneath."
                   />
                 </span>}
                 {columnSet.has("delivery_entity") && <span>
@@ -5599,26 +5777,16 @@ export function ProjectCommandCenter({
                           />
                         </button>
                         <span>
-                          <InlineEdit
-                            ariaLabel={`Project name for ${projectTitle(project)}`}
-                            onCommit={(title) =>
-                              title &&
+                          <ProjectTitleCell
+                            onOpen={() => onOpenProject(project)}
+                            onRename={(title) =>
                               onUpdateProject(project.id, {
                                 title,
                                 name: title,
                               })
                             }
-                            placeholder="Project name"
-                            value={projectTitle(project)}
+                            project={project}
                           />
-                          <small>
-                            {project.demo ? "DEMO · " : ""}
-                            {project.projectKey || "No key"} ·{" "}
-                            {project.serviceLine ||
-                              project.projectType ||
-                              project.category ||
-                              "Delivery"}
-                          </small>
                         </span>
                       </div>}
                       {columnSet.has("delivery_entity") && <div className="do-master-data-cell">
