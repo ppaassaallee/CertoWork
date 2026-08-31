@@ -106,13 +106,22 @@ export function memberPublicLabel(member: Pick<WorkspaceMember, "alias" | "displ
 
 export function memberManageLabel(
   member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
+  canSeeEmail = true,
 ) {
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
-    normalizeInviteEmail(member.email || member.emailLower || "") ||
-    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Teammate")
+    (canSeeEmail ? normalizeInviteEmail(member.email || member.emailLower || "") : "") ||
+    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Needs alias")
   );
+}
+
+export function memberVisibleEmail(
+  member: Pick<WorkspaceMember, "email" | "emailLower">,
+  canSeeEmail = false,
+) {
+  if (!canSeeEmail) return "";
+  return normalizeInviteEmail(member.email || member.emailLower || "");
 }
 
 export function inviteManageLabel(invite: {

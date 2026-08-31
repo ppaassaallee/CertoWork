@@ -173,8 +173,11 @@ import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
-  isPortfolioViewerMember,
   normalizeAccessEmail,
+  projectAccessEmails,
+  projectAccessLookupIds,
+  projectAccessNameValues,
+  shouldTryWorkspacePortfolioQuery,
 } from "../lib/accessControl";
 import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
@@ -237,6 +240,7 @@ import {
   memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
+  memberVisibleEmail,
   membershipPublicPatch,
   normalizeAlias,
   normalizeInviteEmail,
@@ -557,8 +561,23 @@ export function DelivereeWorkspace() {
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
     const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
-    const canSeeWorkspacePortfolio =
-      workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
+    const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
+      isOwner: workspace.ownerId === user.uid,
+      member: currentMember,
+    });
+    const roleLookupIds = projectAccessLookupIds({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      email: user.email,
+      memberIds: [memberId, currentMember?.id],
+    }).slice(0, 10);
+    const roleEmails = projectAccessEmails(user.email);
+    const roleNames = projectAccessNameValues({
+      alias: currentMember?.alias,
+      displayName: currentMember?.displayName,
+      email: currentMember?.email || user.email,
+      emailLower: currentMember?.emailLower || emailLower,
+    }).slice(0, 10);
     const canTriageFeedback = canManageWorkspaceMembers(
       currentMember?.role,
       workspace.ownerId === user.uid,
@@ -586,7 +605,8 @@ export function DelivereeWorkspace() {
             );
             publish();
           },
-          () => {
+          (error) => {
+            console.error(`Firestore ${name} query ${index} failed`, error);
             buckets.set(index, []);
             publish();
           },
@@ -612,24 +632,50 @@ export function DelivereeWorkspace() {
           callback(
             snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
           ),
-        () => callback([]),
+        (error) => {
+          console.error(`Firestore ${name} query failed`, error);
+          callback([]);
+        },
       );
     };
+    const projectRoleClauses = [
+      [where("userId", "==", user.uid)],
+      [where("visibleToUserIds", "array-contains", user.uid)],
+      ...roleEmails.map((email) => [where("visibleToEmails", "array-contains", email)]),
+      ...(roleLookupIds.length
+        ? [
+            [where("teamMemberIds", "array-contains-any", roleLookupIds)],
+            [where("sponsorIds", "array-contains-any", roleLookupIds)],
+            [where("projectManagerId", "in", roleLookupIds)],
+            [where("productOwnerId", "in", roleLookupIds)],
+          ]
+        : []),
+      ...(roleNames.length
+        ? [
+            [where("projectManager", "in", roleNames), where("workspaceId", "==", workspace.id)],
+            [where("contact", "in", roleNames), where("workspaceId", "==", workspace.id)],
+          ]
+        : []),
+    ];
+    let cancelled = false;
+    const extraUnsubscribers: Array<() => void> = [];
+    const startRoleProjectQueries = () => {
+      if (cancelled) return;
+      extraUnsubscribers.push(...mergeQueries("projects", projectRoleClauses, setProjects));
+    };
     const projectUnsubscribers = canSeeWorkspacePortfolio
-      ? [makeQuery("projects", setProjects)]
-      : mergeQueries(
-          "projects",
-          [
-            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-            [where("visibleToUserIds", "array-contains", user.uid)],
-            [where("visibleToEmails", "array-contains", emailLower)],
-            [where("teamMemberIds", "array-contains", memberId)],
-            [where("sponsorIds", "array-contains", memberId)],
-            [where("projectManagerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-            [where("productOwnerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-          ],
-          setProjects,
-        );
+      ? [
+          onSnapshot(
+            query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
+            (snapshot) =>
+              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+            (error) => {
+              console.error("Workspace projects query failed; falling back to role queries", error);
+              startRoleProjectQueries();
+            },
+          ),
+        ]
+      : mergeQueries("projects", projectRoleClauses, setProjects);
     const taskUnsubscribers =
       workspace.ownerId === user.uid
         ? [makeQuery("tasks", setTasks)]
@@ -732,7 +778,11 @@ export function DelivereeWorkspace() {
       makeQuery("skills", setWorkspaceSkills, false, true),
       makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
@@ -1084,6 +1134,9 @@ export function DelivereeWorkspace() {
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
   );
+  const canSeeMemberEmails =
+    workspace?.ownerId === user?.uid ||
+    isWorkspaceOwnerRole(currentWorkspaceMember?.role);
   const canOperateInvoiceQueue = canOperateInvoices(
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
@@ -2577,6 +2630,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: user.displayName }),
         role: "owner",
         status: "active",
+        portfolioViewer: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
@@ -2621,6 +2675,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({}),
         role: inviteRole,
         status: "invited",
+        portfolioViewer: inviteRole !== "viewer",
         invitedBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -2854,6 +2909,7 @@ export function DelivereeWorkspace() {
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
     await updateDoc(doc(db, "workspace_members", member.id), {
       role,
+      portfolioViewer: role !== "viewer",
       updatedAt: serverTimestamp(),
     });
     if (email) {
@@ -3019,6 +3075,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: request.displayName }),
         role,
         status: "active",
+        portfolioViewer: role !== "viewer",
         approvedBy: user.uid,
         approvedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -6244,12 +6301,15 @@ export function DelivereeWorkspace() {
                       <div>
                         <strong>
                           {normalizeAlias(request.displayName) ||
-                            normalizeInviteEmail(request.email || request.emailLower || "") ||
+                            (canSeeMemberEmails
+                              ? normalizeInviteEmail(request.email || request.emailLower || "")
+                              : "") ||
                             "Pending user"}
                         </strong>
                         <small>
-                          {normalizeInviteEmail(request.email || request.emailLower || "") ||
-                            "No email"}
+                          {canSeeMemberEmails
+                            ? normalizeInviteEmail(request.email || request.emailLower || "") || "No email"
+                            : "Access request"}
                           {" · "}
                           {request.provider || "email/password"} ·{" "}
                           {timeAgo(request.requestedAt || request.updatedAt)}
@@ -6321,15 +6381,15 @@ export function DelivereeWorkspace() {
                     const isOwner =
                       isWorkspaceOwnerRole(member.role) ||
                       member.userId === workspace?.ownerId;
-                    const email = normalizeInviteEmail(member.email || member.emailLower || "");
-                    const label = memberManageLabel(member);
+                    const email = memberVisibleEmail(member, canSeeMemberEmails);
+                    const label = memberManageLabel(member, canSeeMemberEmails);
                     return (
                       <article key={member.id}>
                         <span className="do-member-avatar">
                           {memberAvatar(member)}
                         </span>
                         <div className="do-member-identity">
-                          <strong>{label}</strong>
+                          <strong data-testid="member-directory-name">{label}</strong>
                           <small>
                             {memberStatusLabel(member.status)}
                             {member.userId === user?.uid ? " · You" : ""}
@@ -6406,10 +6466,16 @@ export function DelivereeWorkspace() {
                     return (
                       <article className="do-pending-invite-row" key={row.key}>
                         <div>
-                          <strong>{row.email}</strong>
+                          <strong>
+                            {canSeeMemberEmails ? row.email : "Pending invite"}
+                          </strong>
                           <small>
                             {roleLabel(row.role)} · Invited
-                            {delivery ? ` · email ${delivery}` : " · email not sent yet"}
+                            {canSeeMemberEmails
+                              ? delivery
+                                ? ` · email ${delivery}`
+                                : " · email not sent yet"
+                              : ""}
                             {invite && inviteIsExpired(invite) ? " · expired" : ""}
                           </small>
                         </div>
@@ -6513,7 +6579,7 @@ export function DelivereeWorkspace() {
                                 onClick={() => toggleTeamMember(team, member)}
                                 type="button"
                               >
-                                {memberManageLabel(member)}
+                                {memberManageLabel(member, canSeeMemberEmails)}
                               </button>
                             );
                           })}

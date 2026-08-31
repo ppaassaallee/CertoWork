@@ -31,12 +31,21 @@ test("project read rules and client queries stay aligned", () => {
   assert.match(canRead, /hasProjectRoleAccess\(data\)/);
   assert.match(canRead, /isPortfolioViewer\(data\.workspaceId\)/);
   assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
+  assert.match(canRead, /!isWorkspaceViewer\(data\.workspaceId\)/);
+  assert.match(rules, /isJoinedMemberStatus/);
+  assert.match(rules, /status == "accepted"/);
 
   assert.match(workspace, /canSeeWorkspacePortfolio/);
   assert.match(workspace, /where\("userId", "==", user\.uid\)/);
   assert.match(workspace, /where\("visibleToUserIds", "array-contains", user\.uid\)/);
-  assert.match(workspace, /where\("teamMemberIds", "array-contains", memberId\)/);
-  assert.match(workspace, /where\("projectManagerId", "==", memberId\)/);
+  assert.match(workspace, /where\("teamMemberIds", "array-contains-any", roleLookupIds\)/);
+  assert.match(workspace, /where\("projectManagerId", "in", roleLookupIds\)/);
+  assert.match(workspace, /falling back to role queries/);
+  assert.match(rules, /function isSelfRoleId/);
+  const explicit = ruleFn("hasExplicitUserAccess");
+  assert.match(explicit, /authEmailLower\(\)/);
+  const roleAccess = ruleFn("hasProjectRoleAccess");
+  assert.match(roleAccess, /isSelfRoleId\(data\.workspaceId, data\.projectManagerId\)/);
 });
 
 test("item read rules and client queries stay aligned", () => {

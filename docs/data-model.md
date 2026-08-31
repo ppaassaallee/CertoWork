@@ -13,7 +13,7 @@ Do not trust `userId` / `workspaceId` from the client body on `/api/*`. Auth mid
 | Collection | Owner fields | Required keys | Notes / rules |
 |---|---|---|---|
 | `workspaces` | `ownerId` | `ownerId`, `name`, `createdAt` | Owner create/update/delete. Only the owner, an email in `members`, or an active `workspace_members` row may read — including the workspace name. Signed-in strangers must not list other companies' workspaces. |
-| `workspace_members` | `workspaceId`, `userId` | `workspaceId`, `userId`, `role`, `status` | Doc id is `${workspaceId}_${uid}`. Roles: `owner`, `admin`, `member`, `viewer`. `portfolioViewer: true` grants workspace-wide project read. |
+| `workspace_members` | `workspaceId`, `userId` | `workspaceId`, `userId`, `role`, `status` | Doc id is `${workspaceId}_${uid}`. Roles: `owner`, `admin`, `member`, `viewer`. Active members (not `viewer`) can read and edit workspace projects. `portfolioViewer: true` still grants workspace-wide project read for viewers. |
 | `users` | `userId` (doc id) | auth uid | Signed-in user profile. |
 | `access_requests` | `userId` | `email`, `status` | Beta access queue. |
 | `invoice_documents` | `workspaceId`, `shareToken` (doc id) | `workspaceId`, `title`, `amount`, `status`, `paymentStatus` | AP invoice queue. Members list workspace invoices. Finance operators (admin/owner or `financeAccess`) update lifecycle. Client portal can get/update by token: paid, rejected, exception. Statuses: `billed`, `sent`, `pending_approval`, `approved`, `paid`, `rejected`, `void`, `exception`. |
@@ -36,7 +36,7 @@ Canonical health: `on_track` \| `at_risk` \| `blocked`. Canonical project status
 | `categories` | `workspaceId` | `workspaceId`, `name` | Controlled lists |
 | `stakeholders` | `workspaceId` | `workspaceId` | — |
 
-Project read is allowed for owners, explicit `visibleToUserIds` / `visibleToEmails`, role assignees, workspace admins, or members with `portfolioViewer`.
+Project read is allowed for the record owner, explicit `visibleToUserIds` / `visibleToEmails`, role assignees (`projectManagerId` / `productOwnerId` may be the membership id, auth uid, or email), workspace admins, and any joined workspace member who is not a `viewer`. Viewers need `portfolioViewer` or a direct assignment. The client lists the workspace `projects` query first and falls back to those role queries if the wide query is denied.
 
 ## Conversations and approvals
 

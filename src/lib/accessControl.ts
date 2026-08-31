@@ -4,12 +4,32 @@ export function normalizeAccessEmail(value?: string | null) {
   return String(value || "").trim().toLowerCase();
 }
 
+export function grantsWorkspacePortfolioAccess(role?: string | null) {
+  return String(role || "member").toLowerCase() !== "viewer";
+}
+
 export function isPortfolioViewerMember(member?: {
   role?: string | null;
   portfolioViewer?: boolean | null;
 } | null) {
-  const role = String(member?.role || "").toLowerCase();
-  return role === "owner" || role === "admin" || Boolean(member?.portfolioViewer);
+  if (!member) return false;
+  if (member.portfolioViewer) return true;
+  return grantsWorkspacePortfolioAccess(member.role);
+}
+
+export function shouldTryWorkspacePortfolioQuery({
+  isOwner,
+  member,
+}: {
+  isOwner: boolean;
+  member?: {
+    role?: string | null;
+    portfolioViewer?: boolean | null;
+  } | null;
+}) {
+  if (isOwner) return true;
+  if (!member) return true;
+  return isPortfolioViewerMember(member);
 }
 
 export function activeWorkspaceMemberId(workspaceId: string, userId: string) {
@@ -18,6 +38,45 @@ export function activeWorkspaceMemberId(workspaceId: string, userId: string) {
 
 function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+export function projectAccessLookupIds({
+  workspaceId,
+  userId,
+  email,
+  memberIds = [],
+}: {
+  workspaceId: string;
+  userId: string;
+  email?: string | null;
+  memberIds?: Array<string | null | undefined>;
+}) {
+  return unique([
+    ...memberIds,
+    activeWorkspaceMemberId(workspaceId, userId),
+    userId,
+    normalizeAccessEmail(email),
+    String(email || "").trim(),
+  ]);
+}
+
+export function projectAccessNameValues(member?: {
+  alias?: string | null;
+  displayName?: string | null;
+  name?: string | null;
+  email?: string | null;
+  emailLower?: string | null;
+} | null) {
+  const email = normalizeAccessEmail(member?.email || member?.emailLower);
+  const local = email.split("@")[0] || "";
+  const localHead = local.split(/[._+\-]/)[0] || "";
+  const display = String(member?.displayName || member?.name || "").trim();
+  const first = display.split(/\s+/).filter(Boolean)[0] || "";
+  return unique([member?.alias, display, first, local, localHead]);
+}
+
+export function projectAccessEmails(email?: string | null) {
+  return unique([normalizeAccessEmail(email), String(email || "").trim()]);
 }
 
 export function buildOwnedAccessPatch({
