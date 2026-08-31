@@ -2309,6 +2309,7 @@ export function ProjectConsolePanel({
                 <input
                   accept="*/*"
                   aria-label="Upload file up to 20 MB"
+                  data-testid="project-docs-file-input"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (!file || !onAddDocument) return;
@@ -2317,8 +2318,17 @@ export function ProjectConsolePanel({
                       return;
                     }
                     setDocError("");
-                    void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
-                    setDocTitle("");
+                    void Promise.resolve(
+                      onAddDocument({ resourceType: "file", title: docTitle || file.name, file }),
+                    )
+                      .then(() => setDocTitle(""))
+                      .catch((reason) => {
+                        setDocError(
+                          reason instanceof Error
+                            ? reason.message
+                            : "The document could not be saved.",
+                        );
+                      });
                     event.target.value = "";
                   }}
                   type="file"
@@ -2334,11 +2344,19 @@ export function ProjectConsolePanel({
                     return;
                   }
                   setDocError("");
-                  void onAddDocument?.({
-                    resourceType: docType,
-                    title: docTitle.trim(),
-                    url: docUrl,
-                    body: docBody,
+                  void Promise.resolve(
+                    onAddDocument?.({
+                      resourceType: docType,
+                      title: docTitle.trim(),
+                      url: docUrl,
+                      body: docBody,
+                    }),
+                  ).catch((reason) => {
+                    setDocError(
+                      reason instanceof Error
+                        ? reason.message
+                        : "The document could not be saved.",
+                    );
                   });
                   setDocTitle("");
                   setDocBody("");

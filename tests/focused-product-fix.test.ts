@@ -124,7 +124,12 @@ test("project Docs uses a compact structured panel instead of raw browser contro
   assert.match(docsBlock, /do-docs-compose/);
   assert.match(docsBlock, /do-docs-drive/);
   assert.match(docsBlock, /do-docs-file-button/);
+  assert.match(docsBlock, /data-testid="project-docs-file-input"/);
   assert.equal(docsBlock.includes("Optional Google Drive folder"), false);
   assert.equal(docsBlock.includes("OneDrive connector has not been configured"), false);
   assert.match(css, /\.do-docs-compose[\s\S]*height: 36px/);
+  const fileButtonCss = css.slice(css.indexOf(".do-docs-file-button {"));
+  assert.match(fileButtonCss, /position: relative/);
+  assert.match(fileButtonCss, /inset: 0/);
+  assert.doesNotMatch(fileButtonCss.slice(0, 600), /pointer-events:\s*none/);
 });
