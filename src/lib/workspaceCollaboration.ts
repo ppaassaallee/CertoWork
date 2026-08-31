@@ -38,6 +38,30 @@ export function canCreateWorkspace(count: number) {
   return count < WORKSPACE_LIMIT;
 }
 
+export function workspaceMemberEmails(workspace: { members?: unknown } | null | undefined) {
+  if (!workspace || !Array.isArray(workspace.members)) return [];
+  return workspace.members
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function canSeeWorkspaceDocument(
+  workspace: { id?: string; ownerId?: string; members?: unknown } | null | undefined,
+  user: { uid?: string; email?: string | null } | null | undefined,
+  memberWorkspaceIds: Iterable<string> = [],
+) {
+  if (!workspace || !user?.uid) return false;
+  if (workspace.ownerId && workspace.ownerId === user.uid) return true;
+  const email = normalizeInviteEmail(user.email || "");
+  if (email && workspaceMemberEmails(workspace).includes(email)) return true;
+  const workspaceId = String(workspace.id || "");
+  if (!workspaceId) return false;
+  for (const id of memberWorkspaceIds) {
+    if (id === workspaceId) return true;
+  }
+  return false;
+}
+
 export function normalizeInviteEmail(value: string) {
   return value.trim().toLowerCase();
 }

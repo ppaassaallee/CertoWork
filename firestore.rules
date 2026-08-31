@@ -15,12 +15,32 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
-    // Workspaces
+    function authEmailLower() {
+      return request.auth.token.email is string ? request.auth.token.email.lower() : "";
+    }
+
+    function workspaceListsAuthEmail() {
+      return resource.data.members is list && request.auth.token.email != null && (
+        request.auth.token.email in resource.data.members ||
+        (authEmailLower() != "" && authEmailLower() in resource.data.members)
+      );
+    }
+
+    // Workspaces are tenant-private. A signed-in user who is not the owner,
+    // a listed member email, or an active workspace_members row must not read
+    // the document — including the workspace name.
     match /workspaces/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        workspaceListsAuthEmail() ||
+        (
+          exists(/databases/$(database)/documents/workspace_members/$(id + "_" + request.auth.uid)) &&
+          get(/databases/$(database)/documents/workspace_members/$(id + "_" + request.auth.uid)).data.status == "active"
+        )
+      );
       allow create: if isSignedIn() && incoming().keys().hasAll(['ownerId', 'name', 'createdAt']) && incoming().ownerId == request.auth.uid;
       allow update: if isSignedIn()
-        && (resource.data.ownerId == request.auth.uid || (resource.data.members is list && request.auth.token.email != null && request.auth.token.email in resource.data.members))
+        && (resource.data.ownerId == request.auth.uid || workspaceListsAuthEmail())
         && incoming().ownerId == resource.data.ownerId
         && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
         && (!('createdAt' in resource.data) || incoming().createdAt == resource.data.createdAt);

@@ -7,6 +7,7 @@ import {
   canCreateWorkspace,
   canChangePasswordForProvider,
   canManageWorkspaceMembers,
+  canSeeWorkspaceDocument,
   looksLikeEmail,
   memberAssignmentValue,
   memberAvatar,
@@ -29,6 +30,33 @@ test("workspace creation is capped at three workspaces", () => {
   assert.equal(canCreateWorkspace(0), true);
   assert.equal(canCreateWorkspace(2), true);
   assert.equal(canCreateWorkspace(3), false);
+});
+
+test("a user only sees workspaces they own, are listed on, or belong to", () => {
+  const allied = { uid: "allied-1", email: "roberto.ri@alliedglobal.com" };
+  const boldr = {
+    id: "fR1twiCu17nlX5YMYPLt",
+    ownerId: "boldr-owner",
+    name: "Boldr Ai Workspace",
+    members: ["alejandro@getboldr.ai", "rafael.f@getboldr.ai"],
+  };
+  const pureAi = {
+    id: "BZwDzExcupV1EuBrJysG",
+    ownerId: "boldr-owner",
+    name: "Pure Ai Workspace",
+    members: ["roberto.ri@alliedglobal.com", "alejandro.ms@alliedglobal.com"],
+  };
+  const owned = {
+    id: "personal",
+    ownerId: "allied-1",
+    name: "Personal Focus",
+    members: ["roberto.ri@alliedglobal.com"],
+  };
+  assert.equal(canSeeWorkspaceDocument(boldr, allied), false);
+  assert.equal(canSeeWorkspaceDocument(boldr, allied, ["BZwDzExcupV1EuBrJysG"]), false);
+  assert.equal(canSeeWorkspaceDocument(pureAi, allied), true);
+  assert.equal(canSeeWorkspaceDocument(owned, allied), true);
+  assert.equal(canSeeWorkspaceDocument(boldr, { uid: "x", email: "other@example.com" }, ["fR1twiCu17nlX5YMYPLt"]), true);
 });
 
 test("workspace invite emails and assignment labels stay private", () => {
