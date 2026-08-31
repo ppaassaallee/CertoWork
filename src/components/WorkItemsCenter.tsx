@@ -14,6 +14,7 @@ import {
   GripVertical,
   ListChecks,
   Kanban,
+  Minus,
   Plus,
   Search,
   SlidersHorizontal,
@@ -1167,6 +1168,48 @@ export function WorkItemsCenter({
     setSelectedBulkIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   };
 
+  const visibleBulkIds = filtered.map((item) => item.id);
+  const allVisibleSelected = visibleBulkIds.length > 0 && visibleBulkIds.every((id) => selectedBulkIds.includes(id));
+  const someVisibleSelected = visibleBulkIds.some((id) => selectedBulkIds.includes(id));
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedBulkIds((current) => current.filter((id) => !visibleBulkIds.includes(id)));
+      return;
+    }
+    setSelectedBulkIds((current) => [...new Set([...current, ...visibleBulkIds])]);
+  };
+
+  const renderBulkSelect = (item: any) => (
+    <button
+      aria-label={`Select ${title(item)} for bulk editing`}
+      className={`do-items-select ${selectedBulkIds.includes(item.id) ? "is-selected" : ""}`}
+      data-testid="item-bulk-select"
+      onClick={() => toggleBulk(item.id)}
+      title="Select for bulk editing"
+      type="button"
+    >
+      {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
+    </button>
+  );
+
+  const selectAllClass = `do-items-select do-items-select-all ${allVisibleSelected ? "is-selected" : ""} ${someVisibleSelected && !allVisibleSelected ? "is-partial" : ""}`;
+  const selectAllIcon = allVisibleSelected ? <Check size={11} /> : someVisibleSelected ? <Minus size={11} /> : <Square size={11} />;
+  const renderSelectAll = (testId = "items-select-all") => (
+    <button
+      aria-checked={allVisibleSelected}
+      aria-label={allVisibleSelected ? "Deselect all visible items" : "Select all visible items"}
+      className={selectAllClass}
+      data-testid={testId}
+      disabled={visibleBulkIds.length === 0}
+      onClick={toggleSelectAllVisible}
+      role="checkbox"
+      title={allVisibleSelected ? "Deselect all" : "Select all visible items"}
+      type="button"
+    >
+      {selectAllIcon}
+    </button>
+  );
+
   const toggleDone = async (item: any) => {
     const isDone = canonicalStatus(item) === "done";
     const nextStatus = isDone ? "backlog" : "done";
@@ -1356,9 +1399,7 @@ export function WorkItemsCenter({
         <button aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`} className={`do-items-check ${isDone ? "is-done" : ""}`} onClick={() => toggleDone(item)} title={isDone ? "Reopen item" : "Mark item done"} type="button">
           {isDone ? <Check size={12} /> : <Circle size={12} />}
         </button>
-        <button aria-label={`Select ${title(item)} for bulk editing`} className={`do-items-select ${selectedBulkIds.includes(item.id) ? "is-selected" : ""}`} onClick={() => toggleBulk(item.id)} title="Select for bulk editing" type="button">
-          {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
-        </button>
+        {renderBulkSelect(item)}
         <button
           aria-label={`Drag to reorder ${title(item)}`}
           className="do-items-drag-handle"
@@ -1439,7 +1480,7 @@ export function WorkItemsCenter({
   const renderColumnHeader = () => (
     <div className="do-items-column-head" style={itemGridStyle}>
       <span />
-      <span />
+      {renderSelectAll()}
       <span />
       {[...itemColumnSet].map((column) => (
         <strong key={column}>
@@ -1483,9 +1524,7 @@ export function WorkItemsCenter({
         >
           <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
         </button>
-        <button aria-label={`Select ${title(item)} for bulk editing`} className={`do-items-select ${selectedBulkIds.includes(item.id) ? "is-selected" : ""}`} onClick={() => toggleBulk(item.id)} title="Select for bulk editing" type="button">
-          {selectedBulkIds.includes(item.id) ? <Check size={11} /> : <Square size={11} />}
-        </button>
+        {renderBulkSelect(item)}
         <span />
         {renderTitleCell(item, kind, childCount, { depth: 0, childCount, collapsed, onToggle: () => toggleGroup(groupKey), showToggle: false })}
         {renderFieldCells(item)}
@@ -1570,6 +1609,7 @@ export function WorkItemsCenter({
       <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""}`} data-testid="kanban-card" key={item.id}>
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
         <div className="do-kanban-card-head">
+          <span onPointerDown={stopCardDrag}>{renderBulkSelect(item)}</span>
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
             <strong>{title(item)}</strong>
           </button>
@@ -2453,14 +2493,18 @@ export function WorkItemsCenter({
       {selectedBulkIds.length > 0 && (
         <section className="do-items-bulk do-mobile-advanced" aria-label="Bulk actions">
           <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
+          {renderSelectAll("items-select-all-bulk")}
+          <button onClick={() => setSelectedBulkIds([])} type="button">Clear</button>
           <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
           <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
           <button onClick={() => updateBulk({ dueDate: bulkDueDate || null })} type="button">Apply date</button>
+          <button onClick={() => updateBulk({ dueDate: null })} type="button">Clear date</button>
           <select aria-label="Bulk assignee" onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
             <option value="">Assignee</option>
+            <option value="none">Unassigned</option>
             {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
               <option key={member.id} value={member.id}>{memberName(member)}</option>
             ))}
@@ -2468,6 +2512,15 @@ export function WorkItemsCenter({
           <button
             disabled={!bulkAssigneeId}
             onClick={() => {
+              if (bulkAssigneeId === "none") {
+                updateBulk({
+                  assigneeIds: [],
+                  assignees: [],
+                  owner: "",
+                  assignee: "",
+                });
+                return;
+              }
               const member = workspaceMembers.find((item) => item.id === bulkAssigneeId);
               updateBulk({
                 assigneeIds: member ? [member.id] : [],
@@ -2478,7 +2531,7 @@ export function WorkItemsCenter({
             }}
             type="button"
           >
-            Assign
+            {bulkAssigneeId === "none" ? "Unassign" : "Assign"}
           </button>
           {onCreateSprint && (
             <>
@@ -2522,6 +2575,18 @@ export function WorkItemsCenter({
       <div className="do-items-layout">
         <section className={`do-items-workspace is-${mode}`}>
           <div className="do-items-summary">
+            {filtered.length > 0 && (
+              <button
+                className="do-items-select-all-label"
+                data-testid="items-select-all-summary"
+                disabled={visibleBulkIds.length === 0}
+                onClick={toggleSelectAllVisible}
+                type="button"
+              >
+                <span className={selectAllClass} aria-hidden="true">{selectAllIcon}</span>
+                Select all
+              </button>
+            )}
             {(summaryHasSignal || filtered.length > 0) && (
               <span>
                 <strong>{filtered.length}</strong> shown
