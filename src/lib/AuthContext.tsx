@@ -25,6 +25,7 @@ import {
   shouldFallbackGoogleSignInToRedirect,
   withAuthTimeout,
 } from './authFlow';
+import { inviteShouldCloseOnJoin } from './inviteLifecycle';
 import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
 
 function publicAuthName(displayName?: string | null) {
@@ -188,6 +189,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const qInvited = query(collection(db, 'workspace_members'), where('emailLower', '==', emailLower));
           const snapInvited = await withTimeout(getDocs(qInvited), 7_000, 'Workspace invite lookup');
           lookupSucceeded = true;
+          let inviteSnaps: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
+          try {
+            const snapInvites = await withTimeout(
+              getDocs(query(collection(db, 'agent_invites'), where('emailLower', '==', emailLower))),
+              7_000,
+              'Pending invite lookup',
+            );
+            inviteSnaps = snapInvites.docs;
+          } catch (eInviteDocs) {
+            console.error("Failed to load pending invite documents:", eInviteDocs);
+          }
           const invitePromises = snapInvited.docs.map(async (mDoc) => {
             const mData = mDoc.data();
             const wsId = mData.workspaceId;
@@ -225,6 +237,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   updatedAt: serverTimestamp(),
                 }), 5_000, `Mark invite ${wsId} accepted`);
               }
+              await Promise.all(inviteSnaps.map(async (inviteDoc) => {
+                const inviteData = inviteDoc.data() as {
+                  status?: string;
+                  inviteType?: string;
+                  workspaceId?: string;
+                };
+                if (!inviteShouldCloseOnJoin(inviteData, wsId)) return;
+                await withTimeout(updateDoc(inviteDoc.ref, {
+                  status: "accepted",
+                  acceptedBy: u.uid,
+                  acceptedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                }), 5_000, `Close invite ${inviteDoc.id}`);
+              }));
             } catch (eInviteWs) {
               console.error(`Failed to accept workspace invite ${wsId}:`, eInviteWs);
             }

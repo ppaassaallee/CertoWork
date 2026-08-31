@@ -18,7 +18,7 @@ function asMillis(value: any) {
 }
 
 export function inviteIsExpired(invite: { createdAt?: any; expiresAt?: any } | null | undefined, now = Date.now()) {
-  if (!invite) return true;
+  if (!invite) return false;
   const expires = asMillis(invite.expiresAt);
   if (expires && expires < now) return true;
   const created = asMillis(invite.createdAt);
@@ -26,7 +26,24 @@ export function inviteIsExpired(invite: { createdAt?: any; expiresAt?: any } | n
   return now - created > 14 * 24 * 60 * 60 * 1000;
 }
 
+export function inviteStatus(invite: { status?: string } | null | undefined) {
+  return String(invite?.status || "pending").toLowerCase();
+}
+
 export function inviteIsUsable(invite: { status?: string } | null | undefined) {
-  const status = String(invite?.status || "pending").toLowerCase();
-  return ["pending", "sent", "invited"].includes(status);
+  return ["pending", "sent", "invited"].includes(inviteStatus(invite));
+}
+
+export function inviteWasConsumed(invite: { status?: string } | null | undefined) {
+  return ["accepted", "revoked", "rejected"].includes(inviteStatus(invite));
+}
+
+export function inviteShouldCloseOnJoin(
+  invite: { status?: string; inviteType?: string; workspaceId?: string } | null | undefined,
+  workspaceId: string,
+) {
+  if (!invite || !workspaceId) return false;
+  if (invite.workspaceId && String(invite.workspaceId) !== workspaceId) return false;
+  if (invite.inviteType && String(invite.inviteType) !== "workspace_member") return false;
+  return inviteIsUsable(invite);
 }

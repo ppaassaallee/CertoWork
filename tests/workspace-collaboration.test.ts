@@ -23,6 +23,7 @@ import {
   pendingInviteDirectory,
   pendingMemberId,
   roleLabel,
+  isJoinedWorkspaceMember,
 } from "../src/lib/workspaceCollaboration";
 
 test("workspace creation is capped at three workspaces", () => {
@@ -163,4 +164,107 @@ test("pending invite directory keeps invited people visible until they join", ()
   assert.equal(rows[0].email, "agustin@getboldr.ai");
   assert.equal(rows[0].invite?.id, "inv-1");
   assert.equal(rows[0].member?.id, "ws_invite_agustin_getboldr_ai");
+});
+
+test("pending invite directory drops people who already joined", () => {
+  const members = [
+    {
+      id: "ws_invite_adriana_o_getboldr_ai",
+      email: "adriana.o@getboldr.ai",
+      status: "accepted",
+      role: "admin",
+      userId: "pending:adriana.o@getboldr.ai",
+    },
+    {
+      id: "ws_uid-adriana",
+      email: "adriana.o@getboldr.ai",
+      status: "active",
+      role: "admin",
+      userId: "uid-adriana",
+    },
+    {
+      id: "ws_invite_agustin_getboldr_ai",
+      email: "agustin@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:agustin@getboldr.ai",
+    },
+  ];
+  assert.equal(isJoinedWorkspaceMember(members[1]), true);
+  assert.equal(isJoinedWorkspaceMember(members[2]), false);
+  const rows = pendingInviteDirectory(members, [
+    {
+      id: "inv-adriana",
+      email: "adriana.o@getboldr.ai",
+      role: "admin",
+      status: "pending",
+      emailDeliveryStatus: "sent",
+    },
+    {
+      id: "inv-agustin",
+      email: "agustin@getboldr.ai",
+      role: "admin",
+      status: "pending",
+      emailDeliveryStatus: "not_sent",
+    },
+    {
+      id: "inv-closed",
+      email: "rafael.f@getboldr.ai",
+      role: "admin",
+      status: "accepted",
+    },
+  ]);
+  assert.equal(rows.map((row) => row.email).join(","), "agustin@getboldr.ai");
+  assert.equal(rows[0].invite?.id, "inv-agustin");
+});
+
+test("pending invite directory hides leftover Boldr invite rows after accept or revoke", () => {
+  const leftoverStubs = [
+    {
+      id: "ws_invite_adriana",
+      email: "adriana.o@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:adriana.o@getboldr.ai",
+    },
+    {
+      id: "ws_invite_agustin",
+      email: "agustin@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:agustin@getboldr.ai",
+    },
+    {
+      id: "ws_invite_cesar",
+      email: "cesar.a@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:cesar.a@getboldr.ai",
+    },
+    {
+      id: "ws_invite_josue",
+      email: "josue@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:josue@getboldr.ai",
+    },
+    {
+      id: "ws_invite_rafael",
+      email: "rafael.f@getboldr.ai",
+      status: "invited",
+      role: "admin",
+      userId: "pending:rafael.f@getboldr.ai",
+    },
+  ];
+  const rows = pendingInviteDirectory(leftoverStubs, [
+    { id: "a1", email: "adriana.o@getboldr.ai", status: "accepted", role: "admin" },
+    { id: "a2", email: "adriana.o@getboldr.ai", status: "pending", role: "admin", emailDeliveryStatus: "sent", inviteToken: "AAA" },
+    { id: "a3", email: "adriana.o@getboldr.ai", status: "pending", role: "admin" },
+    { id: "g1", email: "agustin@getboldr.ai", status: "revoked", role: "admin" },
+    { id: "c1", email: "cesar.a@getboldr.ai", status: "revoked", role: "admin" },
+    { id: "j1", email: "josue@getboldr.ai", status: "accepted", role: "admin" },
+    { id: "r1", email: "rafael.f@getboldr.ai", status: "revoked", role: "admin" },
+    { id: "new", email: "nuevo@getboldr.ai", status: "pending", role: "member", inviteToken: "NEW" },
+  ]);
+  assert.equal(rows.map((row) => row.email).join(","), "nuevo@getboldr.ai");
 });

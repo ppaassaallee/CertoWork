@@ -1,3 +1,5 @@
+import { inviteIsUsable, inviteStatus, inviteWasConsumed } from "./inviteLifecycle";
+
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
 export type WorkspaceMember = {
@@ -136,6 +138,25 @@ export function isInvitedMember(
   );
 }
 
+export function isJoinedWorkspaceMember(
+  member: Pick<WorkspaceMember, "status" | "userId">,
+) {
+  const status = String(member.status || "active").toLowerCase();
+  if (["removed", "rejected", "revoked", "invited", "pending"].includes(status)) return false;
+  const userId = String(member.userId || "");
+  return Boolean(userId) && !userId.startsWith("pending:");
+}
+
+export function joinedWorkspaceEmails(members: WorkspaceMember[] = []) {
+  const emails = new Set<string>();
+  for (const member of members) {
+    if (!isJoinedWorkspaceMember(member)) continue;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    if (email) emails.add(email);
+  }
+  return emails;
+}
+
 export function activeDirectoryMembers(members: WorkspaceMember[] = []) {
   return members.filter((member) => isAssignableMember(member) && !isInvitedMember(member));
 }
@@ -149,14 +170,34 @@ export type PendingInviteRow = {
   deliveryStatus?: string;
 };
 
+function preferredUsableInvite(invites: Array<Record<string, any>> = []) {
+  const usable = invites.filter((invite) => inviteIsUsable(invite));
+  return (
+    usable.find((invite) => String(invite.inviteToken || "").trim()) ||
+    usable[0] ||
+    null
+  );
+}
+
 export function pendingInviteDirectory(
   members: WorkspaceMember[] = [],
   invites: Array<Record<string, any>> = [],
 ): PendingInviteRow[] {
-  const rows = new Map<string, PendingInviteRow>();
+  const joinedEmails = joinedWorkspaceEmails(members);
+  const invitesByEmail = new Map<string, Array<Record<string, any>>>();
   for (const invite of invites) {
     const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
     if (!email) continue;
+    const current = invitesByEmail.get(email) || [];
+    current.push(invite);
+    invitesByEmail.set(email, current);
+  }
+  const rows = new Map<string, PendingInviteRow>();
+  for (const [email, emailInvites] of invitesByEmail) {
+    if (joinedEmails.has(email)) continue;
+    if (emailInvites.some((invite) => inviteWasConsumed(invite) && inviteStatus(invite) === "accepted")) continue;
+    const invite = preferredUsableInvite(emailInvites);
+    if (!invite) continue;
     rows.set(email, {
       key: String(invite.id || email),
       email,
@@ -169,13 +210,14 @@ export function pendingInviteDirectory(
   for (const member of members) {
     if (!isInvitedMember(member)) continue;
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
-    if (!email) continue;
+    if (!email || joinedEmails.has(email)) continue;
     const current = rows.get(email);
     if (current) {
       current.member = member;
       current.role = current.role || member.role;
       continue;
     }
+    if (invitesByEmail.has(email)) continue;
     rows.set(email, {
       key: member.id || email,
       email,
