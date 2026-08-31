@@ -193,4 +193,6 @@ test("workspaces are tenant-private and do not allow every signed-in user to rea
   const auth = readFileSync(resolve("src/lib/AuthContext.tsx"), "utf8");
   assert.match(auth, /canSeeWorkspaceDocument/);
   assert.doesNotMatch(auth, /activeWorkspaceName\) \|\| 'Workspace'/);
+  assert.match(auth, /agent_invites/);
+  assert.match(auth, /inviteShouldCloseOnJoin/);
 });
