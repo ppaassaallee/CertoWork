@@ -27,13 +27,14 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
-const MAX_AUDIO_BYTES = 8_000_000;
+const MAX_AUDIO_BYTES = 4_000_000;
 const DEFAULT_EFFICIENT_MODEL = "gpt-5.6-luna";
-const DEFAULT_BALANCED_MODEL = "gpt-5.6-terra";
-const DEFAULT_HEAVY_MODEL = "gpt-5.6-sol";
-const MAX_MESSAGES = 16;
-const MAX_CHAT_OUTPUT_TOKENS = 900;
-const MAX_REWRITE_OUTPUT_TOKENS = 450;
+const DEFAULT_BALANCED_MODEL = "gpt-5.6-luna";
+const DEFAULT_HEAVY_MODEL = "gpt-5.6-luna";
+const DEFAULT_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
+const MAX_MESSAGES = 10;
+const MAX_CHAT_OUTPUT_TOKENS = 550;
+const MAX_REWRITE_OUTPUT_TOKENS = 280;
 
 export function openaiApiKey(env = {}) {
   return String(env.OPENAI_API_KEY || env.OPENAI_KEY || "").trim();
@@ -173,7 +174,7 @@ export async function transcribeVoice(request, env = {}) {
   if (size > MAX_AUDIO_BYTES) return json({ error: "Recording is too large" }, 413);
   const openaiForm = new FormData();
   openaiForm.append("file", file, file.name || "speech.webm");
-  openaiForm.append("model", "whisper-1");
+  openaiForm.append("model", env.OPENAI_TRANSCRIPTION_MODEL || DEFAULT_TRANSCRIPTION_MODEL);
   openaiForm.append("response_format", "json");
   const response = await fetch(OPENAI_TRANSCRIPTIONS_URL, {
     method: "POST",
@@ -650,7 +651,7 @@ export function normalizeConversationMessages(messages) {
     role: message?.role === "assistant" ? "assistant" : "user",
     content: String(message?.content || "").slice(
       0,
-      index === latestUserIndex || index === latestLongUserIndex ? 80_000 : 6_000,
+      index === latestUserIndex || index === latestLongUserIndex ? 40_000 : 3_000,
     ),
   }));
 }
@@ -913,9 +914,9 @@ async function extractMagicProject(request, env) {
   const model = aiModelFor(env, body, "project_planning");
   const maxOutputTokens = numberFromEnv(
     env.OPENAI_MAGIC_PROJECT_MAX_OUTPUT_TOKENS || env.OPENAI_MAX_OUTPUT_TOKENS,
-    1_600,
-    600,
-    4_000,
+    900,
+    400,
+    2_000,
   );
   try {
     const response = await fetch(OPENAI_RESPONSES_URL, {
@@ -996,10 +997,10 @@ async function chat(request, env) {
   const maxOutputTokens = numberFromEnv(
     env.OPENAI_CHAT_MAX_OUTPUT_TOKENS || env.OPENAI_MAX_OUTPUT_TOKENS,
     MAX_CHAT_OUTPUT_TOKENS,
-    300,
-    2_500,
+    180,
+    1_200,
   );
-  const maxRounds = numberFromEnv(env.ODYSSEUS_MAX_ROUNDS, 2, 1, 5);
+  const maxRounds = numberFromEnv(env.ODYSSEUS_MAX_ROUNDS, 1, 1, 3);
   const wantsStream =
     body.stream === true ||
     String(request.headers.get("accept") || "").includes("text/event-stream");

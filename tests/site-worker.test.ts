@@ -385,8 +385,8 @@ test("the current pasted PRD and the latest prior PRD remain available for follo
     { role: "user", content: "Add the PRD from my previous message to FieldOps" },
   ]);
 
-  assert.equal(normalized[0].content.length, 6_000);
-  assert.equal(normalized[2].content.length, 80_000);
+  assert.equal(normalized[0].content.length, 3_000);
+  assert.equal(normalized[2].content.length, 40_000);
   assert.equal(normalized.at(-1)?.content, "Add the PRD from my previous message to FieldOps");
 });
 

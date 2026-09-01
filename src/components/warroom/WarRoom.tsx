@@ -3489,9 +3489,9 @@ export function WarRoom() {
                     onChange={(e) => setNewAgentModel(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 focus:outline-none focus:border-indigo-500 rounded-xl px-4 py-3 font-semibold text-gray-800"
                   >
-                    <option value="gpt-5.6-luna">OpenAI GPT-5.6 Luna (Fast / lower cost)</option>
-                    <option value="gpt-5.6-terra">OpenAI GPT-5.6 Terra (Balanced)</option>
-                    <option value="gpt-5.6-sol">OpenAI GPT-5.6 Sol (Heavy / opt-in)</option>
+                    <option value="gpt-5.6-luna">OpenAI GPT-5.6 Luna (Budget default)</option>
+                    <option value="gpt-5.6-terra">OpenAI GPT-5.6 Terra (Manual upgrade)</option>
+                    <option value="gpt-5.6-sol">OpenAI GPT-5.6 Sol (Manual heavy)</option>
                   </select>
                 </div>
               </div>

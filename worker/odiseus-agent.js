@@ -37,8 +37,8 @@ export async function runOdysseusAgent({
   normalizeAssistantResult,
   citations,
   latestUserMessage,
-  maxRounds = 2,
-  maxOutputTokens = 900,
+  maxRounds = 1,
+  maxOutputTokens = 550,
   onUsage = null,
   onStep = null,
 }) {
