@@ -6690,7 +6690,7 @@ a {
 }
 .do-notes-write {
   display: grid;
-  grid-template-rows: auto minmax(180px, 1fr) minmax(160px, 1fr);
+  grid-template-rows: auto minmax(280px, 1fr);
   height: 100%;
   min-height: 520px;
 }
@@ -6706,46 +6706,74 @@ a {
 .do-notes-format button {
   min-width: 28px;
   height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-0);
   color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
-.do-notes-format span {
-  margin-left: auto;
-  color: var(--text-muted);
-  font-size: var(--text-caption);
+.do-notes-format button:hover {
+  background: var(--accent-soft);
 }
-.do-notes-preview {
+.do-notes-rich {
   overflow: auto;
-  border-top: 1px solid var(--border);
-  background: var(--surface-0);
-  padding: 16px 24px 22px;
+  min-height: 280px;
+  padding: 21px 24px 22px;
   color: var(--text-primary);
+  outline: none;
 }
+.do-notes-rich[data-empty="true"]:before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.do-notes-rich p,
+.do-notes-rich li,
 .do-notes-preview p,
 .do-notes-preview li {
   margin: 0 0 8px;
   line-height: var(--leading-body);
 }
+.do-notes-rich strong,
 .do-notes-preview strong {
   font-weight: 700;
 }
+.do-notes-rich em,
 .do-notes-preview em {
   font-style: italic;
 }
+.do-notes-rich code,
 .do-notes-preview code {
   border-radius: 6px;
   background: var(--surface-2);
   padding: 1px 5px;
   font-size: 0.92em;
 }
-.do-notes-preview h3,
-.do-notes-preview h4,
-.do-notes-preview h5 {
+.do-notes-rich h1,
+.do-notes-rich h2,
+.do-notes-rich h3,
+.do-notes-preview h1,
+.do-notes-preview h2,
+.do-notes-preview h3 {
   margin: 12px 0 6px;
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.25;
 }
+.do-notes-rich h1 {
+  font-size: 1.7rem;
+}
+.do-notes-rich h2 {
+  font-size: 1.28rem;
+}
+.do-notes-rich h3 {
+  font-size: 1.08rem;
+}
+.do-notes-rich ul,
 .do-notes-preview ul {
   margin: 0 0 10px;
   padding-left: 18px;
@@ -13592,7 +13620,7 @@ a {
   .do-notes-meta {
     grid-template-columns: 1fr;
   }
-  .do-notes-paper textarea {
+  .do-notes-rich {
     min-height: 480px;
     padding: 17px;
     font-size: var(--text-caption);
@@ -14162,7 +14190,7 @@ a {
   font-size: var(--text-caption);
   line-height: 1.4;
 }
-:is(.do-user-message, .do-rich-text, .do-panel-intro, .do-project-card-copy, .do-console-hero p, .do-notes-paper textarea) {
+:is(.do-user-message, .do-rich-text, .do-panel-intro, .do-project-card-copy, .do-console-hero p, .do-notes-rich) {
   font-family: var(--font-body);
   font-size: var(--text-body);
   line-height: var(--leading-body);
