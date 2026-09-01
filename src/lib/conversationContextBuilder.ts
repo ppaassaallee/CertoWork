@@ -9,6 +9,17 @@ import { buildProjectDocumentContext } from "./projectContext";
 import { buildNotebookContext, type NotebookEntry } from "./notebookContext";
 import { scopePersonalHomeRecords, type PersonalHomeActor } from "./personalHomeContext";
 
+const MAX_CONTEXT_TASKS = 24;
+const MAX_CONTEXT_PROJECTS = 12;
+const MAX_CONTEXT_MILESTONES = 12;
+const MAX_CONTEXT_RISKS = 10;
+const MAX_CONTEXT_GOALS = 8;
+const MAX_CONTEXT_MEASURES = 12;
+const MAX_CONTEXT_MEMBERS = 20;
+const MAX_CONTEXT_TEAMS = 12;
+const MAX_CONTEXT_CONVERSATIONS = 15;
+const MAX_CONTEXT_TEXT = 700;
+
 type ConversationContextBuildParams = {
   text: string;
   currentUserMessageId: string;
@@ -63,7 +74,7 @@ function scopedByProject<T extends { projectId?: string }>(
 }
 
 function conversationDirectory(conversations: any[], projects: any[], tasks: any[]) {
-  return conversations.slice(0, 30).map((conversation) => ({
+  return conversations.slice(0, MAX_CONTEXT_CONVERSATIONS).map((conversation) => ({
     id: conversation.id,
     title: conversation.title || "New conversation",
     scope: conversationScopeLabel(conversation, projects, tasks),
@@ -74,6 +85,119 @@ function conversationDirectory(conversations: any[], projects: any[], tasks: any
         conversationTaskIds(conversation),
       ),
   }));
+}
+
+function compactText(value: any, limit = MAX_CONTEXT_TEXT) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function recordSearchText(record: any) {
+  return [
+    record?.title,
+    record?.name,
+    record?.description,
+    record?.outcome,
+    record?.objective,
+    record?.status,
+    record?.priority,
+    record?.dueDate,
+    record?.workItemType,
+    record?.deliveryEntity,
+    record?.clientEntity,
+    Array.isArray(record?.tags) ? record.tags.join(" ") : "",
+  ].join(" ").toLowerCase();
+}
+
+function relevanceScore(record: any, text: string, forcedIds: Set<string>) {
+  if (forcedIds.has(String(record?.id || ""))) return 1_000;
+  const haystack = recordSearchText(record);
+  const tokens = String(text || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+  let score = 0;
+  for (const token of tokens) if (haystack.includes(token)) score += 1;
+  if (String(record?.status || "").toLowerCase() !== "done") score += 0.5;
+  if (record?.dueDate) score += 0.25;
+  return score;
+}
+
+function selectRelevantRecords<T extends { id?: string }>(
+  records: T[],
+  text: string,
+  limit: number,
+  forcedIds: string[] = [],
+) {
+  const forced = new Set(forcedIds.filter(Boolean).map(String));
+  return [...records]
+    .map((record, index) => ({ record, index, score: relevanceScore(record, text, forced) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, limit)
+    .map(({ record }) => record);
+}
+
+function compactTask(task: any) {
+  return {
+    id: task.id,
+    title: compactText(task.title || task.name, 220),
+    status: task.status || null,
+    priority: task.priority || null,
+    dueDate: task.dueDate || null,
+    projectId: task.projectId || null,
+    parentId: task.parentId || null,
+    workItemType: task.workItemType || task.type || null,
+    assigneeIds: task.assigneeIds || [],
+    ownerId: task.ownerId || task.userId || null,
+    tags: Array.isArray(task.tags) ? task.tags.slice(0, 8) : [],
+    description: compactText(task.description || task.summary, 360),
+  };
+}
+
+function compactProject(project: any) {
+  if (!project) return null;
+  return {
+    id: project.id,
+    title: compactText(project.title || project.name, 220),
+    status: project.status || null,
+    stage: project.stage || null,
+    projectCategory: project.projectCategory || null,
+    productStage: project.productStage || null,
+    priority: project.priority || null,
+    dueDate: project.dueDate || project.targetDate || null,
+    outcome: compactText(project.outcome || project.objective, 420),
+  };
+}
+
+function compactMilestone(record: any) {
+  return {
+    id: record.id,
+    projectId: record.projectId || null,
+    title: compactText(record.title || record.name, 180),
+    status: record.status || null,
+    dueDate: record.dueDate || null,
+  };
+}
+
+function compactRisk(record: any) {
+  return {
+    id: record.id,
+    projectId: record.projectId || null,
+    title: compactText(record.title || record.name, 180),
+    status: record.status || null,
+    severity: record.severity || record.priority || null,
+    summary: compactText(record.summary || record.description, 320),
+  };
+}
+
+function compactGoal(record: any) {
+  return {
+    id: record.id,
+    title: compactText(record.title || record.name, 200),
+    status: record.status || null,
+    timeframe: record.timeframe || null,
+    objective: compactText(record.objective || record.description, 320),
+  };
 }
 
 export function buildConversationRequestContext({
@@ -179,6 +303,18 @@ export function buildConversationRequestContext({
     directContextProjectIds,
     contextTaskIds,
   );
+  const forcedTaskIds = [...contextTaskIds, currentUserMessageId].filter(Boolean);
+  const forcedProjectIds = [
+    ...directContextProjectIds,
+    ...contextProjectIds,
+    primaryProject?.id,
+    activeProject?.id,
+  ].filter(Boolean);
+  const aiTasks = selectRelevantRecords(scopedTasks, text, MAX_CONTEXT_TASKS, forcedTaskIds).map(compactTask);
+  const aiProjects = selectRelevantRecords(scopedProjects, text, MAX_CONTEXT_PROJECTS, forcedProjectIds).map(compactProject);
+  const aiMilestones = selectRelevantRecords(scopedMilestones, text, MAX_CONTEXT_MILESTONES, forcedProjectIds).map(compactMilestone);
+  const aiRisks = selectRelevantRecords(scopedRisks, text, MAX_CONTEXT_RISKS, forcedProjectIds).map(compactRisk);
+  const aiGoals = selectRelevantRecords(strategicGoals, text, MAX_CONTEXT_GOALS).map(compactGoal);
 
   return {
     judgment,
@@ -191,34 +327,54 @@ export function buildConversationRequestContext({
       { role: "user", content: text },
     ],
     workspaceContext: {
-      ...workspaceSnapshot,
+      tasks: aiTasks,
+      projects: aiProjects,
+      milestones: aiMilestones,
+      risks: aiRisks,
+      goals: aiGoals,
+      events: [],
+      dailyCapacityMinutes: workspaceSnapshot.dailyCapacityMinutes,
+      loaded: true,
+      scope: workspaceSnapshot.scope,
+      activeProjectId: workspaceSnapshot.activeProjectId,
+      contextStats: {
+        totalTasksInScope: scopedTasks.length,
+        sentTasks: aiTasks.length,
+        totalProjectsInScope: scopedProjects.length,
+        sentProjects: aiProjects.length,
+        totalMilestonesInScope: scopedMilestones.length,
+        sentMilestones: aiMilestones.length,
+        totalRisksInScope: scopedRisks.length,
+        sentRisks: aiRisks.length,
+      },
       judgment,
       mode: isFocusedConversation ? "focused_delivery" : "personal_home",
       privacyScope: isFocusedConversation ? "focused_delivery" : "personal_home",
       workspaceRadar: isFocusedConversation ? [] : personalHome?.workspaceRadar || [],
       currentMemberId: currentMemberId || null,
-      activeProject: primaryProject,
-      contextProjects,
-      contextTasks,
+      activeProject: compactProject(primaryProject),
+      contextProjects: selectRelevantRecords(contextProjects, text, MAX_CONTEXT_PROJECTS, forcedProjectIds).map(compactProject),
+      contextTasks: selectRelevantRecords(contextTasks, text, MAX_CONTEXT_TASKS, forcedTaskIds).map(compactTask),
       conversationType,
       conversationDirectory: conversationDirectory(conversations, projects, tasks),
       todayTaskCount: scopedTodayTasks.length,
-      workspaceMembers: workspaceMembers.map((member) => ({
+      workspaceMembers: workspaceMembers.slice(0, MAX_CONTEXT_MEMBERS).map((member) => ({
         id: member.id,
-        email: member.email || member.emailLower || "",
-        displayName: member.displayName || "",
+        displayName: member.displayName || member.alias || "Team member",
+        alias: member.alias || member.displayName || "Team member",
+        avatarEmoji: member.avatarEmoji || "",
         role: member.role || "member",
         status: member.status || "active",
       })),
-      workspaceTeams: workspaceTeams.map((team) => ({
+      workspaceTeams: workspaceTeams.slice(0, MAX_CONTEXT_TEAMS).map((team) => ({
         id: team.id,
         name: team.name || "Team",
-        memberEmails: team.memberEmails || [],
+        memberCount: Array.isArray(team.memberEmails) ? team.memberEmails.length : 0,
       })),
-      strategicMeasures: strategicMeasures.map((measure) => ({
+      strategicMeasures: selectRelevantRecords(strategicMeasures, text, MAX_CONTEXT_MEASURES).map((measure) => ({
         id: measure.id,
         strategicGoalId: measure.strategicGoalId,
-        title: measure.title,
+        title: compactText(measure.title, 180),
         measureKind: measure.measureKind || "outcome",
         currentValue: measure.currentValue,
         targetValue: measure.targetValue,

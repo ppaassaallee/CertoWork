@@ -37,7 +37,9 @@ export async function runOdysseusAgent({
   normalizeAssistantResult,
   citations,
   latestUserMessage,
-  maxRounds = 5,
+  maxRounds = 2,
+  maxOutputTokens = 900,
+  onUsage = null,
   onStep = null,
 }) {
   const steps = [];
@@ -90,11 +92,21 @@ export async function runOdysseusAgent({
         ...(wantsFinal || steps.length > 0
           ? { text: { format: { type: "json_object" } } }
           : {}),
+        max_output_tokens: maxOutputTokens,
         store: false,
       }),
     });
     const payload = await response.json();
     lastPayload = payload;
+    if (typeof onUsage === "function" && payload?.usage) {
+      const inputTokens = Number(payload.usage.input_tokens || payload.usage.prompt_tokens || 0) || 0;
+      const outputTokens = Number(payload.usage.output_tokens || payload.usage.completion_tokens || 0) || 0;
+      await onUsage({
+        inputTokens,
+        outputTokens,
+        totalTokens: Number(payload.usage.total_tokens || inputTokens + outputTokens) || 0,
+      });
+    }
     if (!response.ok) {
       const message = payload?.error?.message || `OpenAI request failed (${response.status})`;
       const error = new Error(message);
@@ -190,7 +202,17 @@ export async function runOdysseusAgent({
     };
   }
 
-  const normalized = normalizeAssistantResult(result, citations, model, latestUserMessage);
+  let finalUsage = null;
+  if (lastPayload?.usage) {
+    const inputTokens = Number(lastPayload.usage.input_tokens || lastPayload.usage.prompt_tokens || 0) || 0;
+    const outputTokens = Number(lastPayload.usage.output_tokens || lastPayload.usage.completion_tokens || 0) || 0;
+    finalUsage = {
+      inputTokens,
+      outputTokens,
+      totalTokens: Number(lastPayload.usage.total_tokens || inputTokens + outputTokens) || 0,
+    };
+  }
+  const normalized = normalizeAssistantResult(result, citations, model, latestUserMessage, finalUsage);
   normalized.run = {
     status: collectedActions.length ? "waiting_for_approval" : "completed",
     steps,

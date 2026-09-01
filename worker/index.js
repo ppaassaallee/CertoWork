@@ -28,14 +28,19 @@ const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcription
 const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_REQUEST_BYTES = 400_000;
 const MAX_AUDIO_BYTES = 8_000_000;
-const MAX_MESSAGES = 40;
+const DEFAULT_EFFICIENT_MODEL = "gpt-5.6-luna";
+const DEFAULT_BALANCED_MODEL = "gpt-5.6-terra";
+const DEFAULT_HEAVY_MODEL = "gpt-5.6-sol";
+const MAX_MESSAGES = 16;
+const MAX_CHAT_OUTPUT_TOKENS = 900;
+const MAX_REWRITE_OUTPUT_TOKENS = 450;
 
 export function openaiApiKey(env = {}) {
   return String(env.OPENAI_API_KEY || env.OPENAI_KEY || "").trim();
 }
 
 export function openaiModelName(env = {}) {
-  return String(env.OPENAI_MODEL || env.AI_MODEL || "gpt-5.6-sol").trim() || "gpt-5.6-sol";
+  return String(env.OPENAI_MODEL || env.AI_MODEL || DEFAULT_EFFICIENT_MODEL).trim() || DEFAULT_EFFICIENT_MODEL;
 }
 
 export function requestedAiProvider(env = {}) {
@@ -355,6 +360,53 @@ function parseJsonObject(text) {
   return JSON.parse(trimmed);
 }
 
+function numberFromEnv(value, fallback, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
+}
+
+function aiModelFor(env, body = {}, feature = "chat") {
+  const requestedMode = String(body.aiMode || body.mode || "").toLowerCase();
+  if (requestedMode === "heavy" || requestedMode === "deep") {
+    return env.OPENAI_HEAVY_MODEL || DEFAULT_HEAVY_MODEL;
+  }
+  if (requestedMode === "balanced" || feature === "project_planning") {
+    return env.OPENAI_BALANCED_MODEL || DEFAULT_BALANCED_MODEL;
+  }
+  return env.OPENAI_EFFICIENT_MODEL || env.OPENAI_MODEL || DEFAULT_EFFICIENT_MODEL;
+}
+
+function openAIUsage(payload) {
+  const usage = payload?.usage || {};
+  const inputTokens = Number(usage.input_tokens || usage.prompt_tokens || 0) || 0;
+  const outputTokens = Number(usage.output_tokens || usage.completion_tokens || 0) || 0;
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: Number(usage.total_tokens || inputTokens + outputTokens) || 0,
+  };
+}
+
+function logAIUsage({ env, body, feature, model, usage }) {
+  const sampleRate = numberFromEnv(env.AI_USAGE_LOG_SAMPLE_RATE, 1, 0, 1);
+  if (sampleRate <= 0 || Math.random() > sampleRate) return;
+  console.log(
+    JSON.stringify({
+      event: "certo_ai_usage",
+      feature,
+      model,
+      workspaceId: body.workspaceId || body.workspaceContext?.workspaceId || null,
+      userId: body.userId || body.workspaceContext?.userId || null,
+      conversationId: body.conversationId || null,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      timestamp: new Date().toISOString(),
+    }),
+  );
+}
+
 function tokenize(value) {
   return new Set(
     String(value || "")
@@ -598,7 +650,7 @@ export function normalizeConversationMessages(messages) {
     role: message?.role === "assistant" ? "assistant" : "user",
     content: String(message?.content || "").slice(
       0,
-      index === latestUserIndex || index === latestLongUserIndex ? 160_000 : 16_000,
+      index === latestUserIndex || index === latestLongUserIndex ? 80_000 : 6_000,
     ),
   }));
 }
@@ -666,7 +718,7 @@ function normalizeActionProposedChange(action, latestUserMessage) {
   return proposedChange;
 }
 
-function normalizeAssistantResult(result, citations, model, latestUserMessage = "") {
+function normalizeAssistantResult(result, citations, model, latestUserMessage = "", usage = null) {
   if (!result || typeof result.reply !== "string" || !result.reply.trim()) {
     throw new Error("OpenAI returned an invalid assistant response");
   }
@@ -677,7 +729,12 @@ function normalizeAssistantResult(result, citations, model, latestUserMessage = 
       ? result.suggestedChips.slice(0, 4).map(String)
       : [],
     citations,
-    provider: { provider: "openai", model },
+    provider: {
+      provider: "openai",
+      model,
+      usage: usage || undefined,
+      costMode: model === DEFAULT_HEAVY_MODEL ? "heavy" : "efficient",
+    },
   };
 
   if (result.actionPlan && Array.isArray(result.actionPlan.proposedActions)) {
@@ -758,7 +815,13 @@ async function rewriteField(request, env) {
   if (!openaiIsConfigured(env)) {
     return json({ error: "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.", code: "OPENAI_NOT_CONFIGURED", safeMode: true }, 503);
   }
-  const model = openaiModelName(env);
+  const model = aiModelFor(env, body, "rewrite");
+  const maxOutputTokens = numberFromEnv(
+    env.OPENAI_REWRITE_MAX_OUTPUT_TOKENS || env.OPENAI_MAX_OUTPUT_TOKENS,
+    MAX_REWRITE_OUTPUT_TOKENS,
+    120,
+    1_200,
+  );
   try {
     const response = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
@@ -771,6 +834,7 @@ async function rewriteField(request, env) {
         instructions: rewriteInstructions(String(body.fieldKind || "project_description"), body.context || {}),
         input: [{ role: "user", content: source }],
         text: { format: { type: "json_object" } },
+        max_output_tokens: maxOutputTokens,
         store: false,
       }),
     });
@@ -781,7 +845,9 @@ async function rewriteField(request, env) {
     const result = parseJsonObject(extractOpenAIText(payload));
     const text = String(result?.text || "").trim();
     if (!text) throw new Error("OpenAI returned an empty rewrite");
-    return json({ text, provider: { provider: "openai", model } });
+    const usage = openAIUsage(payload);
+    logAIUsage({ env, body, feature: "rewrite", model, usage });
+    return json({ text, provider: { provider: "openai", model, usage, costMode: "efficient" } });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "The writing assistant is temporarily unavailable", code: "REWRITE_UNAVAILABLE" }, 502);
   }
@@ -844,7 +910,13 @@ async function extractMagicProject(request, env) {
       safeMode: true,
     }, 503);
   }
-  const model = openaiModelName(env);
+  const model = aiModelFor(env, body, "project_planning");
+  const maxOutputTokens = numberFromEnv(
+    env.OPENAI_MAGIC_PROJECT_MAX_OUTPUT_TOKENS || env.OPENAI_MAX_OUTPUT_TOKENS,
+    1_600,
+    600,
+    4_000,
+  );
   try {
     const response = await fetch(OPENAI_RESPONSES_URL, {
       method: "POST",
@@ -857,6 +929,7 @@ async function extractMagicProject(request, env) {
         instructions: magicProjectInstructions(),
         input: [{ role: "user", content: source }],
         text: { format: { type: "json_object" } },
+        max_output_tokens: maxOutputTokens,
         store: false,
       }),
     });
@@ -866,7 +939,9 @@ async function extractMagicProject(request, env) {
     }
     const blueprint = parseJsonObject(extractOpenAIText(payload));
     if (!blueprint || typeof blueprint !== "object") throw new Error("OpenAI returned an empty project");
-    return json({ blueprint, provider: { provider: "openai", model } });
+    const usage = openAIUsage(payload);
+    logAIUsage({ env, body, feature: "magic_project", model, usage });
+    return json({ blueprint, provider: { provider: "openai", model, usage, costMode: "balanced" } });
   } catch (error) {
     return json({
       error: error instanceof Error ? error.message : "Magic Project is temporarily unavailable",
@@ -917,7 +992,14 @@ async function chat(request, env) {
   const latestUserMessage =
     [...body.messages].reverse().find((message) => message.role === "user")?.content || "";
   const citations = groundedCitations(latestUserMessage, body.workspaceContext);
-  const model = openaiModelName(env);
+  const model = aiModelFor(env, body, "chat");
+  const maxOutputTokens = numberFromEnv(
+    env.OPENAI_CHAT_MAX_OUTPUT_TOKENS || env.OPENAI_MAX_OUTPUT_TOKENS,
+    MAX_CHAT_OUTPUT_TOKENS,
+    300,
+    2_500,
+  );
+  const maxRounds = numberFromEnv(env.ODYSSEUS_MAX_ROUNDS, 2, 1, 5);
   const wantsStream =
     body.stream === true ||
     String(request.headers.get("accept") || "").includes("text/event-stream");
@@ -945,6 +1027,9 @@ async function chat(request, env) {
             normalizeAssistantResult,
             citations,
             latestUserMessage,
+            maxOutputTokens,
+            maxRounds,
+            onUsage: async (usage) => logAIUsage({ env, body, feature: "chat", model, usage }),
             onStep: async (step) => send("step", step),
           });
           send("final", result);
@@ -988,6 +1073,13 @@ async function chat(request, env) {
         ],
       });
       if (hermes?.content) {
+        logAIUsage({
+          env,
+          body,
+          feature: "chat_hermes",
+          model,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+        });
         return json(
           normalizeAssistantResult(
             {
@@ -998,6 +1090,7 @@ async function chat(request, env) {
             citations,
             model,
             latestUserMessage,
+            { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
           ),
         );
       }
@@ -1016,6 +1109,9 @@ async function chat(request, env) {
       normalizeAssistantResult,
       citations,
       latestUserMessage,
+      maxOutputTokens,
+      maxRounds,
+      onUsage: async (usage) => logAIUsage({ env, body, feature: "chat", model, usage }),
     });
     return json(result);
   } catch (error) {
@@ -1058,7 +1154,7 @@ function capabilities(env) {
       model: health.model,
       connectionStatus: health.connectionStatus,
       description: openAIConfigured
-        ? `OpenAI is active through ${health.model}.`
+        ? `OpenAI is active through ${aiModelFor(env, {}, "chat")} with cost controls enabled.`
         : "Add OPENAI_API_KEY as a Cloudflare Worker secret to activate AI responses.",
     },
     gemini: {

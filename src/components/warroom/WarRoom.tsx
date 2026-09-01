@@ -190,7 +190,7 @@ export function WarRoom() {
   const [newAgentDesc, setNewAgentDesc] = useState('');
   const [newAgentEmoji, setNewAgentEmoji] = useState('🤖');
   const [newAgentPrompt, setNewAgentPrompt] = useState('');
-  const [newAgentModel, setNewAgentModel] = useState('gpt-5.6-sol');
+  const [newAgentModel, setNewAgentModel] = useState('gpt-5.6-luna');
   const [newAgentPermissions, setNewAgentPermissions] = useState<BoldiAgent['permissionsProfile']>('can_create_drafts');
   const [newAgentMemory, setNewAgentMemory] = useState<BoldiAgent['memoryPolicy']>('chat_only');
 
@@ -288,7 +288,7 @@ export function WarRoom() {
               systemPrompt: ag.systemPrompt,
               agentType: ag.agentType,
               modelProvider: "openai",
-              modelName: "gpt-5.6-sol",
+              modelName: "gpt-5.6-luna",
               toolsAllowed: ["search_tasks", "prioritize", "schedule_block"],
               permissionsProfile: "read_write",
               memoryPolicy: "persistent",
@@ -1243,7 +1243,7 @@ export function WarRoom() {
           agentType: 'custom',
           systemPrompt: 'You are Marcus Aurelius, Roman Emperor and Stoic Philosopher. Guide the user through productivity dilemmas with wisdom, stoic calm, focus, and a deep sense of lifestyle purpose.',
           modelProvider: 'openai',
-          modelName: 'gpt-5.6-sol',
+          modelName: 'gpt-5.6-luna',
           toolsAllowed: [],
           permissionsProfile: 'tell_me_only',
           memoryPolicy: 'chat_only',
@@ -3489,8 +3489,9 @@ export function WarRoom() {
                     onChange={(e) => setNewAgentModel(e.target.value)}
                     className="w-full bg-gray-50 border border-gray-200 focus:outline-none focus:border-indigo-500 rounded-xl px-4 py-3 font-semibold text-gray-800"
                   >
-                    <option value="gpt-5.6-sol">OpenAI GPT-5.6 Sol (Default)</option>
+                    <option value="gpt-5.6-luna">OpenAI GPT-5.6 Luna (Fast / lower cost)</option>
                     <option value="gpt-5.6-terra">OpenAI GPT-5.6 Terra (Balanced)</option>
+                    <option value="gpt-5.6-sol">OpenAI GPT-5.6 Sol (Heavy / opt-in)</option>
                   </select>
                 </div>
               </div>
