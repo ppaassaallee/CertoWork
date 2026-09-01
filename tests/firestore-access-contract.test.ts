@@ -95,16 +95,19 @@ test("project sharing writes user ids that the rules can honor", () => {
   assert.match(explicit, /request\.auth\.token\.email in data\.visibleToEmails/);
 });
 
-test("knowledge and document reads stay owner-scoped in rules and queries", () => {
-  const start = rules.indexOf("match /knowledge_items/{id} {");
-  const end = rules.indexOf("\n    }", start);
-  const block = rules.slice(start, end);
-  assert.match(block, /resource\.data\.userId == request\.auth\.uid/);
-  assert.doesNotMatch(block, /isWorkspaceMember\(resource\.data\.workspaceId\)/);
+test("personal notes stay owner-scoped; project documents are workspace-readable", () => {
+  const start = rules.indexOf("function canReadKnowledgeItem(");
+  assert.ok(start >= 0, "canReadKnowledgeItem missing");
+  const canRead = ruleFn("canReadKnowledgeItem");
+  assert.match(canRead, /data\.userId == request\.auth\.uid/);
+  assert.match(canRead, /isWorkspaceMember\(data\.workspaceId\)/);
+  assert.match(canRead, /projectId/);
 
-  assert.match(workspace, /makeQuery\("knowledge_items", setKnowledgeItems, false, true\)/);
+  assert.match(workspace, /where\("projectId", "!=", ""\)/);
+  assert.match(workspace, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeBase, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeService, /where\("userId", "==", request\.userId\)/);
+  assert.match(workspace, /makeQuery\("categories", setCategories, false, true\)/);
 });
 
 test("conversations stay personal; Home and project scopes stay distinct", () => {

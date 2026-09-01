@@ -734,7 +734,7 @@ export function DelivereeWorkspace() {
       ),
       makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
-      makeQuery("categories", setCategories),
+      makeQuery("categories", setCategories, false, true),
       makeQuery("cost_templates", setCostTemplates),
       makeQuery("agent_templates", (items) =>
         setProjectTemplates(
@@ -744,7 +744,14 @@ export function DelivereeWorkspace() {
       makeQuery("strategic_goals", setStrategicGoals),
       makeQuery("key_results", setStrategicMeasures),
       makeQuery("strategic_initiatives", setStrategicRecords),
-      makeQuery("knowledge_items", setKnowledgeItems, false, true),
+      ...mergeQueries(
+        "knowledge_items",
+        [
+          [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+          [where("workspaceId", "==", workspace.id), where("projectId", "!=", "")],
+        ],
+        setKnowledgeItems,
+      ),
       makeQuery(
         "notebook_entries",
         (items) => setNotebookEntries(items as NotebookEntry[]),
