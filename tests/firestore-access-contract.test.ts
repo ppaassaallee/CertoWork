@@ -31,12 +31,21 @@ test("project read rules and client queries stay aligned", () => {
   assert.match(canRead, /hasProjectRoleAccess\(data\)/);
   assert.match(canRead, /isPortfolioViewer\(data\.workspaceId\)/);
   assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
+  assert.match(canRead, /!isWorkspaceViewer\(data\.workspaceId\)/);
+  assert.match(rules, /isJoinedMemberStatus/);
+  assert.match(rules, /status == "accepted"/);
 
   assert.match(workspace, /canSeeWorkspacePortfolio/);
   assert.match(workspace, /where\("userId", "==", user\.uid\)/);
   assert.match(workspace, /where\("visibleToUserIds", "array-contains", user\.uid\)/);
-  assert.match(workspace, /where\("teamMemberIds", "array-contains", memberId\)/);
-  assert.match(workspace, /where\("projectManagerId", "==", memberId\)/);
+  assert.match(workspace, /where\("teamMemberIds", "array-contains-any", roleLookupIds\)/);
+  assert.match(workspace, /where\("projectManagerId", "in", roleLookupIds\)/);
+  assert.match(workspace, /falling back to role queries/);
+  assert.match(rules, /function isSelfRoleId/);
+  const explicit = ruleFn("hasExplicitUserAccess");
+  assert.match(explicit, /authEmailLower\(\)/);
+  const roleAccess = ruleFn("hasProjectRoleAccess");
+  assert.match(roleAccess, /isSelfRoleId\(data\.workspaceId, data\.projectManagerId\)/);
 });
 
 test("item read rules and client queries stay aligned", () => {
@@ -52,6 +61,19 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(workspace, /where\("createdBy", "==", user\.uid\)/);
   assert.match(workspace, /where\("assigneeIds", "array-contains", memberId\)/);
   assert.match(workspace, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
+});
+
+test("task records keep createdBy immutable and restrict delete to the record owner", () => {
+  const start = rules.indexOf("match /tasks/{taskId} {");
+  assert.ok(start >= 0, "tasks match block missing");
+  const end = rules.indexOf("\n    }", start);
+  const block = rules.slice(start, end);
+  assert.match(block, /incoming\(\)\.createdBy == resource\.data\.createdBy/);
+  assert.match(block, /resource\.data\.userId == request\.auth\.uid/);
+  assert.match(block, /resource\.data\.createdBy == request\.auth\.uid/);
+  assert.match(block, /Work items are archived or cancelled in product/);
+  assert.match(workspace, /needsCreatorAssigneeRestore/);
+  assert.match(workspace, /My Work is a view: never delete records/);
 });
 
 test("shared workspace members can update projects they can already see", () => {
@@ -108,6 +130,17 @@ test("workspace membership helpers remain available to project access rules", ()
   assert.match(workspace, /workspace_members/);
 });
 
+test("firebase.json deploys rules and indexes to the named production database", () => {
+  const config = JSON.parse(readFileSync(resolve("firebase.json"), "utf8"));
+  const firestore = Array.isArray(config.firestore) ? config.firestore[0] : config.firestore;
+  assert.equal(firestore.database, "ai-studio-0db18e51-58a2-4763-a4d7-3fced116347d");
+  assert.equal(firestore.rules, "firestore.rules");
+  assert.equal(firestore.indexes, "firestore.indexes.json");
+  const workflow = readFileSync(resolve(".github/workflows/deploy-firestore.yml"), "utf8");
+  assert.match(workflow, /firebase-tools@14\.27\.0 deploy --only firestore/);
+  assert.match(workflow, /FIREBASE_TOKEN/);
+});
+
 test("invoice documents are member-listed and finance-operated", () => {
   const operator = ruleFn("isFinanceOperator");
   assert.match(operator, /isWorkspaceAdmin\(workspaceId\)/);
@@ -150,4 +183,36 @@ test("voice apply writes tasks directly and stages review candidates by userId",
   const start = rules.indexOf("function isValidReviewCandidate(");
   const block = rules.slice(start, rules.indexOf("match /review_candidates", start));
   assert.match(block, /idempotencyKey/);
+});
+
+test("item view memory is user-owned on the existing preferences document", () => {
+  const memory = readFileSync(resolve("src/lib/itemViewMemory.ts"), "utf8");
+  assert.match(memory, /ITEM_VIEW_PREFS_COLLECTION = "user_action_board_preferences"/);
+  assert.match(memory, /itemSavedViews/);
+  assert.match(memory, /itemLastSessions/);
+  assert.match(rules, /match \/user_action_board_preferences\/\{prefId\}/);
+  assert.match(rules, /incoming\(\)\.userId == request\.auth\.uid/);
+});
+
+test("kanban presence is workspace-member scoped", () => {
+  assert.match(rules, /match \/kanban_board_presence\/\{presenceId\}/);
+  assert.match(rules, /isWorkspaceMember\(incoming\(\)\.workspaceId\)/);
+  const presence = readFileSync(resolve("src/lib/kanbanPresence.ts"), "utf8");
+  assert.match(presence, /KANBAN_PRESENCE_COLLECTION = "kanban_board_presence"/);
+});
+
+test("workspaces are tenant-private and do not allow every signed-in user to read names", () => {
+  const start = rules.indexOf("match /workspaces/{id} {");
+  assert.ok(start >= 0, "workspaces match block missing");
+  const end = rules.indexOf("\n    }", start);
+  const block = rules.slice(start, end);
+  assert.doesNotMatch(block, /allow read: if isSignedIn\(\);/);
+  assert.match(block, /resource\.data\.ownerId == request\.auth\.uid/);
+  assert.match(block, /workspaceListsAuthEmail/);
+  assert.match(block, /workspace_members/);
+  const auth = readFileSync(resolve("src/lib/AuthContext.tsx"), "utf8");
+  assert.match(auth, /canSeeWorkspaceDocument/);
+  assert.doesNotMatch(auth, /activeWorkspaceName\) \|\| 'Workspace'/);
+  assert.match(auth, /agent_invites/);
+  assert.match(auth, /inviteShouldCloseOnJoin/);
 });

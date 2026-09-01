@@ -17,6 +17,7 @@ import {
   Link as LinkIcon,
   ListChecks,
   MessageSquare,
+  Minus,
   MoreHorizontal,
   Plus,
   Search,
@@ -264,6 +265,17 @@ function projectTitle(project: any) {
   return project?.title || project?.name || "Untitled project";
 }
 
+function isTypingTarget(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag !== "INPUT") return false;
+  const type = String((target as HTMLInputElement).type || "text").toLowerCase();
+  return !["button", "submit", "reset", "checkbox", "radio", "file", "image"].includes(type);
+}
+
 function healthClass(value: string) {
   return `status-tone-${healthToStatus(value)}`;
 }
@@ -506,6 +518,106 @@ function InlineEdit({
   );
 }
 
+function projectMetaLine(project: any) {
+  return `${project.demo ? "DEMO · " : ""}${project.projectKey || "No key"} · ${
+    project.serviceLine || project.projectType || project.category || "Delivery"
+  }`;
+}
+
+function ProjectTitleCell({
+  project,
+  onOpen,
+  onRename,
+}: {
+  project: any;
+  onOpen: () => void;
+  onRename: (title: string) => void;
+}) {
+  const name = projectTitle(project);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const clickTimer = useRef<number | null>(null);
+  useEffect(() => setDraft(name), [name]);
+  useEffect(
+    () => () => {
+      if (clickTimer.current) window.clearTimeout(clickTimer.current);
+    },
+    [],
+  );
+
+  const beginRename = () => {
+    if (clickTimer.current) {
+      window.clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
+    if (project.demo) return;
+    setDraft(name);
+    setEditing(true);
+  };
+
+  if (editing) {
+    return (
+      <span className="do-command-project-title">
+        <input
+          aria-label={`Rename ${name}`}
+          autoFocus
+          data-testid="project-title-rename"
+          onBlur={() => {
+            const next = draft.trim();
+            setEditing(false);
+            if (next && next !== name) onRename(next);
+            else setDraft(name);
+          }}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              setDraft(name);
+              setEditing(false);
+            }
+          }}
+          value={draft}
+        />
+        <small>{projectMetaLine(project)}</small>
+      </span>
+    );
+  }
+
+  return (
+    <span className="do-command-project-title">
+      <button
+        aria-label={`Open ${name}`}
+        className="do-command-project-title-open"
+        data-testid="project-title-open"
+        onClick={(event) => {
+          if (event.detail > 1) return;
+          if (event.detail === 0) {
+            onOpen();
+            return;
+          }
+          if (clickTimer.current) window.clearTimeout(clickTimer.current);
+          clickTimer.current = window.setTimeout(() => {
+            clickTimer.current = null;
+            onOpen();
+          }, 280);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          beginRename();
+        }}
+        title="Click to open · Double-click to rename"
+        type="button"
+      >
+        {name}
+      </button>
+      <small>{projectMetaLine(project)}</small>
+    </span>
+  );
+}
+
 export function ProjectRecordModal({
   project,
   tasks,
@@ -543,10 +655,10 @@ export function ProjectRecordModal({
     "overview" | "plan" | "work" | "risks" | "docs" | "team"
   >("overview");
   const mobileCore = useMobileCore();
-  const [taskTitle, setTaskTitle] = useState("");
   const [milestoneTitle, setMilestoneTitle] = useState("");
   const [riskTitle, setRiskTitle] = useState("");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const methodology = String(project.methodology || "scrum").toLowerCase();
   const currentHealth = projectHealth(project, tasks, risks);
   const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
@@ -565,18 +677,15 @@ export function ProjectRecordModal({
   }, [mobileCore, tab]);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) =>
-      event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTypingTarget(event)) return;
+      onClose();
+    };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
-  const submitTask = async () => {
-    if (!taskTitle.trim()) return;
-    await onAddTask(taskTitle.trim(), "backlog");
-    setTaskTitle("");
-  };
 
   return (
     <div
@@ -992,7 +1101,7 @@ export function ProjectRecordModal({
           )}
 
           {tab === "work" && (
-            <div className="do-project-work">
+            <div className="do-project-work" data-testid="project-work-kanban">
               <div className="do-work-toolbar">
                 <div>
                   <span className="do-project-card-kicker">TEAM EXECUTION</span>
@@ -1002,64 +1111,22 @@ export function ProjectRecordModal({
                       : "Work breakdown & delivery flow"}
                   </h2>
                 </div>
-                <div className="do-project-inline-add">
-                  <input
-                    onChange={(event) => setTaskTitle(event.target.value)}
-                    onKeyDown={(event) => event.key === "Enter" && submitTask()}
-                    placeholder="Add a work item…"
-                    value={taskTitle}
-                  />
-                  <button
-                    disabled={!taskTitle.trim()}
-                    onClick={submitTask}
-                    type="button"
-                  >
-                    <Plus size={13} /> Add
-                  </button>
-                </div>
               </div>
-              <div className="do-work-board">
-                {(
-                  [
-                    ["backlog", "Backlog"],
-                    ["in_progress", "In progress"],
-                    ["blocked", "Blocked"],
-                    ["done", "Done"],
-                  ] as const
-                ).map(([lane, label]) => (
-                  <section className={`do-work-lane is-${lane}`} key={lane}>
-                    <header>
-                      <span>{label}</span>
-                      <small>{lanes[lane].length}</small>
-                    </header>
-                    <div>
-                      {lanes[lane].map((task) => (
-                        <article key={task.id}>
-                          <strong>{task.title || task.name}</strong>
-                          {task.assignee && <small>{task.assignee}</small>}
-                          <select
-                            aria-label={`Move ${task.title || "task"}`}
-                            onChange={(event) =>
-                              onUpdateTask(task.id, {
-                                status: event.target.value,
-                              })
-                            }
-                            value={lane}
-                          >
-                            <option value="backlog">Backlog</option>
-                            <option value="in_progress">In progress</option>
-                            <option value="blocked">Blocked</option>
-                            <option value="done">Done</option>
-                          </select>
-                        </article>
-                      ))}
-                      {lanes[lane].length === 0 && (
-                        <span className="do-lane-empty">No work here</span>
-                      )}
-                    </div>
-                  </section>
-                ))}
-              </div>
+              <WorkItemsCenter
+                activeProject={project}
+                compact
+                forceMode="kanban"
+                onAddTask={(projectId, title, status, patch) =>
+                  onAddTask(title, status, { ...patch, projectId })
+                }
+                onAsk={onAsk}
+                onOpenProjectConsole={() => undefined}
+                onSelectItem={setSelectedWorkItemId}
+                onUpdateTask={onUpdateTask}
+                projects={[project]}
+                selectedItemId={selectedWorkItemId}
+                tasks={tasks}
+              />
             </div>
           )}
 
@@ -2242,6 +2309,7 @@ export function ProjectConsolePanel({
                 <input
                   accept="*/*"
                   aria-label="Upload file up to 20 MB"
+                  data-testid="project-docs-file-input"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (!file || !onAddDocument) return;
@@ -2250,8 +2318,17 @@ export function ProjectConsolePanel({
                       return;
                     }
                     setDocError("");
-                    void onAddDocument({ resourceType: "file", title: docTitle || file.name, file });
-                    setDocTitle("");
+                    void Promise.resolve(
+                      onAddDocument({ resourceType: "file", title: docTitle || file.name, file }),
+                    )
+                      .then(() => setDocTitle(""))
+                      .catch((reason) => {
+                        setDocError(
+                          reason instanceof Error
+                            ? reason.message
+                            : "The document could not be saved.",
+                        );
+                      });
                     event.target.value = "";
                   }}
                   type="file"
@@ -2267,11 +2344,19 @@ export function ProjectConsolePanel({
                     return;
                   }
                   setDocError("");
-                  void onAddDocument?.({
-                    resourceType: docType,
-                    title: docTitle.trim(),
-                    url: docUrl,
-                    body: docBody,
+                  void Promise.resolve(
+                    onAddDocument?.({
+                      resourceType: docType,
+                      title: docTitle.trim(),
+                      url: docUrl,
+                      body: docBody,
+                    }),
+                  ).catch((reason) => {
+                    setDocError(
+                      reason instanceof Error
+                        ? reason.message
+                        : "The document could not be saved.",
+                    );
                   });
                   setDocTitle("");
                   setDocBody("");
@@ -4229,6 +4314,7 @@ export function ProjectCommandCenter({
   const [bulkStage, setBulkStage] = useState<DeliveryStage>("build");
   const [bulkManagerId, setBulkManagerId] = useState("");
   const [bulkTeamId, setBulkTeamId] = useState("");
+  const [bulkDueDate, setBulkDueDate] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState("all");
@@ -4494,6 +4580,24 @@ export function ProjectCommandCenter({
     }
     return projectTitle(left).localeCompare(projectTitle(right));
   });
+  const visibleProjectIds = sortedFiltered.map((project) => project.id);
+  const allVisibleProjectsSelected =
+    visibleProjectIds.length > 0 &&
+    visibleProjectIds.every((id) => selectedProjectIds.includes(id));
+  const someVisibleProjectsSelected = visibleProjectIds.some((id) =>
+    selectedProjectIds.includes(id),
+  );
+  const toggleSelectAllProjects = () => {
+    if (allVisibleProjectsSelected) {
+      setSelectedProjectIds((current) =>
+        current.filter((id) => !visibleProjectIds.includes(id)),
+      );
+      return;
+    }
+    setSelectedProjectIds((current) => [
+      ...new Set([...current, ...visibleProjectIds]),
+    ]);
+  };
   const openProjects = portfolio.filter(
     (project) =>
       !["completed", "archived", "done", "deleted", "cancelled"].includes(
@@ -4566,8 +4670,10 @@ export function ProjectCommandCenter({
     .sort((left, right) => right.count - left.count);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) =>
-      event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTypingTarget(event)) return;
+      onClose();
+    };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
@@ -5152,6 +5258,17 @@ export function ProjectCommandCenter({
           {selectedProjectIds.length > 0 && (
             <div className="do-items-bulk" aria-label="Project bulk actions">
               <span>{selectedProjectIds.length} selected</span>
+              <button
+                aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
+                className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
+                data-testid="projects-select-all"
+                disabled={visibleProjectIds.length === 0}
+                onClick={toggleSelectAllProjects}
+                type="button"
+              >
+                {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
+              </button>
+              <button onClick={() => setSelectedProjectIds([])} type="button">Clear</button>
               <select aria-label="Bulk project status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>
                 {PROJECT_STATUSES.map((status) => (
                   <option key={status} value={status}>{projectStatusLabel(status)}</option>
@@ -5164,8 +5281,43 @@ export function ProjectCommandCenter({
                 ))}
               </select>
               <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { deliveryStage: bulkStage })))} type="button">Change stage</button>
+              <input
+                aria-label="Bulk project due date"
+                onChange={(event) => setBulkDueDate(event.target.value)}
+                type="date"
+                value={bulkDueDate}
+              />
+              <button
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) =>
+                    onUpdateProject(id, {
+                      revisedDueDate: bulkDueDate || null,
+                      dueDate: bulkDueDate || null,
+                      targetDate: bulkDueDate || null,
+                    }),
+                  ))
+                }
+                type="button"
+              >
+                Apply date
+              </button>
+              <button
+                onClick={() =>
+                  Promise.all(selectedProjectIds.map((id) =>
+                    onUpdateProject(id, {
+                      revisedDueDate: null,
+                      dueDate: null,
+                      targetDate: null,
+                    }),
+                  ))
+                }
+                type="button"
+              >
+                Clear date
+              </button>
               <select aria-label="Bulk project manager" onChange={(event) => setBulkManagerId(event.target.value)} value={bulkManagerId}>
                 <option value="">Project manager</option>
+                <option value="none">Unassigned</option>
                 {activeMemberOptions.map((member) => (
                   <option key={member.id} value={member.id}>{member.name}</option>
                 ))}
@@ -5173,12 +5325,15 @@ export function ProjectCommandCenter({
               <button
                 disabled={!bulkManagerId}
                 onClick={() => {
+                  if (bulkManagerId === "none") {
+                    return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: null, projectManager: "" })));
+                  }
                   const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
                   return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: bulkManagerId, projectManager: member?.name || "" })));
                 }}
                 type="button"
               >
-                Assign PM
+                {bulkManagerId === "none" ? "Unassign PM" : "Assign PM"}
               </button>
               <select aria-label="Bulk add team member" onChange={(event) => setBulkTeamId(event.target.value)} value={bulkTeamId}>
                 <option value="">Add team member</option>
@@ -5480,10 +5635,21 @@ export function ProjectCommandCenter({
             <div className="do-command-table">
               <div className="do-command-table-head" style={portfolioGridStyle}>
                 {columnSet.has("project") && <span>
+                  <button
+                    aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
+                    className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
+                    data-testid="projects-select-all-header"
+                    disabled={visibleProjectIds.length === 0}
+                    onClick={toggleSelectAllProjects}
+                    title={allVisibleProjectsSelected ? "Deselect all" : "Select all visible projects"}
+                    type="button"
+                  >
+                    {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
+                  </button>
                   Project{" "}
                   <InfoTip
                     label="Project"
-                    text="Edit the name directly. The stable project key remains underneath."
+                    text="Click the name to open the project. Double-click to rename. The stable project key remains underneath."
                   />
                 </span>}
                 {columnSet.has("delivery_entity") && <span>
@@ -5646,26 +5812,16 @@ export function ProjectCommandCenter({
                           />
                         </button>
                         <span>
-                          <InlineEdit
-                            ariaLabel={`Project name for ${projectTitle(project)}`}
-                            onCommit={(title) =>
-                              title &&
+                          <ProjectTitleCell
+                            onOpen={() => onOpenProject(project)}
+                            onRename={(title) =>
                               onUpdateProject(project.id, {
                                 title,
                                 name: title,
                               })
                             }
-                            placeholder="Project name"
-                            value={projectTitle(project)}
+                            project={project}
                           />
-                          <small>
-                            {project.demo ? "DEMO · " : ""}
-                            {project.projectKey || "No key"} ·{" "}
-                            {project.serviceLine ||
-                              project.projectType ||
-                              project.category ||
-                              "Delivery"}
-                          </small>
                         </span>
                       </div>}
                       {columnSet.has("delivery_entity") && <div className="do-master-data-cell">

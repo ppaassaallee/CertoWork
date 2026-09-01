@@ -37,11 +37,24 @@ npx wrangler login
 npx wrangler secret put OPENAI_API_KEY
 ```
 
-Deploy:
+Deploy from a logged-in machine:
 
 ```bash
 npm run deploy:cloudflare
 ```
+
+Or deploy from GitHub Actions. Create an API token with **Account → Workers
+Scripts → Edit** (not Workers AI) and **Zone → Workers Routes → Edit**, then
+add these repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+Pushes to `main` and manual **Deploy Cloudflare** workflow runs build the
+SPA and run `wrangler deploy`. That deploy keeps the `certo.work` custom
+domain from `wrangler.jsonc`. Worker runtime secrets such as
+`OPENAI_API_KEY` stay in the Cloudflare dashboard; they are not GitHub
+secrets.
 
 Dry-run validation:
 
@@ -56,9 +69,10 @@ has been tested on its generated `workers.dev` URL.
 
 Recommended cutover:
 
-1. Deploy to Cloudflare.
-2. Test the `*.workers.dev` URL.
-3. Add `certo.work` and `www.certo.work` as Worker custom domains.
+1. Deploy to Cloudflare (`npm run deploy:cloudflare` or GitHub Actions).
+2. Test the `*.workers.dev` URL if you need a preview hostname.
+3. Keep `certo.work` as the Worker custom domain in `wrangler.jsonc`. Add
+   `www.certo.work` in the dashboard if you also serve www.
 4. In GoDaddy, either:
    - move nameservers to Cloudflare, then manage DNS in Cloudflare; or
    - keep GoDaddy DNS and add the exact records Cloudflare requests.

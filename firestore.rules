@@ -15,12 +15,32 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
-    // Workspaces
+    function authEmailLower() {
+      return request.auth.token.email is string ? request.auth.token.email.lower() : "";
+    }
+
+    function workspaceListsAuthEmail() {
+      return resource.data.members is list && request.auth.token.email != null && (
+        request.auth.token.email in resource.data.members ||
+        (authEmailLower() != "" && authEmailLower() in resource.data.members)
+      );
+    }
+
+    // Workspaces are tenant-private. A signed-in user who is not the owner,
+    // a listed member email, or an active workspace_members row must not read
+    // the document — including the workspace name.
     match /workspaces/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        workspaceListsAuthEmail() ||
+        (
+          exists(/databases/$(database)/documents/workspace_members/$(id + "_" + request.auth.uid)) &&
+          get(/databases/$(database)/documents/workspace_members/$(id + "_" + request.auth.uid)).data.status == "active"
+        )
+      );
       allow create: if isSignedIn() && incoming().keys().hasAll(['ownerId', 'name', 'createdAt']) && incoming().ownerId == request.auth.uid;
       allow update: if isSignedIn()
-        && (resource.data.ownerId == request.auth.uid || (resource.data.members is list && request.auth.token.email != null && request.auth.token.email in resource.data.members))
+        && (resource.data.ownerId == request.auth.uid || workspaceListsAuthEmail())
         && incoming().ownerId == resource.data.ownerId
         && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
         && (!('createdAt' in resource.data) || incoming().createdAt == resource.data.createdAt);
@@ -32,10 +52,14 @@ service cloud.firestore {
     }
 
     // Helper to check if user belongs to workspace
+    function isJoinedMemberStatus(status) {
+      return status == "active" || status == "accepted";
+    }
+
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() && workspaceId != null
         && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active";
+        && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status);
     }
 
     function activeWorkspaceMemberId(workspaceId) {
@@ -43,13 +67,11 @@ service cloud.firestore {
     }
 
     function isPortfolioViewer(workspaceId) {
-      return isSignedIn()
-        && workspaceId != null
-        && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active"
+      return isWorkspaceMember(workspaceId)
         && (
           get(memberDoc(workspaceId)).data.portfolioViewer == true
-          || get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
+          || get(memberDoc(workspaceId)).data.role in ["owner", "admin", "member"]
+          || !("role" in get(memberDoc(workspaceId)).data)
         );
     }
 
@@ -60,10 +82,15 @@ service cloud.firestore {
           get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid ||
           (
             exists(memberDoc(workspaceId)) &&
-            get(memberDoc(workspaceId)).data.status == "active" &&
+            isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status) &&
             get(memberDoc(workspaceId)).data.role in ["owner", "admin"]
           )
         );
+    }
+
+    function isWorkspaceViewer(workspaceId) {
+      return isWorkspaceMember(workspaceId)
+        && get(memberDoc(workspaceId)).data.role == "viewer";
     }
 
     function isWorkspaceOwner(workspaceId) {
@@ -76,7 +103,7 @@ service cloud.firestore {
       return isWorkspaceAdmin(workspaceId)
         || (
           exists(memberDoc(workspaceId))
-          && get(memberDoc(workspaceId)).data.status == "active"
+          && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status)
           && get(memberDoc(workspaceId)).data.financeAccess == true
         );
     }
@@ -90,17 +117,35 @@ service cloud.firestore {
         request.auth.token.email != null &&
         ('visibleToEmails' in data) &&
         data.visibleToEmails is list &&
-        request.auth.token.email in data.visibleToEmails
+        (
+          request.auth.token.email in data.visibleToEmails ||
+          (authEmailLower() != "" && authEmailLower() in data.visibleToEmails)
+        )
+      );
+    }
+
+    function isSelfRoleId(workspaceId, value) {
+      return value is string && (
+        value == activeWorkspaceMemberId(workspaceId) ||
+        value == request.auth.uid ||
+        (request.auth.token.email != null && value == request.auth.token.email) ||
+        (authEmailLower() != "" && value == authEmailLower())
       );
     }
 
     function hasProjectRoleAccess(data) {
       return ('workspaceId' in data) && data.workspaceId is string && (
-        (('projectManagerId' in data) && data.projectManagerId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('productOwnerId' in data) && data.productOwnerId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('sponsorId' in data) && data.sponsorId == activeWorkspaceMemberId(data.workspaceId)) ||
-        (('sponsorIds' in data) && data.sponsorIds is list && activeWorkspaceMemberId(data.workspaceId) in data.sponsorIds) ||
-        (('teamMemberIds' in data) && data.teamMemberIds is list && activeWorkspaceMemberId(data.workspaceId) in data.teamMemberIds)
+        (('projectManagerId' in data) && isSelfRoleId(data.workspaceId, data.projectManagerId)) ||
+        (('productOwnerId' in data) && isSelfRoleId(data.workspaceId, data.productOwnerId)) ||
+        (('sponsorId' in data) && isSelfRoleId(data.workspaceId, data.sponsorId)) ||
+        (('sponsorIds' in data) && data.sponsorIds is list && (
+          activeWorkspaceMemberId(data.workspaceId) in data.sponsorIds ||
+          request.auth.uid in data.sponsorIds
+        )) ||
+        (('teamMemberIds' in data) && data.teamMemberIds is list && (
+          activeWorkspaceMemberId(data.workspaceId) in data.teamMemberIds ||
+          request.auth.uid in data.teamMemberIds
+        ))
       );
     }
 
@@ -112,16 +157,9 @@ service cloud.firestore {
         hasExplicitUserAccess(data) ||
         hasProjectRoleAccess(data) ||
         (('workspaceId' in data) && isWorkspaceAdmin(data.workspaceId)) ||
+        (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && !isWorkspaceViewer(data.workspaceId)) ||
         (('workspaceId' in data) && isWorkspaceMember(data.workspaceId) && isPortfolioViewer(data.workspaceId))
       );
-    }
-
-    function isWorkspaceViewer(workspaceId) {
-      return isSignedIn()
-        && workspaceId != null
-        && exists(memberDoc(workspaceId))
-        && get(memberDoc(workspaceId)).data.status == "active"
-        && get(memberDoc(workspaceId)).data.role == "viewer";
     }
 
     function canWriteProject(data) {
@@ -724,6 +762,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    match /kanban_board_presence/{presenceId} {
+      allow read: if isSignedIn() && resource.data.workspaceId is string && isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().workspaceId is string
+        && incoming().surface is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     // Tasks
     function isValidTask(data) {
        return data.keys().hasAll(['userId', 'title', 'status', 'createdAt'])
@@ -739,8 +787,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
                     && isValidTask(incoming())
                     && incoming().userId == resource.data.userId
-                    && incoming().createdAt == resource.data.createdAt;
-      allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data);
+                    && incoming().createdAt == resource.data.createdAt
+                    && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy);
+      // Work items are archived or cancelled in product; delete is owner-only so a
+      // view/filter change or workspace-admin pass cannot wipe another person's records.
+      allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
+                    && (resource.data.userId == request.auth.uid
+                        || (('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid));
     }
 
     // New Modules: Habits, Workouts, Analytics

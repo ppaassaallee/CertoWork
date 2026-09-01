@@ -21,7 +21,9 @@ export type DelivereeLens =
   | { kind: "approvals" }
   | { kind: "invoices" }
   | { kind: "settings" }
+  | { kind: "collab" }
   | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
+  | { kind: "notes" }
   | { kind: "more"; section: MoreSection };
 
 const MORE_SECTIONS: MoreSection[] = [
@@ -61,6 +63,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
+  }
+
+  if (path === "/collab" || path.startsWith("/collab/")) {
+    return { kind: "collab" };
   }
 
   if (path === "/invoices" || path === "/finance" || path === "/workspace/invoices") {
@@ -118,6 +124,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   }
   if (path === "/my-work/waiting") {
     return { kind: "my-work", section: "waiting" };
+  }
+
+  if (path === "/notes" || path.startsWith("/notes/")) {
+    return { kind: "notes" };
   }
 
   if (path.startsWith("/more/")) {
@@ -184,9 +194,11 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "approvals") return "/approvals";
   if (lens.kind === "invoices") return "/invoices";
   if (lens.kind === "settings") return "/settings";
+  if (lens.kind === "collab") return "/collab";
   if (lens.kind === "feedback") {
     return lens.section === "queue" ? "/workspace/feedback" : "/feedback";
   }
+  if (lens.kind === "notes") return "/notes";
   if (lens.kind === "more") {
     if (lens.section === "workspace") return "/workspace";
     return `/more/${lens.section}`;

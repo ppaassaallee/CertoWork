@@ -68,6 +68,11 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
+import { ChatCollabModule } from "./ChatCollabModule";
+import { CertoMark } from "./CertoMark";
+import { ProductSwitcher } from "./ProductSwitcher";
+import { collabProjectPath } from "../lib/collabModule";
+import { warmCollabSession } from "../lib/collabClient";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -97,7 +102,7 @@ import {
   timeAgo,
   timestamp,
 } from "../lib/workspaceDisplay";
-import { inviteDirectoryUrl, inviteIsExpired } from "../lib/inviteLifecycle";
+import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
@@ -131,6 +136,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
+import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -167,8 +173,11 @@ import {
   activeWorkspaceMemberId as accessMemberId,
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
-  isPortfolioViewerMember,
   normalizeAccessEmail,
+  projectAccessEmails,
+  projectAccessLookupIds,
+  projectAccessNameValues,
+  shouldTryWorkspacePortfolioQuery,
 } from "../lib/accessControl";
 import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
@@ -231,6 +240,7 @@ import {
   memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
+  memberVisibleEmail,
   membershipPublicPatch,
   normalizeAlias,
   normalizeInviteEmail,
@@ -315,7 +325,37 @@ export function DelivereeWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
+  const onCollab = lens.kind === "collab";
+  const [workOpened, setWorkOpened] = useState(() => !onCollab);
+  const [collabOpened, setCollabOpened] = useState(() => onCollab);
   const mobileCore = useMobileCore();
+  useEffect(() => {
+    if (onCollab) setCollabOpened(true);
+    else setWorkOpened(true);
+  }, [onCollab]);
+  useEffect(() => {
+    if (!user?.email || !workspace) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        if (cancelled) return;
+        await warmCollabSession({
+          token,
+          userId: user.uid,
+          workspaceId: workspace.id,
+          email: user.email || "",
+          displayName: user.displayName || workspace.name || "Certo Work",
+          company: workspace.name || "",
+        });
+      } catch {
+        // The desk still opens from the Collab tab if warming fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, workspace]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -440,10 +480,10 @@ export function DelivereeWorkspace() {
     else if (next === "settings") navigate("/settings");
   };
   const centerView: CenterView =
-    lens.kind === "project"
-      ? lens.tab === "notes"
-        ? "notes"
-        : lens.tab === "strategy"
+    lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
+      ? "notes"
+      : lens.kind === "project"
+      ? lens.tab === "strategy"
           ? "strategy"
           : "project"
       : lens.kind === "my-work"
@@ -464,7 +504,10 @@ export function DelivereeWorkspace() {
       (lens.kind === "project" ? lens.projectId : null) || projectConsoleId;
     if (next === "portfolio") navigate("/projects");
     else if (next === "project" && projectId) navigate(`/work/projects/${projectId}`);
-    else if (next === "notes" && projectId) navigate(`/work/projects/${projectId}/notes`);
+    else if (next === "notes") {
+      if (projectId && lens.kind === "project") navigate(`/work/projects/${projectId}/notes`);
+      else navigate("/notes");
+    }
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -510,6 +553,7 @@ export function DelivereeWorkspace() {
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceSessionRef = useRef(false);
+  const restoredCreatorAssignees = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -517,8 +561,23 @@ export function DelivereeWorkspace() {
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
     const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
-    const canSeeWorkspacePortfolio =
-      workspace.ownerId === user.uid || isPortfolioViewerMember(currentMember);
+    const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
+      isOwner: workspace.ownerId === user.uid,
+      member: currentMember,
+    });
+    const roleLookupIds = projectAccessLookupIds({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      email: user.email,
+      memberIds: [memberId, currentMember?.id],
+    }).slice(0, 10);
+    const roleEmails = projectAccessEmails(user.email);
+    const roleNames = projectAccessNameValues({
+      alias: currentMember?.alias,
+      displayName: currentMember?.displayName,
+      email: currentMember?.email || user.email,
+      emailLower: currentMember?.emailLower || emailLower,
+    }).slice(0, 10);
     const canTriageFeedback = canManageWorkspaceMembers(
       currentMember?.role,
       workspace.ownerId === user.uid,
@@ -546,7 +605,8 @@ export function DelivereeWorkspace() {
             );
             publish();
           },
-          () => {
+          (error) => {
+            console.error(`Firestore ${name} query ${index} failed`, error);
             buckets.set(index, []);
             publish();
           },
@@ -572,24 +632,50 @@ export function DelivereeWorkspace() {
           callback(
             snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
           ),
-        () => callback([]),
+        (error) => {
+          console.error(`Firestore ${name} query failed`, error);
+          callback([]);
+        },
       );
     };
+    const projectRoleClauses = [
+      [where("userId", "==", user.uid)],
+      [where("visibleToUserIds", "array-contains", user.uid)],
+      ...roleEmails.map((email) => [where("visibleToEmails", "array-contains", email)]),
+      ...(roleLookupIds.length
+        ? [
+            [where("teamMemberIds", "array-contains-any", roleLookupIds)],
+            [where("sponsorIds", "array-contains-any", roleLookupIds)],
+            [where("projectManagerId", "in", roleLookupIds)],
+            [where("productOwnerId", "in", roleLookupIds)],
+          ]
+        : []),
+      ...(roleNames.length
+        ? [
+            [where("projectManager", "in", roleNames), where("workspaceId", "==", workspace.id)],
+            [where("contact", "in", roleNames), where("workspaceId", "==", workspace.id)],
+          ]
+        : []),
+    ];
+    let cancelled = false;
+    const extraUnsubscribers: Array<() => void> = [];
+    const startRoleProjectQueries = () => {
+      if (cancelled) return;
+      extraUnsubscribers.push(...mergeQueries("projects", projectRoleClauses, setProjects));
+    };
     const projectUnsubscribers = canSeeWorkspacePortfolio
-      ? [makeQuery("projects", setProjects)]
-      : mergeQueries(
-          "projects",
-          [
-            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-            [where("visibleToUserIds", "array-contains", user.uid)],
-            [where("visibleToEmails", "array-contains", emailLower)],
-            [where("teamMemberIds", "array-contains", memberId)],
-            [where("sponsorIds", "array-contains", memberId)],
-            [where("projectManagerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-            [where("productOwnerId", "==", memberId), where("workspaceId", "==", workspace.id)],
-          ],
-          setProjects,
-        );
+      ? [
+          onSnapshot(
+            query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
+            (snapshot) =>
+              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+            (error) => {
+              console.error("Workspace projects query failed; falling back to role queries", error);
+              startRoleProjectQueries();
+            },
+          ),
+        ]
+      : mergeQueries("projects", projectRoleClauses, setProjects);
     const taskUnsubscribers =
       workspace.ownerId === user.uid
         ? [makeQuery("tasks", setTasks)]
@@ -692,7 +778,11 @@ export function DelivereeWorkspace() {
       makeQuery("skills", setWorkspaceSkills, false, true),
       makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
@@ -745,11 +835,7 @@ export function DelivereeWorkspace() {
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }))
               .filter(
-                (invite: any) =>
-                  invite.inviteType === "workspace_member" &&
-                  !["accepted", "revoked"].includes(
-                    String(invite.status || "").toLowerCase(),
-                  ),
+                (invite: any) => invite.inviteType === "workspace_member",
               ),
           ),
         () => setWorkspaceInvites([]),
@@ -950,6 +1036,49 @@ export function DelivereeWorkspace() {
     () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
     [personalActor, todayTasks],
   );
+  const myWorkTasks = useMemo(
+    () =>
+      filterMyWorkTasks(
+        tasks,
+        lens.kind === "my-work" ? lens.section : "assigned",
+        personalActor,
+        workspaceMembers,
+      ),
+    [lens, personalActor, tasks, workspaceMembers],
+  );
+
+  useEffect(() => {
+    if (!user || !workspace) return;
+    const pending = tasks
+      .filter(
+        (item) =>
+          needsCreatorAssigneeRestore(item, personalActor) &&
+          !restoredCreatorAssignees.current.has(item.id),
+      )
+      .slice(0, 40);
+    if (!pending.length) return;
+    const patch = creatorAssigneePatch(personalActor, workspaceMembers);
+    if (!patch.assigneeIds.length && !patch.assignees.length) return;
+    for (const item of pending) restoredCreatorAssignees.current.add(item.id);
+    // Additive restore only. My Work is a view: never delete records to change a filter.
+    void Promise.all(
+      pending.map((item) =>
+        updateDoc(doc(db, "tasks", item.id), {
+          ...patch,
+          ...buildTaskAccessPatch({
+            task: { ...item, ...patch },
+            workspaceId: workspace.id,
+            userId: user.uid,
+            email: user.email,
+            members: workspaceMembers,
+          }),
+          updatedAt: serverTimestamp(),
+        }),
+      ),
+    ).catch(() => {
+      for (const item of pending) restoredCreatorAssignees.current.delete(item.id);
+    });
+  }, [personalActor, tasks, user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) {
@@ -1005,6 +1134,9 @@ export function DelivereeWorkspace() {
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
   );
+  const canSeeMemberEmails =
+    workspace?.ownerId === user?.uid ||
+    isWorkspaceOwnerRole(currentWorkspaceMember?.role);
   const canOperateInvoiceQueue = canOperateInvoices(
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
@@ -1994,13 +2126,18 @@ export function DelivereeWorkspace() {
         }
       } else {
         let collectionName = "tasks";
+        const assigned = withCreatorAssignee(proposed, {
+          userId: user.uid,
+          memberId: accessMemberId(workspace.id, user.uid),
+          email: user.email,
+        }, workspaceMembers);
         let payload: Record<string, unknown> = {
-          ...proposed,
+          ...assigned,
           userId: user.uid,
           workspaceId: workspace.id,
           projectId,
           ...buildTaskAccessPatch({
-            task: proposed,
+            task: assigned,
             workspaceId: workspace.id,
             userId: user.uid,
             email: user.email,
@@ -2087,23 +2224,32 @@ export function DelivereeWorkspace() {
         const projectId =
           String(proposed.projectId || primaryProject?.id || "").trim() || null;
         if (type === "create_task") {
+          const assigned = withCreatorAssignee(proposed, {
+            userId: user.uid,
+            memberId: accessMemberId(workspace.id, user.uid),
+            email: user.email,
+          }, workspaceMembers);
           await addDoc(collection(db, "tasks"), {
             userId: user.uid,
             workspaceId: workspace.id,
             ...(projectId ? { projectId } : {}),
             ...buildTaskAccessPatch({
-              task: proposed,
+              task: assigned,
               workspaceId: workspace.id,
               userId: user.uid,
               email: user.email,
               members: workspaceMembers,
             }),
-            title: String(proposed.title || proposed.name || "Untitled").trim() || "Untitled",
-            description: String(proposed.description || "").slice(0, 4000),
-            status: String(proposed.status || "open"),
-            priority: proposed.priority ?? null,
-            dueDate: proposed.dueDate || null,
-            timeSector: proposed.timeSector || "today",
+            title: String(assigned.title || assigned.name || "Untitled").trim() || "Untitled",
+            description: String(assigned.description || "").slice(0, 4000),
+            status: String(assigned.status || "open"),
+            priority: assigned.priority ?? null,
+            dueDate: assigned.dueDate || null,
+            timeSector: assigned.timeSector || "today",
+            assigneeIds: assigned.assigneeIds,
+            assignees: assigned.assignees,
+            owner: assigned.owner,
+            assignee: assigned.assignee,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -2484,6 +2630,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: user.displayName }),
         role: "owner",
         status: "active",
+        portfolioViewer: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
@@ -2528,6 +2675,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({}),
         role: inviteRole,
         status: "invited",
+        portfolioViewer: inviteRole !== "viewer",
         invitedBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -2761,6 +2909,7 @@ export function DelivereeWorkspace() {
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
     await updateDoc(doc(db, "workspace_members", member.id), {
       role,
+      portfolioViewer: role !== "viewer",
       updatedAt: serverTimestamp(),
     });
     if (email) {
@@ -2841,6 +2990,7 @@ export function DelivereeWorkspace() {
       });
       const matchingInvites = workspaceInvites.filter(
         (invite) =>
+          inviteIsUsable(invite) &&
           normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
       );
       for (const invite of matchingInvites) {
@@ -2925,6 +3075,7 @@ export function DelivereeWorkspace() {
         ...membershipPublicPatch({ displayName: request.displayName }),
         role,
         status: "active",
+        portfolioViewer: role !== "viewer",
         approvedBy: user.uid,
         approvedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -3106,13 +3257,19 @@ export function DelivereeWorkspace() {
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
+    const actor = {
+      userId: user.uid,
+      memberId: accessMemberId(workspace.id, user.uid),
+      email: user.email,
+    };
+    const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
     const created = await addDoc(collection(db, "tasks"), {
-      ...patch,
+      ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
       projectId,
       ...buildTaskAccessPatch({
-        task: patch,
+        task: assigned,
         workspaceId: workspace.id,
         userId: user.uid,
         email: user.email,
@@ -3265,32 +3422,44 @@ export function DelivereeWorkspace() {
   };
 
   const addProjectDocument = async (projectId: string, payload: Record<string, unknown>) => {
-    if (!user || !workspace) return;
+    if (!user || !workspace) {
+      throw new Error("Sign in to add a document.");
+    }
     let url = String(payload.url || "");
     const file = payload.file as File | undefined;
-    if (file) {
-      if (!isAllowedProjectResourceSize(file.size)) {
-        setNotice("Files must be 20 MB or smaller.");
-        return;
+    try {
+      if (file) {
+        if (!isAllowedProjectResourceSize(file.size)) {
+          throw new Error("Files must be 20 MB or smaller.");
+        }
+        const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
+        const fileRef = ref(storage, path);
+        await uploadBytes(fileRef, file);
+        url = await getDownloadURL(fileRef);
       }
-      const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
-      const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file);
-      url = await getDownloadURL(fileRef);
+      await addDoc(collection(db, "knowledge_items"), {
+        userId: user.uid,
+        workspaceId: workspace.id,
+        projectId,
+        title: payload.title || file?.name || "Untitled",
+        resourceType: payload.resourceType || "note",
+        url,
+        content: payload.body || "",
+        status: "active",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice("Document saved.");
+    } catch (reason) {
+      const message =
+        reason instanceof Error && /permission/i.test(reason.message)
+          ? "This account cannot save documents in this workspace yet. Sign out and sign back in, then try again."
+          : reason instanceof Error
+            ? reason.message
+            : "The document could not be saved.";
+      setNotice(message);
+      throw new Error(message);
     }
-    await addDoc(collection(db, "knowledge_items"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      projectId,
-      title: payload.title || file?.name || "Untitled",
-      resourceType: payload.resourceType || "note",
-      url,
-      content: payload.body || "",
-      status: "active",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice("Document saved.");
   };
 
   const connectProjectDrive = async () => {
@@ -3824,6 +3993,20 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/workspace"),
       },
       {
+        id: "nav-collab",
+        label: "Open Chat Collab",
+        group: "Navigate",
+        keywords: "chat slack teams chatwoot messages",
+        onSelect: () => navigate("/collab"),
+      },
+      ...activeProjects.slice(0, 12).map((project) => ({
+        id: `nav-collab-room-${project.id}`,
+        label: `Open room · ${entityTitle(project)}`,
+        group: "Navigate",
+        keywords: "chat collab room chatwoot",
+        onSelect: () => navigate(collabProjectPath(String(project.id))),
+      })),
+      {
         id: "nav-settings",
         label: "Go to Settings",
         group: "Navigate",
@@ -3899,6 +4082,7 @@ export function DelivereeWorkspace() {
       "nav-home",
       "nav-my-work",
       "nav-projects",
+      "nav-collab",
       "nav-settings",
       "quick-capture",
       "new-conversation",
@@ -3906,7 +4090,10 @@ export function DelivereeWorkspace() {
       "talk-odysseus",
     ]);
     return items.filter(
-      (item) => mobileIds.has(item.id) || item.id.startsWith("project-"),
+      (item) =>
+        mobileIds.has(item.id) ||
+        item.id.startsWith("project-") ||
+        item.id.startsWith("nav-collab-room-"),
     );
   }, [
     activeProjects,
@@ -3918,8 +4105,8 @@ export function DelivereeWorkspace() {
     startVoiceCall,
   ]);
 
-  return (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+  const workPane = (
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -3939,6 +4126,7 @@ export function DelivereeWorkspace() {
         className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`}
         data-testid="primary-sidebar"
       >
+        <ProductSwitcher product="work" />
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -3949,7 +4137,9 @@ export function DelivereeWorkspace() {
             aria-label="Workspace switcher"
             title="Workspace switcher"
           >
-            <span className="do-logo">C</span>
+            <span className="do-logo">
+              <CertoMark size={18} />
+            </span>
             <span className="do-brand-copy">
               <strong>{workspace?.name || "Certo Work"}</strong>
               <small>Certo Work</small>
@@ -4025,6 +4215,18 @@ export function DelivereeWorkspace() {
           >
             <Folder size="sm" />
             <span>{t("navProjects")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-notes ${lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes") ? "is-active" : ""}`}
+            data-testid="nav-notes"
+            onClick={() => {
+              navigate("/notes");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <BookOpen size="sm" />
+            <span>{t("navNotes")}</span>
           </button>
           <button
             className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" ? "is-active" : ""}`}
@@ -4546,6 +4748,9 @@ export function DelivereeWorkspace() {
                           : [{ label: "Assigned" }]),
                     ]
                   : []),
+                ...(lens.kind === "notes"
+                  ? [{ label: "Notes" }]
+                  : []),
                 ...(lens.kind === "agents"
                   ? [
                       {
@@ -4593,16 +4798,34 @@ export function DelivereeWorkspace() {
           </div>
           <div className="do-header-actions">
             {mobileCore && (
-              <button
-                aria-label={t("navSettings")}
-                className={`do-icon-button ${lens.kind === "settings" ? "is-active" : ""}`}
-                data-testid="header-settings"
-                onClick={() => navigate("/settings")}
-                title={t("navSettings")}
-                type="button"
-              >
-                <Settings size={15} />
-              </button>
+              <>
+                <button
+                  aria-label={t("productCollab")}
+                  className="do-icon-button"
+                  data-testid="header-collab"
+                  onClick={() =>
+                    navigate(
+                      lens.kind === "project"
+                        ? collabProjectPath(lens.projectId)
+                        : "/collab",
+                    )
+                  }
+                  title={t("productCollab")}
+                  type="button"
+                >
+                  <MessageSquare size={15} />
+                </button>
+                <button
+                  aria-label={t("navSettings")}
+                  className={`do-icon-button ${lens.kind === "settings" ? "is-active" : ""}`}
+                  data-testid="header-settings"
+                  onClick={() => navigate("/settings")}
+                  title={t("navSettings")}
+                  type="button"
+                >
+                  <Settings size={15} />
+                </button>
+              </>
             )}
             <button
               aria-label="Open command palette"
@@ -5131,7 +5354,7 @@ export function DelivereeWorkspace() {
             selectedItemId={selectedWorkItemId}
             sprints={sprints}
             tags={categories}
-            tasks={tasks}
+            tasks={myWorkTasks}
             workspaceMembers={workspaceMembers}
           />
           </div>
@@ -5369,12 +5592,7 @@ export function DelivereeWorkspace() {
         </button>
         <button
           className={mobileCoreTab(location.pathname) === "notes" ? "is-active" : ""}
-          onClick={() => {
-            const projectId =
-              (lens.kind === "project" ? lens.projectId : null) || projectConsoleId || activeProjects[0]?.id;
-            if (projectId) navigate(`/work/projects/${projectId}/notes`);
-            else navigate("/projects");
-          }}
+          onClick={() => navigate("/notes")}
           type="button"
         >
           <BookOpen size={16} />
@@ -6108,12 +6326,15 @@ export function DelivereeWorkspace() {
                       <div>
                         <strong>
                           {normalizeAlias(request.displayName) ||
-                            normalizeInviteEmail(request.email || request.emailLower || "") ||
+                            (canSeeMemberEmails
+                              ? normalizeInviteEmail(request.email || request.emailLower || "")
+                              : "") ||
                             "Pending user"}
                         </strong>
                         <small>
-                          {normalizeInviteEmail(request.email || request.emailLower || "") ||
-                            "No email"}
+                          {canSeeMemberEmails
+                            ? normalizeInviteEmail(request.email || request.emailLower || "") || "No email"
+                            : "Access request"}
                           {" · "}
                           {request.provider || "email/password"} ·{" "}
                           {timeAgo(request.requestedAt || request.updatedAt)}
@@ -6185,63 +6406,65 @@ export function DelivereeWorkspace() {
                     const isOwner =
                       isWorkspaceOwnerRole(member.role) ||
                       member.userId === workspace?.ownerId;
-                    const email = normalizeInviteEmail(member.email || member.emailLower || "");
-                    const label = memberManageLabel(member);
+                    const email = memberVisibleEmail(member, canSeeMemberEmails);
+                    const label = memberManageLabel(member, canSeeMemberEmails);
                     return (
                       <article key={member.id}>
                         <span className="do-member-avatar">
                           {memberAvatar(member)}
                         </span>
-                        <div>
-                          <strong>{label}</strong>
+                        <div className="do-member-identity">
+                          <strong data-testid="member-directory-name">{label}</strong>
                           <small>
                             {memberStatusLabel(member.status)}
                             {member.userId === user?.uid ? " · You" : ""}
                             {email && email !== label.toLowerCase() ? ` · ${email}` : ""}
                           </small>
                         </div>
-                        {isOwner ? (
-                          <em>Owner</em>
-                        ) : (
-                          <select
-                            aria-label={`Role for ${label}`}
-                            onChange={(event) =>
-                              updateMemberRole(
-                                member,
-                                event.target.value as
-                                  | "admin"
-                                  | "member"
-                                  | "viewer",
-                              )
-                            }
-                            value={String(member.role || "member")}
-                          >
-                            {WORKSPACE_ROLES.map((role) => (
-                              <option key={role.value} value={role.value}>
-                                {role.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        {!isOwner && canManageMembers && (
-                          <>
-                            <label className="do-member-finance">
-                              <input
-                                checked={Boolean(member.financeAccess)}
-                                onChange={() => toggleMemberFinanceAccess(member)}
-                                type="checkbox"
-                              />
-                              Finance
-                            </label>
-                            <button
-                              className="do-member-remove"
-                              onClick={() => removeWorkspaceMember(member)}
-                              type="button"
+                        <div className="do-member-actions">
+                          {isOwner ? (
+                            <em>Owner</em>
+                          ) : (
+                            <select
+                              aria-label={`Role for ${label}`}
+                              onChange={(event) =>
+                                updateMemberRole(
+                                  member,
+                                  event.target.value as
+                                    | "admin"
+                                    | "member"
+                                    | "viewer",
+                                )
+                              }
+                              value={String(member.role || "member")}
                             >
-                              <UserMinus size={13} /> Remove
-                            </button>
-                          </>
-                        )}
+                              {WORKSPACE_ROLES.map((role) => (
+                                <option key={role.value} value={role.value}>
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {!isOwner && canManageMembers && (
+                            <>
+                              <label className="do-member-finance">
+                                <input
+                                  checked={Boolean(member.financeAccess)}
+                                  onChange={() => toggleMemberFinanceAccess(member)}
+                                  type="checkbox"
+                                />
+                                Finance
+                              </label>
+                              <button
+                                className="do-member-remove"
+                                onClick={() => removeWorkspaceMember(member)}
+                                type="button"
+                              >
+                                <UserMinus size={13} /> Remove
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </article>
                     );
                   })}
@@ -6268,11 +6491,17 @@ export function DelivereeWorkspace() {
                     return (
                       <article className="do-pending-invite-row" key={row.key}>
                         <div>
-                          <strong>{row.email}</strong>
+                          <strong>
+                            {canSeeMemberEmails ? row.email : "Pending invite"}
+                          </strong>
                           <small>
                             {roleLabel(row.role)} · Invited
-                            {delivery ? ` · email ${delivery}` : " · email not sent yet"}
-                            {inviteIsExpired(invite) ? " · expired" : ""}
+                            {canSeeMemberEmails
+                              ? delivery
+                                ? ` · email ${delivery}`
+                                : " · email not sent yet"
+                              : ""}
+                            {invite && inviteIsExpired(invite) ? " · expired" : ""}
                           </small>
                         </div>
                         {canManageMembers && (
@@ -6375,7 +6604,7 @@ export function DelivereeWorkspace() {
                                 onClick={() => toggleTeamMember(team, member)}
                                 type="button"
                               >
-                                {memberManageLabel(member)}
+                                {memberManageLabel(member, canSeeMemberEmails)}
                               </button>
                             );
                           })}
@@ -6583,5 +6812,26 @@ export function DelivereeWorkspace() {
         </div>
       )}
     </div>
+  );
+
+  return (
+    <>
+      {workOpened ? (
+        <div aria-hidden={onCollab} className="do-product-pane" hidden={onCollab}>
+          {workPane}
+        </div>
+      ) : null}
+      {collabOpened ? (
+        <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
+          <ChatCollabModule
+            projects={activeProjects.map((project) => ({
+              id: String(project.id),
+              name: entityTitle(project),
+            }))}
+            workspaceName={workspace?.name}
+          />
+        </div>
+      ) : null}
+    </>
   );
 }

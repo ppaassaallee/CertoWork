@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import worker, {
@@ -10,6 +12,7 @@ import worker, {
   rewriteFirebaseAuthLocation,
   rewriteInstructions,
 } from "../worker/index.js";
+import { collabStatusPayload } from "../worker/collab.js";
 
 function environment(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,6 +81,27 @@ test("Firebase auth helpers are resolved through the legacy Firebase host", () =
     ),
     "https://gen-lang-client-0277783597.firebaseapp.com/__/auth/handler?providerId=google.com",
   );
+});
+
+test("Chat Collab status is public and unconfigured by default", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/collab/status"),
+    environment(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), collabStatusPayload({}, "https://gazelle.test"));
+});
+
+test("Chat Collab SSO requires authentication", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/collab/sso", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
 });
 
 test("Firebase auth redirects stay on the public Certo Work origin", () => {
@@ -376,4 +400,24 @@ test("create project requests keep the explicit project name instead of the gene
     "Castillo Retail Pilot",
   );
   assert.equal(inferProjectTitleFromRequest("create a project"), "");
+});
+
+test("Wrangler config serves the SPA and API on Workers Static Assets", () => {
+  const wrangler = readFileSync(resolve("wrangler.jsonc"), "utf8");
+  assert.match(wrangler, /"name": "certo-work"/);
+  assert.match(wrangler, /"directory": "\.\/dist\/client"/);
+  assert.match(wrangler, /"not_found_handling": "single-page-application"/);
+  assert.match(wrangler, /"workers_dev": true/);
+  assert.match(wrangler, /"\/api\/\*"/);
+  assert.match(wrangler, /"pattern": "certo\.work"/);
+  assert.match(wrangler, /"custom_domain": true/);
+  assert.match(wrangler, /"observability"/);
+});
+
+test("GitHub Actions deploys the Worker with Wrangler", () => {
+  const workflow = readFileSync(resolve(".github/workflows/deploy-cloudflare.yml"), "utf8");
+  assert.match(workflow, /CLOUDFLARE_API_TOKEN/);
+  assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /wrangler@4\.127\.1 deploy/);
 });

@@ -109,10 +109,11 @@ Never overload the user. Simplify, prioritize, and protect focus.
 This repo is the **Certo Work** web app (Vite + React SPA served by an Express dev server), not the "Gazelle" persona described above. See `README.md` and `package.json` scripts for the canonical commands.
 
 ### Services / commands
-- Package manager is **pnpm** (`pnpm-lock.yaml`). A stray `package-lock.json` also exists — ignore it and use pnpm.
-- Dev server: `pnpm dev` runs `tsx server.ts` (Express + Vite in middleware mode) on `http://localhost:3000`. It serves the SPA and the `/api/*` routes. Do NOT run `vite` directly; the app expects the Express host.
-- Lint: `pnpm lint` · Tests: `pnpm test` (Node's built-in test runner via `tsx --test tests/*.test.ts`) · Build: `pnpm build` (`tsc -b` then `vite build`).
-- During `pnpm install` a "Ignored build scripts: esbuild/@google/genai/protobufjs…" warning is expected and harmless — build, tests, and dev server all work without approving them. Do not run the interactive `pnpm approve-builds`.
+- Package manager is **pnpm** (`pnpm-lock.yaml`). A stray `package-lock.json` also exists — ignore it and use pnpm **on a laptop**. Cloud Agent install uses **`npm ci`** because GitHub Actions does, and `pnpm-lock.yaml` is currently behind `package.json`.
+- Dev server: `pnpm dev` or `npm run dev` runs `tsx server.ts` (Express + Vite in middleware mode) on `http://localhost:3000`. It serves the SPA and the `/api/*` routes. Do NOT run `vite` directly; the app expects the Express host.
+- Lint: `pnpm lint` · Tests: `pnpm test` / `npm test` (Node's built-in test runner via `tsx --test tests/*.test.ts`) · Build: `pnpm build` (`tsc -b` then `vite build`).
+- Production publish is **GitHub Actions → Deploy Cloudflare** on `main` (secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`). Do not `wrangler deploy` as part of environment setup. Do not merge PRs that strip the `certo.work` custom domain from `wrangler.jsonc`.
+- During `pnpm install` a "Ignored build scripts: esbuild/@google/genai/protobufjs…" warning is expected and harmless — build, tests, and the dev server all work without approving them. Do not run the interactive `pnpm approve-builds`.
 
 ### Runtime / auth notes
 - Firebase and OpenAI are **optional in dev**; the app is offline-safe. The server boots even with no secrets: Firebase Admin initializes with `projectId` only, and AI responses fall back to deterministic behavior when `OPENAI_API_KEY` is unset.

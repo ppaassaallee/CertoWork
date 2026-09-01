@@ -73,20 +73,26 @@ async function startServer() {
       }
 
       if (!getApps().length) {
-        const appOptions: any = { projectId: firebaseConfig.projectId };
-        if (credentialObj) appOptions.credential = credentialObj;
-        initializeApp(appOptions);
+        if (!credentialObj) {
+          // firebase-admin falls back to ADC when no credential is passed, which
+          // crashes local `pnpm dev` with NO_ADC_FOUND. The SPA uses the client SDK.
+          console.log("[Firebase Admin] No service account; skipping Admin SDK so local boot does not require ADC");
+        } else {
+          initializeApp({ projectId: firebaseConfig.projectId, credential: credentialObj });
+        }
       }
-      if (firebaseConfig.firestoreDatabaseId) {
-        try {
-          dbAdmin = getFirestore(firebaseConfig.firestoreDatabaseId);
-        } catch (e) {
+      if (getApps().length) {
+        if (firebaseConfig.firestoreDatabaseId) {
+          try {
+            dbAdmin = getFirestore(firebaseConfig.firestoreDatabaseId);
+          } catch (e) {
+            dbAdmin = getFirestore();
+          }
+        } else {
           dbAdmin = getFirestore();
         }
-      } else {
-        dbAdmin = getFirestore();
+        console.log("[Firebase Admin] Initialized Firestore successfully");
       }
-      console.log("[Firebase Admin] Initialized Firestore successfully");
     }
   } catch (e) {
     console.error("[Firebase Admin] Init failed:", e);

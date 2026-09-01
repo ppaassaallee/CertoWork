@@ -25,7 +25,9 @@ import {
   shouldFallbackGoogleSignInToRedirect,
   withAuthTimeout,
 } from './authFlow';
-import { looksLikeEmail, membershipPublicPatch } from './workspaceCollaboration';
+import { inviteShouldCloseOnJoin } from './inviteLifecycle';
+import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
+import { grantsWorkspacePortfolioAccess } from './accessControl';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -107,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setWorkspaceError('');
     try {
       const wsMap = new Map();
+      const memberWorkspaceIds = new Set<string>();
       let lookupSucceeded = false;
 
       // Query owned workspaces
@@ -128,16 +131,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const fetchPromises = snapMemberships.docs.map(async (mDoc) => {
           const mData = mDoc.data();
           const wsId = mData.workspaceId;
-          if (wsId && !wsMap.has(wsId)) {
-            try {
-              const wsRef = doc(db, 'workspaces', wsId);
-              const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Workspace ${wsId} lookup`);
-              if (wsSnap.exists()) {
-                wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
-              }
-            } catch (eGetWs) {
-              console.error(`Failed to load workspace document ${wsId}:`, eGetWs);
+          if (!wsId || mData.status === "removed") return;
+          memberWorkspaceIds.add(wsId);
+          if (wsMap.has(wsId)) return;
+          try {
+            const wsRef = doc(db, 'workspaces', wsId);
+            const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Workspace ${wsId} lookup`);
+            if (wsSnap.exists()) {
+              wsMap.set(wsId, { id: wsId, ...wsSnap.data() });
             }
+          } catch (eGetWs) {
+            console.error(`Failed to load workspace document ${wsId}:`, eGetWs);
           }
         });
         await Promise.allSettled(fetchPromises);
@@ -168,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
               role: (ws as any).roles?.[emailLower] || "member",
               status: "active",
+              portfolioViewer: grantsWorkspacePortfolioAccess((ws as any).roles?.[emailLower] || "member"),
               acceptedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp()
@@ -186,10 +191,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const qInvited = query(collection(db, 'workspace_members'), where('emailLower', '==', emailLower));
           const snapInvited = await withTimeout(getDocs(qInvited), 7_000, 'Workspace invite lookup');
           lookupSucceeded = true;
+          let inviteSnaps: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
+          try {
+            const snapInvites = await withTimeout(
+              getDocs(query(collection(db, 'agent_invites'), where('emailLower', '==', emailLower))),
+              7_000,
+              'Pending invite lookup',
+            );
+            inviteSnaps = snapInvites.docs;
+          } catch (eInviteDocs) {
+            console.error("Failed to load pending invite documents:", eInviteDocs);
+          }
           const invitePromises = snapInvited.docs.map(async (mDoc) => {
             const mData = mDoc.data();
             const wsId = mData.workspaceId;
             if (!wsId || mData.status === 'removed') return;
+            memberWorkspaceIds.add(wsId);
             try {
               const wsRef = doc(db, 'workspaces', wsId);
               const wsSnap = await withTimeout(getDoc(wsRef), 5_000, `Invited workspace ${wsId} lookup`);
@@ -209,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }),
                 role: mData.role || "member",
                 status: "active",
+                portfolioViewer: grantsWorkspacePortfolioAccess(mData.role || "member"),
                 invitedBy: mData.invitedBy || "",
                 acceptedAt: serverTimestamp(),
                 createdAt: serverTimestamp(),
@@ -222,6 +240,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   updatedAt: serverTimestamp(),
                 }), 5_000, `Mark invite ${wsId} accepted`);
               }
+              await Promise.all(inviteSnaps.map(async (inviteDoc) => {
+                const inviteData = inviteDoc.data() as {
+                  status?: string;
+                  inviteType?: string;
+                  workspaceId?: string;
+                };
+                if (!inviteShouldCloseOnJoin(inviteData, wsId)) return;
+                await withTimeout(updateDoc(inviteDoc.ref, {
+                  status: "accepted",
+                  acceptedBy: u.uid,
+                  acceptedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                }), 5_000, `Close invite ${inviteDoc.id}`);
+              }));
             } catch (eInviteWs) {
               console.error(`Failed to accept workspace invite ${wsId}:`, eInviteWs);
             }
@@ -232,7 +264,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      const allWs = Array.from(wsMap.values()) as Workspace[];
+      const allWs = (Array.from(wsMap.values()) as Workspace[]).filter((ws) =>
+        canSeeWorkspaceDocument(ws, u, memberWorkspaceIds),
+      );
       
       if (allWs.length > 0) {
         const storedId = localStorage.getItem('activeWorkspaceId');
@@ -250,6 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const memberId = `${ws.id}_${u.uid}`;
             const memberRef = doc(db, 'workspace_members', memberId);
             const isOwner = ws.ownerId === u.uid;
+            const role = isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member");
             
             await withTimeout(setDoc(memberRef, {
               id: memberId,
@@ -257,9 +292,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               userId: u.uid,
               email: u.email || "",
               emailLower: (u.email || "").toLowerCase(),
-              role: isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member"),
+              role,
               status: "active",
-              ...(isOwner ? { portfolioViewer: true } : {}),
+              portfolioViewer: grantsWorkspacePortfolioAccess(role),
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {
@@ -332,14 +367,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       if (u) {
         setAuthError('');
-        const storedId = localStorage.getItem('activeWorkspaceId');
-        if (storedId) {
-          setWorkspaceState((current) => current || {
-            id: storedId,
-            name: localStorage.getItem('activeWorkspaceName') || 'Workspace',
-            ownerId: u.uid,
-          });
-        }
         setLoading(false);
         setWorkspaceLoading(true);
         try {

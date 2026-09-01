@@ -1,0 +1,39 @@
+name: Deploy Firestore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firestore.indexes.json
+      - firebase.json
+      - .firebaserc
+      - .github/workflows/deploy-firestore.yml
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy rules and indexes
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp.json"
+          elif [ -z "$FIREBASE_TOKEN" ]; then
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              echo "Add repo secret FIREBASE_TOKEN (firebase login:ci) or FIREBASE_SERVICE_ACCOUNT (JSON)."
+              exit 1
+            fi
+            echo "Skipping Firestore deploy; no FIREBASE_TOKEN or FIREBASE_SERVICE_ACCOUNT secret."
+            exit 0
+          fi
+          npx --yes firebase-tools@14.27.0 deploy --only firestore --project gen-lang-client-0277783597 --non-interactive

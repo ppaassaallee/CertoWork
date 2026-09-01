@@ -143,19 +143,34 @@ function memberSearchText(member: WorkspaceMember) {
   };
 }
 
-export function memberMatchesShareAlias(member: WorkspaceMember, alias: string) {
+const SHARE_ALIAS_SYNONYMS: Record<string, string[]> = {
+  regina: ["regine", "reginaguardia"],
+  nico: ["nicolas", "nicholas"],
+};
+
+function expandedAliasNeedles(alias: string) {
   const needle = alias.trim().toLowerCase();
-  if (!needle) return false;
+  if (!needle) return [];
+  const related = Object.entries(SHARE_ALIAS_SYNONYMS).flatMap(([canonical, synonyms]) =>
+    canonical === needle || synonyms.includes(needle) ? [canonical, ...synonyms] : [],
+  );
+  return unique([needle, ...related]);
+}
+
+export function memberMatchesShareAlias(member: WorkspaceMember, alias: string) {
+  const needles = expandedAliasNeedles(alias);
+  if (!needles.length) return false;
   const text = memberSearchText(member);
   const words = text.display.split(/\s+/).filter(Boolean);
-  return (
-    text.alias === needle ||
-    text.alias.startsWith(needle) ||
-    words[0] === needle ||
-    words.includes(needle) ||
-    text.local === needle ||
-    text.local.startsWith(`${needle}.`) ||
-    text.local.startsWith(needle)
+  return needles.some(
+    (needle) =>
+      text.alias === needle ||
+      text.alias.startsWith(needle) ||
+      words[0] === needle ||
+      words.includes(needle) ||
+      text.local === needle ||
+      text.local.startsWith(`${needle}.`) ||
+      text.local.startsWith(needle),
   );
 }
 

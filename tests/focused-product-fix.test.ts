@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isProjectConversation, isStandaloneConversation } from "../src/lib/conversationScope";
-import { inviteActivationPath, inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../src/lib/inviteLifecycle";
+import { inviteActivationPath, inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteShouldCloseOnJoin, inviteWasConsumed } from "../src/lib/inviteLifecycle";
 import { kanbanColumnForStatus, statusForKanbanColumn } from "../src/lib/kanbanBoard";
 import { canDeleteProject } from "../src/lib/projectPermissions";
 import {
@@ -48,8 +48,14 @@ test("invite tokens expire after 14 days and used invites are not reusable", () 
   assert.equal(inviteDirectoryUrl("abc"), "https://certo.work/invite/abc");
   assert.equal(inviteIsUsable({ status: "pending" }), true);
   assert.equal(inviteIsUsable({ status: "accepted" }), false);
+  assert.equal(inviteWasConsumed({ status: "accepted" }), true);
+  assert.equal(inviteWasConsumed({ status: "revoked" }), true);
+  assert.equal(inviteIsExpired(null), false);
   assert.equal(inviteIsExpired({ createdAt: Date.now() - 15 * 24 * 60 * 60 * 1000 }), true);
   assert.equal(inviteIsExpired({ expiresAt: Date.now() + 60_000 }), false);
+  assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "ws-1", inviteType: "workspace_member" }, "ws-1"), true);
+  assert.equal(inviteShouldCloseOnJoin({ status: "accepted", workspaceId: "ws-1" }, "ws-1"), false);
+  assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "other" }, "ws-1"), false);
 });
 
 test("home recency keeps six recent projects", () => {
@@ -118,7 +124,12 @@ test("project Docs uses a compact structured panel instead of raw browser contro
   assert.match(docsBlock, /do-docs-compose/);
   assert.match(docsBlock, /do-docs-drive/);
   assert.match(docsBlock, /do-docs-file-button/);
+  assert.match(docsBlock, /data-testid="project-docs-file-input"/);
   assert.equal(docsBlock.includes("Optional Google Drive folder"), false);
   assert.equal(docsBlock.includes("OneDrive connector has not been configured"), false);
   assert.match(css, /\.do-docs-compose[\s\S]*height: 36px/);
+  const fileButtonCss = css.slice(css.indexOf(".do-docs-file-button {"));
+  assert.match(fileButtonCss, /position: relative/);
+  assert.match(fileButtonCss, /inset: 0/);
+  assert.doesNotMatch(fileButtonCss.slice(0, 600), /pointer-events:\s*none/);
 });

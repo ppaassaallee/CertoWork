@@ -14,6 +14,7 @@ test("mobile core keeps Home, My Work, Projects, and Notes", () => {
   assert.equal(mobileCoreTab("/home"), "home");
   assert.equal(mobileCoreTab("/my-work"), "my-work");
   assert.equal(mobileCoreTab("/projects"), "projects");
+  assert.equal(mobileCoreTab("/notes"), "notes");
   assert.equal(mobileCoreTab("/work/projects/abc/notes"), "notes");
   assert.equal(mobileCoreTab("/settings"), null);
 });
@@ -43,7 +44,9 @@ test("mobile core hides advanced chrome in the live shell", () => {
   assert.match(workspace, /mobileIds/);
   assert.match(workspace, /talk-odysseus/);
   assert.match(workspace, /header-settings/);
+  assert.match(workspace, /header-collab/);
   assert.match(workspace, /"nav-settings"/);
+  assert.match(workspace, /"nav-collab"/);
   assert.doesNotMatch(
     workspace,
     /do-nav-admin do-mobile-advanced/,

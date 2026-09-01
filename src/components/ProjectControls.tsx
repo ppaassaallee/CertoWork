@@ -144,12 +144,14 @@ export function MultiAssigneePicker({
   selectedNames = [],
   onChange,
   label = "Assignees",
+  compact = false,
 }: {
   members: AssignableMember[];
   selectedIds?: string[];
   selectedNames?: string[];
   onChange: (ids: string[], names: string[]) => void;
   label?: string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -218,7 +220,7 @@ export function MultiAssigneePicker({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`${label}: ${selected.length} selected`}
-        className="cw-multi-assignee-trigger"
+        className={`cw-multi-assignee-trigger${compact ? " is-avatars" : ""}`}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -227,16 +229,28 @@ export function MultiAssigneePicker({
         ref={triggerRef}
         type="button"
       >
-        <Users size={12} />
-        <span>
-          {selected.length
-            ? selected
-                .slice(0, 2)
-                .map((member) => `${memberAvatar(member)} ${memberName(member)}`)
-                .join(", ")
-            : "Unassigned"}
-          {selected.length > 2 ? ` +${selected.length - 2}` : ""}
-        </span>
+        {compact ? (
+          selected.length ? (
+            selected.slice(0, 3).map((member) => (
+              <em aria-hidden="true" key={member.id}>{memberAvatar(member)}</em>
+            ))
+          ) : (
+            <em className="is-empty" aria-hidden="true">+</em>
+          )
+        ) : (
+          <>
+            <Users size={12} />
+            <span>
+              {selected.length
+                ? selected
+                    .slice(0, 2)
+                    .map((member) => `${memberAvatar(member)} ${memberName(member)}`)
+                    .join(", ")
+                : "Unassigned"}
+              {selected.length > 2 ? ` +${selected.length - 2}` : ""}
+            </span>
+          </>
+        )}
       </button>
       {open &&
         createPortal(

@@ -1,3 +1,5 @@
+import { inviteIsUsable, inviteStatus, inviteWasConsumed } from "./inviteLifecycle";
+
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
 export type WorkspaceMember = {
@@ -36,6 +38,30 @@ export const WORKSPACE_ROLES: Array<{ value: WorkspaceRole; label: string; help:
 
 export function canCreateWorkspace(count: number) {
   return count < WORKSPACE_LIMIT;
+}
+
+export function workspaceMemberEmails(workspace: { members?: unknown } | null | undefined) {
+  if (!workspace || !Array.isArray(workspace.members)) return [];
+  return workspace.members
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function canSeeWorkspaceDocument(
+  workspace: { id?: string; ownerId?: string; members?: unknown } | null | undefined,
+  user: { uid?: string; email?: string | null } | null | undefined,
+  memberWorkspaceIds: Iterable<string> = [],
+) {
+  if (!workspace || !user?.uid) return false;
+  if (workspace.ownerId && workspace.ownerId === user.uid) return true;
+  const email = normalizeInviteEmail(user.email || "");
+  if (email && workspaceMemberEmails(workspace).includes(email)) return true;
+  const workspaceId = String(workspace.id || "");
+  if (!workspaceId) return false;
+  for (const id of memberWorkspaceIds) {
+    if (id === workspaceId) return true;
+  }
+  return false;
 }
 
 export function normalizeInviteEmail(value: string) {
@@ -80,13 +106,22 @@ export function memberPublicLabel(member: Pick<WorkspaceMember, "alias" | "displ
 
 export function memberManageLabel(
   member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
+  canSeeEmail = true,
 ) {
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
-    normalizeInviteEmail(member.email || member.emailLower || "") ||
-    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Teammate")
+    (canSeeEmail ? normalizeInviteEmail(member.email || member.emailLower || "") : "") ||
+    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Needs alias")
   );
+}
+
+export function memberVisibleEmail(
+  member: Pick<WorkspaceMember, "email" | "emailLower">,
+  canSeeEmail = false,
+) {
+  if (!canSeeEmail) return "";
+  return normalizeInviteEmail(member.email || member.emailLower || "");
 }
 
 export function inviteManageLabel(invite: {
@@ -112,6 +147,25 @@ export function isInvitedMember(
   );
 }
 
+export function isJoinedWorkspaceMember(
+  member: Pick<WorkspaceMember, "status" | "userId">,
+) {
+  const status = String(member.status || "active").toLowerCase();
+  if (["removed", "rejected", "revoked", "invited", "pending"].includes(status)) return false;
+  const userId = String(member.userId || "");
+  return Boolean(userId) && !userId.startsWith("pending:");
+}
+
+export function joinedWorkspaceEmails(members: WorkspaceMember[] = []) {
+  const emails = new Set<string>();
+  for (const member of members) {
+    if (!isJoinedWorkspaceMember(member)) continue;
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    if (email) emails.add(email);
+  }
+  return emails;
+}
+
 export function activeDirectoryMembers(members: WorkspaceMember[] = []) {
   return members.filter((member) => isAssignableMember(member) && !isInvitedMember(member));
 }
@@ -125,14 +179,34 @@ export type PendingInviteRow = {
   deliveryStatus?: string;
 };
 
+function preferredUsableInvite(invites: Array<Record<string, any>> = []) {
+  const usable = invites.filter((invite) => inviteIsUsable(invite));
+  return (
+    usable.find((invite) => String(invite.inviteToken || "").trim()) ||
+    usable[0] ||
+    null
+  );
+}
+
 export function pendingInviteDirectory(
   members: WorkspaceMember[] = [],
   invites: Array<Record<string, any>> = [],
 ): PendingInviteRow[] {
-  const rows = new Map<string, PendingInviteRow>();
+  const joinedEmails = joinedWorkspaceEmails(members);
+  const invitesByEmail = new Map<string, Array<Record<string, any>>>();
   for (const invite of invites) {
     const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
     if (!email) continue;
+    const current = invitesByEmail.get(email) || [];
+    current.push(invite);
+    invitesByEmail.set(email, current);
+  }
+  const rows = new Map<string, PendingInviteRow>();
+  for (const [email, emailInvites] of invitesByEmail) {
+    if (joinedEmails.has(email)) continue;
+    if (emailInvites.some((invite) => inviteWasConsumed(invite) && inviteStatus(invite) === "accepted")) continue;
+    const invite = preferredUsableInvite(emailInvites);
+    if (!invite) continue;
     rows.set(email, {
       key: String(invite.id || email),
       email,
@@ -145,13 +219,14 @@ export function pendingInviteDirectory(
   for (const member of members) {
     if (!isInvitedMember(member)) continue;
     const email = normalizeInviteEmail(member.email || member.emailLower || "");
-    if (!email) continue;
+    if (!email || joinedEmails.has(email)) continue;
     const current = rows.get(email);
     if (current) {
       current.member = member;
       current.role = current.role || member.role;
       continue;
     }
+    if (invitesByEmail.has(email)) continue;
     rows.set(email, {
       key: member.id || email,
       email,

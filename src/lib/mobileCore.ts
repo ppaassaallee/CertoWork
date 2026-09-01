@@ -33,6 +33,7 @@ export function mobileCoreFallbackPath(pathname: string): string | null {
 export function mobileCoreTab(pathname: string): (typeof MOBILE_CORE_TABS)[number]["id"] | null {
   const lens = resolveDelivereeLens(pathname);
   if (lens.kind === "settings") return null;
+  if (lens.kind === "notes") return "notes";
   if (lens.kind === "my-work") return "my-work";
   if (lens.kind === "work") return "projects";
   if (lens.kind === "project") return lens.tab === "notes" ? "notes" : "projects";

@@ -1,6 +1,13 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
+import {
+  collabStatusPayload,
+  isChatwootProxyPath,
+  isCertoCollabBrandPath,
+  provisionCollabSso,
+  proxyChatwoot,
+} from "./collab.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1088,6 +1095,7 @@ function capabilities(env) {
         ? "OneDrive connector credentials are present."
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
+    collab: collabStatusPayload(env),
   };
 }
 
@@ -1318,6 +1326,58 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/api/collab/status") {
+      return json(collabStatusPayload(env, url.origin));
+    }
+    if (request.method === "POST" && url.pathname === "/api/collab/sso") {
+      try {
+        const body = await readJson(request);
+        await authorize(request, body, env);
+        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: false });
+        return json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
+        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
+        return json(
+          {
+            error: message,
+            configured: collabStatusPayload(env, url.origin).configured,
+          },
+          status,
+        );
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/api/collab/rooms") {
+      try {
+        const body = await readJson(request);
+        await authorize(request, body, env);
+        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: true });
+        return json(result);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
+        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
+        return json(
+          {
+            error: message,
+            configured: collabStatusPayload(env, url.origin).configured,
+          },
+          status,
+        );
+      }
+    }
+    if (request.method === "GET" && isCertoCollabBrandPath(url.pathname)) {
+      const mark = new URL("/certo-mark.svg", request.url);
+      return serveAsset(
+        new Request(mark.toString(), {
+          method: "GET",
+          headers: { accept: "image/svg+xml" },
+        }),
+        env,
+      );
+    }
+    if (isChatwootProxyPath(url.pathname)) {
+      return proxyChatwoot(request, env);
     }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {
