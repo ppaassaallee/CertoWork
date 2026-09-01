@@ -1826,6 +1826,10 @@ a {
 .do-icon-button:hover {
   background: var(--surface-1);
 }
+.do-icon-button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 .do-notice {
   position: absolute;
   z-index: 35;
@@ -14786,10 +14790,21 @@ a {
 }
 .do-shell.is-mobile-core .do-items-mode,
 .do-shell.is-mobile-core .do-items-helpbar,
-.do-shell.is-mobile-core .do-nav-admin,
 .do-shell.is-mobile-core .do-console-insights,
 .do-shell.is-mobile-core .do-console-ask-grid {
   display: none !important;
+}
+.do-shell.is-mobile-core .do-sidebar {
+  bottom: calc(58px + env(safe-area-inset-bottom));
+}
+.do-shell.is-mobile-core.is-sidebar-collapsed .do-nav-admin {
+  display: grid;
+}
+.do-shell.is-mobile-core .do-panel {
+  width: 100%;
+  max-width: none;
+  border-left: 0;
+  bottom: calc(58px + env(safe-area-inset-bottom));
 }
 @media (max-width: 760px) {
   .do-mobile-advanced {

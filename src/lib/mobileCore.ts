@@ -18,7 +18,6 @@ export function mobileCoreFallbackPath(pathname: string): string | null {
   if (
     lens.kind === "agents" ||
     lens.kind === "approvals" ||
-    lens.kind === "settings" ||
     lens.kind === "feedback" ||
     lens.kind === "invoices" ||
     lens.kind === "more"
@@ -31,8 +30,9 @@ export function mobileCoreFallbackPath(pathname: string): string | null {
   return null;
 }
 
-export function mobileCoreTab(pathname: string): (typeof MOBILE_CORE_TABS)[number]["id"] {
+export function mobileCoreTab(pathname: string): (typeof MOBILE_CORE_TABS)[number]["id"] | null {
   const lens = resolveDelivereeLens(pathname);
+  if (lens.kind === "settings") return null;
   if (lens.kind === "notes") return "notes";
   if (lens.kind === "my-work") return "my-work";
   if (lens.kind === "work") return "projects";
