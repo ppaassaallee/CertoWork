@@ -46,7 +46,7 @@ export function priorityRank(value: unknown, isOneThing = false) {
 
 export function isTodayTask(task: any, today = localDateKey(new Date())) {
   if (isClosed(task?.status)) return false;
-  if (Boolean(task?.isOneThing)) return true;
+  if (task?.isOneThing) return true;
   if (dateKey(task?.dueDate) === today) return true;
   return normalizeTimeSector(task?.timeSector) === "today";
 }

@@ -1620,32 +1620,6 @@ export function WorkItemsCenter({
     );
   };
 
-  const startColumnResize = (column: ItemColumnKey, event: ReactPointerEvent<HTMLSpanElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const handle = event.currentTarget;
-    const startX = event.clientX;
-    const startWidth = itemColumnPixels[column] || defaultItemColumnPixels[column];
-    handle.setPointerCapture(event.pointerId);
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    const onMove = (move: PointerEvent) => {
-      move.preventDefault();
-      updateItemColumnWidth(column, startWidth + (move.clientX - startX));
-    };
-    const onUp = () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      handle.releasePointerCapture(event.pointerId);
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
-    };
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
-  };
-
   const startKanbanColumnResize = (columnKey: string, event: ReactPointerEvent<HTMLSpanElement>) => {
     event.preventDefault();
     event.stopPropagation();
