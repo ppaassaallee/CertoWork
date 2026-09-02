@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  allowedParentItems,
+  allowedParentKinds,
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
+  parentLinkPatch,
   sortHierarchyForest,
   visibleParentId,
 } from "../src/lib/itemHierarchy";
@@ -101,4 +104,28 @@ test("a nested feature still follows the epic when sorting families", () => {
     sortHierarchyForest(items, byPriority).map((item) => item.id),
     ["e1", "f1", "p1", "e2"],
   );
+});
+
+test("PBIs can only pick epics as parents, and tasks can only pick PBIs", () => {
+  const epic = { id: "e1", title: "Launch", workItemType: "epic", projectId: "p" };
+  const otherEpic = { id: "e2", title: "Platform", workItemType: "epic", projectId: "p" };
+  const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
+  const task = { id: "t1", title: "Build", workItemType: "task", projectId: "p" };
+  const items = [epic, otherEpic, pbi, task];
+
+  assert.deepEqual(allowedParentKinds("epic"), []);
+  assert.deepEqual(allowedParentKinds("pbi"), ["epic"]);
+  assert.deepEqual(allowedParentKinds("task"), ["pbi", "story"]);
+  assert.deepEqual(allowedParentItems(pbi, items).map((item) => item.id), ["e1", "e2"]);
+  assert.deepEqual(allowedParentItems(epic, items), []);
+  assert.deepEqual(allowedParentItems(task, items).map((item) => item.id), ["p1"]);
+  assert.deepEqual(parentLinkPatch(epic), { parentId: "e1", epicId: "e1", featureId: null });
+  assert.deepEqual(parentLinkPatch(null), { parentId: null, epicId: null, featureId: null });
+});
+
+test("epics stored as type=epic still appear as PBI parents, and other projects are a fallback", () => {
+  const typedEpic = { id: "e3", title: "Growth", type: "epic", projectId: "other" };
+  const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
+  const otherPbi = { id: "p2", title: "Other PBI", workItemType: "pbi", projectId: "p" };
+  assert.deepEqual(allowedParentItems(pbi, [typedEpic, otherPbi]).map((item) => item.id), ["e3"]);
 });
