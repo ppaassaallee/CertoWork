@@ -1,5 +1,3 @@
-export type ItemCompare = (left: any, right: any) => number;
-
 export function normalizeItemId(value: unknown): string {
   if (value == null || value === "") return "";
   if (typeof value === "object") {
@@ -79,12 +77,18 @@ export function compareHierarchySiblings(left: any, right: any): number {
   return String(left?.title || "").localeCompare(String(right?.title || ""));
 }
 
-export function sortHierarchySiblings(items: any[], compare: ItemCompare = compareHierarchySiblings): any[] {
+export function sortHierarchySiblings(
+  items: any[],
+  compare: typeof compareHierarchySiblings = compareHierarchySiblings,
+): any[] {
   return [...items].sort(compare);
 }
 
 /** Flatten a forest so each parent keeps its descendants immediately after it. */
-export function sortHierarchyForest(items: any[], compare: ItemCompare = compareHierarchySiblings): any[] {
+export function sortHierarchyForest(
+  items: any[],
+  compare: typeof compareHierarchySiblings = compareHierarchySiblings,
+): any[] {
   const list = [...items];
   const ids = presentItemIds(list);
   const childrenByParent = new Map<string, any[]>();
