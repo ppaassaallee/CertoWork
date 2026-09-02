@@ -1622,6 +1622,7 @@ export function WorkItemsCenter({
         const key = `${item.id}:parent`;
         const open = openAttr === key;
         const allowed = allowedParentKinds(workItemKind(item));
+        if (allowed.length === 0) return null;
         return (
           <div className={`do-item-attr is-parent ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key="parent">
             <button
