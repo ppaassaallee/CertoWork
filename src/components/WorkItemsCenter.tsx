@@ -248,8 +248,8 @@ function itemAttributePresent(
     return Boolean(value) && value !== "Internal";
   }
   if (column === "tags") return tagLabels(item, tags).length > 0;
-  if (column === "work_category") return Boolean(itemWorkCategory(item, projects));
-  if (column === "product_phase") return Boolean(itemProductPhase(item, projects));
+  if (column === "work_category") return Boolean(String(item?.workCategory || "").trim());
+  if (column === "product_phase") return Boolean(String(item?.productPhase || "").trim());
   if (column === "status") return Boolean(canonicalStatus(item));
   if (column === "priority") return priorityValue(item?.priority) !== "N/A";
   if (column === "gtd") return Boolean(gtdActionValue(item));
