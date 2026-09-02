@@ -1,3 +1,4 @@
+import { isTodayTask, priorityRank } from "./appleWidget";
 import type { MyWorkSection } from "./delivereeRoutes";
 import {
   memberMatchesSelection,
@@ -156,7 +157,33 @@ export function filterMyWorkTasks(
   if (section === "inbox") {
     return mine.filter((item) => isMyWorkInboxItem(item, actor, members));
   }
+  if (section === "today") {
+    return mine.filter((item) => isTodayTask(item));
+  }
   return mine.filter((item) => !isWaitingWorkItem(item));
+}
+
+export function todayPlanGroups(items: Array<Record<string, unknown>> = []) {
+  const sorted = [...items].sort((left, right) => {
+    const rank =
+      priorityRank(left?.priority, Boolean(left?.isOneThing)) -
+      priorityRank(right?.priority, Boolean(right?.isOneThing));
+    if (rank) return rank;
+    return String(left?.title || left?.name || "").localeCompare(String(right?.title || right?.name || ""));
+  });
+  const mustFromPriority = sorted
+    .filter((item) => priorityRank(item?.priority, Boolean(item?.isOneThing)) === 1)
+    .slice(0, 2);
+  const mustDos = mustFromPriority.length > 0 ? mustFromPriority : sorted.slice(0, 2);
+  const mustIds = new Set(mustDos.map((item) => String(item.id || "")));
+  const remaining = sorted.filter((item) => !mustIds.has(String(item.id || "")));
+  const shouldFromPriority = remaining
+    .filter((item) => priorityRank(item?.priority, Boolean(item?.isOneThing)) === 2)
+    .slice(0, 8);
+  const shouldDos = shouldFromPriority.length > 0 ? shouldFromPriority : remaining.slice(0, 8);
+  const shouldIds = new Set(shouldDos.map((item) => String(item.id || "")));
+  const couldDos = remaining.filter((item) => !shouldIds.has(String(item.id || "")));
+  return { mustDos, shouldDos, couldDos };
 }
 
 export function needsCreatorAssigneeRestore(

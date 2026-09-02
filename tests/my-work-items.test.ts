@@ -8,6 +8,7 @@ import {
   filterMyWorkTasks,
   isAssignedToActor,
   needsCreatorAssigneeRestore,
+  todayPlanGroups,
   withCreatorAssignee,
 } from "../src/lib/myWorkItems";
 
@@ -146,11 +147,51 @@ test("waiting tab only shows assigned waiting-for items", () => {
   );
 });
 
+test("today tab groups must-dos and should-dos from today's goals", () => {
+  const must = {
+    id: "must",
+    title: "Ship demo",
+    assigneeIds: ["ws_user-alejandro"],
+    priority: "1",
+    dueDate: "2026-09-02",
+    isOneThing: true,
+    status: "todo",
+  };
+  const should = {
+    id: "should",
+    title: "Review copy",
+    assigneeIds: ["ws_user-alejandro"],
+    priority: "2",
+    timeSector: "today",
+    status: "todo",
+  };
+  const later = {
+    id: "later",
+    title: "Next month",
+    assigneeIds: ["ws_user-alejandro"],
+    priority: "1",
+    timeSector: "next_month",
+    status: "todo",
+  };
+  const todayTab = filterMyWorkTasks(
+    [must, should, later],
+    "today",
+    actor,
+    [alejandro],
+  );
+  assert.deepEqual(todayTab.map((item) => item.id).sort(), ["must", "should"]);
+  const plan = todayPlanGroups(todayTab);
+  assert.deepEqual(plan.mustDos.map((item) => item.id), ["must"]);
+  assert.deepEqual(plan.shouldDos.map((item) => item.id), ["should"]);
+});
+
 test("My Work passes a filtered task list instead of the whole workspace", () => {
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
   const helpers = readFileSync(resolve("src/lib/myWorkItems.ts"), "utf8");
   assert.match(workspace, /filterMyWorkTasks/);
   assert.match(workspace, /tasks=\{myWorkTasks\}/);
+  assert.match(workspace, /MyWorkTodayPanel/);
+  assert.match(workspace, /data-testid="my-work-today-tab"/);
   assert.match(workspace, /withCreatorAssignee/);
   assert.match(workspace, /needsCreatorAssigneeRestore/);
   assert.match(workspace, /updateDoc\(doc\(db, "tasks", item\.id\)/);

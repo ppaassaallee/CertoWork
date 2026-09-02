@@ -74,12 +74,15 @@ test("item field picker exposes every backlog field, including Project", () => {
   assert.match(itemViewMemory, /\| "sprint"/);
   assert.match(workItems, /aria-label=\{`Project for \$\{title\(item\)\}`\}/);
   assert.match(workItems, /aria-label=\{`Sprint for \$\{title\(item\)\}`\}/);
+  assert.match(workItems, /data-testid="item-attr-icons"/);
+  assert.match(workItems, /itemAttributePresent/);
+  assert.match(workItems, /const ATTR_ICONS/);
 
   for (const field of expectedFields) {
     assert.match(
       workItems,
-      new RegExp(`itemColumnSet\\.has\\("${field}"\\)`),
-      `list rows must render the ${field} field`,
+      new RegExp(`\\n\\s*${field}:`),
+      `list rows must render the ${field} attribute icon`,
     );
   }
 });
@@ -106,6 +109,13 @@ test("items and project backlog can paste a line-per-PBI list with tabbed subtas
   assert.match(projectSurfaces, /activeProject=\{project\}/);
 });
 
+test("items and project backlog sort families by the parent, not each child", () => {
+  assert.match(workItems, /sortHierarchyForest/);
+  assert.match(workItems, /hierarchyRoot\(item, tasks\)/);
+  assert.match(workItems, /FAMILY_GROUP_BY/);
+  assert.match(workItems, /compareVisibleSiblings/);
+});
+
 test("items list hides unique keys and shows an inline type flag", () => {
   assert.match(workItems, /do-items-type-flag is-\$\{kind\}/);
   assert.match(workItems, /data-testid="item-type-flag"/);
@@ -114,16 +124,20 @@ test("items list hides unique keys and shows an inline type flag", () => {
   assert.doesNotMatch(workItems, /item\.key \? `\$\{workItemLabel/);
 });
 
-test("items and backlog columns can be resized from the header edge", () => {
-  assert.match(workItems, /startColumnResize/);
-  assert.match(workItems, /data-testid="item-column-resizer"/);
-  assert.match(workItems, /cursor = "col-resize"/);
+test("items list shows faded attribute icons instead of field columns", () => {
+  assert.match(workItems, /data-testid="item-attr-icons"/);
+  assert.match(workItems, /do-item-attr/);
+  assert.match(workItems, /is-off/);
+  assert.doesNotMatch(workItems, /data-testid="item-column-resizer"/);
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(css, /\.do-item-attr\.is-off/);
+  assert.match(css, /opacity: 0\.16/);
 });
 
 test("items list CSS is Asana-like: inline flags, pills, and no boxed fields", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(css, /\.do-items-title \{\s*display: flex/);
-  assert.match(css, /\.do-items-col-resizer/);
+  assert.match(css, /\.do-item-attrs/);
   assert.match(css, /\.do-items-status-pill/);
   assert.match(css, /\.do-items-section-head/);
   assert.match(css, /\.do-items-row select,\s*\.do-items-row input \{\s*[\s\S]*?border: 0;/);
@@ -181,10 +195,10 @@ test("any item including epics can be deleted with a grey-to-red bin", () => {
   assert.match(workItems, /archivedAt:/);
   assert.match(workItems, /renderDeleteButton\(item\)/);
   assert.match(workItems, /renderDeleteButton\(selectedItem\)/);
-  assert.match(workItems, /renderFieldCells\(item\)/);
+  assert.match(workItems, /renderAttributeIcons\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"/);
   assert.match(workItems, /renderTitleCell\(item, kind, childCount/);
-  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderFieldCells\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderAttributeIcons\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderDeleteButton\(item\)/);
   assert.doesNotMatch(workItems, /deleteDoc/);
   assert.match(css, /\.do-items-delete \{[\s\S]*?color: var\(--text-muted\)/);

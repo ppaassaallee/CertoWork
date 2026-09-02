@@ -95,6 +95,7 @@ test("closed and non-today tasks stay out of the widget", () => {
   assert.equal(isTodayTask({ dueDate: "2026-08-25", status: "done" }, "2026-08-25"), false);
   assert.equal(isTodayTask({ timeSector: "this-week" }, "2026-08-25"), false);
   assert.equal(isTodayTask({ timeSector: "today" }, "2026-08-25"), true);
+  assert.equal(isTodayTask({ isOneThing: true, status: "todo" }, "2026-08-25"), true);
   assert.equal(priorityRank("P1"), 1);
   assert.equal(priorityRank("medium"), 2);
 });

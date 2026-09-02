@@ -7,7 +7,7 @@ export type MoreSection =
   | "warroom"
   | "knowledge"
   | "workspace";
-export type MyWorkSection = "assigned" | "inbox" | "waiting";
+export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today";
 export type AgentsSection = "home" | "automations" | "activity";
 
 export type FeedbackSection = "submit" | "queue";
@@ -125,6 +125,9 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   if (path === "/my-work/waiting") {
     return { kind: "my-work", section: "waiting" };
   }
+  if (path === "/my-work/today") {
+    return { kind: "my-work", section: "today" };
+  }
 
   if (path === "/notes" || path.startsWith("/notes/")) {
     return { kind: "notes" };
@@ -174,6 +177,7 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "my-work") {
     if (lens.section === "inbox") return "/my-work/inbox";
     if (lens.section === "waiting") return "/my-work/waiting";
+    if (lens.section === "today") return "/my-work/today";
     return "/my-work";
   }
   if (lens.kind === "agents") {
