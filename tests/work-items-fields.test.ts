@@ -43,6 +43,7 @@ test("My Work uses the same unscoped item center as project backlog", () => {
   assert.ok(myWork, "My Work shell is missing WorkItemsCenter");
   assert.match(myWork[0], /activeProject=\{null\}/);
   assert.match(myWork[0], /tasks=\{myWorkTasks\}/);
+  assert.match(myWork[0], /hierarchyTasks=\{tasks\}/);
   assert.match(myWork[0], /tags=\{categories\}/);
   assert.match(myWork[0], /onCreateSprint=\{createSprint\}/);
 
@@ -77,6 +78,11 @@ test("item field picker exposes every backlog field, including Project", () => {
   assert.match(workItems, /data-testid="item-attr-icons"/);
   assert.match(workItems, /itemAttributePresent/);
   assert.match(workItems, /const ATTR_ICONS/);
+  assert.match(workItems, /data-testid="item-attr-parent"/);
+  assert.match(workItems, /data-testid="item-assign-parent"/);
+  assert.match(workItems, /data-testid="item-parent-field"/);
+  assert.match(workItems, /hierarchyTasks/);
+  assert.match(workItems, /allowedParentItems/);
 
   for (const field of expectedFields) {
     assert.match(

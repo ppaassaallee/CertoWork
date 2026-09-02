@@ -122,3 +122,58 @@ export function sortHierarchyForest(
   }
   return ordered;
 }
+
+export type HierarchyKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
+
+export function hierarchyKind(item: any): HierarchyKind {
+  const structuralValue = String(
+    item?.workItemType || item?.taskType || item?.issueType || item?.kind || item?.type || "",
+  ).toLowerCase();
+  const legacyItemType = String(item?.itemType || "").toLowerCase();
+  const value = structuralValue || legacyItemType;
+  if (value.includes("epic")) return "epic";
+  if (value.includes("feature")) return "feature";
+  if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
+  if (value.includes("story")) return "story";
+  if (value.includes("bug")) return "bug";
+  if (value === "task" || value.includes("project_task")) return "task";
+  return "pbi";
+}
+
+export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[] {
+  if (kind === "epic") return [];
+  if (kind === "feature") return ["epic"];
+  if (kind === "pbi" || kind === "story") return ["epic"];
+  if (kind === "task" || kind === "bug") return ["pbi", "story"];
+  return ["pbi", "story", "task", "bug"];
+}
+
+export function parentLinkPatch(parent: any | null) {
+  if (!parent) return { parentId: null, epicId: null, featureId: null };
+  const kind = hierarchyKind(parent);
+  const id = normalizeItemId(parent?.id) || null;
+  return {
+    parentId: id,
+    epicId: kind === "epic" ? id : parent?.epicId || null,
+    featureId: kind === "feature" ? id : parent?.featureId || null,
+  };
+}
+
+export function allowedParentItems(child: any, items: any[] = []): any[] {
+  const allowed = new Set(allowedParentKinds(hierarchyKind(child)));
+  if (!allowed.size) return [];
+  const childId = normalizeItemId(child?.id);
+  const projectId = normalizeItemId(child?.projectId);
+  const kindMatches = items.filter((item) => {
+    const id = normalizeItemId(item?.id);
+    if (!id || id === childId) return false;
+    return allowed.has(hierarchyKind(item));
+  });
+  const sameProject = projectId
+    ? kindMatches.filter((item) => {
+        const itemProject = normalizeItemId(item?.projectId);
+        return !itemProject || itemProject === projectId;
+      })
+    : kindMatches;
+  return sortHierarchySiblings(sameProject.length ? sameProject : kindMatches);
+}

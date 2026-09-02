@@ -16,6 +16,7 @@ import {
   Compass,
   Flag,
   Folder,
+  GitBranch,
   Globe,
   GripVertical,
   Layers,
@@ -89,10 +90,14 @@ import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
+  allowedParentItems,
+  allowedParentKinds,
   compareHierarchySiblings,
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
+  normalizeItemId,
+  parentLinkPatch,
   sortHierarchyForest,
   sortHierarchySiblings,
 } from "../lib/itemHierarchy";
@@ -125,7 +130,10 @@ type SortBy = ItemSortBy;
 type Props = {
   activeProject: any | null;
   projects: any[];
+  /** Items shown in the list (My Work may pass a filtered subset). */
   tasks: any[];
+  /** Full item pool for parent assignment. Defaults to `tasks`. */
+  hierarchyTasks?: any[];
   tags?: TagLike[];
   workspaceMembers?: Array<{ id: string; displayName?: string; email?: string; emailLower?: string; status?: string; userId?: string }>;
   sprints?: SprintRecord[];
@@ -385,7 +393,7 @@ function itemProductPhase(item: any, projects: any[]) {
 }
 
 function workItemKind(item: any): WorkItemKind {
-  const structuralValue = String(item?.workItemType || item?.taskType || item?.issueType || item?.kind || "").toLowerCase();
+  const structuralValue = String(item?.workItemType || item?.taskType || item?.issueType || item?.kind || item?.type || "").toLowerCase();
   const legacyItemType = String(item?.itemType || "").toLowerCase();
   const value = structuralValue || (workTypes.includes(legacyItemType as WorkItemKind) ? legacyItemType : "");
   if (value.includes("epic")) return "epic";
@@ -601,6 +609,7 @@ export function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
+  hierarchyTasks,
   tags = [],
   workspaceMembers = [],
   sprints = [],
@@ -695,6 +704,7 @@ export function WorkItemsCenter({
   const bounceTimer = useRef<number | null>(null);
   const [boardViewers, setBoardViewers] = useState<KanbanPresence[]>([]);
   const [openAttr, setOpenAttr] = useState<string | null>(null);
+  const [parentSearch, setParentSearch] = useState("");
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
@@ -969,14 +979,23 @@ export function WorkItemsCenter({
     [projects, tags, tasks],
   );
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
+  const parentPool = hierarchyTasks?.length ? hierarchyTasks : tasks;
+  const findPoolItem = (id: string) => {
+    const key = normalizeItemId(id);
+    return parentPool.find((candidate) => normalizeItemId(candidate?.id) === key) || null;
+  };
   const parentOptions = useMemo(() => {
-    const projectId = newProjectId || baseProjectId;
-    const sameProject = tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId);
-    if (newType === "epic") return [];
-    if (newType === "feature") return sameProject.filter((item) => workItemKind(item) === "epic");
-    if (newType === "subtask") return sameProject.filter((item) => ["pbi", "story", "task", "bug"].includes(workItemKind(item)));
-    return sameProject.filter((item) => ["epic", "feature"].includes(workItemKind(item)));
-  }, [baseProjectId, newProjectId, newType, tasks]);
+    return allowedParentItems(
+      { id: "__new__", workItemType: newType, projectId: newProjectId || baseProjectId },
+      parentPool,
+    );
+  }, [baseProjectId, newProjectId, newType, parentPool]);
+
+  useEffect(() => {
+    if (newParentId && !parentOptions.some((item) => item.id === newParentId)) {
+      setNewParentId("");
+    }
+  }, [newParentId, parentOptions]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -1105,15 +1124,13 @@ export function WorkItemsCenter({
     const inheritedClientEntity = String(
       project?.clientEntity || project?.client || "",
     );
-    const parent = tasks.find((item) => item.id === newParentId);
-    const parentKind = parent ? workItemKind(parent) : null;
+    const parent = findPoolItem(newParentId);
+    const links = parentLinkPatch(parent);
     await onAddTask(projectId, newTitle.trim(), "backlog", {
       workItemType: newType,
       itemType: newType,
       taskType: newType,
-      parentId: newParentId || null,
-      epicId: parentKind === "epic" ? newParentId : parent?.epicId || null,
-      featureId: parentKind === "feature" ? newParentId : parent?.featureId || null,
+      ...links,
       deliveryEntity: inheritedDeliveryEntity,
       bpo: inheritedDeliveryEntity,
       clientEntity: inheritedClientEntity,
@@ -1525,8 +1542,117 @@ export function WorkItemsCenter({
     );
   };
 
+  const assignParent = (item: any, nextId: string) => {
+    const parent = nextId ? findPoolItem(nextId) : null;
+    const allowed = allowedParentKinds(workItemKind(item));
+    if (nextId && parent && !allowed.includes(workItemKind(parent))) return;
+    if (nextId && !parent) return;
+    onUpdateTask(item.id, parentLinkPatch(parent));
+    setOpenAttr(null);
+    setParentSearch("");
+  };
+
+  const renderParentEditor = (item: any) => {
+    const kind = workItemKind(item);
+    const allowed = allowedParentKinds(kind);
+    if (allowed.length === 0) {
+      return <span className="do-parent-hint">Epics sit at the top of the tree.</span>;
+    }
+    const candidates = allowedParentItems(item, parentPool);
+    const current = parentId(item);
+    const currentItem = current ? findPoolItem(current) : null;
+    const options = currentItem && !candidates.some((candidate) => candidate.id === currentItem.id)
+      ? [currentItem, ...candidates]
+      : candidates;
+    const needle = parentSearch.trim().toLowerCase();
+    const visible = (needle
+      ? options.filter((candidate) => `${workItemLabel(workItemKind(candidate))} ${title(candidate)}`.toLowerCase().includes(needle))
+      : options
+    ).slice(0, 40);
+    const labels = allowed.map((value) => workItemLabel(value)).join(" or ");
+    return (
+      <div className="do-parent-picker" data-testid="item-parent-field">
+        <input
+          aria-label={`Search ${labels} parent`}
+          onChange={(event) => setParentSearch(event.target.value)}
+          placeholder={`Search ${labels}…`}
+          value={parentSearch}
+        />
+        <div className="do-parent-options" role="listbox" aria-label={`${labels} parents`}>
+          <button
+            className={!current ? "is-active" : ""}
+            onClick={() => assignParent(item, "")}
+            type="button"
+          >
+            No parent
+          </button>
+          {visible.map((candidate) => (
+            <button
+              aria-selected={candidate.id === current}
+              className={candidate.id === current ? "is-active" : ""}
+              key={candidate.id}
+              onClick={() => assignParent(item, candidate.id)}
+              role="option"
+              type="button"
+            >
+              <span className="do-parent-kind">{workItemLabel(workItemKind(candidate))}</span>
+              <span>{title(candidate)}</span>
+            </button>
+          ))}
+        </div>
+        {options.length === 0 && (
+          <small>No {labels} yet. Create one, then assign it here.</small>
+        )}
+        {options.length > 0 && visible.length === 0 && (
+          <small>No matching {labels}. Try another name.</small>
+        )}
+        {options.length > visible.length && needle === "" && (
+          <small>Showing {visible.length} of {options.length}. Type to find the rest.</small>
+        )}
+      </div>
+    );
+  };
+
   const renderAttributeIcons = (item: any) => (
     <div className="do-item-attrs" data-testid="item-attr-icons">
+      {(() => {
+        const filled = Boolean(parentId(item));
+        const parentItem = parentId(item) ? findPoolItem(parentId(item)) : null;
+        const caption = parentItem ? title(parentItem) : "No parent";
+        const key = `${item.id}:parent`;
+        const open = openAttr === key;
+        const allowed = allowedParentKinds(workItemKind(item));
+        if (allowed.length === 0) return null;
+        return (
+          <div className={`do-item-attr is-parent ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key="parent">
+            <button
+              aria-expanded={open}
+              aria-label={`Parent for ${title(item)}${filled ? `: ${caption}` : " (not set)"}`}
+              className="do-item-attr-btn"
+              data-testid="item-attr-parent"
+              onClick={(event) => {
+                event.stopPropagation();
+                setParentSearch("");
+                setOpenAttr(open ? null : key);
+              }}
+              title={allowed.length === 0 ? "Epics have no parent" : `Parent: ${caption}`}
+              type="button"
+            >
+              <GitBranch size={13} />
+            </button>
+            {open && (
+              <div
+                className="do-item-attr-pop"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <strong>Parent</strong>
+                {renderParentEditor(item)}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {attributeColumns.map((column) => {
         const filled = itemAttributePresent(item, column, projects, tags);
         const caption = itemAttributeCaption(item, column, projects, tags, sprints);
@@ -1798,6 +1924,24 @@ export function WorkItemsCenter({
               selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)}
             />
           </span>
+          {allowedParentKinds(kind).length > 0 && (
+            <button
+              aria-label={`Assign parent for ${title(item)}`}
+              className={`do-kanban-parent ${parentId(item) ? "is-on" : ""}`}
+              data-testid="kanban-assign-parent"
+              onClick={() => {
+                onSelectItem(item.id);
+                setParentSearch("");
+                window.setTimeout(() => {
+                  document.querySelector<HTMLElement>('[data-testid="item-parent-field"] input')?.focus();
+                }, 0);
+              }}
+              title={parentId(item) ? `Parent: ${title(findPoolItem(parentId(item)) || { title: "set" })}` : "Assign parent"}
+              type="button"
+            >
+              <GitBranch size={13} />
+            </button>
+          )}
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
             <Calendar size={12} aria-hidden="true" />
             <time>{dueText || "Date"}</time>
@@ -2568,8 +2712,8 @@ export function WorkItemsCenter({
           <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
             {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
           </select>
-          <select aria-label="New item parent" disabled={parentOptions.length === 0} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
-            <option value="">{newType === "epic" ? "No parent" : "Choose parent"}</option>
+          <select aria-label="New item parent" disabled={newType === "epic"} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
+            <option value="">{newType === "epic" ? "No parent" : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`}</option>
             {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
           </select>
           <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
@@ -2848,7 +2992,10 @@ export function WorkItemsCenter({
             <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
             <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
-            <label className="do-mobile-advanced">Parent<select onChange={(event) => onUpdateTask(selectedItem.id, { parentId: event.target.value || null })} value={parentId(selectedItem)}><option value="">No parent</option>{tasks.filter((item) => item.projectId === selectedItem.projectId && item.id !== selectedItem.id).map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}</select></label>
+            <div className="do-item-parent-field">
+              <span>Parent</span>
+              {renderParentEditor(selectedItem)}
+            </div>
             <div className="do-item-estimate-row">
               <label>Story points<input aria-label="Story points" inputMode="numeric" onBlur={(event) => onUpdateTask(selectedItem.id, { storyPoints: event.target.value ? Number(event.target.value) : null })} defaultValue={selectedItem.storyPoints ?? ""} type="number" /></label>
               <label>Estimate (h)<input aria-label="Estimate hours" inputMode="decimal" onBlur={(event) => onUpdateTask(selectedItem.id, { estimateHours: event.target.value ? Number(event.target.value) : null })} defaultValue={selectedItem.estimateHours ?? ""} type="number" /></label>
@@ -2950,6 +3097,21 @@ export function WorkItemsCenter({
             </section>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
+              {allowedParentKinds(workItemKind(selectedItem)).length > 0 && (
+                <button
+                  aria-label="Assign parent"
+                  data-testid="item-assign-parent"
+                  onClick={() => {
+                    setParentSearch("");
+                    const field = document.querySelector<HTMLElement>('[data-testid="item-parent-field"]');
+                    field?.scrollIntoView({ block: "center" });
+                    field?.querySelector("input")?.focus();
+                  }}
+                  type="button"
+                >
+                  <GitBranch size={13} /> Parent
+                </button>
+              )}
               <button onClick={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)} type="button"><ArrowRight size={13} /> Ask</button>
             </div>
             </aside>

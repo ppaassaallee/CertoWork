@@ -5358,6 +5358,7 @@ export function DelivereeWorkspace() {
             )}
             <WorkItemsCenter
             activeProject={null}
+            hierarchyTasks={tasks}
             onAddTask={async (...args) => addProjectTask(...args)}
             onAsk={(prompt) => {
               setComposer(prompt);

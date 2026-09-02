@@ -124,6 +124,7 @@ export const FileOutput = wrapped.FileOutput;
 export const FileText = wrapped.FileText;
 export const Filter = wrapped.Filter;
 export const Flag = wrapped.Flag;
+export const GitBranch = wrapped.GitBranch;
 export const Flame = wrapped.Flame;
 export const Folder = wrapped.Folder;
 export const FolderKanban = wrapped.FolderKanban;
