@@ -160,6 +160,7 @@ import {
 } from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import { MyWorkTodayPanel } from "./MyWorkTodayPanel";
 import { FeedbackCenter } from "./FeedbackCenter";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
@@ -4745,7 +4746,9 @@ export function DelivereeWorkspace() {
                         ? [{ label: "Inbox" }]
                         : lens.section === "waiting"
                           ? [{ label: "Waiting" }]
-                          : [{ label: "Assigned" }]),
+                          : lens.section === "today"
+                            ? [{ label: "Today" }]
+                            : [{ label: "Assigned" }]),
                     ]
                   : []),
                 ...(lens.kind === "notes"
@@ -5308,7 +5311,7 @@ export function DelivereeWorkspace() {
             </div>
           </>
         ) : centerView === "items" ? (
-          <div className="do-my-work-shell" data-testid="my-work-shell">
+          <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""}`} data-testid="my-work-shell">
             {lens.kind === "my-work" && (
               <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
                 <button
@@ -5335,7 +5338,23 @@ export function DelivereeWorkspace() {
                 >
                   {t("myWorkWaiting")}
                 </button>
+                <button
+                  className={lens.section === "today" ? "is-active" : ""}
+                  data-testid="my-work-today-tab"
+                  onClick={() => navigate("/my-work/today")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkToday")}
+                </button>
               </div>
+            )}
+            {lens.kind === "my-work" && lens.section === "today" && (
+              <MyWorkTodayPanel
+                onSelectItem={setSelectedWorkItemId}
+                onUpdateTask={updateProjectTask}
+                tasks={myWorkTasks}
+              />
             )}
             <WorkItemsCenter
             activeProject={null}

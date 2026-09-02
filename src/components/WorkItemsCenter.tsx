@@ -4,22 +4,33 @@ import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult 
 import {
   ArrowRight,
   BarChart3,
+  Briefcase,
   Calendar,
   CalendarRange,
   Check,
   ChevronDown,
   Circle,
+  CircleDot,
   Clipboard,
+  Clock,
+  Compass,
+  Flag,
   Folder,
+  Globe,
   GripVertical,
+  Layers,
   ListChecks,
+  ListTodo,
   Kanban,
   Minus,
   Plus,
   Search,
   SlidersHorizontal,
   Square,
+  Tag,
+  Timer,
   Trash,
+  User,
   X,
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
@@ -78,8 +89,11 @@ import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
+  compareHierarchySiblings,
   hierarchyChildren,
+  hierarchyRoot,
   hierarchyRoots,
+  sortHierarchyForest,
   sortHierarchySiblings,
 } from "../lib/itemHierarchy";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -201,6 +215,82 @@ const itemColumnLabels: Record<ItemColumnKey, string> = {
   due: "Due",
   sprint: "Sprint",
 };
+
+const ATTR_ICONS: Record<Exclude<ItemColumnKey, "title">, typeof Folder> = {
+  project: Folder,
+  delivery_entity: Globe,
+  client_entity: Briefcase,
+  tags: Tag,
+  work_category: Layers,
+  product_phase: Compass,
+  status: CircleDot,
+  priority: Flag,
+  gtd: ListTodo,
+  bucket: Clock,
+  assignees: User,
+  due: Calendar,
+  sprint: Timer,
+};
+
+function itemAttributePresent(
+  item: any,
+  column: Exclude<ItemColumnKey, "title">,
+  projects: any[],
+  tags: TagLike[],
+) {
+  if (column === "project") return Boolean(item?.projectId);
+  if (column === "delivery_entity") {
+    const value = deliveryEntity(item, projects);
+    return Boolean(value) && value !== "Internal";
+  }
+  if (column === "client_entity") {
+    const value = clientEntity(item, projects);
+    return Boolean(value) && value !== "Internal";
+  }
+  if (column === "tags") return tagLabels(item, tags).length > 0;
+  if (column === "work_category") return Boolean(String(item?.workCategory || "").trim());
+  if (column === "product_phase") return Boolean(String(item?.productPhase || "").trim());
+  if (column === "status") return Boolean(canonicalStatus(item));
+  if (column === "priority") return priorityValue(item?.priority) !== "N/A";
+  if (column === "gtd") return Boolean(gtdActionValue(item));
+  if (column === "bucket") return displayDueBucket(item) !== "No sector";
+  if (column === "assignees") {
+    const names = Array.isArray(item?.assignees) ? item.assignees : [item?.owner || item?.assignee];
+    return names.some((name: unknown) => String(name || "").trim());
+  }
+  if (column === "due") return Boolean(dateInputValue(item?.dueDate || item?.targetDate));
+  if (column === "sprint") return Boolean(item?.sprintId);
+  return false;
+}
+
+function itemAttributeCaption(
+  item: any,
+  column: Exclude<ItemColumnKey, "title">,
+  projects: any[],
+  tags: TagLike[],
+  sprints: SprintRecord[],
+) {
+  if (column === "project") return itemProjectTitle(item, projects);
+  if (column === "delivery_entity") return deliveryEntity(item, projects);
+  if (column === "client_entity") return clientEntity(item, projects);
+  if (column === "tags") return tagLabels(item, tags).join(", ") || "No tags";
+  if (column === "work_category") return itemWorkCategory(item, projects);
+  if (column === "product_phase") return itemProductPhase(item, projects);
+  if (column === "status") return displayStatus(canonicalStatus(item));
+  if (column === "priority") return priorityValue(item?.priority);
+  if (column === "gtd") return gtdActionTypes.find((type) => type.value === gtdActionValue(item))?.label || "GTD: N/A";
+  if (column === "bucket") return displayDueBucket(item);
+  if (column === "assignees") {
+    const names = Array.isArray(item?.assignees) ? item.assignees : [item?.owner || item?.assignee];
+    return names.filter(Boolean).join(", ") || "Unassigned";
+  }
+  if (column === "due") return dateInputValue(item?.dueDate || item?.targetDate) || "No date";
+  if (column === "sprint") {
+    const sprint = sprints.find((entry) => entry.id === item?.sprintId);
+    return sprint?.name || "No sprint";
+  }
+  return itemColumnLabels[column];
+}
 
 const itemColumnWidths: Record<ItemColumnKey, string> = {
   title: "minmax(210px, 1.25fr)",
@@ -424,6 +514,17 @@ function itemOrder(item: any, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const FAMILY_GROUP_BY = new Set<GroupBy>([
+  "actionBoard",
+  "priority",
+  "project",
+  "owner",
+  "work_category",
+  "product_phase",
+  "due",
+  "tag",
+]);
+
 function sortValue(item: any, sortBy: SortBy, projects: any[]) {
   if (sortBy === "project") return itemProjectTitle(item, projects).toLowerCase();
   if (sortBy === "delivery_entity")
@@ -443,14 +544,18 @@ function sortValue(item: any, sortBy: SortBy, projects: any[]) {
   return String(itemOrder(item)).padStart(8, "0");
 }
 
+function compareItems(left: any, right: any, primary: SortBy, secondary: SortBy, projects: any[]) {
+  const first = sortValue(left, primary, projects).localeCompare(sortValue(right, primary, projects));
+  if (first) return first;
+  const second = primary === secondary
+    ? 0
+    : sortValue(left, secondary, projects).localeCompare(sortValue(right, secondary, projects));
+  if (second) return second;
+  return compareHierarchySiblings(left, right);
+}
+
 function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: any[]) {
-  return [...items].sort((left, right) => {
-    const first = sortValue(left, primary, projects).localeCompare(sortValue(right, primary, projects));
-    if (first) return first;
-    const second = primary === secondary ? 0 : sortValue(left, secondary, projects).localeCompare(sortValue(right, secondary, projects));
-    if (second) return second;
-    return title(left).localeCompare(title(right));
-  });
+  return sortHierarchyForest(items, (left, right) => compareItems(left, right, primary, secondary, projects));
 }
 
 function displayStatus(status: string) {
@@ -589,13 +694,13 @@ export function WorkItemsCenter({
   const [bouncingId, setBouncingId] = useState<string | null>(null);
   const bounceTimer = useRef<number | null>(null);
   const [boardViewers, setBoardViewers] = useState<KanbanPresence[]>([]);
+  const [openAttr, setOpenAttr] = useState<string | null>(null);
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
+  const attributeColumns = [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
-    gridTemplateColumns: `20px 20px 28px ${[...itemColumnSet]
-      .map((column) => `${itemColumnPixels[column] || defaultItemColumnPixels[column]}px`)
-      .join(" ")} 28px`,
+    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto 28px",
   };
   const currentItemViewFilters: ItemViewFilters = {
     mode,
@@ -917,6 +1022,24 @@ export function WorkItemsCenter({
     () => filtered.find((item) => itemMentionsViewer(item, viewerAliases)) || null,
     [filtered, viewerAliases],
   );
+
+  useEffect(() => {
+    if (!openAttr) return undefined;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".do-item-attr")) return;
+      setOpenAttr(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenAttr(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openAttr]);
 
   const bounceCard = (id: string) => {
     setBouncingId(id);
@@ -1318,9 +1441,9 @@ export function WorkItemsCenter({
     ) : null
   );
 
-  const renderFieldCells = (item: any) => (
-    <>
-      {itemColumnSet.has("project") && (
+  const renderFieldEditor = (item: any, column: Exclude<ItemColumnKey, "title">) => {
+    if (column === "project") {
+      return (
         <select
           aria-label={`Project for ${title(item)}`}
           onChange={(event) => onUpdateTask(item.id, { projectId: event.target.value || null })}
@@ -1331,43 +1454,115 @@ export function WorkItemsCenter({
             <option key={project.id} value={project.id}>{projectTitle(project)}</option>
           ))}
         </select>
-      )}
-      {itemColumnSet.has("delivery_entity") && <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />}
-      {itemColumnSet.has("client_entity") && <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />}
-      {itemColumnSet.has("tags") && <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />}
-      {itemColumnSet.has("work_category") && <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
-        {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-      </select>}
-      {itemColumnSet.has("product_phase") && <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
-        {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
-      </select>}
-      {itemColumnSet.has("status") && <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
-        {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-      </select>}
-      {itemColumnSet.has("priority") && <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
-        {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-      </select>}
-      {itemColumnSet.has("gtd") && <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
-        {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
-      </select>}
-      {itemColumnSet.has("bucket") && <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>}
-      {itemColumnSet.has("assignees") && <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />}
-      {itemColumnSet.has("due") && <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />}
-      {itemColumnSet.has("sprint") && (
-        <select
-          aria-label={`Sprint for ${title(item)}`}
-          onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
-          value={item.sprintId || ""}
-        >
-          <option value="">No sprint</option>
-          {sprints
-            .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
-            .map((sprint) => (
-              <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
-            ))}
+      );
+    }
+    if (column === "delivery_entity") {
+      return <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />;
+    }
+    if (column === "client_entity") {
+      return <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />;
+    }
+    if (column === "tags") {
+      return <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />;
+    }
+    if (column === "work_category") {
+      return (
+        <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
+          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
         </select>
-      )}
-    </>
+      );
+    }
+    if (column === "product_phase") {
+      return (
+        <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
+          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+        </select>
+      );
+    }
+    if (column === "status") {
+      return (
+        <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
+          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+        </select>
+      );
+    }
+    if (column === "priority") {
+      return (
+        <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
+          {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+        </select>
+      );
+    }
+    if (column === "gtd") {
+      return (
+        <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
+          {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
+        </select>
+      );
+    }
+    if (column === "bucket") {
+      return <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>;
+    }
+    if (column === "assignees") {
+      return <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />;
+    }
+    if (column === "due") {
+      return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />;
+    }
+    return (
+      <select
+        aria-label={`Sprint for ${title(item)}`}
+        onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
+        value={item.sprintId || ""}
+      >
+        <option value="">No sprint</option>
+        {sprints
+          .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
+          .map((sprint) => (
+            <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
+          ))}
+      </select>
+    );
+  };
+
+  const renderAttributeIcons = (item: any) => (
+    <div className="do-item-attrs" data-testid="item-attr-icons">
+      {attributeColumns.map((column) => {
+        const filled = itemAttributePresent(item, column, projects, tags);
+        const caption = itemAttributeCaption(item, column, projects, tags, sprints);
+        const Icon = ATTR_ICONS[column];
+        const key = `${item.id}:${column}`;
+        const open = openAttr === key;
+        return (
+          <div className={`do-item-attr ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key={column}>
+            <button
+              aria-expanded={open}
+              aria-label={`${itemColumnLabels[column]} for ${title(item)}${filled ? `: ${caption}` : " (not set)"}`}
+              className="do-item-attr-btn"
+              data-testid={`item-attr-${column}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                setOpenAttr(open ? null : key);
+              }}
+              title={`${itemColumnLabels[column]}: ${caption}`}
+              type="button"
+            >
+              <Icon size={13} />
+            </button>
+            {open && (
+              <div
+                className="do-item-attr-pop"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <strong>{itemColumnLabels[column]}</strong>
+                {renderFieldEditor(item, column)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 
   const renderRow = (
@@ -1380,7 +1575,7 @@ export function WorkItemsCenter({
     const isDone = canonicalStatus(item) === "done";
     return (
       <article
-        className={`do-items-row is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
         onDragOver={(event) => {
@@ -1419,7 +1614,7 @@ export function WorkItemsCenter({
           <GripVertical size={14} />
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
-        {renderFieldCells(item)}
+        {renderAttributeIcons(item)}
         {renderDeleteButton(item)}
       </article>
     );
@@ -1478,22 +1673,12 @@ export function WorkItemsCenter({
   };
 
   const renderColumnHeader = () => (
-    <div className="do-items-column-head" style={itemGridStyle}>
+    <div className="do-items-column-head is-icon-list" style={itemGridStyle}>
       <span />
       {renderSelectAll()}
       <span />
-      {[...itemColumnSet].map((column) => (
-        <strong key={column}>
-          {itemColumnLabels[column]}
-          <span
-            aria-label={`Resize ${itemColumnLabels[column]} column`}
-            className="do-items-col-resizer"
-            data-testid="item-column-resizer"
-            onPointerDown={(event) => startColumnResize(column, event)}
-            role="separator"
-          />
-        </strong>
-      ))}
+      <strong>Item</strong>
+      <span className="do-items-attr-head">Fields</span>
       <span />
     </div>
   );
@@ -1510,7 +1695,7 @@ export function WorkItemsCenter({
     const isDone = canonicalStatus(item) === "done";
     return (
       <header
-        className={`do-items-row do-items-section-head is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
+        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
         data-testid="item-section-head"
         style={itemGridStyle}
       >
@@ -1527,16 +1712,19 @@ export function WorkItemsCenter({
         {renderBulkSelect(item)}
         <span />
         {renderTitleCell(item, kind, childCount, { depth: 0, childCount, collapsed, onToggle: () => toggleGroup(groupKey), showToggle: false })}
-        {renderFieldCells(item)}
+        {renderAttributeIcons(item)}
         {renderDeleteButton(item)}
       </header>
     );
   };
 
+  const compareVisibleSiblings = (left: any, right: any) =>
+    compareItems(left, right, primarySort, secondarySort, projects);
+
   const renderForest = (items: any[]) => {
     const walk = (item: any, depth: number, ancestors: Set<string>) => {
       if (ancestors.has(item.id)) return null;
-      const children = sortHierarchySiblings(hierarchyChildren(items, item.id));
+      const children = sortHierarchySiblings(hierarchyChildren(items, item.id), compareVisibleSiblings);
       const groupKey = `node:${item.id}`;
       const collapsed = collapsedGroups.includes(groupKey);
       const kind = workItemKind(item);
@@ -1561,7 +1749,7 @@ export function WorkItemsCenter({
         </div>
       );
     };
-    const roots = sortHierarchySiblings(hierarchyRoots(items));
+    const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
     return (
       <div className="do-items-tree">
         {roots.map((item) => walk(item, 0, new Set()))}
@@ -1574,16 +1762,17 @@ export function WorkItemsCenter({
 
   const grouped = useMemo(() => {
     const keyFor = (item: any) => {
-      if (groupBy === "actionBoard") return actionBoardBucket(item);
-      if (groupBy === "status") return canonicalStatus(item);
-      if (groupBy === "priority") return priorityValue(item.priority);
-      if (groupBy === "project") return itemProjectTitle(item, projects);
-      if (groupBy === "owner") return String(item.owner || item.assignee || "Unassigned");
-      if (groupBy === "type") return workItemLabel(workItemKind(item));
-      if (groupBy === "work_category") return itemWorkCategory(item, projects);
-      if (groupBy === "product_phase") return itemProductPhase(item, projects);
-      if (groupBy === "due") return dueBucketLabels[dueBucket(item.dueDate || item.targetDate)] || "No sector";
-      if (groupBy === "tag") return tagLabels(item, tags)[0] || "No tag";
+      const target = FAMILY_GROUP_BY.has(groupBy) ? hierarchyRoot(item, tasks) : item;
+      if (groupBy === "actionBoard") return actionBoardBucket(target);
+      if (groupBy === "status") return canonicalStatus(target);
+      if (groupBy === "priority") return priorityValue(target.priority);
+      if (groupBy === "project") return itemProjectTitle(target, projects);
+      if (groupBy === "owner") return String(target.owner || target.assignee || "Unassigned");
+      if (groupBy === "type") return workItemLabel(workItemKind(target));
+      if (groupBy === "work_category") return itemWorkCategory(target, projects);
+      if (groupBy === "product_phase") return itemProductPhase(target, projects);
+      if (groupBy === "due") return dueBucketLabels[dueBucket(target.dueDate || target.targetDate)] || "No sector";
+      if (groupBy === "tag") return tagLabels(target, tags)[0] || "No tag";
       return "Items";
     };
     return filtered.reduce<Record<string, any[]>>((acc, item) => {
@@ -1591,7 +1780,7 @@ export function WorkItemsCenter({
       acc[key] = [...(acc[key] || []), item];
       return acc;
     }, {});
-  }, [filtered, groupBy, projects, tags]);
+  }, [filtered, groupBy, projects, tags, tasks]);
 
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
@@ -2257,7 +2446,7 @@ export function WorkItemsCenter({
             {fieldsOpen && (
               <div className="do-popover do-fields-popover" data-testid="item-fields-picker" role="menu">
                 <strong>Item fields</strong>
-                <span>Show or add the same fields used in project backlog items.</span>
+                <span>Choose which attribute icons appear beside each title. Empty fields stay faded; filters still use every field.</span>
                 <div className="do-column-picker">
                   {selectableItemColumns().map((column) => (
                     <label key={column} className="do-column-toggle">

@@ -23,6 +23,10 @@ test("canonical IA routes resolve to mental-model lenses", () => {
     kind: "my-work",
     section: "waiting",
   });
+  assert.deepEqual(resolveDelivereeLens("/my-work/today"), {
+    kind: "my-work",
+    section: "today",
+  });
   assert.deepEqual(resolveDelivereeLens("/projects"), {
     kind: "work",
     section: "portfolio",
@@ -91,6 +95,7 @@ test("legacy URLs alias into the new IA", () => {
 test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "my-work", section: "assigned" }), "/my-work");
   assert.equal(lensToPath({ kind: "my-work", section: "inbox" }), "/my-work/inbox");
+  assert.equal(lensToPath({ kind: "my-work", section: "today" }), "/my-work/today");
   assert.equal(lensToPath({ kind: "notes" }), "/notes");
   assert.equal(lensToPath({ kind: "work", section: "portfolio" }), "/projects");
   assert.equal(lensToPath({ kind: "agents", section: "home" }), "/agents");
