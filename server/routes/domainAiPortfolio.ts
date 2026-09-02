@@ -21,7 +21,7 @@ export function registerDomainAiPortfolioRoutes(app: Express) {
       Evaluate individual project health, detect misalignments, identify milestones slipping or lacking active tasks, progress bottlenecks, and output a structured analysis. Include a set of tactical candidates that can be approved to adjust priorities, create follow-up task entities, or schedule project touchpoints.`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -91,7 +91,7 @@ export function registerDomainAiPortfolioRoutes(app: Express) {
       Provide a clinical leadership analysis of how to manage communications with this individual. Address blockers, upcoming deadlines they need to meet, open issues, and actions we should take to unblock opportunities. Output solid task actions we can insert into our Review Candidate collection.`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -147,7 +147,7 @@ export function registerDomainAiPortfolioRoutes(app: Express) {
       Organize key tasks into morning focus blocks, mid-day admin, afternoon deep work, and evening reviews. Consider priority (always schedule One Thing in the high-energy Morning Focus block if possible!). Align with health indicators (if Whoop recovery is low, schedule lighter administrative blocks and more recovery time).`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

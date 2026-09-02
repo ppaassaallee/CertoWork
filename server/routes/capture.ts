@@ -35,7 +35,7 @@ Format your output strictly as a valid JSON matching this schema:
 `;
 
       const aiResponse = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: [
           { role: "user", parts: [{ text: systemPrompt }] }
         ],
@@ -80,7 +80,7 @@ Execute the skill instructions precisely on the provided input item. Generate a 
 `;
 
       const aiResponse = await generateContentWithFallback({
-        model: 'gemini-3.5-flash',
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: [
           {
             role: "user",
@@ -105,7 +105,7 @@ Execute the skill instructions precisely on the provided input item. Generate a 
       }
 
       const response = await generateContentWithFallback({
-        model: 'gemini-3.1-pro-preview',
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: [
           {
             text: `You are an elite productivity strategist and executive assistant (inspired by the COD methodology, Weekly Planning, and GTD). The user has recorded an audio file which could be a solo brain-dump, a live client conversation, or a long meeting recording.
@@ -156,7 +156,7 @@ Do not include any other text outside of this JSON block.`
     try {
       const { content } = req.body;
       const response = await generateContentWithFallback({
-        model: 'gemini-2.5-pro',
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: `You are an elite productivity strategist and AI assistant based on GTD and COD. The user is dumping their thoughts, plans, and ideas into the capture tool.
 Break down their raw thoughts into structured review candidates.
 A review candidate can be a 'task', 'project', 'decision', 'waiting_for', etc.

@@ -18,7 +18,7 @@ Your task is to take a natural language request for a new project, goal, or feat
 ${skillsContext}`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           systemInstruction: systemPrompt,
@@ -102,7 +102,7 @@ Generate a structured, polished status report summary based on the provided proj
 Do not invent anything that isn't logical, but structure it beautifully. Keep your summaries objective, executive, and concise.`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           systemInstruction: systemPrompt,
@@ -134,7 +134,7 @@ Do not invent anything that isn't logical, but structure it beautifully. Keep yo
     try {
       const { prompt, context } = req.body;
       const response = await generateContentWithFallback({
-        model: 'gemini-flash-latest',
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: `You are an AI coworker assistant named Boldi built into a productivity workspace. 
 Context about the current item (Task/Project/Document):
 ${context || 'No specific context provided.'}
@@ -202,7 +202,7 @@ Return your analysis strictly as a JSON object matching this schema:
 }`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

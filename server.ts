@@ -429,7 +429,7 @@ Respond in a JSON format matching this schema:
         `;
         
         const enrichResponse = await generateContentWithFallback({
-          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           contents: [{ role: "user", parts: [{ text: enrichPrompt }] }],
           config: {
             responseMimeType: "application/json",
@@ -1057,7 +1057,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           if (!process.env.GEMINI_API_KEY) throw openAIError;
           console.warn("[Boldi Provider] OpenAI failed; preserving the request through Gemini fallback.");
           const fallbackResponse = await generateContentWithFallback({
-            model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+            model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
             contents: messages.map((message: any) => ({
               role: message.role === "assistant" ? "model" : "user",
               parts: [{ text: String(message.content || "") }],
@@ -1072,12 +1072,12 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           resultData = parseCleanJSON(fallbackResponse.text);
           providerMetadata = {
             provider: "gemini",
-            model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+            model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           };
         }
       } else {
         const response = await generateContentWithFallback({
-          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           contents: messages.map((m: any) => ({
             role: m.role === "assistant" ? "model" : m.role,
             parts: [{ text: m.content }]
@@ -1140,7 +1140,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
         resultData = parseCleanJSON(response.text);
         providerMetadata = {
           provider: "gemini",
-          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+          model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         };
       }
 
@@ -1271,7 +1271,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           status: "running",
           inputSummary: userMsg.content,
           modelProvider: currentAgent.modelProvider || "google",
-          modelName: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+          modelName: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           createdAt: new Date(),
           updatedAt: new Date()
         });
@@ -1336,7 +1336,7 @@ Respond STRICTLY in a valid JSON schema:
 
         try {
           const aiResponse = await generateContentWithFallback({
-            model: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+            model: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
             contents: [
               { role: "user", parts: [{ text: systemPrompt }] }
             ],
@@ -1793,7 +1793,7 @@ Respond STRICTLY in a valid JSON schema:
       }`;
 
       const aiResponse = await generateContentWithFallback({
-        model: "gemini-3.1-flash-lite", // Fallback to Lite first as Flash is hitting daily quotas
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -2081,7 +2081,7 @@ Respond STRICTLY in a valid JSON schema:
       If some workspace collections are empty, provide appropriate recommendations and note "Not enough data yet" for that specific section.`;
 
       const response = await generateContentWithFallback({
-        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -2212,7 +2212,7 @@ Respond STRICTLY in a valid JSON schema:
       9. Knowledge candidates/SOP notes that should be retained for future reference.`;
 
       const response = await generateContentWithFallback({
-        model: process.env.BOLDI_GEMINI_MODEL || "gemini-3.1-pro-preview",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -2346,7 +2346,7 @@ Respond STRICTLY in a valid JSON schema:
       Explain the strategic alignment reasoning clinically.`;
 
       const response = await generateContentWithFallback({
-        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -2416,7 +2416,7 @@ Respond STRICTLY in a valid JSON schema:
       - Next week's theme and main focal objectives.`;
 
       const response = await generateContentWithFallback({
-        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -2579,7 +2579,7 @@ Respond STRICTLY in a valid JSON schema:
           systemPrompt: ag.systemPrompt,
           agentType: ag.agentType,
           modelProvider: "google",
-          modelName: "gemini-2.5-flash",
+          modelName: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           toolsAllowed: ["search_tasks", "prioritize", "schedule_block"],
           permissionsProfile: "read_write",
           memoryPolicy: "persistent",

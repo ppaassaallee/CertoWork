@@ -24,7 +24,7 @@ Rules:
 IMPORTANT: Disclaimer "Workout recommendations are general fitness guidance, not medical advice."`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -88,7 +88,7 @@ Produce a structured performance analysis following the EXACT JSON schema provid
 Focus on actionable decisions. Recommendations must be potential review candidates.`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -158,7 +158,7 @@ Specifically answer:
 - Which habit should be paused or simplified to protect focus?`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -256,7 +256,7 @@ Specifically answer:
       }`;
 
       const response = await generateContentWithFallback({
-        model: "gemini-flash-latest",
+        model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

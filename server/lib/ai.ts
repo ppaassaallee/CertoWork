@@ -34,9 +34,9 @@ function logAiUsage(entry: {
 
 export async function generateContentWithFallback(params: any): Promise<any> {
   const started = Date.now();
-  const primaryModel = process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash";
-  const fallbackModel = process.env.BOLDI_GEMINI_FALLBACK_MODEL || "gemini-2.0-flash";
-  const models = [primaryModel, fallbackModel, "gemini-2.5-pro", "gemini-2.0-pro-exp-02-05"];
+  const primaryModel = process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite";
+  const fallbackModel = process.env.BOLDI_GEMINI_FALLBACK_MODEL || "gemini-2.5-flash-lite";
+  const models = Array.from(new Set([primaryModel, fallbackModel]));
   if (params.model && !models.includes(params.model)) models.unshift(params.model);
   else if (params.model) {
     const idx = models.indexOf(params.model);
@@ -122,11 +122,11 @@ export async function completeAssistant(
   const text = String(response.text || "");
   logAiUsage({
     provider: "gemini",
-    model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash",
+    model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
     latencyMs: Date.now() - started,
     requestId,
   });
-  return { provider: "gemini", model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash", text };
+  return { provider: "gemini", model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite", text };
 }
 
 export { resolveAssistantProvider };
