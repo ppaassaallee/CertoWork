@@ -12,6 +12,7 @@ type Props = {
   address?: CaptureAddress | null;
   busy?: boolean;
   onEnsureAddress: () => Promise<void> | void;
+  onEnsureTeamAddress?: (teamSlug: string) => Promise<void> | void;
   onRotateAlias?: () => Promise<void> | void;
 };
 
@@ -71,9 +72,11 @@ export function CaptureSettingsPanel({
   address,
   busy,
   onEnsureAddress,
+  onEnsureTeamAddress,
   onRotateAlias,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [teamSlug, setTeamSlug] = useState("support");
   const preview = useMemo(
     () => address?.email || buildPersonalCaptureEmail(usernameFromProfile(userEmail, userName)),
     [address?.email, userEmail, userName],
@@ -149,6 +152,33 @@ export function CaptureSettingsPanel({
           ) : null}
         </div>
       </div>
+
+      {onEnsureTeamAddress ? (
+        <div className="do-capture-inbox-card" data-testid="capture-team-inbox">
+          <label>Team Requests inbox</label>
+          <p className="do-capture-hint">
+            Shared address for tickets — lands in Requests, not only My Work.
+          </p>
+          <div className="do-capture-inbox-row">
+            <input
+              aria-label="Team inbox slug"
+              onChange={(event) => setTeamSlug(event.target.value)}
+              placeholder="support"
+              value={teamSlug}
+            />
+            <code>@requests.certo.work</code>
+          </div>
+          <button
+            className="do-button do-button-dark"
+            data-testid="capture-ensure-team"
+            disabled={Boolean(busy) || !teamSlug.trim()}
+            onClick={() => void onEnsureTeamAddress(teamSlug)}
+            type="button"
+          >
+            Create team inbox
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

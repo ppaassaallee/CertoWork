@@ -10,6 +10,7 @@ import { InviteActivate } from "./components/InviteActivate";
 import { PublicStatusReport } from "./components/PublicStatusReport";
 import { PublicInvoicePortal } from "./components/PublicInvoicePortal";
 import { PublicAppleWidget } from "./components/PublicAppleWidget";
+import { PublicRequestPortal } from "./components/PublicRequestPortal";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 // TODO: Replace with the Google Calendar appointment schedule URL.
@@ -367,6 +368,9 @@ export default function App() {
   const widgetToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/widget\/([^/]+)/) || [])[1] || "")
     : "";
+  const requestPortalToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/request\/([^/]+)/) || [])[1] || "")
+    : "";
   if (reportToken) {
     return <PublicStatusReport token={reportToken} />;
   }
@@ -375,6 +379,9 @@ export default function App() {
   }
   if (widgetToken) {
     return <PublicAppleWidget token={widgetToken} />;
+  }
+  if (requestPortalToken) {
+    return <PublicRequestPortal token={requestPortalToken} />;
   }
   if (loading) {
     return (

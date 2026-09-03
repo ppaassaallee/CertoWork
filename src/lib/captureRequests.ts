@@ -309,6 +309,7 @@ export function publicTicketProjection(ticket: Record<string, unknown>) {
     id: ticket.id,
     key: ticket.key || null,
     title: ticket.title || "",
+    description: String(ticket.description || "").slice(0, 4000),
     customerStatus: toCustomerStatus(ticket as any),
     customerStatusDetail: ticket.customerStatusDetail || null,
     requesterEmail: ticket.requesterEmail || null,
@@ -318,6 +319,110 @@ export function publicTicketProjection(ticket: Record<string, unknown>) {
     lastPublicUpdate: ticket.lastPublicUpdate || null,
     nextExpectedUpdate: (ticket.sla as any)?.nextUpdateDueAt || null,
   };
+}
+
+export const REQUEST_PORTAL_COLLECTION = "request_portal_tokens";
+
+export type RequestPortalMessage = {
+  id: string;
+  body: string;
+  authorName?: string | null;
+  authorRole: "requester" | "team";
+  createdAt?: unknown;
+};
+
+export type RequestPortalSnapshot = {
+  workspaceName: string;
+  ticket: ReturnType<typeof publicTicketProjection>;
+  messages: RequestPortalMessage[];
+  updatedAt: number;
+};
+
+export function createRequestPortalToken() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID().replace(/-/g, "");
+  }
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+export function requestPortalPath(token: string) {
+  return `/request/${encodeURIComponent(token)}`;
+}
+
+export function requestPortalAbsoluteUrl(token: string, origin?: string) {
+  const base = String(origin || (typeof window !== "undefined" ? window.location.origin : "https://certo.work"))
+    .replace(/\/$/, "");
+  return `${base}${requestPortalPath(token)}`;
+}
+
+export function publicMessagesForPortal(
+  messages: Array<Record<string, unknown>> = [],
+  ticketId: string,
+): RequestPortalMessage[] {
+  return messages
+    .filter(
+      (message) =>
+        String(message.workItemId || "") === ticketId &&
+        String(message.visibility || "public") === "public",
+    )
+    .map((message) => ({
+      id: String(message.id || ""),
+      body: String(message.body || ""),
+      authorName: (message.authorName as string) || null,
+      authorRole:
+        String(message.channel || "") === "portal" ||
+        String(message.authorRole || "") === "requester"
+          ? ("requester" as const)
+          : ("team" as const),
+      createdAt: message.createdAt || null,
+    }));
+}
+
+export function buildRequestPortalSnapshot(input: {
+  workspaceName: string;
+  ticket: Record<string, unknown>;
+  messages?: Array<Record<string, unknown>>;
+}): RequestPortalSnapshot {
+  const ticketId = String(input.ticket.id || "");
+  return {
+    workspaceName: String(input.workspaceName || "Certo Work"),
+    ticket: publicTicketProjection(input.ticket),
+    messages: publicMessagesForPortal(input.messages || [], ticketId),
+    updatedAt: Date.now(),
+  };
+}
+
+/** Minimal SLA clocks for Requests — first response + next update. */
+export function buildTicketSlaPatch(now = Date.now()) {
+  const hour = 60 * 60 * 1000;
+  return {
+    firstResponseDueAt: new Date(now + 8 * hour).toISOString(),
+    resolutionDueAt: new Date(now + 72 * hour).toISOString(),
+    nextUpdateDueAt: new Date(now + 24 * hour).toISOString(),
+    firstRespondedAt: null as string | null,
+  };
+}
+
+export function markTicketFirstResponseSla(
+  existing: Record<string, unknown> | null | undefined,
+  now = Date.now(),
+) {
+  const current = (existing?.sla && typeof existing.sla === "object"
+    ? { ...(existing.sla as Record<string, unknown>) }
+    : buildTicketSlaPatch(now)) as Record<string, unknown>;
+  if (!current.firstRespondedAt) {
+    current.firstRespondedAt = new Date(now).toISOString();
+  }
+  current.nextUpdateDueAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+  return current;
+}
+
+export function captureRouteDocId(email: string) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._+-]/g, "_")
+    .slice(0, 700);
 }
 
 /** Deterministic offline AI fallback when OpenAI is unavailable. */

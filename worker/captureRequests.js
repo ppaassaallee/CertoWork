@@ -1,3 +1,9 @@
+import {
+  firestoreAdminConfigured,
+  firestoreCreateDocument,
+  firestoreGetDocument,
+} from "./firestoreAdmin.js";
+
 /**
  * Certo Capture + Requests — worker handlers (Brevo outbound, offline-safe AI).
  */
@@ -202,38 +208,13 @@ export function createCaptureRequestsHandlers(deps) {
     return json({ ok: true, provider: "offline-safe", triage });
   }
 
-  /** Brevo inbound parse / generic email webhook → understand payload (persist client-side). */
+  /** Brevo inbound parse / generic email webhook → understand + optional persist. */
   async function handleInboundEmail(request, env) {
-    if (!inboundAuthorized(request, env) && !env.CAPTURE_INBOUND_OPEN) {
-      // Also allow Firebase-authenticated callers for manual ingest.
-      let body;
-      try {
-        body = await readJson(request);
-      } catch (error) {
-        return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
-      }
-      try {
-        await authorize(request, body, env);
-      } catch {
-        return json({ error: "Capture inbound secret or auth required" }, 401);
-      }
-      const understood = deterministicCaptureUnderstand(normalizeInboundBody(body));
-      const triage = deterministicTicketTriage(normalizeInboundBody(body));
-      return json({
-        ok: true,
-        persisted: false,
-        understood,
-        triage,
-        suggested: suggestedWorkItem(understood, triage, normalizeInboundBody(body)),
-      });
-    }
-
+    const secretOk = inboundAuthorized(request, env) || Boolean(env.CAPTURE_INBOUND_OPEN);
     let body;
     try {
       const contentType = request.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        body = await readJson(request);
-      } else if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+      if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
         const form = await request.formData();
         body = Object.fromEntries([...form.entries()].map(([k, v]) => [k, typeof v === "string" ? v : v.name]));
       } else {
@@ -243,16 +224,125 @@ export function createCaptureRequestsHandlers(deps) {
       return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
     }
 
+    if (!secretOk) {
+      try {
+        await authorize(request, body, env);
+      } catch {
+        return json({ error: "Capture inbound secret or auth required" }, 401);
+      }
+    }
+
     const normalized = normalizeInboundBody(body);
     const understood = deterministicCaptureUnderstand(normalized);
     const triage = deterministicTicketTriage(normalized);
+    const suggested = suggestedWorkItem(understood, triage, normalized);
+
+    const routeEmail = String(
+      normalized.to ||
+        body.to ||
+        body.recipient ||
+        body.To ||
+        "",
+    )
+      .split(",")[0]
+      .replace(/.*</, "")
+      .replace(/>.*/, "")
+      .trim()
+      .toLowerCase();
+
+    let route = null;
+    if (routeEmail.includes("@")) {
+      const routeId = routeEmail.replace(/[^a-z0-9@._+-]/g, "_").slice(0, 700);
+      route = await firestoreGetDocument(env, "capture_routes", routeId);
+      if (route && route.status !== "active") route = null;
+    }
+
+    if (!route) {
+      return json({
+        ok: true,
+        persisted: false,
+        reason: routeEmail
+          ? "No active capture route for recipient"
+          : "Missing recipient address",
+        understood,
+        triage,
+        suggested,
+      });
+    }
+
+    if (!firestoreAdminConfigured(env)) {
+      return json({
+        ok: true,
+        persisted: false,
+        reason: "FIREBASE_SERVICE_ACCOUNT not configured",
+        route: {
+          workspaceId: route.workspaceId,
+          userId: route.userId,
+          kind: route.kind,
+        },
+        understood,
+        triage,
+        suggested,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const kind = route.kind === "team" || suggested.workItemType === "ticket" ? "ticket" : suggested.workItemType;
+    const taskPayload = {
+      ...suggested,
+      type: kind,
+      workItemType: kind,
+      userId: route.userId,
+      createdBy: route.userId,
+      workspaceId: route.workspaceId,
+      projectId: null,
+      assigneeIds: route.kind === "personal" ? [] : [],
+      visibleToUserIds: route.userId ? [route.userId] : [],
+      source: "email",
+      sourceType: "email",
+      captureChannelId: route.addressId || null,
+      ticketStatus: kind === "ticket" ? "new" : null,
+      customerStatus: kind === "ticket" ? "Received" : null,
+      teamId: route.teamSlug || null,
+      createdAt: { __timestamp: true },
+      updatedAt: { __timestamp: true },
+      normalizedTitle: String(suggested.title || "").trim().toLowerCase().replace(/\s+/g, " "),
+      inboundAt: nowIso,
+    };
+    if (kind === "ticket") {
+      const hour = 60 * 60 * 1000;
+      taskPayload.sla = {
+        firstResponseDueAt: new Date(Date.now() + 8 * hour).toISOString(),
+        resolutionDueAt: new Date(Date.now() + 72 * hour).toISOString(),
+        nextUpdateDueAt: new Date(Date.now() + 24 * hour).toISOString(),
+        firstRespondedAt: null,
+      };
+    }
+
+    const created = await firestoreCreateDocument(env, "tasks", taskPayload);
+    if (!created.ok) {
+      return json({
+        ok: false,
+        persisted: false,
+        error: created.reason,
+        understood,
+        triage,
+        suggested,
+      }, 502);
+    }
+
     return json({
       ok: true,
-      persisted: false,
-      note: "Wire Brevo inbound to this endpoint; create the work item from suggested payload in Certo (or add FIREBASE admin write later).",
+      persisted: true,
+      taskId: created.id,
+      route: {
+        workspaceId: route.workspaceId,
+        userId: route.userId,
+        kind: route.kind,
+      },
       understood,
       triage,
-      suggested: suggestedWorkItem(understood, triage, normalized),
+      suggested,
     });
   }
 
