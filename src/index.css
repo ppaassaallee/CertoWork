@@ -5039,6 +5039,21 @@ a {
   font-size: var(--text-body-sm);
   font-weight: 600;
 }
+.do-items-section-head.do-items-row.is-icon-list {
+  display: grid;
+  grid-template-columns: 20px 20px 28px minmax(0, 1fr) auto 28px;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+.do-items-section-head.do-items-row.is-icon-list .do-items-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.do-items-section-head.do-items-row.is-icon-list .do-item-attrs {
+  justify-self: end;
+  margin-left: 8px;
+}
 .do-items-parent:first-child > .do-items-section-head,
 .do-items-groups > .do-items-group:first-child > .do-items-section-head {
   margin-top: 0;

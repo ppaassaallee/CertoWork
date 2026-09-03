@@ -146,6 +146,7 @@ test("items list CSS is Asana-like: inline flags, pills, and no boxed fields", (
   assert.match(css, /\.do-item-attrs/);
   assert.match(css, /\.do-items-status-pill/);
   assert.match(css, /\.do-items-section-head/);
+  assert.match(css, /\.do-items-section-head\.do-items-row\.is-icon-list \{\s*[\s\S]*?grid-template-columns: 20px 20px 28px minmax\(0, 1fr\) auto 28px/);
   assert.match(css, /\.do-items-row select,\s*\.do-items-row input \{\s*[\s\S]*?border: 0;/);
   assert.match(css, /\.do-items-row \{\s*[\s\S]*?border-bottom: 1px solid var\(--border\)/);
 });
