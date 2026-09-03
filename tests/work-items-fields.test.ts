@@ -135,6 +135,13 @@ test("items list hides unique keys and shows an inline type icon", () => {
   assert.match(css, /\.do-items-type-flag-label/);
 });
 
+test("epic section heads include a complete/reopen control like other rows", () => {
+  assert.match(workItems, /data-testid="item-section-head"/);
+  assert.match(workItems, /data-testid="item-epic-complete"/);
+  assert.match(workItems, /Mark epic done/);
+  assert.match(workItems, /toggleDone\(item\)/);
+});
+
 test("hierarchy expands epics by default and keeps other parents collapsed until toggled", () => {
   assert.match(workItems, /collapsedEpicNodes/);
   assert.match(workItems, /expandedTreeNodes/);
@@ -218,8 +225,9 @@ test("any item including epics can be deleted with a grey-to-red bin", () => {
   assert.match(workItems, /renderAttributeIcons\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"/);
   assert.match(workItems, /renderTitleCell\(item, kind, childCount/);
-  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderAttributeIcons\(item\)/);
-  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderDeleteButton\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}renderAttributeIcons\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}renderDeleteButton\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}item-epic-complete/);
   assert.doesNotMatch(workItems, /deleteDoc/);
   assert.match(css, /\.do-items-delete \{[\s\S]*?color: var\(--text-muted\)/);
   assert.match(css, /\.do-items-delete:hover[\s\S]*?color: var\(--status-danger\)/);

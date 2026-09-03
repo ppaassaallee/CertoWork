@@ -1982,17 +1982,26 @@ export function WorkItemsCenter({
         style={itemGridStyle}
       >
         <button
+          aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`}
+          className={`do-items-check ${isDone ? "is-done" : ""}`}
+          data-testid="item-epic-complete"
+          onClick={() => toggleDone(item)}
+          title={isDone ? "Reopen epic" : "Mark epic done"}
+          type="button"
+        >
+          {isDone ? <Check size={12} /> : <Circle size={12} />}
+        </button>
+        {renderBulkSelect(item)}
+        <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
-            className="do-items-section-toggle"
-            data-testid="item-tree-toggle"
-            onClick={() => toggleTreeNode(groupKey, kind, depth)}
+          className="do-items-section-toggle"
+          data-testid="item-tree-toggle"
+          onClick={() => toggleTreeNode(groupKey, kind, depth)}
           type="button"
         >
           <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
         </button>
-        {renderBulkSelect(item)}
-        <span />
         {renderTitleCell(item, kind, childCount, {
           depth: 0,
           childCount,
