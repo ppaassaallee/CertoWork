@@ -90,9 +90,12 @@ import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
+  allowedChildKinds,
   allowedParentItems,
   allowedParentKinds,
   compareHierarchySiblings,
+  effectiveInheritedField,
+  effectivePriority,
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
@@ -245,25 +248,31 @@ function itemAttributePresent(
   column: Exclude<ItemColumnKey, "title">,
   projects: any[],
   tags: TagLike[],
+  allItems: any[] = [],
 ) {
   if (column === "project") return Boolean(item?.projectId);
   if (column === "delivery_entity") {
-    const value = deliveryEntity(item, projects);
+    const value = String(effectiveInheritedField(item, allItems, "deliveryEntity") || deliveryEntity(item, projects));
     return Boolean(value) && value !== "Internal";
   }
   if (column === "client_entity") {
-    const value = clientEntity(item, projects);
+    const value = String(effectiveInheritedField(item, allItems, "clientEntity") || clientEntity(item, projects));
     return Boolean(value) && value !== "Internal";
   }
   if (column === "tags") return tagLabels(item, tags).length > 0;
-  if (column === "work_category") return Boolean(String(item?.workCategory || "").trim());
-  if (column === "product_phase") return Boolean(String(item?.productPhase || "").trim());
+  if (column === "work_category") {
+    return Boolean(String(effectiveInheritedField(item, allItems, "workCategory") || item?.workCategory || "").trim());
+  }
+  if (column === "product_phase") {
+    return Boolean(String(effectiveInheritedField(item, allItems, "productPhase") || item?.productPhase || "").trim());
+  }
   if (column === "status") return Boolean(canonicalStatus(item));
-  if (column === "priority") return priorityValue(item?.priority) !== "N/A";
+  if (column === "priority") return priorityValue(effectivePriority(item, allItems)) !== "N/A";
   if (column === "gtd") return Boolean(gtdActionValue(item));
   if (column === "bucket") return displayDueBucket(item) !== "No sector";
   if (column === "assignees") {
-    const names = Array.isArray(item?.assignees) ? item.assignees : [item?.owner || item?.assignee];
+    const inherited = effectiveInheritedField(item, allItems, "owner");
+    const names = Array.isArray(item?.assignees) ? item.assignees : [item?.owner || item?.assignee || inherited];
     return names.some((name: unknown) => String(name || "").trim());
   }
   if (column === "due") return Boolean(dateInputValue(item?.dueDate || item?.targetDate));
@@ -277,19 +286,31 @@ function itemAttributeCaption(
   projects: any[],
   tags: TagLike[],
   sprints: SprintRecord[],
+  allItems: any[] = [],
 ) {
   if (column === "project") return itemProjectTitle(item, projects);
-  if (column === "delivery_entity") return deliveryEntity(item, projects);
-  if (column === "client_entity") return clientEntity(item, projects);
+  if (column === "delivery_entity") {
+    return String(effectiveInheritedField(item, allItems, "deliveryEntity") || deliveryEntity(item, projects));
+  }
+  if (column === "client_entity") {
+    return String(effectiveInheritedField(item, allItems, "clientEntity") || clientEntity(item, projects));
+  }
   if (column === "tags") return tagLabels(item, tags).join(", ") || "No tags";
-  if (column === "work_category") return itemWorkCategory(item, projects);
-  if (column === "product_phase") return itemProductPhase(item, projects);
+  if (column === "work_category") {
+    return String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects));
+  }
+  if (column === "product_phase") {
+    return String(effectiveInheritedField(item, allItems, "productPhase") || itemProductPhase(item, projects));
+  }
   if (column === "status") return displayStatus(canonicalStatus(item));
-  if (column === "priority") return priorityValue(item?.priority);
+  if (column === "priority") return priorityValue(effectivePriority(item, allItems));
   if (column === "gtd") return gtdActionTypes.find((type) => type.value === gtdActionValue(item))?.label || "GTD: N/A";
   if (column === "bucket") return displayDueBucket(item);
   if (column === "assignees") {
-    const names = Array.isArray(item?.assignees) ? item.assignees : [item?.owner || item?.assignee];
+    const inherited = effectiveInheritedField(item, allItems, "owner");
+    const names = Array.isArray(item?.assignees) && item.assignees.length
+      ? item.assignees
+      : [item?.owner || item?.assignee || inherited];
     return names.filter(Boolean).join(", ") || "Unassigned";
   }
   if (column === "due") return dateInputValue(item?.dueDate || item?.targetDate) || "No date";
@@ -533,37 +554,46 @@ const FAMILY_GROUP_BY = new Set<GroupBy>([
   "tag",
 ]);
 
-function sortValue(item: any, sortBy: SortBy, projects: any[]) {
+function sortValue(item: any, sortBy: SortBy, projects: any[], allItems: any[] = []) {
   if (sortBy === "project") return itemProjectTitle(item, projects).toLowerCase();
-  if (sortBy === "delivery_entity")
-    return deliveryEntity(item, projects).toLowerCase();
-  if (sortBy === "client_entity")
-    return clientEntity(item, projects).toLowerCase();
-  if (sortBy === "work_category")
-    return itemWorkCategory(item, projects).toLowerCase();
-  if (sortBy === "product_phase")
-    return itemProductPhase(item, projects).toLowerCase();
-  if (sortBy === "priority") return priorityValue(item.priority) === "N/A" ? "9" : priorityValue(item.priority);
+  if (sortBy === "delivery_entity") {
+    return String(effectiveInheritedField(item, allItems, "deliveryEntity") || deliveryEntity(item, projects)).toLowerCase();
+  }
+  if (sortBy === "client_entity") {
+    return String(effectiveInheritedField(item, allItems, "clientEntity") || clientEntity(item, projects)).toLowerCase();
+  }
+  if (sortBy === "work_category") {
+    return String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects)).toLowerCase();
+  }
+  if (sortBy === "product_phase") {
+    return String(effectiveInheritedField(item, allItems, "productPhase") || itemProductPhase(item, projects)).toLowerCase();
+  }
+  if (sortBy === "priority") {
+    const priority = priorityValue(effectivePriority(item, allItems));
+    return priority === "N/A" ? "9" : priority;
+  }
   if (sortBy === "due") return dateInputValue(item.dueDate || item.targetDate) || "9999-12-31";
   if (sortBy === "status") return canonicalStatus(item);
-  if (sortBy === "owner") return String(item.owner || item.assignee || "zz unassigned").toLowerCase();
+  if (sortBy === "owner") {
+    return String(effectiveInheritedField(item, allItems, "owner") || item.owner || item.assignee || "zz unassigned").toLowerCase();
+  }
   if (sortBy === "type") return workItemKind(item);
   if (sortBy === "title") return title(item).toLowerCase();
   return String(itemOrder(item)).padStart(8, "0");
 }
 
-function compareItems(left: any, right: any, primary: SortBy, secondary: SortBy, projects: any[]) {
-  const first = sortValue(left, primary, projects).localeCompare(sortValue(right, primary, projects));
+function compareItems(left: any, right: any, primary: SortBy, secondary: SortBy, projects: any[], allItems: any[] = []) {
+  const first = sortValue(left, primary, projects, allItems).localeCompare(sortValue(right, primary, projects, allItems));
   if (first) return first;
   const second = primary === secondary
     ? 0
-    : sortValue(left, secondary, projects).localeCompare(sortValue(right, secondary, projects));
+    : sortValue(left, secondary, projects, allItems).localeCompare(sortValue(right, secondary, projects, allItems));
   if (second) return second;
   return compareHierarchySiblings(left, right);
 }
 
-function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: any[]) {
-  return sortHierarchyForest(items, (left, right) => compareItems(left, right, primary, secondary, projects));
+function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: any[], allItems: any[] = items) {
+  return sortHierarchyForest(items, (left, right) => compareItems(left, right, primary, secondary, projects, allItems));
 }
 
 function displayStatus(status: string) {
@@ -587,10 +617,12 @@ function InlineText({
   ariaLabel,
   value,
   onCommit,
+  onEnter,
 }: {
   ariaLabel: string;
   value?: string;
   onCommit: (value: string) => void;
+  onEnter?: () => void;
 }) {
   const [draft, setDraft] = useState(value || "");
   useEffect(() => setDraft(value || ""), [value]);
@@ -599,7 +631,13 @@ function InlineText({
       aria-label={ariaLabel}
       onBlur={() => draft.trim() !== String(value || "").trim() && onCommit(draft.trim())}
       onChange={(event) => setDraft(event.target.value)}
-      onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        if (draft.trim() !== String(value || "").trim()) onCommit(draft.trim());
+        if (onEnter) onEnter();
+        else event.currentTarget.blur();
+      }}
       value={draft}
     />
   );
@@ -651,6 +689,12 @@ export function WorkItemsCenter({
   const [newProjectId, setNewProjectId] = useState(activeProject?.id || "");
   const [newParentId, setNewParentId] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [newPriority, setNewPriority] = useState("N/A");
+  const [newDeliveryEntity, setNewDeliveryEntity] = useState("");
+  const [inlineAddDrafts, setInlineAddDrafts] = useState<Record<string, string>>({});
+  const inlineAddRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
@@ -999,26 +1043,25 @@ export function WorkItemsCenter({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const pool = hierarchyTasks?.length ? hierarchyTasks : tasks;
     return sortItems(tasks.filter((item) => {
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
       const matchesStatus = statusFilter === "all" ||
         (statusFilter === "open" ? !["done", "completed", "closed", "cancelled", "archived", "deleted"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
-      const matchesPriority = priorityFilter === "all" || priorityValue(item.priority) === priorityFilter;
+      const matchesPriority = priorityFilter === "all" || priorityValue(effectivePriority(item, pool)) === priorityFilter;
       const itemKind = workItemKind(item);
-      const matchesType = typeFilter === "all" ||
-        itemKind === typeFilter ||
-        (typeFilter === "pbi" && ["pbi", "story", "task", "bug"].includes(itemKind));
-      const matchesOwner = ownerFilter === "all" || String(item.owner || item.assignee || "") === ownerFilter;
+      const matchesType = typeFilter === "all" || itemKind === typeFilter;
+      const matchesOwner = ownerFilter === "all" || String(effectiveInheritedField(item, pool, "owner") || item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
       const matchesItemTag = matchesTag(item, tagFilter);
-      const matchesWorkCategory = workCategoryFilter === "all" || itemWorkCategory(item, projects) === workCategoryFilter;
-      const matchesProductPhase = productPhaseFilter === "all" || itemProductPhase(item, projects) === productPhaseFilter;
+      const matchesWorkCategory = workCategoryFilter === "all" || String(effectiveInheritedField(item, pool, "workCategory") || itemWorkCategory(item, projects)) === workCategoryFilter;
+      const matchesProductPhase = productPhaseFilter === "all" || String(effectiveInheritedField(item, pool, "productPhase") || itemProductPhase(item, projects)) === productPhaseFilter;
       const matchesSprint = itemMatchesSprint(item, sprintFilter);
       const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${itemWorkCategory(item, projects)} ${itemProductPhase(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
       return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && matchesSprint && (!needle || searchable.includes(needle));
-    }), primarySort, secondarySort, projects);
-  }, [dateFilter, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+    }), primarySort, secondarySort, projects, pool);
+  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const columnCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1119,13 +1162,15 @@ export function WorkItemsCenter({
     if (!newTitle.trim()) return;
     const project = projects.find((candidate) => candidate.id === projectId);
     const inheritedDeliveryEntity = String(
-      project?.deliveryEntity || project?.bpo || "",
+      newDeliveryEntity || project?.deliveryEntity || project?.bpo || "",
     );
     const inheritedClientEntity = String(
       project?.clientEntity || project?.client || "",
     );
     const parent = findPoolItem(newParentId);
     const links = parentLinkPatch(parent);
+    const assigneeMember = workspaceMembers.find((member) => member.id === newAssigneeId || member.userId === newAssigneeId);
+    const assigneeName = assigneeMember ? memberName(assigneeMember) : "";
     await onAddTask(projectId, newTitle.trim(), "backlog", {
       workItemType: newType,
       itemType: newType,
@@ -1137,12 +1182,64 @@ export function WorkItemsCenter({
       client: inheritedClientEntity,
       workCategory: project ? workCategory(project) : "Personal / Errand",
       productPhase: project ? productPhase(project) : "Explore",
-      priority: null,
+      priority: newPriority === "N/A" ? null : newPriority,
+      dueDate: newDueDate || null,
+      ...(assigneeMember ? {
+        assigneeIds: [assigneeMember.id],
+        assignees: [assigneeName],
+        owner: assigneeName,
+        assignee: assigneeName,
+      } : {}),
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
     });
     setNewTitle("");
     setNewParentId("");
+    setNewDueDate("");
+    setNewAssigneeId("");
+    setNewPriority("N/A");
+    setNewDeliveryEntity("");
+  };
+
+  const createInlineChild = async (parent: any) => {
+    const childKinds = allowedChildKinds(workItemKind(parent));
+    if (!childKinds.length) return;
+    const text = String(inlineAddDrafts[parent.id] || "").trim();
+    if (!text) return;
+    const kind = childKinds[0];
+    const projectId = parent.projectId || newProjectId || baseProjectId || "";
+    const links = parentLinkPatch(parent);
+    const project = projects.find((candidate) => candidate.id === projectId);
+    const inheritedDeliveryEntity = String(project?.deliveryEntity || project?.bpo || "");
+    const inheritedClientEntity = String(project?.clientEntity || project?.client || "");
+    await onAddTask(projectId, text, "backlog", {
+      workItemType: kind,
+      itemType: kind,
+      taskType: kind,
+      ...links,
+      deliveryEntity: inheritedDeliveryEntity,
+      bpo: inheritedDeliveryEntity,
+      clientEntity: inheritedClientEntity,
+      client: inheritedClientEntity,
+      workCategory: project ? workCategory(project) : "Personal / Errand",
+      productPhase: project ? productPhase(project) : "Explore",
+      priority: null,
+      order: tasks.filter((item) => (projectId ? item.projectId === projectId : !item.projectId)).length,
+      rank: tasks.filter((item) => (projectId ? item.projectId === projectId : !item.projectId)).length,
+    });
+    setInlineAddDrafts((current) => ({ ...current, [parent.id]: "" }));
+  };
+
+  const changeItemType = (item: any, kind: WorkItemKind) => {
+    const allowed = allowedParentKinds(kind);
+    const currentParent = findPoolItem(parentId(item));
+    const parentOk = Boolean(currentParent && allowed.includes(workItemKind(currentParent)));
+    onUpdateTask(item.id, {
+      workItemType: kind,
+      itemType: kind,
+      taskType: kind,
+      ...parentLinkPatch(parentOk ? currentParent : null),
+    });
   };
 
   const createKanbanItem = async (columnKey: string) => {
@@ -1228,7 +1325,7 @@ export function WorkItemsCenter({
     peers: any[],
   ) => {
     if (!draggedId || draggedId === targetId) return;
-    const ordered = sortItems(peers, "rank", "priority", projects);
+    const ordered = sortItems(peers, "rank", "priority", projects, parentPool);
     const from = ordered.findIndex((candidate) => candidate.id === draggedId);
     const to = ordered.findIndex((candidate) => candidate.id === targetId);
     if (from === -1 || to === -1) return;
@@ -1424,11 +1521,11 @@ export function WorkItemsCenter({
     item: any,
     kind: WorkItemKind,
     childCount: number,
-    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; showToggle?: boolean },
+    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; showToggle?: boolean; onEnterAddChild?: () => void },
   ) => (
     itemColumnSet.has("title") ? (
       <div className="do-items-title" style={tree?.depth ? { paddingLeft: tree.depth * 16 } : undefined}>
-        {tree?.showToggle !== false && tree && tree.childCount > 0 ? (
+        {tree?.showToggle !== false && tree && (tree.childCount > 0 || Boolean(tree.onEnterAddChild)) ? (
           <button
             aria-expanded={!tree.collapsed}
             aria-label={`${tree.collapsed ? "Expand" : "Collapse"} ${title(item)}`}
@@ -1452,7 +1549,12 @@ export function WorkItemsCenter({
         >
           {workItemLabel(kind)}
         </button>
-        <InlineText ariaLabel={`Title for ${title(item)}`} onCommit={(next) => next && onUpdateTask(item.id, { title: next })} value={title(item)} />
+        <InlineText
+          ariaLabel={`Title for ${title(item)}`}
+          onCommit={(next) => next && onUpdateTask(item.id, { title: next })}
+          onEnter={tree?.onEnterAddChild}
+          value={title(item)}
+        />
         {childCount ? <small>{childCount}</small> : null}
       </div>
     ) : null
@@ -1654,8 +1756,8 @@ export function WorkItemsCenter({
         );
       })()}
       {attributeColumns.map((column) => {
-        const filled = itemAttributePresent(item, column, projects, tags);
-        const caption = itemAttributeCaption(item, column, projects, tags, sprints);
+        const filled = itemAttributePresent(item, column, projects, tags, parentPool);
+        const caption = itemAttributeCaption(item, column, projects, tags, sprints, parentPool);
         const Icon = ATTR_ICONS[column];
         const key = `${item.id}:${column}`;
         const open = openAttr === key;
@@ -1694,7 +1796,7 @@ export function WorkItemsCenter({
   const renderRow = (
     item: any,
     peers: any[],
-    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void },
+    tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; onEnterAddChild?: () => void },
   ) => {
     const kind = workItemKind(item);
     const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
@@ -1789,10 +1891,20 @@ export function WorkItemsCenter({
       : [...current, group]);
   };
 
+  const focusInlineAdd = (parentIdValue: string, groupKey: string) => {
+    if (collapsedGroups.includes(groupKey)) {
+      setCollapsedGroups((current) => current.filter((key) => key !== groupKey));
+    }
+    window.setTimeout(() => {
+      inlineAddRefs.current[parentIdValue]?.focus();
+    }, 0);
+  };
+
   const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
     const kind = workItemKind(item);
     const collapsed = collapsedGroups.includes(groupKey);
     const isDone = canonicalStatus(item) === "done";
+    const canAddChild = allowedChildKinds(kind).length > 0;
     return (
       <header
         className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
@@ -1811,7 +1923,14 @@ export function WorkItemsCenter({
         </button>
         {renderBulkSelect(item)}
         <span />
-        {renderTitleCell(item, kind, childCount, { depth: 0, childCount, collapsed, onToggle: () => toggleGroup(groupKey), showToggle: false })}
+        {renderTitleCell(item, kind, childCount, {
+          depth: 0,
+          childCount,
+          collapsed,
+          onToggle: () => toggleGroup(groupKey),
+          showToggle: false,
+          onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey) : undefined,
+        })}
         {renderAttributeIcons(item)}
         {renderDeleteButton(item)}
       </header>
@@ -1819,7 +1938,38 @@ export function WorkItemsCenter({
   };
 
   const compareVisibleSiblings = (left: any, right: any) =>
-    compareItems(left, right, primarySort, secondarySort, projects);
+    compareItems(left, right, primarySort, secondarySort, projects, parentPool);
+
+  const renderInlineAddChild = (parent: any, depth: number) => {
+    const childKinds = allowedChildKinds(workItemKind(parent));
+    if (!childKinds.length) return null;
+    const childKind = childKinds[0];
+    const draft = inlineAddDrafts[parent.id] || "";
+    return (
+      <div
+        className="do-items-inline-add"
+        data-testid="item-inline-add-child"
+        style={{ paddingLeft: Math.max(depth + 1, 1) * 16 }}
+      >
+        <Plus size={12} aria-hidden="true" />
+        <input
+          aria-label={`Add ${workItemLabel(childKind)} under ${title(parent)}`}
+          onChange={(event) => setInlineAddDrafts((current) => ({ ...current, [parent.id]: event.target.value }))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              createInlineChild(parent);
+            }
+          }}
+          placeholder={`Add ${workItemLabel(childKind)}…`}
+          ref={(node) => {
+            inlineAddRefs.current[parent.id] = node;
+          }}
+          value={draft}
+        />
+      </div>
+    );
+  };
 
   const renderForest = (items: any[]) => {
     const walk = (item: any, depth: number, ancestors: Set<string>) => {
@@ -1828,6 +1978,7 @@ export function WorkItemsCenter({
       const groupKey = `node:${item.id}`;
       const collapsed = collapsedGroups.includes(groupKey);
       const kind = workItemKind(item);
+      const canAddChild = allowedChildKinds(kind).length > 0;
       const nextAncestors = new Set(ancestors);
       nextAncestors.add(item.id);
       const tree = {
@@ -1835,15 +1986,19 @@ export function WorkItemsCenter({
         childCount: children.length,
         collapsed,
         onToggle: () => toggleGroup(groupKey),
+        onEnterAddChild: canAddChild
+          ? () => focusInlineAdd(item.id, groupKey)
+          : undefined,
       };
       return (
         <div className={`do-items-tree-node do-items-parent is-${kind}${kind === "epic" && depth === 0 ? " is-epic-section" : ""}`} data-depth={depth} data-testid="item-tree-node" key={item.id}>
           {kind === "epic" && depth === 0
             ? renderSectionHead(item, groupKey, children.length)
             : renderRow(item, items, tree)}
-          {!collapsed && children.length > 0 && (
+          {!collapsed && (
             <div className="do-items-children">
               {children.map((child) => walk(child, depth + 1, nextAncestors))}
+              {canAddChild ? renderInlineAddChild(item, depth) : null}
             </div>
           )}
         </div>
@@ -1865,12 +2020,12 @@ export function WorkItemsCenter({
       const target = FAMILY_GROUP_BY.has(groupBy) ? hierarchyRoot(item, tasks) : item;
       if (groupBy === "actionBoard") return actionBoardBucket(target);
       if (groupBy === "status") return canonicalStatus(target);
-      if (groupBy === "priority") return priorityValue(target.priority);
+      if (groupBy === "priority") return priorityValue(effectivePriority(target, tasks));
       if (groupBy === "project") return itemProjectTitle(target, projects);
-      if (groupBy === "owner") return String(target.owner || target.assignee || "Unassigned");
+      if (groupBy === "owner") return String(effectiveInheritedField(target, tasks, "owner") || target.owner || target.assignee || "Unassigned");
       if (groupBy === "type") return workItemLabel(workItemKind(target));
-      if (groupBy === "work_category") return itemWorkCategory(target, projects);
-      if (groupBy === "product_phase") return itemProductPhase(target, projects);
+      if (groupBy === "work_category") return String(effectiveInheritedField(target, tasks, "workCategory") || itemWorkCategory(target, projects));
+      if (groupBy === "product_phase") return String(effectiveInheritedField(target, tasks, "productPhase") || itemProductPhase(target, projects));
       if (groupBy === "due") return dueBucketLabels[dueBucket(target.dueDate || target.targetDate)] || "No sector";
       if (groupBy === "tag") return tagLabels(target, tags)[0] || "No tag";
       return "Items";
@@ -1886,7 +2041,7 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const due = dateInputValue(item.dueDate || item.targetDate);
     const isDone = canonicalStatus(item) === "done";
-    const priority = priorityValue(item.priority);
+    const priority = priorityValue(effectivePriority(item, parentPool));
     const dueText = due ? dateLabel(new Date(`${due}T00:00:00`)) : "";
     const stopCardDrag = (event: { stopPropagation: () => void }) => event.stopPropagation();
     const checks = checklistProgress(checklistItems(item));
@@ -2353,7 +2508,7 @@ export function WorkItemsCenter({
   }
 
   const blockedCount = filtered.filter((item) => canonicalStatus(item) === "blocked").length;
-  const priorityOneCount = filtered.filter((item) => priorityValue(item.priority) === "1").length;
+  const priorityOneCount = filtered.filter((item) => priorityValue(effectivePriority(item, parentPool)) === "1").length;
   const overdueCount = filtered.filter(
     (item) => dueBucket(item.dueDate || item.targetDate) === "overdue",
   ).length;
@@ -2704,7 +2859,7 @@ export function WorkItemsCenter({
       )}
 
       {addItemOpen && (
-        <section className="do-items-create">
+        <section className="do-items-create is-quick-attrs">
           <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
             <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
             {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
@@ -2717,6 +2872,20 @@ export function WorkItemsCenter({
             {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
           </select>
           <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
+          <input aria-label="New item due date" data-testid="item-create-due" onChange={(event) => setNewDueDate(event.target.value)} type="date" value={newDueDate} />
+          <select aria-label="New item assignee" data-testid="item-create-assignee" onChange={(event) => setNewAssigneeId(event.target.value)} value={newAssigneeId}>
+            <option value="">Unassigned</option>
+            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+              <option key={member.id} value={member.id}>{memberName(member)}</option>
+            ))}
+          </select>
+          <select aria-label="New item priority" data-testid="item-create-priority" onChange={(event) => setNewPriority(event.target.value)} value={newPriority}>
+            {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+          </select>
+          <select aria-label="New item delivery entity" data-testid="item-create-delivery" onChange={(event) => setNewDeliveryEntity(event.target.value)} value={newDeliveryEntity}>
+            <option value="">Delivery entity</option>
+            {deliveryEntityOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
           <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
         </section>
       )}
@@ -2953,7 +3122,16 @@ export function WorkItemsCenter({
               role="dialog"
             >
             <div className="do-item-detail-head">
-              <span>{workItemLabel(workItemKind(selectedItem))}</span>
+              <select
+                aria-label="Item type"
+                data-testid="item-assign-type"
+                onChange={(event) => changeItemType(selectedItem, event.target.value as WorkItemKind)}
+                value={workItemKind(selectedItem)}
+              >
+                {workTypes.map((kind) => (
+                  <option key={kind} value={kind}>{workItemLabel(kind)}</option>
+                ))}
+              </select>
               <div className="do-item-detail-head-actions">
                 {renderDeleteButton(selectedItem)}
                 <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>

@@ -258,3 +258,38 @@ test("portfolio list opens a project from the title and renames on double-click"
   assert.doesNotMatch(projectSurfaces, /Edit the name directly/);
   assert.match(css, /\.do-command-project-title-open/);
 });
+
+test("type filter matches exact work item kinds only", () => {
+  assert.match(workItems, /const matchesType = typeFilter === "all" \|\| itemKind === typeFilter/);
+  assert.doesNotMatch(
+    workItems,
+    /typeFilter === "pbi" && \["pbi", "story", "task", "bug"\]/,
+  );
+});
+
+test("detail modal can change item type and re-validate parent", () => {
+  assert.match(workItems, /data-testid="item-assign-type"/);
+  assert.match(workItems, /changeItemType/);
+  assert.match(workItems, /allowedParentKinds\(kind\)/);
+  assert.match(workItems, /parentLinkPatch\(parentOk \? currentParent : null\)/);
+});
+
+test("expanded tree nodes offer an inline add-child input", () => {
+  assert.match(workItems, /data-testid="item-inline-add-child"/);
+  assert.match(workItems, /createInlineChild/);
+  assert.match(workItems, /allowedChildKinds/);
+  assert.match(workItems, /parentLinkPatch\(parent\)/);
+  assert.match(workItems, /focusInlineAdd/);
+});
+
+test("add item form exposes optional quick attributes before create", () => {
+  assert.match(workItems, /data-testid="item-create-due"/);
+  assert.match(workItems, /data-testid="item-create-assignee"/);
+  assert.match(workItems, /data-testid="item-create-priority"/);
+  assert.match(workItems, /data-testid="item-create-delivery"/);
+  assert.match(workItems, /newDueDate/);
+  assert.match(workItems, /newAssigneeId/);
+  assert.match(workItems, /newPriority/);
+  assert.match(workItems, /newDeliveryEntity/);
+  assert.match(workItems, /dueDate: newDueDate \|\| null/);
+});

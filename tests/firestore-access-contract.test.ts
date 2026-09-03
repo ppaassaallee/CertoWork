@@ -215,4 +215,8 @@ test("workspaces are tenant-private and do not allow every signed-in user to rea
   assert.doesNotMatch(auth, /activeWorkspaceName\) \|\| 'Workspace'/);
   assert.match(auth, /agent_invites/);
   assert.match(auth, /inviteShouldCloseOnJoin/);
+  assert.match(auth, /inviteIsUsable/);
+  assert.match(auth, /You have a workspace invitation/);
+  assert.match(rules, /workspaceMembersContainAuthEmail/);
+  assert.match(rules, /resource\.data\.emailLower == authEmailLower\(\)/);
 });

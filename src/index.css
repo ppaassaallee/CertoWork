@@ -4812,6 +4812,13 @@ a {
     auto;
   background: var(--surface-0);
 }
+.do-items-create.is-quick-attrs {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  align-items: center;
+}
+.do-items-create.is-quick-attrs .do-ai-create-field {
+  grid-column: 1 / -2;
+}
 .do-ai-create-field,
 .do-ai-inline-field {
   display: flex;
@@ -5088,6 +5095,27 @@ a {
   gap: 0;
   border-top: 0;
   padding: 0 0 0 12px;
+}
+.do-items-inline-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 2px 4px 6px;
+  color: var(--text-muted);
+}
+.do-items-inline-add input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  outline: none;
+}
+.do-items-inline-add input::placeholder {
+  color: var(--text-muted);
 }
 .do-items-subtasks {
   display: grid;

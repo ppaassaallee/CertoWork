@@ -102,6 +102,7 @@ import {
   timeAgo,
   timestamp,
 } from "../lib/workspaceDisplay";
+import { productPhase, workCategory } from "../lib/workClassification";
 import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
@@ -2704,12 +2705,18 @@ export function DelivereeWorkspace() {
       inviteToken,
       inviteId: inviteRef.id,
     });
+    const inviteUrl = inviteDirectoryUrl(inviteToken);
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+    } catch {
+      /* clipboard may be blocked; still show the link in the notice */
+    }
     setInviteEmail("");
     await reloadWorkspaces();
     setNotice(
       result.sent
-        ? `Invite sent to ${email}. They should sign in with that exact email.`
-        : `Invite saved for ${email}, but no email was sent yet: ${result.warning} Copy the link from Pending invites if you need to send it manually.`,
+        ? `Invite emailed to ${email}. Invite link copied — they must open it and sign in with that exact email.`
+        : `Invite saved for ${email}, but email was not delivered: ${result.warning}. Invite link copied — share it manually: ${inviteUrl}`,
     );
     } catch (reason) {
       setNotice(
@@ -4000,11 +4007,11 @@ export function DelivereeWorkspace() {
         keywords: "chat slack teams chatwoot messages",
         onSelect: () => navigate("/collab"),
       },
-      ...activeProjects.slice(0, 12).map((project) => ({
+      ...activeProjects.map((project) => ({
         id: `nav-collab-room-${project.id}`,
         label: `Open room · ${entityTitle(project)}`,
         group: "Navigate",
-        keywords: "chat collab room chatwoot",
+        keywords: `chat collab room chatwoot ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -4070,11 +4077,22 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/workspace/feedback"),
       },
     ];
-    for (const project of activeProjects.slice(0, 30)) {
+    for (const project of activeProjects) {
       items.push({
         id: `project-${project.id}`,
         label: entityTitle(project),
         group: "Projects",
+        keywords: [
+          entityTitle(project),
+          project.clientEntity || project.client || "",
+          project.deliveryEntity || project.bpo || "",
+          project.projectKey || "",
+          project.serviceLine || "",
+          workCategory(project),
+          productPhase(project),
+        ]
+          .filter(Boolean)
+          .join(" "),
         onSelect: () => openProjectRecord(project),
       });
     }

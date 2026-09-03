@@ -25,7 +25,7 @@ import {
   shouldFallbackGoogleSignInToRedirect,
   withAuthTimeout,
 } from './authFlow';
-import { inviteShouldCloseOnJoin } from './inviteLifecycle';
+import { inviteIsUsable, inviteShouldCloseOnJoin } from './inviteLifecycle';
 import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
 import { grantsWorkspacePortfolioAccess } from './accessControl';
 
@@ -185,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Accept pending email invitations automatically once the invited person signs in.
+      let pendingInviteDocs: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
       if (u.email) {
         try {
           const emailLower = u.email.toLowerCase();
@@ -199,6 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               'Pending invite lookup',
             );
             inviteSnaps = snapInvites.docs;
+            pendingInviteDocs = snapInvites.docs;
           } catch (eInviteDocs) {
             console.error("Failed to load pending invite documents:", eInviteDocs);
           }
@@ -305,6 +307,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         if (!lookupSucceeded) {
           throw new Error('Workspace lookups did not complete');
+        }
+        const openInvites = pendingInviteDocs.filter((inviteDoc) => {
+          const data = inviteDoc.data() as { status?: string; inviteType?: string; workspaceId?: string };
+          return inviteIsUsable(data) && String(data.workspaceId || "");
+        });
+        // Invited teammates should never be trapped on the beta-access gate.
+        if (openInvites.length > 0) {
+          for (const inviteDoc of openInvites) {
+            const inviteData = inviteDoc.data() as {
+              workspaceId?: string;
+              role?: string;
+              email?: string;
+              emailLower?: string;
+            };
+            const wsId = String(inviteData.workspaceId || "");
+            if (!wsId) continue;
+            try {
+              const wsSnap = await withTimeout(getDoc(doc(db, 'workspaces', wsId)), 5_000, `Open invite workspace ${wsId}`);
+              if (!wsSnap.exists()) continue;
+              const ws = { id: wsId, ...wsSnap.data() } as Workspace;
+              wsMap.set(wsId, ws);
+              memberWorkspaceIds.add(wsId);
+              const memberId = `${wsId}_${u.uid}`;
+              const role = inviteData.role || "member";
+              await withTimeout(setDoc(doc(db, 'workspace_members', memberId), {
+                id: memberId,
+                workspaceId: wsId,
+                userId: u.uid,
+                email: u.email || "",
+                emailLower: (u.email || "").toLowerCase(),
+                ...membershipPublicPatch({ displayName: publicAuthName(u.displayName) }),
+                role,
+                status: "active",
+                portfolioViewer: grantsWorkspacePortfolioAccess(role),
+                acceptedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              }, { merge: true }), 5_000, `Join invited workspace ${wsId}`);
+              await withTimeout(updateDoc(inviteDoc.ref, {
+                status: "accepted",
+                acceptedBy: u.uid,
+                acceptedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              }), 5_000, `Accept open invite ${inviteDoc.id}`);
+            } catch (eOpenInvite) {
+              console.error(`Failed to join open invite workspace:`, eOpenInvite);
+            }
+          }
+          const joined = (Array.from(wsMap.values()) as Workspace[]).filter((ws) =>
+            canSeeWorkspaceDocument(ws, u, memberWorkspaceIds),
+          );
+          if (joined.length > 0) {
+            const active = joined[0];
+            setWorkspaces(joined);
+            setWorkspaceState(active);
+            localStorage.setItem('activeWorkspaceId', active.id);
+            localStorage.setItem('activeWorkspaceName', active.name || 'Workspace');
+            setWorkspaceError("");
+            return;
+          }
+          setWorkspaceState(null);
+          setWorkspaces([]);
+          setWorkspaceError("You have a workspace invitation. Open the invite link from your email (or ask an admin to resend it), then sign in with that exact email.");
+          return;
         }
         const isEmailPasswordAccount = u.providerData.some((provider) => provider.providerId === "password");
         if (isEmailPasswordAccount) {

@@ -41,15 +41,18 @@ export function CommandPalette({
   }, [open, onClose]);
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const normalize = (value: string) =>
+      value
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase();
+    const needle = normalize(query.trim());
     if (!needle) return items.slice(0, 40);
     return items
       .filter((item) =>
-        `${item.label} ${item.group} ${item.keywords || ""}`
-          .toLowerCase()
-          .includes(needle),
+        normalize(`${item.label} ${item.group} ${item.keywords || ""}`).includes(needle),
       )
-      .slice(0, 40);
+      .slice(0, 60);
   }, [items, query]);
 
   if (!open) return null;

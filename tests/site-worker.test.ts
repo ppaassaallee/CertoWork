@@ -151,6 +151,13 @@ test("workspace invite email route requires authentication", async () => {
   assert.equal(response.status, 401);
 });
 
+test("invite emails use the public certo.work origin and fail loudly without Brevo", async () => {
+  const source = readFileSync(resolve("worker/index.js"), "utf8");
+  assert.match(source, /function publicAppOrigin/);
+  assert.match(source, /do not request beta access/i);
+  assert.match(source, /result\.configured \? 502 : 503/);
+});
+
 test("Sites worker exposes the signed-in platform identity for the migration path", async () => {
   const response = await worker.fetch(
     new Request("https://gazelle.test/api/session", {
