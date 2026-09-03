@@ -122,12 +122,25 @@ test("items and project backlog sort families by the parent, not each child", ()
   assert.match(workItems, /compareVisibleSiblings/);
 });
 
-test("items list hides unique keys and shows an inline type flag", () => {
-  assert.match(workItems, /do-items-type-flag is-\$\{kind\}/);
+test("items list hides unique keys and shows an inline type icon", () => {
+  assert.match(workItems, /do-items-type-flag is-icon is-\$\{kind\}/);
   assert.match(workItems, /data-testid="item-type-flag"/);
+  assert.match(workItems, /WORK_ITEM_TYPE_ICONS/);
+  assert.match(workItems, /do-items-type-flag-label/);
   assert.match(workItems, /do-items-section-head/);
   assert.doesNotMatch(workItems, /workItemLabel\(kind\)\} · \$\{item\.key\}/);
   assert.doesNotMatch(workItems, /item\.key \? `\$\{workItemLabel/);
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(css, /\.do-items-type-flag\.is-icon/);
+  assert.match(css, /\.do-items-type-flag-label/);
+});
+
+test("hierarchy expands epics by default and keeps other parents collapsed until toggled", () => {
+  assert.match(workItems, /collapsedEpicNodes/);
+  assert.match(workItems, /expandedTreeNodes/);
+  assert.match(workItems, /isTreeNodeCollapsed/);
+  assert.match(workItems, /toggleTreeNode/);
+  assert.match(workItems, /isEpicSection\(kind, depth\)/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {

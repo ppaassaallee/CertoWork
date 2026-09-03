@@ -4,18 +4,23 @@ import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult 
 import {
   ArrowRight,
   BarChart3,
+  Bookmark,
   Briefcase,
+  Bug,
   Calendar,
   CalendarRange,
   Check,
+  CheckSquare,
   ChevronDown,
   Circle,
   CircleDot,
   Clipboard,
   Clock,
   Compass,
+  CornerDownRight,
   Flag,
   Folder,
+  Gem,
   GitBranch,
   Globe,
   GripVertical,
@@ -29,6 +34,7 @@ import {
   SlidersHorizontal,
   Square,
   Tag,
+  Target,
   Timer,
   Trash,
   User,
@@ -432,6 +438,16 @@ function workItemLabel(kind: WorkItemKind) {
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
+const WORK_ITEM_TYPE_ICONS: Record<WorkItemKind, typeof Gem> = {
+  epic: Gem,
+  feature: Layers,
+  story: Bookmark,
+  pbi: Target,
+  task: CheckSquare,
+  bug: Bug,
+  subtask: CornerDownRight,
+};
+
 function parentId(item: any) {
   return String(item?.parentId || item?.featureId || item?.epicId || "");
 }
@@ -697,6 +713,10 @@ export function WorkItemsCenter({
   const [inlineAddOpen, setInlineAddOpen] = useState<Record<string, boolean>>({});
   const inlineAddRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  /** Epics start expanded; listed keys are user-collapsed for this screen visit. */
+  const [collapsedEpicNodes, setCollapsedEpicNodes] = useState<string[]>([]);
+  /** Non-epic parents start collapsed; listed keys are user-expanded for this screen visit. */
+  const [expandedTreeNodes, setExpandedTreeNodes] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
@@ -985,7 +1005,12 @@ export function WorkItemsCenter({
     if (remotePushTimer.current) window.clearTimeout(remotePushTimer.current);
   }, []);
 
-  useEffect(() => setCollapsedGroups([]), [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, workCategoryFilter, productPhaseFilter, query]);
+  useEffect(() => {
+    setCollapsedGroups([]);
+    setCollapsedEpicNodes([]);
+    setExpandedTreeNodes([]);
+    setInlineAddOpen({});
+  }, [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, workCategoryFilter, productPhaseFilter, query]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1544,12 +1569,17 @@ export function WorkItemsCenter({
         ) : tree ? <span className="do-items-tree-spacer" /> : null}
         <button
           aria-label={`${workItemLabel(kind)} ${title(item)}`}
-          className={`do-items-type-flag is-${kind}`}
+          className={`do-items-type-flag is-icon is-${kind}`}
           data-testid="item-type-flag"
           onClick={() => onSelectItem(item.id)}
+          title={workItemLabel(kind)}
           type="button"
         >
-          {workItemLabel(kind)}
+          {(() => {
+            const TypeIcon = WORK_ITEM_TYPE_ICONS[kind] || Target;
+            return <TypeIcon aria-hidden="true" size={13} />;
+          })()}
+          <span className="do-items-type-flag-label">{workItemLabel(kind)}</span>
         </button>
         <InlineText
           ariaLabel={`Title for ${title(item)}`}
@@ -1888,24 +1918,50 @@ export function WorkItemsCenter({
   );
 
   const toggleGroup = (group: string) => {
-    const collapsing = !collapsedGroups.includes(group);
     setCollapsedGroups((current) => current.includes(group)
       ? current.filter((item) => item !== group)
       : [...current, group]);
-    if (collapsing && group.startsWith("node:")) {
-      const parentIdValue = group.slice(5);
-      setInlineAddOpen((current) => {
-        if (!current[parentIdValue]) return current;
-        const next = { ...current };
-        delete next[parentIdValue];
-        return next;
-      });
-    }
   };
 
-  const focusInlineAdd = (parentIdValue: string, groupKey: string) => {
-    if (collapsedGroups.includes(groupKey)) {
-      setCollapsedGroups((current) => current.filter((key) => key !== groupKey));
+  const isEpicSection = (kind: WorkItemKind, depth: number) => kind === "epic" && depth === 0;
+
+  const isTreeNodeCollapsed = (groupKey: string, kind: WorkItemKind, depth: number) => {
+    if (isEpicSection(kind, depth)) return collapsedEpicNodes.includes(groupKey);
+    return !expandedTreeNodes.includes(groupKey);
+  };
+
+  const clearInlineAddForNode = (groupKey: string) => {
+    if (!groupKey.startsWith("node:")) return;
+    const parentIdValue = groupKey.slice(5);
+    setInlineAddOpen((current) => {
+      if (!current[parentIdValue]) return current;
+      const next = { ...current };
+      delete next[parentIdValue];
+      return next;
+    });
+  };
+
+  const toggleTreeNode = (groupKey: string, kind: WorkItemKind, depth: number) => {
+    const collapsing = !isTreeNodeCollapsed(groupKey, kind, depth);
+    if (isEpicSection(kind, depth)) {
+      setCollapsedEpicNodes((current) => collapsing
+        ? [...current, groupKey]
+        : current.filter((key) => key !== groupKey));
+    } else {
+      setExpandedTreeNodes((current) => collapsing
+        ? current.filter((key) => key !== groupKey)
+        : [...current, groupKey]);
+    }
+    if (collapsing) clearInlineAddForNode(groupKey);
+  };
+
+  const focusInlineAdd = (parentIdValue: string, groupKey: string, kind: WorkItemKind, depth: number) => {
+    if (isTreeNodeCollapsed(groupKey, kind, depth)) {
+      if (isEpicSection(kind, depth)) {
+        setCollapsedEpicNodes((current) => current.filter((key) => key !== groupKey));
+      } else {
+        setExpandedTreeNodes((current) => current.includes(groupKey) ? current : [...current, groupKey]);
+      }
     }
     setInlineAddOpen((current) => ({ ...current, [parentIdValue]: true }));
     window.setTimeout(() => {
@@ -1915,7 +1971,8 @@ export function WorkItemsCenter({
 
   const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
     const kind = workItemKind(item);
-    const collapsed = collapsedGroups.includes(groupKey);
+    const depth = 0;
+    const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
     const isDone = canonicalStatus(item) === "done";
     const canAddChild = allowedChildKinds(kind).length > 0;
     return (
@@ -1929,7 +1986,7 @@ export function WorkItemsCenter({
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
             className="do-items-section-toggle"
             data-testid="item-tree-toggle"
-            onClick={() => toggleGroup(groupKey)}
+            onClick={() => toggleTreeNode(groupKey, kind, depth)}
           type="button"
         >
           <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
@@ -1940,9 +1997,9 @@ export function WorkItemsCenter({
           depth: 0,
           childCount,
           collapsed,
-          onToggle: () => toggleGroup(groupKey),
+          onToggle: () => toggleTreeNode(groupKey, kind, depth),
           showToggle: false,
-          onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey) : undefined,
+          onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
         {renderAttributeIcons(item)}
         {renderDeleteButton(item)}
@@ -1968,7 +2025,7 @@ export function WorkItemsCenter({
           aria-label={`${addLabel} under ${title(parent)}`}
           className="do-items-inline-add-btn"
           data-testid="item-inline-add-child"
-          onClick={() => focusInlineAdd(parent.id, groupKey)}
+          onClick={() => focusInlineAdd(parent.id, groupKey, workItemKind(parent), depth)}
           style={{ paddingLeft: indent }}
           type="button"
         >
@@ -2032,8 +2089,8 @@ export function WorkItemsCenter({
       if (ancestors.has(item.id)) return null;
       const children = sortHierarchySiblings(hierarchyChildren(childPool, item.id), compareVisibleSiblings);
       const groupKey = `node:${item.id}`;
-      const collapsed = collapsedGroups.includes(groupKey);
       const kind = workItemKind(item);
+      const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
       const canAddChild = allowedChildKinds(kind).length > 0;
       const nextAncestors = new Set(ancestors);
       nextAncestors.add(item.id);
@@ -2041,9 +2098,9 @@ export function WorkItemsCenter({
         depth,
         childCount: children.length,
         collapsed,
-        onToggle: () => toggleGroup(groupKey),
+        onToggle: () => toggleTreeNode(groupKey, kind, depth),
         onEnterAddChild: canAddChild
-          ? () => focusInlineAdd(item.id, groupKey)
+          ? () => focusInlineAdd(item.id, groupKey, kind, depth)
           : undefined,
       };
       return (
