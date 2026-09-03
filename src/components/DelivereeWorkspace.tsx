@@ -156,10 +156,14 @@ import { RequestsCenter } from "./RequestsCenter";
 import {
   buildPersonalCaptureAlias,
   buildPersonalCaptureEmail,
+  buildTeamCaptureEmail,
   formatCaptureDescription,
   deterministicCaptureUnderstand,
   buildRequestPortalSnapshot,
+  buildTicketSlaPatch,
+  captureRouteDocId,
   createRequestPortalToken,
+  markTicketFirstResponseSla,
   requestPortalAbsoluteUrl,
   REQUEST_PORTAL_COLLECTION,
   type CaptureAddress,
@@ -3496,6 +3500,21 @@ export function DelivereeWorkspace() {
         ...(existing ? {} : { createdAt: serverTimestamp(), createdBy: user.uid }),
       };
       await setDoc(doc(db, "capture_addresses", id), payload, { merge: true });
+      if (email) {
+        await setDoc(
+          doc(db, "capture_routes", captureRouteDocId(email)),
+          {
+            email,
+            addressId: id,
+            workspaceId: workspace.id,
+            userId: user.uid,
+            kind: "personal",
+            status: "active",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
       setNotice(`Capture inbox ready: ${email}`);
     } catch (reason) {
       setNotice(
@@ -3558,6 +3577,7 @@ export function DelivereeWorkspace() {
       relatedWorkIds: [],
       projectId: null,
       portalToken,
+      sla: buildTicketSlaPatch(),
     });
     if (id) {
       const ticket = {
@@ -3642,11 +3662,13 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
     });
     if (visibility === "public") {
+      const sla = markTicketFirstResponseSla(ticket);
       await updateDoc(doc(db, "tasks", ticketId), {
         lastPublicUpdate: body.slice(0, 240),
         customerStatus: "In progress",
         ticketStatus: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.ticketStatus || "in_progress",
         status: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.status || "in_progress",
+        sla,
         updatedAt: serverTimestamp(),
       });
       await syncRequestPortal(ticketId, [
@@ -3729,6 +3751,94 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
     setNotice(`Created related ${kind.toUpperCase()}.`);
+  };
+
+  const ensureRequestPortal = async (ticket: any) => {
+    if (!user || !workspace || !ticket?.id) return;
+    if (ticket.portalToken) {
+      void navigator.clipboard?.writeText(requestPortalAbsoluteUrl(String(ticket.portalToken)));
+      setNotice("Requester portal link copied.");
+      return;
+    }
+    const portalToken = createRequestPortalToken();
+    const messages = workItemMessages.filter((message) => message.workItemId === ticket.id);
+    await setDoc(doc(db, REQUEST_PORTAL_COLLECTION, portalToken), {
+      token: portalToken,
+      ticketId: ticket.id,
+      workspaceId: workspace.id,
+      userId: user.uid,
+      requesterEmail: ticket.requesterEmail || null,
+      revoked: false,
+      snapshot: buildRequestPortalSnapshot({
+        workspaceName: workspace.name || "Certo Work",
+        ticket: { ...ticket, id: ticket.id },
+        messages,
+      }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, "tasks", ticket.id), {
+      portalToken,
+      updatedAt: serverTimestamp(),
+    });
+    void navigator.clipboard?.writeText(requestPortalAbsoluteUrl(portalToken));
+    setNotice("Requester portal created and copied.");
+  };
+
+  const ensureTeamCaptureAddress = async (teamSlug: string) => {
+    if (!user || !workspace) return;
+    const slug = String(teamSlug || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._+-]/g, "")
+      .slice(0, 48);
+    if (!slug) {
+      setNotice("Enter a team slug like support or platform.");
+      return;
+    }
+    setCaptureBusy(true);
+    try {
+      const email = buildTeamCaptureEmail(slug);
+      const id = `team_${workspace.id}_${slug}`;
+      await setDoc(
+        doc(db, "capture_addresses", id),
+        {
+          workspaceId: workspace.id,
+          kind: "team",
+          localPart: slug,
+          domain: "requests.certo.work",
+          email,
+          userId: user.uid,
+          teamSlug: slug,
+          status: "active",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: user.uid,
+        },
+        { merge: true },
+      );
+      await setDoc(
+        doc(db, "capture_routes", captureRouteDocId(email)),
+        {
+          email,
+          addressId: id,
+          workspaceId: workspace.id,
+          userId: user.uid,
+          kind: "team",
+          teamSlug: slug,
+          status: "active",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setNotice(`Team Requests inbox ready: ${email}`);
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not create team inbox.",
+      );
+    } finally {
+      setCaptureBusy(false);
+    }
   };
 
   const ingestCapturedEmail = async (subject: string, body: string) => {
@@ -5859,6 +5969,7 @@ export function DelivereeWorkspace() {
           />
         ) : centerView === "requests" ? (
           <RequestsCenter
+            allTasks={tasks}
             messages={workItemMessages}
             onChangeSection={(section) => {
               if (section === "inbox") navigate("/requests");
@@ -5872,6 +5983,11 @@ export function DelivereeWorkspace() {
             }}
             onCreateRelatedWork={createRelatedWorkFromTicket}
             onCreateTicket={createRequestTicket}
+            onEnsurePortal={ensureRequestPortal}
+            onOpenRelatedWork={(id) => {
+              setSelectedWorkItemId(id);
+              navigate("/my-work");
+            }}
             onSelect={setSelectedRequestId}
             onSendMessage={sendRequestMessage}
             onUpdateTicket={async (id, patch) => {
@@ -6577,6 +6693,7 @@ export function DelivereeWorkspace() {
                 address={captureAddress}
                 busy={captureBusy}
                 onEnsureAddress={ensureCaptureAddress}
+                onEnsureTeamAddress={ensureTeamCaptureAddress}
                 onRotateAlias={rotateCaptureAlias}
                 userEmail={user?.email}
                 userName={user?.displayName}

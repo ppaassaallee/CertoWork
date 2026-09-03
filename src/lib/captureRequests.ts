@@ -392,6 +392,39 @@ export function buildRequestPortalSnapshot(input: {
   };
 }
 
+/** Minimal SLA clocks for Requests — first response + next update. */
+export function buildTicketSlaPatch(now = Date.now()) {
+  const hour = 60 * 60 * 1000;
+  return {
+    firstResponseDueAt: new Date(now + 8 * hour).toISOString(),
+    resolutionDueAt: new Date(now + 72 * hour).toISOString(),
+    nextUpdateDueAt: new Date(now + 24 * hour).toISOString(),
+    firstRespondedAt: null as string | null,
+  };
+}
+
+export function markTicketFirstResponseSla(
+  existing: Record<string, unknown> | null | undefined,
+  now = Date.now(),
+) {
+  const current = (existing?.sla && typeof existing.sla === "object"
+    ? { ...(existing.sla as Record<string, unknown>) }
+    : buildTicketSlaPatch(now)) as Record<string, unknown>;
+  if (!current.firstRespondedAt) {
+    current.firstRespondedAt = new Date(now).toISOString();
+  }
+  current.nextUpdateDueAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+  return current;
+}
+
+export function captureRouteDocId(email: string) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._+-]/g, "_")
+    .slice(0, 700);
+}
+
 /** Deterministic offline AI fallback when OpenAI is unavailable. */
 export function deterministicCaptureUnderstand(input: {
   subject?: string;

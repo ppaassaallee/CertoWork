@@ -23,6 +23,7 @@ import {
 type Props = {
   section: "inbox" | "mine" | "waiting" | "resolved" | "new";
   tickets: any[];
+  allTasks?: any[];
   viewerId?: string;
   viewerName?: string;
   selectedId?: string | null;
@@ -39,6 +40,8 @@ type Props = {
   onCreateRelatedWork: (ticketId: string, kind: "pbi" | "bug" | "task" | "issue") => Promise<void> | void;
   onChangeSection: (section: Props["section"]) => void;
   onCopyPortalLink?: (ticket: any) => void;
+  onEnsurePortal?: (ticket: any) => Promise<void> | void;
+  onOpenRelatedWork?: (id: string) => void;
 };
 
 function titleOf(item: any) {
@@ -58,6 +61,7 @@ function ticketStatusOf(item: any): TicketStatus {
 export function RequestsCenter({
   section,
   tickets,
+  allTasks = [],
   viewerId,
   viewerName,
   selectedId,
@@ -69,6 +73,8 @@ export function RequestsCenter({
   onCreateRelatedWork,
   onChangeSection,
   onCopyPortalLink,
+  onEnsurePortal,
+  onOpenRelatedWork,
 }: Props) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -233,25 +239,65 @@ export function RequestsCenter({
                     <h2>{titleOf(selected)}</h2>
                     <p>{toCustomerStatus(selected)}</p>
                   </div>
-                  <label>
-                    Status
-                    <select
-                      aria-label="Ticket status"
-                      onChange={(event) => {
-                        const ticketStatus = event.target.value as TicketStatus;
-                        void onUpdateTicket(selected.id, {
-                          ticketStatus,
-                          status: mapTicketStatusToWorkStatus(ticketStatus),
-                          waitingReason: ticketStatus === "waiting" ? selected.waitingReason || WAITING_REASONS[0] : null,
-                        });
-                      }}
-                      value={ticketStatusOf(selected)}
-                    >
-                      {TICKET_STATUSES.map((status) => (
-                        <option key={status} value={status}>{ticketStatusLabel(status)}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="do-requests-status-fields">
+                    <label>
+                      Status
+                      <select
+                        aria-label="Ticket status"
+                        onChange={(event) => {
+                          const ticketStatus = event.target.value as TicketStatus;
+                          void onUpdateTicket(selected.id, {
+                            ticketStatus,
+                            status: mapTicketStatusToWorkStatus(ticketStatus),
+                            waitingReason:
+                              ticketStatus === "waiting"
+                                ? selected.waitingReason || WAITING_REASONS[0]
+                                : null,
+                            customerStatus: toCustomerStatus({
+                              ...selected,
+                              ticketStatus,
+                              waitingReason:
+                                ticketStatus === "waiting"
+                                  ? selected.waitingReason || WAITING_REASONS[0]
+                                  : null,
+                            }),
+                          });
+                        }}
+                        value={ticketStatusOf(selected)}
+                      >
+                        {TICKET_STATUSES.map((status) => (
+                          <option key={status} value={status}>{ticketStatusLabel(status)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {ticketStatusOf(selected) === "waiting" ? (
+                      <label>
+                        Waiting reason
+                        <select
+                          aria-label="Waiting reason"
+                          data-testid="requests-waiting-reason"
+                          onChange={(event) => {
+                            const waitingReason = event.target.value;
+                            void onUpdateTicket(selected.id, {
+                              waitingReason,
+                              ticketStatus: "waiting",
+                              status: "blocked",
+                              customerStatus: toCustomerStatus({
+                                ...selected,
+                                ticketStatus: "waiting",
+                                waitingReason,
+                              }),
+                            });
+                          }}
+                          value={selected.waitingReason || WAITING_REASONS[0]}
+                        >
+                          {WAITING_REASONS.map((reason) => (
+                            <option key={reason} value={reason}>{reason}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
                 </header>
 
                 <div className="do-requests-meta">
@@ -266,6 +312,15 @@ export function RequestsCenter({
                       type="button"
                     >
                       <Link2 size={13} /> Copy requester portal
+                    </button>
+                  ) : onEnsurePortal ? (
+                    <button
+                      className="do-button"
+                      data-testid="requests-ensure-portal"
+                      onClick={() => void onEnsurePortal(selected)}
+                      type="button"
+                    >
+                      <Link2 size={13} /> Create requester portal
                     </button>
                   ) : null}
                 </div>
@@ -291,9 +346,28 @@ export function RequestsCenter({
                   </div>
                   {(Array.isArray(selected.relatedWorkIds) ? selected.relatedWorkIds : []).length ? (
                     <ul>
-                      {(selected.relatedWorkIds as string[]).map((id) => (
-                        <li key={id}>{id}</li>
-                      ))}
+                      {(selected.relatedWorkIds as string[]).map((id) => {
+                        const related = allTasks.find((item) => item.id === id);
+                        return (
+                          <li key={id}>
+                            {onOpenRelatedWork ? (
+                              <button
+                                className="do-requests-related-link"
+                                onClick={() => onOpenRelatedWork(id)}
+                                type="button"
+                              >
+                                {related
+                                  ? `${String(related.workItemType || related.type || "item").toUpperCase()} · ${titleOf(related)}`
+                                  : id}
+                              </button>
+                            ) : (
+                              related
+                                ? `${String(related.workItemType || related.type || "item").toUpperCase()} · ${titleOf(related)}`
+                                : id
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <em>No related engineering work yet.</em>

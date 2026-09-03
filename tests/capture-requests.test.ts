@@ -7,10 +7,12 @@ import {
   buildPersonalCaptureEmail,
   buildTeamCaptureEmail,
   buildRequestPortalSnapshot,
+  buildTicketSlaPatch,
   deterministicCaptureUnderstand,
   deterministicTicketTriage,
   isCapturedWorkItem,
   mapTicketStatusToWorkStatus,
+  markTicketFirstResponseSla,
   requestPortalPath,
   toCustomerStatus,
 } from "../src/lib/captureRequests";
@@ -195,8 +197,28 @@ test("requester portal route is public and token-based", () => {
   assert.match(app, /\\\/request\\\//);
   assert.match(portal, /data-testid="request-portal"/);
   assert.match(portal, /request-portal-reply/);
+  assert.match(portal, /onSnapshot/);
   assert.match(rules, /match \/request_portal_tokens\/\{id\}/);
   assert.match(rules, /channel == 'portal'/);
+  assert.match(rules, /match \/capture_routes\/\{id\}/);
+});
+
+test("SLA helpers set first response and next update clocks", () => {
+  const sla = buildTicketSlaPatch(Date.parse("2026-09-03T10:00:00.000Z"));
+  assert.ok(sla.firstResponseDueAt);
+  assert.ok(sla.nextUpdateDueAt);
+  const marked = markTicketFirstResponseSla({ sla }, Date.parse("2026-09-03T11:00:00.000Z"));
+  assert.equal(marked.firstRespondedAt, "2026-09-03T11:00:00.000Z");
+});
+
+test("workspace wires core requests polish", () => {
+  const source = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  const requests = readFileSync(resolve("src/components/RequestsCenter.tsx"), "utf8");
+  assert.match(source, /ensureRequestPortal/);
+  assert.match(source, /ensureTeamCaptureAddress/);
+  assert.match(source, /buildTicketSlaPatch/);
+  assert.match(requests, /requests-waiting-reason/);
+  assert.match(requests, /onOpenRelatedWork/);
 });
 
 test("portal snapshot only exposes public customer fields", () => {

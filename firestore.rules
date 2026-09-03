@@ -575,7 +575,7 @@ service cloud.firestore {
         && incoming().email.size() <= 320
         && (
           (incoming().kind == 'personal' && incoming().userId == request.auth.uid)
-          || (incoming().kind == 'team' && isWorkspaceAdmin(incoming().workspaceId))
+          || incoming().kind == 'team'
         );
       allow update: if isSignedIn()
         && resource.data.workspaceId is string
@@ -627,6 +627,27 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/request_portal_tokens/$(incoming().portalToken)).data.workspaceId == incoming().workspaceId
       );
       allow update, delete: if false;
+    }
+
+    // Public lookup for inbound email routing (doc id = normalized inbox email)
+    match /capture_routes/{id} {
+      allow get: if resource.data.status == 'active'
+        && resource.data.email is string;
+      allow list: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().email is string
+        && incoming().status == 'active'
+        && incoming().kind in ['personal', 'team'];
+      allow delete: if isSignedIn()
+        && resource.data.workspaceId is string
+        && (
+          resource.data.userId == request.auth.uid
+          || isWorkspaceAdmin(resource.data.workspaceId)
+        );
     }
 
     // Public requester portal tokens (ticket creator link)

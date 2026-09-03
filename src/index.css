@@ -1710,11 +1710,31 @@ a {
   color: var(--text-secondary);
   text-align: center;
 }
-.do-requests-detail {
+.do-requests-detail header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.do-requests-status-fields {
   display: grid;
-  align-content: start;
-  gap: 14px;
-  padding: 14px;
+  gap: 8px;
+  min-width: 180px;
+}
+.do-requests-related-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.do-capture-inbox-card input {
+  min-width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
 }
 .do-requests-meta,
 .do-requests-related > div {

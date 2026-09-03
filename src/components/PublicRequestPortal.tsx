@@ -3,7 +3,7 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
+  onSnapshot,
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
@@ -26,27 +26,27 @@ export function PublicRequestPortal({ token }: { token: string }) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const snap = await getDoc(doc(db, REQUEST_PORTAL_COLLECTION, token));
+    setError("");
+    setSnapshot(null);
+    const unsubscribe = onSnapshot(
+      doc(db, REQUEST_PORTAL_COLLECTION, token),
+      (snap) => {
         const data = snap.exists() ? snap.data() : null;
         if (!data || data.revoked === true || data.token !== token || !data.snapshot) {
-          throw new Error("This request link is invalid or has been revoked.");
+          setError("This request link is invalid or has been revoked.");
+          setSnapshot(null);
+          return;
         }
-        if (!active) return;
+        setError("");
         setWorkspaceId(String(data.workspaceId || ""));
         setTicketId(String(data.ticketId || ""));
         setSnapshot(data.snapshot as RequestPortalSnapshot);
-      } catch (reason) {
-        if (active) {
-          setError(reason instanceof Error ? reason.message : "This request could not be opened.");
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
+      },
+      () => {
+        setError("This request could not be opened.");
+      },
+    );
+    return () => unsubscribe();
   }, [token]);
 
   const send = async () => {
@@ -95,7 +95,6 @@ export function PublicRequestPortal({ token }: { token: string }) {
         snapshot: nextSnapshot,
         updatedAt: serverTimestamp(),
       });
-      setSnapshot(nextSnapshot);
       setReply("");
       setNotice("Message sent. The team will see it in Requests.");
     } catch (reason) {
