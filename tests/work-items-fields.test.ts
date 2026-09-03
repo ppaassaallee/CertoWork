@@ -122,12 +122,32 @@ test("items and project backlog sort families by the parent, not each child", ()
   assert.match(workItems, /compareVisibleSiblings/);
 });
 
-test("items list hides unique keys and shows an inline type flag", () => {
-  assert.match(workItems, /do-items-type-flag is-\$\{kind\}/);
+test("items list hides unique keys and shows an inline type icon", () => {
+  assert.match(workItems, /do-items-type-flag is-icon is-\$\{kind\}/);
   assert.match(workItems, /data-testid="item-type-flag"/);
+  assert.match(workItems, /WORK_ITEM_TYPE_ICONS/);
+  assert.match(workItems, /do-items-type-flag-label/);
   assert.match(workItems, /do-items-section-head/);
   assert.doesNotMatch(workItems, /workItemLabel\(kind\)\} · \$\{item\.key\}/);
   assert.doesNotMatch(workItems, /item\.key \? `\$\{workItemLabel/);
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(css, /\.do-items-type-flag\.is-icon/);
+  assert.match(css, /\.do-items-type-flag-label/);
+});
+
+test("epic section heads include a complete/reopen control like other rows", () => {
+  assert.match(workItems, /data-testid="item-section-head"/);
+  assert.match(workItems, /data-testid="item-epic-complete"/);
+  assert.match(workItems, /Mark epic done/);
+  assert.match(workItems, /toggleDone\(item\)/);
+});
+
+test("hierarchy expands epics by default and keeps other parents collapsed until toggled", () => {
+  assert.match(workItems, /collapsedEpicNodes/);
+  assert.match(workItems, /expandedTreeNodes/);
+  assert.match(workItems, /isTreeNodeCollapsed/);
+  assert.match(workItems, /toggleTreeNode/);
+  assert.match(workItems, /isEpicSection\(kind, depth\)/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {
@@ -205,8 +225,9 @@ test("any item including epics can be deleted with a grey-to-red bin", () => {
   assert.match(workItems, /renderAttributeIcons\(item\)/);
   assert.match(workItems, /data-testid="item-section-head"/);
   assert.match(workItems, /renderTitleCell\(item, kind, childCount/);
-  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderAttributeIcons\(item\)/);
-  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,1200}renderDeleteButton\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}renderAttributeIcons\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}renderDeleteButton\(item\)/);
+  assert.match(workItems, /data-testid="item-section-head"[\s\S]{0,2000}item-epic-complete/);
   assert.doesNotMatch(workItems, /deleteDoc/);
   assert.match(css, /\.do-items-delete \{[\s\S]*?color: var\(--text-muted\)/);
   assert.match(css, /\.do-items-delete:hover[\s\S]*?color: var\(--status-danger\)/);
@@ -218,10 +239,21 @@ test("list hierarchy nests children under epics and opens an expanded item popup
   assert.match(workItems, /data-testid="item-tree-toggle"/);
   assert.match(workItems, /hierarchyChildren/);
   assert.match(workItems, /renderForest/);
+  assert.match(workItems, /const childPool = parentPool/);
+  assert.match(workItems, /hierarchyChildren\(childPool, item\.id\)/);
   assert.match(workItems, /data-testid="item-expanded-modal"/);
   assert.match(workItems, /createPortal/);
   assert.match(css, /\.do-item-modal-backdrop/);
   assert.match(css, /\.do-item-modal \{/);
+});
+
+test("My Work hierarchy expands children from the full pool like Asana project lists", () => {
+  assert.match(workItems, /hierarchyTasks/);
+  assert.match(workItems, /const parentPool = hierarchyTasks\?\.length \? hierarchyTasks : tasks/);
+  assert.match(workItems, /const childPool = parentPool/);
+  assert.match(workItems, /hierarchyRoots\(items\)/);
+  assert.match(workspace, /hierarchyTasks=\{tasks\}/);
+  assert.match(workspace, /tasks=\{myWorkTasks\}/);
 });
 
 test("items and backlog can select all visible rows and bulk-edit assignee, date, and project", () => {
@@ -275,8 +307,10 @@ test("detail modal can change item type and re-validate parent", () => {
   assert.match(workItems, /parentLinkPatch\(parentOk \? currentParent : null\)/);
 });
 
-test("expanded tree nodes offer an inline add-child input", () => {
+test("expanded tree nodes offer an inline add-child control", () => {
   assert.match(workItems, /data-testid="item-inline-add-child"/);
+  assert.match(workItems, /do-items-inline-add-btn/);
+  assert.match(workItems, /inlineAddOpen/);
   assert.match(workItems, /createInlineChild/);
   assert.match(workItems, /allowedChildKinds/);
   assert.match(workItems, /parentLinkPatch\(parent\)/);

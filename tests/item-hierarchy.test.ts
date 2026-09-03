@@ -178,3 +178,15 @@ test("effectivePriority inherits from the highest ancestor; due dates stay local
   assert.equal(effectivePriority(orphan, [orphan]), "2");
   assert.equal(effectiveInheritedField(orphan, [orphan], "dueDate"), "2026-04-01");
 });
+
+test("My Work-style filtered roots still resolve children from the full hierarchy pool", () => {
+  const parent = { id: "p1", title: "Checkout", workItemType: "pbi", assignee: "me" };
+  const mine = { id: "t1", title: "My part", workItemType: "task", parentId: "p1", assignee: "me" };
+  const theirs = { id: "t2", title: "Their part", workItemType: "task", parentId: "p1", assignee: "other" };
+  const myWorkView = [parent, mine];
+  const fullPool = [parent, mine, theirs];
+
+  assert.deepEqual(hierarchyRoots(myWorkView).map((item) => item.id), ["p1"]);
+  assert.deepEqual(hierarchyChildren(myWorkView, "p1").map((item) => item.id), ["t1"]);
+  assert.deepEqual(hierarchyChildren(fullPool, "p1").map((item) => item.id), ["t1", "t2"]);
+});

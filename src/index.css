@@ -5119,6 +5119,29 @@ a {
   padding: 2px 4px 6px;
   color: var(--text-muted);
 }
+.do-items-inline-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  width: 100%;
+  padding: 2px 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.do-items-inline-add-btn:hover,
+.do-items-inline-add-btn:focus-visible {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+}
+.do-items-inline-add.is-open {
+  color: var(--text-secondary);
+}
 .do-items-inline-add input {
   min-width: 0;
   flex: 1;
@@ -5575,6 +5598,41 @@ a {
   line-height: 1.4;
   cursor: pointer;
 }
+.do-items-type-flag.is-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 7px;
+}
+.do-items-type-flag-label {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  z-index: 5;
+  transform: translateY(-50%);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--surface-inverse, #1c1c1c);
+  color: var(--text-inverse, #fff);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+.do-items-type-flag.is-icon:hover .do-items-type-flag-label,
+.do-items-type-flag.is-icon:focus-visible .do-items-type-flag-label {
+  opacity: 1;
+  visibility: visible;
+}
 .do-items-type-flag.is-feature,
 .do-items-row.is-feature .do-items-title > span,
 .do-kanban-card.is-feature .do-items-type-flag {
@@ -5602,6 +5660,11 @@ a {
 .do-items-type-flag.is-pbi,
 .do-items-row.is-pbi .do-items-title > span {
   background: var(--accent-soft);
+  color: var(--accent);
+}
+.do-items-type-flag.is-task,
+.do-items-row.is-task .do-items-title > span {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
 }
 .do-items-type-flag.is-epic,
