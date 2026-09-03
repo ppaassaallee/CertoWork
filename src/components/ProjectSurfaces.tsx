@@ -1511,6 +1511,7 @@ export function ProjectConsolePanel({
   const [docUrl, setDocUrl] = useState("");
   const [docError, setDocError] = useState("");
   const [shareLink, setShareLink] = useState("");
+  const [supportLinkCopied, setSupportLinkCopied] = useState(false);
   const [riskTitle, setRiskTitle] = useState("");
   const [riskSeverity, setRiskSeverity] = useState("medium");
   const [archiveConfirm, setArchiveConfirm] = useState(false);
@@ -1642,6 +1643,16 @@ export function ProjectConsolePanel({
       ),
   );
   const report = buildProjectStatusReport(project, tasks, risks, milestones);
+  const supportFormLink =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/feedback?project=${encodeURIComponent(project.id)}&kind=bug`
+      : "";
+  const copySupportFormLink = async () => {
+    if (!supportFormLink) return;
+    await navigator.clipboard?.writeText(supportFormLink);
+    setSupportLinkCopied(true);
+    window.setTimeout(() => setSupportLinkCopied(false), 2200);
+  };
 
   return (
     <section className="do-project-console" data-testid="project-console">
@@ -1726,14 +1737,23 @@ export function ProjectConsolePanel({
           >
             <UserPlus size={14} /> Team
           </button>
-          <button
-            aria-label="Share project"
+            <button
+              aria-label="Share project"
             className="do-button-secondary do-mobile-advanced"
             onClick={() => setTab("team")}
             title="Share"
             type="button"
           >
-            <Share2 size={14} />
+              <Share2 size={14} />
+            </button>
+          <button
+            aria-label="Copy support form link"
+            className="do-button-secondary do-mobile-advanced"
+            onClick={() => void copySupportFormLink()}
+            title="Copy support form"
+            type="button"
+          >
+            <LinkIcon size={14} /> {supportLinkCopied ? "Copied" : "Support"}
           </button>
           <button
             aria-label="Ask Odysseus for a project update"
@@ -1838,6 +1858,20 @@ export function ProjectConsolePanel({
             value={project.description}
           />
           <div className="do-console-insights">
+            <article className="do-console-support-link">
+              <span>
+                Support form{" "}
+                <InfoTip
+                  label="Project support form"
+                  text="Share this link with people who should submit bugs or feature requests directly into this project. They still need workspace access."
+                />
+              </span>
+              <strong>Project-specific intake</strong>
+              <small>Tickets and bugs submitted here arrive already linked to this project.</small>
+              <button onClick={() => void copySupportFormLink()} type="button">
+                <LinkIcon size={12} /> {supportLinkCopied ? "Copied" : "Copy form link"}
+              </button>
+            </article>
             <article>
               <span>
                 Next delivery point{" "}
