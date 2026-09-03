@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
   AlertCircle,
+  ArrowUpDown,
   ArrowRight,
   BarChart3,
   Bookmark,
@@ -19,6 +20,7 @@ import {
   Clock,
   Compass,
   CornerDownRight,
+  Eye,
   Flag,
   Folder,
   Gem,
@@ -33,6 +35,7 @@ import {
   Minus,
   Plus,
   Search,
+  Settings2,
   SlidersHorizontal,
   Square,
   Tag,
@@ -2778,7 +2781,10 @@ export function WorkItemsCenter({
         )}
         <div className="do-items-toolbar-actions">
           <div className="do-popover-anchor">
-            <button aria-expanded={viewsOpen} aria-label="Views" className={`do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} type="button">Views</button>
+            <button aria-expanded={viewsOpen} aria-label="Views" className={`do-icon-tool do-mobile-advanced ${viewsOpen ? "is-active" : ""}`} onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }} title="Views" type="button">
+              <Eye size={15} />
+              <span>Views</span>
+            </button>
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
                 <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("list"); setViewsOpen(false); }} type="button">Epic hierarchy</button>
@@ -2844,12 +2850,14 @@ export function WorkItemsCenter({
             <button
               aria-expanded={fieldsOpen}
               aria-label="Fields"
-              className={`do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
+              className={`do-icon-tool do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
               data-testid="item-fields-button"
               onClick={() => { setFieldsOpen((o) => !o); setViewsOpen(false); setFilterOpen(false); setSortOpen(false); }}
+              title="Fields"
               type="button"
             >
-              Fields
+              <Settings2 size={15} />
+              <span>Fields</span>
             </button>
             {fieldsOpen && (
               <div className="do-popover do-fields-popover" data-testid="item-fields-picker" role="menu">
@@ -2872,8 +2880,10 @@ export function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button aria-expanded={filterOpen} aria-label="Filter" className={activeFilterChips.length ? "is-active" : ""} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">
-              <SlidersHorizontal size={13} /> Filter{activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
+            <button aria-expanded={filterOpen} aria-label="Filter" className={`do-icon-tool ${activeFilterChips.length ? "is-active" : ""}`} onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }} title="Filter" type="button">
+              <SlidersHorizontal size={15} />
+              <span>Filter</span>
+              {activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
             </button>
             {filterOpen && (
               <div className="do-popover do-filter-popover">
@@ -2959,7 +2969,10 @@ export function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button aria-expanded={sortOpen} aria-label="Sort" className="do-mobile-advanced" onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }} type="button">Sort</button>
+            <button aria-expanded={sortOpen} aria-label="Sort" className={`do-icon-tool do-mobile-advanced ${sortOpen ? "is-active" : ""}`} onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }} title="Sort" type="button">
+              <ArrowUpDown size={15} />
+              <span>Sort</span>
+            </button>
             {sortOpen && (
               <div className="do-popover">
                 <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
@@ -2995,33 +3008,54 @@ export function WorkItemsCenter({
 
       {addItemOpen && (
         <section className="do-items-create is-quick-attrs">
-          <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
-            <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-          </select>
-          <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
-            {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
-          </select>
-          <select aria-label="New item parent" disabled={newType === "epic"} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
-            <option value="">{newType === "epic" ? "No parent" : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`}</option>
-            {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
-          </select>
+          <label className="do-quick-attr-select" title="Project">
+            <Folder size={14} />
+            <select aria-label="New item project" disabled={Boolean(activeProject)} onChange={(event) => setNewProjectId(event.target.value)} value={newProjectId}>
+              <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+            </select>
+          </label>
+          <label className="do-quick-attr-select" title="Item type">
+            <ListTodo size={14} />
+            <select aria-label="New item type" onChange={(event) => { setNewType(event.target.value as WorkItemKind); setNewParentId(""); }} value={newType}>
+              {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+            </select>
+          </label>
+          <label className="do-quick-attr-select" title="Parent">
+            <Layers size={14} />
+            <select aria-label="New item parent" disabled={newType === "epic"} onChange={(event) => setNewParentId(event.target.value)} value={newParentId}>
+              <option value="">{newType === "epic" ? "No parent" : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`}</option>
+              {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
+            </select>
+          </label>
           <div className="do-ai-create-field"><input aria-label="New work item title" onChange={(event) => setNewTitle(event.target.value)} onKeyDown={(event) => event.key === "Enter" && createItem()} placeholder={`Add ${workItemLabel(newType)}...`} value={newTitle} /><AiRewriteButton context={{ itemType: newType, project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={setNewTitle} text={newTitle} /></div>
-          <input aria-label="New item due date" data-testid="item-create-due" onChange={(event) => setNewDueDate(event.target.value)} type="date" value={newDueDate} />
-          <select aria-label="New item assignee" data-testid="item-create-assignee" onChange={(event) => setNewAssigneeId(event.target.value)} value={newAssigneeId}>
-            <option value="">Unassigned</option>
-            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
-              <option key={member.id} value={member.id}>{memberName(member)}</option>
-            ))}
-          </select>
-          <select aria-label="New item priority" data-testid="item-create-priority" onChange={(event) => setNewPriority(event.target.value)} value={newPriority}>
-            {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-          </select>
-          <select aria-label="New item delivery entity" data-testid="item-create-delivery" onChange={(event) => setNewDeliveryEntity(event.target.value)} value={newDeliveryEntity}>
-            <option value="">Delivery entity</option>
-            {deliveryEntityOptions.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
-          <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
+          <label className="do-quick-attr-select" title="Due date">
+            <Calendar size={14} />
+            <input aria-label="New item due date" data-testid="item-create-due" onChange={(event) => setNewDueDate(event.target.value)} type="date" value={newDueDate} />
+          </label>
+          <label className="do-quick-attr-select" title="Assignee">
+            <User size={14} />
+            <select aria-label="New item assignee" data-testid="item-create-assignee" onChange={(event) => setNewAssigneeId(event.target.value)} value={newAssigneeId}>
+              <option value="">Unassigned</option>
+              {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
+                <option key={member.id} value={member.id}>{memberName(member)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="do-quick-attr-select" title="Priority">
+            <Flag size={14} />
+            <select aria-label="New item priority" data-testid="item-create-priority" onChange={(event) => setNewPriority(event.target.value)} value={newPriority}>
+              {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+            </select>
+          </label>
+          <label className="do-quick-attr-select" title="Delivery entity">
+            <Briefcase size={14} />
+            <select aria-label="New item delivery entity" data-testid="item-create-delivery" onChange={(event) => setNewDeliveryEntity(event.target.value)} value={newDeliveryEntity}>
+              <option value="">Delivery entity</option>
+              {deliveryEntityOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <button className="do-quick-add-submit" disabled={!canCreate} onClick={createItem} title="Add item" type="button"><Plus size={15} /><span>Add</span></button>
         </section>
       )}
       {addSprintOpen && onCreateSprint && (
