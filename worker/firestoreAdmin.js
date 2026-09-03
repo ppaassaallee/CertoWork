@@ -199,6 +199,37 @@ export async function firestoreCreateDocument(env, collection, data, docId = "")
   return { ok: true, id };
 }
 
+export async function firestorePatchDocument(env, collection, docId, data) {
+  const serviceAccount = parseServiceAccount(env);
+  if (!serviceAccount) {
+    return { ok: false, reason: "FIREBASE_SERVICE_ACCOUNT not configured" };
+  }
+  const token = await googleAccessToken(serviceAccount);
+  const project = projectId(env);
+  const database = databaseId(env);
+  const fieldPaths = Object.keys(data || {}).filter((key) => data[key] !== undefined);
+  if (!fieldPaths.length) return { ok: true, id: docId };
+  const params = new URLSearchParams();
+  for (const path of fieldPaths) params.append("updateMask.fieldPaths", path);
+  const path = `projects/${project}/databases/${encodeURIComponent(database)}/documents/${collection}/${encodeURIComponent(docId)}`;
+  const response = await fetch(`https://firestore.googleapis.com/v1/${path}?${params}`, {
+    method: "PATCH",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(encodeFirestoreDocument(data)),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: payload?.error?.message || `Firestore patch failed (${response.status})`,
+    };
+  }
+  return { ok: true, id: docId };
+}
+
 export function firestoreAdminConfigured(env = {}) {
   return Boolean(parseServiceAccount(env));
 }

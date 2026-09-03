@@ -174,7 +174,27 @@ function inboundAuthorized(request, env) {
  * @param {object} deps - { json, readJson, authorize, sendBrevoTransactionalEmail, openai optional }
  */
 export function createCaptureRequestsHandlers(deps) {
-  const { json, readJson, authorize, sendBrevoTransactionalEmail } = deps;
+  const {
+    json,
+    readJson,
+    authorize,
+    sendBrevoTransactionalEmail,
+    openaiUnderstand,
+  } = deps;
+
+  async function resolveUnderstand(body, env) {
+    if (typeof openaiUnderstand === "function") {
+      try {
+        const ai = await openaiUnderstand(body, env);
+        if (ai?.understood) {
+          return { understood: ai.understood, provider: ai.provider || "openai" };
+        }
+      } catch {
+        // Fall through to deterministic.
+      }
+    }
+    return { understood: deterministicCaptureUnderstand(body), provider: "offline-safe" };
+  }
 
   async function handleUnderstand(request, env) {
     let body;
@@ -188,8 +208,8 @@ export function createCaptureRequestsHandlers(deps) {
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
     }
-    const understood = deterministicCaptureUnderstand(body);
-    return json({ ok: true, provider: "offline-safe", understood });
+    const result = await resolveUnderstand(body, env);
+    return json({ ok: true, provider: result.provider, understood: result.understood });
   }
 
   async function handleTriage(request, env) {
@@ -233,7 +253,8 @@ export function createCaptureRequestsHandlers(deps) {
     }
 
     const normalized = normalizeInboundBody(body);
-    const understood = deterministicCaptureUnderstand(normalized);
+    const understandResult = await resolveUnderstand(normalized, env);
+    const understood = understandResult.understood;
     const triage = deterministicTicketTriage(normalized);
     const suggested = suggestedWorkItem(understood, triage, normalized);
 
@@ -288,6 +309,12 @@ export function createCaptureRequestsHandlers(deps) {
 
     const nowIso = new Date().toISOString();
     const kind = route.kind === "team" || suggested.workItemType === "ticket" ? "ticket" : suggested.workItemType;
+    const portalToken =
+      kind === "ticket"
+        ? (globalThis.crypto?.randomUUID
+            ? globalThis.crypto.randomUUID().replace(/-/g, "")
+            : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))
+        : null;
     const taskPayload = {
       ...suggested,
       type: kind,
@@ -296,13 +323,14 @@ export function createCaptureRequestsHandlers(deps) {
       createdBy: route.userId,
       workspaceId: route.workspaceId,
       projectId: null,
-      assigneeIds: route.kind === "personal" ? [] : [],
+      assigneeIds: [],
       visibleToUserIds: route.userId ? [route.userId] : [],
       source: "email",
       sourceType: "email",
       captureChannelId: route.addressId || null,
       ticketStatus: kind === "ticket" ? "new" : null,
       customerStatus: kind === "ticket" ? "Received" : null,
+      portalToken,
       teamId: route.teamSlug || null,
       createdAt: { __timestamp: true },
       updatedAt: { __timestamp: true },
@@ -331,10 +359,77 @@ export function createCaptureRequestsHandlers(deps) {
       }, 502);
     }
 
+    let portalUrl = null;
+    if (portalToken) {
+      const origin = String(env.CERTO_APP_ORIGIN || "https://certo.work").replace(/\/$/, "");
+      portalUrl = `${origin}/request/${portalToken}`;
+      await firestoreCreateDocument(
+        env,
+        "request_portal_tokens",
+        {
+          token: portalToken,
+          ticketId: created.id,
+          workspaceId: route.workspaceId,
+          userId: route.userId,
+          requesterEmail: suggested.requesterEmail || normalized.fromEmail || null,
+          revoked: false,
+          snapshot: {
+            workspaceName: String(body.workspaceName || route.teamSlug || "Certo Work"),
+            ticket: {
+              id: created.id,
+              key: null,
+              title: suggested.title,
+              description: suggested.description || "",
+              customerStatus: "Received",
+              requesterEmail: suggested.requesterEmail || normalized.fromEmail || null,
+              requesterName: suggested.requesterName || normalized.fromName || null,
+              lastPublicUpdate: null,
+              nextExpectedUpdate: taskPayload.sla?.nextUpdateDueAt || null,
+            },
+            messages: [],
+            updatedAt: Date.now(),
+          },
+          createdAt: { __timestamp: true },
+          updatedAt: { __timestamp: true },
+        },
+        portalToken,
+      );
+    }
+
+    let ack = { sent: false };
+    const ackEmail = String(suggested.requesterEmail || normalized.fromEmail || "").trim().toLowerCase();
+    if (ackEmail.includes("@")) {
+      const content = briefTicketReplyEmail({
+        ticketTitle: suggested.title,
+        ticketKey: "",
+        body: "We received your request and will update you here.",
+        workspaceName: body.workspaceName || "Certo Work",
+        portalUrl,
+      });
+      const senderEmail =
+        env.CERTO_REQUESTS_EMAIL_FROM ||
+        env.CERTO_EMAIL_FROM ||
+        "requests@certo.work";
+      const senderName = env.CERTO_EMAIL_FROM_NAME || "Certo Requests";
+      ack = await sendBrevoTransactionalEmail(env, {
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: ackEmail, name: String(normalized.fromName || "").trim() }],
+        replyTo: { email: senderEmail, name: senderName },
+        subject: content.subject.replace(/^Re:\s*/i, "Received: "),
+        htmlContent: content.htmlContent,
+        textContent: content.textContent,
+        tags: ["request-ack"],
+      });
+    }
+
     return json({
       ok: true,
       persisted: true,
       taskId: created.id,
+      portalToken,
+      portalUrl,
+      ackSent: Boolean(ack?.sent),
+      provider: understandResult.provider,
       route: {
         workspaceId: route.workspaceId,
         userId: route.userId,

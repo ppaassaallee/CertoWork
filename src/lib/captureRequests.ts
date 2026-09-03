@@ -80,6 +80,7 @@ export type CaptureAddress = {
   localPart: string;
   domain: string;
   email: string;
+  aliasEmail?: string | null;
   userId?: string | null;
   teamId?: string | null;
   teamSlug?: string | null;

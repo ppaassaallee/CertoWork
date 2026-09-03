@@ -925,11 +925,26 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(taskId) && (resource == null || canReadTask(resource.data));
       allow list: if isSignedIn() && canReadTask(resource.data);
       allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
-      allow update: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)
-                    && isValidTask(incoming())
-                    && incoming().userId == resource.data.userId
-                    && incoming().createdAt == resource.data.createdAt
-                    && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy);
+      allow update: if isValidId(taskId) && isValidTask(incoming()) && (
+        (
+          isSignedIn() && canWriteTask(resource.data)
+          && incoming().userId == resource.data.userId
+          && incoming().createdAt == resource.data.createdAt
+          && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy)
+        ) || (
+          // Requester portal may only nudge status fields after a public portal reply.
+          resource.data.portalToken is string
+          && exists(/databases/$(database)/documents/request_portal_tokens/$(resource.data.portalToken))
+          && get(/databases/$(database)/documents/request_portal_tokens/$(resource.data.portalToken)).data.token == resource.data.portalToken
+          && get(/databases/$(database)/documents/request_portal_tokens/$(resource.data.portalToken)).data.ticketId == taskId
+          && get(/databases/$(database)/documents/request_portal_tokens/$(resource.data.portalToken)).data.revoked != true
+          && incoming().userId == resource.data.userId
+          && incoming().createdAt == resource.data.createdAt
+          && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['ticketStatus', 'waitingReason', 'customerStatus', 'lastPublicUpdate', 'status', 'updatedAt', 'sla'])
+        )
+      );
       // Work items are archived or cancelled in product; delete is owner-only so a
       // view/filter change or workspace-admin pass cannot wipe another person's records.
       allow delete: if isSignedIn() && isValidId(taskId) && canWriteTask(resource.data)

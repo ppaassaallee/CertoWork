@@ -10,6 +10,7 @@ type Props = {
   userEmail?: string | null;
   userName?: string | null;
   address?: CaptureAddress | null;
+  teamAddresses?: CaptureAddress[];
   busy?: boolean;
   onEnsureAddress: () => Promise<void> | void;
   onEnsureTeamAddress?: (teamSlug: string) => Promise<void> | void;
@@ -70,6 +71,7 @@ export function CaptureSettingsPanel({
   userEmail,
   userName,
   address,
+  teamAddresses = [],
   busy,
   onEnsureAddress,
   onEnsureTeamAddress,
@@ -82,11 +84,12 @@ export function CaptureSettingsPanel({
     [address?.email, userEmail, userName],
   );
   const aliasPreview = useMemo(() => {
+    if (address?.aliasEmail) return String(address.aliasEmail);
     if (address?.secretSuffix) {
       return buildPersonalCaptureAlias(usernameFromProfile(userEmail, userName), address.secretSuffix);
     }
     return "";
-  }, [address?.secretSuffix, userEmail, userName]);
+  }, [address?.aliasEmail, address?.secretSuffix, userEmail, userName]);
 
   const copy = async (value: string) => {
     if (!value || typeof navigator === "undefined" || !navigator.clipboard) return;
@@ -123,7 +126,7 @@ export function CaptureSettingsPanel({
         </div>
         {aliasPreview ? (
           <p className="do-capture-alias">
-            Alias: <code>{aliasPreview}</code>
+            Alias: <code data-testid="capture-alias-email">{aliasPreview}</code>
           </p>
         ) : null}
         <p className="do-capture-hint">
@@ -159,6 +162,25 @@ export function CaptureSettingsPanel({
           <p className="do-capture-hint">
             Shared address for tickets — lands in Requests, not only My Work.
           </p>
+          {teamAddresses.length > 0 ? (
+            <ul className="do-capture-team-list" data-testid="capture-team-list">
+              {teamAddresses.map((item) => (
+                <li key={item.id}>
+                  <code>{item.email}</code>
+                  <button
+                    className="do-button"
+                    data-testid={`capture-team-copy-${item.localPart || item.id}`}
+                    onClick={() => void copy(item.email)}
+                    type="button"
+                  >
+                    <Copy size={13} /> Copy
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="do-capture-hint">No team inboxes yet.</p>
+          )}
           <div className="do-capture-inbox-row">
             <input
               aria-label="Team inbox slug"
