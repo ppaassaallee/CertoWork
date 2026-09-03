@@ -25,22 +25,19 @@ export function PublicRequestPortal({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
 
-  const reload = async () => {
-    const snap = await getDoc(doc(db, REQUEST_PORTAL_COLLECTION, token));
-    const data = snap.exists() ? snap.data() : null;
-    if (!data || data.revoked === true || data.token !== token || !data.snapshot) {
-      throw new Error("This request link is invalid or has been revoked.");
-    }
-    setWorkspaceId(String(data.workspaceId || ""));
-    setTicketId(String(data.ticketId || ""));
-    setSnapshot(data.snapshot as RequestPortalSnapshot);
-  };
-
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        await reload();
+        const snap = await getDoc(doc(db, REQUEST_PORTAL_COLLECTION, token));
+        const data = snap.exists() ? snap.data() : null;
+        if (!data || data.revoked === true || data.token !== token || !data.snapshot) {
+          throw new Error("This request link is invalid or has been revoked.");
+        }
+        if (!active) return;
+        setWorkspaceId(String(data.workspaceId || ""));
+        setTicketId(String(data.ticketId || ""));
+        setSnapshot(data.snapshot as RequestPortalSnapshot);
       } catch (reason) {
         if (active) {
           setError(reason instanceof Error ? reason.message : "This request could not be opened.");
@@ -50,7 +47,6 @@ export function PublicRequestPortal({ token }: { token: string }) {
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const send = async () => {
