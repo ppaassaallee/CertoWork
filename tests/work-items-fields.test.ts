@@ -150,6 +150,12 @@ test("hierarchy keeps parents collapsed until toggled for this visit", () => {
   assert.match(workItems, /data-testid="item-tree-children"/);
 });
 
+test("expanded parents hide completed children unless status filter includes them", () => {
+  assert.match(workItems, /matchesStatusFilter/);
+  assert.match(workItems, /visibleChildrenOf/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter\)\)/);
+});
+
 test("items list shows faded attribute icons instead of field columns", () => {
   assert.match(workItems, /data-testid="item-attr-icons"/);
   assert.match(workItems, /do-item-attr/);

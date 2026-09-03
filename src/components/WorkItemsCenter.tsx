@@ -475,6 +475,14 @@ function canonicalStatus(item: any) {
   return taskWorkLane(item);
 }
 
+const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
+
+function matchesStatusFilter(item: any, statusFilter: string) {
+  if (statusFilter === "all") return true;
+  if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
+  return canonicalStatus(item) === statusFilter;
+}
+
 function dueBucket(value: any) {
   const date = dateInputValue(value);
   if (!date) return "unscheduled";
@@ -1071,8 +1079,7 @@ export function WorkItemsCenter({
     return sortItems(tasks.filter((item) => {
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
-      const matchesStatus = statusFilter === "all" ||
-        (statusFilter === "open" ? !["done", "completed", "closed", "cancelled", "archived", "deleted"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
+      const matchesStatus = matchesStatusFilter(item, statusFilter);
       const matchesPriority = priorityFilter === "all" || priorityValue(effectivePriority(item, pool)) === priorityFilter;
       const itemKind = workItemKind(item);
       const matchesType = typeFilter === "all" || itemKind === typeFilter;
@@ -2080,11 +2087,17 @@ export function WorkItemsCenter({
     // Roots stay scoped to the visible list (My Work / filters). Children resolve
     // from the full hierarchy pool so expand twisties work like Asana project
     // lists — and like the My Tasks request — even when subtasks are not
-    // themselves in the filtered view.
+    // themselves in the filtered view. Status filter still applies to nested
+    // children so completed work stays hidden unless the filter asks for it.
     const childPool = parentPool;
+    const visibleChildrenOf = (parentIdValue: string) =>
+      sortHierarchySiblings(
+        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
+        compareVisibleSiblings,
+      );
     const walk = (item: any, depth: number, ancestors: Set<string>) => {
       if (ancestors.has(item.id)) return null;
-      const children = sortHierarchySiblings(hierarchyChildren(childPool, item.id), compareVisibleSiblings);
+      const children = visibleChildrenOf(item.id);
       const groupKey = `node:${item.id}`;
       const kind = workItemKind(item);
       const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
