@@ -47,6 +47,7 @@ import {
   financeAmount,
   financeCapacityAllocations,
   financeId,
+  financePriceAmount,
   financeSummary,
   normalizedFinancePeriods,
   projectFinancialRollup,
@@ -2949,6 +2950,7 @@ function ProjectFinanceLedger({
   const [newBuildLabel, setNewBuildLabel] = useState("V1");
   const [newMonth, setNewMonth] = useState(new Date().getMonth() + 1);
   const [newYear, setNewYear] = useState(new Date().getFullYear());
+  const [sheetYear, setSheetYear] = useState(new Date().getFullYear());
   const [templateId, setTemplateId] = useState("none");
   const [addPeriodOpen, setAddPeriodOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
@@ -2968,6 +2970,12 @@ function ProjectFinanceLedger({
       label: `${month.label} ${year}`,
     })),
   );
+  const sheetPeriodOptions = monthOptions.map((month) => ({
+    value: `${sheetYear}-${String(month.value).padStart(2, "0")}`,
+    label: `${month.label} ${sheetYear}`,
+    month: month.value,
+    year: sheetYear,
+  }));
   const availableTemplates = [
     ...COST_TEMPLATES,
     ...templates.filter(
@@ -3013,6 +3021,109 @@ function ProjectFinanceLedger({
           : period,
       ),
     );
+  const periodForMonth = (accountingMonth: string, source: FinancePeriod[] = periods) => {
+    const [yearRaw, monthRaw] = accountingMonth.split("-");
+    const year = Number(yearRaw) || sheetYear;
+    const month = Number(monthRaw) || new Date().getMonth() + 1;
+    const existing = source.find(
+      (period) => period.kind === "monthly" && period.year === year && period.month === month,
+    );
+    if (existing) return existing;
+    return {
+      id: financeId("period"),
+      kind: "monthly" as const,
+      label: new Date(year, Math.max(0, month - 1), 1).toLocaleDateString(
+        undefined,
+        { month: "long", year: "numeric" },
+      ),
+      month,
+      year,
+      status: "active",
+      currency: project.currency || "USD",
+      billingStatus: "not_billed",
+      collectionStatus: "unpaid",
+      entries: [],
+    };
+  };
+  const updateSheetEntry = (
+    periodId: string,
+    entryId: string,
+    patch: Partial<FinanceEntry>,
+  ) => {
+    if (!patch.accountingMonth) {
+      updateEntry(periodId, entryId, patch);
+      return;
+    }
+    const currentPeriod = periods.find((period) => period.id === periodId);
+    const currentEntry = currentPeriod?.entries.find((entry) => entry.id === entryId);
+    if (!currentEntry) return;
+    const nextEntry = { ...currentEntry, ...patch };
+    const target = periodForMonth(String(patch.accountingMonth));
+    const withoutEntry = periods.map((period) =>
+      period.id === periodId
+        ? {
+            ...period,
+            entries: period.entries.filter((entry) => entry.id !== entryId),
+          }
+        : period,
+    );
+    const hasTarget = withoutEntry.some((period) => period.id === target.id);
+    updatePeriods(
+      hasTarget
+        ? withoutEntry.map((period) =>
+            period.id === target.id
+              ? { ...period, entries: [...period.entries, nextEntry] }
+              : period,
+          )
+        : [...withoutEntry, { ...target, entries: [nextEntry] }],
+    );
+  };
+  const addSheetLine = () => {
+    const accountingMonth = `${sheetYear}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    const period = periodForMonth(accountingMonth);
+    const nextEntry: FinanceEntry = {
+      id: financeId("entry"),
+      direction: "cost",
+      description: "New line",
+      category: "development",
+      costType: "Direct Cost",
+      allocationStage: deliveryStageLabels[deliveryStage(project)],
+      serviceSolution: project.serviceLine || project.technology || "Delivery",
+      unit: "fee",
+      plannedQty: 1,
+      actualQty: 1,
+      plannedRate: 0,
+      rate: 0,
+      plannedPriceRate: 0,
+      priceRate: 0,
+      accountingMonth,
+      transactionDate: today,
+      financialStatus: "not_billed",
+      costStatus: "planned",
+      invoiceStatus: "not_billed",
+      paymentStatus: "unpaid",
+      settledAmount: 0,
+      settledDate: "",
+    };
+    const hasPeriod = periods.some((candidate) => candidate.id === period.id);
+    updatePeriods(
+      hasPeriod
+        ? periods.map((candidate) =>
+            candidate.id === period.id
+              ? { ...candidate, entries: [...candidate.entries, nextEntry] }
+              : candidate,
+          )
+        : [...periods, { ...period, entries: [nextEntry] }],
+    );
+  };
+  const sheetRows = periods.flatMap((period) =>
+    period.entries
+      .filter((entry) =>
+        String(entry.accountingMonth || `${period.year || ""}-${String(period.month || "").padStart(2, "0")}`)
+          .startsWith(`${sheetYear}-`),
+      )
+      .map((entry) => ({ period, entry })),
+  );
   const addEntry = (periodId: string, direction: FinanceDirection) =>
     updatePeriods(
       periods.map((period) =>
@@ -3277,6 +3388,257 @@ function ProjectFinanceLedger({
         </div>
       </div>
 
+      <div className="do-finance-sheet-shell">
+        <header className="do-finance-sheet-toolbar">
+          <div>
+            <span className="do-kicker">Finance spreadsheet</span>
+            <h3>Cost & price lines</h3>
+            <p>
+              One row per cost, price or invoice. Pick any month of the year;
+              Certo creates the period behind the scenes.
+            </p>
+          </div>
+          <div className="do-finance-sheet-actions">
+            <label>
+              <span>Year</span>
+              <select onChange={(event) => setSheetYear(Number(event.target.value))} value={sheetYear}>
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {periods.length === 0 &&
+              costRows(project).some(
+                (row: any) => row.plannedQty || row.actualQty || row.rate,
+              ) && (
+                <button className="do-button-secondary" onClick={migrateLegacy} type="button">
+                  Import old baseline
+                </button>
+              )}
+            <button className="do-button do-button-dark" onClick={addSheetLine} type="button">
+              <Plus size={13} /> Add line
+            </button>
+          </div>
+        </header>
+
+        <div className="do-finance-sheet-scroll">
+          <div className="do-finance-sheet-grid do-finance-sheet-head">
+            <span>Project name</span>
+            <span>Delivery entity</span>
+            <span>Client entity</span>
+            <span>Stage</span>
+            <span>Phase</span>
+            <span>Period</span>
+            <span>Line item</span>
+            <span>Type</span>
+            <span>Service</span>
+            <span>Date</span>
+            <span>Category</span>
+            <span>Unit</span>
+            <span>Budget qty</span>
+            <span>Actual qty</span>
+            <span>Cost rate</span>
+            <span>Actual cost</span>
+            <span>Price rate</span>
+            <span>Actual price</span>
+            <span>Status</span>
+            <span>Paid</span>
+            <span />
+          </div>
+          {sheetRows.map(({ period, entry }) => (
+            <div className="do-finance-sheet-grid do-finance-sheet-row" key={`${period.id}:${entry.id}`}>
+              <span title={projectTitle(project)}>{projectTitle(project)}</span>
+              <span>{project.deliveryEntity || project.delivery || "—"}</span>
+              <span>{project.clientEntity || project.client || "—"}</span>
+              <select
+                onChange={(event) =>
+                  updateSheetEntry(period.id, entry.id, { allocationStage: event.target.value })
+                }
+                value={entry.allocationStage || "Build"}
+              >
+                {ALLOCATION_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stage}
+                  </option>
+                ))}
+              </select>
+              <span>{deliveryPhaseLabel(deliveryPhase(project))}</span>
+              <select
+                onChange={(event) =>
+                  updateSheetEntry(period.id, entry.id, { accountingMonth: event.target.value })
+                }
+                value={entry.accountingMonth || `${period.year || sheetYear}-${String(period.month || 1).padStart(2, "0")}`}
+              >
+                {sheetPeriodOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                defaultValue={entry.description}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, {
+                    description: event.target.value.trim() || "Financial item",
+                  })
+                }
+              />
+              <select
+                onChange={(event) => {
+                  const direction = event.target.value === "revenue" ? "revenue" : "cost";
+                  updateSheetEntry(period.id, entry.id, {
+                    direction,
+                    costType: direction === "revenue" ? "Revenue" : entry.costType || "Direct Cost",
+                    invoiceStatus: direction === "revenue" ? entry.invoiceStatus || "not_billed" : entry.invoiceStatus,
+                  });
+                }}
+                value={entry.direction}
+              >
+                <option value="cost">Cost + optional price</option>
+                <option value="revenue">Invoice / revenue</option>
+              </select>
+              <input
+                defaultValue={entry.serviceSolution || ""}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, {
+                    serviceSolution: event.target.value.trim(),
+                  })
+                }
+                placeholder="Service"
+              />
+              <input
+                onChange={(event) =>
+                  updateSheetEntry(period.id, entry.id, {
+                    transactionDate: event.target.value,
+                    issueDate: entry.direction === "revenue" ? event.target.value : entry.issueDate,
+                  })
+                }
+                type="date"
+                value={entry.transactionDate || entry.issueDate || ""}
+              />
+              <select
+                onChange={(event) =>
+                  updateSheetEntry(period.id, entry.id, { category: event.target.value })
+                }
+                value={entry.category}
+              >
+                <option value="development">Development</option>
+                <option value="implementation">Implementation</option>
+                <option value="support">Support</option>
+                <option value="vendor">Vendor</option>
+                <option value="license">License</option>
+                <option value="infrastructure">Infrastructure</option>
+                <option value="revenue">Revenue</option>
+                <option value="other">Other</option>
+              </select>
+              <select
+                onChange={(event) =>
+                  updateSheetEntry(period.id, entry.id, { unit: event.target.value })
+                }
+                value={entry.unit}
+              >
+                {COST_UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {costUnitLabels[unit]}
+                  </option>
+                ))}
+              </select>
+              <input
+                defaultValue={entry.plannedQty}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, { plannedQty: Number(event.target.value || 0) })
+                }
+                type="number"
+              />
+              <input
+                defaultValue={entry.actualQty}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, { actualQty: Number(event.target.value || 0) })
+                }
+                type="number"
+              />
+              <input
+                defaultValue={entry.rate}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, { rate: Number(event.target.value || 0) })
+                }
+                type="number"
+              />
+              <strong>${financeAmount(entry).toLocaleString()}</strong>
+              <input
+                defaultValue={entry.direction === "revenue" ? entry.rate : entry.priceRate || 0}
+                onBlur={(event) => {
+                  const value = Number(event.target.value || 0);
+                  updateSheetEntry(period.id, entry.id, entry.direction === "revenue" ? { rate: value } : { priceRate: value });
+                }}
+                type="number"
+              />
+              <strong>${financePriceAmount(entry).toLocaleString()}</strong>
+              <select
+                onChange={(event) => {
+                  const financialStatus = event.target.value;
+                  updateSheetEntry(period.id, entry.id, {
+                    financialStatus,
+                    invoiceStatus:
+                      financialStatus === "not_billed"
+                        ? "not_billed"
+                        : financialStatus === "disputed"
+                          ? "disputed"
+                          : "invoiced",
+                    costStatus:
+                      financialStatus === "paid"
+                        ? "paid"
+                        : financialStatus === "billed"
+                          ? "incurred"
+                          : financialStatus === "disputed"
+                            ? "disputed"
+                            : "planned",
+                    paymentStatus: financialStatus === "paid" ? "paid" : "unpaid",
+                  });
+                }}
+                value={entry.financialStatus || "not_billed"}
+              >
+                <option value="not_billed">Not billed</option>
+                <option value="billed">Billed</option>
+                <option value="paid">Paid</option>
+                <option value="disputed">Disputed</option>
+              </select>
+              <input
+                defaultValue={entry.settledAmount || 0}
+                onBlur={(event) =>
+                  updateSheetEntry(period.id, entry.id, {
+                    settledAmount: Number(event.target.value || 0),
+                  })
+                }
+                type="number"
+              />
+              <button
+                aria-label={`Remove ${entry.description}`}
+                onClick={() =>
+                  window.confirm(`Remove ${entry.description}?`) &&
+                  removeEntry(period.id, entry.id)
+                }
+                type="button"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+          {sheetRows.length === 0 && (
+            <div className="do-finance-sheet-empty">
+              No lines for {sheetYear}. Click Add line and start typing like a spreadsheet.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <details className="do-finance-advanced">
+        <summary>
+          <span>Advanced period cards</span>
+          <small>Optional legacy view for templates, build cards and detailed invoice lines.</small>
+        </summary>
       <div className="do-finance-add-period">
         <button
           className="do-button do-button-dark"
@@ -4068,6 +4430,7 @@ function ProjectFinanceLedger({
           />
         )}
       </div>
+      </details>
     </section>
   );
 }
