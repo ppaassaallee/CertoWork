@@ -158,6 +158,10 @@ import {
   buildPersonalCaptureEmail,
   formatCaptureDescription,
   deterministicCaptureUnderstand,
+  buildRequestPortalSnapshot,
+  createRequestPortalToken,
+  requestPortalAbsoluteUrl,
+  REQUEST_PORTAL_COLLECTION,
   type CaptureAddress,
 } from "../lib/captureRequests";
 import {
@@ -3539,6 +3543,7 @@ export function DelivereeWorkspace() {
     priority?: string;
   }) => {
     if (!user || !workspace) return;
+    const portalToken = createRequestPortalToken();
     const id = await addProjectTask("", input.title, "backlog", {
       workItemType: "ticket",
       type: "ticket",
@@ -3552,11 +3557,67 @@ export function DelivereeWorkspace() {
       priority: input.priority || "2",
       relatedWorkIds: [],
       projectId: null,
+      portalToken,
     });
     if (id) {
+      const ticket = {
+        id,
+        title: input.title,
+        description: input.description || "",
+        key: null,
+        requesterEmail: input.requesterEmail || user.email || null,
+        requesterName: memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null,
+        ticketStatus: "new",
+        customerStatus: "Received",
+      };
+      await setDoc(doc(db, REQUEST_PORTAL_COLLECTION, portalToken), {
+        token: portalToken,
+        ticketId: id,
+        workspaceId: workspace.id,
+        userId: user.uid,
+        requesterEmail: ticket.requesterEmail,
+        revoked: false,
+        snapshot: buildRequestPortalSnapshot({
+          workspaceName: workspace.name || "Certo Work",
+          ticket,
+          messages: [],
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       setSelectedRequestId(id);
-      setNotice("Request created.");
+      setNotice(`Request created. Portal: ${requestPortalAbsoluteUrl(portalToken)}`);
     }
+  };
+
+  const syncRequestPortal = async (
+    ticketId: string,
+    extraMessages: Array<Record<string, unknown>> = [],
+  ) => {
+    if (!workspace) return;
+    const ticket = tasks.find((item) => item.id === ticketId);
+    const portalToken = String(ticket?.portalToken || "").trim();
+    if (!ticket || !portalToken) return;
+    const messages = [
+      ...workItemMessages.filter((message) => message.workItemId === ticketId),
+      ...extraMessages,
+    ];
+    await setDoc(
+      doc(db, REQUEST_PORTAL_COLLECTION, portalToken),
+      {
+        token: portalToken,
+        ticketId,
+        workspaceId: workspace.id,
+        revoked: false,
+        snapshot: buildRequestPortalSnapshot({
+          workspaceName: workspace.name || "Certo Work",
+          ticket: { ...ticket, id: ticketId },
+          messages,
+        }),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
   };
 
   const sendRequestMessage = async (
@@ -3566,14 +3627,17 @@ export function DelivereeWorkspace() {
   ) => {
     if (!user || !workspace) return;
     const ticket = tasks.find((item) => item.id === ticketId);
+    const authorName =
+      memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null;
     await addDoc(collection(db, "work_item_messages"), {
       workspaceId: workspace.id,
       workItemId: ticketId,
       visibility,
       channel: "app",
+      authorRole: "team",
       body,
       authorId: user.uid,
-      authorName: memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null,
+      authorName,
       authorEmail: user.email || null,
       createdAt: serverTimestamp(),
     });
@@ -3585,7 +3649,20 @@ export function DelivereeWorkspace() {
         status: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.status || "in_progress",
         updatedAt: serverTimestamp(),
       });
+      await syncRequestPortal(ticketId, [
+        {
+          id: `local_${Date.now()}`,
+          workItemId: ticketId,
+          visibility: "public",
+          channel: "app",
+          authorRole: "team",
+          body,
+          authorName,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
       const toEmail = String(ticket?.requesterEmail || "").trim().toLowerCase();
+      const portalToken = String(ticket?.portalToken || "").trim();
       if (toEmail && toEmail.includes("@")) {
         try {
           const token = await user.getIdToken();
@@ -3605,6 +3682,7 @@ export function DelivereeWorkspace() {
               toEmail,
               toName: ticket?.requesterName || "",
               body,
+              portalUrl: portalToken ? requestPortalAbsoluteUrl(portalToken) : undefined,
             }),
           });
           const payload = await response.json().catch(() => ({}));
@@ -5786,11 +5864,20 @@ export function DelivereeWorkspace() {
               if (section === "inbox") navigate("/requests");
               else navigate(`/requests/${section}`);
             }}
+            onCopyPortalLink={(ticket) => {
+              const token = String(ticket?.portalToken || "").trim();
+              if (!token || typeof navigator === "undefined") return;
+              void navigator.clipboard.writeText(requestPortalAbsoluteUrl(token));
+              setNotice("Requester portal link copied.");
+            }}
             onCreateRelatedWork={createRelatedWorkFromTicket}
             onCreateTicket={createRequestTicket}
             onSelect={setSelectedRequestId}
             onSendMessage={sendRequestMessage}
-            onUpdateTicket={updateProjectTask}
+            onUpdateTicket={async (id, patch) => {
+              await updateProjectTask(id, patch);
+              await syncRequestPortal(id);
+            }}
             section={lens.kind === "requests" ? lens.section : "inbox"}
             selectedId={selectedRequestId}
             tickets={requestTickets}

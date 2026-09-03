@@ -384,6 +384,7 @@ export interface Task {
   customerStatusDetail?: string | null;
   relatedWorkIds?: string[];
   sourceTicketId?: string | null;
+  portalToken?: string | null;
   lastPublicUpdate?: string | null;
   sla?: {
     firstResponseDueAt?: string | null;

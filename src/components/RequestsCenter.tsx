@@ -38,6 +38,7 @@ type Props = {
   onSendMessage: (ticketId: string, body: string, visibility: "public" | "internal") => Promise<void> | void;
   onCreateRelatedWork: (ticketId: string, kind: "pbi" | "bug" | "task" | "issue") => Promise<void> | void;
   onChangeSection: (section: Props["section"]) => void;
+  onCopyPortalLink?: (ticket: any) => void;
 };
 
 function titleOf(item: any) {
@@ -67,6 +68,7 @@ export function RequestsCenter({
   onSendMessage,
   onCreateRelatedWork,
   onChangeSection,
+  onCopyPortalLink,
 }: Props) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -256,6 +258,16 @@ export function RequestsCenter({
                   <span><User size={13} /> {selected.requesterName || selected.requesterEmail || "Requester"}</span>
                   <span><Clock size={13} /> Priority {selected.priority || "2"}</span>
                   <span><AlertCircle size={13} /> {selected.waitingReason || "No wait reason"}</span>
+                  {selected.portalToken && onCopyPortalLink ? (
+                    <button
+                      className="do-button"
+                      data-testid="requests-copy-portal"
+                      onClick={() => onCopyPortalLink(selected)}
+                      type="button"
+                    >
+                      <Link2 size={13} /> Copy requester portal
+                    </button>
+                  ) : null}
                 </div>
 
                 <article className="do-requests-description">

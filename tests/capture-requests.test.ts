@@ -6,10 +6,12 @@ import { resolve } from "node:path";
 import {
   buildPersonalCaptureEmail,
   buildTeamCaptureEmail,
+  buildRequestPortalSnapshot,
   deterministicCaptureUnderstand,
   deterministicTicketTriage,
   isCapturedWorkItem,
   mapTicketStatusToWorkStatus,
+  requestPortalPath,
   toCustomerStatus,
 } from "../src/lib/captureRequests";
 import { allowedParentKinds } from "../src/lib/itemHierarchy";
@@ -100,11 +102,14 @@ test("Brevo reply email stays brief", () => {
     ticketKey: "REQ-12",
     body: "We fixed the reset link. Try again.",
     workspaceName: "Certo Work",
+    portalUrl: "https://certo.work/request/abc",
   });
   assert.match(content.subject, /REQ-12/);
   assert.match(content.textContent, /We fixed the reset link/);
+  assert.match(content.textContent, /Track status/);
   assert.doesNotMatch(content.textContent, /Onboarding checklist|long narrative/i);
-  assert.ok(content.textContent.length < 400);
+  assert.ok(content.textContent.length < 500);
+  assert.equal(requestPortalPath("abc"), "/request/abc");
 });
 
 test("worker capture understand endpoint is offline-safe", async () => {
@@ -177,6 +182,60 @@ test("workspace wires Requests nav and Capture settings", () => {
   assert.match(source, /CaptureSettingsPanel/);
   assert.match(source, /\/api\/requests\/reply/);
   assert.match(source, /RequestsCenter/);
+  assert.match(source, /REQUEST_PORTAL_COLLECTION/);
+  assert.match(source, /requestPortalAbsoluteUrl/);
+});
+
+test("requester portal route is public and token-based", () => {
+  const app = readFileSync(resolve("src/App.tsx"), "utf8");
+  const portal = readFileSync(resolve("src/components/PublicRequestPortal.tsx"), "utf8");
+  const rules = readFileSync(resolve("firestore.rules"), "utf8");
+  assert.match(app, /PublicRequestPortal/);
+  assert.match(app, /requestPortalToken/);
+  assert.match(app, /\\\/request\\\//);
+  assert.match(portal, /data-testid="request-portal"/);
+  assert.match(portal, /request-portal-reply/);
+  assert.match(rules, /match \/request_portal_tokens\/\{id\}/);
+  assert.match(rules, /channel == 'portal'/);
+});
+
+test("portal snapshot only exposes public customer fields", () => {
+  const snapshot = buildRequestPortalSnapshot({
+    workspaceName: "Acme",
+    ticket: {
+      id: "t1",
+      title: "Cannot login",
+      description: "Reset failed",
+      ticketStatus: "waiting",
+      waitingReason: "Waiting for requester",
+      requesterEmail: "pat@example.com",
+      relatedWorkIds: ["secret-eng-id"],
+      ai: { notes: "internal" },
+    },
+    messages: [
+      {
+        id: "m1",
+        workItemId: "t1",
+        visibility: "public",
+        body: "Please try again",
+        authorName: "Team",
+        channel: "app",
+      },
+      {
+        id: "m2",
+        workItemId: "t1",
+        visibility: "internal",
+        body: "Check auth logs",
+        authorName: "Dev",
+        channel: "app",
+      },
+    ],
+  });
+  assert.equal(snapshot.ticket.customerStatus, "Waiting on you");
+  assert.equal(snapshot.messages.length, 1);
+  assert.equal(snapshot.messages[0].body, "Please try again");
+  assert.equal((snapshot.ticket as any).relatedWorkIds, undefined);
+  assert.equal((snapshot.ticket as any).ai, undefined);
 });
 
 test("worker understand matches client helper", () => {
