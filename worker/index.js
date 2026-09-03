@@ -37,6 +37,186 @@ const MAX_MESSAGES = 10;
 const MAX_CHAT_OUTPUT_TOKENS = 550;
 const MAX_REWRITE_OUTPUT_TOKENS = 280;
 
+function unfoldEmailHeaders(headerText = "") {
+  const headers = {};
+  const lines = String(headerText || "").replace(/\r\n/g, "\n").split("\n");
+  let current = "";
+  for (const line of lines) {
+    if (/^[\t ]/.test(line) && current) {
+      current += ` ${line.trim()}`;
+      continue;
+    }
+    if (current) {
+      const index = current.indexOf(":");
+      if (index > 0) {
+        headers[current.slice(0, index).trim().toLowerCase()] = current.slice(index + 1).trim();
+      }
+    }
+    current = line;
+  }
+  if (current) {
+    const index = current.indexOf(":");
+    if (index > 0) {
+      headers[current.slice(0, index).trim().toLowerCase()] = current.slice(index + 1).trim();
+    }
+  }
+  return headers;
+}
+
+function decodeQuotedPrintable(value = "") {
+  return String(value || "")
+    .replace(/=\r?\n/g, "")
+    .replace(/=([A-Fa-f0-9]{2})/g, (_, hex) => {
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return _;
+      }
+    });
+}
+
+function stripHtml(value = "") {
+  return String(value || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+\n/g, "\n\n")
+    .trim();
+}
+
+function firstEmailAddress(value = "") {
+  const match = String(value || "").match(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
+  return match ? match[0].toLowerCase() : "";
+}
+
+function displayNameFromMailbox(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const withoutEmail = text.replace(/<[^>]+>/g, "").replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "").trim();
+  return withoutEmail.replace(/^"|"$/g, "").trim();
+}
+
+function bodyFromRawEmail(raw = "", headers = {}) {
+  const normalized = String(raw || "").replace(/\r\n/g, "\n");
+  const [, ...parts] = normalized.split(/\n\n/);
+  const body = parts.join("\n\n");
+  const contentType = String(headers["content-type"] || "").toLowerCase();
+  const transferEncoding = String(headers["content-transfer-encoding"] || "").toLowerCase();
+  const decoded = transferEncoding.includes("quoted-printable") ? decodeQuotedPrintable(body) : body;
+
+  const boundary = contentType.match(/boundary="?([^";]+)"?/i)?.[1];
+  if (boundary) {
+    const sections = decoded.split(`--${boundary}`);
+    const parsedSections = sections
+      .map((section) => {
+        const cleaned = section.replace(/^--\s*/, "").trim();
+        const [sectionHeaderText, ...sectionBodyParts] = cleaned.replace(/\r\n/g, "\n").split(/\n\n/);
+        const sectionHeaders = unfoldEmailHeaders(sectionHeaderText || "");
+        return {
+          contentType: String(sectionHeaders["content-type"] || "").toLowerCase(),
+          body: sectionBodyParts.join("\n\n").trim(),
+        };
+      })
+      .filter((section) => section.body);
+    const textPart = parsedSections.find((section) => section.contentType.includes("text/plain"));
+    if (textPart) return decodeQuotedPrintable(textPart.body).trim();
+    const htmlPart = parsedSections.find((section) => section.contentType.includes("text/html"));
+    if (htmlPart) return stripHtml(decodeQuotedPrintable(htmlPart.body));
+  }
+
+  if (contentType.includes("text/html")) return stripHtml(decoded);
+  return decoded.trim();
+}
+
+export function parseCloudflareInboundEmail(message = {}, raw = "") {
+  const normalized = String(raw || "").replace(/\r\n/g, "\n");
+  const [headerText = ""] = normalized.split(/\n\n/);
+  const headers = unfoldEmailHeaders(headerText);
+  const fromHeader = headers.from || message.from || "";
+  const toHeader = headers.to || message.to || "";
+  return {
+    subject: headers.subject || "",
+    body: bodyFromRawEmail(normalized, headers),
+    fromEmail: firstEmailAddress(fromHeader || message.from),
+    fromName: displayNameFromMailbox(fromHeader || message.from),
+    to: firstEmailAddress(toHeader || message.to) || String(message.to || ""),
+    messageId: headers["message-id"] || "",
+    inReplyTo: headers["in-reply-to"] || "",
+    references: headers.references || "",
+    provider: "cloudflare-email-routing",
+  };
+}
+
+async function readableStreamToText(stream) {
+  if (!stream) return "";
+  if (typeof stream === "string") return stream;
+  if (stream instanceof ArrayBuffer) return new TextDecoder().decode(stream);
+  if (stream instanceof Uint8Array) return new TextDecoder().decode(stream);
+  return new Response(stream).text();
+}
+
+async function handleCloudflareEmail(message, env, ctx) {
+  const raw = await readableStreamToText(message.raw);
+  const payload = parseCloudflareInboundEmail(message, raw);
+  const origin = String(env.CERTO_APP_ORIGIN || "https://certo.work").replace(/\/$/, "");
+  const captureRequest = new Request(`${origin}/api/capture/inbound/email`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-capture-secret": String(env.CAPTURE_INBOUND_SECRET || ""),
+    },
+    body: JSON.stringify(payload),
+  });
+  const capture = createCaptureRequestsHandlers({
+    json,
+    readJson,
+    authorize,
+    sendBrevoTransactionalEmail,
+    openaiUnderstand: openaiCaptureUnderstand,
+  });
+  const response = await capture.handleInboundEmail(captureRequest, env);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    console.error(
+      JSON.stringify({
+        event: "cloudflare_email_capture_failed",
+        status: response.status,
+        to: payload.to,
+        from: payload.fromEmail,
+        reason: text.slice(0, 400),
+      }),
+    );
+    message.setReject("Certo Capture could not process this email.");
+    return;
+  }
+  ctx.waitUntil(
+    response
+      .clone()
+      .json()
+      .then((result) => {
+        console.log(
+          JSON.stringify({
+            event: "cloudflare_email_capture_processed",
+            persisted: Boolean(result.persisted),
+            reason: result.reason || null,
+            to: payload.to,
+            taskId: result.taskId || null,
+          }),
+        );
+      })
+      .catch(() => {}),
+  );
+}
+
 export function openaiApiKey(env = {}) {
   return String(env.OPENAI_API_KEY || env.OPENAI_KEY || "").trim();
 }
@@ -1463,6 +1643,9 @@ async function serveAsset(request, env) {
 }
 
 const worker = {
+  async email(message, env, ctx) {
+    return handleCloudflareEmail(message, env, ctx);
+  },
   async fetch(request, env) {
     const url = new URL(request.url);
 
