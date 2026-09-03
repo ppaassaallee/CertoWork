@@ -7,10 +7,11 @@ export type MoreSection =
   | "warroom"
   | "knowledge"
   | "workspace";
-export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today";
+export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "captured";
 export type AgentsSection = "home" | "automations" | "activity";
 
 export type FeedbackSection = "submit" | "queue";
+export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new";
 
 export type DelivereeLens =
   | { kind: "home" }
@@ -23,6 +24,7 @@ export type DelivereeLens =
   | { kind: "settings" }
   | { kind: "collab" }
   | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
+  | { kind: "requests"; section: RequestsSection }
   | { kind: "notes" }
   | { kind: "more"; section: MoreSection };
 
@@ -128,9 +130,24 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   if (path === "/my-work/today") {
     return { kind: "my-work", section: "today" };
   }
+  if (path === "/my-work/captured" || path === "/capture/inbox") {
+    return { kind: "my-work", section: "captured" };
+  }
 
   if (path === "/notes" || path.startsWith("/notes/")) {
     return { kind: "notes" };
+  }
+
+  if (
+    path === "/requests" ||
+    path === "/requests/inbox" ||
+    path.startsWith("/requests/")
+  ) {
+    if (path.endsWith("/mine")) return { kind: "requests", section: "mine" };
+    if (path.endsWith("/waiting")) return { kind: "requests", section: "waiting" };
+    if (path.endsWith("/resolved")) return { kind: "requests", section: "resolved" };
+    if (path.endsWith("/new")) return { kind: "requests", section: "new" };
+    return { kind: "requests", section: "inbox" };
   }
 
   if (path.startsWith("/more/")) {
@@ -178,6 +195,7 @@ export function lensToPath(lens: DelivereeLens) {
     if (lens.section === "inbox") return "/my-work/inbox";
     if (lens.section === "waiting") return "/my-work/waiting";
     if (lens.section === "today") return "/my-work/today";
+    if (lens.section === "captured") return "/my-work/captured";
     return "/my-work";
   }
   if (lens.kind === "agents") {
@@ -201,6 +219,13 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "collab") return "/collab";
   if (lens.kind === "feedback") {
     return lens.section === "queue" ? "/workspace/feedback" : "/feedback";
+  }
+  if (lens.kind === "requests") {
+    if (lens.section === "mine") return "/requests/mine";
+    if (lens.section === "waiting") return "/requests/waiting";
+    if (lens.section === "resolved") return "/requests/resolved";
+    if (lens.section === "new") return "/requests/new";
+    return "/requests";
   }
   if (lens.kind === "notes") return "/notes";
   if (lens.kind === "more") {

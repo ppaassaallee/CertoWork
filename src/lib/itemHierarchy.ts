@@ -123,7 +123,7 @@ export function sortHierarchyForest(
   return ordered;
 }
 
-export type HierarchyKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
+export type HierarchyKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask" | "ticket" | "issue";
 
 export function hierarchyKind(item: any): HierarchyKind {
   const structuralValue = String(
@@ -134,6 +134,8 @@ export function hierarchyKind(item: any): HierarchyKind {
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
   if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
+  if (value.includes("ticket")) return "ticket";
+  if (value === "issue" || value.includes("issue")) return "issue";
   if (value.includes("story")) return "story";
   if (value.includes("bug")) return "bug";
   if (value === "task" || value.includes("project_task")) return "task";
@@ -141,19 +143,19 @@ export function hierarchyKind(item: any): HierarchyKind {
 }
 
 export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[] {
-  if (kind === "epic") return [];
+  if (kind === "epic" || kind === "ticket") return [];
   if (kind === "feature") return ["epic"];
   if (kind === "pbi" || kind === "story") return ["epic"];
-  if (kind === "task" || kind === "bug") return ["pbi", "story"];
-  return ["pbi", "story", "task", "bug"];
+  if (kind === "task" || kind === "bug" || kind === "issue") return ["pbi", "story"];
+  return ["pbi", "story", "task", "bug", "issue"];
 }
 
 /** Inverse of parent rules: which kinds may be created directly under a parent. */
 export function allowedChildKinds(parentKind: HierarchyKind | string): HierarchyKind[] {
   if (parentKind === "epic") return ["pbi", "feature", "story"];
   if (parentKind === "feature") return ["pbi", "story"];
-  if (parentKind === "pbi" || parentKind === "story") return ["task", "bug"];
-  if (parentKind === "task" || parentKind === "bug") return ["subtask"];
+  if (parentKind === "pbi" || parentKind === "story") return ["task", "bug", "issue"];
+  if (parentKind === "task" || parentKind === "bug" || parentKind === "issue") return ["subtask"];
   return [];
 }
 

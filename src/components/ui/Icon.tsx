@@ -213,6 +213,7 @@ export const Tag = wrapped.Tag;
 export const Tags = wrapped.Tags;
 export const Target = wrapped.Target;
 export const Thermometer = wrapped.Thermometer;
+export const Ticket = wrapped.Ticket;
 export const Timer = wrapped.Timer;
 export const Trash = wrapped.Trash;
 export const Trash2 = wrapped.Trash2;

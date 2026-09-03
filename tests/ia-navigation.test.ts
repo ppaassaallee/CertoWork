@@ -128,6 +128,7 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-approvals"/);
   assert.match(source, /data-testid="nav-invoices"/);
   assert.match(source, /data-testid="nav-feedback"/);
+  assert.match(source, /data-testid="nav-requests"/);
   assert.match(source, /data-testid="nav-workspace"/);
   assert.match(source, /data-testid="nav-settings"/);
   assert.match(source, /ProductSwitcher/);

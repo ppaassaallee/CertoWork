@@ -179,6 +179,23 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "workspaceId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "capture_addresses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "kind", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "work_item_messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "workItemId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
