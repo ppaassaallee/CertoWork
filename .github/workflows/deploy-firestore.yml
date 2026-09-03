@@ -28,6 +28,7 @@ jobs:
           if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
             printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp.json"
             export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp.json"
+            unset FIREBASE_TOKEN
           elif [ -z "$FIREBASE_TOKEN" ]; then
             if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
               echo "Add repo secret FIREBASE_TOKEN (firebase login:ci) or FIREBASE_SERVICE_ACCOUNT (JSON)."
