@@ -249,13 +249,25 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
+    function canReadKnowledgeItem(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        (
+          ('projectId' in data) &&
+          data.projectId is string &&
+          data.projectId.size() > 0 &&
+          ('workspaceId' in data) &&
+          isWorkspaceMember(data.workspaceId)
+        )
+      );
+    }
     match /knowledge_items/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid
         && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid);
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadKnowledgeItem(resource.data));
       allow update, delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid
         && (!('userId' in incoming()) || incoming().userId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && canReadKnowledgeItem(resource.data);
     }
     match /knowledge_folders/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;

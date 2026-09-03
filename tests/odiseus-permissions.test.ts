@@ -13,13 +13,14 @@ test("firestore rules allow Odysseus run and activity collections", () => {
   );
 });
 
-test("knowledge items stay owner-only even inside a shared workspace", () => {
+test("personal knowledge stays owner-only; project documents can be read by workspace members", () => {
   const rules = readFileSync(resolve("firestore.rules"), "utf8");
+  assert.match(rules, /function canReadKnowledgeItem\(data\)/);
+  assert.match(rules, /isWorkspaceMember\(data\.workspaceId\)/);
   const start = rules.indexOf("match /knowledge_items/{id} {");
   const end = rules.indexOf("\n    }", start);
   const block = start >= 0 && end > start ? rules.slice(start, end) : "";
-  assert.match(block, /resource\.data\.userId == request\.auth\.uid/);
-  assert.doesNotMatch(block, /isWorkspaceMember\(resource\.data\.workspaceId\)/);
+  assert.match(block, /canReadKnowledgeItem\(resource\.data\)/);
 });
 
 test("chat persistence does not hard-fail on Odysseus run writes", () => {
