@@ -246,7 +246,8 @@ test("list hierarchy nests children under epics and opens an expanded item popup
   assert.match(workItems, /hierarchyChildren/);
   assert.match(workItems, /renderForest/);
   assert.match(workItems, /const childPool = parentPool/);
-  assert.match(workItems, /hierarchyChildren\(childPool, item\.id\)/);
+  assert.match(workItems, /visibleChildrenOf/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)/);
   assert.match(workItems, /data-testid="item-expanded-modal"/);
   assert.match(workItems, /createPortal/);
   assert.match(css, /\.do-item-modal-backdrop/);
