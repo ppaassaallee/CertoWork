@@ -134,7 +134,18 @@ async function startServer() {
       googleDrive: {
         configured: !!process.env.GOOGLE_DRIVE_API_KEY || (!!process.env.GOOGLE_DRIVE_CLIENT_ID && !!process.env.GOOGLE_DRIVE_CLIENT_SECRET),
         description: "Enables folder structure creation and document uploads."
-      }
+      },
+      email: {
+        configured: !!process.env.BREVO_API_KEY,
+        provider: process.env.BREVO_API_KEY ? "brevo" : "none",
+        description: process.env.BREVO_API_KEY
+          ? "Transactional email through Brevo."
+          : "Add BREVO_API_KEY to send invites and request replies.",
+      },
+      capture: {
+        configured: true,
+        description: "Certo Capture + Requests (tickets) with Brevo replies.",
+      },
     });
   });
 
@@ -163,6 +174,93 @@ async function startServer() {
     adminAvailable: () => Boolean(dbAdmin),
   });
   const aiRateLimit = createAiRateLimit();
+
+  app.post("/api/capture/understand", requireWorkspaceApiAuth, async (req, res) => {
+    try {
+      const { deterministicCaptureUnderstand } = await import("./src/lib/captureRequests.ts");
+      const understood = deterministicCaptureUnderstand({
+        subject: req.body?.subject,
+        body: req.body?.body || req.body?.text,
+        fromEmail: req.body?.fromEmail,
+        fromName: req.body?.fromName,
+      });
+      res.json({ ok: true, provider: "offline-safe", understood });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Could not understand capture.",
+      });
+    }
+  });
+
+  app.post("/api/requests/reply", requireWorkspaceApiAuth, async (req, res) => {
+    try {
+      const { briefTicketReplyEmail } = await import("./worker/captureRequests.js");
+      const toEmail = String(req.body?.toEmail || "").trim().toLowerCase();
+      const body = String(req.body?.body || "").trim();
+      if (!toEmail || !body) {
+        return res.status(400).json({ error: "toEmail and body are required" });
+      }
+      if (!process.env.BREVO_API_KEY) {
+        return res.status(503).json({
+          ok: false,
+          configured: false,
+          error: "BREVO_API_KEY is not configured",
+        });
+      }
+      const content = briefTicketReplyEmail({
+        ticketTitle: req.body?.ticketTitle,
+        ticketKey: req.body?.ticketKey,
+        body,
+        workspaceName: req.body?.workspaceName,
+        portalUrl: req.body?.portalUrl,
+      });
+      const senderEmail =
+        process.env.CERTO_REQUESTS_EMAIL_FROM ||
+        process.env.CERTO_EMAIL_FROM ||
+        "requests@certo.work";
+      const senderName = process.env.CERTO_EMAIL_FROM_NAME || "Certo Requests";
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": process.env.BREVO_API_KEY,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: toEmail, name: String(req.body?.toName || "").trim() }],
+          replyTo: {
+            email:
+              process.env.CERTO_REQUESTS_EMAIL_REPLY_TO ||
+              process.env.CERTO_EMAIL_REPLY_TO ||
+              senderEmail,
+            name: senderName,
+          },
+          subject: content.subject,
+          htmlContent: content.htmlContent,
+          textContent: content.textContent,
+          tags: ["request-reply"],
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return res.status(502).json({
+          ok: false,
+          configured: true,
+          error: (payload as any)?.message || "Brevo request failed",
+        });
+      }
+      return res.json({
+        ok: true,
+        sent: true,
+        messageId: (payload as any)?.messageId || null,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Could not send reply.",
+      });
+    }
+  });
 
   app.post("/api/webhooks/hubspot", verifyHubspotSignature, async (req, res) => {
     try {

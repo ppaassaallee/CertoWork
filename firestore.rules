@@ -557,6 +557,60 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Certo Capture addresses (personal / team inboxes)
+    match /capture_addresses/{id} {
+      allow get, list: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.userId == request.auth.uid
+          || isWorkspaceAdmin(resource.data.workspaceId)
+        );
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().kind in ['personal', 'team']
+        && incoming().email is string
+        && incoming().email.size() > 3
+        && incoming().email.size() <= 320
+        && (
+          (incoming().kind == 'personal' && incoming().userId == request.auth.uid)
+          || (incoming().kind == 'team' && isWorkspaceAdmin(incoming().workspaceId))
+        );
+      allow update: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && incoming().workspaceId == resource.data.workspaceId
+        && (
+          resource.data.userId == request.auth.uid
+          || isWorkspaceAdmin(resource.data.workspaceId)
+        );
+      allow delete: if isSignedIn()
+        && resource.data.workspaceId is string
+        && (
+          resource.data.userId == request.auth.uid
+          || isWorkspaceAdmin(resource.data.workspaceId)
+        );
+    }
+
+    // Request / ticket conversation messages (public + internal)
+    match /work_item_messages/{id} {
+      allow get, list: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().workItemId is string
+        && incoming().body is string
+        && incoming().body.size() > 0
+        && incoming().body.size() <= 8000
+        && incoming().visibility in ['public', 'internal']
+        && incoming().createdAt is timestamp
+        && (!('authorId' in incoming()) || incoming().authorId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
     // Workspace-shared cost models used by the delivery control tower.
     match /cost_templates/{id} {
       allow get, list: if isSignedIn() && isValidId(id)

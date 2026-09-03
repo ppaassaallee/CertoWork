@@ -335,8 +335,8 @@ export interface Task {
 
   // Canonical Certo Work work-item fields. The existing `tasks` collection is
   // retained as the one source of truth while records are upgraded additively.
-  type?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';
-  workItemType?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask';
+  type?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask' | 'ticket' | 'issue';
+  workItemType?: 'epic' | 'feature' | 'pbi' | 'story' | 'task' | 'bug' | 'subtask' | 'ticket' | 'issue';
   key?: string;
   normalizedTitle?: string;
   epicId?: string | null;
@@ -366,9 +366,34 @@ export interface Task {
   environment?: string | null;
   blocked?: boolean;
   blockedReason?: string;
-  source?: 'manual' | 'boldi' | 'import' | 'github' | 'hermes' | 'api' | 'codex';
+  source?: 'manual' | 'boldi' | 'import' | 'github' | 'hermes' | 'api' | 'codex' | 'email' | 'form' | 'capture' | 'request_portal' | 'slack' | 'teams' | 'meeting' | 'agent' | 'ticket' | 'integration' | 'user_feedback' | 'bulk_paste';
+  sourceType?: string;
+  sourceId?: string | null;
+  sourceThreadId?: string | null;
+  sourceMessageIds?: string[];
+  captureChannelId?: string | null;
+  captureIntent?: string | null;
+  captureReviewStatus?: 'needs_review' | 'accepted' | 'dismissed' | string | null;
+  requesterId?: string | null;
+  requesterEmail?: string | null;
+  requesterName?: string | null;
+  teamId?: string | null;
+  ticketStatus?: 'new' | 'in_progress' | 'waiting' | 'resolved' | 'closed' | string | null;
+  waitingReason?: string | null;
+  customerStatus?: string | null;
+  customerStatusDetail?: string | null;
+  relatedWorkIds?: string[];
+  sourceTicketId?: string | null;
+  lastPublicUpdate?: string | null;
+  sla?: {
+    firstResponseDueAt?: string | null;
+    resolutionDueAt?: string | null;
+    nextUpdateDueAt?: string | null;
+    firstRespondedAt?: string | null;
+  } | null;
+  ai?: Record<string, unknown> | null;
   checklist?: Array<{ id: string; text: string; done: boolean }>;
-  comments?: Array<{ id: string; at: string; author: string; text: string }>;
+  comments?: Array<{ id: string; at: string; author: string; text: string; visibility?: 'public' | 'internal' }>;
   statusHistory?: Array<{ status: string; column?: string; at: string }>;
   loggedHours?: number | null;
   codexStatus?: string;

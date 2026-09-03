@@ -131,6 +131,34 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
   assert.match(body.gemini.description, /not used/i);
   assert.equal(body.activeAIProvider.configured, false);
   assert.equal(body.email.configured, false);
+  assert.equal(body.capture?.configured, true);
+});
+
+test("capture understand and request reply routes require auth", async () => {
+  const understand = await worker.fetch(
+    new Request("https://gazelle.test/api/capture/understand", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "u1", workspaceId: "w1", subject: "Hi" }),
+    }),
+    environment(),
+  );
+  assert.equal(understand.status, 401);
+
+  const reply = await worker.fetch(
+    new Request("https://gazelle.test/api/requests/reply", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "u1",
+        workspaceId: "w1",
+        toEmail: "a@example.com",
+        body: "Thanks",
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(reply.status, 401);
 });
 
 test("workspace invite email route requires authentication", async () => {

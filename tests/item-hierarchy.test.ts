@@ -138,10 +138,12 @@ test("epics stored as type=epic still appear as PBI parents, and other projects 
 test("allowedChildKinds is the inverse nesting table", () => {
   assert.deepEqual(allowedChildKinds("epic"), ["pbi", "feature", "story"]);
   assert.deepEqual(allowedChildKinds("feature"), ["pbi", "story"]);
-  assert.deepEqual(allowedChildKinds("pbi"), ["task", "bug"]);
-  assert.deepEqual(allowedChildKinds("story"), ["task", "bug"]);
+  assert.deepEqual(allowedChildKinds("pbi"), ["task", "bug", "issue"]);
+  assert.deepEqual(allowedChildKinds("story"), ["task", "bug", "issue"]);
   assert.deepEqual(allowedChildKinds("task"), ["subtask"]);
   assert.deepEqual(allowedChildKinds("bug"), ["subtask"]);
+  assert.deepEqual(allowedChildKinds("issue"), ["subtask"]);
+  assert.deepEqual(allowedChildKinds("ticket"), []);
   assert.deepEqual(allowedChildKinds("subtask"), []);
 });
 

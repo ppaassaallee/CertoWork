@@ -8,6 +8,7 @@ import {
   provisionCollabSso,
   proxyChatwoot,
 } from "./collab.js";
+import { createCaptureRequestsHandlers } from "./captureRequests.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1177,6 +1178,12 @@ function capabilities(env) {
         ? `Transactional email is active through Brevo as ${env.CERTO_EMAIL_FROM || "the configured sender"}.`
         : "Add BREVO_API_KEY and a verified sender to send workspace invitations and notifications.",
     },
+    capture: {
+      configured: true,
+      inboundSecret: Boolean(env.CAPTURE_INBOUND_SECRET),
+      description:
+        "Certo Capture understands inbound email; Requests replies send through Brevo.",
+    },
     hubspot: {
       configured: false,
       description: "No live HubSpot connection is configured.",
@@ -1440,6 +1447,26 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);
+    }
+    {
+      const capture = createCaptureRequestsHandlers({
+        json,
+        readJson,
+        authorize,
+        sendBrevoTransactionalEmail,
+      });
+      if (request.method === "POST" && url.pathname === "/api/capture/understand") {
+        return capture.handleUnderstand(request, env);
+      }
+      if (request.method === "POST" && url.pathname === "/api/capture/triage") {
+        return capture.handleTriage(request, env);
+      }
+      if (request.method === "POST" && url.pathname === "/api/capture/inbound/email") {
+        return capture.handleInboundEmail(request, env);
+      }
+      if (request.method === "POST" && url.pathname === "/api/requests/reply") {
+        return capture.handleTicketReply(request, env);
+      }
     }
     if (request.method === "GET" && url.pathname === "/api/collab/status") {
       return json(collabStatusPayload(env, url.origin));

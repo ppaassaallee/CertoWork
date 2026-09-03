@@ -1,5 +1,6 @@
 import { isTodayTask, priorityRank } from "./appleWidget";
 import type { MyWorkSection } from "./delivereeRoutes";
+import { isCapturedWorkItem, needsCaptureReview } from "./captureRequests";
 import {
   memberMatchesSelection,
   memberPublicLabel,
@@ -159,6 +160,9 @@ export function filterMyWorkTasks(
   }
   if (section === "today") {
     return mine.filter((item) => isTodayTask(item));
+  }
+  if (section === "captured") {
+    return mine.filter((item) => isCapturedWorkItem(item) || needsCaptureReview(item));
   }
   return mine.filter((item) => !isWaitingWorkItem(item));
 }

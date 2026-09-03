@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, typ
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
+  AlertCircle,
   ArrowRight,
   BarChart3,
   Bookmark,
@@ -24,6 +25,7 @@ import {
   GitBranch,
   Globe,
   GripVertical,
+  Inbox,
   Layers,
   ListChecks,
   ListTodo,
@@ -133,7 +135,7 @@ import {
   type WorkItemsViewMode,
 } from "../lib/itemViewMemory";
 
-type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask";
+type WorkItemKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask" | "ticket" | "issue";
 type GroupBy = ItemGroupBy;
 type SortBy = ItemSortBy;
 
@@ -160,7 +162,7 @@ type Props = {
   forceMode?: WorkItemsViewMode;
 };
 
-const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask"];
+const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask", "ticket", "issue"];
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
 const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Next action", "Waiting", "Someday", "Reference", "No sector"];
@@ -427,6 +429,8 @@ function workItemKind(item: any): WorkItemKind {
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
   if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
+  if (value.includes("ticket")) return "ticket";
+  if (value === "issue" || value.includes("issue")) return "issue";
   if (value.includes("story")) return "story";
   if (value.includes("bug")) return "bug";
   if (value === "task" || value.includes("project_task")) return "task";
@@ -447,6 +451,8 @@ const WORK_ITEM_TYPE_ICONS: Record<WorkItemKind, typeof Gem> = {
   task: CheckSquare,
   bug: Bug,
   subtask: CornerDownRight,
+  ticket: Inbox,
+  issue: AlertCircle,
 };
 
 function parentId(item: any) {

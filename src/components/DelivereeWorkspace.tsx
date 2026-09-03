@@ -151,6 +151,15 @@ import {
 } from "../lib/invoiceDocuments";
 import { stripUndefinedValues } from "../lib/projectFinance";
 import { InvoiceCenter } from "./InvoiceCenter";
+import { CaptureSettingsPanel, CaptureIngestForm } from "./CaptureSettingsPanel";
+import { RequestsCenter } from "./RequestsCenter";
+import {
+  buildPersonalCaptureAlias,
+  buildPersonalCaptureEmail,
+  formatCaptureDescription,
+  deterministicCaptureUnderstand,
+  type CaptureAddress,
+} from "../lib/captureRequests";
 import {
   feedbackToTaskPatch,
   isOpenFeedback,
@@ -312,7 +321,8 @@ export type CenterView =
   | "project"
   | "agents"
   | "invoices"
-  | "feedback";
+  | "feedback"
+  | "requests";
 
 export function DelivereeWorkspace() {
   const {
@@ -382,6 +392,10 @@ export function DelivereeWorkspace() {
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
+  const [captureAddress, setCaptureAddress] = useState<CaptureAddress | null>(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
@@ -492,6 +506,8 @@ export function DelivereeWorkspace() {
         ? "items"
         : lens.kind === "feedback"
         ? "feedback"
+        : lens.kind === "requests"
+          ? "requests"
         : lens.kind === "work"
           ? lens.section === "issues"
             ? "items"
@@ -518,6 +534,7 @@ export function DelivereeWorkspace() {
     else if (next === "agents") navigate("/agents");
     else if (next === "invoices") navigate("/invoices");
     else if (next === "feedback") navigate("/feedback");
+    else if (next === "requests") navigate("/requests");
     else navigate("/home");
   };
   const projectConsoleInitialTab =
@@ -729,6 +746,39 @@ export function DelivereeWorkspace() {
                 timestamp(right.createdAt) - timestamp(left.createdAt),
             ),
           ),
+      ),
+      onSnapshot(
+        query(
+          collection(db, "capture_addresses"),
+          where("workspaceId", "==", workspace.id),
+          where("userId", "==", user.uid),
+          where("kind", "==", "personal"),
+        ),
+        (snapshot) => {
+          const rows = snapshot.docs.map(
+            (item) => ({ id: item.id, ...item.data() }) as CaptureAddress,
+          );
+          const active =
+            rows.find((row) => (row.status || "active") === "active") || rows[0] || null;
+          setCaptureAddress(active);
+        },
+        () => setCaptureAddress(null),
+      ),
+      onSnapshot(
+        query(
+          collection(db, "work_item_messages"),
+          where("workspaceId", "==", workspace.id),
+        ),
+        (snapshot) =>
+          setWorkItemMessages(
+            snapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }) as any)
+              .sort(
+                (left: any, right: any) =>
+                  timestamp(left.createdAt) - timestamp(right.createdAt),
+              ),
+          ),
+        () => setWorkItemMessages([]),
       ),
       makeQuery("milestones", setMilestones),
       makeQuery("invoice_documents", (items) =>
@@ -3409,6 +3459,228 @@ export function DelivereeWorkspace() {
     });
   };
 
+  const captureUsername = () =>
+    String(user?.email || "")
+      .split("@")[0]
+      .toLowerCase()
+      .replace(/[^a-z0-9._+-]/g, "")
+      .slice(0, 48) || "user";
+
+  const ensureCaptureAddress = async () => {
+    if (!user || !workspace) return;
+    setCaptureBusy(true);
+    try {
+      const username = captureUsername();
+      const email = buildPersonalCaptureEmail(username);
+      const id = `personal_${workspace.id}_${user.uid}`;
+      const existing = captureAddress;
+      const secretSuffix =
+        existing?.secretSuffix || Math.random().toString(36).slice(2, 10);
+      const payload = {
+        workspaceId: workspace.id,
+        kind: "personal" as const,
+        localPart: username,
+        domain: "in.certo.work",
+        email,
+        userId: user.uid,
+        teamId: null,
+        teamSlug: null,
+        status: "active" as const,
+        secretSuffix,
+        aliasEmail: buildPersonalCaptureAlias(username, secretSuffix),
+        updatedAt: serverTimestamp(),
+        ...(existing ? {} : { createdAt: serverTimestamp(), createdBy: user.uid }),
+      };
+      await setDoc(doc(db, "capture_addresses", id), payload, { merge: true });
+      setNotice(`Capture inbox ready: ${email}`);
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not create capture inbox.",
+      );
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
+
+  const rotateCaptureAlias = async () => {
+    if (!user || !workspace || !captureAddress) return;
+    setCaptureBusy(true);
+    try {
+      const username = captureUsername();
+      const secretSuffix = Math.random().toString(36).slice(2, 10);
+      await updateDoc(doc(db, "capture_addresses", captureAddress.id), {
+        secretSuffix,
+        aliasEmail: buildPersonalCaptureAlias(username, secretSuffix),
+        updatedAt: serverTimestamp(),
+      });
+      setNotice("Capture alias rotated.");
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error ? reason.message : "Could not rotate alias.",
+      );
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
+
+  const requestTickets = useMemo(
+    () =>
+      tasks.filter((item) => {
+        const kind = String(item.workItemType || item.type || "").toLowerCase();
+        return kind === "ticket" || item.ticketStatus;
+      }),
+    [tasks],
+  );
+
+  const createRequestTicket = async (input: {
+    title: string;
+    description: string;
+    requesterEmail?: string;
+    priority?: string;
+  }) => {
+    if (!user || !workspace) return;
+    const id = await addProjectTask("", input.title, "backlog", {
+      workItemType: "ticket",
+      type: "ticket",
+      description: input.description || "",
+      source: "manual",
+      sourceType: "form",
+      requesterEmail: input.requesterEmail || user.email || null,
+      requesterName: memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null,
+      ticketStatus: "new",
+      customerStatus: "Received",
+      priority: input.priority || "2",
+      relatedWorkIds: [],
+      projectId: null,
+    });
+    if (id) {
+      setSelectedRequestId(id);
+      setNotice("Request created.");
+    }
+  };
+
+  const sendRequestMessage = async (
+    ticketId: string,
+    body: string,
+    visibility: "public" | "internal",
+  ) => {
+    if (!user || !workspace) return;
+    const ticket = tasks.find((item) => item.id === ticketId);
+    await addDoc(collection(db, "work_item_messages"), {
+      workspaceId: workspace.id,
+      workItemId: ticketId,
+      visibility,
+      channel: "app",
+      body,
+      authorId: user.uid,
+      authorName: memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null,
+      authorEmail: user.email || null,
+      createdAt: serverTimestamp(),
+    });
+    if (visibility === "public") {
+      await updateDoc(doc(db, "tasks", ticketId), {
+        lastPublicUpdate: body.slice(0, 240),
+        customerStatus: "In progress",
+        ticketStatus: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.ticketStatus || "in_progress",
+        status: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.status || "in_progress",
+        updatedAt: serverTimestamp(),
+      });
+      const toEmail = String(ticket?.requesterEmail || "").trim().toLowerCase();
+      if (toEmail && toEmail.includes("@")) {
+        try {
+          const token = await user.getIdToken();
+          const response = await fetch("/api/requests/reply", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId: user.uid,
+              workspaceId: workspace.id,
+              workspaceName: workspace.name,
+              ticketId,
+              ticketTitle: ticket?.title || "",
+              ticketKey: ticket?.key || "",
+              toEmail,
+              toName: ticket?.requesterName || "",
+              body,
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setNotice(
+              payload?.error ||
+                "Reply saved, but Brevo could not send the email yet.",
+            );
+          } else {
+            setNotice("Reply sent via Brevo.");
+          }
+        } catch {
+          setNotice("Reply saved in Certo. Email send failed.");
+        }
+      }
+    }
+  };
+
+  const createRelatedWorkFromTicket = async (
+    ticketId: string,
+    kind: "pbi" | "bug" | "task" | "issue",
+  ) => {
+    const ticket = tasks.find((item) => item.id === ticketId);
+    if (!ticket) return;
+    const relatedId = await addProjectTask(
+      String(ticket.projectId || ""),
+      `${String(kind).toUpperCase()}: ${ticket.title || "Untitled"}`,
+      "backlog",
+      {
+        workItemType: kind,
+        type: kind,
+        description: ticket.description || "",
+        source: "ticket",
+        sourceTicketId: ticketId,
+        priority: ticket.priority || "2",
+        projectId: ticket.projectId || null,
+      },
+    );
+    if (!relatedId) return;
+    const related = Array.isArray(ticket.relatedWorkIds) ? [...ticket.relatedWorkIds] : [];
+    related.push(relatedId);
+    await updateDoc(doc(db, "tasks", ticketId), {
+      relatedWorkIds: related,
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`Created related ${kind.toUpperCase()}.`);
+  };
+
+  const ingestCapturedEmail = async (subject: string, body: string) => {
+    if (!user || !workspace) return;
+    const understood = deterministicCaptureUnderstand({ subject, body });
+    const description = formatCaptureDescription({
+      ...understood.description,
+      sourceLabel: `Email capture · ${user.email || "you"}`,
+    });
+    const kind = understood.workItemSuggestion === "pbi" ? "pbi" : "task";
+    const id = await addProjectTask("", understood.title, "backlog", {
+      workItemType: kind,
+      type: kind,
+      description,
+      source: "capture",
+      sourceType: "email",
+      captureIntent: understood.intent,
+      captureReviewStatus:
+        understood.workItemSuggestion === "none" ? "needs_review" : "accepted",
+      captureChannelId: captureAddress?.id || null,
+      ai: { classification: understood.intent },
+      projectId: null,
+    });
+    if (id) {
+      setNotice("Captured into My Work.");
+      navigate("/my-work/captured");
+      setSelectedWorkItemId(id);
+    }
+  };
+
   const createSprint = async (patch: Record<string, unknown>) => {
     if (!user || !workspace) return;
     await addDoc(collection(db, "sprints"), {
@@ -3961,6 +4233,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/my-work"),
       },
       {
+        id: "nav-requests",
+        label: "Go to Requests",
+        group: "Navigate",
+        keywords: "ticket inbox capture support",
+        onSelect: () => navigate("/requests"),
+      },
+      {
         id: "nav-projects",
         label: "Go to Projects",
         group: "Navigate",
@@ -4125,7 +4404,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -4222,6 +4501,36 @@ export function DelivereeWorkspace() {
           >
             <CheckCircle2 size="sm" />
             <span>{t("navMyWork")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-requests do-mobile-advanced ${lens.kind === "requests" ? "is-active" : ""}`}
+            data-testid="nav-requests"
+            onClick={() => {
+              navigate("/requests");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Inbox size="sm" />
+            <span>Requests</span>
+            {requestTickets.filter((item) => {
+              const status = String(item.ticketStatus || "").toLowerCase();
+              return status === "new" || status === "in_progress" || status === "waiting" || !status;
+            }).length > 0 && (
+              <em className="do-nav-badge">
+                {
+                  requestTickets.filter((item) => {
+                    const status = String(item.ticketStatus || "").toLowerCase();
+                    return (
+                      status === "new" ||
+                      status === "in_progress" ||
+                      status === "waiting" ||
+                      (!status && String(item.status || "") !== "done")
+                    );
+                  }).length
+                }
+              </em>
+            )}
           </button>
           <button
             className={`do-nav-item is-projects ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
@@ -4766,7 +5075,26 @@ export function DelivereeWorkspace() {
                           ? [{ label: "Waiting" }]
                           : lens.section === "today"
                             ? [{ label: "Today" }]
+                            : lens.section === "captured"
+                              ? [{ label: "Captured" }]
                             : [{ label: "Assigned" }]),
+                    ]
+                  : []),
+                ...(lens.kind === "requests"
+                  ? [
+                      {
+                        label: "Requests",
+                        onClick: () => navigate("/requests"),
+                      },
+                      ...(lens.section === "mine"
+                        ? [{ label: "Mine" }]
+                        : lens.section === "waiting"
+                          ? [{ label: "Waiting" }]
+                          : lens.section === "resolved"
+                            ? [{ label: "Resolved" }]
+                            : lens.section === "new"
+                              ? [{ label: "New" }]
+                              : [{ label: "Inbox" }]),
                     ]
                   : []),
                 ...(lens.kind === "notes"
@@ -5365,6 +5693,20 @@ export function DelivereeWorkspace() {
                 >
                   {t("myWorkToday")}
                 </button>
+                <button
+                  className={lens.section === "captured" ? "is-active" : ""}
+                  data-testid="my-work-captured-tab"
+                  onClick={() => navigate("/my-work/captured")}
+                  role="tab"
+                  type="button"
+                >
+                  Captured
+                </button>
+              </div>
+            )}
+            {lens.kind === "my-work" && lens.section === "captured" && (
+              <div className="do-capture-ingest" data-testid="capture-ingest">
+                <CaptureIngestForm onCapture={(subject, body) => void ingestCapturedEmail(subject, body)} />
               </div>
             )}
             {lens.kind === "my-work" && lens.section === "today" && (
@@ -5435,6 +5777,28 @@ export function DelivereeWorkspace() {
               lens.kind === "feedback" && lens.section === "queue" && canManageMembers
                 ? feedbackReports
                 : feedbackReports.filter((item) => item.userId === user?.uid)
+            }
+          />
+        ) : centerView === "requests" ? (
+          <RequestsCenter
+            messages={workItemMessages}
+            onChangeSection={(section) => {
+              if (section === "inbox") navigate("/requests");
+              else navigate(`/requests/${section}`);
+            }}
+            onCreateRelatedWork={createRelatedWorkFromTicket}
+            onCreateTicket={createRequestTicket}
+            onSelect={setSelectedRequestId}
+            onSendMessage={sendRequestMessage}
+            onUpdateTicket={updateProjectTask}
+            section={lens.kind === "requests" ? lens.section : "inbox"}
+            selectedId={selectedRequestId}
+            tickets={requestTickets}
+            viewerId={user?.uid}
+            viewerName={
+              memberPublicLabel(currentWorkspaceMember || {}) ||
+              user?.displayName ||
+              undefined
             }
           />
         ) : centerView === "agents" ? (
@@ -6121,6 +6485,14 @@ export function DelivereeWorkspace() {
                 onEnable={() => void enableAppleWidget()}
                 onRevoke={() => void revokeAppleWidget()}
                 token={widgetToken}
+              />
+              <CaptureSettingsPanel
+                address={captureAddress}
+                busy={captureBusy}
+                onEnsureAddress={ensureCaptureAddress}
+                onRotateAlias={rotateCaptureAlias}
+                userEmail={user?.email}
+                userName={user?.displayName}
               />
               <ControlledListsSettings
                 categories={categories}
