@@ -379,6 +379,101 @@ function aiModelFor(env, body = {}, feature = "chat") {
   return env.OPENAI_EFFICIENT_MODEL || env.OPENAI_MODEL || DEFAULT_EFFICIENT_MODEL;
 }
 
+const CAPTURE_INTENTS = [
+  "ACTION_REQUIRED",
+  "DECISION",
+  "FOLLOW_UP",
+  "REQUEST",
+  "INFORMATION",
+  "FYI",
+  "MEETING",
+  "SPAM",
+  "NO_ACTION",
+];
+
+/** Optional OpenAI path for Capture understand; falls back to deterministic offline. */
+async function openaiCaptureUnderstand(body, env) {
+  if (!openaiIsConfigured(env)) return null;
+  const subject = String(body?.subject || "").trim();
+  const textBody = String(body?.body || body?.text || "").trim().slice(0, 4000);
+  const fromEmail = String(body?.fromEmail || body?.from || "").trim();
+  const model = aiModelFor(env, body, "rewrite");
+  const instructions = `You extract Certo Capture metadata from inbound email.
+Return JSON only with this shape:
+{
+  "intent": "ACTION_REQUIRED|DECISION|FOLLOW_UP|REQUEST|INFORMATION|FYI|MEETING|SPAM|NO_ACTION",
+  "title": "short actionable title under 80 chars",
+  "description": {
+    "context": "what happened / what was asked",
+    "outcome": "requested outcome",
+    "details": "important details"
+  },
+  "workItemSuggestion": "pbi|none"
+}
+Rules: preserve language; do not invent deadlines; prefer ACTION_REQUIRED when the sender asks for work; use none for FYI/spam/meeting-only.`;
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${openaiApiKey(env)}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        instructions,
+        input: [
+          {
+            role: "user",
+            content: `From: ${fromEmail}\nSubject: ${subject}\nBody:\n${textBody}`,
+          },
+        ],
+        text: { format: { type: "json_object" } },
+        max_output_tokens: 500,
+        store: false,
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    const parsed = parseJsonObject(extractOpenAIText(payload));
+    if (!parsed || typeof parsed !== "object") return null;
+    const intent = CAPTURE_INTENTS.includes(parsed.intent) ? parsed.intent : "INFORMATION";
+    const actionable = ["ACTION_REQUIRED", "DECISION", "FOLLOW_UP", "REQUEST"].includes(intent);
+    const title = String(parsed.title || subject || "Captured email")
+      .trim()
+      .slice(0, 120);
+    const description =
+      parsed.description && typeof parsed.description === "object"
+        ? {
+            context: String(parsed.description.context || textBody.slice(0, 420)).slice(0, 500),
+            outcome: String(parsed.description.outcome || "").slice(0, 280),
+            details: String(parsed.description.details || textBody.slice(0, 900)).slice(0, 900),
+          }
+        : {
+            context: textBody.slice(0, 420) || "No body text was provided.",
+            outcome: actionable
+              ? "Confirm the requested outcome and close the loop with the sender."
+              : "Review and decide whether action is required.",
+            details: textBody.slice(0, 900),
+          };
+    return {
+      provider: "openai",
+      understood: {
+        intent,
+        title: title || "Captured email",
+        description,
+        workItemSuggestion:
+          parsed.workItemSuggestion === "pbi" || (parsed.workItemSuggestion !== "none" && actionable)
+            ? "pbi"
+            : "none",
+        fields: {},
+        duplicateOfId: null,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function openAIUsage(payload) {
   const usage = payload?.usage || {};
   const inputTokens = Number(usage.input_tokens || usage.prompt_tokens || 0) || 0;
@@ -1454,6 +1549,7 @@ const worker = {
         readJson,
         authorize,
         sendBrevoTransactionalEmail,
+        openaiUnderstand: openaiCaptureUnderstand,
       });
       if (request.method === "POST" && url.pathname === "/api/capture/understand") {
         return capture.handleUnderstand(request, env);

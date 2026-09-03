@@ -264,3 +264,59 @@ test("worker understand matches client helper", () => {
   const input = { subject: "FYI: weekly note", body: "No action needed" };
   assert.equal(workerUnderstand(input).intent, deterministicCaptureUnderstand(input).intent);
 });
+
+test("worker understand can use OpenAI dependency when provided", async () => {
+  const handlers = createCaptureRequestsHandlers({
+    json: (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    readJson: async () => ({
+      userId: "u1",
+      workspaceId: "w1",
+      subject: "Need approval",
+      body: "Please approve the change",
+    }),
+    authorize: async () => ({ uid: "u1" }),
+    sendBrevoTransactionalEmail: async () => ({ sent: false, configured: false }),
+    openaiUnderstand: async () => ({
+      provider: "openai",
+      understood: {
+        intent: "DECISION",
+        title: "Approve the change",
+        description: { context: "Approval needed", outcome: "Decision", details: "" },
+        workItemSuggestion: "pbi",
+        fields: {},
+        duplicateOfId: null,
+      },
+    }),
+  });
+  const response = await handlers.handleUnderstand(
+    new Request("https://certo.work/api/capture/understand", { method: "POST" }),
+    {},
+  );
+  const body = await response.json();
+  assert.equal(body.provider, "openai");
+  assert.equal(body.understood.intent, "DECISION");
+  assert.equal(body.understood.title, "Approve the change");
+});
+
+test("finish gaps wire portal task update, understand API, team list, express parity", () => {
+  const portal = readFileSync(resolve("src/components/PublicRequestPortal.tsx"), "utf8");
+  const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  const settings = readFileSync(resolve("src/components/CaptureSettingsPanel.tsx"), "utf8");
+  const server = readFileSync(resolve("server.ts"), "utf8");
+  const worker = readFileSync(resolve("worker/index.js"), "utf8");
+  const rules = readFileSync(resolve("firestore.rules"), "utf8");
+  assert.match(portal, /ticketStatus:\s*"in_progress"/);
+  assert.match(rules, /portalToken/);
+  assert.match(workspace, /\/api\/capture\/understand/);
+  assert.match(workspace, /teamCaptureAddresses/);
+  assert.match(workspace, /capture_routes.*aliasEmail|aliasEmail[\s\S]*capture_routes/);
+  assert.match(settings, /capture-team-list/);
+  assert.match(server, /\/api\/capture\/triage/);
+  assert.match(server, /\/api\/capture\/inbound\/email/);
+  assert.match(worker, /openaiCaptureUnderstand/);
+  assert.match(worker, /openaiUnderstand:\s*openaiCaptureUnderstand/);
+});

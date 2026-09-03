@@ -95,6 +95,18 @@ export function PublicRequestPortal({ token }: { token: string }) {
         snapshot: nextSnapshot,
         updatedAt: serverTimestamp(),
       });
+      try {
+        await updateDoc(doc(db, "tasks", ticketId), {
+          ticketStatus: "in_progress",
+          waitingReason: null,
+          customerStatus: "Waiting on our side",
+          lastPublicUpdate: body.slice(0, 240),
+          status: "in_progress",
+          updatedAt: serverTimestamp(),
+        });
+      } catch {
+        // Rules may not be deployed yet; message + portal snapshot still landed.
+      }
       setReply("");
       setNotice("Message sent. The team will see it in Requests.");
     } catch (reason) {

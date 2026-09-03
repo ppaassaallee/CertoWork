@@ -401,9 +401,11 @@ export function DelivereeWorkspace() {
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
   const [captureAddress, setCaptureAddress] = useState<CaptureAddress | null>(null);
+  const [teamCaptureAddresses, setTeamCaptureAddresses] = useState<CaptureAddress[]>([]);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const portalRequesterSyncRef = useRef<Set<string>>(new Set());
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);
   const [strategicGoals, setStrategicGoals] = useState<any[]>([]);
@@ -771,6 +773,24 @@ export function DelivereeWorkspace() {
           setCaptureAddress(active);
         },
         () => setCaptureAddress(null),
+      ),
+      onSnapshot(
+        query(
+          collection(db, "capture_addresses"),
+          where("workspaceId", "==", workspace.id),
+          where("userId", "==", user.uid),
+          where("kind", "==", "team"),
+        ),
+        (snapshot) => {
+          const rows = snapshot.docs
+            .map((item) => ({ id: item.id, ...item.data() }) as CaptureAddress)
+            .filter((row) => (row.status || "active") === "active")
+            .sort((left, right) =>
+              String(left.email || "").localeCompare(String(right.email || "")),
+            );
+          setTeamCaptureAddresses(rows);
+        },
+        () => setTeamCaptureAddresses([]),
       ),
       onSnapshot(
         query(
@@ -3515,6 +3535,21 @@ export function DelivereeWorkspace() {
           { merge: true },
         );
       }
+      if (payload.aliasEmail) {
+        await setDoc(
+          doc(db, "capture_routes", captureRouteDocId(payload.aliasEmail)),
+          {
+            email: payload.aliasEmail,
+            addressId: id,
+            workspaceId: workspace.id,
+            userId: user.uid,
+            kind: "personal",
+            status: "active",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
       setNotice(`Capture inbox ready: ${email}`);
     } catch (reason) {
       setNotice(
@@ -3531,11 +3566,33 @@ export function DelivereeWorkspace() {
     try {
       const username = captureUsername();
       const secretSuffix = Math.random().toString(36).slice(2, 10);
+      const aliasEmail = buildPersonalCaptureAlias(username, secretSuffix);
+      const previousAlias = String(captureAddress.aliasEmail || "").trim().toLowerCase();
+      if (previousAlias) {
+        try {
+          await deleteDoc(doc(db, "capture_routes", captureRouteDocId(previousAlias)));
+        } catch {
+          // Old alias route may already be gone.
+        }
+      }
       await updateDoc(doc(db, "capture_addresses", captureAddress.id), {
         secretSuffix,
-        aliasEmail: buildPersonalCaptureAlias(username, secretSuffix),
+        aliasEmail,
         updatedAt: serverTimestamp(),
       });
+      await setDoc(
+        doc(db, "capture_routes", captureRouteDocId(aliasEmail)),
+        {
+          email: aliasEmail,
+          addressId: captureAddress.id,
+          workspaceId: workspace.id,
+          userId: user.uid,
+          kind: "personal",
+          status: "active",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
       setNotice("Capture alias rotated.");
     } catch (reason) {
       setNotice(
@@ -3843,7 +3900,31 @@ export function DelivereeWorkspace() {
 
   const ingestCapturedEmail = async (subject: string, body: string) => {
     if (!user || !workspace) return;
-    const understood = deterministicCaptureUnderstand({ subject, body });
+    let understood = deterministicCaptureUnderstand({ subject, body });
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/capture/understand", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          workspaceId: workspace.id,
+          subject,
+          body,
+          fromEmail: user.email || "",
+          fromName: user.displayName || "",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && payload?.understood) {
+        understood = payload.understood;
+      }
+    } catch {
+      // Fall back to deterministic local understand.
+    }
     const description = formatCaptureDescription({
       ...understood.description,
       sourceLabel: `Email capture · ${user.email || "you"}`,
@@ -3868,6 +3949,33 @@ export function DelivereeWorkspace() {
       setSelectedWorkItemId(id);
     }
   };
+
+  // Fallback: when a requester replies via portal and task is still waiting, clear waiting.
+  useEffect(() => {
+    if (!user || !workspace) return;
+    for (const message of workItemMessages) {
+      if (String(message.channel || "") !== "portal") continue;
+      if (String(message.authorRole || "") !== "requester") continue;
+      const messageId = String(message.id || "");
+      if (!messageId || portalRequesterSyncRef.current.has(messageId)) continue;
+      portalRequesterSyncRef.current.add(messageId);
+      const ticket = tasks.find((item) => item.id === message.workItemId);
+      if (!ticket) continue;
+      const waiting =
+        String(ticket.ticketStatus || "") === "waiting" || Boolean(ticket.waitingReason);
+      if (!waiting) continue;
+      void updateDoc(doc(db, "tasks", ticket.id), {
+        ticketStatus: "in_progress",
+        waitingReason: null,
+        customerStatus: "Waiting on our side",
+        lastPublicUpdate: String(message.body || "").slice(0, 240),
+        status: "in_progress",
+        updatedAt: serverTimestamp(),
+      }).catch(() => {
+        portalRequesterSyncRef.current.delete(messageId);
+      });
+    }
+  }, [workItemMessages, tasks, user, workspace]);
 
   const createSprint = async (patch: Record<string, unknown>) => {
     if (!user || !workspace) return;
@@ -6695,6 +6803,7 @@ export function DelivereeWorkspace() {
                 onEnsureAddress={ensureCaptureAddress}
                 onEnsureTeamAddress={ensureTeamCaptureAddress}
                 onRotateAlias={rotateCaptureAlias}
+                teamAddresses={teamCaptureAddresses}
                 userEmail={user?.email}
                 userName={user?.displayName}
               />

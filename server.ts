@@ -192,6 +192,96 @@ async function startServer() {
     }
   });
 
+  app.post("/api/capture/triage", requireWorkspaceApiAuth, async (req, res) => {
+    try {
+      const { deterministicTicketTriage } = await import("./worker/captureRequests.js");
+      const triage = deterministicTicketTriage({
+        subject: req.body?.subject,
+        body: req.body?.body || req.body?.text,
+      });
+      res.json({ ok: true, provider: "offline-safe", triage });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Could not triage request.",
+      });
+    }
+  });
+
+  app.post("/api/capture/inbound/email", async (req, res) => {
+    try {
+      const { createCaptureRequestsHandlers } = await import("./worker/captureRequests.js");
+      const secret = String(process.env.CAPTURE_INBOUND_SECRET || "").trim();
+      const header =
+        String(req.get("x-capture-secret") || req.get("x-brevo-secret") || "").trim();
+      const auth = String(req.get("authorization") || "");
+      const secretOk =
+        ["1", "true", "yes"].includes(
+          String(process.env.CAPTURE_INBOUND_OPEN || "")
+            .trim()
+            .toLowerCase(),
+        ) ||
+        (Boolean(secret) && (header === secret || auth === `Bearer ${secret}`));
+      if (!secretOk) {
+        return res.status(401).json({ error: "Capture inbound secret or auth required" });
+      }
+
+      const sendBrevo = async (_env: unknown, message: Record<string, unknown>) => {
+        if (!process.env.BREVO_API_KEY) {
+          return { sent: false, configured: false, error: "BREVO_API_KEY is not configured" };
+        }
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": process.env.BREVO_API_KEY,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify(message),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          return {
+            sent: false,
+            configured: true,
+            error: (payload as { message?: string })?.message || "Brevo request failed",
+          };
+        }
+        return {
+          sent: true,
+          configured: true,
+          messageId: (payload as { messageId?: string })?.messageId || null,
+        };
+      };
+
+      const handlers = createCaptureRequestsHandlers({
+        json: (data: unknown, status = 200) =>
+          new Response(JSON.stringify(data), {
+            status,
+            headers: { "content-type": "application/json" },
+          }),
+        readJson: async () => req.body || {},
+        authorize: async () => ({ uid: "inbound" }),
+        sendBrevoTransactionalEmail: sendBrevo,
+      });
+      const request = new Request("http://localhost/api/capture/inbound/email", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(header ? { "x-capture-secret": header } : {}),
+          ...(auth ? { authorization: auth } : {}),
+        },
+        body: JSON.stringify(req.body || {}),
+      });
+      const response = await handlers.handleInboundEmail(request, process.env as any);
+      const payload = await response.json().catch(() => ({}));
+      return res.status(response.status).json(payload);
+    } catch (error) {
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Could not process inbound email.",
+      });
+    }
+  });
+
   app.post("/api/requests/reply", requireWorkspaceApiAuth, async (req, res) => {
     try {
       const { briefTicketReplyEmail } = await import("./worker/captureRequests.js");
