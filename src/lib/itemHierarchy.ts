@@ -148,6 +148,78 @@ export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[
   return ["pbi", "story", "task", "bug"];
 }
 
+/** Inverse of parent rules: which kinds may be created directly under a parent. */
+export function allowedChildKinds(parentKind: HierarchyKind | string): HierarchyKind[] {
+  if (parentKind === "epic") return ["pbi", "feature", "story"];
+  if (parentKind === "feature") return ["pbi", "story"];
+  if (parentKind === "pbi" || parentKind === "story") return ["task", "bug"];
+  if (parentKind === "task" || parentKind === "bug") return ["subtask"];
+  return [];
+}
+
+const NON_INHERITED_DATE_FIELDS = new Set(["dueDate", "targetDate", "startDate"]);
+
+function fieldValueEmpty(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === "string") {
+    const text = value.trim();
+    return !text || text.toUpperCase() === "N/A";
+  }
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function readInheritedField(item: any, field: string): unknown {
+  if (field === "owner" || field === "assignee") {
+    if (!fieldValueEmpty(item?.owner)) return item.owner;
+    if (!fieldValueEmpty(item?.assignee)) return item.assignee;
+    if (Array.isArray(item?.assignees) && item.assignees.length) return item.assignees[0];
+    return "";
+  }
+  return item?.[field];
+}
+
+/** Root → … → item. Used so the highest ancestor's non-empty value wins. */
+export function hierarchyChain(item: any, items: any[]): any[] {
+  const ids = presentItemIds(items);
+  const byId = new Map(items.map((candidate) => [normalizeItemId(candidate?.id), candidate]));
+  const upward: any[] = [];
+  let current = item;
+  const seen = new Set<string>();
+  while (current) {
+    const id = normalizeItemId(current?.id);
+    if (!id || seen.has(id)) break;
+    seen.add(id);
+    upward.push(current);
+    const parentId = visibleParentId(current, ids);
+    if (!parentId) break;
+    const parent = byId.get(parentId);
+    if (!parent) break;
+    current = parent;
+  }
+  return upward.reverse();
+}
+
+/**
+ * Walk from hierarchy root down; first non-empty ancestor value wins.
+ * Never inherits dueDate / targetDate / startDate (those stay item-local).
+ */
+export function effectiveInheritedField(item: any, items: any[], field: string): unknown {
+  if (NON_INHERITED_DATE_FIELDS.has(field)) {
+    return item?.[field] ?? null;
+  }
+  const chain = hierarchyChain(item, items);
+  for (const node of chain) {
+    const value = readInheritedField(node, field);
+    if (!fieldValueEmpty(value)) return value;
+  }
+  return readInheritedField(item, field) ?? null;
+}
+
+export function effectivePriority(item: any, items: any[]): unknown {
+  return effectiveInheritedField(item, items, "priority");
+}
+
 export function parentLinkPatch(parent: any | null) {
   if (!parent) return { parentId: null, epicId: null, featureId: null };
   const kind = hierarchyKind(parent);

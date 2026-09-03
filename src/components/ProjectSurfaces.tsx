@@ -5249,7 +5249,11 @@ export function ProjectCommandCenter({
               <Search size={14} />
               <input
                 aria-label="Search projects"
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSearch(next);
+                  if (next.trim() && view === "dashboard") setView("overview");
+                }}
                 placeholder="Search project, client or service"
                 value={search}
               />

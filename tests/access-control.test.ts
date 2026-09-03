@@ -65,4 +65,13 @@ test("login membership writes grant portfolio access to non-viewers", () => {
   assert.match(workspace, /portfolioViewer: role !== "viewer"/);
   assert.match(workspace, /canSeeMemberEmails/);
   assert.match(workspace, /data-testid="member-directory-name"/);
+  assert.match(workspace, /Invite link copied/);
+  assert.match(workspace, /for \(const project of activeProjects\)/);
+});
+
+test("project search opens the portfolio list instead of staying on the dashboard", () => {
+  const projectSurfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
+  const commandPalette = readFileSync(resolve("src/components/CommandPalette.tsx"), "utf8");
+  assert.match(projectSurfaces, /if \(next\.trim\(\) && view === "dashboard"\) setView\("overview"\)/);
+  assert.match(commandPalette, /normalize\("NFD"\)/);
 });

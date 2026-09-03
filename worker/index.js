@@ -1205,9 +1205,18 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function publicAppOrigin(origin) {
+  const value = String(origin || "").trim().replace(/\/$/, "");
+  if (!value || /workers\.dev$/i.test(new URL(value).hostname) || /localhost|127\.0\.0\.1/i.test(value)) {
+    return "https://certo.work";
+  }
+  return value;
+}
+
 function inviteEmailContent(body, origin) {
   const token = String(body.inviteToken || "").trim();
-  const inviteUrl = token ? `${origin}/invite/${encodeURIComponent(token)}` : `${origin}/`;
+  const appOrigin = publicAppOrigin(origin);
+  const inviteUrl = token ? `${appOrigin}/invite/${encodeURIComponent(token)}` : `${appOrigin}/`;
   const workspaceName = String(body.workspaceName || "Certo Work").trim();
   const toEmail = String(body.toEmail || "").trim().toLowerCase();
   const role = String(body.role || "member").trim();
@@ -1216,15 +1225,16 @@ function inviteEmailContent(body, origin) {
   const textContent = [
     `You have been invited to ${workspaceName} in Certo Work.`,
     "",
-    "Complete these steps so you can sign in later with your own password:",
-    `1. Open ${inviteUrl}`,
-    `2. Use this exact email: ${toEmail}`,
-    "3. Create or confirm your password (at least 6 characters).",
-    "4. Sign out, then sign back in with that email and password.",
+    "Use this invitation link (do not request beta access):",
+    inviteUrl,
+    "",
+    `1. Open the link above.`,
+    `2. Sign in or create your password with this exact email: ${toEmail}`,
+    "3. Certo Work will add you to the workspace automatically.",
     `Role: ${role}`,
     "",
-    "If you do not have an account yet, choose Request beta access and create your password with that same email.",
-    "If you already have an account, choose Sign in.",
+    "If the button/link does not open, copy and paste the URL into your browser.",
+    "Check spam/promotions if you are looking for this email later.",
     "",
     "— Certo Work",
   ].join("\n");
@@ -1241,8 +1251,9 @@ function inviteEmailContent(body, origin) {
           <span>${escapeHtml(toEmail)}</span><br />
           <small>Role: ${escapeHtml(role)}</small>
         </div>
-        <a href="${inviteUrl}" style="display:inline-block;border-radius:999px;background:#214b39;color:#ffffff;padding:13px 18px;text-decoration:none;font-weight:800;">Open Certo Work</a>
-        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">Open the button above, set your password, then sign out and sign back in with this email and password. If the account already exists, sign in with your current password on the invitation page.</p>
+        <a href="${inviteUrl}" style="display:inline-block;border-radius:999px;background:#214b39;color:#ffffff;padding:13px 18px;text-decoration:none;font-weight:800;">Accept invitation</a>
+        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">Open the button above and sign in or create your password with that email. Do not use “Request beta access” — this link already grants workspace access. If you do not see this email in your inbox, check spam/promotions.</p>
+        <p style="margin:14px 0 0;color:#8a9690;font-size:12px;line-height:1.5;word-break:break-all;">${escapeHtml(inviteUrl)}</p>
       </div>
     </div>
   </body>
@@ -1294,7 +1305,7 @@ async function sendInviteEmail(request, env) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(toEmail)) {
     return json({ error: "A valid recipient email is required" }, 400);
   }
-  const origin = new URL(request.url).origin;
+  const origin = env.CERTO_APP_ORIGIN || new URL(request.url).origin;
   const content = inviteEmailContent({ ...body, toEmail }, origin);
   const senderEmail = env.CERTO_EMAIL_FROM || "support@certo.work";
   const senderName = env.CERTO_EMAIL_FROM_NAME || "Certo Work";
@@ -1307,11 +1318,17 @@ async function sendInviteEmail(request, env) {
     htmlContent: content.htmlContent,
     textContent: content.textContent,
     tags: ["workspace-invite"],
+    headers: {
+      "X-Mailin-custom": JSON.stringify({ workspaceId: body.workspaceId, invite: true }),
+    },
     params: {
       workspaceId: body.workspaceId,
       role: body.role || "member",
     },
   });
+  if (!result.sent) {
+    return json({ ...result, inviteUrl: content.inviteUrl }, result.configured ? 502 : 503);
+  }
   return json({ ...result, inviteUrl: content.inviteUrl });
 }
 

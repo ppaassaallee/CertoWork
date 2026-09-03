@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  allowedChildKinds,
   allowedParentItems,
   allowedParentKinds,
+  effectiveInheritedField,
+  effectivePriority,
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
@@ -128,4 +131,50 @@ test("epics stored as type=epic still appear as PBI parents, and other projects 
   const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
   const otherPbi = { id: "p2", title: "Other PBI", workItemType: "pbi", projectId: "p" };
   assert.deepEqual(allowedParentItems(pbi, [typedEpic, otherPbi]).map((item) => item.id), ["e3"]);
+});
+
+test("allowedChildKinds is the inverse nesting table", () => {
+  assert.deepEqual(allowedChildKinds("epic"), ["pbi", "feature", "story"]);
+  assert.deepEqual(allowedChildKinds("feature"), ["pbi", "story"]);
+  assert.deepEqual(allowedChildKinds("pbi"), ["task", "bug"]);
+  assert.deepEqual(allowedChildKinds("story"), ["task", "bug"]);
+  assert.deepEqual(allowedChildKinds("task"), ["subtask"]);
+  assert.deepEqual(allowedChildKinds("bug"), ["subtask"]);
+  assert.deepEqual(allowedChildKinds("subtask"), []);
+});
+
+test("effectivePriority inherits from the highest ancestor; due dates stay local", () => {
+  const epic = { id: "e1", title: "Launch", workItemType: "epic", priority: "1", dueDate: "2026-01-01" };
+  const feature = {
+    id: "f1",
+    title: "Auth",
+    workItemType: "feature",
+    parentId: "e1",
+    epicId: "e1",
+    priority: "3",
+    dueDate: "2026-02-01",
+  };
+  const pbi = {
+    id: "p1",
+    title: "Login",
+    workItemType: "pbi",
+    parentId: "f1",
+    featureId: "f1",
+    epicId: "e1",
+    priority: null,
+    dueDate: "2026-03-01",
+  };
+  const items = [epic, feature, pbi];
+
+  assert.equal(effectivePriority(pbi, items), "1");
+  assert.equal(effectivePriority(feature, items), "1");
+  assert.equal(effectiveInheritedField(pbi, items, "priority"), "1");
+  assert.equal(effectiveInheritedField(pbi, items, "dueDate"), "2026-03-01");
+  assert.equal(effectiveInheritedField(feature, items, "dueDate"), "2026-02-01");
+  assert.equal(effectiveInheritedField(pbi, items, "targetDate"), null);
+  assert.equal(effectiveInheritedField(pbi, items, "startDate"), null);
+
+  const orphan = { id: "p2", title: "Solo", workItemType: "pbi", priority: "2", dueDate: "2026-04-01" };
+  assert.equal(effectivePriority(orphan, [orphan]), "2");
+  assert.equal(effectiveInheritedField(orphan, [orphan], "dueDate"), "2026-04-01");
 });

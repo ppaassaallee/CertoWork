@@ -26,6 +26,14 @@ service cloud.firestore {
       );
     }
 
+    function workspaceMembersContainAuthEmail(workspaceId) {
+      let members = get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.members;
+      return members is list && request.auth.token.email != null && (
+        request.auth.token.email in members ||
+        (authEmailLower() != "" && authEmailLower() in members)
+      );
+    }
+
     // Workspaces are tenant-private. A signed-in user who is not the owner,
     // a listed member email, or an active workspace_members row must not read
     // the document — including the workspace name.
@@ -1177,11 +1185,16 @@ service cloud.firestore {
     }
 
     match /workspace_members/{memberId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)));
+      allow read: if isSignedIn() && (
+        resource == null ||
+        resource.data.userId == request.auth.uid ||
+        exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)) ||
+        (authEmailLower() != "" && resource.data.emailLower == authEmailLower())
+      );
       allow create: if isSignedIn() && (
         incoming().userId == request.auth.uid && (
           get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-          (request.auth.token.email != null && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.members)
+          workspaceMembersContainAuthEmail(incoming().workspaceId)
         ) ||
         get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
         isWorkspaceAdmin(incoming().workspaceId)
@@ -1189,13 +1202,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         incoming().userId == request.auth.uid && (
           get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-          (request.auth.token.email != null && request.auth.token.email in get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.members)
+          workspaceMembersContainAuthEmail(incoming().workspaceId)
         ) ||
         get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
         isWorkspaceAdmin(incoming().workspaceId) ||
         (
-          request.auth.token.email != null &&
-          resource.data.emailLower == request.auth.token.email &&
+          authEmailLower() != "" &&
+          resource.data.emailLower == authEmailLower() &&
           incoming().workspaceId == resource.data.workspaceId
         )
       );
