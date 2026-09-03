@@ -218,10 +218,21 @@ test("list hierarchy nests children under epics and opens an expanded item popup
   assert.match(workItems, /data-testid="item-tree-toggle"/);
   assert.match(workItems, /hierarchyChildren/);
   assert.match(workItems, /renderForest/);
+  assert.match(workItems, /const childPool = parentPool/);
+  assert.match(workItems, /hierarchyChildren\(childPool, item\.id\)/);
   assert.match(workItems, /data-testid="item-expanded-modal"/);
   assert.match(workItems, /createPortal/);
   assert.match(css, /\.do-item-modal-backdrop/);
   assert.match(css, /\.do-item-modal \{/);
+});
+
+test("My Work hierarchy expands children from the full pool like Asana project lists", () => {
+  assert.match(workItems, /hierarchyTasks/);
+  assert.match(workItems, /const parentPool = hierarchyTasks\?\.length \? hierarchyTasks : tasks/);
+  assert.match(workItems, /const childPool = parentPool/);
+  assert.match(workItems, /hierarchyRoots\(items\)/);
+  assert.match(workspace, /hierarchyTasks=\{tasks\}/);
+  assert.match(workspace, /tasks=\{myWorkTasks\}/);
 });
 
 test("items and backlog can select all visible rows and bulk-edit assignee, date, and project", () => {

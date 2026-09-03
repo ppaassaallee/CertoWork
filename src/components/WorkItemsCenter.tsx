@@ -2023,9 +2023,14 @@ export function WorkItemsCenter({
   };
 
   const renderForest = (items: any[]) => {
+    // Roots stay scoped to the visible list (My Work / filters). Children resolve
+    // from the full hierarchy pool so expand twisties work like Asana project
+    // lists — and like the My Tasks request — even when subtasks are not
+    // themselves in the filtered view.
+    const childPool = parentPool;
     const walk = (item: any, depth: number, ancestors: Set<string>) => {
       if (ancestors.has(item.id)) return null;
-      const children = sortHierarchySiblings(hierarchyChildren(items, item.id), compareVisibleSiblings);
+      const children = sortHierarchySiblings(hierarchyChildren(childPool, item.id), compareVisibleSiblings);
       const groupKey = `node:${item.id}`;
       const collapsed = collapsedGroups.includes(groupKey);
       const kind = workItemKind(item);
@@ -2045,7 +2050,7 @@ export function WorkItemsCenter({
         <div className={`do-items-tree-node do-items-parent is-${kind}${kind === "epic" && depth === 0 ? " is-epic-section" : ""}`} data-depth={depth} data-testid="item-tree-node" key={item.id}>
           {kind === "epic" && depth === 0
             ? renderSectionHead(item, groupKey, children.length)
-            : renderRow(item, items, tree)}
+            : renderRow(item, children, tree)}
           {!collapsed && (
             <div className="do-items-children">
               {children.map((child) => walk(child, depth + 1, nextAncestors))}
@@ -2057,7 +2062,7 @@ export function WorkItemsCenter({
     };
     const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
     return (
-      <div className="do-items-tree">
+      <div className="do-items-tree" data-testid="item-hierarchy-forest">
         {roots.map((item) => walk(item, 0, new Set()))}
         {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI, task or bug for this context.</span></div>}
       </div>
