@@ -105,6 +105,7 @@ import {
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
+  isTreeNodeCollapsedState,
   normalizeItemId,
   parentLinkPatch,
   sortHierarchyForest,
@@ -474,6 +475,14 @@ function canonicalStatus(item: any) {
   return taskWorkLane(item);
 }
 
+const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
+
+function matchesStatusFilter(item: any, statusFilter: string) {
+  if (statusFilter === "all") return true;
+  if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
+  return canonicalStatus(item) === statusFilter;
+}
+
 function dueBucket(value: any) {
   const date = dateInputValue(value);
   if (!date) return "unscheduled";
@@ -713,9 +722,7 @@ export function WorkItemsCenter({
   const [inlineAddOpen, setInlineAddOpen] = useState<Record<string, boolean>>({});
   const inlineAddRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
-  /** Epics start expanded; listed keys are user-collapsed for this screen visit. */
-  const [collapsedEpicNodes, setCollapsedEpicNodes] = useState<string[]>([]);
-  /** Non-epic parents start collapsed; listed keys are user-expanded for this screen visit. */
+  /** Parents the user expanded during this screen visit. Everything else stays collapsed. */
   const [expandedTreeNodes, setExpandedTreeNodes] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
@@ -1007,7 +1014,6 @@ export function WorkItemsCenter({
 
   useEffect(() => {
     setCollapsedGroups([]);
-    setCollapsedEpicNodes([]);
     setExpandedTreeNodes([]);
     setInlineAddOpen({});
   }, [groupBy, primarySort, secondarySort, projectFilter, statusFilter, priorityFilter, typeFilter, ownerFilter, dateFilter, tagFilter, workCategoryFilter, productPhaseFilter, query]);
@@ -1073,8 +1079,7 @@ export function WorkItemsCenter({
     return sortItems(tasks.filter((item) => {
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
-      const matchesStatus = statusFilter === "all" ||
-        (statusFilter === "open" ? !["done", "completed", "closed", "cancelled", "archived", "deleted"].includes(String(item.status || "").toLowerCase()) : canonicalStatus(item) === statusFilter);
+      const matchesStatus = matchesStatusFilter(item, statusFilter);
       const matchesPriority = priorityFilter === "all" || priorityValue(effectivePriority(item, pool)) === priorityFilter;
       const itemKind = workItemKind(item);
       const matchesType = typeFilter === "all" || itemKind === typeFilter;
@@ -1556,7 +1561,7 @@ export function WorkItemsCenter({
           <button
             aria-expanded={!tree.collapsed}
             aria-label={`${tree.collapsed ? "Expand" : "Collapse"} ${title(item)}`}
-            className="do-items-section-toggle"
+            className={`do-items-section-toggle${tree.collapsed ? " is-collapsed" : ""}`}
             data-testid="item-tree-toggle"
             onClick={(event) => {
               event.stopPropagation();
@@ -1564,22 +1569,21 @@ export function WorkItemsCenter({
             }}
             type="button"
           >
-            <ChevronDown className={tree.collapsed ? "is-collapsed" : ""} size={14} />
+            <ChevronDown size={14} />
           </button>
         ) : tree ? <span className="do-items-tree-spacer" /> : null}
         <button
           aria-label={`${workItemLabel(kind)} ${title(item)}`}
           className={`do-items-type-flag is-icon is-${kind}`}
           data-testid="item-type-flag"
+          data-tip={workItemLabel(kind)}
           onClick={() => onSelectItem(item.id)}
-          title={workItemLabel(kind)}
           type="button"
         >
           {(() => {
             const TypeIcon = WORK_ITEM_TYPE_ICONS[kind] || Target;
             return <TypeIcon aria-hidden="true" size={13} />;
           })()}
-          <span className="do-items-type-flag-label">{workItemLabel(kind)}</span>
         </button>
         <InlineText
           ariaLabel={`Title for ${title(item)}`}
@@ -1923,12 +1927,13 @@ export function WorkItemsCenter({
       : [...current, group]);
   };
 
-  const isEpicSection = (kind: WorkItemKind, depth: number) => kind === "epic" && depth === 0;
-
-  const isTreeNodeCollapsed = (groupKey: string, kind: WorkItemKind, depth: number) => {
-    if (isEpicSection(kind, depth)) return collapsedEpicNodes.includes(groupKey);
-    return !expandedTreeNodes.includes(groupKey);
-  };
+  const isTreeNodeCollapsed = (groupKey: string, kind: WorkItemKind, depth: number) =>
+    isTreeNodeCollapsedState({
+      kind,
+      depth,
+      groupKey,
+      expandedKeys: expandedTreeNodes,
+    });
 
   const clearInlineAddForNode = (groupKey: string) => {
     if (!groupKey.startsWith("node:")) return;
@@ -1941,27 +1946,17 @@ export function WorkItemsCenter({
     });
   };
 
-  const toggleTreeNode = (groupKey: string, kind: WorkItemKind, depth: number) => {
-    const collapsing = !isTreeNodeCollapsed(groupKey, kind, depth);
-    if (isEpicSection(kind, depth)) {
-      setCollapsedEpicNodes((current) => collapsing
-        ? [...current, groupKey]
-        : current.filter((key) => key !== groupKey));
-    } else {
-      setExpandedTreeNodes((current) => collapsing
-        ? current.filter((key) => key !== groupKey)
-        : [...current, groupKey]);
-    }
+  const toggleTreeNode = (groupKey: string, _kind: WorkItemKind, _depth: number) => {
+    const collapsing = !isTreeNodeCollapsed(groupKey, _kind, _depth);
+    setExpandedTreeNodes((current) => collapsing
+      ? current.filter((key) => key !== groupKey)
+      : current.includes(groupKey) ? current : [...current, groupKey]);
     if (collapsing) clearInlineAddForNode(groupKey);
   };
 
   const focusInlineAdd = (parentIdValue: string, groupKey: string, kind: WorkItemKind, depth: number) => {
     if (isTreeNodeCollapsed(groupKey, kind, depth)) {
-      if (isEpicSection(kind, depth)) {
-        setCollapsedEpicNodes((current) => current.filter((key) => key !== groupKey));
-      } else {
-        setExpandedTreeNodes((current) => current.includes(groupKey) ? current : [...current, groupKey]);
-      }
+      setExpandedTreeNodes((current) => current.includes(groupKey) ? current : [...current, groupKey]);
     }
     setInlineAddOpen((current) => ({ ...current, [parentIdValue]: true }));
     window.setTimeout(() => {
@@ -1995,12 +1990,12 @@ export function WorkItemsCenter({
         <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
-          className="do-items-section-toggle"
+          className={`do-items-section-toggle${collapsed ? " is-collapsed" : ""}`}
           data-testid="item-tree-toggle"
           onClick={() => toggleTreeNode(groupKey, kind, depth)}
           type="button"
         >
-          <ChevronDown className={collapsed ? "is-collapsed" : ""} size={14} />
+          <ChevronDown size={14} />
         </button>
         {renderTitleCell(item, kind, childCount, {
           depth: 0,
@@ -2092,11 +2087,17 @@ export function WorkItemsCenter({
     // Roots stay scoped to the visible list (My Work / filters). Children resolve
     // from the full hierarchy pool so expand twisties work like Asana project
     // lists — and like the My Tasks request — even when subtasks are not
-    // themselves in the filtered view.
+    // themselves in the filtered view. Status filter still applies to nested
+    // children so completed work stays hidden unless the filter asks for it.
     const childPool = parentPool;
+    const visibleChildrenOf = (parentIdValue: string) =>
+      sortHierarchySiblings(
+        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
+        compareVisibleSiblings,
+      );
     const walk = (item: any, depth: number, ancestors: Set<string>) => {
       if (ancestors.has(item.id)) return null;
-      const children = sortHierarchySiblings(hierarchyChildren(childPool, item.id), compareVisibleSiblings);
+      const children = visibleChildrenOf(item.id);
       const groupKey = `node:${item.id}`;
       const kind = workItemKind(item);
       const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
@@ -2113,16 +2114,22 @@ export function WorkItemsCenter({
           : undefined,
       };
       return (
-        <div className={`do-items-tree-node do-items-parent is-${kind}${kind === "epic" && depth === 0 ? " is-epic-section" : ""}`} data-depth={depth} data-testid="item-tree-node" key={item.id}>
+        <div
+          className={`do-items-tree-node do-items-parent is-${kind}${kind === "epic" && depth === 0 ? " is-epic-section" : ""}`}
+          data-collapsed={collapsed ? "true" : "false"}
+          data-depth={depth}
+          data-testid="item-tree-node"
+          key={item.id}
+        >
           {kind === "epic" && depth === 0
             ? renderSectionHead(item, groupKey, children.length)
             : renderRow(item, children, tree)}
-          {!collapsed && (
-            <div className="do-items-children">
+          {!collapsed ? (
+            <div className="do-items-children" data-testid="item-tree-children">
               {children.map((child) => walk(child, depth + 1, nextAncestors))}
               {canAddChild ? renderInlineAddChild(item, depth, groupKey) : null}
             </div>
-          )}
+          ) : null}
         </div>
       );
     };

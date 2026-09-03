@@ -10,8 +10,10 @@ import {
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
+  isTreeNodeCollapsedState,
   parentLinkPatch,
   sortHierarchyForest,
+  treeNodeExpandedByDefault,
   visibleParentId,
 } from "../src/lib/itemHierarchy";
 
@@ -189,4 +191,22 @@ test("My Work-style filtered roots still resolve children from the full hierarch
   assert.deepEqual(hierarchyRoots(myWorkView).map((item) => item.id), ["p1"]);
   assert.deepEqual(hierarchyChildren(myWorkView, "p1").map((item) => item.id), ["t1"]);
   assert.deepEqual(hierarchyChildren(fullPool, "p1").map((item) => item.id), ["t1", "t2"]);
+});
+
+test("tree nodes start collapsed until the user expands them this visit", () => {
+  assert.equal(treeNodeExpandedByDefault("epic", 0), false);
+  assert.equal(treeNodeExpandedByDefault("pbi", 0), false);
+  assert.equal(treeNodeExpandedByDefault("task", 1), false);
+  assert.equal(
+    isTreeNodeCollapsedState({ kind: "epic", depth: 0, groupKey: "node:e1", expandedKeys: [] }),
+    true,
+  );
+  assert.equal(
+    isTreeNodeCollapsedState({ kind: "pbi", depth: 1, groupKey: "node:p1", expandedKeys: [] }),
+    true,
+  );
+  assert.equal(
+    isTreeNodeCollapsedState({ kind: "pbi", depth: 1, groupKey: "node:p1", expandedKeys: ["node:p1"] }),
+    false,
+  );
 });

@@ -125,14 +125,15 @@ test("items and project backlog sort families by the parent, not each child", ()
 test("items list hides unique keys and shows an inline type icon", () => {
   assert.match(workItems, /do-items-type-flag is-icon is-\$\{kind\}/);
   assert.match(workItems, /data-testid="item-type-flag"/);
+  assert.match(workItems, /data-tip=\{workItemLabel\(kind\)\}/);
   assert.match(workItems, /WORK_ITEM_TYPE_ICONS/);
-  assert.match(workItems, /do-items-type-flag-label/);
+  assert.doesNotMatch(workItems, /do-items-type-flag-label/);
   assert.match(workItems, /do-items-section-head/);
   assert.doesNotMatch(workItems, /workItemLabel\(kind\)\} · \$\{item\.key\}/);
   assert.doesNotMatch(workItems, /item\.key \? `\$\{workItemLabel/);
   const css = readFileSync(resolve("src/index.css"), "utf8");
-  assert.match(css, /\.do-items-type-flag\.is-icon/);
-  assert.match(css, /\.do-items-type-flag-label/);
+  assert.match(css, /\.do-items-type-flag\.is-icon::after/);
+  assert.match(css, /content: attr\(data-tip\)/);
 });
 
 test("epic section heads include a complete/reopen control like other rows", () => {
@@ -142,12 +143,17 @@ test("epic section heads include a complete/reopen control like other rows", () 
   assert.match(workItems, /toggleDone\(item\)/);
 });
 
-test("hierarchy expands epics by default and keeps other parents collapsed until toggled", () => {
-  assert.match(workItems, /collapsedEpicNodes/);
+test("hierarchy keeps parents collapsed until toggled for this visit", () => {
   assert.match(workItems, /expandedTreeNodes/);
-  assert.match(workItems, /isTreeNodeCollapsed/);
-  assert.match(workItems, /toggleTreeNode/);
-  assert.match(workItems, /isEpicSection\(kind, depth\)/);
+  assert.match(workItems, /isTreeNodeCollapsedState/);
+  assert.match(workItems, /data-collapsed=\{collapsed \? "true" : "false"\}/);
+  assert.match(workItems, /data-testid="item-tree-children"/);
+});
+
+test("expanded parents hide completed children unless status filter includes them", () => {
+  assert.match(workItems, /matchesStatusFilter/);
+  assert.match(workItems, /visibleChildrenOf/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter\)\)/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {
@@ -240,7 +246,8 @@ test("list hierarchy nests children under epics and opens an expanded item popup
   assert.match(workItems, /hierarchyChildren/);
   assert.match(workItems, /renderForest/);
   assert.match(workItems, /const childPool = parentPool/);
-  assert.match(workItems, /hierarchyChildren\(childPool, item\.id\)/);
+  assert.match(workItems, /visibleChildrenOf/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)/);
   assert.match(workItems, /data-testid="item-expanded-modal"/);
   assert.match(workItems, /createPortal/);
   assert.match(css, /\.do-item-modal-backdrop/);
