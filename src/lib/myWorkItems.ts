@@ -1,6 +1,7 @@
 import { isTodayTask, priorityRank } from "./appleWidget";
 import type { MyWorkSection } from "./delivereeRoutes";
 import { isCapturedWorkItem, needsCaptureReview } from "./captureRequests";
+import { dateKey, isClosed, localDateKey } from "./workspaceDisplay";
 import {
   memberMatchesSelection,
   memberPublicLabel,
@@ -120,6 +121,34 @@ export function isWaitingWorkItem(item: Record<string, unknown> | null | undefin
   return value === "waiting" || value === "waiting_for" || value === "delegated";
 }
 
+function saturdayNoonFor(value: Date) {
+  const target = new Date(value);
+  target.setHours(12, 0, 0, 0);
+  const day = target.getDay();
+  const daysUntilSaturday = (6 - day + 7) % 7;
+  target.setDate(target.getDate() + daysUntilSaturday);
+  return target;
+}
+
+export function isThisWeekTask(
+  item: Record<string, unknown> | null | undefined,
+  now = new Date(),
+) {
+  if (!item || isClosed(String(item.status || ""))) return false;
+  const sector = String(item.timeSector || "").toLowerCase();
+  const expiresRaw = item.timeSectorExpiresAt as any;
+  if (sector === "this_week") {
+    if (expiresRaw?.toDate && expiresRaw.toDate().getTime() < now.getTime()) return false;
+    if (typeof expiresRaw === "string" && Date.parse(expiresRaw) < now.getTime()) return false;
+    return true;
+  }
+  const due = dateKey(item.dueDate || item.targetDate);
+  if (!due) return false;
+  const today = localDateKey(now);
+  const weekEnd = localDateKey(saturdayNoonFor(now));
+  return due >= today && due <= weekEnd;
+}
+
 /** My Work is a view. It never deletes records. */
 export function isMyWorkItem(
   item: Record<string, unknown> | null | undefined,
@@ -160,6 +189,9 @@ export function filterMyWorkTasks(
   }
   if (section === "today") {
     return mine.filter((item) => isTodayTask(item));
+  }
+  if (section === "this_week") {
+    return mine.filter((item) => isThisWeekTask(item));
   }
   if (section === "captured") {
     return mine.filter((item) => isCapturedWorkItem(item) || needsCaptureReview(item));

@@ -96,16 +96,17 @@ test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "my-work", section: "assigned" }), "/my-work");
   assert.equal(lensToPath({ kind: "my-work", section: "inbox" }), "/my-work/inbox");
   assert.equal(lensToPath({ kind: "my-work", section: "today" }), "/my-work/today");
+  assert.equal(lensToPath({ kind: "my-work", section: "this_week" }), "/my-work/this-week");
   assert.equal(lensToPath({ kind: "notes" }), "/notes");
   assert.equal(lensToPath({ kind: "work", section: "portfolio" }), "/projects");
   assert.equal(lensToPath({ kind: "agents", section: "home" }), "/agents");
   assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/agents/automations");
   assert.equal(lensToPath({ kind: "more", section: "workspace" }), "/workspace");
   assert.equal(lensToPath({ kind: "invoices" }), "/invoices");
-  assert.equal(lensToPath({ kind: "feedback", section: "submit" }), "/feedback");
+  assert.equal(lensToPath({ kind: "feedback", section: "submit" }), "/supportops");
   assert.equal(
     lensToPath({ kind: "feedback", section: "queue" }),
-    "/workspace/feedback",
+    "/workspace/supportops",
   );
 });
 

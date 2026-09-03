@@ -65,7 +65,7 @@ export function FeedbackCenter({
 
   const intakeUrl = (routeProjectId = "", routeKind: FeedbackKind | "" = "") => {
     if (typeof window === "undefined") return "";
-    const url = new URL("/feedback", window.location.origin);
+    const url = new URL("/supportops", window.location.origin);
     if (routeProjectId) url.searchParams.set("project", routeProjectId);
     if (routeKind) url.searchParams.set("kind", routeKind);
     return url.toString();
@@ -136,7 +136,7 @@ export function FeedbackCenter({
     <div className="do-feedback-center" data-testid={mode === "queue" ? "feedback-admin-queue" : "feedback-submit"}>
       <header className="do-feedback-head">
         <span className="do-kicker">{mode === "queue" ? "Admin" : "Workspace"}</span>
-        <h1>{mode === "queue" ? "Feedback queue" : "Report a bug or request a feature"}</h1>
+        <h1>{mode === "queue" ? "SupportOps queue" : "Report a bug or request a feature"}</h1>
         <p>
           {mode === "queue"
             ? "Triage submissions, then convert the ones that should become backlog PBIs."
@@ -187,7 +187,7 @@ export function FeedbackCenter({
       )}
 
       {mode === "submit" && (
-        <section className="do-feedback-submit-card" aria-label="Submit feedback">
+        <section className="do-feedback-submit-card" aria-label="Submit SupportOps request">
           <div className="do-feedback-submit-hero">
             <div>
               <span className="do-kicker">{selectedProject ? "Project support form" : "General support intake"}</span>
@@ -198,7 +198,7 @@ export function FeedbackCenter({
                   : "No project selected. This lands in the general queue so Tier 1 can classify and route it."}
               </p>
             </div>
-            <div className="do-feedback-kind" role="tablist" aria-label="Feedback type">
+            <div className="do-feedback-kind" role="tablist" aria-label="SupportOps type">
               <button
                 className={kind === "bug" ? "is-active" : ""}
                 onClick={() => setKind("bug")}
@@ -220,7 +220,7 @@ export function FeedbackCenter({
           <label className="do-feedback-field">
             Title
             <input
-              aria-label="Feedback title"
+              aria-label="SupportOps title"
               onChange={(event) => setTitle(event.target.value)}
               placeholder={kind === "bug" ? "What went wrong?" : "What should exist?"}
               value={title}
@@ -229,7 +229,7 @@ export function FeedbackCenter({
           <label className="do-feedback-field">
             Details
             <textarea
-              aria-label="Feedback details"
+              aria-label="SupportOps details"
               onChange={(event) => setDescription(event.target.value)}
               placeholder={
                 kind === "bug"
@@ -284,7 +284,7 @@ export function FeedbackCenter({
         </section>
       )}
 
-      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All feedback" : "My reports"}>
+      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All SupportOps reports" : "My reports"}>
         <div className="do-workspace-admin-head">
           <span className="do-kicker">{mode === "queue" ? "Queue" : "My reports"}</span>
           <strong>
@@ -295,7 +295,7 @@ export function FeedbackCenter({
         <label>
           Status
           <select
-            aria-label="Feedback status filter"
+            aria-label="SupportOps status filter"
             onChange={(event) => setStatusFilter(event.target.value)}
             value={statusFilter}
           >

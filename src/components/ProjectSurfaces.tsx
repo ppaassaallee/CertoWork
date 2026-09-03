@@ -1645,7 +1645,7 @@ export function ProjectConsolePanel({
   const report = buildProjectStatusReport(project, tasks, risks, milestones);
   const supportFormLink =
     typeof window !== "undefined"
-      ? `${window.location.origin}/feedback?project=${encodeURIComponent(project.id)}&kind=bug`
+      ? `${window.location.origin}/supportops?project=${encodeURIComponent(project.id)}&kind=bug`
       : "";
   const copySupportFormLink = async () => {
     if (!supportFormLink) return;

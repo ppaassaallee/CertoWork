@@ -48,7 +48,9 @@ export function isTodayTask(task: any, today = localDateKey(new Date())) {
   if (isClosed(task?.status)) return false;
   if (task?.isOneThing) return true;
   if (dateKey(task?.dueDate) === today) return true;
-  return normalizeTimeSector(task?.timeSector) === "today";
+  if (normalizeTimeSector(task?.timeSector) !== "today") return false;
+  const pinnedDate = dateKey(task?.timeSectorDate || task?.plannedForDate);
+  return Boolean(pinnedDate) && pinnedDate === today;
 }
 
 function taskTitle(task: any) {

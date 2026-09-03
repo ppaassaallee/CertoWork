@@ -366,7 +366,7 @@ export function cumulativeFlowSeries(items: any[], days = 14, now = new Date()):
     day.setHours(23, 59, 59, 999);
     day.setDate(day.getDate() - offset);
     const point: CumulativeFlowPoint = {
-      date: day.toISOString().slice(0, 10),
+      date: dateKey(day),
       backlog: 0,
       doing: 0,
       blocked: 0,

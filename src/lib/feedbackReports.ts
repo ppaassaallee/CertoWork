@@ -76,7 +76,7 @@ export function feedbackToTaskPatch(report: FeedbackReport) {
   const workItemType = workItemTypeForFeedback(kind);
   const description = [
     String(report.description || "").trim(),
-    `Reported via Feedback as a ${feedbackKindLabel(kind).toLowerCase()}.`,
+    `Reported via SupportOps as a ${feedbackKindLabel(kind).toLowerCase()}.`,
     report.severity ? `Severity: ${report.severity}.` : "",
   ]
     .filter(Boolean)

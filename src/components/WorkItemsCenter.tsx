@@ -470,6 +470,22 @@ function dateInputValue(value: any) {
   return "";
 }
 
+function localDateKey(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, "0"),
+    String(value.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function saturdayNoon(value = new Date()) {
+  const target = new Date(value);
+  target.setHours(12, 0, 0, 0);
+  const daysUntilSaturday = (6 - target.getDay() + 7) % 7;
+  target.setDate(target.getDate() + daysUntilSaturday);
+  return target;
+}
+
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
   if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
@@ -791,7 +807,7 @@ export function WorkItemsCenter({
   );
   const attributeColumns = [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
-    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto 28px",
+    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
   const currentItemViewFilters: ItemViewFilters = {
     mode,
@@ -1558,6 +1574,60 @@ export function WorkItemsCenter({
     </button>
   );
 
+  const renderTimingButtons = (item: any) => {
+    if (canonicalStatus(item) === "done") return <span className="do-item-timing-actions is-empty" aria-hidden="true" />;
+    const today = localDateKey(new Date());
+    const due = dateInputValue(item.dueDate || item.targetDate);
+    const sector = normalizeTimeSector(item.timeSector);
+    const markedToday = due === today || (sector === "today" && dateInputValue(item.timeSectorDate) === today);
+    const weekEnd = saturdayNoon();
+    const weekEndDate = localDateKey(weekEnd);
+    const markedWeek = !markedToday && (
+      sector === "this_week" ||
+      (Boolean(due) && due >= today && due <= weekEndDate)
+    );
+    return (
+      <div className="do-item-timing-actions" aria-label={`Plan ${title(item)}`}>
+        <button
+          aria-label={`Move ${title(item)} to Today`}
+          className={markedToday ? "is-active" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            onUpdateTask(item.id, {
+              dueDate: today,
+              timeSector: "today",
+              timeSectorDate: today,
+              timeSectorExpiresAt: `${today}T23:59:59`,
+            });
+          }}
+          title="Add to Today. It disappears from Today tomorrow."
+          type="button"
+        >
+          <Calendar size={12} />
+          <span>Today</span>
+        </button>
+        <button
+          aria-label={`Move ${title(item)} to This week`}
+          className={markedWeek ? "is-active" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            onUpdateTask(item.id, {
+              dueDate: weekEndDate,
+              timeSector: "this_week",
+              timeSectorDate: today,
+              timeSectorExpiresAt: weekEnd.toISOString(),
+            });
+          }}
+          title="Add to This week. It resets Saturday at noon."
+          type="button"
+        >
+          <Clock size={12} />
+          <span>Week</span>
+        </button>
+      </div>
+    );
+  };
+
   const renderTitleCell = (
     item: any,
     kind: WorkItemKind,
@@ -1888,6 +1958,7 @@ export function WorkItemsCenter({
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
         {renderAttributeIcons(item)}
+        {renderTimingButtons(item)}
         {renderDeleteButton(item)}
       </article>
     );
@@ -1926,6 +1997,7 @@ export function WorkItemsCenter({
       <span />
       <strong>Item</strong>
       <span className="do-items-attr-head">Fields</span>
+      <span />
       <span />
     </div>
   );
@@ -2015,6 +2087,7 @@ export function WorkItemsCenter({
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
         {renderAttributeIcons(item)}
+        {renderTimingButtons(item)}
         {renderDeleteButton(item)}
       </header>
     );
