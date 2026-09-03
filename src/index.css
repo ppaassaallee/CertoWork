@@ -5119,6 +5119,29 @@ a {
   padding: 2px 4px 6px;
   color: var(--text-muted);
 }
+.do-items-inline-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  width: 100%;
+  padding: 2px 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.do-items-inline-add-btn:hover,
+.do-items-inline-add-btn:focus-visible {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+}
+.do-items-inline-add.is-open {
+  color: var(--text-secondary);
+}
 .do-items-inline-add input {
   min-width: 0;
   flex: 1;

@@ -275,8 +275,10 @@ test("detail modal can change item type and re-validate parent", () => {
   assert.match(workItems, /parentLinkPatch\(parentOk \? currentParent : null\)/);
 });
 
-test("expanded tree nodes offer an inline add-child input", () => {
+test("expanded tree nodes offer an inline add-child control", () => {
   assert.match(workItems, /data-testid="item-inline-add-child"/);
+  assert.match(workItems, /do-items-inline-add-btn/);
+  assert.match(workItems, /inlineAddOpen/);
   assert.match(workItems, /createInlineChild/);
   assert.match(workItems, /allowedChildKinds/);
   assert.match(workItems, /parentLinkPatch\(parent\)/);

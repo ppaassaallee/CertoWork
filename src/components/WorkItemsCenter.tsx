@@ -694,6 +694,7 @@ export function WorkItemsCenter({
   const [newPriority, setNewPriority] = useState("N/A");
   const [newDeliveryEntity, setNewDeliveryEntity] = useState("");
   const [inlineAddDrafts, setInlineAddDrafts] = useState<Record<string, string>>({});
+  const [inlineAddOpen, setInlineAddOpen] = useState<Record<string, boolean>>({});
   const inlineAddRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
@@ -1228,6 +1229,7 @@ export function WorkItemsCenter({
       rank: tasks.filter((item) => (projectId ? item.projectId === projectId : !item.projectId)).length,
     });
     setInlineAddDrafts((current) => ({ ...current, [parent.id]: "" }));
+    window.setTimeout(() => inlineAddRefs.current[parent.id]?.focus(), 0);
   };
 
   const changeItemType = (item: any, kind: WorkItemKind) => {
@@ -1886,15 +1888,26 @@ export function WorkItemsCenter({
   );
 
   const toggleGroup = (group: string) => {
+    const collapsing = !collapsedGroups.includes(group);
     setCollapsedGroups((current) => current.includes(group)
       ? current.filter((item) => item !== group)
       : [...current, group]);
+    if (collapsing && group.startsWith("node:")) {
+      const parentIdValue = group.slice(5);
+      setInlineAddOpen((current) => {
+        if (!current[parentIdValue]) return current;
+        const next = { ...current };
+        delete next[parentIdValue];
+        return next;
+      });
+    }
   };
 
   const focusInlineAdd = (parentIdValue: string, groupKey: string) => {
     if (collapsedGroups.includes(groupKey)) {
       setCollapsedGroups((current) => current.filter((key) => key !== groupKey));
     }
+    setInlineAddOpen((current) => ({ ...current, [parentIdValue]: true }));
     window.setTimeout(() => {
       inlineAddRefs.current[parentIdValue]?.focus();
     }, 0);
@@ -1940,28 +1953,66 @@ export function WorkItemsCenter({
   const compareVisibleSiblings = (left: any, right: any) =>
     compareItems(left, right, primarySort, secondarySort, projects, parentPool);
 
-  const renderInlineAddChild = (parent: any, depth: number) => {
+  const renderInlineAddChild = (parent: any, depth: number, groupKey: string) => {
     const childKinds = allowedChildKinds(workItemKind(parent));
     if (!childKinds.length) return null;
     const childKind = childKinds[0];
+    const childLabel = workItemLabel(childKind);
+    const addLabel = `Add ${childLabel}`;
     const draft = inlineAddDrafts[parent.id] || "";
+    const open = Boolean(inlineAddOpen[parent.id]);
+    const indent = Math.max(depth + 1, 1) * 16;
+    if (!open) {
+      return (
+        <button
+          aria-label={`${addLabel} under ${title(parent)}`}
+          className="do-items-inline-add-btn"
+          data-testid="item-inline-add-child"
+          onClick={() => focusInlineAdd(parent.id, groupKey)}
+          style={{ paddingLeft: indent }}
+          type="button"
+        >
+          <Plus size={12} aria-hidden="true" />
+          <span>{addLabel}</span>
+        </button>
+      );
+    }
     return (
       <div
-        className="do-items-inline-add"
+        className="do-items-inline-add is-open"
         data-testid="item-inline-add-child"
-        style={{ paddingLeft: Math.max(depth + 1, 1) * 16 }}
+        style={{ paddingLeft: indent }}
       >
         <Plus size={12} aria-hidden="true" />
         <input
-          aria-label={`Add ${workItemLabel(childKind)} under ${title(parent)}`}
+          aria-label={`${addLabel} under ${title(parent)}`}
+          onBlur={(event) => {
+            if (!event.currentTarget.value.trim()) {
+              setInlineAddOpen((current) => {
+                if (!current[parent.id]) return current;
+                const next = { ...current };
+                delete next[parent.id];
+                return next;
+              });
+            }
+          }}
           onChange={(event) => setInlineAddDrafts((current) => ({ ...current, [parent.id]: event.target.value }))}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              createInlineChild(parent);
+              void createInlineChild(parent);
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setInlineAddDrafts((current) => ({ ...current, [parent.id]: "" }));
+              setInlineAddOpen((current) => {
+                const next = { ...current };
+                delete next[parent.id];
+                return next;
+              });
             }
           }}
-          placeholder={`Add ${workItemLabel(childKind)}…`}
+          placeholder={`${addLabel}…`}
           ref={(node) => {
             inlineAddRefs.current[parent.id] = node;
           }}
@@ -1998,7 +2049,7 @@ export function WorkItemsCenter({
           {!collapsed && (
             <div className="do-items-children">
               {children.map((child) => walk(child, depth + 1, nextAncestors))}
-              {canAddChild ? renderInlineAddChild(item, depth) : null}
+              {canAddChild ? renderInlineAddChild(item, depth, groupKey) : null}
             </div>
           )}
         </div>
