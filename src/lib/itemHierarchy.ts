@@ -157,6 +157,29 @@ export function allowedChildKinds(parentKind: HierarchyKind | string): Hierarchy
   return [];
 }
 
+/**
+ * Tree expand defaults for list/hierarchy views.
+ * All parents start collapsed so entering Items/My Work is compact.
+ * Expansion lasts only for the current screen visit.
+ */
+export function treeNodeExpandedByDefault(_kind: HierarchyKind | string, _depth: number) {
+  return false;
+}
+
+export function isTreeNodeCollapsedState(options: {
+  kind: HierarchyKind | string;
+  depth: number;
+  groupKey: string;
+  collapsedEpicKeys?: Iterable<string>;
+  expandedKeys?: Iterable<string>;
+}) {
+  const expandedByDefault = treeNodeExpandedByDefault(options.kind, options.depth);
+  const collapsedDefaults = new Set(options.collapsedEpicKeys || []);
+  const expanded = new Set(options.expandedKeys || []);
+  if (expandedByDefault) return collapsedDefaults.has(options.groupKey);
+  return !expanded.has(options.groupKey);
+}
+
 const NON_INHERITED_DATE_FIELDS = new Set(["dueDate", "targetDate", "startDate"]);
 
 function fieldValueEmpty(value: unknown): boolean {

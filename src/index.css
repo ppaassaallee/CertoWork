@@ -5608,7 +5608,8 @@ a {
   padding: 0;
   border-radius: 7px;
 }
-.do-items-type-flag-label {
+.do-items-type-flag.is-icon::after {
+  content: attr(data-tip);
   position: absolute;
   left: calc(100% + 6px);
   top: 50%;
@@ -5628,10 +5629,13 @@ a {
   visibility: hidden;
   transition: opacity 0.12s ease;
 }
-.do-items-type-flag.is-icon:hover .do-items-type-flag-label,
-.do-items-type-flag.is-icon:focus-visible .do-items-type-flag-label {
+.do-items-type-flag.is-icon:hover::after,
+.do-items-type-flag.is-icon:focus-visible::after {
   opacity: 1;
   visibility: visible;
+}
+.do-items-tree-node[data-collapsed="true"] > .do-items-children {
+  display: none !important;
 }
 .do-items-type-flag.is-feature,
 .do-items-row.is-feature .do-items-title > span,
@@ -5774,6 +5778,7 @@ a {
   transition: transform 0.16s ease;
 }
 .do-items-group > button svg.is-collapsed,
+.do-items-section-toggle.is-collapsed svg,
 .do-items-section-toggle svg.is-collapsed,
 .do-gantt-unscheduled > button svg.is-collapsed {
   transform: rotate(-90deg);
