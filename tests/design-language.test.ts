@@ -41,7 +41,7 @@ test("index.css imports the design language tokens", () => {
 test("project wizard create button stays a primary CTA", () => {
   const css = readFileSync(resolve(root, "src/index.css"), "utf8");
   const secondaryStart = css.indexOf("Calm Authority: accent discipline");
-  const primaryStart = css.indexOf(".do-items-create button:last-child");
+  const primaryStart = css.indexOf(".do-items-create > button:last-child");
   assert.ok(secondaryStart >= 0 && primaryStart > secondaryStart);
   const secondaryBlock = css.slice(secondaryStart, primaryStart);
   assert.equal(secondaryBlock.includes(".do-skill-foot button:last-child"), false);
