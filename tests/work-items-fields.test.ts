@@ -335,3 +335,29 @@ test("add item form exposes optional quick attributes before create", () => {
   assert.match(workItems, /newDeliveryEntity/);
   assert.match(workItems, /dueDate: newDueDate \|\| null/);
 });
+
+test("toolbar views fields filter sort are icon-only with hover titles", () => {
+  assert.match(workItems, /className=\{`do-icon-tool/);
+  assert.match(workItems, /title="Views"/);
+  assert.match(workItems, /title="Fields"/);
+  assert.match(workItems, /title="Filter"/);
+  assert.match(workItems, /title="Sort"/);
+  assert.match(workItems, /<Eye size=\{15\} \/>/);
+  assert.match(workItems, /<Settings2 size=\{15\} \/>/);
+  assert.match(workItems, /<ArrowUpDown size=\{15\} \/>/);
+  assert.match(workItems, /<span>Views<\/span>/);
+  assert.match(workItems, /<span>Fields<\/span>/);
+  assert.match(workItems, /<span>Sort<\/span>/);
+  assert.doesNotMatch(workItems, />Views<\/button>/);
+  assert.doesNotMatch(workItems, />Fields<\/button>/);
+  assert.doesNotMatch(workItems, />Sort<\/button>/);
+});
+
+test("add item quick attributes use icon popovers like item attrs", () => {
+  assert.match(workItems, /do-items-create-attrs/);
+  assert.match(workItems, /data-testid="item-create-project"/);
+  assert.match(workItems, /data-testid="item-create-type"/);
+  assert.match(workItems, /data-testid="item-create-parent"/);
+  assert.match(workItems, /createAttr/);
+  assert.match(workItems, /WORK_ITEM_TYPE_ICONS\[newType\]/);
+});

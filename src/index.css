@@ -5264,74 +5264,50 @@ a {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding-block: 7px;
+  gap: 8px;
+  grid-template-columns: none;
+}
+.do-items-create.is-quick-attrs .do-items-create-attrs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
 }
 .do-items-create.is-quick-attrs .do-ai-create-field {
-  flex: 1 1 380px;
-  min-width: min(360px, 100%);
-  order: 4;
+  flex: 1 1 220px;
+  min-width: 180px;
+  grid-column: auto;
 }
-.do-quick-attr-select {
-  position: relative;
-  display: inline-flex;
-  flex: 0 1 150px;
-  min-width: 96px;
-  height: 32px;
+.do-items-create.is-quick-attrs > button {
+  flex: none;
+}
+.do-items-create-type-pop {
+  min-width: 220px;
+}
+.do-items-create-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.do-items-create-type-grid button {
+  display: flex;
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-0);
-  padding: 0 7px;
+  padding: 7px 8px;
   color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
 }
-.do-quick-attr-select svg {
-  flex: none;
-  color: var(--accent);
-}
-.do-quick-attr-select:focus-within,
-.do-quick-attr-select:hover {
-  border-color: var(--accent-muted);
+.do-items-create-type-grid button:hover,
+.do-items-create-type-grid button.is-active {
+  border-color: var(--border);
   background: var(--accent-soft);
-}
-.do-items-create.is-quick-attrs .do-quick-attr-select select,
-.do-items-create.is-quick-attrs .do-quick-attr-select input {
-  width: 100%;
-  min-width: 0;
-  height: 30px;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--text-primary);
-  font-size: var(--text-caption);
-  font-weight: 650;
-  outline: none;
-}
-.do-items-create.is-quick-attrs .do-quick-attr-select select {
-  cursor: pointer;
-}
-.do-items-create.is-quick-attrs .do-quick-attr-select input[type="date"] {
-  min-width: 112px;
-}
-.do-items-create.is-quick-attrs .do-quick-add-submit {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  gap: 5px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--accent);
-  padding: 0 12px;
-  color: var(--surface-0);
-  font-size: var(--text-caption);
-  font-weight: 750;
-  cursor: pointer;
-}
-.do-items-create.is-quick-attrs .do-quick-add-submit:disabled {
-  background: var(--surface-2);
-  color: var(--text-muted);
-  cursor: default;
+  color: var(--accent);
 }
 .do-ai-create-field,
 .do-ai-inline-field {
@@ -5387,7 +5363,7 @@ a {
 .do-items-row input:focus {
   background: var(--hover-overlay);
 }
-.do-items-create button,
+.do-items-create > button,
 .do-items-bulk button,
 .do-item-detail-actions button {
   display: flex;
@@ -5404,7 +5380,7 @@ a {
   font-weight: 600;
   cursor: pointer;
 }
-.do-items-create button:disabled {
+.do-items-create > button:disabled {
   background: var(--surface-2);
   color: var(--text-muted);
   cursor: default;
@@ -14642,7 +14618,7 @@ a {
     grid-template-columns: 1fr 1fr;
   }
   .do-items-create input,
-  .do-items-create button {
+  .do-items-create > button {
     grid-column: 1 / -1;
   }
   .do-items-layout,
@@ -15505,7 +15481,7 @@ a {
   border-radius: var(--radius-control) !important;
   box-shadow: none !important;
 }
-.do-items-create button:last-child,
+.do-items-create > button:last-child,
 .do-panel-primary,
 .do-send,
 .do-button.do-button-dark,
