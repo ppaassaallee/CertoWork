@@ -7,7 +7,7 @@ export type MoreSection =
   | "warroom"
   | "knowledge"
   | "workspace";
-export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "captured";
+export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "this_week" | "captured";
 export type AgentsSection = "home" | "automations" | "activity";
 
 export type FeedbackSection = "submit" | "queue";
@@ -77,6 +77,8 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (
     path === "/workspace/feedback" ||
+    path === "/workspace/supportops" ||
+    path === "/supportops/queue" ||
     path === "/feedback/queue" ||
     path === "/workspace/bugs"
   ) {
@@ -91,7 +93,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "feedback", section: "submit", intent: "feature" };
   }
 
-  if (path === "/feedback") {
+  if (path === "/feedback" || path === "/supportops") {
     return { kind: "feedback", section: "submit" };
   }
 
@@ -129,6 +131,9 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   }
   if (path === "/my-work/today") {
     return { kind: "my-work", section: "today" };
+  }
+  if (path === "/my-work/this-week") {
+    return { kind: "my-work", section: "this_week" };
   }
   if (path === "/my-work/captured" || path === "/capture/inbox") {
     return { kind: "my-work", section: "captured" };
@@ -195,6 +200,7 @@ export function lensToPath(lens: DelivereeLens) {
     if (lens.section === "inbox") return "/my-work/inbox";
     if (lens.section === "waiting") return "/my-work/waiting";
     if (lens.section === "today") return "/my-work/today";
+    if (lens.section === "this_week") return "/my-work/this-week";
     if (lens.section === "captured") return "/my-work/captured";
     return "/my-work";
   }
@@ -218,7 +224,7 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "settings") return "/settings";
   if (lens.kind === "collab") return "/collab";
   if (lens.kind === "feedback") {
-    return lens.section === "queue" ? "/workspace/feedback" : "/feedback";
+    return lens.section === "queue" ? "/workspace/supportops" : "/supportops";
   }
   if (lens.kind === "requests") {
     if (lens.section === "mine") return "/requests/mine";

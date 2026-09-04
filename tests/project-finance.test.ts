@@ -123,6 +123,46 @@ test("financial ledger separates revenue, invoicing and cash collection", () => 
   assert.equal(summary.margin, 2380);
 });
 
+test("a spreadsheet cost line can carry its own price", () => {
+  const summary = financeSummary(
+    normalizedFinancePeriods({
+      financePeriods: [
+        {
+          id: "month",
+          kind: "monthly",
+          label: "September 2026",
+          month: 9,
+          year: 2026,
+          status: "active",
+          currency: "USD",
+          entries: [
+            {
+              id: "agent-minutes",
+              direction: "cost",
+              description: "AI minutes",
+              category: "infrastructure",
+              unit: "ai_minute",
+              plannedQty: 1000,
+              actualQty: 800,
+              plannedRate: 0.05,
+              rate: 0.04,
+              plannedPriceRate: 0.12,
+              priceRate: 0.1,
+              financialStatus: "billed",
+              settledAmount: 50,
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  assert.equal(summary.actualCost, 32);
+  assert.equal(summary.actualRevenue, 80);
+  assert.equal(summary.invoiced, 80);
+  assert.equal(summary.collected, 50);
+  assert.equal(summary.margin, 48);
+});
+
 test("portfolio uses all build costs and only the latest monthly period", () => {
   const summary = projectFinancialRollup(project);
   assert.equal(summary.buildCost, 6100);

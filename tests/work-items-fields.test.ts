@@ -337,14 +337,17 @@ test("add item form exposes optional quick attributes before create", () => {
 });
 
 test("toolbar views fields filter sort are icon-only with hover titles", () => {
-  assert.match(workItems, /className=\{`do-items-toolbar-icon/);
+  assert.match(workItems, /className=\{`do-icon-tool/);
   assert.match(workItems, /title="Views"/);
   assert.match(workItems, /title="Fields"/);
   assert.match(workItems, /title="Filter"/);
   assert.match(workItems, /title="Sort"/);
-  assert.match(workItems, /<LayoutGrid size=\{14\} \/>/);
-  assert.match(workItems, /<Settings2 size=\{14\} \/>/);
-  assert.match(workItems, /<ArrowUpDown size=\{14\} \/>/);
+  assert.match(workItems, /<Eye size=\{15\} \/>/);
+  assert.match(workItems, /<Settings2 size=\{15\} \/>/);
+  assert.match(workItems, /<ArrowUpDown size=\{15\} \/>/);
+  assert.match(workItems, /<span>Views<\/span>/);
+  assert.match(workItems, /<span>Fields<\/span>/);
+  assert.match(workItems, /<span>Sort<\/span>/);
   assert.doesNotMatch(workItems, />Views<\/button>/);
   assert.doesNotMatch(workItems, />Fields<\/button>/);
   assert.doesNotMatch(workItems, />Sort<\/button>/);

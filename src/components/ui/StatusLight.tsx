@@ -37,7 +37,12 @@ export function taskDueStatus(input: {
       ? due.getTime()
       : typeof due === "number"
         ? due
-        : Date.parse(String(due));
+        : /^\d{4}-\d{2}-\d{2}$/.test(String(due))
+          ? (() => {
+              const [year, month, day] = String(due).split("-").map(Number);
+              return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
+            })()
+          : Date.parse(String(due));
   if (!Number.isFinite(dueTime)) return "gray";
   const now = input.now ?? Date.now();
   const startOfToday = new Date(now);

@@ -20,6 +20,7 @@ import {
   Clock,
   Compass,
   CornerDownRight,
+  Eye,
   Flag,
   Folder,
   Gem,
@@ -28,7 +29,6 @@ import {
   GripVertical,
   Inbox,
   Layers,
-  LayoutGrid,
   ListChecks,
   ListTodo,
   Kanban,
@@ -470,6 +470,22 @@ function dateInputValue(value: any) {
   return "";
 }
 
+function localDateKey(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, "0"),
+    String(value.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function saturdayNoon(value = new Date()) {
+  const target = new Date(value);
+  target.setHours(12, 0, 0, 0);
+  const daysUntilSaturday = (6 - target.getDay() + 7) % 7;
+  target.setDate(target.getDate() + daysUntilSaturday);
+  return target;
+}
+
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
   if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
@@ -792,7 +808,7 @@ export function WorkItemsCenter({
   );
   const attributeColumns = [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
-    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto 28px",
+    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
   const currentItemViewFilters: ItemViewFilters = {
     mode,
@@ -1563,6 +1579,60 @@ export function WorkItemsCenter({
     </button>
   );
 
+  const renderTimingButtons = (item: any) => {
+    if (canonicalStatus(item) === "done") return <span className="do-item-timing-actions is-empty" aria-hidden="true" />;
+    const today = localDateKey(new Date());
+    const due = dateInputValue(item.dueDate || item.targetDate);
+    const sector = normalizeTimeSector(item.timeSector);
+    const markedToday = due === today || (sector === "today" && dateInputValue(item.timeSectorDate) === today);
+    const weekEnd = saturdayNoon();
+    const weekEndDate = localDateKey(weekEnd);
+    const markedWeek = !markedToday && (
+      sector === "this_week" ||
+      (Boolean(due) && due >= today && due <= weekEndDate)
+    );
+    return (
+      <div className="do-item-timing-actions" aria-label={`Plan ${title(item)}`}>
+        <button
+          aria-label={`Move ${title(item)} to Today`}
+          className={markedToday ? "is-active" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            onUpdateTask(item.id, {
+              dueDate: today,
+              timeSector: "today",
+              timeSectorDate: today,
+              timeSectorExpiresAt: `${today}T23:59:59`,
+            });
+          }}
+          title="Add to Today. It disappears from Today tomorrow."
+          type="button"
+        >
+          <Calendar size={12} />
+          <span>Today</span>
+        </button>
+        <button
+          aria-label={`Move ${title(item)} to This week`}
+          className={markedWeek ? "is-active" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            onUpdateTask(item.id, {
+              dueDate: weekEndDate,
+              timeSector: "this_week",
+              timeSectorDate: today,
+              timeSectorExpiresAt: weekEnd.toISOString(),
+            });
+          }}
+          title="Add to This week. It resets Saturday at noon."
+          type="button"
+        >
+          <Clock size={12} />
+          <span>Week</span>
+        </button>
+      </div>
+    );
+  };
+
   const renderTitleCell = (
     item: any,
     kind: WorkItemKind,
@@ -1893,6 +1963,7 @@ export function WorkItemsCenter({
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
         {renderAttributeIcons(item)}
+        {renderTimingButtons(item)}
         {renderDeleteButton(item)}
       </article>
     );
@@ -1931,6 +2002,7 @@ export function WorkItemsCenter({
       <span />
       <strong>Item</strong>
       <span className="do-items-attr-head">Fields</span>
+      <span />
       <span />
     </div>
   );
@@ -2020,6 +2092,7 @@ export function WorkItemsCenter({
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
         {renderAttributeIcons(item)}
+        {renderTimingButtons(item)}
         {renderDeleteButton(item)}
       </header>
     );
@@ -2789,12 +2862,13 @@ export function WorkItemsCenter({
             <button
               aria-expanded={viewsOpen}
               aria-label="Views"
-              className={`do-items-toolbar-icon do-mobile-advanced ${viewsOpen ? "is-active" : ""}`}
+              className={`do-icon-tool do-mobile-advanced ${viewsOpen ? "is-active" : ""}`}
               onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }}
               title="Views"
               type="button"
             >
-              <LayoutGrid size={14} />
+              <Eye size={15} />
+              <span>Views</span>
             </button>
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
@@ -2861,13 +2935,14 @@ export function WorkItemsCenter({
             <button
               aria-expanded={fieldsOpen}
               aria-label="Fields"
-              className={`do-items-toolbar-icon do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
+              className={`do-icon-tool do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
               data-testid="item-fields-button"
               onClick={() => { setFieldsOpen((o) => !o); setViewsOpen(false); setFilterOpen(false); setSortOpen(false); }}
               title="Fields"
               type="button"
             >
-              <Settings2 size={14} />
+              <Settings2 size={15} />
+              <span>Fields</span>
             </button>
             {fieldsOpen && (
               <div className="do-popover do-fields-popover" data-testid="item-fields-picker" role="menu">
@@ -2893,12 +2968,13 @@ export function WorkItemsCenter({
             <button
               aria-expanded={filterOpen}
               aria-label="Filter"
-              className={`do-items-toolbar-icon ${activeFilterChips.length || filterOpen ? "is-active" : ""}`}
+              className={`do-icon-tool ${activeFilterChips.length || filterOpen ? "is-active" : ""}`}
               onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
               title="Filter"
               type="button"
             >
-              <SlidersHorizontal size={14} />
+              <SlidersHorizontal size={15} />
+              <span>Filter</span>
               {activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
             </button>
             {filterOpen && (
@@ -2988,12 +3064,13 @@ export function WorkItemsCenter({
             <button
               aria-expanded={sortOpen}
               aria-label="Sort"
-              className={`do-items-toolbar-icon do-mobile-advanced ${sortOpen ? "is-active" : ""}`}
+              className={`do-icon-tool do-mobile-advanced ${sortOpen ? "is-active" : ""}`}
               onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
               title="Sort"
               type="button"
             >
-              <ArrowUpDown size={14} />
+              <ArrowUpDown size={15} />
+              <span>Sort</span>
             </button>
             {sortOpen && (
               <div className="do-popover">
@@ -3272,8 +3349,7 @@ export function WorkItemsCenter({
               text={newTitle}
             />
           </div>
-          <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>
-        </section>
+          <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>        </section>
       )}
       {addSprintOpen && onCreateSprint && (
         <section className="do-items-create">

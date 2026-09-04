@@ -14,6 +14,8 @@ export type FinanceEntry = {
   actualQty: number;
   plannedRate?: number;
   rate: number;
+  plannedPriceRate?: number;
+  priceRate?: number;
   vendor?: string;
   assignee?: string;
   accountingMonth?: string;
@@ -131,6 +133,22 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
               entry.plannedRate ??
               0,
           ),
+          plannedPriceRate: Number(
+            entry.plannedPriceRate ??
+              entry.budgetPriceRate ??
+              entry.priceRate ??
+              entry.unitPrice ??
+              entry["Budget Unit Price"] ??
+              0,
+          ),
+          priceRate: Number(
+            entry.priceRate ??
+              entry.actualPriceRate ??
+              entry.unitPrice ??
+              entry.plannedPriceRate ??
+              entry["Actual Unit Price"] ??
+              0,
+          ),
           vendor: String(entry.vendor || "") || undefined,
           assignee:
             String(entry.assignee || entry.assigneeName || entry.owner || "") ||
@@ -207,6 +225,15 @@ export function financeAmount(entry: FinanceEntry, actual = true) {
   return Number(quantity || 0) * Number(rate || 0);
 }
 
+export function financePriceAmount(entry: FinanceEntry, actual = true) {
+  if (entry.direction === "revenue") return financeAmount(entry, actual);
+  const quantity = actual ? entry.actualQty : entry.plannedQty;
+  const rate = actual
+    ? entry.priceRate
+    : (entry.plannedPriceRate ?? entry.priceRate);
+  return Number(quantity || 0) * Number(rate || 0);
+}
+
 export function financeSummary(periods: FinancePeriod[]) {
   const entries = periods.flatMap((period) => period.entries);
   const active = entries.filter((entry) =>
@@ -215,7 +242,6 @@ export function financeSummary(periods: FinancePeriod[]) {
       : entry.costStatus !== "void",
   );
   const costs = active.filter((entry) => entry.direction === "cost");
-  const revenue = active.filter((entry) => entry.direction === "revenue");
   const actualCost = costs.reduce(
     (sum, entry) => sum + financeAmount(entry),
     0,
@@ -224,27 +250,30 @@ export function financeSummary(periods: FinancePeriod[]) {
     (sum, entry) => sum + financeAmount(entry, false),
     0,
   );
-  const actualRevenue = revenue.reduce(
-    (sum, entry) => sum + financeAmount(entry),
+  const actualRevenue = active.reduce(
+    (sum, entry) => sum + financePriceAmount(entry),
     0,
   );
-  const plannedRevenue = revenue.reduce(
-    (sum, entry) => sum + financeAmount(entry, false),
+  const plannedRevenue = active.reduce(
+    (sum, entry) => sum + financePriceAmount(entry, false),
     0,
   );
-  const invoiced = revenue
+  const invoiced = active
     .filter(
       (entry) =>
-        Boolean(entry.referenceNumber) ||
-        ["billed", "paid", "disputed"].includes(
-          String(entry.financialStatus),
-        ) ||
-        ["invoiced", "open", "paid", "uncollectible"].includes(
-          String(entry.invoiceStatus),
-        ),
+        financePriceAmount(entry) > 0 &&
+        (Boolean(entry.referenceNumber) ||
+          ["billed", "paid", "disputed"].includes(
+            String(entry.financialStatus),
+          ) ||
+          ["invoiced", "open", "paid", "uncollectible"].includes(
+            String(entry.invoiceStatus),
+          )),
     )
-    .reduce((sum, entry) => sum + financeAmount(entry), 0);
-  const collected = revenue.reduce(
+    .reduce((sum, entry) => sum + financePriceAmount(entry), 0);
+  const collected = active
+    .filter((entry) => financePriceAmount(entry) > 0)
+    .reduce(
     (sum, entry) => sum + Number(entry.settledAmount || 0),
     0,
   );

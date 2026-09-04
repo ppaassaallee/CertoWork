@@ -87,7 +87,6 @@ import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
 import { t } from "../lib/i18n";
 import {
-  dateKey,
   entityTitle,
   findMatchingProject,
   inviteMessage,
@@ -212,6 +211,7 @@ import {
   APPLE_WIDGET_COLLECTION,
   buildAppleWidgetSnapshot,
   createAppleWidgetToken,
+  isTodayTask,
 } from "../lib/appleWidget";
 import {
   buildVoiceWrapUpMessage,
@@ -543,7 +543,7 @@ export function DelivereeWorkspace() {
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
     else if (next === "invoices") navigate("/invoices");
-    else if (next === "feedback") navigate("/feedback");
+    else if (next === "feedback") navigate("/supportops");
     else if (next === "requests") navigate("/requests");
     else navigate("/home");
   };
@@ -1098,11 +1098,7 @@ export function DelivereeWorkspace() {
   const todayTasks = useMemo(
     () =>
       openTasks
-        .filter(
-          (task) =>
-            dateKey(task.dueDate) === todayKey ||
-            String(task.timeSector || "").toLowerCase() === "today",
-        )
+        .filter((task) => isTodayTask(task, todayKey))
         .sort((left, right) =>
           String(left.priority || "z").localeCompare(
             String(right.priority || "z"),
@@ -3410,8 +3406,8 @@ export function DelivereeWorkspace() {
       });
       setNotice(
         input.kind === "bug"
-          ? "Bug submitted. Admins can convert it to a PBI from the feedback queue."
-          : "Feature request submitted. Admins can convert it to a PBI from the feedback queue.",
+          ? "Bug submitted. Admins can convert it to a PBI from the SupportOps queue."
+          : "Feature request submitted. Admins can convert it to a PBI from the SupportOps queue.",
       );
     } catch (reason) {
       setNotice(
@@ -4571,10 +4567,10 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-feedback",
-        label: "Report a bug or feature",
+        label: "Open SupportOps",
         group: "Navigate",
-        keywords: "feedback bug feature pbi request",
-        onSelect: () => navigate("/feedback"),
+        keywords: "supportops support feedback bug feature pbi request",
+        onSelect: () => navigate("/supportops"),
       },
       {
         id: "nav-workspace",
@@ -4653,10 +4649,10 @@ export function DelivereeWorkspace() {
       },
       {
         id: "feedback-queue",
-        label: "Open feedback queue",
+        label: "Open SupportOps queue",
         group: "Navigate",
         keywords: "admin triage pbi bug feature",
-        onSelect: () => navigate("/workspace/feedback"),
+        onSelect: () => navigate("/workspace/supportops"),
       },
     ];
     for (const project of activeProjects) {
@@ -4913,7 +4909,7 @@ export function DelivereeWorkspace() {
             className={`do-nav-item is-feedback do-mobile-advanced ${lens.kind === "feedback" ? "is-active" : ""}`}
             data-testid="nav-feedback"
             onClick={() => {
-              navigate("/feedback");
+              navigate("/supportops");
               setSidebarOpen(false);
             }}
             type="button"
@@ -5420,8 +5416,8 @@ export function DelivereeWorkspace() {
                 ...(lens.kind === "feedback"
                   ? [
                       {
-                        label: "Feedback",
-                        onClick: () => navigate("/feedback"),
+                        label: "SupportOps",
+                        onClick: () => navigate("/supportops"),
                       },
                       ...(lens.section === "queue" ? [{ label: "Queue" }] : []),
                     ]
@@ -5997,6 +5993,15 @@ export function DelivereeWorkspace() {
                   {t("myWorkToday")}
                 </button>
                 <button
+                  className={lens.section === "this_week" ? "is-active" : ""}
+                  data-testid="my-work-this-week-tab"
+                  onClick={() => navigate("/my-work/this-week")}
+                  role="tab"
+                  type="button"
+                >
+                  {t("myWorkThisWeek")}
+                </button>
+                <button
                   className={lens.section === "captured" ? "is-active" : ""}
                   data-testid="my-work-captured-tab"
                   onClick={() => navigate("/my-work/captured")}
@@ -6072,7 +6077,7 @@ export function DelivereeWorkspace() {
               setSelectedWorkItemId(taskId);
               navigate("/my-work");
             }}
-            onOpenQueue={() => navigate("/workspace/feedback")}
+            onOpenQueue={() => navigate("/workspace/supportops")}
             onSubmit={submitFeedbackReport}
             onUpdateStatus={updateFeedbackStatus}
             projects={projects}
@@ -7014,7 +7019,7 @@ export function DelivereeWorkspace() {
               {canManageMembers && (
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
-                  <span className="do-kicker">Feedback</span>
+                  <span className="do-kicker">SupportOps</span>
                   <strong>
                     {feedbackReports.filter((item) => isOpenFeedback(item.status)).length} open
                     {" "}report
@@ -7022,13 +7027,13 @@ export function DelivereeWorkspace() {
                   </strong>
                 </div>
                 <p className="do-panel-intro">
-                  Bugs and feature requests from the workspace. Convert accepted ones into backlog PBIs.
+                  Support requests, bugs, and feature asks from the workspace. Convert accepted ones into backlog PBIs.
                 </p>
                 <button
-                  onClick={() => navigate("/workspace/feedback")}
+                  onClick={() => navigate("/workspace/supportops")}
                   type="button"
                 >
-                  Open feedback queue
+                  Open SupportOps queue
                 </button>
               </section>
               )}

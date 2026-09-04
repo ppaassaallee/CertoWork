@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bug, Check, Flag, Folder, Lightbulb, Plus } from "./ui/Icon";
+import { Bug, Check, Copy, Flag, Folder, Inbox, Lightbulb, Link2, Plus, ShieldCheck } from "./ui/Icon";
 import {
   FEEDBACK_SEVERITIES,
   feedbackKindLabel,
@@ -61,6 +61,29 @@ export function FeedbackCenter({
   const [statusFilter, setStatusFilter] = useState("open");
   const [convertProjectById, setConvertProjectById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState("");
+  const [copied, setCopied] = useState("");
+
+  const intakeUrl = (routeProjectId = "", routeKind: FeedbackKind | "" = "") => {
+    if (typeof window === "undefined") return "";
+    const url = new URL("/supportops", window.location.origin);
+    if (routeProjectId) url.searchParams.set("project", routeProjectId);
+    if (routeKind) url.searchParams.set("kind", routeKind);
+    return url.toString();
+  };
+
+  const selectedProject = projects.find((project) => project.id === projectId);
+  const selectedProjectUrl = projectId ? intakeUrl(projectId, kind) : "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const routedKind = params.get("kind");
+    const routedProjectId = params.get("project") || "";
+    if (routedKind === "bug" || routedKind === "feature") setKind(routedKind);
+    if (routedProjectId && projects.some((project) => project.id === routedProjectId)) {
+      setProjectId(routedProjectId);
+    }
+  }, [projects]);
 
   const filtered = useMemo(() => {
     return [...reports]
@@ -93,6 +116,13 @@ export function FeedbackCenter({
     setSeverity("medium");
   };
 
+  const copy = async (value: string, label: string) => {
+    if (!value) return;
+    await navigator.clipboard?.writeText(value);
+    setCopied(label);
+    window.setTimeout(() => setCopied(""), 2200);
+  };
+
   const run = async (id: string, work: () => Promise<void> | void) => {
     setBusyId(id);
     try {
@@ -106,7 +136,7 @@ export function FeedbackCenter({
     <div className="do-feedback-center" data-testid={mode === "queue" ? "feedback-admin-queue" : "feedback-submit"}>
       <header className="do-feedback-head">
         <span className="do-kicker">{mode === "queue" ? "Admin" : "Workspace"}</span>
-        <h1>{mode === "queue" ? "Feedback queue" : "Report a bug or request a feature"}</h1>
+        <h1>{mode === "queue" ? "SupportOps queue" : "Report a bug or request a feature"}</h1>
         <p>
           {mode === "queue"
             ? "Triage submissions, then convert the ones that should become backlog PBIs."
@@ -119,39 +149,87 @@ export function FeedbackCenter({
         )}
       </header>
 
+      {canManage && (
+        <section className="do-feedback-link-hub" aria-label="Support form links">
+          <article>
+            <span><Inbox size={16} /></span>
+            <div>
+              <strong>General intake queue</strong>
+              <p>Share this when Tier 1 should review first and assign the project later.</p>
+            </div>
+            <button onClick={() => void copy(intakeUrl(), "general")} type="button">
+              <Copy size={13} /> {copied === "general" ? "Copied" : "Copy link"}
+            </button>
+          </article>
+          <article>
+            <span><Folder size={16} /></span>
+            <div>
+              <strong>Project-specific form</strong>
+              <p>Choose a project below; the link opens this form already routed to that project.</p>
+            </div>
+            <button disabled={!selectedProjectUrl} onClick={() => void copy(selectedProjectUrl, "project")} type="button">
+              <Copy size={13} /> {copied === "project" ? "Copied" : "Copy link"}
+            </button>
+          </article>
+          <article>
+            <span><ShieldCheck size={16} /></span>
+            <div>
+              <strong>Access behavior</strong>
+              <p>Current links require workspace access. Use this for clients or teammates you invite, not an anonymous public web form yet.</p>
+            </div>
+            {onOpenQueue ? (
+              <button onClick={onOpenQueue} type="button">
+                <Link2 size={13} /> Admin queue
+              </button>
+            ) : null}
+          </article>
+        </section>
+      )}
+
       {mode === "submit" && (
-        <section className="do-workspace-admin-card" aria-label="Submit feedback">
-          <div className="do-feedback-kind" role="tablist" aria-label="Feedback type">
-            <button
-              className={kind === "bug" ? "is-active" : ""}
-              onClick={() => setKind("bug")}
-              role="tab"
-              type="button"
-            >
-              <Bug size={14} /> Bug
-            </button>
-            <button
-              className={kind === "feature" ? "is-active" : ""}
-              onClick={() => setKind("feature")}
-              role="tab"
-              type="button"
-            >
-              <Lightbulb size={14} /> Feature
-            </button>
+        <section className="do-feedback-submit-card" aria-label="Submit SupportOps request">
+          <div className="do-feedback-submit-hero">
+            <div>
+              <span className="do-kicker">{selectedProject ? "Project support form" : "General support intake"}</span>
+              <h2>{selectedProject ? projectTitle(selectedProject) : "Tell us what needs attention"}</h2>
+              <p>
+                {selectedProject
+                  ? "This report will land already tied to this project, so the project team can triage it directly."
+                  : "No project selected. This lands in the general queue so Tier 1 can classify and route it."}
+              </p>
+            </div>
+            <div className="do-feedback-kind" role="tablist" aria-label="SupportOps type">
+              <button
+                className={kind === "bug" ? "is-active" : ""}
+                onClick={() => setKind("bug")}
+                role="tab"
+                type="button"
+              >
+                <Bug size={14} /> Bug
+              </button>
+              <button
+                className={kind === "feature" ? "is-active" : ""}
+                onClick={() => setKind("feature")}
+                role="tab"
+                type="button"
+              >
+                <Lightbulb size={14} /> Feature
+              </button>
+            </div>
           </div>
-          <label>
+          <label className="do-feedback-field">
             Title
             <input
-              aria-label="Feedback title"
+              aria-label="SupportOps title"
               onChange={(event) => setTitle(event.target.value)}
               placeholder={kind === "bug" ? "What went wrong?" : "What should exist?"}
               value={title}
             />
           </label>
-          <label>
+          <label className="do-feedback-field">
             Details
             <textarea
-              aria-label="Feedback details"
+              aria-label="SupportOps details"
               onChange={(event) => setDescription(event.target.value)}
               placeholder={
                 kind === "bug"
@@ -163,7 +241,7 @@ export function FeedbackCenter({
             />
           </label>
           <div className="do-feedback-meta">
-            <label>
+            <label className="do-feedback-field">
               Related project
               <select
                 aria-label="Related project"
@@ -179,7 +257,7 @@ export function FeedbackCenter({
               </select>
             </label>
             {kind === "bug" && (
-              <label>
+              <label className="do-feedback-field">
                 Severity
                 <select
                   aria-label="Bug severity"
@@ -206,7 +284,7 @@ export function FeedbackCenter({
         </section>
       )}
 
-      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All feedback" : "My reports"}>
+      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All SupportOps reports" : "My reports"}>
         <div className="do-workspace-admin-head">
           <span className="do-kicker">{mode === "queue" ? "Queue" : "My reports"}</span>
           <strong>
@@ -217,7 +295,7 @@ export function FeedbackCenter({
         <label>
           Status
           <select
-            aria-label="Feedback status filter"
+            aria-label="SupportOps status filter"
             onChange={(event) => setStatusFilter(event.target.value)}
             value={statusFilter}
           >

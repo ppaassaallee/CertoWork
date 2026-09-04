@@ -148,12 +148,14 @@ test("waiting tab only shows assigned waiting-for items", () => {
 });
 
 test("today tab groups must-dos and should-dos from today's goals", () => {
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const must = {
     id: "must",
     title: "Ship demo",
     assigneeIds: ["ws_user-alejandro"],
     priority: "1",
-    dueDate: "2026-09-02",
+    dueDate: todayKey,
     isOneThing: true,
     status: "todo",
   };
@@ -163,6 +165,7 @@ test("today tab groups must-dos and should-dos from today's goals", () => {
     assigneeIds: ["ws_user-alejandro"],
     priority: "2",
     timeSector: "today",
+    timeSectorDate: todayKey,
     status: "todo",
   };
   const later = {
