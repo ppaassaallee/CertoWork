@@ -436,6 +436,7 @@ export function PortfolioFinanceAnalyst({
       {financeVisibleColumns.map((column, index) => {
         const className = [
           column === "project" ? "is-frozen" : "",
+          column === "followUp" ? "is-follow-up is-follow-up-sticky" : "",
           column === "cost" || column === "price" ? "is-numeric" : "",
         ]
           .filter(Boolean)
@@ -585,23 +586,29 @@ export function PortfolioFinanceAnalyst({
     if (column === "followUp") {
       const linked = tasksByFinanceLine.get(row.id) || [];
       return (
-        <td className={`${className} is-follow-up`} key={`${row.id}-${column}`}>
+        <td
+          className={`${className} is-follow-up is-follow-up-sticky`}
+          key={`${row.id}-${column}`}
+        >
           <div className="do-portfolio-finance-followups">
             <button
-              aria-label={`Create follow-up for ${row.project}`}
-              className="do-portfolio-finance-followup-btn"
+              aria-label={`Assign PBI follow-up for ${row.project}`}
+              className="do-portfolio-finance-followup-btn is-labeled"
+              data-testid="finance-assign-pbi"
               onClick={() => openFollowUp(row)}
-              title="Assign a PBI follow-up"
+              title="Create a PBI in My Work and assign a teammate"
               type="button"
             >
               <UserPlus size={13} />
+              <span>Assign PBI</span>
             </button>
             {linked.slice(0, 2).map((task) => (
               <button
                 className="do-portfolio-finance-task-chip"
+                data-testid="finance-open-linked-task"
                 key={task.id}
                 onClick={() => onOpenWorkItem?.(task.id)}
-                title={String(task.title || "Open task")}
+                title={`Open ${String(task.title || "task")} and comments`}
                 type="button"
               >
                 <MessageSquare size={11} />
@@ -631,9 +638,9 @@ export function PortfolioFinanceAnalyst({
           <span className="do-project-card-kicker">TRANSACTIONS BY PROJECT</span>
           <strong>Portfolio financials</strong>
           <small>
-            Month → project breaks · editable billing · follow-up PBIs ·{" "}
-            {portfolioFinanceTotals.lines.toLocaleString()} lines ·{" "}
-            {portfolioFinanceTotals.billed.toLocaleString()} billed
+            Scroll horizontally for billing fields · <strong>Assign PBI</strong> stays
+            pinned on the right · linked tasks open My Work comments ·{" "}
+            {portfolioFinanceTotals.lines.toLocaleString()} lines
           </small>
         </div>
         <div className="do-portfolio-finance-analyst-totals">
@@ -779,7 +786,7 @@ export function PortfolioFinanceAnalyst({
                         ? "is-numeric"
                         : "",
                       activeFilter ? "is-filtered" : "",
-                      column === "followUp" ? "is-follow-up" : "",
+                      column === "followUp" ? "is-follow-up is-follow-up-sticky" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -787,7 +794,11 @@ export function PortfolioFinanceAnalyst({
                     scope="col"
                   >
                     <div className="do-portfolio-finance-th">
-                      <span>{portfolioFinanceColumnLabels[column]}</span>
+                      <span>
+                        {column === "followUp"
+                          ? "Actions"
+                          : portfolioFinanceColumnLabels[column]}
+                      </span>
                       {filterable && (
                         <button
                           aria-expanded={financeFilterMenu === column}
@@ -955,6 +966,10 @@ export function PortfolioFinanceAnalyst({
               <div>
                 <span className="do-project-card-kicker">FOLLOW-UP PBI</span>
                 <strong>Assign tracking for this finance line</strong>
+                <small>
+                  Creates a PBI in My Work for you and whoever you assign. From My
+                  Work you can jump back to this exact finance line.
+                </small>
                 <small>
                   {followUpRow.project} · {followUpRow.monthLabel} · {followUpRow.type}
                 </small>
