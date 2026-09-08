@@ -80,6 +80,10 @@ import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
 import {
+  pricingPortfolioProjectCount,
+  syncPureAiPricingPortfolio,
+} from "../lib/runPricingPortfolioSync";
+import {
   projectHealth,
   sidebarProjectGroups,
   sortProjectsByRecency,
@@ -406,6 +410,7 @@ export function DelivereeWorkspace() {
   const [teamCaptureAddresses, setTeamCaptureAddresses] = useState<CaptureAddress[]>([]);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
+  const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -3324,6 +3329,57 @@ export function DelivereeWorkspace() {
       );
     } finally {
       setClearPureAiBusy(false);
+    }
+  };
+
+  const syncPureAiPricingFromSheet = async () => {
+    if (!user || !workspace) return;
+    if (!isPureAiWorkspace(workspace)) {
+      setNotice("This action only works inside the Pure AI workspace.");
+      return;
+    }
+    if (workspace.ownerId !== user.uid) {
+      setNotice("Only the Pure AI workspace owner can sync pricing.");
+      return;
+    }
+    const sheetCount = pricingPortfolioProjectCount();
+    const confirmed = window.confirm(
+      `Sync Pure AI projects from Pricing Data Portafolio IA 2026?\n\n` +
+        `• Match existing projects at ≥80% title confidence\n` +
+        `• Update BPO→delivery, Client→client, costs/finance periods\n` +
+        `• Create projects that are only in the sheet (${sheetCount} pricing projects)\n` +
+        `• Prefix unmatched Certo projects with “X”\n\n` +
+        `My Work items without a project stay. Cost lines replace financePeriods on matched projects.`,
+    );
+    if (!confirmed) return;
+    setPricingSyncBusy(true);
+    try {
+      const result = await syncPureAiPricingPortfolio({
+        db,
+        user,
+        workspace,
+        members: workspaceMembers,
+      });
+      if (result.skipped) {
+        setNotice(
+          result.reason === "not-owner"
+            ? "Only the Pure AI workspace owner can sync pricing."
+            : "Could not sync pricing portfolio.",
+        );
+        return;
+      }
+      goCenterView("portfolio");
+      setNotice(
+        `Pricing sync: updated ${result.updatedProjects}, created ${result.createdProjects}, marked X on ${result.markedUnmatched}.`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Could not sync pricing portfolio: ${reason.message}`
+          : "Could not sync pricing portfolio.",
+      );
+    } finally {
+      setPricingSyncBusy(false);
     }
   };
 
@@ -6818,22 +6874,38 @@ export function DelivereeWorkspace() {
                 <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pure AI portfolio</span>
-                    <strong>Clear all projects</strong>
+                    <strong>Pricing sync &amp; clear</strong>
                   </div>
                   <p className="do-panel-intro">
-                    Removes every project in this Pure AI workspace so you can bulk-load a new set.
-                    My Work items without a project stay. Tasks linked to those projects are deleted.
+                    Sync from Pricing_Data_Portafolio_IA_2026 (TRANSACTIONS BY PROJECT): fuzzy-match
+                    projects, map BPO→delivery / Client→client, replace finance cost lines, create
+                    missing projects, and prefix unmatched Certo projects with X. Clear deletes all
+                    projects first if you need a clean slate. My Work without a project stays.
                   </p>
-                  <button
-                    className="do-button"
-                    data-testid="pure-ai-clear-projects-btn"
-                    disabled={clearPureAiBusy}
-                    onClick={() => void clearPureAiPortfolioProjects()}
-                    type="button"
-                  >
-                    <Trash2 size={14} />
-                    {clearPureAiBusy ? "Clearing…" : "Delete all Pure AI projects"}
-                  </button>
+                  <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      className="do-button"
+                      data-testid="pure-ai-pricing-sync-btn"
+                      disabled={pricingSyncBusy || clearPureAiBusy}
+                      onClick={() => void syncPureAiPricingFromSheet()}
+                      type="button"
+                    >
+                      <Receipt size={14} />
+                      {pricingSyncBusy
+                        ? "Syncing…"
+                        : `Sync pricing (${pricingPortfolioProjectCount()} projects)`}
+                    </button>
+                    <button
+                      className="do-button"
+                      data-testid="pure-ai-clear-projects-btn"
+                      disabled={clearPureAiBusy || pricingSyncBusy}
+                      onClick={() => void clearPureAiPortfolioProjects()}
+                      type="button"
+                    >
+                      <Trash2 size={14} />
+                      {clearPureAiBusy ? "Clearing…" : "Delete all Pure AI projects"}
+                    </button>
+                  </div>
                 </section>
               ) : null}
               <section className="do-workspace-admin-card">
