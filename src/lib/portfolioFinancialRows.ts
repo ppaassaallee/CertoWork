@@ -6,6 +6,12 @@ import {
   normalizeChargeLineType,
   type ChargeLineType,
 } from "./financeChargeTypes";
+import {
+  normalizeFinanceBillingStatus,
+  normalizeFinanceVendorPayStatus,
+  type FinanceBillingStatus,
+  type FinanceVendorPayStatus,
+} from "./financeBillingStatuses";
 
 export const PORTFOLIO_FINANCE_COLUMNS = [
   "project",
@@ -25,7 +31,12 @@ export const PORTFOLIO_FINANCE_COLUMNS = [
   "cost",
   "marginPct",
   "price",
+  "billingStatus",
+  "vendorPayStatus",
+  "vendorInvoice",
+  "clientInvoice",
   "source",
+  "followUp",
 ] as const;
 
 export type PortfolioFinanceColumn = (typeof PORTFOLIO_FINANCE_COLUMNS)[number];
@@ -48,12 +59,38 @@ export const portfolioFinanceColumnLabels: Record<PortfolioFinanceColumn, string
   cost: "Cost",
   marginPct: "Margin %",
   price: "Price",
+  billingStatus: "Billing status",
+  vendorPayStatus: "Vendor pay status",
+  vendorInvoice: "Vendor invoice",
+  clientInvoice: "Client invoice",
   source: "Source",
+  followUp: "Follow-up",
 };
 
-/** Project stays first and frozen; users can toggle the rest. */
+/** Default visible columns — Source hidden; billing fields on; follow-up action last. */
 export const defaultPortfolioFinanceColumns: PortfolioFinanceColumn[] = [
-  ...PORTFOLIO_FINANCE_COLUMNS,
+  "project",
+  "projectId",
+  "client",
+  "product",
+  "bpo",
+  "externalOrInternal",
+  "stage",
+  "phase",
+  "status",
+  "type",
+  "month",
+  "unit",
+  "units",
+  "costPerUnit",
+  "cost",
+  "marginPct",
+  "price",
+  "billingStatus",
+  "vendorPayStatus",
+  "vendorInvoice",
+  "clientInvoice",
+  "followUp",
 ];
 
 export const PORTFOLIO_FINANCE_FILTERABLE_COLUMNS: PortfolioFinanceColumn[] = [
@@ -69,7 +106,10 @@ export const PORTFOLIO_FINANCE_FILTERABLE_COLUMNS: PortfolioFinanceColumn[] = [
   "type",
   "month",
   "unit",
-  "source",
+  "billingStatus",
+  "vendorPayStatus",
+  "vendorInvoice",
+  "clientInvoice",
 ];
 
 export type PortfolioFinanceRow = {
@@ -96,6 +136,10 @@ export type PortfolioFinanceRow = {
   source: string;
   billed: boolean;
   financialStatus: string;
+  billingStatus: FinanceBillingStatus;
+  vendorPayStatus: FinanceVendorPayStatus;
+  vendorInvoice: string;
+  clientInvoice: string;
 };
 
 export type PortfolioFinanceColumnFilters = Partial<
@@ -163,8 +207,18 @@ export function portfolioFinanceCellValue(
       return row.marginPct == null ? "—" : String(row.marginPct);
     case "price":
       return String(row.price);
+    case "billingStatus":
+      return row.billingStatus;
+    case "vendorPayStatus":
+      return row.vendorPayStatus;
+    case "vendorInvoice":
+      return row.vendorInvoice || "—";
+    case "clientInvoice":
+      return row.clientInvoice || "—";
     case "source":
       return row.source;
+    case "followUp":
+      return "";
     default:
       return "";
   }
@@ -224,6 +278,11 @@ export function buildPortfolioFinanceRows(projects: any[]): PortfolioFinanceRow[
           source: clean(entry.referenceNumber || entry.description) || "—",
           billed: isFinanceLineBilled(entry),
           financialStatus: clean(entry.financialStatus) || "not_billed",
+          billingStatus: normalizeFinanceBillingStatus(entry.financialStatus),
+          vendorPayStatus: normalizeFinanceVendorPayStatus(entry.paymentStatus),
+          vendorInvoice:
+            clean(entry.vendorInvoice) || clean(entry.referenceNumber) || "",
+          clientInvoice: clean(entry.clientInvoice) || "",
         });
       }
     }
@@ -384,7 +443,7 @@ export function filterPortfolioFinanceRows(
     }
     if (!search) return true;
     const haystack =
-      `${row.project} ${row.projectKey} ${row.client} ${row.product} ${row.bpo} ${row.type} ${row.source}`.toLowerCase();
+      `${row.project} ${row.projectKey} ${row.client} ${row.product} ${row.bpo} ${row.type} ${row.source} ${row.vendorInvoice} ${row.clientInvoice}`.toLowerCase();
     return haystack.includes(search);
   });
 }
@@ -392,6 +451,24 @@ export function filterPortfolioFinanceRows(
 export function ensureProjectFinanceColumn(
   columns: PortfolioFinanceColumn[],
 ): PortfolioFinanceColumn[] {
-  const rest = columns.filter((column) => column !== "project");
-  return ["project", ...rest];
+  const known = new Set<string>(PORTFOLIO_FINANCE_COLUMNS);
+  const cleaned = columns.filter(
+    (column): column is PortfolioFinanceColumn =>
+      known.has(column) && column !== "project" && column !== "followUp",
+  );
+  // Drop Source unless the user explicitly kept it in stored prefs after this change.
+  const withoutLegacySource =
+    cleaned.includes("billingStatus") || cleaned.includes("vendorPayStatus")
+      ? cleaned
+      : cleaned.filter((column) => column !== "source");
+  const withBilling = [...withoutLegacySource];
+  for (const required of [
+    "billingStatus",
+    "vendorPayStatus",
+    "vendorInvoice",
+    "clientInvoice",
+  ] as const) {
+    if (!withBilling.includes(required)) withBilling.push(required);
+  }
+  return ["project", ...withBilling, "followUp"];
 }

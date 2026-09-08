@@ -23,6 +23,10 @@ export type FinanceEntry = {
   transactionDate?: string;
   financialStatus?: string;
   referenceNumber?: string;
+  /** Vendor invoice number / reference shown in portfolio Financials. */
+  vendorInvoice?: string;
+  /** Client invoice number shown in portfolio Financials. */
+  clientInvoice?: string;
   issueDate?: string;
   dueDate?: string;
   invoiceStatus?: string;
@@ -184,6 +188,10 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
           referenceNumber: String(
             entry.referenceNumber || entry.invoiceNumber || "",
           ),
+          vendorInvoice: String(
+            entry.vendorInvoice || entry.referenceNumber || entry.invoiceNumber || "",
+          ),
+          clientInvoice: String(entry.clientInvoice || ""),
           issueDate: String(entry.issueDate || ""),
           dueDate: String(entry.dueDate || ""),
           invoiceStatus: String(
@@ -212,7 +220,11 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
                   : entry.paymentStatus === "overdue"
                     ? "overdue"
                     : "unpaid"
-              : entry.paymentStatus || "planned",
+              : ["unpaid", "partial", "paid", "overdue"].includes(
+                    String(entry.paymentStatus || ""),
+                  )
+                ? entry.paymentStatus
+                : entry.paymentStatus || "planned",
           ),
           settledAmount: Number(entry.settledAmount ?? entry.paidAmount ?? 0),
           settledDate: String(entry.settledDate || entry.paidDate || ""),
