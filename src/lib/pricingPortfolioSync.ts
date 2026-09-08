@@ -130,10 +130,10 @@ export function mapPricingUnit(unitOfMeasure?: string | null) {
 
 export function mapChargeType(chargeType?: string | null, externalOrInternal?: string | null) {
   const charge = token(chargeType);
-  const internal = token(externalOrInternal) === "internal";
+  void externalOrInternal;
   if (charge.includes("build")) {
     return {
-      costType: internal ? "Internal Cost" : "Direct Cost",
+      costType: "Build",
       allocationStage: "Build",
       category: "development",
       kind: "build" as const,
@@ -141,7 +141,7 @@ export function mapChargeType(chargeType?: string | null, externalOrInternal?: s
   }
   if (charge.includes("maintenance") || charge.includes("support")) {
     return {
-      costType: internal ? "Internal Cost" : "Recurring Cost",
+      costType: "Maintenance and Support",
       allocationStage: "Support",
       category: "support",
       kind: "monthly" as const,
@@ -149,7 +149,7 @@ export function mapChargeType(chargeType?: string | null, externalOrInternal?: s
   }
   if (charge.includes("token") || charge.includes("surcharge")) {
     return {
-      costType: "Pass-through Cost",
+      costType: "Ops Consumptions",
       allocationStage: "Operations",
       category: "infrastructure",
       kind: "monthly" as const,
@@ -157,7 +157,7 @@ export function mapChargeType(chargeType?: string | null, externalOrInternal?: s
   }
   // Consumption and fallback
   return {
-    costType: internal ? "Internal Cost" : "Pass-through Cost",
+    costType: "Ops Consumptions",
     allocationStage: "Operations",
     category: "usage",
     kind: "monthly" as const,

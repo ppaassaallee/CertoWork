@@ -12623,6 +12623,28 @@ a {
 .do-finance-sheet-row:hover {
   background: var(--surface-1);
 }
+.do-finance-sheet-row.is-billed {
+  background: color-mix(in srgb, #1f9d63 12%, var(--surface-0));
+}
+.do-finance-sheet-row.is-billed:hover {
+  background: color-mix(in srgb, #1f9d63 18%, var(--surface-0));
+}
+.do-finance-sheet-month + .do-finance-sheet-month {
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+.do-finance-sheet-subtotal {
+  background: color-mix(in srgb, var(--surface-1) 88%, var(--accent-soft));
+  border-top: 1px dashed var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+}
+.do-finance-sheet-subtotal strong {
+  font-weight: 700;
+}
+.do-finance-charge-type {
+  font-weight: 650;
+}
 .do-finance-sheet-row > span {
   overflow: hidden;
   text-overflow: ellipsis;
