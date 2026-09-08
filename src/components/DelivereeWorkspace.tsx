@@ -895,6 +895,8 @@ export function DelivereeWorkspace() {
     if (!isPureAiWorkspace(workspace)) return;
     if (workspace.ownerId !== user.uid) return;
     if (workspace.portfolioImportKey === PRICING_PORTFOLIO_IMPORT_KEY) return;
+    // Wait until membership roster is live so share targets resolve.
+    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
     if (pricingAutoSyncRef.current || pricingSyncBusy || clearPureAiBusy) return;
     pricingAutoSyncRef.current = true;
     setPricingSyncBusy(true);
