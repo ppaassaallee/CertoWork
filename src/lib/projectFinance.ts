@@ -9,6 +9,7 @@ export type FinanceEntry = {
   costType?: string;
   allocationStage?: string;
   serviceSolution?: string;
+  phase?: string;
   unit: string;
   plannedQty: number;
   actualQty: number;
@@ -114,6 +115,7 @@ export function normalizedFinancePeriods(project: any): FinancePeriod[] {
           serviceSolution:
             String(entry.serviceSolution || entry.service || entry.solution || "") ||
             undefined,
+          phase: String(entry.phase || "") || undefined,
           unit: String(entry.unit || "fee"),
           plannedQty: Number(entry.plannedQty ?? entry.quantity ?? 0),
           actualQty: Number(entry.actualQty ?? entry.actualQuantity ?? 0),

@@ -71,6 +71,26 @@ import {
   type DeliveryPhase,
   type DeliveryStage,
 } from "../lib/projectDelivery";
+import {
+  CHARGE_LINE_TYPE_COLORS,
+  CHARGE_LINE_TYPES,
+  financeMonthKey,
+  financeMonthLabel,
+  isFinanceLineBilled,
+  normalizeChargeLineType,
+  type ChargeLineType,
+} from "../lib/financeChargeTypes";
+import {
+  PORTFOLIO_FINANCE_COLUMNS,
+  buildPortfolioFinanceRows,
+  defaultPortfolioFinanceColumns,
+  filterPortfolioFinanceRows,
+  groupPortfolioFinanceRows,
+  portfolioFinanceColumnLabels,
+  type PortfolioFinanceColumn,
+  type PortfolioFinanceGroupBy,
+  type PortfolioFinanceRow,
+} from "../lib/portfolioFinancialRows";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
@@ -2632,14 +2652,7 @@ const costUnitLabels: Record<string, string> = {
   other: "Other",
 };
 
-const COST_TYPES = [
-  "Direct Cost",
-  "Direct Allocation Cost",
-  "Recurring Cost",
-  "Pass-through Cost",
-  "Internal Cost",
-  "Revenue",
-] as const;
+const COST_TYPES = [...CHARGE_LINE_TYPES] as const;
 
 const ALLOCATION_STAGES = [
   "Define",
@@ -2651,6 +2664,18 @@ const ALLOCATION_STAGES = [
   "Support",
 ] as const;
 
+const COST_PHASE_OPTIONS = [
+  ...Object.values(deliveryPhaseLabels),
+  "Diseño",
+  "Desarrollo",
+  "QA",
+  "Pre-Producción",
+  "Producción",
+  "EOL",
+  "Hold",
+  "TBC",
+] as const;
+
 const COST_TEMPLATES = [
   {
     id: "cost-allocation-example",
@@ -2660,7 +2685,7 @@ const COST_TEMPLATES = [
     rows: [
       {
         dimension: "External Developers Solution Architecture",
-        costType: "Direct Cost",
+        costType: "Build",
         allocationStage: "Build",
         serviceSolution: "Agentic Project",
         unit: "hour",
@@ -2671,7 +2696,7 @@ const COST_TEMPLATES = [
       },
       {
         dimension: "External Developers",
-        costType: "Direct Cost",
+        costType: "Build",
         allocationStage: "Build",
         serviceSolution: "Agentic Project",
         unit: "hour",
@@ -2682,7 +2707,7 @@ const COST_TEMPLATES = [
       },
       {
         dimension: "Internal allocation hours",
-        costType: "Direct Allocation Cost",
+        costType: "Build",
         allocationStage: "Build",
         serviceSolution: "Agentic Project",
         unit: "hour",
@@ -2693,7 +2718,7 @@ const COST_TEMPLATES = [
       },
       {
         dimension: "AI consumption for build phase",
-        costType: "Direct Cost",
+        costType: "Ops Consumptions",
         allocationStage: "Build",
         serviceSolution: "Agentic Project",
         unit: "ai_minute",
@@ -3088,8 +3113,9 @@ function ProjectFinanceLedger({
       direction: "cost",
       description: "New line",
       category: "development",
-      costType: "Direct Cost",
+      costType: "Build",
       allocationStage: deliveryStageLabels[deliveryStage(project)],
+      phase: deliveryPhaseLabel(project),
       serviceSolution: project.serviceLine || project.technology || "Delivery",
       unit: "fee",
       plannedQty: 1,
@@ -3126,6 +3152,32 @@ function ProjectFinanceLedger({
       )
       .map((entry) => ({ period, entry })),
   );
+  const sheetRowsByMonth = (() => {
+    const groups = new Map<
+      string,
+      Array<{ period: FinancePeriod; entry: FinanceEntry }>
+    >();
+    for (const row of sheetRows) {
+      const key = financeMonthKey(row.entry, row.period);
+      const list = groups.get(key) || [];
+      list.push(row);
+      groups.set(key, list);
+    }
+    return [...groups.entries()].sort(([left], [right]) => {
+      if (left === "build" || left === "unscheduled") return 1;
+      if (right === "build" || right === "unscheduled") return -1;
+      return left.localeCompare(right);
+    });
+  })();
+  const costPhaseOptions = [
+    ...new Set([
+      ...COST_PHASE_OPTIONS,
+      ...sheetRows
+        .map(({ entry }) => String(entry.phase || "").trim())
+        .filter(Boolean),
+      deliveryPhaseLabel(project),
+    ]),
+  ];
   const addEntry = (periodId: string, direction: FinanceDirection) =>
     updatePeriods(
       periods.map((period) =>
@@ -3140,11 +3192,12 @@ function ProjectFinanceLedger({
                   description:
                     direction === "cost" ? "New cost" : "New invoice",
                   category: direction === "cost" ? "development" : "revenue",
-                  costType: direction === "cost" ? "Direct Cost" : "Revenue",
+                  costType: "Build",
                   allocationStage:
                     period.kind === "monthly"
                       ? "Operations"
                       : deliveryStageLabels[deliveryStage(project)],
+                  phase: deliveryPhaseLabel(project),
                   serviceSolution:
                     project.serviceLine || project.technology || "Delivery",
                   unit: "fee",
@@ -3188,7 +3241,7 @@ function ProjectFinanceLedger({
             direction: "cost" as const,
             description: row.dimension || "Cost item",
             category: row.category || inferredCostCategory(row),
-            costType: row.costType || "Direct Cost",
+            costType: row.costType || "Build",
             allocationStage: row.allocationStage || deliveryStageLabels[deliveryStage(project)],
             serviceSolution:
               row.serviceSolution ||
@@ -3248,7 +3301,7 @@ function ProjectFinanceLedger({
         direction: "cost" as const,
         description: row.dimension,
         category: row.category,
-        costType: row.costType || "Direct Cost",
+        costType: row.costType || "Build",
         allocationStage:
           row.allocationStage || deliveryStageLabels[deliveryStage(project)],
         serviceSolution:
@@ -3300,7 +3353,7 @@ function ProjectFinanceLedger({
         .map((entry) => ({
           dimension: entry.description,
           category: entry.category,
-          costType: entry.costType || "Direct Cost",
+          costType: normalizeChargeLineType(entry),
           allocationStage: entry.allocationStage || "Build",
           serviceSolution: entry.serviceSolution || "Delivery",
           unit: entry.unit,
@@ -3320,7 +3373,7 @@ function ProjectFinanceLedger({
         .map((entry) => ({
           dimension: entry.description,
           category: entry.category,
-          costType: entry.costType || "Direct Cost",
+          costType: normalizeChargeLineType(entry),
           allocationStage: entry.allocationStage || "Build",
           serviceSolution: entry.serviceSolution || "Delivery",
           unit: entry.unit,
@@ -3449,185 +3502,293 @@ function ProjectFinanceLedger({
             <span>Paid</span>
             <span />
           </div>
-          {sheetRows.map(({ period, entry }) => (
-            <div className="do-finance-sheet-grid do-finance-sheet-row" key={`${period.id}:${entry.id}`}>
-              <span title={projectTitle(project)}>{projectTitle(project)}</span>
-              <span>{project.deliveryEntity || project.delivery || "—"}</span>
-              <span>{project.clientEntity || project.client || "—"}</span>
-              <select
-                onChange={(event) =>
-                  updateSheetEntry(period.id, entry.id, { allocationStage: event.target.value })
-                }
-                value={entry.allocationStage || "Build"}
-              >
-                {ALLOCATION_STAGES.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
-              </select>
-              <span>{deliveryPhaseLabel(deliveryPhase(project))}</span>
-              <select
-                onChange={(event) =>
-                  updateSheetEntry(period.id, entry.id, { accountingMonth: event.target.value })
-                }
-                value={entry.accountingMonth || `${period.year || sheetYear}-${String(period.month || 1).padStart(2, "0")}`}
-              >
-                {sheetPeriodOptions.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                defaultValue={entry.description}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, {
-                    description: event.target.value.trim() || "Financial item",
-                  })
-                }
-              />
-              <select
-                onChange={(event) => {
-                  const direction = event.target.value === "revenue" ? "revenue" : "cost";
-                  updateSheetEntry(period.id, entry.id, {
-                    direction,
-                    costType: direction === "revenue" ? "Revenue" : entry.costType || "Direct Cost",
-                    invoiceStatus: direction === "revenue" ? entry.invoiceStatus || "not_billed" : entry.invoiceStatus,
-                  });
-                }}
-                value={entry.direction}
-              >
-                <option value="cost">Cost + optional price</option>
-                <option value="revenue">Invoice / revenue</option>
-              </select>
-              <input
-                defaultValue={entry.serviceSolution || ""}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, {
-                    serviceSolution: event.target.value.trim(),
-                  })
-                }
-                placeholder="Service"
-              />
-              <input
-                onChange={(event) =>
-                  updateSheetEntry(period.id, entry.id, {
-                    transactionDate: event.target.value,
-                    issueDate: entry.direction === "revenue" ? event.target.value : entry.issueDate,
-                  })
-                }
-                type="date"
-                value={entry.transactionDate || entry.issueDate || ""}
-              />
-              <select
-                onChange={(event) =>
-                  updateSheetEntry(period.id, entry.id, { category: event.target.value })
-                }
-                value={entry.category}
-              >
-                <option value="development">Development</option>
-                <option value="implementation">Implementation</option>
-                <option value="support">Support</option>
-                <option value="vendor">Vendor</option>
-                <option value="license">License</option>
-                <option value="infrastructure">Infrastructure</option>
-                <option value="revenue">Revenue</option>
-                <option value="other">Other</option>
-              </select>
-              <select
-                onChange={(event) =>
-                  updateSheetEntry(period.id, entry.id, { unit: event.target.value })
-                }
-                value={entry.unit}
-              >
-                {COST_UNITS.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {costUnitLabels[unit]}
-                  </option>
-                ))}
-              </select>
-              <input
-                defaultValue={entry.plannedQty}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, { plannedQty: Number(event.target.value || 0) })
-                }
-                type="number"
-              />
-              <input
-                defaultValue={entry.actualQty}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, { actualQty: Number(event.target.value || 0) })
-                }
-                type="number"
-              />
-              <input
-                defaultValue={entry.rate}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, { rate: Number(event.target.value || 0) })
-                }
-                type="number"
-              />
-              <strong>${financeAmount(entry).toLocaleString()}</strong>
-              <input
-                defaultValue={entry.direction === "revenue" ? entry.rate : entry.priceRate || 0}
-                onBlur={(event) => {
-                  const value = Number(event.target.value || 0);
-                  updateSheetEntry(period.id, entry.id, entry.direction === "revenue" ? { rate: value } : { priceRate: value });
-                }}
-                type="number"
-              />
-              <strong>${financePriceAmount(entry).toLocaleString()}</strong>
-              <select
-                onChange={(event) => {
-                  const financialStatus = event.target.value;
-                  updateSheetEntry(period.id, entry.id, {
-                    financialStatus,
-                    invoiceStatus:
-                      financialStatus === "not_billed"
-                        ? "not_billed"
-                        : financialStatus === "disputed"
-                          ? "disputed"
-                          : "invoiced",
-                    costStatus:
-                      financialStatus === "paid"
-                        ? "paid"
-                        : financialStatus === "billed"
-                          ? "incurred"
-                          : financialStatus === "disputed"
-                            ? "disputed"
-                            : "planned",
-                    paymentStatus: financialStatus === "paid" ? "paid" : "unpaid",
-                  });
-                }}
-                value={entry.financialStatus || "not_billed"}
-              >
-                <option value="not_billed">Not billed</option>
-                <option value="billed">Billed</option>
-                <option value="paid">Paid</option>
-                <option value="disputed">Disputed</option>
-              </select>
-              <input
-                defaultValue={entry.settledAmount || 0}
-                onBlur={(event) =>
-                  updateSheetEntry(period.id, entry.id, {
-                    settledAmount: Number(event.target.value || 0),
-                  })
-                }
-                type="number"
-              />
-              <button
-                aria-label={`Remove ${entry.description}`}
-                onClick={() =>
-                  window.confirm(`Remove ${entry.description}?`) &&
-                  removeEntry(period.id, entry.id)
-                }
-                type="button"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
+          {sheetRowsByMonth.map(([monthKey, rows]) => {
+            const monthCost = rows.reduce(
+              (sum, row) => sum + financeAmount(row.entry),
+              0,
+            );
+            const monthPrice = rows.reduce(
+              (sum, row) => sum + financePriceAmount(row.entry),
+              0,
+            );
+            return (
+              <div className="do-finance-sheet-month" key={monthKey}>
+                {rows.map(({ period, entry }) => {
+                  const chargeType = normalizeChargeLineType(entry);
+                  const chargeColors = CHARGE_LINE_TYPE_COLORS[chargeType];
+                  const billed = isFinanceLineBilled(entry);
+                  const phaseValue =
+                    String(entry.phase || "").trim() || deliveryPhaseLabel(project);
+                  return (
+                    <div
+                      className={`do-finance-sheet-grid do-finance-sheet-row ${billed ? "is-billed" : ""}`}
+                      data-charge-type={chargeType}
+                      key={`${period.id}:${entry.id}`}
+                    >
+                      <span title={projectTitle(project)}>{projectTitle(project)}</span>
+                      <span>{project.deliveryEntity || project.delivery || "—"}</span>
+                      <span>{project.clientEntity || project.client || "—"}</span>
+                      <select
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            allocationStage: event.target.value,
+                          })
+                        }
+                        value={entry.allocationStage || "Build"}
+                      >
+                        {ALLOCATION_STAGES.map((stage) => (
+                          <option key={stage} value={stage}>
+                            {stage}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="Phase"
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            phase: event.target.value,
+                          })
+                        }
+                        value={phaseValue}
+                      >
+                        {costPhaseOptions.map((phase) => (
+                          <option key={phase} value={phase}>
+                            {phase}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            accountingMonth: event.target.value,
+                          })
+                        }
+                        value={
+                          entry.accountingMonth ||
+                          `${period.year || sheetYear}-${String(period.month || 1).padStart(2, "0")}`
+                        }
+                      >
+                        {sheetPeriodOptions.map((month) => (
+                          <option key={month.value} value={month.value}>
+                            {month.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        defaultValue={entry.description}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            description: event.target.value.trim() || "Financial item",
+                          })
+                        }
+                      />
+                      <select
+                        aria-label="Cost type"
+                        className="do-finance-charge-type"
+                        onChange={(event) => {
+                          const nextType = event.target.value as ChargeLineType;
+                          updateSheetEntry(period.id, entry.id, {
+                            costType: nextType,
+                            direction: "cost",
+                          });
+                        }}
+                        style={{
+                          background: chargeColors.bg,
+                          color: chargeColors.fg,
+                          borderColor: chargeColors.border,
+                        }}
+                        value={chargeType}
+                      >
+                        {CHARGE_LINE_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        defaultValue={entry.serviceSolution || ""}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            serviceSolution: event.target.value.trim(),
+                          })
+                        }
+                        placeholder="Service"
+                      />
+                      <input
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            transactionDate: event.target.value,
+                            issueDate:
+                              entry.direction === "revenue"
+                                ? event.target.value
+                                : entry.issueDate,
+                          })
+                        }
+                        type="date"
+                        value={entry.transactionDate || entry.issueDate || ""}
+                      />
+                      <select
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            category: event.target.value,
+                          })
+                        }
+                        value={entry.category}
+                      >
+                        <option value="development">Development</option>
+                        <option value="implementation">Implementation</option>
+                        <option value="support">Support</option>
+                        <option value="vendor">Vendor</option>
+                        <option value="license">License</option>
+                        <option value="infrastructure">Infrastructure</option>
+                        <option value="usage">Usage</option>
+                        <option value="revenue">Revenue</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <select
+                        onChange={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            unit: event.target.value,
+                          })
+                        }
+                        value={entry.unit}
+                      >
+                        {COST_UNITS.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {costUnitLabels[unit]}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        defaultValue={entry.plannedQty}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            plannedQty: Number(event.target.value || 0),
+                          })
+                        }
+                        type="number"
+                      />
+                      <input
+                        defaultValue={entry.actualQty}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            actualQty: Number(event.target.value || 0),
+                          })
+                        }
+                        type="number"
+                      />
+                      <input
+                        defaultValue={entry.rate}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            rate: Number(event.target.value || 0),
+                          })
+                        }
+                        type="number"
+                      />
+                      <strong>${financeAmount(entry).toLocaleString()}</strong>
+                      <input
+                        defaultValue={
+                          entry.direction === "revenue"
+                            ? entry.rate
+                            : entry.priceRate || 0
+                        }
+                        onBlur={(event) => {
+                          const value = Number(event.target.value || 0);
+                          updateSheetEntry(
+                            period.id,
+                            entry.id,
+                            entry.direction === "revenue"
+                              ? { rate: value }
+                              : { priceRate: value },
+                          );
+                        }}
+                        type="number"
+                      />
+                      <strong>${financePriceAmount(entry).toLocaleString()}</strong>
+                      <select
+                        onChange={(event) => {
+                          const financialStatus = event.target.value;
+                          updateSheetEntry(period.id, entry.id, {
+                            financialStatus,
+                            invoiceStatus:
+                              financialStatus === "not_billed"
+                                ? "not_billed"
+                                : financialStatus === "disputed"
+                                  ? "disputed"
+                                  : "invoiced",
+                            costStatus:
+                              financialStatus === "paid"
+                                ? "paid"
+                                : financialStatus === "billed"
+                                  ? "incurred"
+                                  : financialStatus === "disputed"
+                                    ? "disputed"
+                                    : "planned",
+                            paymentStatus:
+                              financialStatus === "paid" ? "paid" : "unpaid",
+                          });
+                        }}
+                        value={entry.financialStatus || "not_billed"}
+                      >
+                        <option value="not_billed">Not billed</option>
+                        <option value="billed">Billed</option>
+                        <option value="paid">Paid</option>
+                        <option value="disputed">Disputed</option>
+                      </select>
+                      <input
+                        defaultValue={entry.settledAmount || 0}
+                        onBlur={(event) =>
+                          updateSheetEntry(period.id, entry.id, {
+                            settledAmount: Number(event.target.value || 0),
+                          })
+                        }
+                        type="number"
+                      />
+                      <button
+                        aria-label={`Remove ${entry.description}`}
+                        onClick={() =>
+                          window.confirm(`Remove ${entry.description}?`) &&
+                          removeEntry(period.id, entry.id)
+                        }
+                        type="button"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <div
+                  className="do-finance-sheet-grid do-finance-sheet-subtotal"
+                  data-testid={`finance-month-subtotal-${monthKey}`}
+                >
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <strong>{financeMonthLabel(monthKey)} subtotal</strong>
+                  <span>
+                    {rows.length} line{rows.length === 1 ? "" : "s"}
+                  </span>
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <strong>${monthCost.toLocaleString()}</strong>
+                  <span />
+                  <strong>${monthPrice.toLocaleString()}</strong>
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            );
+          })}
           {sheetRows.length === 0 && (
             <div className="do-finance-sheet-empty">
               No lines for {sheetYear}. Click Add line and start typing like a spreadsheet.
@@ -4031,12 +4192,27 @@ function ProjectFinanceLedger({
                           }
                         />
                         <select
+                          className="do-finance-charge-type"
                           onChange={(event) =>
                             updateEntry(period.id, entry.id, {
                               costType: event.target.value,
                             })
                           }
-                          value={entry.costType || "Direct Cost"}
+                          style={{
+                            background:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].bg,
+                            color:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].fg,
+                            borderColor:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].border,
+                          }}
+                          value={normalizeChargeLineType(entry)}
                         >
                           {COST_TYPES.map((type) => (
                             <option key={type} value={type}>
@@ -4725,6 +4901,32 @@ export function ProjectCommandCenter({
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<PortfolioView>("dashboard");
+  const [financeSearch, setFinanceSearch] = useState("");
+  const [financeClient, setFinanceClient] = useState("all");
+  const [financeBpo, setFinanceBpo] = useState("all");
+  const [financeProduct, setFinanceProduct] = useState("all");
+  const [financeMonth, setFinanceMonth] = useState("all");
+  const [financeType, setFinanceType] = useState("all");
+  const [financeBilled, setFinanceBilled] = useState<"all" | "billed" | "unbilled">(
+    "all",
+  );
+  const [financeGroupBy, setFinanceGroupBy] =
+    useState<PortfolioFinanceGroupBy>("month");
+  const [financeColumns, setFinanceColumns] = useState<PortfolioFinanceColumn[]>(
+    () => {
+      if (typeof window === "undefined") return defaultPortfolioFinanceColumns;
+      try {
+        const stored = JSON.parse(
+          window.localStorage.getItem("certo-portfolio-finance-columns") || "null",
+        );
+        return Array.isArray(stored) && stored.length
+          ? stored
+          : defaultPortfolioFinanceColumns;
+      } catch {
+        return defaultPortfolioFinanceColumns;
+      }
+    },
+  );
   const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
@@ -4979,6 +5181,159 @@ export function ProjectCommandCenter({
     }
     return projectTitle(left).localeCompare(projectTitle(right));
   });
+  const financeSourceProjects = sortedFiltered.filter(
+    (project) =>
+      !["deleted", "archived", "cancelled"].includes(
+        String(project.status || "").toLowerCase(),
+      ),
+  );
+  const portfolioFinanceAllRows = useMemo(
+    () => buildPortfolioFinanceRows(financeSourceProjects),
+    [financeSourceProjects],
+  );
+  const portfolioFinanceFilteredRows = useMemo(
+    () =>
+      filterPortfolioFinanceRows(portfolioFinanceAllRows, {
+        search: financeSearch,
+        client: financeClient,
+        bpo: financeBpo,
+        product: financeProduct,
+        month: financeMonth,
+        type: financeType,
+        billed: financeBilled,
+      }),
+    [
+      portfolioFinanceAllRows,
+      financeSearch,
+      financeClient,
+      financeBpo,
+      financeProduct,
+      financeMonth,
+      financeType,
+      financeBilled,
+    ],
+  );
+  const portfolioFinanceGroups = useMemo(
+    () => groupPortfolioFinanceRows(portfolioFinanceFilteredRows, financeGroupBy),
+    [portfolioFinanceFilteredRows, financeGroupBy],
+  );
+  const financeClientOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.client))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeBpoOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.bpo))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeProductOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.product))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeMonthOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.monthKey))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeColumnSet = new Set(financeColumns);
+  const financeGridStyle = {
+    gridTemplateColumns: financeColumns
+      .map((column) => {
+        if (column === "project") return "minmax(220px, 1.4fr)";
+        if (column === "source") return "minmax(160px, 1fr)";
+        if (["cost", "price", "costPerUnit", "units", "marginPct"].includes(column))
+          return "110px";
+        if (column === "type") return "170px";
+        if (column === "projectId") return "160px";
+        return "130px";
+      })
+      .join(" "),
+  };
+  const toggleFinanceColumn = (column: PortfolioFinanceColumn) => {
+    setFinanceColumns((current) => {
+      const next = current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column];
+      const safe = next.length ? next : defaultPortfolioFinanceColumns;
+      window.localStorage.setItem(
+        "certo-portfolio-finance-columns",
+        JSON.stringify(safe),
+      );
+      return safe;
+    });
+  };
+  const portfolioFinanceTotals = useMemo(
+    () => ({
+      cost: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.cost, 0),
+      price: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.price, 0),
+      lines: portfolioFinanceFilteredRows.length,
+      billed: portfolioFinanceFilteredRows.filter((row) => row.billed).length,
+    }),
+    [portfolioFinanceFilteredRows],
+  );
+  const formatPortfolioFinanceCell = (
+    row: PortfolioFinanceRow,
+    column: PortfolioFinanceColumn,
+  ) => {
+    switch (column) {
+      case "project":
+        return row.project;
+      case "projectId":
+        return row.projectKey;
+      case "client":
+        return row.client;
+      case "product":
+        return row.product;
+      case "bpo":
+        return row.bpo;
+      case "externalOrInternal":
+        return row.externalOrInternal;
+      case "stage":
+        return row.stage;
+      case "phase":
+        return row.phase;
+      case "status":
+        return row.status;
+      case "type":
+        return row.type;
+      case "month":
+        return row.monthLabel;
+      case "unit":
+        return row.unit;
+      case "units":
+        return row.units.toLocaleString();
+      case "costPerUnit":
+        return `$${row.costPerUnit.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "cost":
+        return `$${row.cost.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "marginPct":
+        return row.marginPct == null
+          ? "—"
+          : `${(row.marginPct * 100).toFixed(2)}%`;
+      case "price":
+        return `$${row.price.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "source":
+        return row.source;
+      default:
+        return "—";
+    }
+  };
   const visibleProjectIds = sortedFiltered.map((project) => project.id);
   const allVisibleProjectsSelected =
     visibleProjectIds.length > 0 &&
@@ -6633,20 +6988,267 @@ export function ProjectCommandCenter({
             </div>
             </div>
           ) : (
-            <div className="do-command-economics-list">
-              {sortedFiltered.map((project) =>
-                renderEconomics(
-                  project,
-                  tasks.filter((task) => task.projectId === project.id),
-                ),
-              )}
-              {sortedFiltered.length === 0 && (
-                <EmptyState
-                  icon={<LayoutGrid size={20} />}
-                  title="No projects in this view"
-                  text="Change the filter or create a project through the conversation."
-                />
-              )}
+            <div
+              className="do-portfolio-finance-analyst"
+              data-testid="portfolio-finance-analyst"
+            >
+              <header className="do-portfolio-finance-analyst-head">
+                <div>
+                  <span className="do-project-card-kicker">
+                    TRANSACTIONS BY PROJECT
+                  </span>
+                  <strong>Portfolio financials</strong>
+                  <small>
+                    Analyst sheet · break down by client, period, and product ·{" "}
+                    {portfolioFinanceTotals.lines.toLocaleString()} lines ·{" "}
+                    {portfolioFinanceTotals.billed.toLocaleString()} billed
+                  </small>
+                </div>
+                <div className="do-portfolio-finance-analyst-totals">
+                  <span>Cost</span>
+                  <strong>
+                    $
+                    {portfolioFinanceTotals.cost.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </strong>
+                  <span>Price</span>
+                  <strong>
+                    $
+                    {portfolioFinanceTotals.price.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </strong>
+                </div>
+              </header>
+
+              <div className="do-portfolio-finance-filters">
+                <label>
+                  <Search size={13} />
+                  <input
+                    aria-label="Search financial lines"
+                    onChange={(event) => setFinanceSearch(event.target.value)}
+                    placeholder="Search project, client, product, source…"
+                    value={financeSearch}
+                  />
+                </label>
+                <label>
+                  Client
+                  <select
+                    aria-label="Filter by client"
+                    onChange={(event) => setFinanceClient(event.target.value)}
+                    value={financeClient}
+                  >
+                    <option value="all">All clients</option>
+                    {financeClientOptions.map((client) => (
+                      <option key={client} value={client}>
+                        {client}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Period
+                  <select
+                    aria-label="Filter by period"
+                    onChange={(event) => setFinanceMonth(event.target.value)}
+                    value={financeMonth}
+                  >
+                    <option value="all">All periods</option>
+                    {financeMonthOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {financeMonthLabel(month)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Product
+                  <select
+                    aria-label="Filter by product"
+                    onChange={(event) => setFinanceProduct(event.target.value)}
+                    value={financeProduct}
+                  >
+                    <option value="all">All products</option>
+                    {financeProductOptions.map((product) => (
+                      <option key={product} value={product}>
+                        {product}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  BPO
+                  <select
+                    aria-label="Filter by BPO"
+                    onChange={(event) => setFinanceBpo(event.target.value)}
+                    value={financeBpo}
+                  >
+                    <option value="all">All BPOs</option>
+                    {financeBpoOptions.map((bpo) => (
+                      <option key={bpo} value={bpo}>
+                        {bpo}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Type
+                  <select
+                    aria-label="Filter by charge type"
+                    onChange={(event) => setFinanceType(event.target.value)}
+                    value={financeType}
+                  >
+                    <option value="all">All types</option>
+                    {CHARGE_LINE_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Billed
+                  <select
+                    aria-label="Filter by billed status"
+                    onChange={(event) =>
+                      setFinanceBilled(
+                        event.target.value as "all" | "billed" | "unbilled",
+                      )
+                    }
+                    value={financeBilled}
+                  >
+                    <option value="all">All lines</option>
+                    <option value="billed">Billed only</option>
+                    <option value="unbilled">Unbilled only</option>
+                  </select>
+                </label>
+                <label>
+                  Group by
+                  <select
+                    aria-label="Group financial lines"
+                    onChange={(event) =>
+                      setFinanceGroupBy(
+                        event.target.value as PortfolioFinanceGroupBy,
+                      )
+                    }
+                    value={financeGroupBy}
+                  >
+                    <option value="month">Period</option>
+                    <option value="client">Client</option>
+                    <option value="product">Product</option>
+                  </select>
+                </label>
+              </div>
+
+              <details className="do-portfolio-finance-columns">
+                <summary>Columns</summary>
+                <div>
+                  {PORTFOLIO_FINANCE_COLUMNS.map((column) => (
+                    <label key={column}>
+                      <input
+                        checked={financeColumnSet.has(column)}
+                        onChange={() => toggleFinanceColumn(column)}
+                        type="checkbox"
+                      />
+                      {portfolioFinanceColumnLabels[column]}
+                    </label>
+                  ))}
+                </div>
+              </details>
+
+              <div className="do-portfolio-finance-sheet-scroll">
+                <div
+                  className="do-portfolio-finance-sheet-grid do-portfolio-finance-sheet-head"
+                  style={financeGridStyle}
+                >
+                  {financeColumns.map((column) => (
+                    <span key={column}>
+                      {portfolioFinanceColumnLabels[column]}
+                    </span>
+                  ))}
+                </div>
+
+                {portfolioFinanceGroups.map((group) => (
+                  <div
+                    className="do-portfolio-finance-group"
+                    key={`${financeGroupBy}-${group.key}`}
+                  >
+                    {group.rows.map((row) => {
+                      const typeColors = CHARGE_LINE_TYPE_COLORS[row.type];
+                      return (
+                        <div
+                          className={`do-portfolio-finance-sheet-grid do-portfolio-finance-row ${
+                            row.billed ? "is-billed" : ""
+                          }`}
+                          data-testid={
+                            row.billed
+                              ? "portfolio-finance-row-billed"
+                              : "portfolio-finance-row"
+                          }
+                          key={row.id}
+                          style={financeGridStyle}
+                        >
+                          {financeColumns.map((column) =>
+                            column === "type" ? (
+                              <span
+                                className="do-finance-charge-type"
+                                key={`${row.id}-${column}`}
+                                style={{
+                                  background: typeColors.bg,
+                                  borderColor: typeColors.border,
+                                  color: typeColors.fg,
+                                }}
+                                title={row.type}
+                              >
+                                {row.type}
+                              </span>
+                            ) : (
+                              <span
+                                key={`${row.id}-${column}`}
+                                title={String(
+                                  formatPortfolioFinanceCell(row, column),
+                                )}
+                              >
+                                {formatPortfolioFinanceCell(row, column)}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div
+                      className="do-portfolio-finance-sheet-grid do-portfolio-finance-subtotal"
+                      style={financeGridStyle}
+                    >
+                      <strong>
+                        {group.label} · {group.rows.length} lines
+                      </strong>
+                      {financeColumns.slice(1).map((column) => (
+                        <span key={`${group.key}-sub-${column}`}>
+                          {column === "cost"
+                            ? `$${group.cost.toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}`
+                            : column === "price"
+                              ? `$${group.price.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}`
+                              : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {portfolioFinanceFilteredRows.length === 0 && (
+                  <EmptyState
+                    icon={<LayoutGrid size={20} />}
+                    title="No financial lines in this view"
+                    text="Adjust client, period, or product filters — or open a project ledger to add cost lines."
+                  />
+                )}
+              </div>
             </div>
           )}
         </section>

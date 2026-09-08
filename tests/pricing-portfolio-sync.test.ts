@@ -46,13 +46,16 @@ test("maps charge types, units, and Excel quantities without inventing blanks", 
   assert.equal(mapPricingUnit("Month"), "fee");
 
   assert.deepEqual(mapChargeType("Build Fee", "External"), {
-    costType: "Direct Cost",
+    costType: "Build",
     allocationStage: "Build",
     category: "development",
     kind: "build",
   });
-  assert.equal(mapChargeType("Maintenance and Support", "Internal").costType, "Internal Cost");
-  assert.equal(mapChargeType("Consumption", "External").costType, "Pass-through Cost");
+  assert.equal(
+    mapChargeType("Maintenance and Support", "Internal").costType,
+    "Maintenance and Support",
+  );
+  assert.equal(mapChargeType("Consumption", "External").costType, "Ops Consumptions");
   assert.equal(mapChargeType("Token/Voice surcharge", "External").allocationStage, "Operations");
 
   const build = transactionQuantities({
@@ -99,7 +102,7 @@ test("builds finance periods from monthly + build transactions", () => {
     .flatMap((period) => period.entries)
     .find((entry) => entry.description.includes("Maintenance"));
   assert.ok(support);
-  assert.equal(support.costType, "Recurring Cost");
+  assert.equal(support.costType, "Maintenance and Support");
   assert.equal(support.allocationStage, "Support");
   assert.equal(support.unit, "hour");
   assert.equal(support.serviceSolution, "AI Agent");
