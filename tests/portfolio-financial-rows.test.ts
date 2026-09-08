@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildPortfolioFinanceRows,
+  ensureProjectFinanceColumn,
   filterPortfolioFinanceRows,
+  groupPortfolioFinanceByMonthThenProject,
   groupPortfolioFinanceRows,
 } from "../src/lib/portfolioFinancialRows";
 
@@ -166,4 +168,40 @@ test("groups by client, period, and product with cost/price subtotals", () => {
     byProduct.map((group) => group.key).sort(),
     ["AI Agent", "Platform", "Voice"],
   );
+});
+
+test("breaks by month chronologically then by project with cost and price totals", () => {
+  const rows = buildPortfolioFinanceRows(sampleProjects);
+  const breaks = groupPortfolioFinanceByMonthThenProject(rows);
+  assert.deepEqual(
+    breaks.map((month) => month.key),
+    ["build", "2026-01", "2026-02"],
+  );
+  assert.equal(breaks[0].label, "Build / unscheduled");
+  assert.equal(breaks[1].projects.length, 1);
+  assert.equal(breaks[1].projects[0].label, "AI Agent Claro");
+  assert.equal(breaks[1].projects[0].rows.length, 2);
+  assert.ok(breaks[1].cost > 0);
+  assert.ok(breaks[1].price > 0);
+  assert.equal(
+    breaks[1].cost,
+    breaks[1].projects.reduce((sum, project) => sum + project.cost, 0),
+  );
+});
+
+test("applies Excel-style column filters and keeps project column frozen first", () => {
+  const rows = buildPortfolioFinanceRows(sampleProjects);
+  const filtered = filterPortfolioFinanceRows(rows, {
+    columnFilters: {
+      type: ["Ops Consumptions"],
+      client: ["Claro Argentina"],
+    },
+  });
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].type, "Ops Consumptions");
+  assert.deepEqual(ensureProjectFinanceColumn(["client", "cost"]), [
+    "project",
+    "client",
+    "cost",
+  ]);
 });
