@@ -42,6 +42,9 @@ export interface Workspace {
   color?: string;
   description?: string;
   roles?: Record<string, string>;
+  portfolioImportKey?: string | null;
+  portfolioImportSource?: string | null;
+  portfolioImportCount?: number | null;
 }
 
 interface AuthContextType {
