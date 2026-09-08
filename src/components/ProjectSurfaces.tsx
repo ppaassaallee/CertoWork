@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   AlertTriangle,
@@ -83,6 +84,7 @@ import {
 import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { collabProjectPath } from "../lib/collabModule";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import {
   collaborationShareGrant,
@@ -664,6 +666,13 @@ export function ProjectRecordModal({
   onAddMilestone: (title: string) => Promise<void> | void;
   onAddRisk: (title: string) => Promise<void> | void;
 }) {
+  const navigate = useNavigate();
+  const openCollabProject = (projectId: string) => {
+    navigate(collabProjectPath(projectId));
+  };
+  const openFinanceLine = (financeLineId: string) => {
+    navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+  };
   const [tab, setTab] = useState<
     "overview" | "plan" | "work" | "risks" | "docs" | "team"
   >("overview");
@@ -1133,6 +1142,8 @@ export function ProjectRecordModal({
                   onAddTask(title, status, { ...patch, projectId })
                 }
                 onAsk={onAsk}
+                onOpenCollabProject={openCollabProject}
+                onOpenFinanceLine={openFinanceLine}
                 onOpenProjectConsole={() => undefined}
                 onSelectItem={setSelectedWorkItemId}
                 onUpdateTask={onUpdateTask}
@@ -1513,6 +1524,13 @@ export function ProjectConsolePanel({
     name: string,
   ) => Promise<string | void> | string | void;
 }) {
+  const navigate = useNavigate();
+  const openCollabProject = (projectId: string) => {
+    navigate(collabProjectPath(projectId));
+  };
+  const openFinanceLine = (financeLineId: string) => {
+    navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+  };
   const mobileCore = useMobileCore();
   const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1966,6 +1984,8 @@ export function ProjectConsolePanel({
             onAsk={onAsk}
             onCreateControlledOption={onCreateControlledOption}
             onCreateSprint={onCreateSprint}
+            onOpenCollabProject={openCollabProject}
+            onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}
             onSelectItem={setSelectedWorkItemId}
             onUpdateSprint={onUpdateSprint}

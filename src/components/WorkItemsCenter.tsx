@@ -1850,7 +1850,6 @@ export function WorkItemsCenter({
       {(() => {
         const comments = Array.isArray(item?.comments) ? item.comments : [];
         const mentioned = itemMentionsViewer(item, viewerAliases);
-        if (comments.length === 0 && !mentioned) return null;
         return (
           <div
             className={`do-item-attr is-collab ${comments.length || mentioned ? "is-on" : "is-off"} ${mentioned ? "is-mention" : ""}`}
@@ -1860,7 +1859,9 @@ export function WorkItemsCenter({
               aria-label={
                 mentioned
                   ? `You were mentioned in comments on ${title(item)}`
-                  : `${comments.length} comment${comments.length === 1 ? "" : "s"} on ${title(item)}`
+                  : comments.length
+                    ? `${comments.length} comment${comments.length === 1 ? "" : "s"} on ${title(item)}`
+                    : `Ask a teammate about ${title(item)}`
               }
               className="do-item-attr-btn"
               data-testid="item-attr-collab"
@@ -1871,7 +1872,9 @@ export function WorkItemsCenter({
               title={
                 mentioned
                   ? "Collab: you were @mentioned — open to reply"
-                  : `Collab activity · ${comments.length} comment${comments.length === 1 ? "" : "s"}`
+                  : comments.length
+                    ? `Collab activity · ${comments.length} comment${comments.length === 1 ? "" : "s"}`
+                    : "Ask with @ or open Collab chat"
               }
               type="button"
             >
@@ -3651,6 +3654,50 @@ export function WorkItemsCenter({
               </div>
             </div>
             <div className="do-ai-inline-field"><InlineText ariaLabel="Selected item title" onCommit={(next) => next && onUpdateTask(selectedItem.id, { title: next })} value={title(selectedItem)} /><AiRewriteButton context={{ itemType: workItemKind(selectedItem), project: currentProject ? projectTitle(currentProject) : "No project" }} fieldKind="work_item_title" onRewrite={(next) => onUpdateTask(selectedItem.id, { title: next })} text={title(selectedItem)} /></div>
+            {isFinanceLineTask(selectedItem) && onOpenFinanceLine && financeLineIdFromTask(selectedItem) && (
+              <div className="do-item-finance-banner" data-testid="item-finance-banner">
+                <div>
+                  <strong>Finance follow-up</strong>
+                  <small>This PBI tracks a specific portfolio financials line.</small>
+                </div>
+                <button
+                  onClick={() => onOpenFinanceLine(financeLineIdFromTask(selectedItem))}
+                  type="button"
+                >
+                  <BarChart3 size={13} /> Open finance line
+                </button>
+              </div>
+            )}
+            <div className="do-item-collab-strip" data-testid="item-collab-strip">
+              <div>
+                <strong>Ask the team</strong>
+                <small>Comment with @ below, or jump into the live Collab room.</small>
+              </div>
+              <div className="do-item-collab-strip-actions">
+                <button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>(
+                      '[data-testid="item-comments"] input[aria-label="Add a comment"]',
+                    );
+                    input?.scrollIntoView({ block: "center" });
+                    input?.focus();
+                    if (!commentDraft.includes("@")) setCommentDraft(`${commentDraft}@`);
+                    setCommentMentionOpen(true);
+                  }}
+                  type="button"
+                >
+                  <MessageSquare size={13} /> Ask with @
+                </button>
+                {currentProject && onOpenCollabProject && (
+                  <button
+                    onClick={() => onOpenCollabProject(currentProject.id)}
+                    type="button"
+                  >
+                    <MessageSquare size={13} /> Discuss in Collab
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="do-ai-description-field"><textarea
               aria-label="Selected item description"
               onBlur={() => detailDescription !== String(selectedItem.description || selectedItem.definitionOfDone || "") && onUpdateTask(selectedItem.id, { description: detailDescription })}
