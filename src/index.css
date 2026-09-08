@@ -15350,6 +15350,11 @@ a {
   .do-portfolio-finance-filters label:first-child {
     grid-column: 1 / -1;
   }
+  .do-portfolio-finance-table thead th.is-frozen,
+  .do-portfolio-finance-table td.is-frozen {
+    min-width: 180px;
+    max-width: 200px;
+  }
   .do-finance-summary,
   .do-finance-ledger.is-compact .do-finance-summary {
     grid-template-columns: 1fr 1fr;
