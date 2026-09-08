@@ -12,8 +12,10 @@ import {
 import type { WorkspaceMember } from "./workspaceCollaboration";
 import {
   PORTFOLIO_MASTER_IMPORT_KEY,
+  PORTFOLIO_CLEARED_KEY,
   PORTFOLIO_MASTER_SOURCE,
   buildPortfolioProjectPayload,
+  isPureAiWorkspace,
   resolvePortfolioShareTargets,
   shouldReplacePureAiPortfolio,
   type PortfolioMasterRow,
@@ -33,6 +35,68 @@ async function commitInChunks(
     operations.slice(index, index + BATCH_LIMIT).forEach((operation) => operation(batch));
     await batch.commit();
   }
+}
+
+/**
+ * Delete all projects in the Pure AI workspace (and tasks that belong to those
+ * projects). Leaves My Work items without a projectId untouched. Does not
+ * re-import the master sheet.
+ */
+export async function clearPureAiProjects(input: {
+  db: Firestore;
+  user: { uid: string; email?: string | null };
+  workspace: {
+    id: string;
+    name?: string;
+    ownerId?: string;
+    portfolioImportKey?: string | null;
+  };
+}) {
+  if (!isPureAiWorkspace(input.workspace)) {
+    return { skipped: true as const, reason: "not-pure-ai" };
+  }
+  if (input.workspace.ownerId !== input.user.uid) {
+    return { skipped: true as const, reason: "not-owner" };
+  }
+
+  const projectsSnap = await getDocs(
+    query(collection(input.db, "projects"), where("workspaceId", "==", input.workspace.id)),
+  );
+  const tasksSnap = await getDocs(
+    query(collection(input.db, "tasks"), where("workspaceId", "==", input.workspace.id)),
+  );
+  const projectIds = new Set(projectsSnap.docs.map((item) => item.id));
+  // Only remove work tied to Pure AI projects — keep My Work / no-project items.
+  const projectTaskDeletes = tasksSnap.docs.filter((item) => {
+    const projectId = String(item.data().projectId || "").trim();
+    return Boolean(projectId) && projectIds.has(projectId);
+  });
+
+  const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [
+    ...projectTaskDeletes.map((item) => (batch: ReturnType<typeof writeBatch>) =>
+      batch.delete(item.ref),
+    ),
+    ...projectsSnap.docs.map((item) => (batch: ReturnType<typeof writeBatch>) =>
+      batch.delete(item.ref),
+    ),
+  ];
+  await commitInChunks(input.db, deletions);
+
+  await updateDoc(doc(input.db, "workspaces", input.workspace.id), {
+    portfolioImportKey: PORTFOLIO_CLEARED_KEY,
+    portfolioImportSource: null,
+    portfolioImportCount: 0,
+    portfolioImportAt: serverTimestamp(),
+    portfolioClearedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return {
+    skipped: false as const,
+    removedProjects: projectsSnap.size,
+    removedProjectTasks: projectTaskDeletes.length,
+    preservedMyWorkTasks: tasksSnap.size - projectTaskDeletes.length,
+  };
 }
 
 export async function replacePureAiPortfolioFromMaster(input: {
