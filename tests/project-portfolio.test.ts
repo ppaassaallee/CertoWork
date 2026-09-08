@@ -5,36 +5,98 @@ import {
   sidebarProjectGroups,
   sortProjectsByRecency,
   taskWorkLane,
+  upcomingProjectCheckpoints,
 } from "../src/lib/projectPortfolio";
 
 test("puts favorite projects first and keeps the six latest non-favorites", () => {
-    const projects = [
-      { id: "old", title: "Old", updatedAt: 1 },
-      { id: "favorite", title: "Favorite", favorite: true, updatedAt: 2 },
-      { id: "recent-1", title: "Recent 1", updatedAt: 5 },
-      { id: "recent-2", title: "Recent 2", updatedAt: 4 },
-      { id: "recent-3", title: "Recent 3", updatedAt: 3 },
-    ];
-    const groups = sidebarProjectGroups(projects);
+  const projects = [
+    { id: "old", title: "Old", updatedAt: 1 },
+    { id: "favorite", title: "Favorite", favorite: true, updatedAt: 2 },
+    { id: "recent-1", title: "Recent 1", updatedAt: 5 },
+    { id: "recent-2", title: "Recent 2", updatedAt: 4 },
+    { id: "recent-3", title: "Recent 3", updatedAt: 3 },
+  ];
+  const groups = sidebarProjectGroups(projects);
   assert.deepEqual(groups.favorites.map((project) => project.id), ["favorite"]);
-  assert.deepEqual(groups.recent.map((project) => project.id), ["recent-1", "recent-2", "recent-3", "old"]);
+  assert.deepEqual(groups.recent.map((project) => project.id), [
+    "recent-1",
+    "recent-2",
+    "recent-3",
+    "old",
+  ]);
 });
 
 test("does not hide a just-created project behind insertion order", () => {
-    const sorted = sortProjectsByRecency([
-      { id: "legacy", updatedAt: { seconds: 10 } },
-      { id: "new", createdAt: { seconds: 100 } },
-    ]);
+  const sorted = sortProjectsByRecency([
+    { id: "legacy", updatedAt: { seconds: 10 } },
+    { id: "new", createdAt: { seconds: 100 } },
+  ]);
   assert.equal(sorted[0].id, "new");
 });
 
 test("derives project health and Jira-like work lanes from real records", () => {
   assert.equal(projectHealth({}, [{ status: "blocked" }], []), "blocked");
   assert.equal(projectHealth({}, [], [{ status: "open" }]), "at_risk");
-  assert.equal(projectHealth({}, [], [{ status: "open", severity: "critical" }]), "blocked");
-  assert.equal(projectHealth({ status: "active", dueDate: "2020-01-01" }, [], []), "at_risk");
-  assert.equal(projectHealth({ healthOverride: "on_track", dueDate: "2020-01-01" }, [{ status: "blocked" }], []), "on_track");
-  assert.equal(projectHealth({ importedFrom: "pipeline", health: "on_track" }, [{ status: "blocked" }], []), "blocked");
+  assert.equal(
+    projectHealth({}, [], [{ status: "open", severity: "critical" }]),
+    "blocked",
+  );
+  assert.equal(
+    projectHealth({ status: "active", dueDate: "2020-01-01" }, [], []),
+    "at_risk",
+  );
+  assert.equal(
+    projectHealth(
+      { healthOverride: "on_track", dueDate: "2020-01-01" },
+      [{ status: "blocked" }],
+      [],
+    ),
+    "on_track",
+  );
+  assert.equal(
+    projectHealth(
+      { importedFrom: "pipeline", health: "on_track" },
+      [{ status: "blocked" }],
+      [],
+    ),
+    "blocked",
+  );
   assert.equal(taskWorkLane({ status: "in_progress" }), "in_progress");
   assert.equal(taskWorkLane({ status: "open" }), "backlog");
+});
+
+test("Next Exits skips deleted and closed projects", () => {
+  const rows = upcomingProjectCheckpoints(
+    [
+      {
+        id: "deleted-x",
+        title: "X AI Agent PTC AI Collections Agent Banrural Allied Global 2026",
+        status: "deleted",
+        dueDate: "2026-05-01",
+      },
+      {
+        id: "active-soon",
+        title: "Active Banrural",
+        status: "active",
+        dueDate: "2026-06-01",
+      },
+      {
+        id: "archived",
+        title: "Archived",
+        status: "archived",
+        dueDate: "2026-04-01",
+      },
+      {
+        id: "active-later",
+        title: "Later",
+        status: "planning",
+        dueDate: "2026-08-01",
+      },
+    ],
+    8,
+  );
+  assert.deepEqual(
+    rows.map((project) => project.id),
+    ["active-soon", "active-later"],
+  );
 });
