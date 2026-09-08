@@ -78,6 +78,17 @@ import {
   normalizeChargeLineType,
   type ChargeLineType,
 } from "../lib/financeChargeTypes";
+import {
+  PORTFOLIO_FINANCE_COLUMNS,
+  buildPortfolioFinanceRows,
+  defaultPortfolioFinanceColumns,
+  filterPortfolioFinanceRows,
+  groupPortfolioFinanceRows,
+  portfolioFinanceColumnLabels,
+  type PortfolioFinanceColumn,
+  type PortfolioFinanceGroupBy,
+  type PortfolioFinanceRow,
+} from "../lib/portfolioFinancialRows";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
@@ -4179,11 +4190,26 @@ function ProjectFinanceLedger({
                           }
                         />
                         <select
+                          className="do-finance-charge-type"
                           onChange={(event) =>
                             updateEntry(period.id, entry.id, {
                               costType: event.target.value,
                             })
                           }
+                          style={{
+                            background:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].bg,
+                            color:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].fg,
+                            borderColor:
+                              CHARGE_LINE_TYPE_COLORS[
+                                normalizeChargeLineType(entry)
+                              ].border,
+                          }}
                           value={normalizeChargeLineType(entry)}
                         >
                           {COST_TYPES.map((type) => (
@@ -4873,6 +4899,32 @@ export function ProjectCommandCenter({
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<PortfolioView>("dashboard");
+  const [financeSearch, setFinanceSearch] = useState("");
+  const [financeClient, setFinanceClient] = useState("all");
+  const [financeBpo, setFinanceBpo] = useState("all");
+  const [financeProduct, setFinanceProduct] = useState("all");
+  const [financeMonth, setFinanceMonth] = useState("all");
+  const [financeType, setFinanceType] = useState("all");
+  const [financeBilled, setFinanceBilled] = useState<"all" | "billed" | "unbilled">(
+    "all",
+  );
+  const [financeGroupBy, setFinanceGroupBy] =
+    useState<PortfolioFinanceGroupBy>("month");
+  const [financeColumns, setFinanceColumns] = useState<PortfolioFinanceColumn[]>(
+    () => {
+      if (typeof window === "undefined") return defaultPortfolioFinanceColumns;
+      try {
+        const stored = JSON.parse(
+          window.localStorage.getItem("certo-portfolio-finance-columns") || "null",
+        );
+        return Array.isArray(stored) && stored.length
+          ? stored
+          : defaultPortfolioFinanceColumns;
+      } catch {
+        return defaultPortfolioFinanceColumns;
+      }
+    },
+  );
   const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
@@ -5127,6 +5179,159 @@ export function ProjectCommandCenter({
     }
     return projectTitle(left).localeCompare(projectTitle(right));
   });
+  const financeSourceProjects = sortedFiltered.filter(
+    (project) =>
+      !["deleted", "archived", "cancelled"].includes(
+        String(project.status || "").toLowerCase(),
+      ),
+  );
+  const portfolioFinanceAllRows = useMemo(
+    () => buildPortfolioFinanceRows(financeSourceProjects),
+    [financeSourceProjects],
+  );
+  const portfolioFinanceFilteredRows = useMemo(
+    () =>
+      filterPortfolioFinanceRows(portfolioFinanceAllRows, {
+        search: financeSearch,
+        client: financeClient,
+        bpo: financeBpo,
+        product: financeProduct,
+        month: financeMonth,
+        type: financeType,
+        billed: financeBilled,
+      }),
+    [
+      portfolioFinanceAllRows,
+      financeSearch,
+      financeClient,
+      financeBpo,
+      financeProduct,
+      financeMonth,
+      financeType,
+      financeBilled,
+    ],
+  );
+  const portfolioFinanceGroups = useMemo(
+    () => groupPortfolioFinanceRows(portfolioFinanceFilteredRows, financeGroupBy),
+    [portfolioFinanceFilteredRows, financeGroupBy],
+  );
+  const financeClientOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.client))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeBpoOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.bpo))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeProductOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.product))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeMonthOptions = useMemo(
+    () =>
+      [...new Set(portfolioFinanceAllRows.map((row) => row.monthKey))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [portfolioFinanceAllRows],
+  );
+  const financeColumnSet = new Set(financeColumns);
+  const financeGridStyle = {
+    gridTemplateColumns: financeColumns
+      .map((column) => {
+        if (column === "project") return "minmax(220px, 1.4fr)";
+        if (column === "source") return "minmax(160px, 1fr)";
+        if (["cost", "price", "costPerUnit", "units", "marginPct"].includes(column))
+          return "110px";
+        if (column === "type") return "170px";
+        if (column === "projectId") return "160px";
+        return "130px";
+      })
+      .join(" "),
+  };
+  const toggleFinanceColumn = (column: PortfolioFinanceColumn) => {
+    setFinanceColumns((current) => {
+      const next = current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column];
+      const safe = next.length ? next : defaultPortfolioFinanceColumns;
+      window.localStorage.setItem(
+        "certo-portfolio-finance-columns",
+        JSON.stringify(safe),
+      );
+      return safe;
+    });
+  };
+  const portfolioFinanceTotals = useMemo(
+    () => ({
+      cost: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.cost, 0),
+      price: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.price, 0),
+      lines: portfolioFinanceFilteredRows.length,
+      billed: portfolioFinanceFilteredRows.filter((row) => row.billed).length,
+    }),
+    [portfolioFinanceFilteredRows],
+  );
+  const formatPortfolioFinanceCell = (
+    row: PortfolioFinanceRow,
+    column: PortfolioFinanceColumn,
+  ) => {
+    switch (column) {
+      case "project":
+        return row.project;
+      case "projectId":
+        return row.projectKey;
+      case "client":
+        return row.client;
+      case "product":
+        return row.product;
+      case "bpo":
+        return row.bpo;
+      case "externalOrInternal":
+        return row.externalOrInternal;
+      case "stage":
+        return row.stage;
+      case "phase":
+        return row.phase;
+      case "status":
+        return row.status;
+      case "type":
+        return row.type;
+      case "month":
+        return row.monthLabel;
+      case "unit":
+        return row.unit;
+      case "units":
+        return row.units.toLocaleString();
+      case "costPerUnit":
+        return `$${row.costPerUnit.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "cost":
+        return `$${row.cost.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "marginPct":
+        return row.marginPct == null
+          ? "—"
+          : `${(row.marginPct * 100).toFixed(2)}%`;
+      case "price":
+        return `$${row.price.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}`;
+      case "source":
+        return row.source;
+      default:
+        return "—";
+    }
+  };
   const visibleProjectIds = sortedFiltered.map((project) => project.id);
   const allVisibleProjectsSelected =
     visibleProjectIds.length > 0 &&
@@ -6794,20 +6999,267 @@ export function ProjectCommandCenter({
             </div>
             </div>
           ) : (
-            <div className="do-command-economics-list">
-              {sortedFiltered.map((project) =>
-                renderEconomics(
-                  project,
-                  tasks.filter((task) => task.projectId === project.id),
-                ),
-              )}
-              {sortedFiltered.length === 0 && (
-                <EmptyState
-                  icon={<LayoutGrid size={20} />}
-                  title="No projects in this view"
-                  text="Change the filter or create a project through the conversation."
-                />
-              )}
+            <div
+              className="do-portfolio-finance-analyst"
+              data-testid="portfolio-finance-analyst"
+            >
+              <header className="do-portfolio-finance-analyst-head">
+                <div>
+                  <span className="do-project-card-kicker">
+                    TRANSACTIONS BY PROJECT
+                  </span>
+                  <strong>Portfolio financials</strong>
+                  <small>
+                    Analyst sheet · break down by client, period, and product ·{" "}
+                    {portfolioFinanceTotals.lines.toLocaleString()} lines ·{" "}
+                    {portfolioFinanceTotals.billed.toLocaleString()} billed
+                  </small>
+                </div>
+                <div className="do-portfolio-finance-analyst-totals">
+                  <span>Cost</span>
+                  <strong>
+                    $
+                    {portfolioFinanceTotals.cost.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </strong>
+                  <span>Price</span>
+                  <strong>
+                    $
+                    {portfolioFinanceTotals.price.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}
+                  </strong>
+                </div>
+              </header>
+
+              <div className="do-portfolio-finance-filters">
+                <label>
+                  <Search size={13} />
+                  <input
+                    aria-label="Search financial lines"
+                    onChange={(event) => setFinanceSearch(event.target.value)}
+                    placeholder="Search project, client, product, source…"
+                    value={financeSearch}
+                  />
+                </label>
+                <label>
+                  Client
+                  <select
+                    aria-label="Filter by client"
+                    onChange={(event) => setFinanceClient(event.target.value)}
+                    value={financeClient}
+                  >
+                    <option value="all">All clients</option>
+                    {financeClientOptions.map((client) => (
+                      <option key={client} value={client}>
+                        {client}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Period
+                  <select
+                    aria-label="Filter by period"
+                    onChange={(event) => setFinanceMonth(event.target.value)}
+                    value={financeMonth}
+                  >
+                    <option value="all">All periods</option>
+                    {financeMonthOptions.map((month) => (
+                      <option key={month} value={month}>
+                        {financeMonthLabel(month)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Product
+                  <select
+                    aria-label="Filter by product"
+                    onChange={(event) => setFinanceProduct(event.target.value)}
+                    value={financeProduct}
+                  >
+                    <option value="all">All products</option>
+                    {financeProductOptions.map((product) => (
+                      <option key={product} value={product}>
+                        {product}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  BPO
+                  <select
+                    aria-label="Filter by BPO"
+                    onChange={(event) => setFinanceBpo(event.target.value)}
+                    value={financeBpo}
+                  >
+                    <option value="all">All BPOs</option>
+                    {financeBpoOptions.map((bpo) => (
+                      <option key={bpo} value={bpo}>
+                        {bpo}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Type
+                  <select
+                    aria-label="Filter by charge type"
+                    onChange={(event) => setFinanceType(event.target.value)}
+                    value={financeType}
+                  >
+                    <option value="all">All types</option>
+                    {CHARGE_LINE_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Billed
+                  <select
+                    aria-label="Filter by billed status"
+                    onChange={(event) =>
+                      setFinanceBilled(
+                        event.target.value as "all" | "billed" | "unbilled",
+                      )
+                    }
+                    value={financeBilled}
+                  >
+                    <option value="all">All lines</option>
+                    <option value="billed">Billed only</option>
+                    <option value="unbilled">Unbilled only</option>
+                  </select>
+                </label>
+                <label>
+                  Group by
+                  <select
+                    aria-label="Group financial lines"
+                    onChange={(event) =>
+                      setFinanceGroupBy(
+                        event.target.value as PortfolioFinanceGroupBy,
+                      )
+                    }
+                    value={financeGroupBy}
+                  >
+                    <option value="month">Period</option>
+                    <option value="client">Client</option>
+                    <option value="product">Product</option>
+                  </select>
+                </label>
+              </div>
+
+              <details className="do-portfolio-finance-columns">
+                <summary>Columns</summary>
+                <div>
+                  {PORTFOLIO_FINANCE_COLUMNS.map((column) => (
+                    <label key={column}>
+                      <input
+                        checked={financeColumnSet.has(column)}
+                        onChange={() => toggleFinanceColumn(column)}
+                        type="checkbox"
+                      />
+                      {portfolioFinanceColumnLabels[column]}
+                    </label>
+                  ))}
+                </div>
+              </details>
+
+              <div className="do-portfolio-finance-sheet-scroll">
+                <div
+                  className="do-portfolio-finance-sheet-grid do-portfolio-finance-sheet-head"
+                  style={financeGridStyle}
+                >
+                  {financeColumns.map((column) => (
+                    <span key={column}>
+                      {portfolioFinanceColumnLabels[column]}
+                    </span>
+                  ))}
+                </div>
+
+                {portfolioFinanceGroups.map((group) => (
+                  <div
+                    className="do-portfolio-finance-group"
+                    key={`${financeGroupBy}-${group.key}`}
+                  >
+                    {group.rows.map((row) => {
+                      const typeColors = CHARGE_LINE_TYPE_COLORS[row.type];
+                      return (
+                        <div
+                          className={`do-portfolio-finance-sheet-grid do-portfolio-finance-row ${
+                            row.billed ? "is-billed" : ""
+                          }`}
+                          data-testid={
+                            row.billed
+                              ? "portfolio-finance-row-billed"
+                              : "portfolio-finance-row"
+                          }
+                          key={row.id}
+                          style={financeGridStyle}
+                        >
+                          {financeColumns.map((column) =>
+                            column === "type" ? (
+                              <span
+                                className="do-finance-charge-type"
+                                key={`${row.id}-${column}`}
+                                style={{
+                                  background: typeColors.bg,
+                                  borderColor: typeColors.border,
+                                  color: typeColors.fg,
+                                }}
+                                title={row.type}
+                              >
+                                {row.type}
+                              </span>
+                            ) : (
+                              <span
+                                key={`${row.id}-${column}`}
+                                title={String(
+                                  formatPortfolioFinanceCell(row, column),
+                                )}
+                              >
+                                {formatPortfolioFinanceCell(row, column)}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div
+                      className="do-portfolio-finance-sheet-grid do-portfolio-finance-subtotal"
+                      style={financeGridStyle}
+                    >
+                      <strong>
+                        {group.label} · {group.rows.length} lines
+                      </strong>
+                      {financeColumns.slice(1).map((column) => (
+                        <span key={`${group.key}-sub-${column}`}>
+                          {column === "cost"
+                            ? `$${group.cost.toLocaleString(undefined, {
+                                maximumFractionDigits: 0,
+                              })}`
+                            : column === "price"
+                              ? `$${group.price.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}`
+                              : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {portfolioFinanceFilteredRows.length === 0 && (
+                  <EmptyState
+                    icon={<LayoutGrid size={20} />}
+                    title="No financial lines in this view"
+                    text="Adjust client, period, or product filters — or open a project ledger to add cost lines."
+                  />
+                )}
+              </div>
             </div>
           )}
         </section>
