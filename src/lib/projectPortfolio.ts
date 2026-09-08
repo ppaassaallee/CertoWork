@@ -38,6 +38,33 @@ export function isProjectClosed(project: any) {
   );
 }
 
+export function projectCheckpointDate(project: any) {
+  return (
+    String(
+      project?.revisedDueDate ||
+        project?.dueDate ||
+        project?.targetDate ||
+        project?.originalDueDate ||
+        "",
+    ).slice(0, 10) || ""
+  );
+}
+
+/**
+ * Live portfolio checkpoints for dashboard "Next Exits".
+ * Soft-deleted / archived / completed projects never appear here.
+ */
+export function upcomingProjectCheckpoints(projects: any[], limit = 8) {
+  return [...projects]
+    .filter((project) => !isProjectClosed(project))
+    .sort((left, right) => {
+      const leftDate = projectCheckpointDate(left) || "9999-12-31";
+      const rightDate = projectCheckpointDate(right) || "9999-12-31";
+      return leftDate.localeCompare(rightDate);
+    })
+    .slice(0, Math.max(0, limit));
+}
+
 export function sidebarProjectGroups(projects: any[]) {
   const sorted = sortProjectsByRecency(projects).filter((project) => !isProjectClosed(project));
   const favorites = sorted.filter(isProjectFavorite).slice(0, 4);

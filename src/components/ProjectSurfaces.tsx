@@ -33,12 +33,14 @@ import {
 import {
   PROJECT_HEALTH,
   PROJECT_STATUSES,
+  isProjectClosed,
   isProjectFavorite,
   projectHealth,
   projectHealthLabel,
   projectStatusLabel,
   sortProjectsByRecency,
   taskWorkLane,
+  upcomingProjectCheckpoints,
   type WorkLane,
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
@@ -4995,19 +4997,14 @@ export function ProjectCommandCenter({
       ...new Set([...current, ...visibleProjectIds]),
     ]);
   };
-  const openProjects = portfolio.filter(
-    (project) =>
-      !["completed", "archived", "done", "deleted", "cancelled"].includes(
-        String(project.status || "").toLowerCase(),
-      ),
-  );
+  const openProjects = portfolio.filter((project) => !isProjectClosed(project));
   const allAttention = openProjects.filter((project) => {
     const projectTasks = tasks.filter((task) => task.projectId === project.id);
     const projectRisks = risks.filter((risk) => risk.projectId === project.id);
     return projectHealth(project, projectTasks, projectRisks) !== "on_track";
   });
   const attention = allAttention.slice(0, 3);
-  const allRows = realProjects.map((project) =>
+  const allRows = openProjects.map((project) =>
     projectSummary(
       project,
       tasks.filter((task) => task.projectId === project.id),
@@ -5024,13 +5021,13 @@ export function ProjectCommandCenter({
   );
   const stageCounts = DELIVERY_STAGES.map((stage) => ({
     stage,
-    count: realProjects.filter((project) => deliveryStage(project) === stage)
+    count: openProjects.filter((project) => deliveryStage(project) === stage)
       .length,
   }));
   const healthCounts = (["on_track", "at_risk", "blocked"] as const).map(
     (health) => ({
       health,
-      count: realProjects.filter(
+      count: openProjects.filter(
         (project) =>
           projectHealth(
             project,
@@ -5040,25 +5037,17 @@ export function ProjectCommandCenter({
       ).length,
     }),
   );
-  const upcomingProjects = [...realProjects]
-    .sort((left, right) => {
-      const leftDate = projectDueDate(left);
-      const rightDate = projectDueDate(right);
-      if (leftDate === "No date") return 1;
-      if (rightDate === "No date") return -1;
-      return leftDate.localeCompare(rightDate);
-    })
-    .slice(0, 8);
+  const upcomingProjects = upcomingProjectCheckpoints(openProjects, 8);
   const taxonomyBreakdown = [
     ...new Set(
-      realProjects.map((project) =>
+      openProjects.map((project) =>
         portfolioDimensionValue(project, taxonomyDimension, tasks, risks),
       ),
     ),
   ]
     .map((value) => ({
       value,
-      count: realProjects.filter(
+      count: openProjects.filter(
         (project) =>
           portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
           value,
@@ -5351,7 +5340,7 @@ export function ProjectCommandCenter({
                     </span>
                     <h3>Projects by stage</h3>
                   </div>
-                  <span>{realProjects.length} total</span>
+                  <span>{openProjects.length} total</span>
                 </div>
                 <div className="do-stage-bars">
                   {stageCounts.map(({ stage, count }) => (
@@ -5371,7 +5360,7 @@ export function ProjectCommandCenter({
                       <i>
                         <em
                           style={{
-                            width: `${realProjects.length ? Math.max(4, (count / realProjects.length) * 100) : 0}%`,
+                            width: `${openProjects.length ? Math.max(4, (count / openProjects.length) * 100) : 0}%`,
                           }}
                         />
                       </i>
