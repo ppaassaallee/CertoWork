@@ -562,6 +562,16 @@ export function DelivereeWorkspace() {
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
+  const [highlightFinanceLineId, setHighlightFinanceLineId] = useState<string | null>(
+    () => {
+      if (typeof window === "undefined") return null;
+      return new URLSearchParams(window.location.search).get("financeLine");
+    },
+  );
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(location.search).get("financeLine");
+    if (fromUrl) setHighlightFinanceLineId(fromUrl);
+  }, [location.search]);
   const [notice, setNotice] = useState("");
   const [cleanSlateOpen, setCleanSlateOpen] = useState(false);
   const [cleanConfirmText, setCleanConfirmText] = useState("");
@@ -6188,6 +6198,11 @@ export function DelivereeWorkspace() {
               goCenterView("conversation");
             }}
             onCreateSprint={createSprint}
+            onOpenCollabProject={(projectId) => navigate(collabProjectPath(projectId))}
+            onOpenFinanceLine={(financeLineId) => {
+              setHighlightFinanceLineId(financeLineId);
+              navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+            }}
             onOpenProjectConsole={openProjectRecord}
             onSelectItem={setSelectedWorkItemId}
             onCreateControlledOption={createControlledOption}
@@ -6319,6 +6334,8 @@ export function DelivereeWorkspace() {
           />
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
+            highlightFinanceLineId={highlightFinanceLineId}
+            initialPortfolioView={highlightFinanceLineId ? "economics" : undefined}
             onArchiveProject={archiveProject}
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
@@ -6327,8 +6344,26 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onAddFinanceTask={async (projectId, title, status, patch) =>
+              addProjectTask(projectId, title, status, patch || {})
+            }
             onCreateControlledOption={createControlledOption}
+            onFinanceHighlightConsumed={() => {
+              setHighlightFinanceLineId(null);
+              const params = new URLSearchParams(location.search);
+              if (params.has("financeLine")) {
+                params.delete("financeLine");
+                navigate(
+                  `${location.pathname}${params.toString() ? `?${params}` : ""}`,
+                  { replace: true },
+                );
+              }
+            }}
             onOpenProject={openProjectRecord}
+            onOpenWorkItem={(taskId) => {
+              setSelectedWorkItemId(taskId);
+              navigate("/my-work");
+            }}
             onUpdateProject={updateProject}
             onApplyProjectTemplate={applyProjectTemplate}
             onCreateProjectTemplate={createProjectTemplate}

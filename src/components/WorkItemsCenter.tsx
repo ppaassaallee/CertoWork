@@ -43,6 +43,7 @@ import {
   Timer,
   Trash,
   User,
+  MessageSquare,
   X,
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
@@ -57,6 +58,10 @@ import {
   collaborationShareGrant,
   withCollaboratorAccess,
 } from "../lib/collaborationAccess";
+import {
+  financeLineIdFromTask,
+  isFinanceLineTask,
+} from "../lib/financeBillingStatuses";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn } from "../lib/kanbanBoard";
@@ -159,6 +164,8 @@ type Props = {
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
+  onOpenFinanceLine?: (financeLineId: string) => void;
+  onOpenCollabProject?: (projectId: string) => void;
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
   onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
   compact?: boolean;
@@ -708,6 +715,8 @@ export function WorkItemsCenter({
   onUpdateTask,
   onCreateControlledOption,
   onOpenProjectConsole,
+  onOpenFinanceLine,
+  onOpenCollabProject,
   onCreateSprint,
   onUpdateSprint: _onUpdateSprint,
   compact = false,
@@ -796,6 +805,7 @@ export function WorkItemsCenter({
   const [calendarAnchor, setCalendarAnchor] = useState(() => new Date());
   const [checklistDraft, setChecklistDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
+  const [commentMentionOpen, setCommentMentionOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [bouncingId, setBouncingId] = useState<string | null>(null);
   const bounceTimer = useRef<number | null>(null);
@@ -1838,6 +1848,42 @@ export function WorkItemsCenter({
   const renderAttributeIcons = (item: any) => (
     <div className="do-item-attrs" data-testid="item-attr-icons">
       {(() => {
+        const comments = Array.isArray(item?.comments) ? item.comments : [];
+        const mentioned = itemMentionsViewer(item, viewerAliases);
+        if (comments.length === 0 && !mentioned) return null;
+        return (
+          <div
+            className={`do-item-attr is-collab ${comments.length || mentioned ? "is-on" : "is-off"} ${mentioned ? "is-mention" : ""}`}
+            key="collab"
+          >
+            <button
+              aria-label={
+                mentioned
+                  ? `You were mentioned in comments on ${title(item)}`
+                  : `${comments.length} comment${comments.length === 1 ? "" : "s"} on ${title(item)}`
+              }
+              className="do-item-attr-btn"
+              data-testid="item-attr-collab"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectItem(item.id);
+              }}
+              title={
+                mentioned
+                  ? "Collab: you were @mentioned — open to reply"
+                  : `Collab activity · ${comments.length} comment${comments.length === 1 ? "" : "s"}`
+              }
+              type="button"
+            >
+              <MessageSquare size={13} />
+              {comments.length > 0 && (
+                <em className="do-item-attr-count">{comments.length > 9 ? "9+" : comments.length}</em>
+              )}
+            </button>
+          </div>
+        );
+      })()}
+      {(() => {
         const filled = Boolean(parentId(item));
         const parentItem = parentId(item) ? findPoolItem(parentId(item)) : null;
         const caption = parentItem ? title(parentItem) : "No parent";
@@ -2448,9 +2494,14 @@ export function WorkItemsCenter({
       >
         {kanbanError && <p className="do-signin-error" data-testid="kanban-wip-reject" role="alert">{kanbanError}</p>}
         {mentionAlertItem && (
-          <p className="do-kanban-mention-alert" data-testid="kanban-mention-alert" role="status">
-            You were mentioned on {title(mentionAlertItem)}.
-          </p>
+          <button
+            className="do-kanban-mention-alert"
+            data-testid="kanban-mention-alert"
+            onClick={() => onSelectItem(mentionAlertItem.id)}
+            type="button"
+          >
+            You were mentioned on {title(mentionAlertItem)}. Open to reply.
+          </button>
         )}
         {kanbanSwimlane === "none" ? (
           <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
@@ -3691,7 +3742,10 @@ export function WorkItemsCenter({
               </form>
             </section>
             <section className="do-item-comments" data-testid="item-comments">
-              <strong>Activity</strong>
+              <strong>Activity & collab</strong>
+              <p className="do-item-comments-hint">
+                Ask a teammate with @ — they get a collab flag on the item. Use Discuss in Collab for the live project room.
+              </p>
               {activityThread(selectedItem).map((entry) => (
                 <article className={entry.kind === "system" ? "is-system" : "is-comment"} key={entry.id}>
                   <span>{entry.kind === "system" ? "System" : entry.author || "Teammate"} · {dateLabel(new Date(entry.at))}</span>
@@ -3705,6 +3759,7 @@ export function WorkItemsCenter({
                 </article>
               ))}
               <form
+                className="do-item-comment-form"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const text = commentDraft.trim();
@@ -3716,27 +3771,102 @@ export function WorkItemsCenter({
                     author: author ? memberName(author) : "Me",
                     text,
                   };
+                  const mentioned = mentionNames(text);
+                  const mentionedMembers = workspaceMembers.filter((member) => {
+                    const label = memberName(member).toLowerCase();
+                    const alias = String((member as any).publicAlias || "").toLowerCase();
+                    return mentioned.some(
+                      (name) =>
+                        label.startsWith(name.toLowerCase()) ||
+                        alias === name.toLowerCase() ||
+                        label.split(/\s+/)[0] === name.toLowerCase(),
+                    );
+                  });
+                  let accessPatch: Record<string, unknown> = {};
+                  for (const member of mentionedMembers) {
+                    accessPatch = withCollaboratorAccess(
+                      { ...selectedItem, ...accessPatch },
+                      collaborationShareGrant(member),
+                    );
+                  }
                   onUpdateTask(selectedItem.id, {
                     comments: [...(Array.isArray(selectedItem.comments) ? selectedItem.comments : []), next],
-                    mentionedNames: mentionNames(text),
+                    mentionedNames: mentioned,
+                    ...accessPatch,
                   });
                   setCommentDraft("");
+                  setCommentMentionOpen(false);
                 }}
               >
-                <input
-                  aria-label="Add a comment"
-                  onChange={(event) => setCommentDraft(event.target.value)}
-                  placeholder="Comment and @mention a teammate"
-                  value={commentDraft}
-                />
+                <div className="do-item-comment-compose">
+                  <input
+                    aria-label="Add a comment"
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setCommentDraft(value);
+                      setCommentMentionOpen(/@[\w-]*$/.test(value));
+                    }}
+                    onFocus={() => setCommentMentionOpen(/@[\w-]*$/.test(commentDraft))}
+                    placeholder="Comment and @mention a teammate"
+                    value={commentDraft}
+                  />
+                  {commentMentionOpen && (
+                    <div className="do-item-mention-menu" data-testid="item-mention-menu">
+                      {workspaceMembers
+                        .filter((member) => String(member.status || "active") !== "removed")
+                        .filter((member) => {
+                          const needle = (commentDraft.match(/@([\w-]*)$/) || [])[1]?.toLowerCase() || "";
+                          const label = memberName(member).toLowerCase();
+                          return !needle || label.includes(needle) || label.split(/\s+/)[0].startsWith(needle);
+                        })
+                        .slice(0, 6)
+                        .map((member) => {
+                          const label = memberName(member);
+                          const token = label.split(/\s+/)[0] || label;
+                          return (
+                            <button
+                              key={member.id}
+                              onClick={() => {
+                                setCommentDraft((current) =>
+                                  current.replace(/@[\w-]*$/, `@${token} `),
+                                );
+                                setCommentMentionOpen(false);
+                              }}
+                              type="button"
+                            >
+                              @{token}
+                              <small>{label}</small>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
               </form>
               {commentMentionsViewer(commentDraft, owners.concat(workspaceMembers.map((member) => memberName(member)))) && (
-                <small>This will notify the mentioned teammate in the board activity.</small>
+                <small>Mentioned teammates get a collab flag on this item and shared access if needed.</small>
               )}
               {extractUrls(detailDescription).map((url) => <a href={url} key={url} rel="noreferrer" target="_blank">{url}</a>)}
             </section>
             <div className="do-item-detail-actions">
               {currentProject && <button onClick={() => onOpenProjectConsole(currentProject)} type="button"><Folder size={13} /> Console</button>}
+              {currentProject && onOpenCollabProject && (
+                <button
+                  onClick={() => onOpenCollabProject(currentProject.id)}
+                  type="button"
+                >
+                  <MessageSquare size={13} /> Discuss in Collab
+                </button>
+              )}
+              {isFinanceLineTask(selectedItem) && onOpenFinanceLine && financeLineIdFromTask(selectedItem) && (
+                <button
+                  data-testid="item-open-finance-line"
+                  onClick={() => onOpenFinanceLine(financeLineIdFromTask(selectedItem))}
+                  type="button"
+                >
+                  <BarChart3 size={13} /> Open finance line
+                </button>
+              )}
               {allowedParentKinds(workItemKind(selectedItem)).length > 0 && (
                 <button
                   aria-label="Assign parent"

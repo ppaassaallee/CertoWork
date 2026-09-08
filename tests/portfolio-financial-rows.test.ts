@@ -203,5 +203,10 @@ test("applies Excel-style column filters and keeps project column frozen first",
     "project",
     "client",
     "cost",
+    "billingStatus",
+    "vendorPayStatus",
+    "vendorInvoice",
+    "clientInvoice",
+    "followUp",
   ]);
 });

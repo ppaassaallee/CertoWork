@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   AlertTriangle,
@@ -11,7 +11,6 @@ import {
   Copy,
   Download,
   FileText,
-  Filter,
   Flag,
   FolderKanban,
   LayoutGrid,
@@ -81,20 +80,7 @@ import {
   normalizeChargeLineType,
   type ChargeLineType,
 } from "../lib/financeChargeTypes";
-import {
-  PORTFOLIO_FINANCE_COLUMNS,
-  PORTFOLIO_FINANCE_FILTERABLE_COLUMNS,
-  buildPortfolioFinanceRows,
-  defaultPortfolioFinanceColumns,
-  ensureProjectFinanceColumn,
-  filterPortfolioFinanceRows,
-  groupPortfolioFinanceByMonthThenProject,
-  portfolioFinanceColumnLabels,
-  uniquePortfolioFinanceValues,
-  type PortfolioFinanceColumn,
-  type PortfolioFinanceColumnFilters,
-  type PortfolioFinanceRow,
-} from "../lib/portfolioFinancialRows";
+import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
@@ -4849,6 +4835,11 @@ export function ProjectCommandCenter({
   onDeleteProjectTemplate,
   onApplyProjectTemplate,
   onCreateControlledOption,
+  onAddFinanceTask,
+  onOpenWorkItem,
+  highlightFinanceLineId = null,
+  onFinanceHighlightConsumed,
+  initialPortfolioView,
 }: {
   projects: any[];
   tasks: any[];
@@ -4878,6 +4869,16 @@ export function ProjectCommandCenter({
     group: "delivery_entity" | "client_entity" | "tag",
     name: string,
   ) => Promise<string | void> | string | void;
+  onAddFinanceTask?: (
+    projectId: string,
+    title: string,
+    status: WorkLane,
+    patch?: Record<string, unknown>,
+  ) => Promise<string | void | undefined>;
+  onOpenWorkItem?: (taskId: string) => void;
+  highlightFinanceLineId?: string | null;
+  onFinanceHighlightConsumed?: () => void;
+  initialPortfolioView?: PortfolioView;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("active");
   const [statusFilters, setStatusFilters] = useState<string[]>(() => {
@@ -4904,41 +4905,15 @@ export function ProjectCommandCenter({
     useState<PortfolioDimension>("bpo");
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<PortfolioView>("dashboard");
-  const [financeSearch, setFinanceSearch] = useState("");
-  const [financeClient, setFinanceClient] = useState("all");
-  const [financeBpo, setFinanceBpo] = useState("all");
-  const [financeProduct, setFinanceProduct] = useState("all");
-  const [financeMonth, setFinanceMonth] = useState("all");
-  const [financeType, setFinanceType] = useState("all");
-  const [financeBilled, setFinanceBilled] = useState<"all" | "billed" | "unbilled">(
-    "all",
+  const [view, setView] = useState<PortfolioView>(
+    initialPortfolioView || "dashboard",
   );
-  const [financeColumnFilters, setFinanceColumnFilters] =
-    useState<PortfolioFinanceColumnFilters>({});
-  const [financeFilterMenu, setFinanceFilterMenu] = useState<PortfolioFinanceColumn | null>(
-    null,
-  );
-  const [financeFilterQuery, setFinanceFilterQuery] = useState("");
-  const [financeColumns, setFinanceColumns] = useState<PortfolioFinanceColumn[]>(
-    () => {
-      if (typeof window === "undefined") {
-        return ensureProjectFinanceColumn(defaultPortfolioFinanceColumns);
-      }
-      try {
-        const stored = JSON.parse(
-          window.localStorage.getItem("certo-portfolio-finance-columns") || "null",
-        );
-        return ensureProjectFinanceColumn(
-          Array.isArray(stored) && stored.length
-            ? stored
-            : defaultPortfolioFinanceColumns,
-        );
-      } catch {
-        return ensureProjectFinanceColumn(defaultPortfolioFinanceColumns);
-      }
-    },
-  );
+  useEffect(() => {
+    if (initialPortfolioView) setView(initialPortfolioView);
+  }, [initialPortfolioView]);
+  useEffect(() => {
+    if (highlightFinanceLineId) setView("economics");
+  }, [highlightFinanceLineId]);
   const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
@@ -5198,255 +5173,6 @@ export function ProjectCommandCenter({
       !["deleted", "archived", "cancelled"].includes(
         String(project.status || "").toLowerCase(),
       ),
-  );
-  const portfolioFinanceAllRows = useMemo(
-    () => buildPortfolioFinanceRows(financeSourceProjects),
-    [financeSourceProjects],
-  );
-  const portfolioFinanceFilteredRows = useMemo(
-    () =>
-      filterPortfolioFinanceRows(portfolioFinanceAllRows, {
-        search: financeSearch,
-        client: financeClient,
-        bpo: financeBpo,
-        product: financeProduct,
-        month: financeMonth,
-        type: financeType,
-        billed: financeBilled,
-        columnFilters: financeColumnFilters,
-      }),
-    [
-      portfolioFinanceAllRows,
-      financeSearch,
-      financeClient,
-      financeBpo,
-      financeProduct,
-      financeMonth,
-      financeType,
-      financeBilled,
-      financeColumnFilters,
-    ],
-  );
-  const portfolioFinanceBreaks = useMemo(
-    () => groupPortfolioFinanceByMonthThenProject(portfolioFinanceFilteredRows),
-    [portfolioFinanceFilteredRows],
-  );
-  const financeClientOptions = useMemo(
-    () =>
-      [...new Set(portfolioFinanceAllRows.map((row) => row.client))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [portfolioFinanceAllRows],
-  );
-  const financeBpoOptions = useMemo(
-    () =>
-      [...new Set(portfolioFinanceAllRows.map((row) => row.bpo))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [portfolioFinanceAllRows],
-  );
-  const financeProductOptions = useMemo(
-    () =>
-      [...new Set(portfolioFinanceAllRows.map((row) => row.product))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [portfolioFinanceAllRows],
-  );
-  const financeMonthOptions = useMemo(
-    () =>
-      [...new Set(portfolioFinanceAllRows.map((row) => row.monthKey))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [portfolioFinanceAllRows],
-  );
-  const financeColumnSet = new Set(financeColumns);
-  const financeVisibleColumns = ensureProjectFinanceColumn(financeColumns);
-  const toggleFinanceColumn = (column: PortfolioFinanceColumn) => {
-    if (column === "project") return;
-    setFinanceColumns((current) => {
-      const next = current.includes(column)
-        ? current.filter((item) => item !== column)
-        : [...current, column];
-      const safe = ensureProjectFinanceColumn(
-        next.length ? next : defaultPortfolioFinanceColumns,
-      );
-      window.localStorage.setItem(
-        "certo-portfolio-finance-columns",
-        JSON.stringify(safe),
-      );
-      return safe;
-    });
-  };
-  const financeFilterOptions = useMemo(() => {
-    if (!financeFilterMenu) return [];
-    const withoutColumn = filterPortfolioFinanceRows(portfolioFinanceAllRows, {
-      search: financeSearch,
-      client: financeClient,
-      bpo: financeBpo,
-      product: financeProduct,
-      month: financeMonth,
-      type: financeType,
-      billed: financeBilled,
-      columnFilters: {
-        ...financeColumnFilters,
-        [financeFilterMenu]: undefined,
-      },
-    });
-    return uniquePortfolioFinanceValues(withoutColumn, financeFilterMenu);
-  }, [
-    financeFilterMenu,
-    portfolioFinanceAllRows,
-    financeSearch,
-    financeClient,
-    financeBpo,
-    financeProduct,
-    financeMonth,
-    financeType,
-    financeBilled,
-    financeColumnFilters,
-  ]);
-  const activeFinanceColumnFilter = financeFilterMenu
-    ? financeColumnFilters[financeFilterMenu]
-    : undefined;
-  const toggleFinanceColumnFilterValue = (column: PortfolioFinanceColumn, value: string) => {
-    setFinanceColumnFilters((current) => {
-      const options = uniquePortfolioFinanceValues(
-        filterPortfolioFinanceRows(portfolioFinanceAllRows, {
-          search: financeSearch,
-          client: financeClient,
-          bpo: financeBpo,
-          product: financeProduct,
-          month: financeMonth,
-          type: financeType,
-          billed: financeBilled,
-          columnFilters: { ...current, [column]: undefined },
-        }),
-        column,
-      );
-      const selected = current[column];
-      const baseline = selected && selected.length ? selected : options;
-      const nextSelected = baseline.includes(value)
-        ? baseline.filter((item) => item !== value)
-        : [...baseline, value];
-      const next = { ...current };
-      if (nextSelected.length === 0 || nextSelected.length === options.length) {
-        delete next[column];
-      } else {
-        next[column] = nextSelected;
-      }
-      return next;
-    });
-  };
-  const clearFinanceColumnFilter = (column: PortfolioFinanceColumn) => {
-    setFinanceColumnFilters((current) => {
-      const next = { ...current };
-      delete next[column];
-      return next;
-    });
-  };
-  const portfolioFinanceTotals = useMemo(
-    () => ({
-      cost: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.cost, 0),
-      price: portfolioFinanceFilteredRows.reduce((sum, row) => sum + row.price, 0),
-      lines: portfolioFinanceFilteredRows.length,
-      billed: portfolioFinanceFilteredRows.filter((row) => row.billed).length,
-    }),
-    [portfolioFinanceFilteredRows],
-  );
-  const formatPortfolioFinanceCell = (
-    row: PortfolioFinanceRow,
-    column: PortfolioFinanceColumn,
-  ) => {
-    switch (column) {
-      case "project":
-        return row.project;
-      case "projectId":
-        return row.projectKey;
-      case "client":
-        return row.client;
-      case "product":
-        return row.product;
-      case "bpo":
-        return row.bpo;
-      case "externalOrInternal":
-        return row.externalOrInternal;
-      case "stage":
-        return row.stage;
-      case "phase":
-        return row.phase;
-      case "status":
-        return row.status;
-      case "type":
-        return row.type;
-      case "month":
-        return row.monthLabel;
-      case "unit":
-        return row.unit;
-      case "units":
-        return row.units.toLocaleString();
-      case "costPerUnit":
-        return `$${row.costPerUnit.toLocaleString(undefined, {
-          maximumFractionDigits: 2,
-        })}`;
-      case "cost":
-        return `$${row.cost.toLocaleString(undefined, {
-          maximumFractionDigits: 2,
-        })}`;
-      case "marginPct":
-        return row.marginPct == null
-          ? "—"
-          : `${(row.marginPct * 100).toFixed(2)}%`;
-      case "price":
-        return `$${row.price.toLocaleString(undefined, {
-          maximumFractionDigits: 2,
-        })}`;
-      case "source":
-        return row.source;
-      default:
-        return "—";
-    }
-  };
-  const formatFinanceMoney = (value: number) =>
-    `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  const renderFinanceBreakCells = (
-    label: string,
-    cost: number,
-    price: number,
-    kind: "month" | "project",
-  ) => (
-    <>
-      {financeVisibleColumns.map((column, index) => {
-        const isFrozen = column === "project";
-        const className = [
-          isFrozen ? "is-frozen" : "",
-          column === "cost" || column === "price" ? "is-numeric" : "",
-        ]
-          .filter(Boolean)
-          .join(" ");
-        if (index === 0) {
-          return (
-            <td className={className} key={`${kind}-${column}-label`}>
-              <strong>{label}</strong>
-            </td>
-          );
-        }
-        if (column === "cost") {
-          return (
-            <td className={className} key={`${kind}-${column}`}>
-              {formatFinanceMoney(cost)}
-            </td>
-          );
-        }
-        if (column === "price") {
-          return (
-            <td className={className} key={`${kind}-${column}`}>
-              {formatFinanceMoney(price)}
-            </td>
-          );
-        }
-        return <td className={className} key={`${kind}-${column}`} />;
-      })}
-    </>
   );
   const visibleProjectIds = sortedFiltered.map((project) => project.id);
   const allVisibleProjectsSelected =
@@ -7102,386 +6828,16 @@ export function ProjectCommandCenter({
             </div>
             </div>
           ) : (
-            <div
-              className="do-portfolio-finance-analyst"
-              data-testid="portfolio-finance-analyst"
-            >
-              <header className="do-portfolio-finance-analyst-head">
-                <div>
-                  <span className="do-project-card-kicker">
-                    TRANSACTIONS BY PROJECT
-                  </span>
-                  <strong>Portfolio financials</strong>
-                  <small>
-                    Analyst sheet · month → project breaks · Excel column filters ·{" "}
-                    {portfolioFinanceTotals.lines.toLocaleString()} lines ·{" "}
-                    {portfolioFinanceTotals.billed.toLocaleString()} billed
-                  </small>
-                </div>
-                <div className="do-portfolio-finance-analyst-totals">
-                  <span>Cost</span>
-                  <strong>
-                    $
-                    {portfolioFinanceTotals.cost.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
-                  </strong>
-                  <span>Price</span>
-                  <strong>
-                    $
-                    {portfolioFinanceTotals.price.toLocaleString(undefined, {
-                      maximumFractionDigits: 0,
-                    })}
-                  </strong>
-                </div>
-              </header>
-
-              <div className="do-portfolio-finance-filters">
-                <label>
-                  <Search size={13} />
-                  <input
-                    aria-label="Search financial lines"
-                    onChange={(event) => setFinanceSearch(event.target.value)}
-                    placeholder="Search project, client, product, source…"
-                    value={financeSearch}
-                  />
-                </label>
-                <label>
-                  Client
-                  <select
-                    aria-label="Filter by client"
-                    onChange={(event) => setFinanceClient(event.target.value)}
-                    value={financeClient}
-                  >
-                    <option value="all">All clients</option>
-                    {financeClientOptions.map((client) => (
-                      <option key={client} value={client}>
-                        {client}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Period
-                  <select
-                    aria-label="Filter by period"
-                    onChange={(event) => setFinanceMonth(event.target.value)}
-                    value={financeMonth}
-                  >
-                    <option value="all">All periods</option>
-                    {financeMonthOptions.map((month) => (
-                      <option key={month} value={month}>
-                        {financeMonthLabel(month)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Product
-                  <select
-                    aria-label="Filter by product"
-                    onChange={(event) => setFinanceProduct(event.target.value)}
-                    value={financeProduct}
-                  >
-                    <option value="all">All products</option>
-                    {financeProductOptions.map((product) => (
-                      <option key={product} value={product}>
-                        {product}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  BPO
-                  <select
-                    aria-label="Filter by BPO"
-                    onChange={(event) => setFinanceBpo(event.target.value)}
-                    value={financeBpo}
-                  >
-                    <option value="all">All BPOs</option>
-                    {financeBpoOptions.map((bpo) => (
-                      <option key={bpo} value={bpo}>
-                        {bpo}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Type
-                  <select
-                    aria-label="Filter by charge type"
-                    onChange={(event) => setFinanceType(event.target.value)}
-                    value={financeType}
-                  >
-                    <option value="all">All types</option>
-                    {CHARGE_LINE_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Billed
-                  <select
-                    aria-label="Filter by billed status"
-                    onChange={(event) =>
-                      setFinanceBilled(
-                        event.target.value as "all" | "billed" | "unbilled",
-                      )
-                    }
-                    value={financeBilled}
-                  >
-                    <option value="all">All lines</option>
-                    <option value="billed">Billed only</option>
-                    <option value="unbilled">Unbilled only</option>
-                  </select>
-                </label>
-              </div>
-
-              <details className="do-portfolio-finance-columns">
-                <summary>Columns</summary>
-                <div>
-                  {PORTFOLIO_FINANCE_COLUMNS.map((column) => (
-                    <label key={column}>
-                      <input
-                        checked={financeColumnSet.has(column) || column === "project"}
-                        disabled={column === "project"}
-                        onChange={() => toggleFinanceColumn(column)}
-                        type="checkbox"
-                      />
-                      {portfolioFinanceColumnLabels[column]}
-                      {column === "project" ? " (frozen)" : ""}
-                    </label>
-                  ))}
-                </div>
-              </details>
-
-              <div className="do-portfolio-finance-sheet-scroll">
-                <table
-                  className="do-portfolio-finance-table"
-                  data-testid="portfolio-finance-table"
-                >
-                  <thead>
-                    <tr>
-                      {financeVisibleColumns.map((column) => {
-                        const filterable =
-                          PORTFOLIO_FINANCE_FILTERABLE_COLUMNS.includes(column);
-                        const activeFilter = Boolean(
-                          financeColumnFilters[column]?.length,
-                        );
-                        return (
-                          <th
-                            className={[
-                              column === "project" ? "is-frozen" : "",
-                              ["cost", "price", "units", "costPerUnit", "marginPct"].includes(
-                                column,
-                              )
-                                ? "is-numeric"
-                                : "",
-                              activeFilter ? "is-filtered" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            key={column}
-                            scope="col"
-                          >
-                            <div className="do-portfolio-finance-th">
-                              <span>{portfolioFinanceColumnLabels[column]}</span>
-                              {filterable && (
-                                <button
-                                  aria-expanded={financeFilterMenu === column}
-                                  aria-label={`Filter ${portfolioFinanceColumnLabels[column]}`}
-                                  className={
-                                    activeFilter || financeFilterMenu === column
-                                      ? "is-active"
-                                      : ""
-                                  }
-                                  onClick={() => {
-                                    setFinanceFilterMenu((current) =>
-                                      current === column ? null : column,
-                                    );
-                                    setFinanceFilterQuery("");
-                                  }}
-                                  type="button"
-                                >
-                                  <Filter size={11} />
-                                </button>
-                              )}
-                            </div>
-                            {financeFilterMenu === column && (
-                              <div
-                                className="do-portfolio-finance-filter-menu"
-                                data-testid={`portfolio-finance-filter-${column}`}
-                              >
-                                <input
-                                  aria-label={`Search ${portfolioFinanceColumnLabels[column]} values`}
-                                  onChange={(event) =>
-                                    setFinanceFilterQuery(event.target.value)
-                                  }
-                                  placeholder="Search values…"
-                                  value={financeFilterQuery}
-                                />
-                                <div className="do-portfolio-finance-filter-list">
-                                  {financeFilterOptions
-                                    .filter((value) =>
-                                      value
-                                        .toLowerCase()
-                                        .includes(financeFilterQuery.toLowerCase()),
-                                    )
-                                    .map((value) => {
-                                      const checked =
-                                        !activeFinanceColumnFilter ||
-                                        activeFinanceColumnFilter.includes(value);
-                                      return (
-                                        <label key={value}>
-                                          <input
-                                            checked={checked}
-                                            onChange={() =>
-                                              toggleFinanceColumnFilterValue(
-                                                column,
-                                                value,
-                                              )
-                                            }
-                                            type="checkbox"
-                                          />
-                                          <span title={value}>{value}</span>
-                                        </label>
-                                      );
-                                    })}
-                                </div>
-                                <div className="do-portfolio-finance-filter-actions">
-                                  <button
-                                    onClick={() => clearFinanceColumnFilter(column)}
-                                    type="button"
-                                  >
-                                    Clear
-                                  </button>
-                                  <button
-                                    onClick={() => setFinanceFilterMenu(null)}
-                                    type="button"
-                                  >
-                                    Done
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolioFinanceBreaks.map((month) => (
-                      <Fragment key={`month-${month.key}`}>
-                        <tr
-                          className="do-portfolio-finance-break is-month"
-                          data-testid={`portfolio-finance-month-${month.key}`}
-                        >
-                          {renderFinanceBreakCells(
-                            `${month.label} · ${month.lineCount} lines`,
-                            month.cost,
-                            month.price,
-                            "month",
-                          )}
-                        </tr>
-                        {month.projects.map((project) => (
-                          <Fragment key={`${month.key}-${project.key}`}>
-                            {project.rows.map((row) => {
-                              const typeColors = CHARGE_LINE_TYPE_COLORS[row.type];
-                              return (
-                                <tr
-                                  className={`do-portfolio-finance-row ${
-                                    row.billed ? "is-billed" : ""
-                                  }`}
-                                  data-testid={
-                                    row.billed
-                                      ? "portfolio-finance-row-billed"
-                                      : "portfolio-finance-row"
-                                  }
-                                  key={row.id}
-                                >
-                                  {financeVisibleColumns.map((column) => {
-                                    const isFrozen = column === "project";
-                                    const className = [
-                                      isFrozen ? "is-frozen" : "",
-                                      ["cost", "price", "units", "costPerUnit", "marginPct"].includes(
-                                        column,
-                                      )
-                                        ? "is-numeric"
-                                        : "",
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" ");
-                                    if (column === "type") {
-                                      return (
-                                        <td className={className} key={`${row.id}-${column}`}>
-                                          <span
-                                            className="do-finance-charge-type"
-                                            style={{
-                                              background: typeColors.bg,
-                                              borderColor: typeColors.border,
-                                              color: typeColors.fg,
-                                            }}
-                                            title={row.type}
-                                          >
-                                            {row.type}
-                                          </span>
-                                        </td>
-                                      );
-                                    }
-                                    const text = formatPortfolioFinanceCell(row, column);
-                                    return (
-                                      <td
-                                        className={className}
-                                        key={`${row.id}-${column}`}
-                                        title={String(text)}
-                                      >
-                                        {text}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              );
-                            })}
-                            <tr
-                              className="do-portfolio-finance-break is-project"
-                              data-testid={`portfolio-finance-project-total-${month.key}-${project.key}`}
-                            >
-                              {renderFinanceBreakCells(
-                                `Project total · ${project.label}`,
-                                project.cost,
-                                project.price,
-                                "project",
-                              )}
-                            </tr>
-                          </Fragment>
-                        ))}
-                        <tr
-                          className="do-portfolio-finance-break is-month-total"
-                          data-testid={`portfolio-finance-month-total-${month.key}`}
-                        >
-                          {renderFinanceBreakCells(
-                            `${month.label} total`,
-                            month.cost,
-                            month.price,
-                            "month",
-                          )}
-                        </tr>
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-
-                {portfolioFinanceFilteredRows.length === 0 && (
-                  <EmptyState
-                    icon={<LayoutGrid size={20} />}
-                    title="No financial lines in this view"
-                    text="Adjust client, period, or product filters — or open a project ledger to add cost lines."
-                  />
-                )}
-              </div>
-            </div>
+            <PortfolioFinanceAnalyst
+              highlightFinanceLineId={highlightFinanceLineId}
+              onAddTask={onAddFinanceTask}
+              onHighlightConsumed={onFinanceHighlightConsumed}
+              onOpenWorkItem={onOpenWorkItem}
+              onUpdateProject={onUpdateProject}
+              projects={financeSourceProjects}
+              tasks={tasks}
+              workspaceMembers={workspaceMembers}
+            />
           )}
         </section>
       </div>
