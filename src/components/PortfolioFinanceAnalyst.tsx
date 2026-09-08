@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Filter,
   LayoutGrid,
@@ -950,86 +951,90 @@ export function PortfolioFinanceAnalyst({
         )}
       </div>
 
-      {followUpRow && (
-        <div
-          className="do-item-modal-backdrop"
-          data-testid="finance-followup-modal"
-          onClick={() => !followUpBusy && setFollowUpRow(null)}
-        >
+      {followUpRow &&
+        createPortal(
           <div
-            className="do-sheet do-portfolio-finance-followup-modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-label="Create finance follow-up"
+            className="do-item-modal-backdrop"
+            data-testid="finance-followup-modal"
+            onClick={() => !followUpBusy && setFollowUpRow(null)}
           >
-            <header>
-              <div>
-                <span className="do-project-card-kicker">FOLLOW-UP PBI</span>
-                <strong>Assign tracking for this finance line</strong>
-                <small>
-                  Creates a PBI in My Work for you and whoever you assign. From My
-                  Work you can jump back to this exact finance line.
-                </small>
-                <small>
-                  {followUpRow.project} · {followUpRow.monthLabel} · {followUpRow.type}
-                </small>
-              </div>
-              <button
-                aria-label="Close"
-                disabled={followUpBusy}
-                onClick={() => setFollowUpRow(null)}
-                type="button"
-              >
-                <X size={14} />
-              </button>
-            </header>
-            <label>
-              Title
-              <input
-                onChange={(event) => setFollowUpTitle(event.target.value)}
-                value={followUpTitle}
+            <div
+              aria-label="Create finance follow-up"
+              aria-modal="true"
+              className="do-item-modal do-portfolio-finance-followup-modal"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <header>
+                <div>
+                  <span className="do-project-card-kicker">FOLLOW-UP PBI</span>
+                  <strong>Assign tracking for this finance line</strong>
+                  <small>
+                    Creates a PBI in My Work for you and whoever you assign. From
+                    My Work you can jump back to this exact finance line.
+                  </small>
+                  <small>
+                    {followUpRow.project} · {followUpRow.monthLabel} ·{" "}
+                    {followUpRow.type}
+                  </small>
+                </div>
+                <button
+                  aria-label="Close"
+                  disabled={followUpBusy}
+                  onClick={() => setFollowUpRow(null)}
+                  type="button"
+                >
+                  <X size={14} />
+                </button>
+              </header>
+              <label>
+                Title
+                <input
+                  onChange={(event) => setFollowUpTitle(event.target.value)}
+                  value={followUpTitle}
+                />
+              </label>
+              <label>
+                Notes for the assignee
+                <textarea
+                  onChange={(event) => setFollowUpNotes(event.target.value)}
+                  placeholder="What needs follow-up? Billing, vendor pay, invoice mismatch…"
+                  rows={4}
+                  value={followUpNotes}
+                />
+              </label>
+              <MultiAssigneePicker
+                label="Assign to"
+                members={workspaceMembers}
+                onChange={(ids, names) => {
+                  setFollowUpAssigneeIds(ids);
+                  setFollowUpAssigneeNames(names);
+                }}
+                selectedIds={followUpAssigneeIds}
+                selectedNames={followUpAssigneeNames}
               />
-            </label>
-            <label>
-              Notes for the assignee
-              <textarea
-                onChange={(event) => setFollowUpNotes(event.target.value)}
-                placeholder="What needs follow-up? Billing, vendor pay, invoice mismatch…"
-                rows={4}
-                value={followUpNotes}
-              />
-            </label>
-            <MultiAssigneePicker
-              label="Assign to"
-              members={workspaceMembers}
-              onChange={(ids, names) => {
-                setFollowUpAssigneeIds(ids);
-                setFollowUpAssigneeNames(names);
-              }}
-              selectedIds={followUpAssigneeIds}
-              selectedNames={followUpAssigneeNames}
-            />
-            <footer>
-              <button
-                disabled={followUpBusy}
-                onClick={() => setFollowUpRow(null)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="is-primary"
-                disabled={followUpBusy || !followUpTitle.trim() || !onAddTask}
-                onClick={() => void submitFollowUp()}
-                type="button"
-              >
-                <ListChecks size={13} />
-                {followUpBusy ? "Creating…" : "Create PBI in My Work"}
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
+              <footer>
+                <button
+                  disabled={followUpBusy}
+                  onClick={() => setFollowUpRow(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="is-primary"
+                  disabled={followUpBusy || !followUpTitle.trim() || !onAddTask}
+                  onClick={() => void submitFollowUp()}
+                  type="button"
+                >
+                  <ListChecks size={13} />
+                  {followUpBusy ? "Creating…" : "Create PBI in My Work"}
+                </button>
+              </footer>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

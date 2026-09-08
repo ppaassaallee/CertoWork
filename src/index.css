@@ -12767,13 +12767,20 @@ a {
   white-space: nowrap;
 }
 .do-portfolio-finance-followup-modal {
-  width: min(480px, 92vw);
+  width: min(520px, 100%);
+  max-height: min(88vh, 720px);
+  overflow: auto;
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 14px;
+  padding: 18px 20px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-0);
+  box-shadow: 0 24px 80px rgba(28, 27, 23, 0.28);
 }
 .do-portfolio-finance-followup-modal header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
@@ -12781,10 +12788,35 @@ a {
 .do-portfolio-finance-followup-modal header small {
   display: block;
 }
+.do-portfolio-finance-followup-modal header strong {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+.do-portfolio-finance-followup-modal header small {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.35;
+}
+.do-portfolio-finance-followup-modal header > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
 .do-portfolio-finance-followup-modal label {
   display: grid;
   gap: 6px;
   font-size: 12px;
+  font-weight: 650;
   color: var(--text-secondary);
 }
 .do-portfolio-finance-followup-modal input,
@@ -12792,15 +12824,45 @@ a {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   font: inherit;
+  font-weight: 500;
   color: var(--text-primary);
   background: var(--surface-0);
+}
+.do-portfolio-finance-followup-modal textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 .do-portfolio-finance-followup-modal footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.do-portfolio-finance-followup-modal footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 650;
+  cursor: pointer;
+}
+.do-portfolio-finance-followup-modal footer button.is-primary {
+  background: #1f6b45;
+  border-color: #1f6b45;
+  color: #fff;
+}
+.do-portfolio-finance-followup-modal footer button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .do-item-attr.is-collab.is-mention .do-item-attr-btn {
   color: #1d4fbf;
