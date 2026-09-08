@@ -5,6 +5,7 @@ import { normalizeDeliveryStage } from "./projectDelivery";
 import type { ProductPhase } from "./workClassification";
 
 export const PORTFOLIO_MASTER_IMPORT_KEY = "ago2026-apversion";
+export const PORTFOLIO_CLEARED_KEY = "cleared-manual";
 export const PORTFOLIO_MASTER_SOURCE =
   "Portafolio_Super_Sheet1_Ago2026 - apversion.xlsx";
 export const PORTFOLIO_SHARE_ALIASES = [

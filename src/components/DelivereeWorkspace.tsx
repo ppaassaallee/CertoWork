@@ -77,6 +77,8 @@ import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
+import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
+import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
 import {
   projectHealth,
   sidebarProjectGroups,
@@ -403,6 +405,7 @@ export function DelivereeWorkspace() {
   const [captureAddress, setCaptureAddress] = useState<CaptureAddress | null>(null);
   const [teamCaptureAddresses, setTeamCaptureAddresses] = useState<CaptureAddress[]>([]);
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -3279,6 +3282,49 @@ export function DelivereeWorkspace() {
     setNotice(
       `${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
     );
+  };
+
+  const clearPureAiPortfolioProjects = async () => {
+    if (!user || !workspace) return;
+    if (!isPureAiWorkspace(workspace)) {
+      setNotice("This action only works inside the Pure AI workspace.");
+      return;
+    }
+    if (workspace.ownerId !== user.uid) {
+      setNotice("Only the Pure AI workspace owner can clear all projects.");
+      return;
+    }
+    const projectCount = projects.filter((project) => project.workspaceId === workspace.id).length;
+    const confirmed = window.confirm(
+      `Delete all ${projectCount} Pure AI projects now?\n\nMy Work items without a project stay. Project-linked tasks are removed. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setClearPureAiBusy(true);
+    try {
+      const result = await clearPureAiProjects({ db, user, workspace });
+      if (result.skipped) {
+        setNotice(
+          result.reason === "not-owner"
+            ? "Only the Pure AI workspace owner can clear all projects."
+            : "Could not clear Pure AI projects.",
+        );
+        return;
+      }
+      setProjectConsoleId(null);
+      setPanel(null);
+      goCenterView("portfolio");
+      setNotice(
+        `Cleared ${result.removedProjects} Pure AI projects (${result.removedProjectTasks} project tasks removed). Kept ${result.preservedMyWorkTasks} My Work / unassigned items.`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Could not clear Pure AI projects: ${reason.message}`
+          : "Could not clear Pure AI projects.",
+      );
+    } finally {
+      setClearPureAiBusy(false);
+    }
   };
 
   const restoreProject = async (project: any) => {
@@ -6768,6 +6814,28 @@ export function DelivereeWorkspace() {
                   Save alias
                 </button>
               </section>
+              {isPureAiWorkspace(workspace) && workspace?.ownerId === user?.uid ? (
+                <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
+                  <div className="do-workspace-admin-head">
+                    <span className="do-kicker">Pure AI portfolio</span>
+                    <strong>Clear all projects</strong>
+                  </div>
+                  <p className="do-panel-intro">
+                    Removes every project in this Pure AI workspace so you can bulk-load a new set.
+                    My Work items without a project stay. Tasks linked to those projects are deleted.
+                  </p>
+                  <button
+                    className="do-button"
+                    data-testid="pure-ai-clear-projects-btn"
+                    disabled={clearPureAiBusy}
+                    onClick={() => void clearPureAiPortfolioProjects()}
+                    type="button"
+                  >
+                    <Trash2 size={14} />
+                    {clearPureAiBusy ? "Clearing…" : "Delete all Pure AI projects"}
+                  </button>
+                </section>
+              ) : null}
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Account security</span>

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import rows from "../src/data/portfolioMasterAgo2026.json";
 import {
   PORTFOLIO_MASTER_IMPORT_KEY,
+  PORTFOLIO_CLEARED_KEY,
   buildPortfolioProjectPayload,
   isPureAiWorkspace,
   mapProductPhase,
@@ -151,4 +154,17 @@ test("never auto-replaces a live Pure AI portfolio", () => {
     false,
   );
   assert.ok(portfolioImportKey(masterRows[0]).includes(String(masterRows[0].sourceRow)));
+});
+
+test("clear Pure AI projects helper is owner-gated and keeps My Work items", () => {
+  const source = readFileSync(resolve("src/lib/runPortfolioMasterImport.ts"), "utf8");
+  const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  assert.equal(PORTFOLIO_CLEARED_KEY, "cleared-manual");
+  assert.match(source, /export async function clearPureAiProjects/);
+  assert.match(source, /PORTFOLIO_CLEARED_KEY/);
+  assert.match(source, /preservedMyWorkTasks/);
+  assert.match(source, /Boolean\(projectId\) && projectIds\.has\(projectId\)/);
+  assert.match(workspace, /data-testid="pure-ai-clear-projects"/);
+  assert.match(workspace, /clearPureAiProjects/);
+  assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
 });
