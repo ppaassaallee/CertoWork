@@ -83,6 +83,7 @@ import {
   pricingPortfolioProjectCount,
   syncPureAiPricingPortfolio,
 } from "../lib/runPricingPortfolioSync";
+import { PRICING_PORTFOLIO_IMPORT_KEY } from "../lib/pricingPortfolioSync";
 import {
   projectHealth,
   sidebarProjectGroups,
@@ -411,6 +412,7 @@ export function DelivereeWorkspace() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
+  const pricingAutoSyncRef = useRef(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -886,6 +888,55 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
+
+  // Owner one-shot: apply Pricing 2026 portfolio as soon as Pure AI loads.
+  useEffect(() => {
+    if (!user || !workspace) return;
+    if (!isPureAiWorkspace(workspace)) return;
+    if (workspace.ownerId !== user.uid) return;
+    if (workspace.portfolioImportKey === PRICING_PORTFOLIO_IMPORT_KEY) return;
+    if (pricingAutoSyncRef.current || pricingSyncBusy || clearPureAiBusy) return;
+    pricingAutoSyncRef.current = true;
+    setPricingSyncBusy(true);
+    void (async () => {
+      try {
+        const result = await syncPureAiPricingPortfolio({
+          db,
+          user,
+          workspace,
+          members: workspaceMembers,
+        });
+        if (result.skipped) {
+          pricingAutoSyncRef.current = false;
+          setNotice(
+            result.reason === "not-owner"
+              ? "Only the Pure AI workspace owner can sync pricing."
+              : "Could not auto-sync pricing portfolio.",
+          );
+          return;
+        }
+        goCenterView("portfolio");
+        setNotice(
+          `Pricing sync applied: updated ${result.updatedProjects}, created ${result.createdProjects}, marked X on ${result.markedUnmatched}.`,
+        );
+      } catch (reason) {
+        pricingAutoSyncRef.current = false;
+        setNotice(
+          reason instanceof Error
+            ? `Could not auto-sync pricing portfolio: ${reason.message}`
+            : "Could not auto-sync pricing portfolio.",
+        );
+      } finally {
+        setPricingSyncBusy(false);
+      }
+    })();
+  }, [
+    user,
+    workspace,
+    workspaceMembers,
+    pricingSyncBusy,
+    clearPureAiBusy,
+  ]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -6879,8 +6930,9 @@ export function DelivereeWorkspace() {
                   <p className="do-panel-intro">
                     Sync from Pricing_Data_Portafolio_IA_2026 (TRANSACTIONS BY PROJECT): fuzzy-match
                     projects, map BPO→delivery / Client→client, replace finance cost lines, create
-                    missing projects, and prefix unmatched Certo projects with X. Clear deletes all
-                    projects first if you need a clean slate. My Work without a project stays.
+                    missing projects, and prefix unmatched Certo projects with X. Runs automatically
+                    once for the Pure AI owner until applied; use the button to re-run. Clear deletes
+                    all projects first if you need a clean slate. My Work without a project stays.
                   </p>
                   <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button

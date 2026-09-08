@@ -1,0 +1,36 @@
+name: Sync Pure AI pricing portfolio
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/data/pricingPortfolio2026.json"
+      - "src/lib/pricingPortfolioSync.ts"
+      - "scripts/sync-pricing-portfolio.ts"
+      - ".github/workflows/sync-pricing-portfolio.yml"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Sync pricing portfolio into Pure AI
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT secret missing; cannot write Pure AI projects."
+            exit 1
+          fi
+          pnpm exec tsx scripts/sync-pricing-portfolio.ts
