@@ -3819,7 +3819,7 @@ export function WorkItemsCenter({
                           const label = memberName(member).toLowerCase();
                           return !needle || label.includes(needle) || label.split(/\s+/)[0].startsWith(needle);
                         })
-                        .slice(0, 6)
+                        .slice(0, 8)
                         .map((member) => {
                           const label = memberName(member);
                           const token = label.split(/\s+/)[0] || label;
