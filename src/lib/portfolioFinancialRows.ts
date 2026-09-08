@@ -51,8 +51,25 @@ export const portfolioFinanceColumnLabels: Record<PortfolioFinanceColumn, string
   source: "Source",
 };
 
+/** Project stays first and frozen; users can toggle the rest. */
 export const defaultPortfolioFinanceColumns: PortfolioFinanceColumn[] = [
   ...PORTFOLIO_FINANCE_COLUMNS,
+];
+
+export const PORTFOLIO_FINANCE_FILTERABLE_COLUMNS: PortfolioFinanceColumn[] = [
+  "project",
+  "projectId",
+  "client",
+  "product",
+  "bpo",
+  "externalOrInternal",
+  "stage",
+  "phase",
+  "status",
+  "type",
+  "month",
+  "unit",
+  "source",
 ];
 
 export type PortfolioFinanceRow = {
@@ -81,6 +98,10 @@ export type PortfolioFinanceRow = {
   financialStatus: string;
 };
 
+export type PortfolioFinanceColumnFilters = Partial<
+  Record<PortfolioFinanceColumn, string[]>
+>;
+
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -95,6 +116,58 @@ function unitLabel(unit: string) {
     other: "Other",
   };
   return labels[unit] || unit || "Fee";
+}
+
+function monthSortKey(monthKey: string) {
+  if (/^\d{4}-\d{2}$/.test(monthKey)) return monthKey;
+  if (monthKey === "build") return "0000-00";
+  return `9999-${monthKey}`;
+}
+
+export function portfolioFinanceCellValue(
+  row: PortfolioFinanceRow,
+  column: PortfolioFinanceColumn,
+): string {
+  switch (column) {
+    case "project":
+      return row.project;
+    case "projectId":
+      return row.projectKey;
+    case "client":
+      return row.client;
+    case "product":
+      return row.product;
+    case "bpo":
+      return row.bpo;
+    case "externalOrInternal":
+      return row.externalOrInternal;
+    case "stage":
+      return row.stage;
+    case "phase":
+      return row.phase;
+    case "status":
+      return row.status;
+    case "type":
+      return row.type;
+    case "month":
+      return row.monthLabel;
+    case "unit":
+      return row.unit;
+    case "units":
+      return String(row.units);
+    case "costPerUnit":
+      return String(row.costPerUnit);
+    case "cost":
+      return String(row.cost);
+    case "marginPct":
+      return row.marginPct == null ? "—" : String(row.marginPct);
+    case "price":
+      return String(row.price);
+    case "source":
+      return row.source;
+    default:
+      return "";
+  }
 }
 
 export function buildPortfolioFinanceRows(projects: any[]): PortfolioFinanceRow[] {
@@ -156,22 +229,31 @@ export function buildPortfolioFinanceRows(projects: any[]): PortfolioFinanceRow[
     }
   }
   return rows.sort((left, right) => {
-    const byClient = left.client.localeCompare(right.client);
-    if (byClient) return byClient;
-    const byMonth = left.monthKey.localeCompare(right.monthKey);
+    const byMonth = monthSortKey(left.monthKey).localeCompare(monthSortKey(right.monthKey));
     if (byMonth) return byMonth;
-    const byProduct = left.product.localeCompare(right.product);
-    if (byProduct) return byProduct;
-    return left.project.localeCompare(right.project);
+    const byProject = left.project.localeCompare(right.project);
+    if (byProject) return byProject;
+    return left.product.localeCompare(right.product);
   });
 }
 
-export type PortfolioFinanceGroupBy = "month" | "client" | "product";
+export type PortfolioFinanceGroupBy = "month" | "client" | "product" | "monthProject";
 
 export function groupPortfolioFinanceRows(
   rows: PortfolioFinanceRow[],
   groupBy: PortfolioFinanceGroupBy,
 ) {
+  if (groupBy === "monthProject") {
+    return groupPortfolioFinanceByMonthThenProject(rows).flatMap((month) =>
+      month.projects.map((project) => ({
+        key: `${month.key}::${project.key}`,
+        label: `${month.label} · ${project.label}`,
+        rows: project.rows,
+        cost: project.cost,
+        price: project.price,
+      })),
+    );
+  }
   const groups = new Map<string, PortfolioFinanceRow[]>();
   for (const row of rows) {
     const key =
@@ -185,17 +267,84 @@ export function groupPortfolioFinanceRows(
     groups.set(key, list);
   }
   return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
+    .sort(([left], [right]) =>
+      groupBy === "month"
+        ? monthSortKey(left).localeCompare(monthSortKey(right))
+        : left.localeCompare(right),
+    )
     .map(([key, items]) => ({
       key,
-      label:
-        groupBy === "month"
-          ? financeMonthLabel(key)
-          : key || "—",
+      label: groupBy === "month" ? financeMonthLabel(key) : key || "—",
       rows: items,
       cost: items.reduce((sum, row) => sum + row.cost, 0),
       price: items.reduce((sum, row) => sum + row.price, 0),
     }));
+}
+
+export type PortfolioFinanceProjectBreak = {
+  key: string;
+  label: string;
+  rows: PortfolioFinanceRow[];
+  cost: number;
+  price: number;
+};
+
+export type PortfolioFinanceMonthBreak = {
+  key: string;
+  label: string;
+  projects: PortfolioFinanceProjectBreak[];
+  cost: number;
+  price: number;
+  lineCount: number;
+};
+
+/** Excel-style outline: chronological month → project, with cost/price totals. */
+export function groupPortfolioFinanceByMonthThenProject(
+  rows: PortfolioFinanceRow[],
+): PortfolioFinanceMonthBreak[] {
+  const months = new Map<string, Map<string, PortfolioFinanceRow[]>>();
+  for (const row of rows) {
+    const byProject = months.get(row.monthKey) || new Map<string, PortfolioFinanceRow[]>();
+    const key = row.projectId || row.project;
+    const list = byProject.get(key) || [];
+    list.push(row);
+    byProject.set(key, list);
+    months.set(row.monthKey, byProject);
+  }
+
+  return [...months.entries()]
+    .sort(([left], [right]) => monthSortKey(left).localeCompare(monthSortKey(right)))
+    .map(([monthKey, projects]) => {
+      const projectBreaks = [...projects.entries()]
+        .map(([projectKey, items]) => {
+          const sorted = [...items].sort((a, b) => a.project.localeCompare(b.project));
+          return {
+            key: projectKey,
+            label: sorted[0]?.project || "—",
+            rows: sorted,
+            cost: sorted.reduce((sum, row) => sum + row.cost, 0),
+            price: sorted.reduce((sum, row) => sum + row.price, 0),
+          };
+        })
+        .sort((left, right) => left.label.localeCompare(right.label));
+      return {
+        key: monthKey,
+        label: financeMonthLabel(monthKey),
+        projects: projectBreaks,
+        cost: projectBreaks.reduce((sum, project) => sum + project.cost, 0),
+        price: projectBreaks.reduce((sum, project) => sum + project.price, 0),
+        lineCount: projectBreaks.reduce((sum, project) => sum + project.rows.length, 0),
+      };
+    });
+}
+
+export function uniquePortfolioFinanceValues(
+  rows: PortfolioFinanceRow[],
+  column: PortfolioFinanceColumn,
+) {
+  return [
+    ...new Set(rows.map((row) => portfolioFinanceCellValue(row, column) || "—")),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 export function filterPortfolioFinanceRows(
@@ -208,9 +357,11 @@ export function filterPortfolioFinanceRows(
     month?: string;
     type?: string;
     billed?: "all" | "billed" | "unbilled";
+    columnFilters?: PortfolioFinanceColumnFilters;
   },
 ) {
   const search = clean(filters.search).toLowerCase();
+  const columnFilters = filters.columnFilters || {};
   return rows.filter((row) => {
     if (filters.client && filters.client !== "all" && row.client !== filters.client) {
       return false;
@@ -225,9 +376,22 @@ export function filterPortfolioFinanceRows(
     if (filters.type && filters.type !== "all" && row.type !== filters.type) return false;
     if (filters.billed === "billed" && !row.billed) return false;
     if (filters.billed === "unbilled" && row.billed) return false;
+    for (const column of PORTFOLIO_FINANCE_COLUMNS) {
+      const selected = columnFilters[column];
+      if (!selected || selected.length === 0) continue;
+      const value = portfolioFinanceCellValue(row, column) || "—";
+      if (!selected.includes(value)) return false;
+    }
     if (!search) return true;
     const haystack =
       `${row.project} ${row.projectKey} ${row.client} ${row.product} ${row.bpo} ${row.type} ${row.source}`.toLowerCase();
     return haystack.includes(search);
   });
+}
+
+export function ensureProjectFinanceColumn(
+  columns: PortfolioFinanceColumn[],
+): PortfolioFinanceColumn[] {
+  const rest = columns.filter((column) => column !== "project");
+  return ["project", ...rest];
 }
