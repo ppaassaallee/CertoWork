@@ -411,9 +411,45 @@ export function calendarWeekDays(anchor = new Date()) {
       key: dateKey(date),
       label: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
       date,
+      inMonth: true,
     };
   });
 }
+
+/** Monday-start month matrix (5–6 weeks) including leading/trailing days. */
+export function calendarMonthDays(anchor = new Date()) {
+  const focus = new Date(anchor);
+  focus.setHours(0, 0, 0, 0);
+  const month = focus.getMonth();
+  const year = focus.getFullYear();
+  const first = new Date(year, month, 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  const last = new Date(year, month + 1, 0);
+  const end = new Date(last);
+  const trailing = (7 - ((last.getDay() + 6) % 7) - 1 + 7) % 7;
+  end.setDate(last.getDate() + trailing);
+  const days: Array<{ key: string; label: string; dayNumber: number; date: Date; inMonth: boolean }> = [];
+  const cursor = new Date(start);
+  while (cursor.getTime() <= end.getTime()) {
+    const date = new Date(cursor);
+    days.push({
+      key: dateKey(date),
+      label: String(date.getDate()),
+      dayNumber: date.getDate(),
+      date,
+      inMonth: date.getMonth() === month,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+export function calendarMonthLabel(anchor = new Date()) {
+  return new Date(anchor).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+export const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 export function itemDueKey(item: any) {
   const raw = item?.dueDate || item?.targetDate || item?.occurrenceDate;

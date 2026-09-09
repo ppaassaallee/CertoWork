@@ -5,7 +5,10 @@ import {
   applyKanbanAutomations,
   appendStatusHistory,
   asKanbanSwimlane,
+  calendarMonthDays,
+  calendarMonthLabel,
   calendarWeekDays,
+  CALENDAR_WEEKDAY_LABELS,
   canAcceptWipDrop,
   checklistCaption,
   checklistProgress,
@@ -161,6 +164,22 @@ test("calendar weeks start Monday and comments extract mentions and links", () =
   assert.deepEqual(extractUrls("See https://certo.work/docs and more"), ["https://certo.work/docs"]);
   assert.equal(asKanbanSwimlane("assignee"), "assignee");
   assert.equal(asKanbanSwimlane("nope"), "none");
+});
+
+test("calendar month matrix fills Monday–Sunday weeks for the visible month", () => {
+  const days = calendarMonthDays(new Date("2026-09-09T12:00:00"));
+  assert.equal(days.length % 7, 0);
+  assert.ok(days.length === 35 || days.length === 42);
+  assert.equal(days[0].key, "2026-08-31");
+  assert.equal(days[0].inMonth, false);
+  assert.equal(days.find((day) => day.key === "2026-09-01")?.inMonth, true);
+  assert.equal(days[days.length - 1].key, "2026-10-04");
+  assert.equal(
+    calendarMonthLabel(new Date("2026-09-09T12:00:00")),
+    new Date(2026, 8, 9).toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+  );
+  assert.equal(CALENDAR_WEEKDAY_LABELS[0], "Mon");
+  assert.equal(CALENDAR_WEEKDAY_LABELS[6], "Sun");
 });
 
 test("status history appends a column change without duplicating the last event", () => {
