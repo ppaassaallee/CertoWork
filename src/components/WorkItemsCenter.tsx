@@ -54,7 +54,7 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
-import { assignmentFieldsFromMembers } from "../lib/taskAssignment";
+import { assignmentFieldsFromMembers, itemCollaboratorMemberIds } from "../lib/taskAssignment";
 import {
   collaborationShareGrant,
   withCollaboratorAccess,
@@ -255,7 +255,7 @@ const itemColumnLabels: Record<ItemColumnKey, string> = {
   priority: "Priority",
   gtd: "GTD",
   bucket: "Action Board",
-  assignees: "Assignees",
+  assignees: "Assignee",
   due: "Due",
   sprint: "Sprint",
 };
@@ -1706,7 +1706,30 @@ export function WorkItemsCenter({
       return <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>;
     }
     if (column === "assignees") {
-      return <MultiAssigneePicker members={workspaceMembers} onInviteEmail={onInviteAssigneeEmail} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />;
+      return (
+        <MultiAssigneePicker
+          helperText="One person is accountable for finishing this work."
+          label="Assignee"
+          maxSelections={1}
+          members={workspaceMembers}
+          onInviteEmail={onInviteAssigneeEmail}
+          onChange={(assigneeIds, assignees) =>
+            onUpdateTask(item.id, {
+              assigneeIds,
+              assignees,
+              owner: assignees[0] || "",
+              assignee: assignees[0] || "",
+              assigneeId: assigneeIds[0] || "",
+            })
+          }
+          selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
+          selectedNames={
+            Array.isArray(item.assignees)
+              ? item.assignees.slice(0, 1)
+              : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+          }
+        />
+      );
     }
     if (column === "due") {
       return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />;
@@ -1891,6 +1914,9 @@ export function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
+                helperText="One person is accountable for finishing this work."
+                label="Assignee"
+                maxSelections={1}
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
@@ -1899,14 +1925,18 @@ export function WorkItemsCenter({
                     assignees,
                     owner: assignees[0] || "",
                     assignee: assignees[0] || "",
+                    assigneeId: assigneeIds[0] || "",
                   })
                 }
-                selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
+                selectedIds={
+                  Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []
+                }
                 selectedNames={
                   Array.isArray(item.assignees)
-                    ? item.assignees
-                    : [item.owner || item.assignee].filter(Boolean)
+                    ? item.assignees.slice(0, 1)
+                    : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
                 }
+                triggerTestId={`item-attr-assignees-${item.id}`}
               />
             </div>
           );
@@ -2318,12 +2348,26 @@ export function WorkItemsCenter({
             <i className="do-kanban-live-dot" data-testid="kanban-live-dot" />
             <MultiAssigneePicker
               compact
-              label="Item assignees"
+              helperText="One person is accountable for finishing this work."
+              label="Assignee"
+              maxSelections={1}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
-              onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })}
-              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
-              selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)}
+              onChange={(assigneeIds, assignees) =>
+                onUpdateTask(item.id, {
+                  assigneeIds,
+                  assignees,
+                  owner: assignees[0] || "",
+                  assignee: assignees[0] || "",
+                  assigneeId: assigneeIds[0] || "",
+                })
+              }
+              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
+              selectedNames={
+                Array.isArray(item.assignees)
+                  ? item.assignees.slice(0, 1)
+                  : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+              }
             />
           </span>
           {allowedParentKinds(kind).length > 0 && (
@@ -3814,14 +3858,68 @@ export function WorkItemsCenter({
             <label className="do-mobile-advanced">Work Category<select onChange={(event) => onUpdateTask(selectedItem.id, { workCategory: event.target.value })} value={itemWorkCategory(selectedItem, projects)}>{WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
             <label className="do-mobile-advanced">Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
             <label className="do-mobile-advanced">Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
-            <label>Assignees <InfoTip label="Item assignees" text="Assign one or many workspace members. The first selected person remains the primary owner for older reports and filters." /></label>
+            <label>
+              Assignee{" "}
+              <InfoTip
+                label="Assignee"
+                text="Exactly one person is accountable for finishing this work. Add others as Collaborators below if they need updates."
+              />
+            </label>
             <MultiAssigneePicker
-              label="Item assignees"
+              helperText="One person is accountable for finishing this work."
+              label="Assignee"
+              maxSelections={1}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
-              onChange={(assigneeIds, assignees) => onUpdateTask(selectedItem.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })}
-              selectedIds={Array.isArray(selectedItem.assigneeIds) ? selectedItem.assigneeIds : []}
-              selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}
+              onChange={(assigneeIds, assignees) =>
+                onUpdateTask(selectedItem.id, {
+                  assigneeIds,
+                  assignees,
+                  owner: assignees[0] || "",
+                  assignee: assignees[0] || "",
+                  assigneeId: assigneeIds[0] || "",
+                })
+              }
+              selectedIds={
+                Array.isArray(selectedItem.assigneeIds)
+                  ? selectedItem.assigneeIds.slice(0, 1)
+                  : []
+              }
+              selectedNames={
+                Array.isArray(selectedItem.assignees)
+                  ? selectedItem.assignees.slice(0, 1)
+                  : [selectedItem.owner || selectedItem.assignee].filter(Boolean).slice(0, 1)
+              }
+            />
+            <label>
+              Collaborators{" "}
+              <InfoTip
+                label="Collaborators"
+                text="Followers who get notifications and can help — they are not responsible for final delivery. Teams own projects; people own tasks."
+              />
+            </label>
+            <MultiAssigneePicker
+              helperText="Collaborators get updates and can help. They are not the delivery owner."
+              label="Collaborators"
+              members={workspaceMembers.filter((member) => {
+                const assigneeId = Array.isArray(selectedItem.assigneeIds)
+                  ? String(selectedItem.assigneeIds[0] || "")
+                  : "";
+                return String(member.id) !== assigneeId;
+              })}
+              onInviteEmail={onInviteAssigneeEmail}
+              onChange={(collaboratorMemberIds, collaborators) =>
+                onUpdateTask(selectedItem.id, {
+                  collaboratorMemberIds,
+                  collaborators,
+                })
+              }
+              selectedIds={itemCollaboratorMemberIds(selectedItem)}
+              selectedNames={
+                Array.isArray(selectedItem.collaborators)
+                  ? selectedItem.collaborators
+                  : []
+              }
             />
             <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
             <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>

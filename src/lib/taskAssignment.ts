@@ -16,9 +16,21 @@ export const ASSIGNMENT_FIELD_KEYS = [
   "assignedTo",
 ] as const;
 
+export const COLLABORATOR_FIELD_KEYS = [
+  "collaboratorMemberIds",
+  "collaboratorIds",
+  "followers",
+  "followerIds",
+] as const;
+
 export function patchTouchesAssignment(patch: Record<string, unknown> | null | undefined) {
   if (!patch) return false;
   return ASSIGNMENT_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+}
+
+export function patchTouchesCollaborators(patch: Record<string, unknown> | null | undefined) {
+  if (!patch) return false;
+  return COLLABORATOR_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
 /** Stable label for task assignee arrays — prefer email over generic placeholders. */
@@ -33,13 +45,79 @@ export function memberAssigneeLabel(
   );
 }
 
+/** Certo model: exactly one primary assignee (0–1 ids). Extra members belong in collaborators. */
 export function assignmentFieldsFromMembers(members: WorkspaceMember[] = []) {
+  const primary = members[0];
+  if (!primary) {
+    return {
+      assigneeIds: [] as string[],
+      assignees: [] as string[],
+      owner: "",
+      assignee: "",
+      assigneeId: "",
+    };
+  }
+  const label = memberAssigneeLabel(primary);
+  return {
+    assigneeIds: [String(primary.id)],
+    assignees: [label].filter(Boolean),
+    owner: label || "",
+    assignee: label || "",
+    assigneeId: String(primary.id),
+  };
+}
+
+export function collaboratorFieldsFromMembers(members: WorkspaceMember[] = []) {
   const labels = members.map((member) => memberAssigneeLabel(member)).filter(Boolean);
   return {
-    assigneeIds: members.map((member) => String(member.id)),
-    assignees: labels,
-    owner: labels[0] || "",
-    assignee: labels[0] || "",
+    collaboratorMemberIds: members.map((member) => String(member.id)),
+    collaborators: labels,
+  };
+}
+
+export function itemCollaboratorMemberIds(item: Record<string, unknown> | null | undefined) {
+  if (!item) return [] as string[];
+  const fromExplicit = Array.isArray(item.collaboratorMemberIds)
+    ? item.collaboratorMemberIds.map((itemId) => String(itemId || "")).filter(Boolean)
+    : [];
+  if (fromExplicit.length) return [...new Set(fromExplicit)];
+  const legacyFollowers = Array.isArray(item.followerIds)
+    ? item.followerIds.map((itemId) => String(itemId || "")).filter(Boolean)
+    : [];
+  return [...new Set(legacyFollowers)];
+}
+
+/**
+ * When legacy multi-assignee data exists, keep the first as assignee and move the rest
+ * into collaborators (without dropping existing collaboratorMemberIds).
+ */
+export function splitMultiAssigneeToCollaborators(
+  item: Record<string, unknown>,
+  members: WorkspaceMember[] = [],
+) {
+  const ids = Array.isArray(item.assigneeIds)
+    ? item.assigneeIds.map((itemId) => String(itemId || "")).filter(Boolean)
+    : [];
+  if (ids.length <= 1) return null;
+  const [primaryId, ...extraIds] = ids;
+  const primary = members.find((member) => member.id === primaryId);
+  const extras = members.filter((member) => extraIds.includes(String(member.id)));
+  const existing = itemCollaboratorMemberIds(item);
+  const collaboratorIds = [...new Set([...existing, ...extraIds])];
+  return {
+    ...(primary
+      ? assignmentFieldsFromMembers([primary])
+      : {
+          assigneeIds: [primaryId],
+          assignees: [String(item.assignee || item.owner || "")].filter(Boolean),
+          owner: String(item.owner || item.assignee || ""),
+          assignee: String(item.assignee || item.owner || ""),
+          assigneeId: primaryId,
+        }),
+    collaboratorMemberIds: collaboratorIds,
+    collaborators: extras.length
+      ? extras.map((member) => memberAssigneeLabel(member))
+      : collaboratorIds,
   };
 }
 
@@ -48,13 +126,19 @@ export function resolveAssigneeSwimlanePatch(
   members: WorkspaceMember[] = [],
 ): Record<string, unknown> {
   if (!swimlaneKey || swimlaneKey === "Unassigned") {
-    return { assignee: "", owner: "", assignees: [], assigneeIds: [] };
+    return { assignee: "", owner: "", assignees: [], assigneeIds: [], assigneeId: "" };
   }
   const matched = members.filter((member) =>
     memberMatchesSelection(member, [], [swimlaneKey]),
   );
-  if (matched.length) return assignmentFieldsFromMembers(matched);
-  return { assignee: swimlaneKey, owner: swimlaneKey, assignees: [swimlaneKey], assigneeIds: [] };
+  if (matched.length) return assignmentFieldsFromMembers(matched.slice(0, 1));
+  return {
+    assignee: swimlaneKey,
+    owner: swimlaneKey,
+    assignees: [swimlaneKey],
+    assigneeIds: [],
+    assigneeId: "",
+  };
 }
 
 export function resolveAssigneeNamePatch(
@@ -66,23 +150,23 @@ export function resolveAssigneeNamePatch(
     memberMatchesSelection(member, [], [assigneeName]),
   );
   if (matched.length) {
-    return assignmentFieldsFromMembers(matched);
+    return assignmentFieldsFromMembers(matched.slice(0, 1));
   }
   return {
     assignee: assigneeName,
     owner: assigneeName,
     assignees: [assigneeName].filter(Boolean),
     assigneeIds: [],
+    assigneeId: "",
   };
 }
 
 /**
  * Normalize an assignment-touching patch so Firestore never keeps stale assigneeIds
- * when only names change (kanban swimlane / automation), and always stores
- * canonical labels for known members.
+ * when only names change, and always stores a single primary assignee.
  */
 export function normalizeAssignmentPatch(
-  _current: Record<string, unknown>,
+  current: Record<string, unknown>,
   patch: Record<string, unknown>,
   members: WorkspaceMember[] = [],
 ): Record<string, unknown> {
@@ -100,25 +184,39 @@ export function normalizeAssignmentPatch(
         assignees: [],
         assignee: "",
         owner: "",
+        assigneeId: "",
       };
     }
-    const matched = members.filter(
+    const primaryId = ids[0];
+    const extras = ids.slice(1);
+    const matched = members.find(
       (member) =>
-        ids.includes(String(member.id)) ||
-        (member.userId ? ids.includes(String(member.userId)) : false),
+        String(member.id) === primaryId ||
+        (member.userId ? String(member.userId) === primaryId : false),
     );
-    if (matched.length) {
-      return { ...patch, ...assignmentFieldsFromMembers(matched) };
-    }
     const labels = Array.isArray(patch.assignees)
       ? patch.assignees.map((item) => String(item || "").trim()).filter(Boolean)
       : [String(patch.assignee || patch.owner || "").trim()].filter(Boolean);
+    const assignment = matched
+      ? assignmentFieldsFromMembers([matched])
+      : {
+          assigneeIds: [primaryId],
+          assignees: labels.slice(0, 1),
+          assignee: labels[0] || "",
+          owner: labels[0] || "",
+          assigneeId: primaryId,
+        };
+
+    if (!extras.length) return { ...patch, ...assignment };
+
+    const existingCollaborators = itemCollaboratorMemberIds({
+      ...current,
+      ...patch,
+    });
     return {
       ...patch,
-      assigneeIds: ids,
-      assignees: labels,
-      assignee: labels[0] || "",
-      owner: labels[0] || "",
+      ...assignment,
+      collaboratorMemberIds: [...new Set([...existingCollaborators, ...extras])],
     };
   }
 
@@ -134,12 +232,38 @@ export function normalizeAssignmentPatch(
       assignees: [],
       assignee: "",
       owner: "",
+      assigneeId: "",
     };
   }
 
   return {
     ...patch,
     ...resolveAssigneeNamePatch(primary || names[0], members, names),
+  };
+}
+
+export function normalizeCollaboratorsPatch(
+  patch: Record<string, unknown>,
+  members: WorkspaceMember[] = [],
+): Record<string, unknown> {
+  if (!patchTouchesCollaborators(patch)) return { ...patch };
+  const ids = Array.isArray(patch.collaboratorMemberIds)
+    ? patch.collaboratorMemberIds.map((item) => String(item || "")).filter(Boolean)
+    : Array.isArray(patch.followerIds)
+      ? patch.followerIds.map((item) => String(item || "")).filter(Boolean)
+      : [];
+  const matched = members.filter(
+    (member) =>
+      ids.includes(String(member.id)) ||
+      (member.userId ? ids.includes(String(member.userId)) : false),
+  );
+  if (matched.length) return { ...patch, ...collaboratorFieldsFromMembers(matched) };
+  return {
+    ...patch,
+    collaboratorMemberIds: ids,
+    collaborators: Array.isArray(patch.collaborators)
+      ? patch.collaborators.map(String)
+      : [],
   };
 }
 
@@ -158,6 +282,17 @@ export function assignmentDiff(
   return { added, removed, changed: added.length > 0 || removed.length > 0 };
 }
 
+export function collaboratorDiff(
+  previous: { collaboratorMemberIds?: unknown; followerIds?: unknown } | null | undefined,
+  next: { collaboratorMemberIds?: unknown; followerIds?: unknown } | null | undefined,
+) {
+  const before = new Set(itemCollaboratorMemberIds(previous as Record<string, unknown>));
+  const after = new Set(itemCollaboratorMemberIds(next as Record<string, unknown>));
+  const added = [...after].filter((id) => id && !before.has(id));
+  const removed = [...before].filter((id) => id && !after.has(id));
+  return { added, removed, changed: added.length > 0 || removed.length > 0 };
+}
+
 export function buildAssignmentNotificationDocs({
   taskId,
   taskTitle,
@@ -166,6 +301,7 @@ export function buildAssignmentNotificationDocs({
   assignedByName,
   members,
   addedMemberIds,
+  type = "task_assigned",
 }: {
   taskId: string;
   taskTitle: string;
@@ -174,6 +310,7 @@ export function buildAssignmentNotificationDocs({
   assignedByName?: string | null;
   members: CollaborationMember[];
   addedMemberIds: string[];
+  type?: "task_assigned" | "task_collaborator";
 }) {
   const selected = new Set(addedMemberIds.map(String));
   return members
@@ -183,7 +320,7 @@ export function buildAssignmentNotificationDocs({
       return uid && uid !== assignedByUserId && !uid.startsWith("pending:");
     })
     .map((member) => ({
-      type: "task_assigned" as const,
+      type,
       taskId,
       taskTitle,
       workspaceId,
@@ -214,6 +351,8 @@ const ARRAY_ID_FIELDS = [
   "accessMemberIds",
   "teamMemberIds",
   "sponsorIds",
+  "collaboratorMemberIds",
+  "followerIds",
 ] as const;
 
 const SCALAR_ID_FIELDS = [

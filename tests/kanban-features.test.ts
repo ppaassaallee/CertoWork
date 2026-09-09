@@ -68,6 +68,7 @@ test("swimlanes group cards by assignee, priority, or project", () => {
     owner: "Ana",
     assignees: ["Ana"],
     assigneeIds: [],
+    assigneeId: "",
   });
 });
 

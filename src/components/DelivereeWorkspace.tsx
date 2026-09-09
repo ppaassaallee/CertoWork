@@ -210,8 +210,11 @@ import {
 import {
   assignmentDiff,
   buildAssignmentNotificationDocs,
+  collaboratorDiff,
   normalizeAssignmentPatch,
+  normalizeCollaboratorsPatch,
   patchTouchesAssignment,
+  patchTouchesCollaborators,
 } from "../lib/taskAssignment";
 import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
@@ -3834,15 +3837,35 @@ export function DelivereeWorkspace() {
       unknown
     >;
     const touchesAssignment = patchTouchesAssignment(patch);
-    const assignmentPatch = touchesAssignment
-      ? normalizeAssignmentPatch(current, patch, workspaceMembers)
-      : patch;
-    const next = { ...current, ...assignmentPatch };
+    const touchesCollaborators = patchTouchesCollaborators(patch);
+    let nextPatch = { ...patch };
+    if (touchesAssignment) {
+      nextPatch = normalizeAssignmentPatch(current, nextPatch, workspaceMembers);
+    }
+    if (touchesCollaborators || Object.prototype.hasOwnProperty.call(nextPatch, "collaboratorMemberIds")) {
+      nextPatch = normalizeCollaboratorsPatch(nextPatch, workspaceMembers);
+    }
+    // Keep the assignee out of the collaborators list.
+    if (Array.isArray(nextPatch.collaboratorMemberIds) && Array.isArray(nextPatch.assigneeIds)) {
+      const assigneeId = String(nextPatch.assigneeIds[0] || "");
+      nextPatch.collaboratorMemberIds = nextPatch.collaboratorMemberIds
+        .map(String)
+        .filter((id) => id && id !== assigneeId);
+    } else if (
+      Array.isArray(nextPatch.collaboratorMemberIds) &&
+      Array.isArray(current.assigneeIds)
+    ) {
+      const assigneeId = String(current.assigneeIds[0] || "");
+      nextPatch.collaboratorMemberIds = nextPatch.collaboratorMemberIds
+        .map(String)
+        .filter((id) => id && id !== assigneeId);
+    }
+    const next = { ...current, ...nextPatch };
     const write: Record<string, unknown> = {
-      ...assignmentPatch,
+      ...nextPatch,
       updatedAt: serverTimestamp(),
     };
-    if (touchesAssignment) {
+    if (touchesAssignment || touchesCollaborators) {
       Object.assign(
         write,
         buildTaskAccessPatch({
@@ -3855,7 +3878,6 @@ export function DelivereeWorkspace() {
       );
     }
 
-    // Optimistic local merge without FieldValue so follow-up edits stay clean.
     const { updatedAt: _ignored, ...localPatch } = write;
     setTasks((prev) =>
       prev.map((item) =>
@@ -3866,7 +3888,6 @@ export function DelivereeWorkspace() {
     try {
       await updateDoc(doc(db, "tasks", taskId), write as any);
     } catch (reason) {
-      // Roll back optimistic merge from the last known Firestore-shaped current.
       setTasks((prev) =>
         prev.map((item) => (item.id === taskId ? { ...item, ...current } : item)),
       );
@@ -3878,32 +3899,63 @@ export function DelivereeWorkspace() {
       throw reason;
     }
 
-    if (!touchesAssignment || !user || !workspace) return;
-    const diff = assignmentDiff(current, write);
-    if (!diff.added.length) return;
-    const notifications = buildAssignmentNotificationDocs({
-      taskId,
-      taskTitle: String(next.title || next.name || "Untitled"),
-      workspaceId: workspace.id,
-      assignedByUserId: user.uid,
-      assignedByName: user.displayName || user.email || "",
-      members: workspaceMembers,
-      addedMemberIds: diff.added,
-    });
-    await Promise.allSettled(
-      notifications.map((payload) =>
-        addDoc(collection(db, "user_notifications"), {
-          ...payload,
-          createdAt: serverTimestamp(),
-        }),
-      ),
-    );
-    if (notifications.length) {
-      setNotice(
-        notifications.length === 1
-          ? `Assigned “${notifications[0].taskTitle}” — they’ll see it in My Work.`
-          : `Assigned “${String(next.title || "item")}” to ${notifications.length} people — they’ll see it in My Work.`,
-      );
+    if (!user || !workspace) return;
+    const taskTitle = String(next.title || next.name || "Untitled");
+    if (touchesAssignment) {
+      const diff = assignmentDiff(current, write);
+      if (diff.added.length) {
+        const notifications = buildAssignmentNotificationDocs({
+          taskId,
+          taskTitle,
+          workspaceId: workspace.id,
+          assignedByUserId: user.uid,
+          assignedByName: user.displayName || user.email || "",
+          members: workspaceMembers,
+          addedMemberIds: diff.added.slice(0, 1),
+          type: "task_assigned",
+        });
+        await Promise.allSettled(
+          notifications.map((payload) =>
+            addDoc(collection(db, "user_notifications"), {
+              ...payload,
+              createdAt: serverTimestamp(),
+            }),
+          ),
+        );
+        if (notifications.length) {
+          setNotice(`Assigned “${taskTitle}” — they’ll see it in My Work.`);
+        }
+      }
+    }
+    if (touchesCollaborators) {
+      const diff = collaboratorDiff(current, write);
+      if (diff.added.length) {
+        const notifications = buildAssignmentNotificationDocs({
+          taskId,
+          taskTitle,
+          workspaceId: workspace.id,
+          assignedByUserId: user.uid,
+          assignedByName: user.displayName || user.email || "",
+          members: workspaceMembers,
+          addedMemberIds: diff.added,
+          type: "task_collaborator",
+        });
+        await Promise.allSettled(
+          notifications.map((payload) =>
+            addDoc(collection(db, "user_notifications"), {
+              ...payload,
+              createdAt: serverTimestamp(),
+            }),
+          ),
+        );
+        if (notifications.length) {
+          setNotice(
+            notifications.length === 1
+              ? `Added a collaborator on “${taskTitle}”.`
+              : `Added ${notifications.length} collaborators on “${taskTitle}”.`,
+          );
+        }
+      }
     }
   };
 
@@ -6729,6 +6781,7 @@ export function DelivereeWorkspace() {
               )}
               workspace={workspace}
               workspaceMembers={workspaceMembers}
+              workspaceTeams={workspaceTeams}
               projects={projects}
             />
           ) : (
@@ -6905,6 +6958,7 @@ export function DelivereeWorkspace() {
                   (item) => item.projectId === consoleProject.id,
                 )}
                 workspaceMembers={workspaceMembers}
+                workspaceTeams={workspaceTeams}
                 projects={projects}
               />
             ) : (
@@ -7864,7 +7918,9 @@ export function DelivereeWorkspace() {
                   <strong>{workspaceTeams.length} teams</strong>
                 </div>
                 <p className="do-invite-delivery-banner">
-                  Teams are groups (Engineering, Ops). To add a person, use Invite with their email — do not create a team named after an email.
+                  Hierarchy: Workspace → Teams → Projects → Items. Teams (Engineering, Ops) own projects.
+                  Assign each task to exactly one person; add Collaborators on the item for followers.
+                  Invite people by email — do not create a team named after an email.
                 </p>
                 <div className="do-workspace-create-row">
                   <input

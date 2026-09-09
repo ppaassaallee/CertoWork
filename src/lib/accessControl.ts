@@ -108,8 +108,13 @@ export function buildTaskAccessPatch({
   members?: CollaborationMember[];
 }) {
   const assigneeIds = Array.isArray(task?.assigneeIds)
-    ? (task?.assigneeIds as unknown[]).map((item) => String(item))
+    ? (task?.assigneeIds as unknown[]).map((item) => String(item)).slice(0, 1)
     : [];
+  const collaboratorMemberIds = Array.isArray(task?.collaboratorMemberIds)
+    ? (task?.collaboratorMemberIds as unknown[]).map((item) => String(item))
+    : Array.isArray(task?.followerIds)
+      ? (task?.followerIds as unknown[]).map((item) => String(item))
+      : [];
   const explicitUserIds = Array.isArray(task?.visibleToUserIds)
     ? (task?.visibleToUserIds as unknown[]).map((item) => String(item))
     : [];
@@ -119,17 +124,36 @@ export function buildTaskAccessPatch({
   const sharedWithUserIds = Array.isArray(task?.sharedWithUserIds)
     ? (task?.sharedWithUserIds as unknown[]).map((item) => String(item))
     : [];
-  const collaborators = collaboratorAccessFromMembers(members, assigneeIds);
+  const assignees = collaboratorAccessFromMembers(members, assigneeIds);
+  const followers = collaboratorAccessFromMembers(members, collaboratorMemberIds);
   return {
     visibility: String(task?.visibility || "private"),
-    visibleToUserIds: unique([userId, ...explicitUserIds, ...sharedWithUserIds, ...collaborators.userIds]),
-    visibleToEmails: unique([normalizeAccessEmail(email), ...explicitEmails, ...collaborators.emails]),
-    sharedWithUserIds: unique([...sharedWithUserIds, ...collaborators.userIds]),
+    visibleToUserIds: unique([
+      userId,
+      ...explicitUserIds,
+      ...sharedWithUserIds,
+      ...assignees.userIds,
+      ...followers.userIds,
+    ]),
+    visibleToEmails: unique([
+      normalizeAccessEmail(email),
+      ...explicitEmails,
+      ...assignees.emails,
+      ...followers.emails,
+    ]),
+    sharedWithUserIds: unique([
+      ...sharedWithUserIds,
+      ...assignees.userIds,
+      ...followers.userIds,
+    ]),
     assigneeIds,
+    collaboratorMemberIds: unique(collaboratorMemberIds),
     accessMemberIds: unique([
       activeWorkspaceMemberId(workspaceId, userId),
       ...assigneeIds,
-      ...collaborators.memberIds,
+      ...collaboratorMemberIds,
+      ...assignees.memberIds,
+      ...followers.memberIds,
     ]),
   };
 }
