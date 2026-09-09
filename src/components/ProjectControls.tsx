@@ -146,6 +146,7 @@ export function MultiAssigneePicker({
   onInviteEmail,
   label = "Assignees",
   compact = false,
+  triggerTestId,
 }: {
   members: AssignableMember[];
   selectedIds?: string[];
@@ -154,6 +155,7 @@ export function MultiAssigneePicker({
   onInviteEmail?: (email: string) => Promise<void> | void;
   label?: string;
   compact?: boolean;
+  triggerTestId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -183,23 +185,36 @@ export function MultiAssigneePicker({
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const width = 300;
-    const estimatedHeight = Math.min(360, 120 + activeMembers.length * 44 + (onInviteEmail ? 72 : 0));
+    const gap = 6;
+    const measured = menuRef.current?.offsetHeight;
+    const estimated =
+      measured ||
+      Math.min(320, 120 + activeMembers.length * 44 + (onInviteEmail ? 72 : 0) + (orphanNames.length ? 48 : 0));
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    const openUp = spaceBelow < Math.min(estimated, 240) && spaceAbove > spaceBelow;
+    const available = Math.max(140, openUp ? spaceAbove : spaceBelow);
+    const maxHeight = Math.min(320, available);
     let left = Math.min(rect.right - width, window.innerWidth - width - 8);
     if (left < 8) left = 8;
-    const openUp = rect.bottom + estimatedHeight + 8 > window.innerHeight && rect.top > estimatedHeight;
-    const top = openUp ? Math.max(8, rect.top - estimatedHeight - 6) : rect.bottom + 6;
+    const top = openUp
+      ? Math.max(8, rect.top - Math.min(estimated, maxHeight) - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - 8);
     setMenuStyle({
       position: "fixed",
       top,
       left,
       width,
-      zIndex: 240,
+      maxHeight,
+      overflowY: "auto",
+      zIndex: 260,
     });
   };
 
   useEffect(() => {
     if (!open) return;
     placeMenu();
+    const frame = window.requestAnimationFrame(() => placeMenu());
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -210,11 +225,12 @@ export function MultiAssigneePicker({
     window.addEventListener("resize", onReposition);
     window.addEventListener("scroll", onReposition, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("mousedown", onPointerDown);
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
-  }, [open, activeMembers.length, onInviteEmail]);
+  }, [open, activeMembers.length, onInviteEmail, orphanNames.length]);
 
   const toggle = (member: AssignableMember) => {
     const isSelected = selected.some((candidate) => candidate.id === member.id);
@@ -247,6 +263,7 @@ export function MultiAssigneePicker({
         aria-haspopup="listbox"
         aria-label={`${label}: ${selected.length} selected`}
         className={`cw-multi-assignee-trigger${compact ? " is-avatars" : ""}`}
+        data-testid={triggerTestId}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -261,7 +278,7 @@ export function MultiAssigneePicker({
               <em aria-hidden="true" key={member.id}>{memberAvatar(member)}</em>
             ))
           ) : (
-            <em className="is-empty" aria-hidden="true">+</em>
+            <Users size={13} />
           )
         ) : (
           <>

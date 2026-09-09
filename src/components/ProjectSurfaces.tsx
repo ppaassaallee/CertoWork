@@ -1474,6 +1474,7 @@ export function ProjectConsolePanel({
   driveMessage = "",
   tags = [],
   onCreateControlledOption,
+  onInviteAssigneeEmail,
   projects: workspaceProjects,
 }: {
   project: any;
@@ -1519,6 +1520,7 @@ export function ProjectConsolePanel({
   driveMessage?: string;
   tags?: TagLike[];
   projects?: any[];
+  onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   onCreateControlledOption?: (
     group: "delivery_entity" | "client_entity" | "tag",
     name: string,
@@ -1686,7 +1688,10 @@ export function ProjectConsolePanel({
   };
 
   return (
-    <section className="do-project-console" data-testid="project-console">
+    <section
+      className={`do-project-console${tab === "items" ? " is-items-tab" : ""}`}
+      data-testid="project-console"
+    >
       <datalist id="do-project-member-options">
         {assignmentOptions.map((owner) => (
           <option key={owner} value={owner} />
@@ -1984,6 +1989,7 @@ export function ProjectConsolePanel({
             onAsk={onAsk}
             onCreateControlledOption={onCreateControlledOption}
             onCreateSprint={onCreateSprint}
+            onInviteAssigneeEmail={onInviteAssigneeEmail}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}
