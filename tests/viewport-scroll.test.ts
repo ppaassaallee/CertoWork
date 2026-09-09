@@ -12,6 +12,18 @@ test("app shell locks to the viewport and allows pane scrolling", () => {
   assert.match(css, /\.do-thread-viewport\s*\{[^}]*overflow-y:\s*auto/s);
 });
 
+test("project Items tab fills leftover console height instead of leaving a white band", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  const surfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
+  const controls = readFileSync(resolve("src/components/ProjectControls.tsx"), "utf8");
+  assert.match(surfaces, /is-items-tab/);
+  assert.match(css, /\.do-main > \.do-project-console\.is-items-tab/);
+  assert.match(css, /\.do-project-console\.is-items-tab > \.do-console-section\[data-testid="project-items"\]/);
+  assert.match(controls, /maxHeight/);
+  assert.match(controls, /requestAnimationFrame/);
+  assert.match(controls, /createPortal/);
+});
+
 test("landing is a bounded scrollport so phones can scroll the page", () => {
   const css = readFileSync(resolve("src/styles/landing.css"), "utf8");
   const app = readFileSync(resolve("src/App.tsx"), "utf8");

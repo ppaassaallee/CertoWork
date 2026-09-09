@@ -326,7 +326,7 @@ test("expanded tree nodes offer an inline add-child control", () => {
 
 test("add item form exposes optional quick attributes before create", () => {
   assert.match(workItems, /data-testid="item-create-due"/);
-  assert.match(workItems, /data-testid="item-create-assignee"/);
+  assert.match(workItems, /triggerTestId="item-create-assignee"|data-testid="item-create-assignee"/);
   assert.match(workItems, /data-testid="item-create-priority"/);
   assert.match(workItems, /data-testid="item-create-delivery"/);
   assert.match(workItems, /newDueDate/);
