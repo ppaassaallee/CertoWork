@@ -28,6 +28,7 @@ import {
 import { inviteIsUsable, inviteShouldCloseOnJoin } from './inviteLifecycle';
 import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
 import { grantsWorkspacePortfolioAccess } from './accessControl';
+import { remapWorkspaceAccessAfterInviteAccept } from './inviteAcceptRemap';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -241,9 +242,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 await withTimeout(updateDoc(mDoc.ref, {
                   status: "accepted",
                   acceptedUserId: u.uid,
+                  acceptedMemberId: memberId,
                   acceptedAt: serverTimestamp(),
                   updatedAt: serverTimestamp(),
                 }), 5_000, `Mark invite ${wsId} accepted`);
+                await withTimeout(
+                  remapWorkspaceAccessAfterInviteAccept({
+                    db,
+                    workspaceId: wsId,
+                    pendingMemberId: mDoc.id,
+                    activeMemberId: memberId,
+                    userId: u.uid,
+                    email: u.email || emailLower,
+                  }),
+                  12_000,
+                  `Remap assignees ${wsId}`,
+                ).catch((remapError) => {
+                  console.error(`Failed to remap assignees for ${wsId}:`, remapError);
+                });
               }
               await Promise.all(inviteSnaps.map(async (inviteDoc) => {
                 const inviteData = inviteDoc.data() as {

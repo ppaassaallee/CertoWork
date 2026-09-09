@@ -68,6 +68,7 @@ export const BarChart = wrapped.BarChart;
 export const BarChart2 = wrapped.BarChart2;
 export const BarChart3 = wrapped.BarChart3;
 export const Battery = wrapped.Battery;
+export const Bell = wrapped.Bell;
 export const BellOff = wrapped.BellOff;
 export const Bike = wrapped.Bike;
 export const Book = wrapped.Book;

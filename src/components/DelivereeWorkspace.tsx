@@ -188,6 +188,7 @@ import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { MyWorkTodayPanel } from "./MyWorkTodayPanel";
 import { FeedbackCenter } from "./FeedbackCenter";
+import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
@@ -206,6 +207,12 @@ import {
   projectAccessNameValues,
   shouldTryWorkspacePortfolioQuery,
 } from "../lib/accessControl";
+import {
+  assignmentDiff,
+  buildAssignmentNotificationDocs,
+  normalizeAssignmentPatch,
+  patchTouchesAssignment,
+} from "../lib/taskAssignment";
 import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
 import {
   DELIVEREE_SKILLS,
@@ -3704,6 +3711,26 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    const createdDiff = assignmentDiff({}, assigned);
+    if (createdDiff.added.length) {
+      const notifications = buildAssignmentNotificationDocs({
+        taskId: created.id,
+        taskTitle: title,
+        workspaceId: workspace.id,
+        assignedByUserId: user.uid,
+        assignedByName: user.displayName || user.email || "",
+        members: workspaceMembers,
+        addedMemberIds: createdDiff.added,
+      });
+      await Promise.allSettled(
+        notifications.map((payload) =>
+          addDoc(collection(db, "user_notifications"), {
+            ...payload,
+            createdAt: serverTimestamp(),
+          }),
+        ),
+      );
+    }
     return created.id;
   };
 
@@ -3802,19 +3829,82 @@ export function DelivereeWorkspace() {
     taskId: string,
     patch: Record<string, unknown>,
   ) => {
-    const current = tasks.find((item) => item.id === taskId) || {};
-    const next = { ...current, ...patch };
-    await updateDoc(doc(db, "tasks", taskId), {
-      ...patch,
-      ...buildTaskAccessPatch({
-        task: next,
-        workspaceId: workspace?.id || String(next.workspaceId || ""),
-        userId: user?.uid || String(next.userId || ""),
-        email: user?.email || "",
-        members: workspaceMembers,
-      }),
+    const current = (tasks.find((item) => item.id === taskId) || {}) as Record<
+      string,
+      unknown
+    >;
+    const touchesAssignment = patchTouchesAssignment(patch);
+    const assignmentPatch = touchesAssignment
+      ? normalizeAssignmentPatch(current, patch, workspaceMembers)
+      : patch;
+    const next = { ...current, ...assignmentPatch };
+    const write: Record<string, unknown> = {
+      ...assignmentPatch,
       updatedAt: serverTimestamp(),
+    };
+    if (touchesAssignment) {
+      Object.assign(
+        write,
+        buildTaskAccessPatch({
+          task: next,
+          workspaceId: workspace?.id || String(next.workspaceId || ""),
+          userId: user?.uid || String(next.userId || ""),
+          email: user?.email || "",
+          members: workspaceMembers,
+        }),
+      );
+    }
+
+    // Optimistic local merge without FieldValue so follow-up edits stay clean.
+    const { updatedAt: _ignored, ...localPatch } = write;
+    setTasks((prev) =>
+      prev.map((item) =>
+        item.id === taskId ? { ...item, ...localPatch } : item,
+      ),
+    );
+
+    try {
+      await updateDoc(doc(db, "tasks", taskId), write as any);
+    } catch (reason) {
+      // Roll back optimistic merge from the last known Firestore-shaped current.
+      setTasks((prev) =>
+        prev.map((item) => (item.id === taskId ? { ...item, ...current } : item)),
+      );
+      setNotice(
+        reason instanceof Error
+          ? `Could not update item: ${reason.message}`
+          : "Could not update item.",
+      );
+      throw reason;
+    }
+
+    if (!touchesAssignment || !user || !workspace) return;
+    const diff = assignmentDiff(current, write);
+    if (!diff.added.length) return;
+    const notifications = buildAssignmentNotificationDocs({
+      taskId,
+      taskTitle: String(next.title || next.name || "Untitled"),
+      workspaceId: workspace.id,
+      assignedByUserId: user.uid,
+      assignedByName: user.displayName || user.email || "",
+      members: workspaceMembers,
+      addedMemberIds: diff.added,
     });
+    await Promise.allSettled(
+      notifications.map((payload) =>
+        addDoc(collection(db, "user_notifications"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        }),
+      ),
+    );
+    if (notifications.length) {
+      setNotice(
+        notifications.length === 1
+          ? `Assigned “${notifications[0].taskTitle}” — they’ll see it in My Work.`
+          : `Assigned “${String(next.title || "item")}” to ${notifications.length} people — they’ll see it in My Work.`,
+      );
+    }
   };
 
   const captureUsername = () =>
@@ -5772,6 +5862,13 @@ export function DelivereeWorkspace() {
             />
           </div>
           <div className="do-header-actions">
+            <AssignmentNotificationsBell
+              onOpenTask={(taskId) => {
+                setSelectedWorkItemId(taskId);
+                navigate("/my-work");
+              }}
+              userId={user?.uid}
+            />
             {mobileCore && (
               <>
                 <button

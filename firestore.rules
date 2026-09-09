@@ -1392,6 +1392,21 @@ service cloud.firestore {
     match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
     match /agent_resources/{id} { allow read, write: if isSignedIn(); }
     match /agent_invites/{id} { allow read, write: if isSignedIn(); }
+    match /user_notifications/{id} {
+      allow get, list: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId is string
+        && incoming().assignedByUserId == request.auth.uid
+        && incoming().type is string
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && incoming().userId == resource.data.userId;
+      allow delete: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
+    }
     match /sprints/{id} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().workspaceId is string && isWorkspaceMember(incoming().workspaceId);

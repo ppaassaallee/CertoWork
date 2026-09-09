@@ -29,6 +29,7 @@ import {
 } from "../lib/inviteActivate";
 import { inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
 import { membershipPublicPatch, pendingMemberId } from "../lib/workspaceCollaboration";
+import { remapWorkspaceAccessAfterInviteAccept } from "../lib/inviteAcceptRemap";
 
 type Props = {
   token: string;
@@ -112,6 +113,14 @@ export function InviteActivate({ token }: Props) {
         acceptedMemberId: memberId,
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+      }).catch(() => undefined);
+      await remapWorkspaceAccessAfterInviteAccept({
+        db,
+        workspaceId,
+        pendingMemberId: pendingId,
+        activeMemberId: memberId,
+        userId: current.uid,
+        email: current.email || invitedEmail,
       }).catch(() => undefined);
     }
     setNotice("Account activated. Opening Certo Work…");

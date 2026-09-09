@@ -54,6 +54,7 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
+import { assignmentFieldsFromMembers } from "../lib/taskAssignment";
 import {
   collaborationShareGrant,
   withCollaboratorAccess,
@@ -1207,7 +1208,6 @@ export function WorkItemsCenter({
     const parent = findPoolItem(newParentId);
     const links = parentLinkPatch(parent);
     const assigneeMember = workspaceMembers.find((member) => member.id === newAssigneeId || member.userId === newAssigneeId);
-    const assigneeName = assigneeMember ? memberName(assigneeMember) : "";
     await onAddTask(projectId, newTitle.trim(), "backlog", {
       workItemType: newType,
       itemType: newType,
@@ -1221,12 +1221,7 @@ export function WorkItemsCenter({
       productPhase: project ? productPhase(project) : "Explore",
       priority: newPriority === "N/A" ? null : newPriority,
       dueDate: newDueDate || null,
-      ...(assigneeMember ? {
-        assigneeIds: [assigneeMember.id],
-        assignees: [assigneeName],
-        owner: assigneeName,
-        assignee: assigneeName,
-      } : {}),
+      ...(assigneeMember ? assignmentFieldsFromMembers([assigneeMember as any]) : {}),
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
     });
@@ -1426,9 +1421,15 @@ export function WorkItemsCenter({
         } else if (canonicalStatus(item) === "done") {
           patch.completedAt = null;
         }
-        Object.assign(patch, applyKanbanAutomations(item, parsed.columnKey, kanbanAutomations));
+        Object.assign(
+          patch,
+          applyKanbanAutomations(item, parsed.columnKey, kanbanAutomations, workspaceMembers),
+        );
       }
-      Object.assign(patch, swimlaneMovePatch(kanbanSwimlane, parsed.swimlaneKey, projects));
+      Object.assign(
+        patch,
+        swimlaneMovePatch(kanbanSwimlane, parsed.swimlaneKey, projects, workspaceMembers),
+      );
     }
     try {
       await onUpdateTask(item.id, patch);
@@ -3462,12 +3463,16 @@ export function WorkItemsCenter({
                 return;
               }
               const member = workspaceMembers.find((item) => item.id === bulkAssigneeId);
-              updateBulk({
-                assigneeIds: member ? [member.id] : [],
-                assignees: member ? [memberName(member)] : [],
-                owner: member ? memberName(member) : "",
-                assignee: member ? memberName(member) : "",
-              });
+              updateBulk(
+                member
+                  ? assignmentFieldsFromMembers([member as any])
+                  : {
+                      assigneeIds: [],
+                      assignees: [],
+                      owner: "",
+                      assignee: "",
+                    },
+              );
             }}
             type="button"
           >

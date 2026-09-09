@@ -204,6 +204,16 @@ test("kanban presence is workspace-member scoped", () => {
   assert.match(presence, /KANBAN_PRESENCE_COLLECTION = "kanban_board_presence"/);
 });
 
+test("assignment notifications are readable only by the target user", () => {
+  assert.match(rules, /match \/user_notifications\/\{id\}/);
+  assert.match(rules, /incoming\(\)\.assignedByUserId == request\.auth\.uid/);
+  assert.match(rules, /resource\.data\.userId == request\.auth\.uid/);
+  const bell = readFileSync(resolve("src/components/AssignmentNotificationsBell.tsx"), "utf8");
+  assert.match(bell, /user_notifications/);
+  const assignment = readFileSync(resolve("src/lib/taskAssignment.ts"), "utf8");
+  assert.match(assignment, /task_assigned/);
+});
+
 test("workspaces are tenant-private and do not allow every signed-in user to read names", () => {
   const start = rules.indexOf("match /workspaces/{id} {");
   assert.ok(start >= 0, "workspaces match block missing");
