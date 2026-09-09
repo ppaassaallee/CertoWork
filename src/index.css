@@ -12149,6 +12149,77 @@ a {
   color: var(--text-secondary);
   font-size: var(--text-caption);
 }
+.cw-multi-assignee-orphan {
+  margin: 0 0 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #b45309 12%, var(--surface-0));
+  color: #7c3d0a;
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+.cw-multi-assignee-invite {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.cw-multi-assignee-invite input {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.cw-multi-assignee-invite button {
+  border: 1px solid #1f6b45;
+  border-radius: 8px;
+  background: #1f6b45;
+  color: #fff;
+  font-size: var(--text-caption);
+  font-weight: 650;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.cw-multi-assignee-invite button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.do-orphan-assignees {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.do-orphan-assignee-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.do-orphan-assignee-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 10px;
+  background: var(--surface-0);
+}
+.do-orphan-assignee-list button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  padding: 6px 10px;
+  font-size: var(--text-caption);
+  font-weight: 650;
+  cursor: pointer;
+}
 .cw-alias-editor {
   display: grid;
   gap: 10px;
