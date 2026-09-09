@@ -181,9 +181,29 @@ test("workspace invite email route requires authentication", async () => {
 
 test("invite emails use the public certo.work origin and fail loudly without Brevo", async () => {
   const source = readFileSync(resolve("worker/index.js"), "utf8");
-  assert.match(source, /function publicAppOrigin/);
-  assert.match(source, /do not request beta access/i);
+  const template = readFileSync(resolve("worker/inviteEmail.js"), "utf8");
+  assert.match(template, /function publicAppOrigin/);
+  assert.match(template, /do not request beta access/i);
+  assert.match(template, /reminder_final/);
   assert.match(source, /result\.configured \? 502 : 503/);
+  assert.match(source, /\/api\/email\/invite\/delivery/);
+  assert.match(source, /inviteToken is required/);
+});
+
+test("workspace invite delivery route requires authentication", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/email/invite/delivery", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        toEmail: "team@example.com",
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
 });
 
 test("Sites worker exposes the signed-in platform identity for the migration path", async () => {

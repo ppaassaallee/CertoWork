@@ -109,7 +109,9 @@ import {
   timestamp,
 } from "../lib/workspaceDisplay";
 import { productPhase, workCategory } from "../lib/workClassification";
-import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable } from "../lib/inviteLifecycle";
+import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
+import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/emailClient";
+import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
@@ -233,7 +235,6 @@ import {
   conversationTitleForMessage,
   streamConversationReply,
 } from "../lib/conversationSession";
-import { sendWorkspaceInviteEmail } from "../lib/emailClient";
 import {
   isAllowedProjectResourceSize,
 } from "../lib/projectResources";
@@ -349,6 +350,8 @@ export function DelivereeWorkspace() {
     sendPasswordReset,
     logOut,
   } = useAuth();
+  const { capabilities } = usePlatformCapabilities();
+  const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
@@ -2837,6 +2840,7 @@ export function DelivereeWorkspace() {
       { merge: true },
     );
     const inviteToken = createInviteCode();
+    const expiresAt = inviteExpiresAt();
     const inviteRef = await addDoc(collection(db, "agent_invites"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -2846,7 +2850,9 @@ export function DelivereeWorkspace() {
       inviteType: "workspace_member",
       inviteToken,
       status: "pending",
-      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      expiresAt,
+      reminderCount: 0,
+      nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2856,6 +2862,8 @@ export function DelivereeWorkspace() {
       role: inviteRole,
       inviteToken,
       inviteId: inviteRef.id,
+      kind: "invite",
+      expiresAt,
     });
     const inviteUrl = inviteDirectoryUrl(inviteToken);
     try {
@@ -2867,7 +2875,7 @@ export function DelivereeWorkspace() {
     await reloadWorkspaces();
     setNotice(
       result.sent
-        ? `Invite emailed to ${email}. Invite link copied — they must open it and sign in with that exact email.`
+        ? `Invite emailed to ${email}. Link copied. Reminders go out on day 1, 3, and 6 if they have not joined.`
         : `Invite saved for ${email}, but email was not delivered: ${result.warning}. Invite link copied — share it manually: ${inviteUrl}`,
     );
     } catch (reason) {
@@ -2904,11 +2912,17 @@ export function DelivereeWorkspace() {
     role,
     inviteToken,
     inviteId,
+    kind = "invite",
+    expiresAt,
+    inviteCreatedAt,
   }: {
     email: string;
     role: string;
     inviteToken: string;
     inviteId: string;
+    kind?: InviteEmailKind;
+    expiresAt?: Date | null;
+    inviteCreatedAt?: any;
   }) => {
     if (!user || !workspace) {
       return { sent: false, warning: "Sign in to send the invite email." };
@@ -2925,16 +2939,43 @@ export function DelivereeWorkspace() {
         inviterName: user.displayName,
         inviterEmail: user.email,
         inviteToken,
+        kind,
+        expiresLabel: inviteExpiresLabel(expiresAt),
       });
       const sent = Boolean(result.sent);
-      const warning = sent ? "" : result.error || "Brevo is not configured yet.";
+      const warning = sent
+        ? ""
+        : result.error ||
+          (result.configured === false
+            ? "BREVO_API_KEY is not configured on the Certo Work worker."
+            : "Invite email provider rejected the send.");
+      const schedule = reminderScheduleAfterSend(
+        { createdAt: inviteCreatedAt || Date.now() },
+        kind,
+      );
+      const reminderPatch =
+        kind === "invite"
+          ? {
+              reminderCount: 0,
+              nextReminderAt: schedule.nextReminderAt,
+              lastEmailKind: "invite",
+            }
+          : {
+              reminderCount: schedule.reminderCount,
+              nextReminderAt: schedule.nextReminderAt,
+              lastEmailKind: kind,
+              lastReminderAt: serverTimestamp(),
+            };
       await updateDoc(doc(db, "agent_invites", inviteId), {
-        emailDeliveryStatus: sent ? "sent" : "not_sent",
+        emailDeliveryStatus: sent ? "sent" : result.configured === false ? "not_sent" : "failed",
         emailDeliveryError: sent ? "" : warning,
         emailSentAt: sent ? serverTimestamp() : null,
+        emailMessageId: sent ? result.messageId || "" : "",
+        emailProviderAcceptedAt: sent ? serverTimestamp() : null,
+        ...reminderPatch,
         updatedAt: serverTimestamp(),
       });
-      return { sent, warning };
+      return { sent, warning, messageId: result.messageId || "" };
     } catch (error) {
       const warning =
         error instanceof Error ? error.message : "Invite email could not be sent.";
@@ -2944,6 +2985,39 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       });
       return { sent: false, warning };
+    }
+  };
+
+  const confirmInviteDelivery = async (row: {
+    email: string;
+    invite?: Record<string, any> | null;
+  }) => {
+    if (!user || !workspace || !row.invite?.id) return;
+    try {
+      const token = await user.getIdToken();
+      const result = await checkWorkspaceInviteDelivery({
+        token,
+        userId: user.uid,
+        workspaceId: workspace.id,
+        toEmail: row.email,
+        messageId: row.invite.emailMessageId || "",
+      });
+      await updateDoc(doc(db, "agent_invites", String(row.invite.id)), {
+        emailDeliveryStatus: result.status || row.invite.emailDeliveryStatus || "unknown",
+        emailDeliveryError: result.error || "",
+        emailDeliveryCheckedAt: serverTimestamp(),
+        emailMessageId: result.messageId || row.invite.emailMessageId || "",
+        updatedAt: serverTimestamp(),
+      });
+      setNotice(
+        `Delivery for ${row.email}: ${inviteDeliveryLabel(result.status, result.error)}`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Delivery check failed: ${reason.message}`
+          : "Delivery check failed.",
+      );
     }
   };
 
@@ -2963,13 +3037,16 @@ export function DelivereeWorkspace() {
     try {
       let inviteId = String(row.invite?.id || "");
       let inviteToken = String(row.invite?.inviteToken || "");
+      const expiresAt = inviteExpiresAt();
       if (!inviteId || inviteIsExpired(row.invite) || !inviteToken) {
         inviteToken = createInviteCode();
         if (inviteId) {
           await updateDoc(doc(db, "agent_invites", inviteId), {
             inviteToken,
             status: "pending",
-            expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            expiresAt,
+            reminderCount: 0,
+            nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
             updatedAt: serverTimestamp(),
           });
         } else {
@@ -2982,23 +3059,34 @@ export function DelivereeWorkspace() {
             inviteType: "workspace_member",
             inviteToken,
             status: "pending",
-            expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            expiresAt,
+            reminderCount: 0,
+            nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
           inviteId = inviteRef.id;
         }
+      } else {
+        await updateDoc(doc(db, "agent_invites", inviteId), {
+          expiresAt,
+          reminderCount: 0,
+          nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          updatedAt: serverTimestamp(),
+        });
       }
       const result = await deliverWorkspaceInvite({
         email,
         role,
         inviteToken,
         inviteId,
+        kind: "invite",
+        expiresAt,
       });
       setNotice(
         result.sent
-          ? `Invite resent to ${email}.`
+          ? `Invite resent to ${email}. Reminder cycle restarted.`
           : `Invite saved for ${email}, but no email was sent yet: ${result.warning}`,
       );
     } catch (reason) {
@@ -3009,6 +3097,45 @@ export function DelivereeWorkspace() {
       );
     }
   };
+
+  useEffect(() => {
+    if (!user || !workspace || !canManageMembers) return;
+    if (!emailInvitesConfigured) return;
+    let cancelled = false;
+    const dueRows = pendingInvites.filter((row) => dueInviteReminder(row.invite));
+    if (!dueRows.length) return;
+    const runKey = dueRows.map((row) => `${row.invite?.id}:${dueInviteReminder(row.invite)?.kind}`).join("|");
+    if ((window as any).__certoInviteReminderRun === runKey) return;
+    (window as any).__certoInviteReminderRun = runKey;
+    void (async () => {
+      let sentCount = 0;
+      for (const row of dueRows) {
+        if (cancelled || !row.invite?.id || !row.invite?.inviteToken) continue;
+        const due = dueInviteReminder(row.invite);
+        if (!due) continue;
+        const result = await deliverWorkspaceInvite({
+          email: row.email,
+          role: String(row.role || row.invite.role || "member"),
+          inviteToken: String(row.invite.inviteToken),
+          inviteId: String(row.invite.id),
+          kind: due.kind,
+          expiresAt: row.invite.expiresAt?.toDate?.() || row.invite.expiresAt || null,
+          inviteCreatedAt: row.invite.createdAt,
+        });
+        if (result.sent) sentCount += 1;
+      }
+      if (!cancelled && sentCount > 0) {
+        setNotice(
+          sentCount === 1
+            ? "Sent 1 invite reminder."
+            : `Sent ${sentCount} invite reminders.`,
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, workspace?.id, canManageMembers, emailInvitesConfigured, pendingInvites]);
 
   const requestPasswordReset = async () => {
     if (!user?.email) {
@@ -7182,6 +7309,18 @@ export function DelivereeWorkspace() {
                   <span className="do-kicker">Invite</span>
                   <strong>Access control</strong>
                 </div>
+                {!emailInvitesConfigured && (
+                  <p className="do-invite-delivery-banner is-warn">
+                    Invite emails are not configured on this environment (`BREVO_API_KEY` missing).
+                    Invites still create a link you can copy, but nothing will reach the inbox until Brevo is connected.
+                  </p>
+                )}
+                {emailInvitesConfigured && (
+                  <p className="do-invite-delivery-banner">
+                    Certo Work emails invites immediately, then reminds on day 1, 3, and 6. Invites expire after 7 days.
+                    Use Confirm delivery to check Brevo inbox status.
+                  </p>
+                )}
                 <div className="do-workspace-create-row">
                   <input
                     onChange={(event) => setInviteEmail(event.target.value)}
@@ -7450,8 +7589,12 @@ export function DelivereeWorkspace() {
                   </div>
                   {pendingInvites.map((row) => {
                     const invite = row.invite;
-                    const delivery = String(row.deliveryStatus || invite?.emailDeliveryStatus || "")
-                      .replace(/_/g, " ");
+                    const delivery = inviteDeliveryLabel(
+                      row.deliveryStatus || invite?.emailDeliveryStatus,
+                      invite?.emailDeliveryError,
+                    );
+                    const due = dueInviteReminder(invite);
+                    const remindersSent = Number(invite?.reminderCount || 0) || 0;
                     return (
                       <article className="do-pending-invite-row" key={row.key}>
                         <div>
@@ -7460,13 +7603,14 @@ export function DelivereeWorkspace() {
                           </strong>
                           <small>
                             {roleLabel(row.role)} · Invited
-                            {canSeeMemberEmails
-                              ? delivery
-                                ? ` · email ${delivery}`
-                                : " · email not sent yet"
-                              : ""}
+                            {canSeeMemberEmails ? ` · ${delivery}` : ""}
+                            {remindersSent > 0 ? ` · ${remindersSent} reminder${remindersSent === 1 ? "" : "s"}` : ""}
+                            {due ? ` · reminder due (${due.kind.replace(/_/g, " ")})` : ""}
                             {invite && inviteIsExpired(invite) ? " · expired" : ""}
                           </small>
+                          {canSeeMemberEmails && invite?.emailDeliveryError ? (
+                            <small className="do-invite-delivery-error">{invite.emailDeliveryError}</small>
+                          ) : null}
                         </div>
                         {canManageMembers && (
                           <div className="do-pending-invite-actions">
@@ -7475,6 +7619,12 @@ export function DelivereeWorkspace() {
                               type="button"
                             >
                               <Mail size={13} /> Resend
+                            </button>
+                            <button
+                              onClick={() => void confirmInviteDelivery(row)}
+                              type="button"
+                            >
+                              Confirm delivery
                             </button>
                             {invite?.inviteToken && (
                               <button

@@ -16,6 +16,7 @@ export interface PlatformCapabilities {
   hubspot: CapabilityInfo;
   googleDrive: CapabilityInfo;
   oneDrive?: CapabilityInfo;
+  email?: CapabilityInfo & { provider?: string };
 }
 
 export function usePlatformCapabilities() {

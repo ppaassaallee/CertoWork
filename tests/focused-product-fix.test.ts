@@ -43,7 +43,7 @@ test("project resources reject files over 20MB and accept https links", () => {
   assert.equal(looksLikeExternalUrl("javascript:alert(1)"), false);
 });
 
-test("invite tokens expire after 14 days and used invites are not reusable", () => {
+test("invite tokens expire after 7 days and used invites are not reusable", () => {
   assert.equal(inviteActivationPath("abc"), "/invite/abc");
   assert.equal(inviteDirectoryUrl("abc"), "https://certo.work/invite/abc");
   assert.equal(inviteIsUsable({ status: "pending" }), true);
@@ -51,11 +51,29 @@ test("invite tokens expire after 14 days and used invites are not reusable", () 
   assert.equal(inviteWasConsumed({ status: "accepted" }), true);
   assert.equal(inviteWasConsumed({ status: "revoked" }), true);
   assert.equal(inviteIsExpired(null), false);
-  assert.equal(inviteIsExpired({ createdAt: Date.now() - 15 * 24 * 60 * 60 * 1000 }), true);
+  assert.equal(inviteIsExpired({ createdAt: Date.now() - 8 * 24 * 60 * 60 * 1000 }), true);
   assert.equal(inviteIsExpired({ expiresAt: Date.now() + 60_000 }), false);
   assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "ws-1", inviteType: "workspace_member" }, "ws-1"), true);
   assert.equal(inviteShouldCloseOnJoin({ status: "accepted", workspaceId: "ws-1" }, "ws-1"), false);
   assert.equal(inviteShouldCloseOnJoin({ status: "pending", workspaceId: "other" }, "ws-1"), false);
+});
+
+test("invite reminder cadence follows day 1 / 3 / 6 best practice", async () => {
+  const { dueInviteReminder, nextInviteReminder, reminderScheduleAfterSend } = await import("../src/lib/inviteLifecycle");
+  const createdAt = Date.now() - 3.5 * 24 * 60 * 60 * 1000;
+  const invite = {
+    status: "pending",
+    createdAt,
+    emailDeliveryStatus: "sent",
+    reminderCount: 1,
+  };
+  const next = nextInviteReminder(invite);
+  assert.equal(next?.kind, "reminder_2");
+  assert.equal(dueInviteReminder(invite)?.kind, "reminder_2");
+  assert.equal(dueInviteReminder({ ...invite, reminderCount: 0, createdAt: Date.now() }), null);
+  const afterFinal = reminderScheduleAfterSend(invite, "reminder_final");
+  assert.equal(afterFinal.reminderCount, 3);
+  assert.equal(afterFinal.nextReminderAt, null);
 });
 
 test("home recency keeps six recent projects", () => {

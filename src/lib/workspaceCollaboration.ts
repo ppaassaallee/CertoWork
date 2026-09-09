@@ -331,8 +331,10 @@ export function passwordProviderMessage(providerIds: string[] = []) {
 }
 
 export function createInviteCode() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().slice(0, 8).toUpperCase();
-  return Math.random().toString(36).slice(2, 10).toUpperCase();
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 22).toUpperCase();
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.slice(0, 22).toUpperCase();
 }
 
 export function membershipPublicPatch(input: {
