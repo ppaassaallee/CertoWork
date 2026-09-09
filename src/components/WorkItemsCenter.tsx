@@ -1878,6 +1878,34 @@ export function WorkItemsCenter({
         const Icon = ATTR_ICONS[column];
         const key = `${item.id}:${column}`;
         const open = openAttr === key;
+        if (column === "assignees") {
+          return (
+            <div
+              className={`do-item-attr is-assignees ${filled ? "is-on" : "is-off"}`}
+              key={column}
+            >
+              <MultiAssigneePicker
+                compact
+                members={workspaceMembers}
+                onInviteEmail={onInviteAssigneeEmail}
+                onChange={(assigneeIds, assignees) =>
+                  onUpdateTask(item.id, {
+                    assigneeIds,
+                    assignees,
+                    owner: assignees[0] || "",
+                    assignee: assignees[0] || "",
+                  })
+                }
+                selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
+                selectedNames={
+                  Array.isArray(item.assignees)
+                    ? item.assignees
+                    : [item.owner || item.assignee].filter(Boolean)
+                }
+              />
+            </div>
+          );
+        }
         return (
           <div className={`do-item-attr ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key={column}>
             <button
@@ -3123,9 +3151,6 @@ export function WorkItemsCenter({
                 : newType === "epic"
                   ? "No parent"
                   : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`;
-              const assigneeLabel = newAssigneeId
-                ? memberName(workspaceMembers.find((member) => member.id === newAssigneeId) || { id: newAssigneeId })
-                : "Unassigned";
               const deliveryLabel = newDeliveryEntity || "Delivery entity";
               const open = (key: string) => createAttr === key;
               const toggle = (key: string) => {
@@ -3251,34 +3276,32 @@ export function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr ${newAssigneeId ? "is-on" : "is-off"} ${open("assignee") ? "is-open" : ""}`}>
-                    <button
-                      aria-expanded={open("assignee")}
-                      aria-label={`Assignee: ${assigneeLabel}`}
-                      className="do-item-attr-btn"
-                      data-testid="item-create-assignee-btn"
-                      onClick={() => toggle("assignee")}
-                      title={`Assignee: ${assigneeLabel}`}
-                      type="button"
-                    >
-                      <User size={13} />
-                    </button>
-                    {open("assignee") && (
-                      <div className="do-item-attr-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                        <strong>Assignee</strong>
-                        <select
-                          aria-label="New item assignee"
-                          data-testid="item-create-assignee"
-                          onChange={(event) => { setNewAssigneeId(event.target.value); setCreateAttr(null); }}
-                          value={newAssigneeId}
-                        >
-                          <option value="">Unassigned</option>
-                          {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
-                            <option key={member.id} value={member.id}>{memberName(member)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                  <div className={`do-item-attr is-assignees ${newAssigneeId ? "is-on" : "is-off"}`}>
+                    <MultiAssigneePicker
+                      compact
+                      label="Assignees"
+                      members={workspaceMembers.filter(
+                        (member) => String(member.status || "active") !== "removed",
+                      )}
+                      onInviteEmail={onInviteAssigneeEmail}
+                      onChange={(assigneeIds) => {
+                        setNewAssigneeId(assigneeIds[0] || "");
+                        setCreateAttr(null);
+                      }}
+                      selectedIds={newAssigneeId ? [newAssigneeId] : []}
+                      selectedNames={
+                        newAssigneeId
+                          ? [
+                              memberName(
+                                workspaceMembers.find((member) => member.id === newAssigneeId) || {
+                                  id: newAssigneeId,
+                                },
+                              ),
+                            ]
+                          : []
+                      }
+                      triggerTestId="item-create-assignee"
+                    />
                   </div>
                   <div className={`do-item-attr ${newPriority && newPriority !== "N/A" ? "is-on" : "is-off"} ${open("priority") ? "is-open" : ""}`}>
                     <button

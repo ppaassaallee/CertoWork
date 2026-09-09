@@ -6669,6 +6669,13 @@ export function DelivereeWorkspace() {
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onCreateControlledOption={createControlledOption}
+              onInviteAssigneeEmail={
+                canManageMembers
+                  ? async (email) => {
+                      await inviteWorkspaceMember(email);
+                    }
+                  : undefined
+              }
               onCreateShareLink={async () => {
                 if (!user || !workspace) return;
                 const token = createShareToken();
@@ -6875,6 +6882,13 @@ export function DelivereeWorkspace() {
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onCreateControlledOption={createControlledOption}
+                onInviteAssigneeEmail={
+                  canManageMembers
+                    ? async (email) => {
+                        await inviteWorkspaceMember(email);
+                      }
+                    : undefined
+                }
                 onDeleteProject={deleteProject}
                 onRestoreProject={restoreProject}
                 onAsk={setComposer}
