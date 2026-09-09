@@ -85,8 +85,9 @@ import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { collabProjectPath } from "../lib/collabModule";
-import { looksLikeEmail } from "../lib/workspaceCollaboration";
+import { looksLikeEmail, normalizeInviteEmail } from "../lib/workspaceCollaboration";
 import {
+  buildProjectCollaboratorAccessPatch,
   collaborationShareGrant,
   shareableEmail,
   withCollaboratorAccess,
@@ -1475,6 +1476,7 @@ export function ProjectConsolePanel({
   tags = [],
   onCreateControlledOption,
   onInviteAssigneeEmail,
+  workspaceTeams = [],
   projects: workspaceProjects,
 }: {
   project: any;
@@ -1483,6 +1485,11 @@ export function ProjectConsolePanel({
   risks: any[];
   documents: any[];
   workspaceMembers?: AssignmentMember[];
+  workspaceTeams?: Array<{
+    id: string;
+    name?: string;
+    memberEmails?: string[];
+  }>;
   costTemplates?: any[];
   conversationId?: string | null;
   sprints?: SprintRecord[];
@@ -2077,6 +2084,73 @@ export function ProjectConsolePanel({
 
       {tab === "team" && (
         <div className="do-console-section do-team-panel">
+          <div className="do-team-ownership">
+            <h4 className="do-section-label">Owning team</h4>
+            <p className="do-muted-copy">
+              Workspace → Teams → Projects → Items. House this project under a department team so
+              members can find it. You assign tasks to people, not to teams.
+            </p>
+            <label>
+              Team
+              <select
+                aria-label="Project owning team"
+                onChange={(event) => {
+                  const teamId = event.target.value;
+                  const team = workspaceTeams.find((item) => item.id === teamId);
+                  if (!team) {
+                    update({ teamId: null, teamName: "" });
+                    return;
+                  }
+                  const emails = new Set(
+                    (team.memberEmails || []).map((email) => normalizeInviteEmail(email)),
+                  );
+                  const fromTeam = workspaceMembers.filter((member) =>
+                    emails.has(
+                      normalizeInviteEmail(String(member.email || member.emailLower || "")),
+                    ),
+                  );
+                  const nextMemberIds = [
+                    ...new Set([
+                      ...(Array.isArray(project.teamMemberIds) ? project.teamMemberIds.map(String) : []),
+                      ...fromTeam.map((member) => String(member.id)),
+                    ]),
+                  ];
+                  const nextNames = [
+                    ...new Set([
+                      ...(Array.isArray(project.teamMembers) ? project.teamMembers.map(String) : []),
+                      ...fromTeam.map((member) => memberName(member)),
+                    ]),
+                  ];
+                  const nextProject = {
+                    ...project,
+                    teamId: team.id,
+                    teamName: team.name || "",
+                    teamMemberIds: nextMemberIds,
+                    teamMembers: nextNames,
+                  };
+                  update({
+                    teamId: team.id,
+                    teamName: team.name || "",
+                    teamMemberIds: nextMemberIds,
+                    teamMembers: nextNames,
+                    ...buildProjectCollaboratorAccessPatch({
+                      project: nextProject,
+                      members: workspaceMembers,
+                      actorUserId: currentUser?.uid,
+                    }),
+                  });
+                }}
+                value={project.teamId || ""}
+              >
+                <option value="">No owning team</option>
+                {workspaceTeams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name || "Team"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="do-team-table-wrap">
             <table className="do-team-table">
               <thead>
@@ -2113,6 +2187,7 @@ export function ProjectConsolePanel({
                   <th>Sponsors</th>
                   <td>
                     <MultiAssigneePicker
+                      helperText="Sponsors follow project outcomes. They are not task assignees."
                       label="Sponsors"
                       members={workspaceMembers}
                       onChange={(sponsorIds, sponsors) =>
@@ -2130,10 +2205,11 @@ export function ProjectConsolePanel({
                   </td>
                 </tr>
                 <tr>
-                  <th>Team</th>
+                  <th>Project members</th>
                   <td>
                     <MultiAssigneePicker
-                      label="Team"
+                      helperText="People who can view and update this project. Task delivery still has one assignee each."
+                      label="Project members"
                       members={workspaceMembers}
                       onChange={(teamMemberIds, teamMembers) =>
                         update({ teamMemberIds, teamMembers })

@@ -4357,6 +4357,33 @@ a {
 .do-team-panel {
   gap: 10px;
 }
+.do-team-ownership {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.do-team-ownership label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.do-team-ownership select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  padding: 0 10px;
+  color: var(--text-primary);
+}
+.do-muted-copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+  font-weight: 400;
+}
 .do-team-table-wrap {
   overflow: auto;
   border: 1px solid var(--border);

@@ -147,6 +147,8 @@ export function MultiAssigneePicker({
   label = "Assignees",
   compact = false,
   triggerTestId,
+  maxSelections,
+  helperText,
 }: {
   members: AssignableMember[];
   selectedIds?: string[];
@@ -156,6 +158,9 @@ export function MultiAssigneePicker({
   label?: string;
   compact?: boolean;
   triggerTestId?: string;
+  /** Cap selections. Use 1 for Certo's single primary assignee. */
+  maxSelections?: number;
+  helperText?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -163,6 +168,7 @@ export function MultiAssigneePicker({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const single = maxSelections === 1;
   const activeMembers = useMemo(
     () => members.filter((member) => isAssignableMember(member)),
     [members],
@@ -234,13 +240,22 @@ export function MultiAssigneePicker({
 
   const toggle = (member: AssignableMember) => {
     const isSelected = selected.some((candidate) => candidate.id === member.id);
-    const next = isSelected
-      ? selected.filter((candidate) => candidate.id !== member.id)
-      : [...selected, member];
+    let next: AssignableMember[];
+    if (single) {
+      next = isSelected ? [] : [member];
+    } else {
+      next = isSelected
+        ? selected.filter((candidate) => candidate.id !== member.id)
+        : [...selected, member];
+      if (typeof maxSelections === "number" && next.length > maxSelections) {
+        next = next.slice(next.length - maxSelections);
+      }
+    }
     onChange(
       next.map((candidate) => candidate.id),
       next.map((candidate) => memberAssignmentValue(candidate)),
     );
+    if (single && !isSelected) setOpen(false);
   };
 
   const submitInvite = async () => {
@@ -291,7 +306,9 @@ export function MultiAssigneePicker({
                     .join(", ")
                 : orphanNames.length
                   ? orphanNames.slice(0, 2).join(", ")
-                : "Unassigned"}
+                : single
+                  ? "Unassigned"
+                  : "None"}
               {selected.length > 2 ? ` +${selected.length - 2}` : ""}
             </span>
           </>
@@ -302,7 +319,12 @@ export function MultiAssigneePicker({
           <div className="cw-multi-assignee-menu" ref={menuRef} style={menuStyle}>
             <header>
               <strong>{label}</strong>
-              <small>Pick workspace members. Typing a name elsewhere does not send an invite email.</small>
+              <small>
+                {helperText ||
+                  (single
+                    ? "One person is accountable for finishing this work."
+                    : "Pick workspace members. Typing a name elsewhere does not send an invite email.")}
+              </small>
             </header>
             {orphanNames.length > 0 && (
               <p className="cw-multi-assignee-orphan">
@@ -313,7 +335,12 @@ export function MultiAssigneePicker({
               const checked = selected.some((candidate) => candidate.id === member.id);
               return (
                 <label key={member.id}>
-                  <input checked={checked} onChange={() => toggle(member)} type="checkbox" />
+                  <input
+                    checked={checked}
+                    onChange={() => toggle(member)}
+                    type={single ? "radio" : "checkbox"}
+                    name={single ? `assignee-${label}` : undefined}
+                  />
                   <em aria-hidden="true">{memberAvatar(member)}</em>
                   <span>
                     <strong>{memberName(member)}</strong>

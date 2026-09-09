@@ -112,9 +112,13 @@ export function AssignmentNotificationsBell({
             >
               <span>{item.taskTitle || "Work item"}</span>
               <small>
-                {item.assignedByName
-                  ? `Assigned by ${item.assignedByName}`
-                  : "New assignment"}
+                {item.type === "task_collaborator"
+                  ? item.assignedByName
+                    ? `Added as collaborator by ${item.assignedByName}`
+                    : "Added as collaborator"
+                  : item.assignedByName
+                    ? `Assigned by ${item.assignedByName}`
+                    : "New assignment"}
               </small>
             </button>
           ))}
