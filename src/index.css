@@ -2253,6 +2253,72 @@ a {
   background: var(--accent-soft);
   color: var(--accent);
 }
+.do-notify-bell {
+  position: relative;
+}
+.do-notify-bell .do-notify-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  line-height: 14px;
+  text-align: center;
+  padding: 0 3px;
+}
+.do-notify-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  width: min(320px, calc(100vw - 24px));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  box-shadow: 0 16px 40px rgba(20, 40, 30, 0.14);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+.do-notify-menu > strong {
+  font-size: var(--text-caption);
+  color: var(--text-2);
+  padding: 2px 4px 6px;
+}
+.do-notify-empty {
+  margin: 0;
+  padding: 10px 6px;
+  color: var(--text-3);
+  font-size: var(--text-caption);
+}
+.do-notify-item {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px;
+  cursor: pointer;
+  color: inherit;
+}
+.do-notify-item:hover,
+.do-notify-item.is-unread {
+  background: var(--accent-soft);
+}
+.do-notify-item span {
+  font-size: var(--text-body-sm, 13px);
+  font-weight: 600;
+}
+.do-notify-item small {
+  color: var(--text-3);
+  font-size: 11px;
+}
 .do-notice {
   position: absolute;
   z-index: 35;

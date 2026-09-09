@@ -15,6 +15,9 @@ export type WorkspaceMember = {
   status?: string;
   teamIds?: string[];
   financeAccess?: boolean;
+  /** Set on the pending invite seat after the person accepts. */
+  acceptedMemberId?: string;
+  acceptedUserId?: string;
 };
 
 export type WorkspaceTeam = {
@@ -242,8 +245,16 @@ export function memberLabel(member: Pick<WorkspaceMember, "alias" | "displayName
   return memberPublicLabel(member);
 }
 
-export function memberAssignmentValue(member: Pick<WorkspaceMember, "alias" | "displayName" | "status">) {
-  return memberPublicLabel(member);
+/** Value stored on task.assignees — never use "Pending acceptance" as the durable label. */
+export function memberAssignmentValue(
+  member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
+) {
+  return (
+    normalizeAlias(member.alias) ||
+    normalizeAlias(member.displayName) ||
+    normalizeInviteEmail(member.email || member.emailLower || "") ||
+    memberPublicLabel(member)
+  );
 }
 
 export function memberAvatar(member: Pick<WorkspaceMember, "emoji" | "alias" | "displayName">) {

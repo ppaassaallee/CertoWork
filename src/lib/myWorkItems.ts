@@ -24,6 +24,8 @@ const PLACEHOLDER_TOKENS = new Set([
   "none",
   "null",
   "undefined",
+  "pending acceptance",
+  "needs alias",
 ]);
 
 function asList(value: unknown) {
@@ -98,6 +100,32 @@ function actorMember(actor: MyWorkActor, members: WorkspaceMember[] = []) {
   );
 }
 
+/** Active + pending seats that represent the same person for assignment matching. */
+export function actorEquivalentMemberIds(actor: MyWorkActor, members: WorkspaceMember[] = []) {
+  const ids = new Set<string>();
+  if (actor.memberId) ids.add(String(actor.memberId));
+  const member = actorMember(actor, members);
+  if (member?.id) ids.add(String(member.id));
+  for (const candidate of members) {
+    const sameUser =
+      (actor.userId &&
+        (candidate.userId === actor.userId ||
+          candidate.acceptedUserId === actor.userId)) ||
+      (member?.id && candidate.acceptedMemberId === member.id) ||
+      (actor.memberId && candidate.acceptedMemberId === actor.memberId);
+    const sameEmail =
+      actor.email &&
+      String(candidate.email || candidate.emailLower || "")
+        .trim()
+        .toLowerCase() === String(actor.email).trim().toLowerCase();
+    if (sameUser || sameEmail) {
+      if (candidate.id) ids.add(String(candidate.id));
+      if (candidate.acceptedMemberId) ids.add(String(candidate.acceptedMemberId));
+    }
+  }
+  return [...ids].filter(Boolean);
+}
+
 export function isAssignedToActor(
   item: Record<string, unknown> | null | undefined,
   actor: MyWorkActor,
@@ -109,6 +137,22 @@ export function isAssignedToActor(
   const member = actorMember(actor, members);
   if (member && memberMatchesSelection(member, ids, names)) return true;
 
+  const equivalentIds = new Set(actorEquivalentMemberIds(actor, members));
+  if (ids.some((value) => equivalentIds.has(value))) return true;
+
+  // Also match pending seats that share email with the actor even if not remapped yet.
+  for (const candidate of members) {
+    if (!ids.includes(String(candidate.id))) continue;
+    if (
+      actor.email &&
+      String(candidate.email || candidate.emailLower || "")
+        .trim()
+        .toLowerCase() === String(actor.email).trim().toLowerCase()
+    ) {
+      return true;
+    }
+  }
+
   const tokens = new Set(
     [
       actor.userId,
@@ -118,6 +162,7 @@ export function isAssignedToActor(
       member?.userId,
       member ? memberPublicLabel(member) : "",
       String(member?.email || member?.emailLower || "").trim().toLowerCase(),
+      ...equivalentIds,
     ]
       .map((value) => String(value || "").trim())
       .filter((value) => value && !isPlaceholderToken(value)),

@@ -64,6 +64,7 @@ test("swimlanes group cards by assignee, priority, or project", () => {
     assignee: "Ana",
     owner: "Ana",
     assignees: ["Ana"],
+    assigneeIds: [],
   });
 });
 
@@ -108,7 +109,8 @@ test("column automations assign and retag when a card enters a lane", () => {
   );
   assert.equal(patch.priority, "1");
   assert.equal(patch.assignee, "Bo");
-  assert.deepEqual(patch.assignees, ["Bo", "Ana"]);
+  assert.deepEqual(patch.assignees, ["Bo"]);
+  assert.deepEqual(patch.assigneeIds, []);
 });
 
 test("cycle and lead time use start and completion stamps", () => {

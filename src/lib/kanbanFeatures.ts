@@ -1,4 +1,9 @@
 import { kanbanColumnForStatus, type KanbanColumnKey } from "./kanbanBoard";
+import {
+  resolveAssigneeNamePatch,
+  resolveAssigneeSwimlanePatch,
+} from "./taskAssignment";
+import type { WorkspaceMember } from "./workspaceCollaboration";
 
 export type KanbanSwimlaneBy = "none" | "assignee" | "priority" | "project";
 
@@ -247,16 +252,21 @@ export function applyKanbanAutomations(
   item: any,
   columnKey: string,
   rules: KanbanAutomationRule[],
+  members: WorkspaceMember[] = [],
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const rule of rules) {
     if (rule.whenColumn !== columnKey) continue;
     if (rule.setPriority) patch.priority = rule.setPriority === "none" ? null : rule.setPriority;
     if (rule.setAssignee) {
-      patch.assignee = rule.setAssignee;
-      patch.owner = rule.setAssignee;
-      const names = Array.isArray(item?.assignees) ? [...item.assignees] : [];
-      if (!names.includes(rule.setAssignee)) patch.assignees = [rule.setAssignee, ...names];
+      Object.assign(
+        patch,
+        resolveAssigneeNamePatch(
+          rule.setAssignee,
+          members,
+          Array.isArray(item?.assignees) ? item.assignees.map(String) : [],
+        ),
+      );
     }
   }
   return patch;
@@ -432,13 +442,11 @@ export function swimlaneMovePatch(
   by: KanbanSwimlaneBy,
   swimlaneKey: string,
   projects: any[] = [],
+  members: WorkspaceMember[] = [],
 ): Record<string, unknown> {
   if (!swimlaneKey || by === "none") return {};
   if (by === "assignee") {
-    if (swimlaneKey === "Unassigned") {
-      return { assignee: "", owner: "", assignees: [], assigneeIds: [] };
-    }
-    return { assignee: swimlaneKey, owner: swimlaneKey, assignees: [swimlaneKey] };
+    return resolveAssigneeSwimlanePatch(swimlaneKey, members);
   }
   if (by === "priority") {
     return { priority: swimlaneKey === "none" ? null : swimlaneKey };
