@@ -14,6 +14,7 @@ import {
   isPureAiWorkspace,
   resolvePortfolioShareTargets,
 } from "./portfolioMasterImport";
+import { buildPureAiFollowerProjectPatch } from "./pureAiPortfolioFollowers";
 import {
   PRICING_PORTFOLIO_IMPORT_KEY,
   PRICING_PORTFOLIO_SOURCE,
@@ -106,6 +107,7 @@ export async function syncPureAiPricingPortfolio(input: {
     updates.push((batch) =>
       batch.update(existing.ref, {
         ...payload,
+        ...buildPureAiFollowerProjectPatch(existing.data() as Record<string, unknown>, share),
         // Drop any prior "X " unmatched marker once pricing finds the project.
         title: stripUnmatchedPrefix(payload.title),
         name: stripUnmatchedPrefix(payload.name),
