@@ -9,6 +9,7 @@ import {
   proxyChatwoot,
 } from "./collab.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
+import { inviteEmailContent } from "./inviteEmail.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -27,6 +28,7 @@ const FIREBASE_WEB_API_KEY = "AIzaSyDa-1rva5k-ky_f6L4A6lenqz8cBUP6Hn4";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions";
 const BREVO_TRANSACTIONAL_EMAIL_URL = "https://api.brevo.com/v3/smtp/email";
+const BREVO_EMAIL_EVENTS_URL = "https://api.brevo.com/v3/smtp/statistics/events";
 const MAX_REQUEST_BYTES = 400_000;
 const MAX_AUDIO_BYTES = 4_000_000;
 const DEFAULT_EFFICIENT_MODEL = "gpt-5.6-luna";
@@ -1478,71 +1480,6 @@ function capabilities(env) {
   };
 }
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function publicAppOrigin(origin) {
-  const value = String(origin || "").trim().replace(/\/$/, "");
-  if (!value || /workers\.dev$/i.test(new URL(value).hostname) || /localhost|127\.0\.0\.1/i.test(value)) {
-    return "https://certo.work";
-  }
-  return value;
-}
-
-function inviteEmailContent(body, origin) {
-  const token = String(body.inviteToken || "").trim();
-  const appOrigin = publicAppOrigin(origin);
-  const inviteUrl = token ? `${appOrigin}/invite/${encodeURIComponent(token)}` : `${appOrigin}/`;
-  const workspaceName = String(body.workspaceName || "Certo Work").trim();
-  const toEmail = String(body.toEmail || "").trim().toLowerCase();
-  const role = String(body.role || "member").trim();
-  const inviterName = String(body.inviterName || body.inviterEmail || "Your workspace admin").trim();
-  const subject = `${inviterName} invited you to ${workspaceName} in Certo Work`;
-  const textContent = [
-    `You have been invited to ${workspaceName} in Certo Work.`,
-    "",
-    "Use this invitation link (do not request beta access):",
-    inviteUrl,
-    "",
-    `1. Open the link above.`,
-    `2. Sign in or create your password with this exact email: ${toEmail}`,
-    "3. Certo Work will add you to the workspace automatically.",
-    `Role: ${role}`,
-    "",
-    "If the button/link does not open, copy and paste the URL into your browser.",
-    "Check spam/promotions if you are looking for this email later.",
-    "",
-    "— Certo Work",
-  ].join("\n");
-  const htmlContent = `<!doctype html>
-<html>
-  <body style="margin:0;background:#f7faf7;font-family:Inter,Arial,sans-serif;color:#23352b;">
-    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
-      <div style="border:1px solid #dfe8e1;border-radius:22px;background:#ffffff;padding:28px;">
-        <div style="font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#587061;">Certo Work</div>
-        <h1 style="margin:18px 0 10px;font-size:28px;line-height:1.05;letter-spacing:-.04em;color:#143d2e;">You’ve been invited to ${escapeHtml(workspaceName)}.</h1>
-        <p style="margin:0 0 18px;color:#5d6d63;line-height:1.6;">${escapeHtml(inviterName)} invited you to collaborate in Certo Work.</p>
-        <div style="border-radius:16px;background:#eef7f1;padding:14px 16px;margin:18px 0;color:#244b39;">
-          <strong>Use this exact email:</strong><br />
-          <span>${escapeHtml(toEmail)}</span><br />
-          <small>Role: ${escapeHtml(role)}</small>
-        </div>
-        <a href="${inviteUrl}" style="display:inline-block;border-radius:999px;background:#214b39;color:#ffffff;padding:13px 18px;text-decoration:none;font-weight:800;">Accept invitation</a>
-        <p style="margin:20px 0 0;color:#6f7d74;font-size:13px;line-height:1.6;">Open the button above and sign in or create your password with that email. Do not use “Request beta access” — this link already grants workspace access. If you do not see this email in your inbox, check spam/promotions.</p>
-        <p style="margin:14px 0 0;color:#8a9690;font-size:12px;line-height:1.5;word-break:break-all;">${escapeHtml(inviteUrl)}</p>
-      </div>
-    </div>
-  </body>
-</html>`;
-  return { subject, textContent, htmlContent, inviteUrl };
-}
-
 async function sendBrevoTransactionalEmail(env, message) {
   if (!env.BREVO_API_KEY) {
     return { sent: false, configured: false, error: "BREVO_API_KEY is not configured" };
@@ -1568,6 +1505,68 @@ async function sendBrevoTransactionalEmail(env, message) {
   return { sent: true, configured: true, messageId: payload?.messageId };
 }
 
+function summarizeInviteDeliveryEvents(events = []) {
+  const ordered = [...events];
+  const priority = ["hardBounces", "softBounces", "bounces", "blocked", "invalid", "error", "spam", "delivered", "opened", "clicks", "requests", "deferred"];
+  for (const name of priority) {
+    const match = ordered.find((item) => String(item?.event || "") === name);
+    if (!match) continue;
+    if (["hardBounces", "softBounces", "bounces", "blocked", "invalid", "error", "spam"].includes(name)) {
+      return {
+        status: name === "spam" ? "spam" : "bounced",
+        reason: match.reason || name,
+        messageId: match.messageId,
+        events: ordered,
+      };
+    }
+    if (name === "opened" || name === "clicks") {
+      return { status: "opened", reason: "", messageId: match.messageId, events: ordered };
+    }
+    if (name === "delivered") {
+      return { status: "delivered", reason: "", messageId: match.messageId, events: ordered };
+    }
+  }
+  if (ordered.length) {
+    return {
+      status: "sent",
+      reason: "",
+      messageId: ordered[0]?.messageId,
+      events: ordered,
+    };
+  }
+  return { status: "unknown", reason: "No delivery events yet", messageId: "", events: [] };
+}
+
+async function fetchBrevoInviteDelivery(env, { messageId, toEmail }) {
+  if (!env.BREVO_API_KEY) {
+    return { configured: false, status: "not_configured", error: "BREVO_API_KEY is not configured", events: [] };
+  }
+  const params = new URLSearchParams({ limit: "50", sort: "desc" });
+  if (messageId) params.set("messageId", String(messageId));
+  if (toEmail) params.set("email", String(toEmail).trim().toLowerCase());
+  if (!messageId && !toEmail) {
+    return { configured: true, status: "unknown", error: "messageId or toEmail is required", events: [] };
+  }
+  const response = await fetch(`${BREVO_EMAIL_EVENTS_URL}?${params}`, {
+    headers: {
+      "api-key": env.BREVO_API_KEY,
+      accept: "application/json",
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      configured: true,
+      status: "unknown",
+      error: payload?.message || `Brevo delivery lookup failed (${response.status})`,
+      events: [],
+    };
+  }
+  const events = Array.isArray(payload?.events) ? payload.events : [];
+  const summary = summarizeInviteDeliveryEvents(events);
+  return { configured: true, ...summary, error: summary.reason || "" };
+}
+
 async function sendInviteEmail(request, env) {
   let body;
   try {
@@ -1587,11 +1586,15 @@ async function sendInviteEmail(request, env) {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(toEmail)) {
     return json({ error: "A valid recipient email is required" }, 400);
   }
+  if (!String(body.inviteToken || "").trim()) {
+    return json({ error: "inviteToken is required to send a workspace invitation" }, 400);
+  }
   const origin = env.CERTO_APP_ORIGIN || new URL(request.url).origin;
   const content = inviteEmailContent({ ...body, toEmail }, origin);
   const senderEmail = env.CERTO_EMAIL_FROM || "support@certo.work";
   const senderName = env.CERTO_EMAIL_FROM_NAME || "Certo Work";
   const replyToEmail = env.CERTO_EMAIL_REPLY_TO || senderEmail;
+  const kindTag = content.kind === "invite" ? "workspace-invite" : `workspace-invite-${content.kind}`;
   const result = await sendBrevoTransactionalEmail(env, {
     sender: { name: senderName, email: senderEmail },
     to: [{ email: toEmail, name: String(body.toName || body.toEmail || "").trim() }],
@@ -1599,19 +1602,60 @@ async function sendInviteEmail(request, env) {
     subject: content.subject,
     htmlContent: content.htmlContent,
     textContent: content.textContent,
-    tags: ["workspace-invite"],
+    tags: ["workspace-invite", kindTag],
     headers: {
-      "X-Mailin-custom": JSON.stringify({ workspaceId: body.workspaceId, invite: true }),
+      "X-Mailin-custom": JSON.stringify({
+        workspaceId: body.workspaceId,
+        invite: true,
+        kind: content.kind,
+      }),
     },
     params: {
       workspaceId: body.workspaceId,
       role: body.role || "member",
+      kind: content.kind,
     },
   });
   if (!result.sent) {
-    return json({ ...result, inviteUrl: content.inviteUrl }, result.configured ? 502 : 503);
+    return json(
+      { ...result, inviteUrl: content.inviteUrl, kind: content.kind },
+      result.configured ? 502 : 503,
+    );
   }
-  return json({ ...result, inviteUrl: content.inviteUrl });
+  return json({
+    ...result,
+    inviteUrl: content.inviteUrl,
+    kind: content.kind,
+    acceptedAt: new Date().toISOString(),
+  });
+}
+
+async function inviteDeliveryStatus(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId) {
+    return json({ error: "userId and workspaceId are required" }, 400);
+  }
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  const result = await fetchBrevoInviteDelivery(env, {
+    messageId: body.messageId,
+    toEmail: body.toEmail,
+  });
+  if (!result.configured) {
+    return json(result, 503);
+  }
+  if (result.error && result.status === "unknown" && !result.events?.length) {
+    return json(result, result.error.includes("required") ? 400 : 502);
+  }
+  return json(result);
 }
 
 async function serveAsset(request, env) {
@@ -1725,6 +1769,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/email/invite/delivery") {
+      return inviteDeliveryStatus(request, env);
     }
     {
       const capture = createCaptureRequestsHandlers({

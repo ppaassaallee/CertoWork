@@ -1976,6 +1976,26 @@ a {
   margin-top: 10px;
   padding-top: 12px;
 }
+.do-invite-delivery-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #1f6b45 22%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, #1f6b45 8%, var(--surface-0));
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+.do-invite-delivery-banner.is-warn {
+  border-color: color-mix(in srgb, #b45309 28%, var(--border));
+  background: color-mix(in srgb, #b45309 10%, var(--surface-0));
+  color: #7c3d0a;
+}
+.do-invite-delivery-error {
+  display: block;
+  margin-top: 4px;
+  color: #9f1239;
+}
 .do-pending-invite-row {
   display: grid;
   gap: 8px;
