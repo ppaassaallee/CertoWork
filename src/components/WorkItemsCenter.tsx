@@ -72,7 +72,10 @@ import {
   appendStatusHistory,
   applyKanbanAutomations,
   averageDuration,
+  calendarMonthDays,
+  calendarMonthLabel,
   calendarWeekDays,
+  CALENDAR_WEEKDAY_LABELS,
   canAcceptWipDrop,
   checklistCaption,
   checklistItems,
@@ -80,6 +83,7 @@ import {
   commentMentionsViewer,
   cumulativeFlowSeries,
   cycleTimeMs,
+  dateKey,
   encodeKanbanDroppable,
   extractUrls,
   formatDurationLong,
@@ -770,6 +774,7 @@ export function WorkItemsCenter({
   const [kanbanAutomations, setKanbanAutomations] = useState<KanbanAutomationRule[]>([]);
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState(() => new Date());
+  const [calendarScale, setCalendarScale] = useState<"week" | "month">("month");
   const [checklistDraft, setChecklistDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [commentMentionOpen, setCommentMentionOpen] = useState(false);
@@ -2514,15 +2519,80 @@ export function WorkItemsCenter({
     );
   };
 
+  const renderCalendarChip = (item: any) => {
+    const kind = workItemKind(item);
+    const priority = priorityValue(effectivePriority(item, parentPool));
+    const isDone = canonicalStatus(item) === "done";
+    return (
+      <button
+        className={`do-kanban-calendar-chip is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
+        data-testid="kanban-calendar-chip"
+        onClick={() => onSelectItem(item.id)}
+        title={title(item)}
+        type="button"
+      >
+        <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
+        <strong>{title(item)}</strong>
+      </button>
+    );
+  };
+
   const renderCalendar = () => {
-    const days = calendarWeekDays(calendarAnchor);
-    const datedIds = new Set(days.flatMap((day) => filtered.filter((item) => itemDueKey(item) === day.key).map((item) => item.id)));
+    const isMonth = calendarScale === "month";
+    const weekDays = calendarWeekDays(calendarAnchor);
+    const monthDays = calendarMonthDays(calendarAnchor);
+    const days = isMonth ? monthDays : weekDays;
+    const todayKey = dateKey(new Date());
+    const datedIds = new Set(
+      days.flatMap((day) => filtered.filter((item) => itemDueKey(item) === day.key).map((item) => item.id)),
+    );
     const unscheduled = filtered.filter((item) => !datedIds.has(item.id) && !itemDueKey(item));
     const shiftWeek = (delta: number) => {
       const next = new Date(calendarAnchor);
       next.setDate(next.getDate() + delta * 7);
       setCalendarAnchor(next);
     };
+    const shiftMonth = (delta: number) => {
+      const next = new Date(calendarAnchor);
+      next.setMonth(next.getMonth() + delta, 1);
+      setCalendarAnchor(next);
+    };
+    const weekCount = Math.max(1, Math.round(monthDays.length / 7));
+    const renderDayItems = (dayKey: string, compact: boolean) => {
+      const items = filtered.filter((item) => itemDueKey(item) === dayKey);
+      return items.map((item, index) => (
+        <Draggable draggableId={item.id} index={index} key={item.id}>
+          {(drag) => (
+            <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+              {compact ? renderCalendarChip(item) : renderBoardCard(item)}
+            </div>
+          )}
+        </Draggable>
+      ));
+    };
+    const renderUnscheduled = (compact: boolean) => (
+      <Droppable droppableId={encodeKanbanDroppable("calendar", "unscheduled")}>
+        {(provided) => (
+          <section
+            className={`do-kanban-calendar-day is-unscheduled${compact ? " is-month-rail" : ""}`}
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+          >
+            <header><strong>Unscheduled</strong><span>{unscheduled.length}</span></header>
+            {unscheduled.map((item, index) => (
+              <Draggable draggableId={item.id} index={index} key={item.id}>
+                {(drag) => (
+                  <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
+                    {compact ? renderCalendarChip(item) : renderBoardCard(item)}
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+          </section>
+        )}
+      </Droppable>
+    );
     return (
       <DragDropContext
         onDragEnd={(result) => {
@@ -2531,54 +2601,104 @@ export function WorkItemsCenter({
         }}
         onDragStart={(start: DragStart) => setDraggingId(start.draggableId)}
       >
-        <div className="do-kanban-calendar" data-testid="kanban-calendar">
+        <div
+          className={`do-kanban-calendar is-${calendarScale}`}
+          data-scale={calendarScale}
+          data-testid="kanban-calendar"
+        >
           <div className="do-kanban-calendar-nav">
-            <button onClick={() => shiftWeek(-1)} type="button">Previous week</button>
-            <strong>{days[0].label} – {days[6].label}</strong>
-            <button onClick={() => setCalendarAnchor(new Date())} type="button">This week</button>
-            <button onClick={() => shiftWeek(1)} type="button">Next week</button>
+            {isMonth ? (
+              <>
+                <button onClick={() => shiftMonth(-1)} type="button">Previous month</button>
+                <strong data-testid="kanban-calendar-label">{calendarMonthLabel(calendarAnchor)}</strong>
+                <button onClick={() => setCalendarAnchor(new Date())} type="button">This month</button>
+                <button onClick={() => shiftMonth(1)} type="button">Next month</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => shiftWeek(-1)} type="button">Previous week</button>
+                <strong data-testid="kanban-calendar-label">{weekDays[0].label} – {weekDays[6].label}</strong>
+                <button onClick={() => setCalendarAnchor(new Date())} type="button">This week</button>
+                <button onClick={() => shiftWeek(1)} type="button">Next week</button>
+              </>
+            )}
+            <div className="do-kanban-calendar-scale" data-testid="kanban-calendar-scale" role="group" aria-label="Calendar scale">
+              <button
+                className={calendarScale === "week" ? "is-active" : ""}
+                onClick={() => setCalendarScale("week")}
+                type="button"
+              >
+                Week
+              </button>
+              <button
+                className={calendarScale === "month" ? "is-active" : ""}
+                onClick={() => setCalendarScale("month")}
+                type="button"
+              >
+                Month
+              </button>
+            </div>
           </div>
-          <div className="do-kanban-calendar-grid">
-            {days.map((day) => {
-              const items = filtered.filter((item) => itemDueKey(item) === day.key);
-              return (
-                <Droppable droppableId={encodeKanbanDroppable("calendar", day.key)} key={day.key}>
-                  {(provided) => (
-                    <section className="do-kanban-calendar-day" ref={provided.innerRef} {...provided.droppableProps}>
-                      <header><strong>{day.label}</strong><span>{items.length}</span></header>
-                      {items.map((item, index) => (
-                        <Draggable draggableId={item.id} index={index} key={item.id}>
-                          {(drag) => (
-                            <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
-                              {renderBoardCard(item)}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </section>
-                  )}
-                </Droppable>
-              );
-            })}
-            <Droppable droppableId={encodeKanbanDroppable("calendar", "unscheduled")}>
-              {(provided) => (
-                <section className="do-kanban-calendar-day is-unscheduled" ref={provided.innerRef} {...provided.droppableProps}>
-                  <header><strong>Unscheduled</strong><span>{unscheduled.length}</span></header>
-                  {unscheduled.map((item, index) => (
-                    <Draggable draggableId={item.id} index={index} key={item.id}>
-                      {(drag) => (
-                        <div ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps}>
-                          {renderBoardCard(item)}
-                        </div>
-                      )}
-                    </Draggable>
+          {isMonth ? (
+            <div className="do-kanban-calendar-month-shell">
+              <div className="do-kanban-calendar-month">
+                <div className="do-kanban-calendar-weekdays" aria-hidden="true">
+                  {CALENDAR_WEEKDAY_LABELS.map((label) => (
+                    <span key={label}>{label}</span>
                   ))}
-                  {provided.placeholder}
-                </section>
-              )}
-            </Droppable>
-          </div>
+                </div>
+                <div
+                  className="do-kanban-calendar-month-grid"
+                  style={{ gridTemplateRows: `repeat(${weekCount}, minmax(0, 1fr))` }}
+                >
+                  {monthDays.map((day) => {
+                    const items = filtered.filter((item) => itemDueKey(item) === day.key);
+                    return (
+                      <Droppable droppableId={encodeKanbanDroppable("calendar", day.key)} key={day.key}>
+                        {(provided) => (
+                          <section
+                            className={`do-kanban-calendar-day is-month-cell${day.inMonth ? "" : " is-outside"}${day.key === todayKey ? " is-today" : ""}`}
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                          >
+                            <header>
+                              <strong>{day.dayNumber}</strong>
+                              {items.length > 0 ? <span>{items.length}</span> : null}
+                            </header>
+                            {renderDayItems(day.key, true)}
+                            {provided.placeholder}
+                          </section>
+                        )}
+                      </Droppable>
+                    );
+                  })}
+                </div>
+              </div>
+              {renderUnscheduled(true)}
+            </div>
+          ) : (
+            <div className="do-kanban-calendar-grid is-week">
+              {weekDays.map((day) => {
+                const items = filtered.filter((item) => itemDueKey(item) === day.key);
+                return (
+                  <Droppable droppableId={encodeKanbanDroppable("calendar", day.key)} key={day.key}>
+                    {(provided) => (
+                      <section
+                        className={`do-kanban-calendar-day${day.key === todayKey ? " is-today" : ""}`}
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                      >
+                        <header><strong>{day.label}</strong><span>{items.length}</span></header>
+                        {renderDayItems(day.key, false)}
+                        {provided.placeholder}
+                      </section>
+                    )}
+                  </Droppable>
+                );
+              })}
+              {renderUnscheduled(false)}
+            </div>
+          )}
         </div>
       </DragDropContext>
     );
@@ -2904,7 +3024,7 @@ export function WorkItemsCenter({
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
                 <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("list"); setViewsOpen(false); }} type="button">Epic hierarchy</button>
-                <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("calendar"); setViewsOpen(false); }} type="button">Calendar week</button>
+                <button onClick={() => { setGroupBy("hierarchy"); setPrimarySort("priority"); setSecondarySort("due"); setMode("calendar"); setCalendarScale("month"); setViewsOpen(false); }} type="button">Calendar month</button>
                 <button onClick={() => { setGroupBy("actionBoard"); setPrimarySort("priority"); setSecondarySort("due"); setMode("kanban"); setViewsOpen(false); }} type="button">Action Board</button>
                 <button onClick={() => { setGroupBy("project"); setPrimarySort("project"); setSecondarySort("priority"); setViewsOpen(false); }} type="button">Project → priority</button>
                 <button onClick={() => { setGroupBy("priority"); setPrimarySort("priority"); setSecondarySort("due"); setViewsOpen(false); }} type="button">Priority → date</button>

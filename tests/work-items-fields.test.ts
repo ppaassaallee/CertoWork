@@ -203,6 +203,8 @@ test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
   assert.match(workItems, /data-testid="kanban-board-settings"/);
   assert.match(workItems, /data-testid="kanban-analytics"/);
   assert.match(workItems, /data-testid="kanban-calendar"/);
+  assert.match(workItems, /data-testid="kanban-calendar-scale"/);
+  assert.match(workItems, /calendarScale === "month"/);
   assert.match(workItems, /data-testid="item-checklist"/);
   assert.match(workItems, /data-testid="item-comments"/);
   assert.match(workItems, /data-testid="kanban-add-rule"/);
@@ -215,6 +217,8 @@ test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
     /do-kanban-card[\s\S]{0,800}GTD action type for/,
   );
   assert.match(css, /\.do-kanban-priority-stripe/);
+  assert.match(css, /\.do-kanban-calendar-month-grid/);
+  assert.match(css, /\.do-kanban-calendar-chip/);
   assert.match(css, /\.do-kanban-col-resizer/);
   assert.match(css, /\.do-kanban-column\.is-drop-ok/);
   assert.match(css, /\.do-kanban-cfd-area/);
