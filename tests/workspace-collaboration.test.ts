@@ -13,6 +13,7 @@ import {
   memberAvatar,
   memberHasAlias,
   memberMatchesSelection,
+  isEmailNamedTeam,
   memberManageLabel,
   memberPublicLabel,
   memberStatusLabel,
@@ -105,7 +106,7 @@ test("workspace member ids and statuses are deterministic", () => {
     pendingMemberId("ws-1", "  New.Person+Ops@Boldr.AI "),
     "ws-1_invite_new_person_ops_boldr_ai",
   );
-  assert.equal(memberStatusLabel("invited"), "Invited");
+  assert.equal(memberStatusLabel("invited"), "Pending acceptance");
   assert.equal(memberStatusLabel("accepted"), "Accepted");
   assert.equal(memberStatusLabel(""), "Active");
 });
@@ -133,14 +134,14 @@ test("workspace admin labels show invite emails instead of unknown user", () => 
       },
       false,
     ),
-    "Invited teammate",
+    "Pending acceptance",
   );
   assert.equal(
     memberPublicLabel({
       status: "invited",
       email: "agustin@getboldr.ai",
     }),
-    "Invited teammate",
+    "Pending acceptance",
   );
   assert.equal(memberVisibleEmail({ email: "ana@example.com" }, false), "");
   assert.equal(memberVisibleEmail({ email: "Ana@Example.com" }, true), "ana@example.com");
@@ -280,4 +281,10 @@ test("pending invite directory hides leftover Boldr invite rows after accept or 
     { id: "new", email: "nuevo@getboldr.ai", status: "pending", role: "member", inviteToken: "NEW" },
   ]);
   assert.equal(rows.map((row) => row.email).join(","), "nuevo@getboldr.ai");
+});
+
+
+test("email-named teams are detected so invites are not confused with groups", () => {
+  assert.equal(isEmailNamedTeam({ name: "luis.oj@alliedglobal.com" }), true);
+  assert.equal(isEmailNamedTeam({ name: "Engineering" }), false);
 });

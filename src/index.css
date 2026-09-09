@@ -1371,6 +1371,14 @@ a {
   display: grid;
   gap: 6px;
 }
+.do-team-list article.is-email-named-team {
+  border-color: color-mix(in srgb, #b45309 35%, var(--border));
+  background: color-mix(in srgb, #b45309 8%, var(--surface-0));
+}
+.do-team-list article.is-email-named-team small {
+  color: #7c3d0a;
+}
+
 .do-member-list article {
   display: grid;
   grid-template-columns: 28px minmax(140px, 1fr);

@@ -100,7 +100,7 @@ export function memberPublicLabel(member: Pick<WorkspaceMember, "alias" | "displ
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
-    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Needs alias")
+    (String(member.status || "").toLowerCase() === "invited" ? "Pending acceptance" : "Needs alias")
   );
 }
 
@@ -112,7 +112,7 @@ export function memberManageLabel(
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
     (canSeeEmail ? normalizeInviteEmail(member.email || member.emailLower || "") : "") ||
-    (String(member.status || "").toLowerCase() === "invited" ? "Invited teammate" : "Needs alias")
+    (String(member.status || "").toLowerCase() === "invited" ? "Pending acceptance" : "Needs alias")
   );
 }
 
@@ -310,10 +310,14 @@ export function activeMemberId(workspaceId: string, userId: string) {
 
 export function memberStatusLabel(value?: string) {
   const status = String(value || "active").toLowerCase();
-  if (status === "invited") return "Invited";
+  if (status === "invited" || status === "pending") return "Pending acceptance";
   if (status === "accepted") return "Accepted";
   if (status === "removed") return "Removed";
   return "Active";
+}
+
+export function isEmailNamedTeam(team: { name?: string | null; title?: string | null }) {
+  return looksLikeEmail(team.name) || looksLikeEmail(team.title);
 }
 
 export function canChangePasswordForProvider(providerIds: string[] = []) {
