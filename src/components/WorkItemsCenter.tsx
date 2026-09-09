@@ -121,6 +121,14 @@ import {
   sortHierarchyForest,
   sortHierarchySiblings,
 } from "../lib/itemHierarchy";
+import {
+  dateInputValue,
+  dueBucket,
+  dueDateTimingPatch,
+  timingMarksForItem,
+  todayTimingPatch,
+  weekTimingPatch,
+} from "../lib/itemTiming";
 import { useMobileCore } from "../hooks/useMobileCore";
 import { useAuth } from "../lib/AuthContext";
 import {
@@ -469,30 +477,6 @@ function parentId(item: any) {
   return String(item?.parentId || item?.featureId || item?.epicId || "");
 }
 
-function dateInputValue(value: any) {
-  if (!value) return "";
-  if (typeof value === "string") return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : "";
-  if (value?.toDate) return value.toDate().toISOString().slice(0, 10);
-  if (value?.seconds) return new Date(value.seconds * 1000).toISOString().slice(0, 10);
-  return "";
-}
-
-function localDateKey(value: Date) {
-  return [
-    value.getFullYear(),
-    String(value.getMonth() + 1).padStart(2, "0"),
-    String(value.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function saturdayNoon(value = new Date()) {
-  const target = new Date(value);
-  target.setHours(12, 0, 0, 0);
-  const daysUntilSaturday = (6 - target.getDay() + 7) % 7;
-  target.setDate(target.getDate() + daysUntilSaturday);
-  return target;
-}
-
 function priorityValue(value: any) {
   const normalized = String(value || "").toUpperCase();
   if (["1", "P1", "HIGH", "URGENT", "CRITICAL"].includes(normalized)) return "1";
@@ -513,26 +497,6 @@ function matchesStatusFilter(item: any, statusFilter: string) {
   if (statusFilter === "all") return true;
   if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
   return canonicalStatus(item) === statusFilter;
-}
-
-function dueBucket(value: any) {
-  const date = dateInputValue(value);
-  if (!date) return "unscheduled";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(`${date}T00:00:00`);
-  const days = Math.floor((due.getTime() - today.getTime()) / 86_400_000);
-  const sameMonth = due.getFullYear() === today.getFullYear() && due.getMonth() === today.getMonth();
-  const nextMonth = due.getFullYear() === today.getFullYear()
-    ? due.getMonth() === today.getMonth() + 1
-    : today.getMonth() === 11 && due.getFullYear() === today.getFullYear() + 1 && due.getMonth() === 0;
-  if (days < 0) return "overdue";
-  if (days === 0) return "today";
-  if (days <= 7) return "this_week";
-  if (days <= 14) return "next_week";
-  if (sameMonth) return "this_month";
-  if (nextMonth || days <= 60) return "next_month";
-  return "later";
 }
 
 function actionBoardBucket(item: any) {
@@ -1591,29 +1555,15 @@ export function WorkItemsCenter({
 
   const renderTimingButtons = (item: any) => {
     if (canonicalStatus(item) === "done") return <span className="do-item-timing-actions is-empty" aria-hidden="true" />;
-    const today = localDateKey(new Date());
-    const due = dateInputValue(item.dueDate || item.targetDate);
-    const sector = normalizeTimeSector(item.timeSector);
-    const markedToday = due === today || (sector === "today" && dateInputValue(item.timeSectorDate) === today);
-    const weekEnd = saturdayNoon();
-    const weekEndDate = localDateKey(weekEnd);
-    const markedWeek = !markedToday && (
-      sector === "this_week" ||
-      (Boolean(due) && due >= today && due <= weekEndDate)
-    );
+    const marks = timingMarksForItem(item);
     return (
       <div className="do-item-timing-actions" aria-label={`Plan ${title(item)}`}>
         <button
           aria-label={`Move ${title(item)} to Today`}
-          className={markedToday ? "is-active" : ""}
+          className={marks.markedToday ? "is-active" : ""}
           onClick={(event) => {
             event.stopPropagation();
-            onUpdateTask(item.id, {
-              dueDate: today,
-              timeSector: "today",
-              timeSectorDate: today,
-              timeSectorExpiresAt: `${today}T23:59:59`,
-            });
+            onUpdateTask(item.id, todayTimingPatch());
           }}
           title="Add to Today. It disappears from Today tomorrow."
           type="button"
@@ -1623,15 +1573,10 @@ export function WorkItemsCenter({
         </button>
         <button
           aria-label={`Move ${title(item)} to This week`}
-          className={markedWeek ? "is-active" : ""}
+          className={marks.markedWeek ? "is-active" : ""}
           onClick={(event) => {
             event.stopPropagation();
-            onUpdateTask(item.id, {
-              dueDate: weekEndDate,
-              timeSector: "this_week",
-              timeSectorDate: today,
-              timeSectorExpiresAt: weekEnd.toISOString(),
-            });
+            onUpdateTask(item.id, weekTimingPatch());
           }}
           title="Add to This week. It resets Saturday at noon."
           type="button"
@@ -1756,7 +1701,7 @@ export function WorkItemsCenter({
       return <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />;
     }
     if (column === "due") {
-      return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />;
+      return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />;
     }
     return (
       <select
@@ -2365,7 +2310,7 @@ export function WorkItemsCenter({
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
             <Calendar size={12} aria-hidden="true" />
             <time>{dueText || "Date"}</time>
-            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />
+            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />
           </label>
         </div>
       </article>
@@ -3492,8 +3437,8 @@ export function WorkItemsCenter({
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
           <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
-          <button onClick={() => updateBulk({ dueDate: bulkDueDate || null })} type="button">Apply date</button>
-          <button onClick={() => updateBulk({ dueDate: null })} type="button">Clear date</button>
+          <button onClick={() => updateBulk(dueDateTimingPatch(bulkDueDate || null))} type="button">Apply date</button>
+          <button onClick={() => updateBulk(dueDateTimingPatch(null))} type="button">Clear date</button>
           <select aria-label="Bulk assignee" onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
             <option value="">Assignee</option>
             <option value="none">Unassigned</option>
@@ -3726,7 +3671,7 @@ export function WorkItemsCenter({
               selectedIds={Array.isArray(selectedItem.assigneeIds) ? selectedItem.assigneeIds : []}
               selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}
             />
-            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { dueDate: event.target.value || null })} type="date" /></label>
+            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
             <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
             <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
