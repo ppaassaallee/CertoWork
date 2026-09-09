@@ -1909,6 +1909,9 @@ export function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
+                helperText="One person is accountable for finishing this work."
+                label="Assignee"
+                maxSelections={1}
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
@@ -1917,14 +1920,18 @@ export function WorkItemsCenter({
                     assignees,
                     owner: assignees[0] || "",
                     assignee: assignees[0] || "",
+                    assigneeId: assigneeIds[0] || "",
                   })
                 }
-                selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
+                selectedIds={
+                  Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []
+                }
                 selectedNames={
                   Array.isArray(item.assignees)
-                    ? item.assignees
-                    : [item.owner || item.assignee].filter(Boolean)
+                    ? item.assignees.slice(0, 1)
+                    : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
                 }
+                triggerTestId={`item-attr-assignees-${item.id}`}
               />
             </div>
           );

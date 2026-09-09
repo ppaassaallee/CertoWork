@@ -167,7 +167,14 @@ export function MultiAssigneePicker({
   const [inviteBusy, setInviteBusy] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: 300,
+    visibility: "hidden",
+    pointerEvents: "none",
+  });
   const single = maxSelections === 1;
   const activeMembers = useMemo(
     () => members.filter((member) => isAssignableMember(member)),
@@ -195,11 +202,17 @@ export function MultiAssigneePicker({
     const measured = menuRef.current?.offsetHeight;
     const estimated =
       measured ||
-      Math.min(320, 120 + activeMembers.length * 44 + (onInviteEmail ? 72 : 0) + (orphanNames.length ? 48 : 0));
+      Math.min(
+        320,
+        Math.max(
+          160,
+          96 + Math.max(activeMembers.length, 1) * 44 + (onInviteEmail ? 72 : 0) + (orphanNames.length ? 48 : 0),
+        ),
+      );
     const spaceBelow = window.innerHeight - rect.bottom - gap;
     const spaceAbove = rect.top - gap;
     const openUp = spaceBelow < Math.min(estimated, 240) && spaceAbove > spaceBelow;
-    const available = Math.max(140, openUp ? spaceAbove : spaceBelow);
+    const available = Math.max(160, openUp ? spaceAbove : spaceBelow);
     const maxHeight = Math.min(320, available);
     let left = Math.min(rect.right - width, window.innerWidth - width - 8);
     if (left < 8) left = 8;
@@ -212,8 +225,11 @@ export function MultiAssigneePicker({
       left,
       width,
       maxHeight,
+      minHeight: 140,
       overflowY: "auto",
-      zIndex: 260,
+      zIndex: 280,
+      visibility: "visible",
+      pointerEvents: "auto",
     });
   };
 
@@ -221,7 +237,12 @@ export function MultiAssigneePicker({
     if (!open) return;
     placeMenu();
     const frame = window.requestAnimationFrame(() => placeMenu());
+    let armed = false;
+    const arm = window.setTimeout(() => {
+      armed = true;
+    }, 0);
     const onPointerDown = (event: MouseEvent) => {
+      if (!armed) return;
       const target = event.target as Node;
       if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
       setOpen(false);
@@ -231,6 +252,7 @@ export function MultiAssigneePicker({
     window.addEventListener("resize", onReposition);
     window.addEventListener("scroll", onReposition, true);
     return () => {
+      window.clearTimeout(arm);
       window.cancelAnimationFrame(frame);
       window.removeEventListener("mousedown", onPointerDown);
       window.removeEventListener("resize", onReposition);
@@ -272,11 +294,11 @@ export function MultiAssigneePicker({
   };
 
   return (
-    <div className="cw-multi-assignee">
+    <div className={`cw-multi-assignee${open ? " is-open" : ""}`}>
       <button
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={`${label}: ${selected.length} selected`}
+        aria-label={`${label}: ${selected.length ? selected.map((member) => memberName(member)).join(", ") : "Unassigned"}`}
         className={`cw-multi-assignee-trigger${compact ? " is-avatars" : ""}`}
         data-testid={triggerTestId}
         onClick={(event) => {
@@ -285,6 +307,7 @@ export function MultiAssigneePicker({
           setOpen((current) => !current);
         }}
         ref={triggerRef}
+        title={label}
         type="button"
       >
         {compact ? (
@@ -316,7 +339,12 @@ export function MultiAssigneePicker({
       </button>
       {open &&
         createPortal(
-          <div className="cw-multi-assignee-menu" ref={menuRef} style={menuStyle}>
+          <div
+            className="cw-multi-assignee-menu"
+            data-testid="assignee-picker-menu"
+            ref={menuRef}
+            style={menuStyle}
+          >
             <header>
               <strong>{label}</strong>
               <small>
@@ -344,13 +372,20 @@ export function MultiAssigneePicker({
                   <em aria-hidden="true">{memberAvatar(member)}</em>
                   <span>
                     <strong>{memberName(member)}</strong>
-                    <small>{String(member.status || "active") === "invited" ? "Invite pending — email sent/queued" : "Workspace member"}</small>
+                    <small>
+                      {String(member.status || "active") === "invited"
+                        ? "Invite pending — email sent/queued"
+                        : "Workspace member"}
+                    </small>
                   </span>
                 </label>
               );
             })}
             {activeMembers.length === 0 && (
-              <p>No members yet. Invite by email first — assigning a plain name never emails them.</p>
+              <p className="cw-multi-assignee-empty">
+                No people available yet. Open <strong>Workspace &amp; team</strong> and invite
+                someone by email — then they will appear here to assign.
+              </p>
             )}
             {onInviteEmail && (
               <div className="cw-multi-assignee-invite">
