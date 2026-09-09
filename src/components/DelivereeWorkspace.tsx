@@ -260,7 +260,10 @@ import {
   canOperateInvoices,
   createInviteCode,
   isAssignableMember,
+  isEmailNamedTeam,
+  isInvitedMember,
   isWorkspaceOwnerRole,
+  looksLikeEmail,
   memberAvatar,
   memberHasAlias,
   memberLabel,
@@ -3158,11 +3161,20 @@ export function DelivereeWorkspace() {
 
   const createWorkspaceTeam = async () => {
     if (!user || !workspace || !newTeamName.trim()) return;
+    const name = newTeamName.trim();
+    if (looksLikeEmail(name)) {
+      setInviteEmail(normalizeInviteEmail(name));
+      setNewTeamName("");
+      setNotice(
+        `${normalizeInviteEmail(name)} looks like an email, not a team. Use Invite above to send a Certo Work invitation — Teams are for groups like Engineering or Ops.`,
+      );
+      return;
+    }
     await addDoc(collection(db, "agent_groups"), {
       userId: user.uid,
       workspaceId: workspace.id,
-      name: newTeamName.trim(),
-      title: newTeamName.trim(),
+      name,
+      title: name,
       groupType: "workspace_team",
       status: "active",
       memberEmails: [],
@@ -3172,6 +3184,25 @@ export function DelivereeWorkspace() {
     });
     setNewTeamName("");
     setNotice("Team created.");
+  };
+
+  const convertEmailNamedTeamToInvite = async (team: WorkspaceTeam) => {
+    const email = normalizeInviteEmail(team.name || "");
+    if (!looksLikeEmail(email)) return;
+    setInviteEmail(email);
+    await inviteWorkspaceMember(email);
+    try {
+      await deleteDoc(doc(db, "agent_groups", team.id));
+    } catch {
+      /* invite still sent even if cleanup fails */
+    }
+    setNotice(`Converted mistaken team into an invite for ${email}.`);
+  };
+
+  const removeWorkspaceTeam = async (team: WorkspaceTeam) => {
+    if (!team.id) return;
+    await deleteDoc(doc(db, "agent_groups", team.id));
+    setNotice(`Removed team ${team.name || ""}.`.trim());
   };
 
   const toggleTeamMember = async (
@@ -7595,9 +7626,15 @@ export function DelivereeWorkspace() {
                 </div>
                 <div className="do-pending-invites">
                   <div className="do-workspace-admin-head">
-                    <span className="do-kicker">Pending invites</span>
-                    <strong>{pendingInvites.length} waiting</strong>
+                    <span className="do-kicker">Pending acceptance</span>
+                    <strong>{pendingInvites.length} waiting to join</strong>
                   </div>
+                  {pendingInvites.length > 0 && (
+                    <p className="do-invite-delivery-banner">
+                      These people were invited by email and have not accepted yet.
+                      Names in Teams or on tasks are not the same as a pending invite.
+                    </p>
+                  )}
                   {pendingInvites.map((row) => {
                     const invite = row.invite;
                     const delivery = inviteDeliveryLabel(
@@ -7613,7 +7650,7 @@ export function DelivereeWorkspace() {
                             {canSeeMemberEmails ? row.email : "Pending invite"}
                           </strong>
                           <small>
-                            {roleLabel(row.role)} · Invited
+                            {roleLabel(row.role)} · Pending acceptance
                             {canSeeMemberEmails ? ` · ${delivery}` : ""}
                             {remindersSent > 0 ? ` · ${remindersSent} reminder${remindersSent === 1 ? "" : "s"}` : ""}
                             {due ? ` · reminder due (${due.kind.replace(/_/g, " ")})` : ""}
@@ -7715,6 +7752,9 @@ export function DelivereeWorkspace() {
                   <span className="do-kicker">Teams</span>
                   <strong>{workspaceTeams.length} teams</strong>
                 </div>
+                <p className="do-invite-delivery-banner">
+                  Teams are groups (Engineering, Ops). To add a person, use Invite with their email — do not create a team named after an email.
+                </p>
                 <div className="do-workspace-create-row">
                   <input
                     onChange={(event) => setNewTeamName(event.target.value)}
@@ -7733,18 +7773,41 @@ export function DelivereeWorkspace() {
                   </button>
                 </div>
                 <div className="do-team-list">
-                  {workspaceTeams.map((team) => (
-                    <article key={team.id}>
+                  {workspaceTeams.map((team) => {
+                    const emailNamed = isEmailNamedTeam(team);
+                    return (
+                    <article className={emailNamed ? "is-email-named-team" : undefined} key={team.id}>
                       <strong>{team.name || "Team"}</strong>
                       <small>
-                        {(team.memberEmails || []).length} member
-                        {(team.memberEmails || []).length === 1 ? "" : "s"}
+                        {emailNamed
+                          ? "Looks like an email, not a team — convert to invite"
+                          : `${(team.memberEmails || []).length} member${
+                              (team.memberEmails || []).length === 1 ? "" : "s"
+                            }`}
                       </small>
+                      {emailNamed && canManageMembers ? (
+                        <div className="do-pending-invite-actions">
+                          <button
+                            onClick={() => void convertEmailNamedTeamToInvite(team)}
+                            type="button"
+                          >
+                            <Mail size={13} /> Convert to invite
+                          </button>
+                          <button
+                            className="do-member-remove"
+                            onClick={() => void removeWorkspaceTeam(team)}
+                            type="button"
+                          >
+                            Remove mistaken team
+                          </button>
+                        </div>
+                      ) : (
                       <div>
                         {workspaceMembers
                           .filter(
                             (member) =>
-                              String(member.status || "active") !== "removed",
+                              String(member.status || "active") !== "removed" &&
+                              !isInvitedMember(member),
                           )
                           .map((member) => {
                             const email = normalizeInviteEmail(
@@ -7765,8 +7828,10 @@ export function DelivereeWorkspace() {
                             );
                           })}
                       </div>
+                      )}
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             </>
