@@ -10,6 +10,7 @@ import {
   needsCreatorAssigneeRestore,
   todayPlanGroups,
   withCreatorAssignee,
+  unmatchedAssigneeLabels,
 } from "../src/lib/myWorkItems";
 
 const actor = {
@@ -227,4 +228,17 @@ test("teammate unassigned items are not restored onto my assignee list", () => {
   assert.equal(needsCreatorAssigneeRestore(theirs, actor), false);
   assert.deepEqual(filterMyWorkTasks([theirs], "assigned", actor, [alejandro, agustin]), []);
   assert.deepEqual(creatorAssigneePatch(actor, [alejandro]).assigneeIds, ["ws_user-alejandro"]);
+});
+
+
+test("unmatched assignee labels catch free-text names that were never invited", () => {
+  const labels = unmatchedAssigneeLabels(
+    [
+      { owner: "Luis Ordonez", assignees: ["Werlyn Giron"] },
+      { assignee: "Jose Miranda" },
+      { owner: "Alejandro" },
+    ],
+    [alejandro, agustin],
+  );
+  assert.deepEqual(labels, ["Jose Miranda", "Luis Ordonez", "Werlyn Giron"]);
 });

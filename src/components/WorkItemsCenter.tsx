@@ -168,6 +168,7 @@ type Props = {
   onOpenCollabProject?: (projectId: string) => void;
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
   onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   compact?: boolean;
   forceMode?: WorkItemsViewMode;
 };
@@ -719,6 +720,7 @@ export function WorkItemsCenter({
   onOpenCollabProject,
   onCreateSprint,
   onUpdateSprint: _onUpdateSprint,
+  onInviteAssigneeEmail,
   compact = false,
   forceMode,
 }: Props) {
@@ -1753,7 +1755,7 @@ export function WorkItemsCenter({
       return <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>;
     }
     if (column === "assignees") {
-      return <MultiAssigneePicker members={workspaceMembers} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />;
+      return <MultiAssigneePicker members={workspaceMembers} onInviteEmail={onInviteAssigneeEmail} onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })} selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []} selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)} />;
     }
     if (column === "due") {
       return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, { dueDate: event.target.value || null })} type="date" />;
@@ -2339,6 +2341,7 @@ export function WorkItemsCenter({
               compact
               label="Item assignees"
               members={workspaceMembers}
+              onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => onUpdateTask(item.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })}
               selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
               selectedNames={Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee].filter(Boolean)}
@@ -3722,6 +3725,7 @@ export function WorkItemsCenter({
             <MultiAssigneePicker
               label="Item assignees"
               members={workspaceMembers}
+              onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => onUpdateTask(selectedItem.id, { assigneeIds, assignees, owner: assignees[0] || "", assignee: assignees[0] || "" })}
               selectedIds={Array.isArray(selectedItem.assigneeIds) ? selectedItem.assigneeIds : []}
               selectedNames={Array.isArray(selectedItem.assignees) ? selectedItem.assignees : [selectedItem.owner || selectedItem.assignee].filter(Boolean)}

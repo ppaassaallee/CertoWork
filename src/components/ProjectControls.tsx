@@ -143,6 +143,7 @@ export function MultiAssigneePicker({
   selectedIds = [],
   selectedNames = [],
   onChange,
+  onInviteEmail,
   label = "Assignees",
   compact = false,
 }: {
@@ -150,10 +151,13 @@ export function MultiAssigneePicker({
   selectedIds?: string[];
   selectedNames?: string[];
   onChange: (ids: string[], names: string[]) => void;
+  onInviteEmail?: (email: string) => Promise<void> | void;
   label?: string;
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
@@ -164,13 +168,22 @@ export function MultiAssigneePicker({
   const selected = activeMembers.filter((member) =>
     memberMatchesSelection(member, selectedIds, selectedNames),
   );
+  const orphanNames = useMemo(() => {
+    return selectedNames
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .filter(
+        (name) =>
+          !activeMembers.some((member) => memberMatchesSelection(member, [], [name])),
+      );
+  }, [selectedNames, activeMembers]);
 
   const placeMenu = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const width = 280;
-    const estimatedHeight = Math.min(320, 88 + activeMembers.length * 44);
+    const width = 300;
+    const estimatedHeight = Math.min(360, 120 + activeMembers.length * 44 + (onInviteEmail ? 72 : 0));
     let left = Math.min(rect.right - width, window.innerWidth - width - 8);
     if (left < 8) left = 8;
     const openUp = rect.bottom + estimatedHeight + 8 > window.innerHeight && rect.top > estimatedHeight;
@@ -201,7 +214,7 @@ export function MultiAssigneePicker({
       window.removeEventListener("resize", onReposition);
       window.removeEventListener("scroll", onReposition, true);
     };
-  }, [open, activeMembers.length]);
+  }, [open, activeMembers.length, onInviteEmail]);
 
   const toggle = (member: AssignableMember) => {
     const isSelected = selected.some((candidate) => candidate.id === member.id);
@@ -212,6 +225,19 @@ export function MultiAssigneePicker({
       next.map((candidate) => candidate.id),
       next.map((candidate) => memberAssignmentValue(candidate)),
     );
+  };
+
+  const submitInvite = async () => {
+    if (!onInviteEmail || inviteBusy) return;
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email.includes("@")) return;
+    setInviteBusy(true);
+    try {
+      await onInviteEmail(email);
+      setInviteEmail("");
+    } finally {
+      setInviteBusy(false);
+    }
   };
 
   return (
@@ -246,6 +272,8 @@ export function MultiAssigneePicker({
                     .slice(0, 2)
                     .map((member) => `${memberAvatar(member)} ${memberName(member)}`)
                     .join(", ")
+                : orphanNames.length
+                  ? orphanNames.slice(0, 2).join(", ")
                 : "Unassigned"}
               {selected.length > 2 ? ` +${selected.length - 2}` : ""}
             </span>
@@ -257,8 +285,13 @@ export function MultiAssigneePicker({
           <div className="cw-multi-assignee-menu" ref={menuRef} style={menuStyle}>
             <header>
               <strong>{label}</strong>
-              <small>Select one or many people. Emails stay private.</small>
+              <small>Pick workspace members. Typing a name elsewhere does not send an invite email.</small>
             </header>
+            {orphanNames.length > 0 && (
+              <p className="cw-multi-assignee-orphan">
+                Not invited yet: {orphanNames.join(", ")}. Invite them below or from Workspace &amp; team.
+              </p>
+            )}
             {activeMembers.map((member) => {
               const checked = selected.some((candidate) => candidate.id === member.id);
               return (
@@ -267,12 +300,38 @@ export function MultiAssigneePicker({
                   <em aria-hidden="true">{memberAvatar(member)}</em>
                   <span>
                     <strong>{memberName(member)}</strong>
-                    <small>{String(member.status || "active") === "invited" ? "Invite pending" : "Workspace member"}</small>
+                    <small>{String(member.status || "active") === "invited" ? "Invite pending — email sent/queued" : "Workspace member"}</small>
                   </span>
                 </label>
               );
             })}
-            {activeMembers.length === 0 && <p>Invite members from Workspace & team first.</p>}
+            {activeMembers.length === 0 && (
+              <p>No members yet. Invite by email first — assigning a plain name never emails them.</p>
+            )}
+            {onInviteEmail && (
+              <div className="cw-multi-assignee-invite">
+                <input
+                  aria-label="Invite assignee by email"
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitInvite();
+                    }
+                  }}
+                  placeholder="Invite by email…"
+                  type="email"
+                  value={inviteEmail}
+                />
+                <button
+                  disabled={inviteBusy || !inviteEmail.includes("@")}
+                  onClick={() => void submitInvite()}
+                  type="button"
+                >
+                  {inviteBusy ? "Inviting…" : "Invite"}
+                </button>
+              </div>
+            )}
           </div>,
           document.body,
         )}

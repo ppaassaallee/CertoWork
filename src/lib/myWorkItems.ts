@@ -5,6 +5,7 @@ import { dateKey, isClosed, localDateKey } from "./workspaceDisplay";
 import {
   memberMatchesSelection,
   memberPublicLabel,
+  isAssignableMember,
   type WorkspaceMember,
 } from "./workspaceCollaboration";
 
@@ -59,6 +60,28 @@ export function itemAssigneeLabels(item: Record<string, unknown> | null | undefi
     ...asList(item.assignee),
     ...asList(item.assigneeEmails),
   ]);
+}
+
+/** Names stored on work items that do not match any workspace member (no invite / no seat). */
+export function unmatchedAssigneeLabels(
+  items: Array<Record<string, unknown> | null | undefined> = [],
+  members: WorkspaceMember[] = [],
+) {
+  const found = new Map<string, string>();
+  for (const item of items) {
+    for (const label of itemAssigneeLabels(item)) {
+      const key = label.trim().toLowerCase();
+      if (!key || isPlaceholderToken(key)) continue;
+      const matched = members.some(
+        (member) =>
+          isAssignableMember(member) &&
+          memberMatchesSelection(member, [], [label]),
+      );
+      if (matched) continue;
+      if (!found.has(key)) found.set(key, label.trim());
+    }
+  }
+  return [...found.values()].sort((left, right) => left.localeCompare(right));
 }
 
 export function itemHasAssignees(item: Record<string, unknown> | null | undefined) {

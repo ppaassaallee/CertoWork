@@ -145,7 +145,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee } from "../lib/myWorkItems";
+import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -1310,6 +1310,10 @@ export function DelivereeWorkspace() {
   const pendingInvites = useMemo(
     () => pendingInviteDirectory(workspaceMembers, workspaceInvites),
     [workspaceMembers, workspaceInvites],
+  );
+  const assignedWithoutInvite = useMemo(
+    () => unmatchedAssigneeLabels(tasks as Array<Record<string, unknown>>, workspaceMembers),
+    [tasks, workspaceMembers],
   );
 
   useEffect(() => {
@@ -2797,13 +2801,13 @@ export function DelivereeWorkspace() {
     setWorkspace({ id: workspaceRef.id, ...workspacePayload });
   };
 
-  const inviteWorkspaceMember = async () => {
+  const inviteWorkspaceMember = async (emailOverride?: string) => {
     if (!user || !workspace) return;
     if (!canManageMembers) {
       setNotice("Only the workspace owner or an admin can invite people.");
       return;
     }
-    const email = normalizeInviteEmail(inviteEmail);
+    const email = normalizeInviteEmail(emailOverride || inviteEmail);
     if (!email || !email.includes("@")) {
       setNotice("Add a valid email to invite someone.");
       return;
@@ -6341,6 +6345,13 @@ export function DelivereeWorkspace() {
             tags={categories}
             tasks={myWorkTasks}
             workspaceMembers={workspaceMembers}
+            onInviteAssigneeEmail={
+              canManageMembers
+                ? async (email) => {
+                    await inviteWorkspaceMember(email);
+                  }
+                : undefined
+            }
           />
           </div>
         ) : centerView === "invoices" ? (
@@ -7347,7 +7358,7 @@ export function DelivereeWorkspace() {
                   </select>
                   <button
                     disabled={!inviteEmail.trim()}
-                    onClick={inviteWorkspaceMember}
+                    onClick={() => void inviteWorkspaceMember()}
                     type="button"
                   >
                     Invite
@@ -7666,6 +7677,37 @@ export function DelivereeWorkspace() {
                     </div>
                   )}
                 </div>
+                {assignedWithoutInvite.length > 0 && (
+                  <div className="do-orphan-assignees">
+                    <div className="do-workspace-admin-head">
+                      <span className="do-kicker">Assigned without invite</span>
+                      <strong>{assignedWithoutInvite.length} names</strong>
+                    </div>
+                    <p className="do-invite-delivery-banner is-warn">
+                      These names appear on work items, but they were never invited by email.
+                      That is why Luis / Werlyn / Miranda-style names can show up with no “pending invite”
+                      and no inbox message — assignment alone does not send mail. Invite each person with their real email below.
+                    </p>
+                    <ul className="do-orphan-assignee-list">
+                      {assignedWithoutInvite.map((name) => (
+                        <li key={name}>
+                          <strong>{name}</strong>
+                          <button
+                            onClick={() => {
+                              setInviteEmail("");
+                              setNotice(
+                                `Enter ${name}'s email in Invite above, then click Invite so they get the Certo Work email and appear under Pending invites.`,
+                              );
+                            }}
+                            type="button"
+                          >
+                            Needs email invite
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </section>
 
               <section className="do-workspace-admin-card">
