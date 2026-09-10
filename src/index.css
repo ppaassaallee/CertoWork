@@ -1241,6 +1241,50 @@ a {
 .do-text-size-control.is-compact button > span {
   font-size: var(--text-caption);
 }
+.do-pure-ai-followers-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-0));
+  padding: 14px 16px;
+}
+.do-pure-ai-followers-callout .do-kicker {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.do-pure-ai-followers-callout strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+.do-pure-ai-followers-callout p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+.do-pure-ai-followers-btn {
+  flex: none;
+  min-height: 40px;
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.do-items-center .do-pure-ai-followers-callout,
+.do-main .do-pure-ai-followers-callout {
+  margin: 8px 12px 0;
+}
 .do-workspace-admin-card {
   display: grid;
   gap: 10px;

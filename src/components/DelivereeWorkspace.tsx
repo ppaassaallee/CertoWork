@@ -972,11 +972,16 @@ export function DelivereeWorkspace() {
     clearPureAiBusy,
   ]);
 
-  // Owner one-shot: grant Regina / César / Rafael / Edgar admin + all-project follow.
+  // One-shot: grant Regina / César / Rafael / Edgar admin + all-project follow.
   useEffect(() => {
     if (!user || !workspace) return;
     if (!isPureAiWorkspace(workspace)) return;
-    if (workspace.ownerId !== user.uid) return;
+    const role = String(
+      workspaceMembers.find((member) => member.userId === user.uid)?.role || "",
+    ).toLowerCase();
+    const canGrant =
+      workspace.ownerId === user.uid || ["owner", "admin"].includes(role);
+    if (!canGrant) return;
     if (workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY) return;
     if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
     if (
@@ -1001,7 +1006,7 @@ export function DelivereeWorkspace() {
           portfolioFollowersAutoRef.current = false;
           if (result.reason === "no-matches") {
             setNotice(
-              "Could not auto-grant Pure AI followers — Regina, César, Rafael or Edgar are not active members yet.",
+              "No se pudo auto-otorgar acceso Pure AI — Regina, César, Rafael o Edgar aún no son miembros activos.",
             );
           }
           return;
@@ -1374,6 +1379,11 @@ export function DelivereeWorkspace() {
     currentWorkspaceMember?.role,
     workspace?.ownerId === user?.uid,
     currentWorkspaceMember?.financeAccess,
+  );
+  const canGrantPureAiFollowers = Boolean(
+    isPureAiWorkspace(workspace) &&
+      (workspace?.ownerId === user?.uid ||
+        ["owner", "admin"].includes(String(currentWorkspaceMember?.role || "").toLowerCase())),
   );
   const pendingInvoiceQueue = useMemo(
     () => pendingInvoiceLines(projects, invoiceDocuments),
@@ -3637,11 +3647,14 @@ export function DelivereeWorkspace() {
       return;
     }
     if (workspace.ownerId !== user.uid) {
-      setNotice("Only the Pure AI workspace owner can grant portfolio followers.");
-      return;
+      const role = String(currentWorkspaceMember?.role || "").toLowerCase();
+      if (!["owner", "admin"].includes(role)) {
+        setNotice("Only Pure AI owners or admins can grant portfolio followers.");
+        return;
+      }
     }
     const confirmed = window.confirm(
-      "Grant Regina, César, Rafael and Edgar admin access and add them as followers on every Pure AI project?\n\nThey will see the full portfolio. Existing project access is kept.",
+      "¿Dar acceso admin a Regina, César, Rafael y Edgar en todos los proyectos de Pure AI?\n\nQuedarán como followers del portafolio completo. El acceso actual de otros no se quita.",
     );
     if (!confirmed) return;
     setPortfolioFollowersBusy(true);
@@ -3655,9 +3668,9 @@ export function DelivereeWorkspace() {
       if (result.skipped) {
         setNotice(
           result.reason === "not-owner"
-            ? "Only the Pure AI workspace owner can grant portfolio followers."
+            ? "Solo owners o admins de Pure AI pueden otorgar followers del portafolio."
             : result.reason === "no-matches"
-              ? "None of Regina, César, Rafael or Edgar were found as active Pure AI members."
+              ? "No encontré a Regina, César, Rafael o Edgar como miembros activos de Pure AI."
               : "Could not grant Pure AI portfolio followers.",
         );
         return;
@@ -6759,6 +6772,38 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
         ) : centerView === "portfolio" ? (
+          <>
+            {canGrantPureAiFollowers ? (
+              <section
+                className="do-pure-ai-followers-callout"
+                data-testid="pure-ai-grant-followers-portfolio"
+                id="pure-ai-followers-callout"
+              >
+                <div>
+                  <span className="do-kicker">Pure AI · acceso</span>
+                  <strong>Regina, César, Rafael y Edgar</strong>
+                  <p>
+                    {workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
+                      ? "Ya se aplicó el acceso admin + followers al portafolio. Puedes volver a aplicarlo si falta alguien."
+                      : "Dales rol admin y followers en todos los proyectos para que vean el portafolio completo."}
+                  </p>
+                </div>
+                <button
+                  className="do-button do-pure-ai-followers-btn"
+                  data-testid="pure-ai-grant-followers-btn"
+                  disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
+                  onClick={() => void grantPureAiAdminFollowers()}
+                  type="button"
+                >
+                  <Users size={14} />
+                  {portfolioFollowersBusy
+                    ? "Aplicando…"
+                    : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
+                      ? "Volver a dar acceso"
+                      : "Dar acceso admin ahora"}
+                </button>
+              </section>
+            ) : null}
           <ProjectCommandCenter
             highlightFinanceLineId={highlightFinanceLineId}
             initialPortfolioView={highlightFinanceLineId ? "economics" : undefined}
@@ -6804,6 +6849,7 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
+          </>
         ) : centerView === "project" ? (
           consoleProject ? (
             <ProjectConsolePanel
@@ -7378,6 +7424,36 @@ export function DelivereeWorkspace() {
 
           {panel === "settings" && (
             <div className="do-panel-settings">
+              {canGrantPureAiFollowers ? (
+                <section
+                  className="do-pure-ai-followers-callout"
+                  data-testid="pure-ai-grant-followers"
+                  id="pure-ai-followers-callout"
+                >
+                  <div>
+                    <span className="do-kicker">Pure AI · acceso</span>
+                    <strong>Regina, César, Rafael y Edgar</strong>
+                    <p>
+                      Este es el botón: dales admin + followers en todos los proyectos de Pure AI.
+                      También aparece arriba en Projects / Portfolio.
+                    </p>
+                  </div>
+                  <button
+                    className="do-button do-pure-ai-followers-btn"
+                    data-testid="pure-ai-grant-followers-btn"
+                    disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
+                    onClick={() => void grantPureAiAdminFollowers()}
+                    type="button"
+                  >
+                    <Users size={14} />
+                    {portfolioFollowersBusy
+                      ? "Aplicando…"
+                      : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
+                        ? "Volver a dar acceso"
+                        : "Dar acceso admin ahora"}
+                  </button>
+                </section>
+              ) : null}
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Public profile</span>
@@ -7404,34 +7480,14 @@ export function DelivereeWorkspace() {
                 <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pure AI portfolio</span>
-                    <strong>Admin followers, pricing sync &amp; clear</strong>
-                  </div>
-                  <p className="do-panel-intro">
-                    <strong>Admin followers:</strong> give Regina, César, Rafael and Edgar admin access
-                    and add them as followers on every Pure AI project so they see the full portfolio.
-                    Runs automatically once for the Pure AI owner; use the button to re-run.
-                  </p>
-                  <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-                    <button
-                      className="do-button"
-                      data-testid="pure-ai-grant-followers-btn"
-                      disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
-                      onClick={() => void grantPureAiAdminFollowers()}
-                      type="button"
-                    >
-                      <Users size={14} />
-                      {portfolioFollowersBusy
-                        ? "Granting…"
-                        : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                          ? "Re-grant admin followers"
-                          : "Grant admin followers (Regina, César, Rafael, Edgar)"}
-                    </button>
+                    <strong>Pricing sync &amp; clear</strong>
                   </div>
                   <p className="do-panel-intro">
                     Sync from Pricing_Data_Portafolio_IA_2026 (TRANSACTIONS BY PROJECT): fuzzy-match
                     projects, map BPO→delivery / Client→client, replace finance cost lines, create
                     missing projects, and prefix unmatched Certo projects with X. Clear deletes all
                     projects first if you need a clean slate. My Work without a project stays.
+                    El acceso de Regina/César/Rafael/Edgar está en el recuadro azul de arriba.
                   </p>
                   <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button
@@ -7699,19 +7755,15 @@ export function DelivereeWorkspace() {
               </section>
               )}
 
-              {isPureAiWorkspace(workspace) && workspace?.ownerId === user?.uid ? (
-                <section className="do-workspace-admin-card" data-testid="pure-ai-grant-followers">
-                  <div className="do-workspace-admin-head">
-                    <span className="do-kicker">Pure AI access</span>
-                    <strong>Admin followers</strong>
+              {canGrantPureAiFollowers ? (
+                <section className="do-pure-ai-followers-callout" data-testid="pure-ai-grant-followers-workspace">
+                  <div>
+                    <span className="do-kicker">Pure AI · acceso</span>
+                    <strong>Regina, César, Rafael y Edgar</strong>
+                    <p>Admin + followers en todos los proyectos del portafolio Pure AI.</p>
                   </div>
-                  <p className="do-panel-intro">
-                    Give Regina, César, Rafael and Edgar admin access and add them as followers on
-                    every Pure AI project so they can see the full portfolio. Runs automatically once
-                    for the Pure AI owner; use the button to re-run.
-                  </p>
                   <button
-                    className="do-button"
+                    className="do-button do-pure-ai-followers-btn"
                     data-testid="pure-ai-grant-followers-btn"
                     disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
                     onClick={() => void grantPureAiAdminFollowers()}
@@ -7719,10 +7771,10 @@ export function DelivereeWorkspace() {
                   >
                     <Users size={14} />
                     {portfolioFollowersBusy
-                      ? "Granting…"
+                      ? "Aplicando…"
                       : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                        ? "Re-grant admin followers"
-                        : "Grant admin followers (Regina, César, Rafael, Edgar)"}
+                        ? "Volver a dar acceso"
+                        : "Dar acceso admin ahora"}
                   </button>
                 </section>
               ) : null}
