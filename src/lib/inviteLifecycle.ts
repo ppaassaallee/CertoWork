@@ -126,6 +126,30 @@ export function dueInviteReminder(
   return { ...scheduled, dueAt };
 }
 
+/** Retry the first invite email when Brevo was down / misconfigured briefly. */
+export function dueInviteEmailRetry(
+  invite: {
+    status?: string;
+    createdAt?: any;
+    emailSentAt?: any;
+    emailDeliveryStatus?: string | null;
+    emailRetryCount?: number | string | null;
+    lastEmailError?: string | null;
+  } | null | undefined,
+  now = Date.now(),
+): { kind: InviteEmailKind; retryCount: number } | null {
+  if (!invite || !inviteIsUsable(invite) || inviteIsExpired(invite, now)) return null;
+  const delivery = String(invite.emailDeliveryStatus || "").toLowerCase();
+  if (["sent", "delivered", "opened"].includes(delivery)) return null;
+  const created = inviteCreatedAtMs(invite);
+  if (!created) return null;
+  // Give the first send a moment, then retry up to 5 times (about every few minutes via the client loop).
+  if (now - created < 90_000) return null;
+  const retries = Math.max(0, Number(invite.emailRetryCount || 0) || 0);
+  if (retries >= 5) return null;
+  return { kind: "invite", retryCount: retries };
+}
+
 export function reminderScheduleAfterSend(
   invite: { createdAt?: any; emailSentAt?: any; reminderCount?: number | string | null } | null | undefined,
   kind: InviteEmailKind = "invite",

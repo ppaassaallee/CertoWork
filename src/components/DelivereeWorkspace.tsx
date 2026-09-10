@@ -79,9 +79,15 @@ import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
-import { grantPureAiPortfolioFollowers } from "../lib/runPureAiPortfolioFollowers";
+import {
+  grantPureAiPortfolioFollowers,
+  selfHealPureAiFollowerMembership,
+} from "../lib/runPureAiPortfolioFollowers";
 import {
   PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
+  emailMatchesPureAiFollower,
+  isPersonalOrEmailNamedWorkspace,
+  pureAiFollowerEmailsMissingFromWorkspace,
 } from "../lib/pureAiPortfolioFollowers";
 import {
   pricingPortfolioProjectCount,
@@ -113,7 +119,7 @@ import {
   timestamp,
 } from "../lib/workspaceDisplay";
 import { productPhase, workCategory } from "../lib/workClassification";
-import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
+import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, dueInviteEmailRetry, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
 import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/emailClient";
 import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
@@ -989,8 +995,10 @@ export function DelivereeWorkspace() {
     const canGrant =
       workspace.ownerId === user.uid || ["owner", "admin"].includes(role);
     if (!canGrant) return;
-    if (workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY) return;
-    if (!actor) return;
+    const missingSeats = pureAiFollowerEmailsMissingFromWorkspace(workspace, workspaceMembers);
+    const keyFresh = workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY;
+    if (keyFresh && missingSeats.length === 0) return;
+    if (!actor && !workspaceMembers.some((member) => member.userId === user.uid)) return;
     if (
       portfolioFollowersAutoRef.current ||
       portfolioFollowersBusy ||
@@ -1011,11 +1019,6 @@ export function DelivereeWorkspace() {
         });
         if (result.skipped) {
           portfolioFollowersAutoRef.current = false;
-          if (result.reason === "no-matches") {
-            setNotice(
-              "No se pudo auto-otorgar acceso Pure AI — Regina, César, Rafael o Edgar aún no son miembros activos.",
-            );
-          }
           return;
         }
         await reloadWorkspaces();
@@ -1040,6 +1043,35 @@ export function DelivereeWorkspace() {
     clearPureAiBusy,
     reloadWorkspaces,
   ]);
+
+  // Move Pure AI followers off empty Personal / email-named workspaces.
+  useEffect(() => {
+    if (!user?.email || !workspace || !workspaces.length) return;
+    if (!emailMatchesPureAiFollower(user.email)) return;
+    if (isPureAiWorkspace(workspace)) return;
+    if (!isPersonalOrEmailNamedWorkspace(workspace, user.email)) return;
+    const pureAi = workspaces.find((item) => isPureAiWorkspace(item));
+    if (!pureAi || pureAi.id === workspace.id) return;
+    setWorkspace(pureAi);
+    setNotice("Te moví a Pure AI Workspace para que veas el portafolio.");
+  }, [user?.email, user?.uid, workspace?.id, workspaces, setWorkspace]);
+
+  // Self-heal: follower on Pure AI always gets admin + portfolioViewer.
+  useEffect(() => {
+    if (!user || !workspace) return;
+    if (!isPureAiWorkspace(workspace)) return;
+    if (!emailMatchesPureAiFollower(user.email)) return;
+    const member = workspaceMembers.find((item) => item.userId === user.uid);
+    if (member && String(member.role || "").toLowerCase() === "admin" && member.portfolioViewer) {
+      return;
+    }
+    void selfHealPureAiFollowerMembership({
+      db,
+      user,
+      workspace,
+      member: member || null,
+    }).catch(() => undefined);
+  }, [user?.uid, user?.email, workspace?.id, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -3012,6 +3044,7 @@ export function DelivereeWorkspace() {
     kind = "invite",
     expiresAt,
     inviteCreatedAt,
+    priorRetryCount = 0,
   }: {
     email: string;
     role: string;
@@ -3020,6 +3053,7 @@ export function DelivereeWorkspace() {
     kind?: InviteEmailKind;
     expiresAt?: Date | null;
     inviteCreatedAt?: any;
+    priorRetryCount?: number;
   }) => {
     if (!user || !workspace) {
       return { sent: false, warning: "Sign in to send the invite email." };
@@ -3069,6 +3103,8 @@ export function DelivereeWorkspace() {
         emailSentAt: sent ? serverTimestamp() : null,
         emailMessageId: sent ? result.messageId || "" : "",
         emailProviderAcceptedAt: sent ? serverTimestamp() : null,
+        emailRetryCount: sent ? 0 : priorRetryCount + (kind === "invite" ? 1 : 0),
+        lastEmailError: sent ? "" : warning,
         ...reminderPatch,
         updatedAt: serverTimestamp(),
       });
@@ -3079,6 +3115,8 @@ export function DelivereeWorkspace() {
       await updateDoc(doc(db, "agent_invites", inviteId), {
         emailDeliveryStatus: "failed",
         emailDeliveryError: warning,
+        emailRetryCount: priorRetryCount + 1,
+        lastEmailError: warning,
         updatedAt: serverTimestamp(),
       });
       return { sent: false, warning };
@@ -3199,14 +3237,35 @@ export function DelivereeWorkspace() {
     if (!user || !workspace || !canManageMembers) return;
     if (!emailInvitesConfigured) return;
     let cancelled = false;
-    const dueRows = pendingInvites.filter((row) => dueInviteReminder(row.invite));
-    if (!dueRows.length) return;
-    const runKey = dueRows.map((row) => `${row.invite?.id}:${dueInviteReminder(row.invite)?.kind}`).join("|");
+    const reminderRows = pendingInvites.filter((row) => dueInviteReminder(row.invite));
+    const retryRows = pendingInvites.filter((row) => dueInviteEmailRetry(row.invite));
+    if (!reminderRows.length && !retryRows.length) return;
+    const runKey = [
+      ...reminderRows.map((row) => `r:${row.invite?.id}:${dueInviteReminder(row.invite)?.kind}`),
+      ...retryRows.map((row) => `t:${row.invite?.id}:${dueInviteEmailRetry(row.invite)?.retryCount}`),
+    ].join("|");
     if ((window as any).__certoInviteReminderRun === runKey) return;
     (window as any).__certoInviteReminderRun = runKey;
     void (async () => {
       let sentCount = 0;
-      for (const row of dueRows) {
+      let retriedCount = 0;
+      for (const row of retryRows) {
+        if (cancelled || !row.invite?.id || !row.invite?.inviteToken) continue;
+        const due = dueInviteEmailRetry(row.invite);
+        if (!due) continue;
+        const result = await deliverWorkspaceInvite({
+          email: row.email,
+          role: String(row.role || row.invite.role || "member"),
+          inviteToken: String(row.invite.inviteToken),
+          inviteId: String(row.invite.id),
+          kind: due.kind,
+          expiresAt: row.invite.expiresAt?.toDate?.() || row.invite.expiresAt || null,
+          inviteCreatedAt: row.invite.createdAt,
+          priorRetryCount: due.retryCount,
+        });
+        if (result.sent) retriedCount += 1;
+      }
+      for (const row of reminderRows) {
         if (cancelled || !row.invite?.id || !row.invite?.inviteToken) continue;
         const due = dueInviteReminder(row.invite);
         if (!due) continue;
@@ -3221,12 +3280,12 @@ export function DelivereeWorkspace() {
         });
         if (result.sent) sentCount += 1;
       }
-      if (!cancelled && sentCount > 0) {
-        setNotice(
-          sentCount === 1
-            ? "Sent 1 invite reminder."
-            : `Sent ${sentCount} invite reminders.`,
-        );
+      if (!cancelled && (sentCount > 0 || retriedCount > 0)) {
+        const parts = [
+          retriedCount > 0 ? `Retried ${retriedCount} invite email${retriedCount === 1 ? "" : "s"}` : "",
+          sentCount > 0 ? `Sent ${sentCount} reminder${sentCount === 1 ? "" : "s"}` : "",
+        ].filter(Boolean);
+        setNotice(`${parts.join(". ")}.`);
       }
     })();
     return () => {
@@ -3676,9 +3735,7 @@ export function DelivereeWorkspace() {
         setNotice(
           result.reason === "not-owner"
             ? "Solo owners o admins de Pure AI pueden otorgar followers del portafolio."
-            : result.reason === "no-matches"
-              ? "No encontré a Regina, César, Rafael o Edgar como miembros activos de Pure AI."
-              : "Could not grant Pure AI portfolio followers.",
+            : "Could not grant Pure AI portfolio followers.",
         );
         return;
       }
