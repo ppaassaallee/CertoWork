@@ -13,6 +13,7 @@ export type WorkspaceMember = {
   emoji?: string;
   role?: WorkspaceRole | string;
   status?: string;
+  portfolioViewer?: boolean;
   teamIds?: string[];
   financeAccess?: boolean;
   /** Set on the pending invite seat after the person accepts. */

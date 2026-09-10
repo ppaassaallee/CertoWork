@@ -28,6 +28,11 @@ import {
 import { inviteIsUsable, inviteShouldCloseOnJoin } from './inviteLifecycle';
 import { looksLikeEmail, membershipPublicPatch, canSeeWorkspaceDocument } from './workspaceCollaboration';
 import { grantsWorkspacePortfolioAccess } from './accessControl';
+import { isPureAiWorkspace } from './portfolioMasterImport';
+import {
+  emailMatchesPureAiFollower,
+  pickPreferredWorkspace,
+} from './pureAiPortfolioFollowers';
 import { remapWorkspaceAccessAfterInviteAccept } from './inviteAcceptRemap';
 
 function publicAuthName(displayName?: string | null) {
@@ -293,7 +298,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (allWs.length > 0) {
         const storedId = localStorage.getItem('activeWorkspaceId');
-        const active = allWs.find(w => w.id === storedId) || allWs[0];
+        const active =
+          pickPreferredWorkspace(allWs, {
+            userEmail: u.email,
+            storedId,
+          }) || allWs[0];
 
         // Open the workspace before non-critical membership housekeeping.
         setWorkspaces(allWs);
@@ -307,17 +316,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const memberId = `${ws.id}_${u.uid}`;
             const memberRef = doc(db, 'workspace_members', memberId);
             const isOwner = ws.ownerId === u.uid;
-            const role = isOwner ? "owner" : ((ws as any).roles?.[(u.email || "").toLowerCase()] || (ws as any).roles?.[u.email || ""] || "member");
+            const emailLower = (u.email || "").toLowerCase();
+            const followerOnPureAi = isPureAiWorkspace(ws) && emailMatchesPureAiFollower(u.email);
+            const role = isOwner
+              ? "owner"
+              : followerOnPureAi
+                ? "admin"
+                : ((ws as any).roles?.[emailLower] || (ws as any).roles?.[u.email || ""] || "member");
             
             await withTimeout(setDoc(memberRef, {
               id: memberId,
               workspaceId: ws.id,
               userId: u.uid,
               email: u.email || "",
-              emailLower: (u.email || "").toLowerCase(),
+              emailLower,
               role,
               status: "active",
-              portfolioViewer: grantsWorkspacePortfolioAccess(role),
+              portfolioViewer: grantsWorkspacePortfolioAccess(role) || followerOnPureAi,
               updatedAt: serverTimestamp()
             }, { merge: true }), 5_000, `Workspace ${ws.id} membership update`);
           } catch (eMemberDoc) {
@@ -380,7 +395,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             canSeeWorkspaceDocument(ws, u, memberWorkspaceIds),
           );
           if (joined.length > 0) {
-            const active = joined[0];
+            const active =
+              pickPreferredWorkspace(joined, {
+                userEmail: u.email,
+                storedId: localStorage.getItem("activeWorkspaceId"),
+              }) || joined[0];
             setWorkspaces(joined);
             setWorkspaceState(active);
             localStorage.setItem('activeWorkspaceId', active.id);
