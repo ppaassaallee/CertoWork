@@ -79,6 +79,7 @@ import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
+import { grantPureAiPortfolioFollowers } from "../lib/runPureAiPortfolioFollowers";
 import {
   pricingPortfolioProjectCount,
   syncPureAiPricingPortfolio,
@@ -428,6 +429,7 @@ export function DelivereeWorkspace() {
   const [captureBusy, setCaptureBusy] = useState(false);
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
+  const [portfolioFollowersBusy, setPortfolioFollowersBusy] = useState(false);
   const pricingAutoSyncRef = useRef(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -3564,6 +3566,51 @@ export function DelivereeWorkspace() {
       );
     } finally {
       setClearPureAiBusy(false);
+    }
+  };
+
+  const grantPureAiAdminFollowers = async () => {
+    if (!user || !workspace) return;
+    if (!isPureAiWorkspace(workspace)) {
+      setNotice("This action only works inside the Pure AI workspace.");
+      return;
+    }
+    if (workspace.ownerId !== user.uid) {
+      setNotice("Only the Pure AI workspace owner can grant portfolio followers.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Grant Regina, César, Rafael and Edgar admin access and add them as followers on every Pure AI project?\n\nThey will see the full portfolio. Existing project access is kept.",
+    );
+    if (!confirmed) return;
+    setPortfolioFollowersBusy(true);
+    try {
+      const result = await grantPureAiPortfolioFollowers({
+        db,
+        user,
+        workspace,
+        members: workspaceMembers,
+      });
+      if (result.skipped) {
+        setNotice(
+          result.reason === "not-owner"
+            ? "Only the Pure AI workspace owner can grant portfolio followers."
+            : result.reason === "no-matches"
+              ? "None of Regina, César, Rafael or Edgar were found as active Pure AI members."
+              : "Could not grant Pure AI portfolio followers.",
+        );
+        return;
+      }
+      await reloadWorkspaces();
+      setNotice(result.message);
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Could not grant portfolio followers: ${reason.message}`
+          : "Could not grant portfolio followers.",
+      );
+    } finally {
+      setPortfolioFollowersBusy(false);
     }
   };
 
@@ -7296,20 +7343,22 @@ export function DelivereeWorkspace() {
                 <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pure AI portfolio</span>
-                    <strong>Pricing sync &amp; clear</strong>
+                    <strong>Pricing sync, followers &amp; clear</strong>
                   </div>
                   <p className="do-panel-intro">
                     Sync from Pricing_Data_Portafolio_IA_2026 (TRANSACTIONS BY PROJECT): fuzzy-match
                     projects, map BPO→delivery / Client→client, replace finance cost lines, create
                     missing projects, and prefix unmatched Certo projects with X. Runs automatically
-                    once for the Pure AI owner until applied; use the button to re-run. Clear deletes
-                    all projects first if you need a clean slate. My Work without a project stays.
+                    once for the Pure AI owner until applied; use the button to re-run. Grant followers
+                    promotes Regina, César, Rafael and Edgar to admin and adds them on every project
+                    so they can see the full Pure AI portfolio. Clear deletes all projects first if
+                    you need a clean slate. My Work without a project stays.
                   </p>
                   <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button
                       className="do-button"
                       data-testid="pure-ai-pricing-sync-btn"
-                      disabled={pricingSyncBusy || clearPureAiBusy}
+                      disabled={pricingSyncBusy || clearPureAiBusy || portfolioFollowersBusy}
                       onClick={() => void syncPureAiPricingFromSheet()}
                       type="button"
                     >
@@ -7320,8 +7369,20 @@ export function DelivereeWorkspace() {
                     </button>
                     <button
                       className="do-button"
+                      data-testid="pure-ai-grant-followers-btn"
+                      disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
+                      onClick={() => void grantPureAiAdminFollowers()}
+                      type="button"
+                    >
+                      <Users size={14} />
+                      {portfolioFollowersBusy
+                        ? "Granting…"
+                        : "Grant admin followers (Regina, César, Rafael, Edgar)"}
+                    </button>
+                    <button
+                      className="do-button"
                       data-testid="pure-ai-clear-projects-btn"
-                      disabled={clearPureAiBusy || pricingSyncBusy}
+                      disabled={clearPureAiBusy || pricingSyncBusy || portfolioFollowersBusy}
                       onClick={() => void clearPureAiPortfolioProjects()}
                       type="button"
                     >

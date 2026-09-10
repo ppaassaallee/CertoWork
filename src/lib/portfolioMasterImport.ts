@@ -14,6 +14,7 @@ export const PORTFOLIO_SHARE_ALIASES = [
   "jose",
   "rafael",
   "regina",
+  "edgar",
 ] as const;
 
 export type PortfolioMasterRow = {

@@ -119,12 +119,14 @@ test("shares with alias users even when emails differ", () => {
     { id: "ws_jose", userId: "u-jose", displayName: "Jose Perez", email: "jose@getboldr.ai", status: "active" },
     { id: "ws_rafa", userId: "u-rafa", alias: "rafael", emailLower: "rafael.f@getboldr.ai", status: "active" },
     { id: "ws_regina", userId: "u-regina", alias: "regina", status: "active" },
+    { id: "ws_edgar", userId: "u-edgar", alias: "edgar", email: "edgar@getboldr.ai", status: "active" },
   ]);
   assert.deepEqual(share.missingAliases, []);
-  assert.deepEqual(share.userIds.sort(), ["u-cesar", "u-jose", "u-nico", "u-rafa", "u-regina"]);
+  assert.deepEqual(share.userIds.sort(), ["u-cesar", "u-edgar", "u-jose", "u-nico", "u-rafa", "u-regina"]);
   assert.ok(share.emails.includes("cesar.ar@alliedglobal.com"));
   assert.ok(share.emails.includes("jose@getboldr.ai"));
   assert.ok(share.emails.includes("rafael.f@getboldr.ai"));
+  assert.ok(share.emails.includes("edgar@getboldr.ai"));
   assert.equal(memberMatchesShareAlias({ id: "x", alias: "cesar", userId: "1" }, "cesar"), true);
   assert.equal(
     memberMatchesShareAlias(
@@ -165,6 +167,8 @@ test("clear Pure AI projects helper is owner-gated and keeps My Work items", () 
   assert.match(source, /preservedMyWorkTasks/);
   assert.match(source, /Boolean\(projectId\) && projectIds\.has\(projectId\)/);
   assert.match(workspace, /data-testid="pure-ai-clear-projects"/);
+  assert.match(workspace, /data-testid="pure-ai-grant-followers-btn"/);
+  assert.match(workspace, /Grant admin followers/);
   assert.match(workspace, /clearPureAiProjects/);
   assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
 });
