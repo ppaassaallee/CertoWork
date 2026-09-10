@@ -631,7 +631,11 @@ export function DelivereeWorkspace() {
     setWorkspaceNameDraft(workspace.name || "Workspace");
     const emailLower = normalizeAccessEmail(user.email);
     const memberId = accessMemberId(workspace.id, user.uid);
-    const currentMember = workspaceMembers.find((member) => member.userId === user.uid);
+    const currentMember = workspaceMembers.find((member) => {
+      if (member.userId === user.uid) return true;
+      const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
+      return Boolean(emailLower && memberEmail && memberEmail === emailLower);
+    });
     const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
       isOwner: workspace.ownerId === user.uid,
       member: currentMember,
@@ -976,14 +980,17 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!user || !workspace) return;
     if (!isPureAiWorkspace(workspace)) return;
-    const role = String(
-      workspaceMembers.find((member) => member.userId === user.uid)?.role || "",
-    ).toLowerCase();
+    const actor = workspaceMembers.find((member) => {
+      if (member.userId === user.uid) return true;
+      const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
+      return Boolean(user.email && memberEmail === normalizeAccessEmail(user.email));
+    });
+    const role = String(actor?.role || "").toLowerCase();
     const canGrant =
       workspace.ownerId === user.uid || ["owner", "admin"].includes(role);
     if (!canGrant) return;
     if (workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY) return;
-    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
+    if (!actor) return;
     if (
       portfolioFollowersAutoRef.current ||
       portfolioFollowersBusy ||
