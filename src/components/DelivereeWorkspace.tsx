@@ -7404,16 +7404,34 @@ export function DelivereeWorkspace() {
                 <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pure AI portfolio</span>
-                    <strong>Pricing sync, followers &amp; clear</strong>
+                    <strong>Admin followers, pricing sync &amp; clear</strong>
+                  </div>
+                  <p className="do-panel-intro">
+                    <strong>Admin followers:</strong> give Regina, César, Rafael and Edgar admin access
+                    and add them as followers on every Pure AI project so they see the full portfolio.
+                    Runs automatically once for the Pure AI owner; use the button to re-run.
+                  </p>
+                  <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                    <button
+                      className="do-button"
+                      data-testid="pure-ai-grant-followers-btn"
+                      disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
+                      onClick={() => void grantPureAiAdminFollowers()}
+                      type="button"
+                    >
+                      <Users size={14} />
+                      {portfolioFollowersBusy
+                        ? "Granting…"
+                        : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
+                          ? "Re-grant admin followers"
+                          : "Grant admin followers (Regina, César, Rafael, Edgar)"}
+                    </button>
                   </div>
                   <p className="do-panel-intro">
                     Sync from Pricing_Data_Portafolio_IA_2026 (TRANSACTIONS BY PROJECT): fuzzy-match
                     projects, map BPO→delivery / Client→client, replace finance cost lines, create
-                    missing projects, and prefix unmatched Certo projects with X. Runs automatically
-                    once for the Pure AI owner until applied; use the button to re-run. Grant followers
-                    promotes Regina, César, Rafael and Edgar to admin and adds them on every project
-                    so they can see the full Pure AI portfolio. Clear deletes all projects first if
-                    you need a clean slate. My Work without a project stays.
+                    missing projects, and prefix unmatched Certo projects with X. Clear deletes all
+                    projects first if you need a clean slate. My Work without a project stays.
                   </p>
                   <div className="do-inline-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button
@@ -7427,18 +7445,6 @@ export function DelivereeWorkspace() {
                       {pricingSyncBusy
                         ? "Syncing…"
                         : `Sync pricing (${pricingPortfolioProjectCount()} projects)`}
-                    </button>
-                    <button
-                      className="do-button"
-                      data-testid="pure-ai-grant-followers-settings-btn"
-                      disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
-                      onClick={() => void grantPureAiAdminFollowers()}
-                      type="button"
-                    >
-                      <Users size={14} />
-                      {portfolioFollowersBusy
-                        ? "Granting…"
-                        : "Grant admin followers (Regina, César, Rafael, Edgar)"}
                     </button>
                     <button
                       className="do-button"
