@@ -169,6 +169,7 @@ test("clear Pure AI projects helper is owner-gated and keeps My Work items", () 
   assert.match(workspace, /data-testid="pure-ai-grant-followers"/);
   assert.match(workspace, /data-testid="pure-ai-grant-followers-btn"/);
   assert.match(workspace, /Grant admin followers/);
+  assert.match(workspace, /Admin followers, pricing sync/);
   assert.match(workspace, /PURE_AI_PORTFOLIO_FOLLOWERS_KEY/);
   assert.match(workspace, /clearPureAiProjects/);
   assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
