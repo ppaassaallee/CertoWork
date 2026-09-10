@@ -15,6 +15,9 @@ export const PURE_AI_PORTFOLIO_FOLLOWER_ALIASES = [
   "edgar",
 ] as const;
 
+/** Bump when the follower set changes so Pure AI owner auto-grant re-runs. */
+export const PURE_AI_PORTFOLIO_FOLLOWERS_KEY = "regina-cesar-rafael-edgar-v1";
+
 export type PureAiFollowerShare = ReturnType<typeof resolvePortfolioShareTargets>;
 
 function unique(values: Array<string | null | undefined>) {

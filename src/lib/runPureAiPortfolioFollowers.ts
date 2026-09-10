@@ -13,6 +13,7 @@ import type { WorkspaceMember } from "./workspaceCollaboration";
 import { isPureAiWorkspace } from "./portfolioMasterImport";
 import {
   PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
+  PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
   buildPureAiFollowerMemberPatch,
   buildPureAiFollowerProjectPatch,
   buildPureAiFollowerWorkspaceRolesPatch,
@@ -46,6 +47,7 @@ export async function grantPureAiPortfolioFollowers(input: {
     name?: string;
     ownerId?: string;
     roles?: Record<string, string> | null;
+    portfolioFollowersGrantedKey?: string | null;
   };
   members: WorkspaceMember[];
 }) {
@@ -83,6 +85,7 @@ export async function grantPureAiPortfolioFollowers(input: {
     roles: buildPureAiFollowerWorkspaceRolesPatch(input.workspace.roles, matched),
     portfolioFollowersGrantedAt: serverTimestamp(),
     portfolioFollowersGrantedAliases: PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
+    portfolioFollowersGrantedKey: PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
     updatedAt: serverTimestamp(),
   });
 
