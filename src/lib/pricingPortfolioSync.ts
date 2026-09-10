@@ -622,9 +622,10 @@ export function buildOperationsStageRepairPatch(project: Record<string, unknown>
   if (current === "operations") return null;
   return {
     deliveryStage: "operations" as const,
-    productPhase: mapProductPhase(
-      String(project.phase || excelFase || project.productPhase || "Producción"),
-    ),
+    productPhase:
+      String(project.productPhase || "").trim() === "Grow"
+        ? ("Grow" as const)
+        : mapProductPhase(String(project.phase || excelFase || "Producción")),
   };
 }
 
