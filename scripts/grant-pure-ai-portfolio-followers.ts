@@ -15,6 +15,7 @@ import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firesto
 import { isPureAiWorkspace } from "../src/lib/portfolioMasterImport";
 import {
   PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
+  PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
   buildPureAiFollowerMemberPatch,
   buildPureAiFollowerProjectPatch,
   buildPureAiFollowerWorkspaceRolesPatch,
@@ -122,6 +123,7 @@ async function main() {
     roles: buildPureAiFollowerWorkspaceRolesPatch(workspace.roles, matched),
     portfolioFollowersGrantedAt: FieldValue.serverTimestamp(),
     portfolioFollowersGrantedAliases: PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
+    portfolioFollowersGrantedKey: PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
     updatedAt: FieldValue.serverTimestamp(),
   });
 

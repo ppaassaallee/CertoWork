@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
+  PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
   buildPureAiFollowerMemberPatch,
   buildPureAiFollowerProjectPatch,
   buildPureAiFollowerWorkspaceRolesPatch,
@@ -20,6 +21,7 @@ test("Pure AI follower aliases cover Regina, César, Rafael and Edgar", () => {
     "rafael",
     "regina",
   ]);
+  assert.equal(PURE_AI_PORTFOLIO_FOLLOWERS_KEY, "regina-cesar-rafael-edgar-v1");
   assert.ok(PORTFOLIO_SHARE_ALIASES.includes("edgar"));
   assert.ok(portfolioShareAliasesWithFollowers().includes("edgar"));
 });
