@@ -14,6 +14,7 @@ import type { WorkspaceMember } from "./workspaceCollaboration";
 import { membershipPublicPatch, pendingMemberId } from "./workspaceCollaboration";
 import { isPureAiWorkspace } from "./portfolioMasterImport";
 import { normalizeAccessEmail } from "./accessControl";
+import { buildOperationsStageRepairPatch } from "./pricingPortfolioSync";
 import {
   PURE_AI_PORTFOLIO_FOLLOWER_ALIASES,
   PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
@@ -138,28 +139,43 @@ export async function grantPureAiPortfolioFollowers(input: {
     ...share,
     emails: [...new Set([...share.emails, ...seatEmails])],
   };
-  const projectOps: Array<(batch: ReturnType<typeof writeBatch>) => void> = projectsSnap.docs.map(
-    (item) => (batch) => {
-      batch.update(item.ref, {
-        ...buildPureAiFollowerProjectPatch(item.data() as Record<string, unknown>, shareWithSeats),
+
+  // Per-project updates: one invalid doc (missing createdAt timestamp, etc.)
+  // must not fail the entire follower grant with "Missing or insufficient permissions".
+  let projectsUpdated = 0;
+  let projectsFailed = 0;
+  let stagesRepaired = 0;
+  for (const item of projectsSnap.docs) {
+    const data = item.data() as Record<string, unknown>;
+    const repair = buildOperationsStageRepairPatch(data);
+    try {
+      await updateDoc(item.ref, {
+        ...buildPureAiFollowerProjectPatch(data, shareWithSeats),
+        ...(repair || {}),
         updatedAt: serverTimestamp(),
       });
-    },
-  );
-  await commitInChunks(input.db, projectOps);
+      projectsUpdated += 1;
+      if (repair) stagesRepaired += 1;
+    } catch {
+      projectsFailed += 1;
+    }
+  }
 
   return {
     skipped: false as const,
-    projectsUpdated: projectsSnap.size,
+    projectsUpdated,
+    projectsFailed,
+    stagesRepaired,
     membersPromoted: matched.length,
     seatsEnsured,
     sharedWith: share.labels,
     missingAliases: share.missingAliases,
     message: summarizePureAiFollowerGrant({
       share,
-      projectsUpdated: projectsSnap.size,
+      projectsUpdated,
       membersPromoted: matched.length,
       seatsEnsured,
+      projectsFailed,
     }),
   };
 }

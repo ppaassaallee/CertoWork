@@ -28,7 +28,7 @@ test("Pure AI follower aliases cover Regina, César, Rafael and Edgar", () => {
     "rafael",
     "regina",
   ]);
-  assert.equal(PURE_AI_PORTFOLIO_FOLLOWERS_KEY, "regina-cesar-rafael-edgar-v3");
+  assert.equal(PURE_AI_PORTFOLIO_FOLLOWERS_KEY, "regina-cesar-rafael-edgar-v4");
   assert.ok(PORTFOLIO_SHARE_ALIASES.includes("edgar"));
   assert.ok(portfolioShareAliasesWithFollowers().includes("edgar"));
   assert.ok(PURE_AI_PORTFOLIO_FOLLOWER_KNOWN_EMAILS.includes("regina.gg@alliedglobal.com"));

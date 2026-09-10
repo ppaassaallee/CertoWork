@@ -5542,7 +5542,7 @@ export function ProjectCommandCenter({
         <div>
           <strong>
             {
-              realProjects.filter(
+              openProjects.filter(
                 (project) => deliveryStage(project) === "operations",
               ).length
             }

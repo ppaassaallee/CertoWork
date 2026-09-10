@@ -76,53 +76,89 @@ function token(value: unknown) {
     .replace(/^_+|_+$/g, "");
 }
 
-export function normalizeDeliveryStage(project: any): DeliveryStage {
-  const explicit = token(project?.deliveryStage);
-  if ((DELIVERY_STAGES as readonly string[]).includes(explicit)) {
-    return explicit as DeliveryStage;
-  }
-  const value = token(
-    project?.deliveryStage ||
-      project?.phase ||
-      project?.sourceStatus ||
-      project?.status ||
-      "build",
-  );
+function isDeliveryStage(value: string): value is DeliveryStage {
+  return (DELIVERY_STAGES as readonly string[]).includes(value);
+}
+
+/** Infer stage from Excel / pricing phase labels (and Grow product phase). */
+export function inferDeliveryStageFromPhase(value: unknown): DeliveryStage | null {
+  const normalized = token(value);
+  if (!normalized) return null;
+  if (isDeliveryStage(normalized)) return normalized;
   if (
-    value.includes("define") ||
-    value.includes("idea") ||
-    value.includes("diseno") ||
-    value.includes("propuesta") ||
-    value.includes("hold") ||
-    value === "tbc"
+    normalized.includes("define") ||
+    normalized.includes("idea") ||
+    normalized.includes("diseno") ||
+    normalized.includes("propuesta") ||
+    normalized.includes("hold") ||
+    normalized === "tbc"
   )
     return "define";
-  if (value.includes("onboard") || value.includes("discovery"))
+  if (normalized.includes("onboard") || normalized.includes("discovery"))
     return "onboarding";
   if (
-    value.includes("deploy") ||
-    value.includes("pre_production") ||
-    value.includes("preproduccion") ||
-    value.includes("pre_produccion") ||
-    value === "qa"
+    normalized.includes("deploy") ||
+    normalized.includes("pre_production") ||
+    normalized.includes("preproduccion") ||
+    normalized.includes("pre_produccion") ||
+    normalized === "qa"
   )
     return "deploy";
   if (
-    value.includes("operat") ||
-    value.includes("production") ||
-    value.includes("produccion") ||
-    value.includes("end_of_life") ||
-    value === "eol"
+    normalized.includes("operat") ||
+    normalized.includes("production") ||
+    normalized.includes("produccion") ||
+    normalized.includes("end_of_life") ||
+    normalized === "eol" ||
+    normalized === "grow"
   )
     return "operations";
   if (
-    value.includes("desarrollo") ||
-    value.includes("development") ||
-    value.includes("en_curso") ||
-    value.includes("in_progress")
+    normalized.includes("desarrollo") ||
+    normalized.includes("development") ||
+    normalized.includes("en_curso") ||
+    normalized.includes("in_progress")
   )
     return "build";
-  return "build";
+  return null;
+}
+
+export function normalizeDeliveryStage(project: any): DeliveryStage {
+  const explicit = token(project?.deliveryStage);
+  if (isDeliveryStage(explicit)) {
+    return explicit;
+  }
+  const inferred =
+    inferDeliveryStageFromPhase(project?.phase) ||
+    inferDeliveryStageFromPhase(project?.excel?.fase) ||
+    inferDeliveryStageFromPhase(project?.productPhase) ||
+    inferDeliveryStageFromPhase(project?.sourceStatus) ||
+    inferDeliveryStageFromPhase(project?.status);
+  return inferred || "build";
+}
+
+/** Keep an existing stage unless the sheet/phase clearly says the project is live. */
+export function resolvePricingDeliveryStage(input: {
+  existing?: Record<string, unknown> | null;
+  phase?: unknown;
+  status?: unknown;
+  productPhase?: unknown;
+  excelFase?: unknown;
+}): DeliveryStage {
+  const fromSheet =
+    inferDeliveryStageFromPhase(input.phase) ||
+    inferDeliveryStageFromPhase(input.excelFase) ||
+    inferDeliveryStageFromPhase(input.productPhase) ||
+    inferDeliveryStageFromPhase(input.status) ||
+    "build";
+  const existing = token(input.existing?.deliveryStage);
+  if (fromSheet === "operations") return "operations";
+  if (isDeliveryStage(existing)) {
+    // Never knock a live project out of Operations when the sheet maps elsewhere.
+    if (existing === "operations") return "operations";
+    return existing;
+  }
+  return fromSheet;
 }
 
 export function phasesForStage(stage: DeliveryStage) {

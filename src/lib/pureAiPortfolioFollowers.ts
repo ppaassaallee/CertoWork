@@ -30,7 +30,7 @@ export const PURE_AI_PORTFOLIO_FOLLOWER_KNOWN_EMAILS = [
 ] as const;
 
 /** Bump when the follower set / seat list changes so Pure AI owner auto-grant re-runs. */
-export const PURE_AI_PORTFOLIO_FOLLOWERS_KEY = "regina-cesar-rafael-edgar-v3";
+export const PURE_AI_PORTFOLIO_FOLLOWERS_KEY = "regina-cesar-rafael-edgar-v4";
 
 export type PureAiFollowerShare = ReturnType<typeof resolvePortfolioShareTargets>;
 
@@ -200,6 +200,7 @@ export function summarizePureAiFollowerGrant(input: {
   projectsUpdated: number;
   membersPromoted: number;
   seatsEnsured?: number;
+  projectsFailed?: number;
 }) {
   const names = input.share.labels.length
     ? input.share.labels.join(", ")
@@ -209,5 +210,9 @@ export function summarizePureAiFollowerGrant(input: {
     : "";
   const seats =
     input.seatsEnsured && input.seatsEnsured > 0 ? ` Ensured ${input.seatsEnsured} email seat(s).` : "";
-  return `Granted Pure AI portfolio follow to ${names} on ${input.projectsUpdated} projects; promoted ${input.membersPromoted} to admin.${seats}${missing}`;
+  const failed =
+    input.projectsFailed && input.projectsFailed > 0
+      ? ` ${input.projectsFailed} project(s) skipped (invalid or locked).`
+      : "";
+  return `Granted Pure AI portfolio follow to ${names} on ${input.projectsUpdated} projects; promoted ${input.membersPromoted} to admin.${seats}${failed}${missing}`;
 }
