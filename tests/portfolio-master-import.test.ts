@@ -161,6 +161,7 @@ test("never auto-replaces a live Pure AI portfolio", () => {
 test("clear Pure AI projects helper is owner-gated and keeps My Work items", () => {
   const source = readFileSync(resolve("src/lib/runPortfolioMasterImport.ts"), "utf8");
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+  const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.equal(PORTFOLIO_CLEARED_KEY, "cleared-manual");
   assert.match(source, /export async function clearPureAiProjects/);
   assert.match(source, /PORTFOLIO_CLEARED_KEY/);
@@ -168,9 +169,10 @@ test("clear Pure AI projects helper is owner-gated and keeps My Work items", () 
   assert.match(source, /Boolean\(projectId\) && projectIds\.has\(projectId\)/);
   assert.match(workspace, /data-testid="pure-ai-grant-followers"/);
   assert.match(workspace, /data-testid="pure-ai-grant-followers-btn"/);
-  assert.match(workspace, /Grant admin followers/);
-  assert.match(workspace, /Admin followers, pricing sync/);
+  assert.match(workspace, /Dar acceso admin ahora/);
+  assert.match(workspace, /do-pure-ai-followers-callout/);
   assert.match(workspace, /PURE_AI_PORTFOLIO_FOLLOWERS_KEY/);
+  assert.match(css, /\.do-pure-ai-followers-callout/);
   assert.match(workspace, /clearPureAiProjects/);
   assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);
 });

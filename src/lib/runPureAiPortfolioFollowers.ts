@@ -55,7 +55,11 @@ export async function grantPureAiPortfolioFollowers(input: {
     return { skipped: true as const, reason: "not-pure-ai" as const };
   }
   if (input.workspace.ownerId !== input.user.uid) {
-    return { skipped: true as const, reason: "not-owner" as const };
+    const actor = input.members.find((member) => member.userId === input.user.uid);
+    const role = String(actor?.role || "").toLowerCase();
+    if (!["owner", "admin"].includes(role)) {
+      return { skipped: true as const, reason: "not-owner" as const };
+    }
   }
 
   const share = resolvePureAiPortfolioFollowers(input.members);
