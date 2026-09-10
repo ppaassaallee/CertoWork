@@ -46,6 +46,8 @@ export interface Workspace {
   portfolioImportKey?: string | null;
   portfolioImportSource?: string | null;
   portfolioImportCount?: number | null;
+  portfolioFollowersGrantedKey?: string | null;
+  portfolioFollowersGrantedAt?: unknown;
 }
 
 interface AuthContextType {
