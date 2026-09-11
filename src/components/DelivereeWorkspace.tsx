@@ -601,6 +601,11 @@ export function DelivereeWorkspace() {
     if (fromUrl) setHighlightFinanceLineId(fromUrl);
   }, [location.search]);
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   const [cleanSlateOpen, setCleanSlateOpen] = useState(false);
   const [cleanConfirmText, setCleanConfirmText] = useState("");
   const [cleaning, setCleaning] = useState(false);
@@ -6203,7 +6208,7 @@ export function DelivereeWorkspace() {
           </Toast>
         )}
 
-        {lens.kind === "project" && (
+        {lens.kind === "project" && lens.tab !== "tasks" && (
         <section
           className="do-center-bar"
           aria-label="Project views"

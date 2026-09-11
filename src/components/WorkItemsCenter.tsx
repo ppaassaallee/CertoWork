@@ -32,6 +32,8 @@ import {
   ListChecks,
   ListTodo,
   Kanban,
+  Maximize2,
+  Minimize2,
   Minus,
   Plus,
   Search,
@@ -184,6 +186,10 @@ type Props = {
   onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   compact?: boolean;
   forceMode?: WorkItemsViewMode;
+  /** Fired when Gantt/Epics timeline mode is active (for dense project chrome). */
+  onTimelineModeChange?: (active: boolean) => void;
+  /** Fired when the user enters/exits Gantt focus (fullscreen) mode. */
+  onGanttFocusChange?: (focused: boolean) => void;
 };
 
 const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask", "ticket", "issue"];
@@ -692,6 +698,8 @@ export function WorkItemsCenter({
   onInviteAssigneeEmail,
   compact = false,
   forceMode,
+  onTimelineModeChange,
+  onGanttFocusChange,
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
@@ -740,7 +748,8 @@ export function WorkItemsCenter({
   const [bulkProjectId, setBulkProjectId] = useState("");
   const [bulkShareId, setBulkShareId] = useState("");
   const [sprintFilter, setSprintFilter] = useState("all");
-  const [ganttScale, setGanttScale] = useState<"week" | "month">("week");
+  const [ganttScale, setGanttScale] = useState<"day" | "week" | "month" | "quarter">("week");
+  const [ganttFocus, setGanttFocus] = useState(false);
   const [sprintName, setSprintName] = useState("");
   const [kanbanError, setKanbanError] = useState("");
   const [detailDescription, setDetailDescription] = useState("");
@@ -1030,6 +1039,38 @@ export function WorkItemsCenter({
     if (typeof window === "undefined") return;
     window.localStorage.setItem("certo-items-focus-list", String(chromeCollapsed));
   }, [chromeCollapsed]);
+
+  const timelineMode = mode === "gantt" || mode === "epics";
+  useEffect(() => {
+    onTimelineModeChange?.(timelineMode);
+  }, [timelineMode, onTimelineModeChange]);
+
+  useEffect(() => {
+    onGanttFocusChange?.(ganttFocus && timelineMode);
+    if (!timelineMode && ganttFocus) setGanttFocus(false);
+  }, [ganttFocus, timelineMode, onGanttFocusChange]);
+
+  useEffect(() => {
+    if (!timelineMode || !compact) return;
+    setChromeCollapsed(true);
+  }, [timelineMode, compact]);
+
+  useEffect(() => {
+    if (!timelineMode) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "f" || event.key === "F") {
+        const target = event.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+          return;
+        }
+        event.preventDefault();
+        setGanttFocus((current) => !current);
+      }
+      if (event.key === "Escape" && ganttFocus) setGanttFocus(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [timelineMode, ganttFocus]);
 
   useEffect(() => {
     if (forceMode && mode !== forceMode) setMode(forceMode);
@@ -2779,6 +2820,18 @@ export function WorkItemsCenter({
   };
 
   const renderGantt = (items = filtered) => {
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+    const depthOf = (item: any) => {
+      let depth = 0;
+      let current = parentId(item);
+      const seen = new Set<string>();
+      while (current && byId.has(current) && depth < 6 && !seen.has(current)) {
+        seen.add(current);
+        depth += 1;
+        current = parentId(byId.get(current));
+      }
+      return depth;
+    };
     const dated = items
       .map((item) => {
         const start = ganttDate(item);
@@ -2789,7 +2842,8 @@ export function WorkItemsCenter({
       .filter((entry) => entry.start && entry.end) as Array<{ item: any; start: Date; end: Date }>;
     const undated = items.filter((item) => !ganttDate(item));
     const now = Date.now();
-    const spanDays = ganttScale === "week" ? 7 : 31;
+    const spanDays =
+      ganttScale === "day" ? 3 : ganttScale === "week" ? 14 : ganttScale === "quarter" ? 92 : 31;
     const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime()), now) : now;
     const maxTime = dated.length
       ? Math.max(...dated.map((entry) => entry.end.getTime()), minTime + spanDays * 86_400_000)
@@ -2797,25 +2851,75 @@ export function WorkItemsCenter({
     const span = Math.max(1, maxTime - minTime);
     const markers = Array.from({ length: 5 }, (_, index) => new Date(minTime + (span * index) / 4));
     const todayLeft = ((now - minTime) / span) * 100;
+    const fitToScreen = () => {
+      if (!dated.length) {
+        setGanttScale("week");
+        return;
+      }
+      const rangeDays = Math.max(
+        1,
+        Math.ceil((Math.max(...dated.map((e) => e.end.getTime())) - Math.min(...dated.map((e) => e.start.getTime()))) / 86_400_000),
+      );
+      if (rangeDays <= 5) setGanttScale("day");
+      else if (rangeDays <= 21) setGanttScale("week");
+      else if (rangeDays <= 70) setGanttScale("month");
+      else setGanttScale("quarter");
+    };
 
     return (
-      <div className="do-gantt">
-        <div className="do-gantt-scale">
-          <button className={ganttScale === "week" ? "is-active" : ""} onClick={() => setGanttScale("week")} type="button">Week</button>
-          <button className={ganttScale === "month" ? "is-active" : ""} onClick={() => setGanttScale("month")} type="button">Month</button>
+      <div className="do-gantt" data-testid="work-items-gantt">
+        <div className="do-gantt-toolbar">
+          <div className="do-gantt-scale" aria-label="Gantt zoom">
+            {(
+              [
+                ["day", "Día"],
+                ["week", "Sem"],
+                ["month", "Mes"],
+                ["quarter", "Trim"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                className={ganttScale === value ? "is-active" : ""}
+                key={value}
+                onClick={() => setGanttScale(value)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button className="do-button-secondary" onClick={fitToScreen} type="button">
+            Ajustar
+          </button>
+          <span className="spacer" style={{ flex: 1 }} />
+          <button
+            aria-label={ganttFocus ? "Salir de focus" : "Focus Gantt"}
+            className="do-icon-tool"
+            onClick={() => setGanttFocus((current) => !current)}
+            title={ganttFocus ? "Salir de focus (F)" : "Focus (F)"}
+            type="button"
+          >
+            {ganttFocus ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          </button>
         </div>
         <div className="do-gantt-axis">
           {markers.map((marker) => <span key={marker.toISOString()}>{dateLabel(marker)}</span>)}
         </div>
         <div className="do-gantt-rows">
-          <div className="do-gantt-today" style={{ left: `${Math.max(0, Math.min(100, todayLeft))}%` }} title="Today" />
+          <div className="do-gantt-today" style={{ left: `calc(200px + (100% - 200px) * ${Math.max(0, Math.min(100, todayLeft)) / 100})` }} title="Today" />
           {dated.map(({ item, start, end }) => {
             const kind = workItemKind(item);
             const left = ((start.getTime() - minTime) / span) * 100;
             const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
             const tone = taskDueStatus({ status: item.status, dueDate: end });
+            const depth = depthOf(item);
+            const barWide = width >= 14;
             return (
-              <article className={`do-gantt-row is-${tone}`} key={item.id}>
+              <article
+                className={`do-gantt-row is-${tone} is-${kind}`}
+                data-depth={Math.min(depth, 3)}
+                key={item.id}
+              >
                 <button onClick={() => onSelectItem(item.id)} type="button">
                   <span>{workItemLabel(kind)}</span>
                   <strong>{title(item)}</strong>
@@ -2823,7 +2927,7 @@ export function WorkItemsCenter({
                 </button>
                 <div className="do-gantt-track">
                   <div
-                    className="do-gantt-bar"
+                    className={`do-gantt-bar${barWide ? " is-wide" : ""}`}
                     style={{ "--gantt-left": `${left}%`, "--gantt-width": `${Math.min(width, 100 - left)}%` } as CSSProperties}
                   >
                     <span>{dateLabel(start)} - {dateLabel(end)}</span>
@@ -2833,6 +2937,28 @@ export function WorkItemsCenter({
             );
           })}
           {dated.length === 0 && <div className="do-items-empty"><CalendarRange size={21} /><strong>No scheduled items yet.</strong><span>Add due dates or start dates to build the project timeline.</span></div>}
+          {compact && (
+            <form
+              className="do-gantt-add-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!newTitle.trim() || !activeProject?.id) return;
+                void onAddTask(activeProject.id, newTitle.trim(), "backlog", {
+                  workItemType: newType,
+                  dueDate: newDueDate || null,
+                });
+                setNewTitle("");
+              }}
+            >
+              <Plus size={13} />
+              <input
+                aria-label="Add PBI"
+                onChange={(event) => setNewTitle(event.target.value)}
+                placeholder="Add PBI…"
+                value={newTitle}
+              />
+            </form>
+          )}
         </div>
         {undated.length > 0 && (
           <section className="do-gantt-unscheduled">
@@ -2926,9 +3052,9 @@ export function WorkItemsCenter({
   const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
-    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""}`} data-testid="work-items-center">
-      <section className={`do-items-toolbar ${chromeCollapsed ? "is-compact" : ""}`}>
-        {!chromeCollapsed && (
+    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""}`} data-testid="work-items-center">
+      <section className={`do-items-toolbar ${chromeCollapsed || timelineMode ? "is-compact" : ""}`}>
+        {!chromeCollapsed && !timelineMode && (
           <label className="do-items-search">
             <Search size={14} />
             <input aria-label="Search work items" onChange={(event) => setQuery(event.target.value)} placeholder="Search items…" value={query} />
@@ -2937,6 +3063,27 @@ export function WorkItemsCenter({
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
+        {chromeCollapsed || compact ? (
+          <label className="do-items-mode-select">
+            <span className="sr-only">Work item view</span>
+            <select
+              aria-label="Work item view"
+              onChange={(event) => {
+                const next = event.target.value as WorkItemsViewMode;
+                setMode(next);
+                if (next === "kanban") setGroupBy("hierarchy");
+              }}
+              value={mode}
+            >
+              {!forceMode && <option value="list">List</option>}
+              <option value="kanban">Kanban</option>
+              <option value="calendar">Calendar</option>
+              <option value="flow">Flow</option>
+              {!forceMode && <option value="gantt">Gantt</option>}
+              {!forceMode && <option value="epics">Epics</option>}
+            </select>
+          </label>
+        ) : (
         <div className="do-items-mode" aria-label="Work item view">
           {!forceMode && <button aria-label="List view" className={mode === "list" ? "is-active" : ""} onClick={() => setMode("list")} type="button"><ListChecks size={14} /> List</button>}
           <button aria-label="Kanban view" className={`do-mobile-advanced ${mode === "kanban" ? "is-active" : ""}`} onClick={() => { setMode("kanban"); setGroupBy("hierarchy"); }} type="button"><Kanban size={14} /> Kanban</button>
@@ -2945,6 +3092,7 @@ export function WorkItemsCenter({
           {!forceMode && <button aria-label="Gantt view" className={`do-mobile-advanced ${mode === "gantt" ? "is-active" : ""}`} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>}
           {!forceMode && <button aria-label="Epics view" className={`do-mobile-advanced ${mode === "epics" ? "is-active" : ""}`} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
+        )}
         {(mode === "kanban" || mode === "calendar") && (
           <div className="do-kanban-board-tools">
             <label>
@@ -3275,17 +3423,49 @@ export function WorkItemsCenter({
               </div>
             )}
           </div>
-          <button aria-label="Add item" className="do-button do-button-dark" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> Add item</button>
-          <button
-            aria-label="Paste bulk items"
-            className="do-button-secondary do-mobile-advanced"
-            onClick={() => { setPasteOpen(true); setPasteError(""); }}
-            type="button"
-          >
-            <Clipboard size={13} /> Paste bulk items
-          </button>
-          {onCreateSprint && (
-            <button aria-label="Add sprint" className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
+          {timelineMode ? (
+            <div className="do-popover-anchor">
+              <button
+                aria-expanded={addItemOpen}
+                aria-label="Add"
+                className="do-button do-button-dark"
+                onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }}
+                type="button"
+              >
+                <Plus size={13} /> Add <ChevronDown size={12} />
+              </button>
+              {addItemOpen && (
+                <div className="do-popover">
+                  <button onClick={() => { setAddItemOpen(true); setCreateAttr(null); }} type="button">Add item</button>
+                  <button
+                    onClick={() => { setAddItemOpen(false); setPasteOpen(true); setPasteError(""); }}
+                    type="button"
+                  >
+                    Paste bulk items
+                  </button>
+                  {onCreateSprint && (
+                    <button onClick={() => { setAddItemOpen(false); setAddSprintOpen(true); }} type="button">
+                      + Sprint
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <button aria-label="Add item" className="do-button do-button-dark" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> Add item</button>
+              <button
+                aria-label="Paste bulk items"
+                className="do-button-secondary do-mobile-advanced"
+                onClick={() => { setPasteOpen(true); setPasteError(""); }}
+                type="button"
+              >
+                <Clipboard size={13} /> Paste bulk items
+              </button>
+              {onCreateSprint && (
+                <button aria-label="Add sprint" className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
+              )}
+            </>
           )}
           <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
