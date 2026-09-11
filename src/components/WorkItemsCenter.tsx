@@ -192,6 +192,10 @@ type Props = {
   notionMode?: WorkItemsViewMode;
   onNotionModeChange?: (mode: WorkItemsViewMode) => void;
   notionSearchOpen?: boolean;
+  notionFilterOpen?: boolean;
+  onNotionFilterOpenChange?: (open: boolean) => void;
+  notionSortOpen?: boolean;
+  onNotionSortOpenChange?: (open: boolean) => void;
   /** Fired when Gantt/Epics timeline mode is active (for dense project chrome). */
   onTimelineModeChange?: (active: boolean) => void;
   /** Fired when the user enters/exits Gantt focus (fullscreen) mode. */
@@ -419,8 +423,10 @@ function projectTitle(project: any) {
   return project?.title || project?.name || "Untitled project";
 }
 
+const NO_PROJECT_LABEL = "No Project";
+
 function itemProjectTitle(item: any, projects: any[]) {
-  if (!item?.projectId) return "No project / errands";
+  if (!item?.projectId) return NO_PROJECT_LABEL;
   return projectTitle(projects.find((project) => project.id === item.projectId));
 }
 
@@ -574,6 +580,9 @@ function groupSortIndex(groupBy: GroupBy, label: string) {
     const index = dueFilterOptions.indexOf(key);
     return index === -1 ? 999 : index;
   }
+  if (groupBy === "project") {
+    return label === NO_PROJECT_LABEL ? 10_000 : 0;
+  }
   return 999;
 }
 
@@ -707,7 +716,11 @@ export function WorkItemsCenter({
   notionSurface = false,
   notionMode,
   onNotionModeChange,
-  notionSearchOpen: _notionSearchOpen = false,
+  notionSearchOpen = false,
+  notionFilterOpen = false,
+  onNotionFilterOpenChange,
+  notionSortOpen = false,
+  onNotionSortOpenChange,
   onTimelineModeChange,
   onGanttFocusChange,
 }: Props) {
@@ -716,6 +729,7 @@ export function WorkItemsCenter({
   const viewerId = user?.uid || "";
   const workspaceId = workspace?.id || "";
   const surface = itemViewSurface(activeProject?.id);
+  const isMyWork = !activeProject;
   const viewHydrated = useRef(false);
   const skipPersist = useRef(true);
   const remotePushTimer = useRef<number | null>(null);
@@ -730,7 +744,14 @@ export function WorkItemsCenter({
   const [tagFilter, setTagFilter] = useState("all");
   const [workCategoryFilter, setWorkCategoryFilter] = useState("all");
   const [productPhaseFilter, setProductPhaseFilter] = useState("all");
-  const [groupBy, setGroupBy] = useState<GroupBy>("hierarchy");
+  const [groupBy, setGroupByState] = useState<GroupBy>(isMyWork ? "project" : "hierarchy");
+  const setGroupBy = (next: GroupBy | ((current: GroupBy) => GroupBy)) => {
+    setGroupByState((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      // My Work always sections by project; keep epic/PBI/subtask forest inside each section.
+      return isMyWork ? "project" : resolved;
+    });
+  };
   const [primarySort, setPrimarySort] = useState<SortBy>("project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
   const [newType, setNewType] = useState<WorkItemKind>("pbi");
@@ -1096,6 +1117,41 @@ export function WorkItemsCenter({
     if (!notionSurface) return;
     onNotionModeChange?.(mode);
   }, [notionSurface, mode, onNotionModeChange]);
+
+  useEffect(() => {
+    if (!notionSurface) return undefined;
+    if (!notionFilterOpen && !notionSortOpen && !notionSearchOpen) return undefined;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-testid='notion-tools-panel']")) return;
+      if (target?.closest(".do-notion-views")) return;
+      onNotionFilterOpenChange?.(false);
+      onNotionSortOpenChange?.(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onNotionFilterOpenChange?.(false);
+        onNotionSortOpenChange?.(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [
+    notionSurface,
+    notionFilterOpen,
+    notionSortOpen,
+    notionSearchOpen,
+    onNotionFilterOpenChange,
+    onNotionSortOpenChange,
+  ]);
+
+  const filterPanelOpen = notionSurface ? notionFilterOpen : filterOpen;
+  const sortPanelOpen = notionSurface ? notionSortOpen : sortOpen;
+  const effectiveGroupBy: GroupBy = isMyWork ? "project" : groupBy;
 
   const owners = useMemo(
     () => [...new Set([
@@ -2354,17 +2410,17 @@ export function WorkItemsCenter({
 
   const grouped = useMemo(() => {
     const keyFor = (item: any) => {
-      const target = FAMILY_GROUP_BY.has(groupBy) ? hierarchyRoot(item, tasks) : item;
-      if (groupBy === "actionBoard") return actionBoardBucket(target);
-      if (groupBy === "status") return canonicalStatus(target);
-      if (groupBy === "priority") return priorityValue(effectivePriority(target, tasks));
-      if (groupBy === "project") return itemProjectTitle(target, projects);
-      if (groupBy === "owner") return String(effectiveInheritedField(target, tasks, "owner") || target.owner || target.assignee || "Unassigned");
-      if (groupBy === "type") return workItemLabel(workItemKind(target));
-      if (groupBy === "work_category") return String(effectiveInheritedField(target, tasks, "workCategory") || itemWorkCategory(target, projects));
-      if (groupBy === "product_phase") return String(effectiveInheritedField(target, tasks, "productPhase") || itemProductPhase(target, projects));
-      if (groupBy === "due") return dueBucketLabels[dueBucket(target.dueDate || target.targetDate)] || "No sector";
-      if (groupBy === "tag") return tagLabels(target, tags)[0] || "No tag";
+      const target = FAMILY_GROUP_BY.has(effectiveGroupBy) ? hierarchyRoot(item, tasks) : item;
+      if (effectiveGroupBy === "actionBoard") return actionBoardBucket(target);
+      if (effectiveGroupBy === "status") return canonicalStatus(target);
+      if (effectiveGroupBy === "priority") return priorityValue(effectivePriority(target, tasks));
+      if (effectiveGroupBy === "project") return itemProjectTitle(target, projects);
+      if (effectiveGroupBy === "owner") return String(effectiveInheritedField(target, tasks, "owner") || target.owner || target.assignee || "Unassigned");
+      if (effectiveGroupBy === "type") return workItemLabel(workItemKind(target));
+      if (effectiveGroupBy === "work_category") return String(effectiveInheritedField(target, tasks, "workCategory") || itemWorkCategory(target, projects));
+      if (effectiveGroupBy === "product_phase") return String(effectiveInheritedField(target, tasks, "productPhase") || itemProductPhase(target, projects));
+      if (effectiveGroupBy === "due") return dueBucketLabels[dueBucket(target.dueDate || target.targetDate)] || "No sector";
+      if (effectiveGroupBy === "tag") return tagLabels(target, tags)[0] || "No tag";
       return "Items";
     };
     return filtered.reduce<Record<string, any[]>>((acc, item) => {
@@ -2372,7 +2428,7 @@ export function WorkItemsCenter({
       acc[key] = [...(acc[key] || []), item];
       return acc;
     }, {});
-  }, [filtered, groupBy, projects, tags, tasks]);
+  }, [effectiveGroupBy, filtered, projects, tags, tasks]);
 
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
@@ -2556,8 +2612,13 @@ export function WorkItemsCenter({
   };
 
   const renderKanban = () => {
-    const useDeliveryBoard = Boolean(activeProject) || groupBy === "hierarchy" || groupBy === "status";
-    const columns = useDeliveryBoard && groupBy !== "actionBoard"
+    // My Work stays on delivery columns; project sectioning applies to list/gantt.
+    const useDeliveryBoard =
+      Boolean(activeProject) ||
+      isMyWork ||
+      effectiveGroupBy === "hierarchy" ||
+      effectiveGroupBy === "status";
+    const columns = useDeliveryBoard && effectiveGroupBy !== "actionBoard"
       ? KANBAN_COLUMNS.map((column) => ({
           key: column.key,
           title: column.label,
@@ -2566,12 +2627,12 @@ export function WorkItemsCenter({
       : Object.entries(grouped)
         .map(([key, items]) => ({ key, title: displayStatus(key) === key ? key : key, items }))
         .sort((left, right) => {
-          const leftIndex = groupSortIndex(groupBy, left.key);
-          const rightIndex = groupSortIndex(groupBy, right.key);
+          const leftIndex = groupSortIndex(effectiveGroupBy, left.key);
+          const rightIndex = groupSortIndex(effectiveGroupBy, right.key);
           if (leftIndex !== rightIndex) return leftIndex - rightIndex;
           return left.title.localeCompare(right.title);
         });
-    const visibleColumns = columns.filter((column) => column.items.length > 0 || (useDeliveryBoard && groupBy !== "actionBoard"));
+    const visibleColumns = columns.filter((column) => column.items.length > 0 || (useDeliveryBoard && effectiveGroupBy !== "actionBoard"));
     const lanes = uniqueSwimlanes(filtered, kanbanSwimlane, projects);
 
     return (
@@ -2594,7 +2655,7 @@ export function WorkItemsCenter({
           </button>
         )}
         {kanbanSwimlane === "none" ? (
-          <div className={`do-kanban-board ${groupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
+          <div className={`do-kanban-board ${effectiveGroupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
             {visibleColumns.map((column) => renderKanbanColumnBody(column.key, column.title, column.items, column.key))}
             {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
           </div>
@@ -2886,6 +2947,53 @@ export function WorkItemsCenter({
       else setGanttScale("quarter");
     };
 
+    const datedSections: Array<{ key: string; label: string; entries: typeof dated }> = (() => {
+      if (!isMyWork) return [{ key: "all", label: "", entries: dated }];
+      const map = new Map<string, typeof dated>();
+      for (const entry of dated) {
+        const label = itemProjectTitle(entry.item, projects);
+        map.set(label, [...(map.get(label) || []), entry]);
+      }
+      return [...map.entries()]
+        .sort(([left], [right]) => {
+          const leftIndex = groupSortIndex("project", left);
+          const rightIndex = groupSortIndex("project", right);
+          if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+          return left.localeCompare(right);
+        })
+        .map(([label, entries]) => ({ key: `gantt-project:${label}`, label, entries }));
+    })();
+
+    const renderGanttRow = ({ item, start, end }: (typeof dated)[number]) => {
+      const kind = workItemKind(item);
+      const left = ((start.getTime() - minTime) / span) * 100;
+      const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
+      const tone = taskDueStatus({ status: item.status, dueDate: end });
+      const depth = depthOf(item);
+      const barWide = width >= 14;
+      return (
+        <article
+          className={`do-gantt-row is-${tone} is-${kind}`}
+          data-depth={Math.min(depth, 3)}
+          key={item.id}
+        >
+          <button onClick={() => onSelectItem(item.id)} type="button">
+            <span>{workItemLabel(kind)}</span>
+            <strong>{title(item)}</strong>
+            {!isMyWork ? <small>{itemProjectTitle(item, projects)}</small> : null}
+          </button>
+          <div className="do-gantt-track">
+            <div
+              className={`do-gantt-bar${barWide ? " is-wide" : ""}`}
+              style={{ "--gantt-left": `${left}%`, "--gantt-width": `${Math.min(width, 100 - left)}%` } as CSSProperties}
+            >
+              <span>{dateLabel(start)} - {dateLabel(end)}</span>
+            </div>
+          </div>
+        </article>
+      );
+    };
+
     return (
       <div className="do-gantt" data-testid="work-items-gantt">
         <div className="do-gantt-toolbar">
@@ -2927,33 +3035,24 @@ export function WorkItemsCenter({
         </div>
         <div className="do-gantt-rows">
           <div className="do-gantt-today" style={{ left: `calc(200px + (100% - 200px) * ${Math.max(0, Math.min(100, todayLeft)) / 100})` }} title="Today" />
-          {dated.map(({ item, start, end }) => {
-            const kind = workItemKind(item);
-            const left = ((start.getTime() - minTime) / span) * 100;
-            const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
-            const tone = taskDueStatus({ status: item.status, dueDate: end });
-            const depth = depthOf(item);
-            const barWide = width >= 14;
+          {datedSections.map((section) => {
+            const collapsed = Boolean(section.label) && collapsedGroups.includes(section.key);
             return (
-              <article
-                className={`do-gantt-row is-${tone} is-${kind}`}
-                data-depth={Math.min(depth, 3)}
-                key={item.id}
-              >
-                <button onClick={() => onSelectItem(item.id)} type="button">
-                  <span>{workItemLabel(kind)}</span>
-                  <strong>{title(item)}</strong>
-                  <small>{itemProjectTitle(item, projects)}</small>
-                </button>
-                <div className="do-gantt-track">
-                  <div
-                    className={`do-gantt-bar${barWide ? " is-wide" : ""}`}
-                    style={{ "--gantt-left": `${left}%`, "--gantt-width": `${Math.min(width, 100 - left)}%` } as CSSProperties}
+              <Fragment key={section.key}>
+                {section.label ? (
+                  <button
+                    className="do-gantt-section-head"
+                    data-testid="gantt-project-section"
+                    onClick={() => toggleGroup(section.key)}
+                    type="button"
                   >
-                    <span>{dateLabel(start)} - {dateLabel(end)}</span>
-                  </div>
-                </div>
-              </article>
+                    <ChevronDown className={collapsed ? "is-collapsed" : ""} size={13} />
+                    <strong>{section.label}</strong>
+                    <span>{section.entries.length}</span>
+                  </button>
+                ) : null}
+                {!collapsed ? section.entries.map(renderGanttRow) : null}
+              </Fragment>
             );
           })}
           {dated.length === 0 && <div className="do-items-empty"><CalendarRange size={21} /><strong>No scheduled items yet.</strong><span>Add due dates or start dates to build the project timeline.</span></div>}
@@ -2996,7 +3095,7 @@ export function WorkItemsCenter({
       key: "project",
       label:
         projectFilter === "no_project"
-          ? "No project"
+          ? NO_PROJECT_LABEL
           : projectTitle(projects.find((p) => p.id === projectFilter) || { title: "Project" }),
       clear: () => setProjectFilter("all"),
     });
@@ -3330,9 +3429,10 @@ export function WorkItemsCenter({
           </div>
           <div className="do-popover-anchor">
             <button
-              aria-expanded={filterOpen}
+              aria-expanded={filterPanelOpen}
               aria-label="Filter"
-              className={`do-icon-tool ${activeFilterChips.length || filterOpen ? "is-active" : ""}`}
+              className={`do-icon-tool ${activeFilterChips.length || filterPanelOpen ? "is-active" : ""}`}
+              data-testid="items-filter-button"
               onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
               title="Filter"
               type="button"
@@ -3341,8 +3441,8 @@ export function WorkItemsCenter({
               <span>Filter</span>
               {activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
             </button>
-            {filterOpen && (
-              <div className="do-popover do-filter-popover">
+            {filterPanelOpen && !notionSurface && (
+              <div className="do-popover do-filter-popover" data-testid="items-filter-popover">
                 <label>
                   Add filter
                   <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
@@ -3361,7 +3461,7 @@ export function WorkItemsCenter({
                 {filterDraft === "project" && (
                   <select aria-label="Project filter" onChange={(event) => setProjectFilter(event.target.value)} value={projectFilter}>
                     <option value="all">All projects</option>
-                    <option value="no_project">No project / errands</option>
+                    <option value="no_project">{NO_PROJECT_LABEL}</option>
                     {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
                   </select>
                 )}
@@ -3426,9 +3526,10 @@ export function WorkItemsCenter({
           </div>
           <div className="do-popover-anchor">
             <button
-              aria-expanded={sortOpen}
+              aria-expanded={sortPanelOpen}
               aria-label="Sort"
-              className={`do-icon-tool do-mobile-advanced ${sortOpen ? "is-active" : ""}`}
+              className={`do-icon-tool do-mobile-advanced ${sortPanelOpen ? "is-active" : ""}`}
+              data-testid="items-sort-button"
               onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
               title="Sort"
               type="button"
@@ -3436,9 +3537,13 @@ export function WorkItemsCenter({
               <ArrowUpDown size={15} />
               <span>Sort</span>
             </button>
-            {sortOpen && (
-              <div className="do-popover">
-                <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+            {sortPanelOpen && !notionSurface && (
+              <div className="do-popover" data-testid="items-sort-popover">
+                {isMyWork ? (
+                  <p className="do-items-views-label">Grouped by project (epic → PBI → subtask inside each)</p>
+                ) : (
+                  <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+                )}
                 <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
                 <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               </div>
@@ -3491,6 +3596,136 @@ export function WorkItemsCenter({
           <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
       </section>
+      )}
+
+      {notionSurface && (notionSearchOpen || filterPanelOpen || sortPanelOpen) && (
+        <div className="do-notion-tools-panel" data-testid="notion-tools-panel">
+          {notionSearchOpen && (
+            <label className="do-items-search">
+              <Search size={14} />
+              <input
+                aria-label="Search work items"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search items…"
+                value={query}
+              />
+            </label>
+          )}
+          {filterPanelOpen && (
+            <div className="do-popover do-filter-popover is-inline" data-testid="items-filter-popover">
+              <label>
+                Add filter
+                <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
+                  <option value="project">Project</option>
+                  <option value="status">Status</option>
+                  <option value="priority">Priority</option>
+                  <option value="type">Type</option>
+                  <option value="owner">Owner</option>
+                  <option value="date">Date</option>
+                  <option value="tag">Tag</option>
+                  <option value="category">Category</option>
+                  <option value="phase">Product phase</option>
+                  <option value="sprint">Sprint</option>
+                </select>
+              </label>
+              {filterDraft === "project" && (
+                <select aria-label="Project filter" onChange={(event) => setProjectFilter(event.target.value)} value={projectFilter}>
+                  <option value="all">All projects</option>
+                  <option value="no_project">{NO_PROJECT_LABEL}</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
+                </select>
+              )}
+              {filterDraft === "status" && (
+                <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+                  <option value="open">Open · hide done</option>
+                  <option value="all">All statuses</option>
+                  {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                </select>
+              )}
+              {filterDraft === "priority" && (
+                <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
+                  <option value="all">Any priority</option>
+                  {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                </select>
+              )}
+              {filterDraft === "type" && (
+                <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
+                  <option value="all">Any type</option>
+                  {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+                </select>
+              )}
+              {filterDraft === "owner" && (
+                <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
+                  <option value="all">Any owner</option>
+                  {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                </select>
+              )}
+              {filterDraft === "date" && (
+                <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
+                  <option value="all">Any date</option>
+                  {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
+                </select>
+              )}
+              {filterDraft === "tag" && (
+                <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
+                  <option value="all">Any tag</option>
+                  {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+                </select>
+              )}
+              {filterDraft === "category" && (
+                <select aria-label="Work Category filter" onChange={(event) => setWorkCategoryFilter(event.target.value)} value={workCategoryFilter}>
+                  <option value="all">Any category</option>
+                  {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+              )}
+              {filterDraft === "phase" && (
+                <select aria-label="Product Phase filter" onChange={(event) => setProductPhaseFilter(event.target.value)} value={productPhaseFilter}>
+                  <option value="all">Any product phase</option>
+                  {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
+                </select>
+              )}
+              {filterDraft === "sprint" && (
+                <select aria-label="Sprint filter" onChange={(event) => setSprintFilter(event.target.value)} value={sprintFilter}>
+                  <option value="all">All sprints</option>
+                  <option value="none">No sprint</option>
+                  {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+          {sortPanelOpen && (
+            <div className="do-popover is-inline" data-testid="items-sort-popover">
+              <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+              <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+              <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            </div>
+          )}
+          {activeFilterChips.length > 0 && (
+            <div className="do-filter-chips" aria-label="Active filters">
+              {activeFilterChips.map((chip) => (
+                <button key={chip.key} onClick={chip.clear} type="button">{chip.label} <X size={12} /></button>
+              ))}
+              <button
+                className="is-text"
+                onClick={() => {
+                  if (!activeProject) setProjectFilter("all");
+                  setStatusFilter("open");
+                  setPriorityFilter("all");
+                  setTypeFilter("all");
+                  setOwnerFilter("all");
+                  setDateFilter("all");
+                  setTagFilter("all");
+                  setWorkCategoryFilter("all");
+                  setProductPhaseFilter("all");
+                  setSprintFilter("all");
+                }}
+                type="button"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {!notionSurface && activeFilterChips.length > 0 && (
@@ -3949,15 +4184,15 @@ export function WorkItemsCenter({
               sprints={sprints}
               tasks={filtered}
             />
-          ) : groupBy === "hierarchy" ? renderHierarchy() : (
+          ) : effectiveGroupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
-                const leftIndex = groupSortIndex(groupBy, left);
-                const rightIndex = groupSortIndex(groupBy, right);
+                const leftIndex = groupSortIndex(effectiveGroupBy, left);
+                const rightIndex = groupSortIndex(effectiveGroupBy, right);
                 if (leftIndex !== rightIndex) return leftIndex - rightIndex;
                 return left.localeCompare(right);
               }).map(([group, items]) => (
-                <section className="do-items-group" key={group}>
+                <section className="do-items-group" data-testid="my-work-project-section" key={group}>
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
                   {!collapsedGroups.includes(group) && renderForest(items)}
                 </section>

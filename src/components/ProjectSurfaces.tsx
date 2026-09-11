@@ -1553,6 +1553,7 @@ export function ProjectConsolePanel({
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
   const [notionSearchOpen, setNotionSearchOpen] = useState(false);
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
+  const [notionSortOpen, setNotionSortOpen] = useState(false);
   const [shareMemberId, setShareMemberId] = useState("");
   const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
   const [docTitle, setDocTitle] = useState("");
@@ -1618,6 +1619,24 @@ export function ProjectConsolePanel({
     setDeleteConfirm(false);
     setMoreOpen(false);
   }, [project.id, initialTab]);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".do-console-more")) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     if (tab !== "items") {
@@ -1775,9 +1794,12 @@ export function ProjectConsolePanel({
         >
           <Share2 size={16} />
         </button>
-        <div className="do-console-more" style={{ position: "relative" }}>
+        <div className="do-console-more">
           <button
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
             aria-label="More"
+            data-testid="notion-more-button"
             onClick={() => setMoreOpen((open) => !open)}
             title="More"
             type="button"
@@ -1785,13 +1807,18 @@ export function ProjectConsolePanel({
             <MoreHorizontal size={16} />
           </button>
           {moreOpen && (
-            <div className="do-account-menu do-console-more-menu">
+            <div
+              className="do-console-more-menu"
+              data-testid="notion-more-menu"
+              role="menu"
+            >
               <button
                 onClick={() => {
                   setMoreOpen(false);
                   setTab("brief");
                   navigate(`/work/projects/${project.id}`);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Overview
@@ -1801,6 +1828,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("team");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Team
@@ -1810,6 +1838,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("costs");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Costs
@@ -1819,6 +1848,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("risks");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Risks
@@ -1828,15 +1858,17 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("docs");
                 }}
+                role="menuitem"
                 type="button"
               >
-                Docs
+                Documents
               </button>
               <button
                 onClick={() => {
                   setMoreOpen(false);
                   void copySupportFormLink();
                 }}
+                role="menuitem"
                 type="button"
               >
                 {supportLinkCopied ? "Support link copied" : "Copy support link"}
@@ -1846,6 +1878,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   downloadProjectStatusReport(report);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Download PDF
@@ -1855,6 +1888,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   update({ favorite: !isProjectFavorite(project) });
                 }}
+                role="menuitem"
                 type="button"
               >
                 {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
@@ -1864,16 +1898,19 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setArchiveConfirm(true);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Archive
               </button>
               {allowDelete && (
                 <button
+                  className="is-quiet-danger"
                   onClick={() => {
                     setMoreOpen(false);
                     setDeleteConfirm(true);
                   }}
+                  role="menuitem"
                   type="button"
                 >
                   Delete
@@ -1940,19 +1977,39 @@ export function ProjectConsolePanel({
           <button
             aria-label="Filter"
             className={`tool${notionFilterOpen ? " is-active" : ""}`}
-            onClick={() => setNotionFilterOpen((open) => !open)}
+            data-testid="notion-filter-button"
+            onClick={() => {
+              setNotionFilterOpen((open) => !open);
+              setNotionSortOpen(false);
+              setNotionSearchOpen(false);
+            }}
             title="Filter"
             type="button"
           >
             <Filter size={16} />
           </button>
-          <button aria-label="Sort" className="tool" title="Sort" type="button">
+          <button
+            aria-label="Sort"
+            className={`tool${notionSortOpen ? " is-active" : ""}`}
+            data-testid="notion-sort-button"
+            onClick={() => {
+              setNotionSortOpen((open) => !open);
+              setNotionFilterOpen(false);
+              setNotionSearchOpen(false);
+            }}
+            title="Sort"
+            type="button"
+          >
             <ArrowUpDown size={16} />
           </button>
           <button
             aria-label="Search"
             className={`tool${notionSearchOpen ? " is-active" : ""}`}
-            onClick={() => setNotionSearchOpen((open) => !open)}
+            onClick={() => {
+              setNotionSearchOpen((open) => !open);
+              setNotionFilterOpen(false);
+              setNotionSortOpen(false);
+            }}
             title="Search"
             type="button"
           >
@@ -2101,8 +2158,10 @@ export function ProjectConsolePanel({
           <WorkItemsCenter
             activeProject={project}
             compact
+            notionFilterOpen={notionFilterOpen}
             notionMode={notionMode}
             notionSearchOpen={notionSearchOpen}
+            notionSortOpen={notionSortOpen}
             notionSurface
             onAddTask={(projectId, title, status, patch) =>
               onAddTask(title, status, { ...patch, projectId })
@@ -2112,7 +2171,9 @@ export function ProjectConsolePanel({
             onCreateSprint={onCreateSprint}
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
+            onNotionFilterOpenChange={setNotionFilterOpen}
             onNotionModeChange={setNotionMode}
+            onNotionSortOpenChange={setNotionSortOpen}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}

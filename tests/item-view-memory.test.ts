@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultItemViewFilters,
   itemViewPrefsDocId,
   itemViewSurface,
   namedViewsStorageKey,
@@ -38,14 +39,28 @@ test("saving a named view replaces the same name and keeps sort", () => {
   assert.equal(next[0].filters?.primarySort, "due");
 });
 
-test("normalize restores a valid last-used sort instead of the mount default", () => {
-  const restored = normalizeItemViewFilters(
+test("My Work defaults to project sections", () => {
+  const myWork = defaultItemViewFilters(null);
+  const project = defaultItemViewFilters("proj-1");
+  assert.equal(myWork.groupBy, "project");
+  assert.equal(project.groupBy, "hierarchy");
+});
+
+test("normalize forces My Work to project groupBy and restores project session sorts", () => {
+  const myWork = normalizeItemViewFilters(
     { primarySort: "due", secondarySort: "title", groupBy: "priority", mode: "calendar" },
     null,
   );
-  assert.equal(restored.primarySort, "due");
-  assert.equal(restored.secondarySort, "title");
-  assert.equal(restored.groupBy, "priority");
-  assert.equal(restored.mode, "calendar");
-  assert.equal(restored.projectFilter, "all");
+  assert.equal(myWork.primarySort, "due");
+  assert.equal(myWork.secondarySort, "title");
+  assert.equal(myWork.groupBy, "project");
+  assert.equal(myWork.mode, "calendar");
+  assert.equal(myWork.projectFilter, "all");
+
+  const project = normalizeItemViewFilters(
+    { primarySort: "due", secondarySort: "title", groupBy: "priority", mode: "calendar" },
+    "proj-1",
+  );
+  assert.equal(project.groupBy, "priority");
+  assert.equal(project.projectFilter, "proj-1");
 });

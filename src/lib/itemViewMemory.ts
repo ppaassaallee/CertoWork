@@ -224,7 +224,8 @@ export function defaultItemViewFilters(projectId?: string | null): ItemViewFilte
     tagFilter: "all",
     workCategoryFilter: "all",
     productPhaseFilter: "all",
-    groupBy: "hierarchy",
+    // My Work always sections by project (with hierarchy inside each section).
+    groupBy: projectId ? "hierarchy" : "project",
     primarySort: "project",
     secondarySort: "priority",
     query: "",
@@ -249,7 +250,8 @@ export function normalizeItemViewFilters(
     tagFilter: asString(value.tagFilter, fallback.tagFilter),
     workCategoryFilter: asString(value.workCategoryFilter, fallback.workCategoryFilter),
     productPhaseFilter: asString(value.productPhaseFilter, fallback.productPhaseFilter),
-    groupBy: asGroup(value.groupBy, fallback.groupBy),
+    // Force project sections for My Work even if an older session saved hierarchy.
+    groupBy: projectId ? asGroup(value.groupBy, fallback.groupBy) : "project",
     primarySort: asSort(value.primarySort, fallback.primarySort),
     secondarySort: asSort(value.secondarySort, fallback.secondarySort),
     query: typeof value.query === "string" ? value.query : "",
