@@ -261,16 +261,15 @@ export function allowedParentItems(child: any, items: any[] = []): any[] {
   if (!allowed.size) return [];
   const childId = normalizeItemId(child?.id);
   const projectId = normalizeItemId(child?.projectId);
-  const kindMatches = items.filter((item) => {
-    const id = normalizeItemId(item?.id);
-    if (!id || id === childId) return false;
-    return allowed.has(hierarchyKind(item));
-  });
-  const sameProject = projectId
-    ? kindMatches.filter((item) => {
-        const itemProject = normalizeItemId(item?.projectId);
-        return !itemProject || itemProject === projectId;
-      })
-    : kindMatches;
-  return sortHierarchySiblings(sameProject.length ? sameProject : kindMatches);
+  return sortHierarchySiblings(
+    items.filter((item) => {
+      const id = normalizeItemId(item?.id);
+      if (!id || id === childId) return false;
+      if (!allowed.has(hierarchyKind(item))) return false;
+      const itemProject = normalizeItemId(item?.projectId);
+      // Never offer a parent from another project — it confuses My Work / cross-project pickers.
+      if (projectId) return itemProject === projectId;
+      return !itemProject;
+    }),
+  );
 }
