@@ -4,7 +4,7 @@ import {
   mapSourceHealth,
   mapSourceStatus,
 } from "./portfolioMasterImport";
-import { normalizeDeliveryStage } from "./projectDelivery";
+import { normalizeDeliveryStage, resolvePricingDeliveryStage } from "./projectDelivery";
 import type { ProductPhase } from "./workClassification";
 
 export const PRICING_PORTFOLIO_IMPORT_KEY = "pricing-2026-transactions";
@@ -537,7 +537,10 @@ export function buildPricingProjectPayload(
   });
 }
 
-export function buildPricingProjectUpdate(row: PricingProjectRow) {
+export function buildPricingProjectUpdate(
+  row: PricingProjectRow,
+  existing?: Record<string, unknown> | null,
+) {
   const title = clean(row.title) || clean(row.projectId) || "Untitled project";
   const bpo = clean(row.bpo) || "Internal";
   const client = clean(row.client) || "Internal";
@@ -546,10 +549,14 @@ export function buildPricingProjectUpdate(row: PricingProjectRow) {
   const sourceStatus = clean(row.status) || clean(row.stage);
   const health = mapSourceHealth(sourceStatus);
   const status = mapSourceStatus(sourceStatus, row.phase);
-  const deliveryStage = normalizeDeliveryStage({
+  // Preserve Operations (and other saved stages) so pricing sync cannot yank
+  // Production / Grow projects into Build when a sheet cell is blank/mismatched.
+  const deliveryStage = resolvePricingDeliveryStage({
+    existing,
     phase,
     status: sourceStatus,
-    deliveryStage: undefined,
+    productPhase: mapProductPhase(row.phase),
+    excelFase: phase,
   });
   const financePeriods = buildFinancePeriodsFromTransactions(row.transactions, {
     externalOrInternal: row.externalOrInternal,
@@ -598,6 +605,28 @@ export function buildPricingProjectUpdate(row: PricingProjectRow) {
     importedFrom: PRICING_PORTFOLIO_IMPORT_KEY,
     pricingImportKey: PRICING_PORTFOLIO_IMPORT_KEY,
   });
+}
+
+/** Patch projects whose phase/excel says Producción but deliveryStage drifted. */
+export function buildOperationsStageRepairPatch(project: Record<string, unknown>) {
+  const current = String(project.deliveryStage || "").trim().toLowerCase();
+  const excelFase = (project.excel as { fase?: string } | undefined)?.fase;
+  const inferred = resolvePricingDeliveryStage({
+    existing: project,
+    phase: project.phase || excelFase,
+    status: project.sourceStatus || project.status,
+    productPhase: project.productPhase,
+    excelFase,
+  });
+  if (inferred !== "operations") return null;
+  if (current === "operations") return null;
+  return {
+    deliveryStage: "operations" as const,
+    productPhase:
+      String(project.productPhase || "").trim() === "Grow"
+        ? ("Grow" as const)
+        : mapProductPhase(String(project.phase || excelFase || "Producción")),
+  };
 }
 
 export function previewPricingSync(

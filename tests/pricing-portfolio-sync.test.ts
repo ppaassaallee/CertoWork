@@ -5,6 +5,7 @@ import {
   PRICING_MATCH_THRESHOLD,
   PRICING_PORTFOLIO_IMPORT_KEY,
   buildFinancePeriodsFromTransactions,
+  buildOperationsStageRepairPatch,
   buildPricingProjectPayload,
   buildPricingProjectUpdate,
   hasUnmatchedPrefix,
@@ -128,6 +129,34 @@ test("BPO maps to deliveryEntity and Client to clientEntity", () => {
   const update = buildPricingProjectUpdate(row);
   assert.equal(update.deliveryEntity, "Apex");
   assert.equal(update.clientEntity, "TECO");
+});
+
+test("pricing updates preserve Operations and repair Producción drift", () => {
+  const prod = data.projects.find((item) => item.phase === "Producción");
+  const build = data.projects.find((item) => item.phase === "Desarrollo");
+  assert.ok(prod);
+  assert.ok(build);
+
+  const restored = buildPricingProjectUpdate(prod, { deliveryStage: "build" });
+  assert.equal(restored.deliveryStage, "operations");
+
+  const preserved = buildPricingProjectUpdate(build, { deliveryStage: "operations" });
+  assert.equal(preserved.deliveryStage, "operations");
+
+  assert.deepEqual(
+    buildOperationsStageRepairPatch({
+      deliveryStage: "build",
+      phase: "Producción",
+    }),
+    { deliveryStage: "operations", productPhase: "Grow" },
+  );
+  assert.equal(
+    buildOperationsStageRepairPatch({
+      deliveryStage: "operations",
+      phase: "Producción",
+    }),
+    null,
+  );
 });
 
 test("fuzzy match reaches ~80% and prefixes unmatched with X", () => {

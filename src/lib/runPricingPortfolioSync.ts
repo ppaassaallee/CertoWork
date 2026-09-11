@@ -18,6 +18,7 @@ import { buildPureAiFollowerProjectPatch } from "./pureAiPortfolioFollowers";
 import {
   PRICING_PORTFOLIO_IMPORT_KEY,
   PRICING_PORTFOLIO_SOURCE,
+  buildOperationsStageRepairPatch,
   buildPricingProjectPayload,
   buildPricingProjectUpdate,
   hasUnmatchedPrefix,
@@ -103,11 +104,12 @@ export async function syncPureAiPricingPortfolio(input: {
   for (const item of match.matched) {
     const existing = byId.get(item.projectId!);
     if (!existing) continue;
-    const payload = buildPricingProjectUpdate(item.pricing);
+    const existingData = existing.data() as Record<string, unknown>;
+    const payload = buildPricingProjectUpdate(item.pricing, existingData);
     updates.push((batch) =>
       batch.update(existing.ref, {
         ...payload,
-        ...buildPureAiFollowerProjectPatch(existing.data() as Record<string, unknown>, share),
+        ...buildPureAiFollowerProjectPatch(existingData, share),
         // Drop any prior "X " unmatched marker once pricing finds the project.
         title: stripUnmatchedPrefix(payload.title),
         name: stripUnmatchedPrefix(payload.name),
@@ -144,16 +146,31 @@ export async function syncPureAiPricingPortfolio(input: {
   for (const projectId of match.unmatchedCertoIds) {
     const existing = byId.get(projectId);
     if (!existing) continue;
-    const data = existing.data();
+    const data = existing.data() as Record<string, unknown>;
     const currentTitle = String(data.title || data.name || "").trim();
-    if (!currentTitle || hasUnmatchedPrefix(currentTitle)) continue;
+    if (!currentTitle || hasUnmatchedPrefix(currentTitle)) {
+      const repair = buildOperationsStageRepairPatch(data);
+      if (repair) {
+        updates.push((batch) =>
+          batch.update(existing.ref, {
+            ...repair,
+            ...buildPureAiFollowerProjectPatch(data, share),
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      }
+      continue;
+    }
     const marked = withUnmatchedPrefix(currentTitle);
+    const repair = buildOperationsStageRepairPatch(data);
     updates.push((batch) =>
       batch.update(existing.ref, {
         title: marked,
         name: marked,
         normalizedTitle: marked.toLowerCase().replace(/\s+/g, " "),
         pricingUnmatched: true,
+        ...(repair || {}),
+        ...buildPureAiFollowerProjectPatch(data, share),
         updatedAt: serverTimestamp(),
       }),
     );

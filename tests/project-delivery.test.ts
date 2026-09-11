@@ -8,6 +8,7 @@ import {
   normalizeDeliveryPhase,
   normalizeDeliveryStage,
   phasesForStage,
+  resolvePricingDeliveryStage,
 } from "../src/lib/projectDelivery";
 
 test("delivery uses five stable stages with four controlled phases each", () => {
@@ -44,6 +45,41 @@ test("Spanish Excel phases map to delivery stages instead of collapsing to Build
   assert.equal(
     normalizeDeliveryStage({ deliveryStage: "operations", phase: "Desarrollo" }),
     "operations",
+  );
+  assert.equal(
+    normalizeDeliveryStage({ productPhase: "Grow", phase: "" }),
+    "operations",
+  );
+  assert.equal(
+    normalizeDeliveryStage({ excel: { fase: "Producción" } }),
+    "operations",
+  );
+});
+
+test("pricing sync preserves Operations and restores Producción from the sheet", () => {
+  assert.equal(
+    resolvePricingDeliveryStage({
+      existing: { deliveryStage: "operations" },
+      phase: "Desarrollo",
+      status: "WIP",
+    }),
+    "operations",
+  );
+  assert.equal(
+    resolvePricingDeliveryStage({
+      existing: { deliveryStage: "build" },
+      phase: "Producción",
+      status: "Completado",
+    }),
+    "operations",
+  );
+  assert.equal(
+    resolvePricingDeliveryStage({
+      existing: { deliveryStage: "deploy" },
+      phase: "QA",
+      status: "WIP",
+    }),
+    "deploy",
   );
 });
 
