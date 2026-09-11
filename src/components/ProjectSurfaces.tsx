@@ -1553,6 +1553,7 @@ export function ProjectConsolePanel({
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
   const [notionSearchOpen, setNotionSearchOpen] = useState(false);
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
+  const [notionSortOpen, setNotionSortOpen] = useState(false);
   const [shareMemberId, setShareMemberId] = useState("");
   const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
   const [docTitle, setDocTitle] = useState("");
@@ -1940,19 +1941,39 @@ export function ProjectConsolePanel({
           <button
             aria-label="Filter"
             className={`tool${notionFilterOpen ? " is-active" : ""}`}
-            onClick={() => setNotionFilterOpen((open) => !open)}
+            data-testid="notion-filter-button"
+            onClick={() => {
+              setNotionFilterOpen((open) => !open);
+              setNotionSortOpen(false);
+              setNotionSearchOpen(false);
+            }}
             title="Filter"
             type="button"
           >
             <Filter size={16} />
           </button>
-          <button aria-label="Sort" className="tool" title="Sort" type="button">
+          <button
+            aria-label="Sort"
+            className={`tool${notionSortOpen ? " is-active" : ""}`}
+            data-testid="notion-sort-button"
+            onClick={() => {
+              setNotionSortOpen((open) => !open);
+              setNotionFilterOpen(false);
+              setNotionSearchOpen(false);
+            }}
+            title="Sort"
+            type="button"
+          >
             <ArrowUpDown size={16} />
           </button>
           <button
             aria-label="Search"
             className={`tool${notionSearchOpen ? " is-active" : ""}`}
-            onClick={() => setNotionSearchOpen((open) => !open)}
+            onClick={() => {
+              setNotionSearchOpen((open) => !open);
+              setNotionFilterOpen(false);
+              setNotionSortOpen(false);
+            }}
             title="Search"
             type="button"
           >
@@ -2101,8 +2122,10 @@ export function ProjectConsolePanel({
           <WorkItemsCenter
             activeProject={project}
             compact
+            notionFilterOpen={notionFilterOpen}
             notionMode={notionMode}
             notionSearchOpen={notionSearchOpen}
+            notionSortOpen={notionSortOpen}
             notionSurface
             onAddTask={(projectId, title, status, patch) =>
               onAddTask(title, status, { ...patch, projectId })
@@ -2112,7 +2135,9 @@ export function ProjectConsolePanel({
             onCreateSprint={onCreateSprint}
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
+            onNotionFilterOpenChange={setNotionFilterOpen}
             onNotionModeChange={setNotionMode}
+            onNotionSortOpenChange={setNotionSortOpen}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}
