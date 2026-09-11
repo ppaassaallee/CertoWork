@@ -1621,6 +1621,24 @@ export function ProjectConsolePanel({
   }, [project.id, initialTab]);
 
   useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".do-console-more")) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
     if (tab !== "items") {
       setTimelineMode(false);
       setGanttFocus(false);
@@ -1776,9 +1794,12 @@ export function ProjectConsolePanel({
         >
           <Share2 size={16} />
         </button>
-        <div className="do-console-more" style={{ position: "relative" }}>
+        <div className="do-console-more">
           <button
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
             aria-label="More"
+            data-testid="notion-more-button"
             onClick={() => setMoreOpen((open) => !open)}
             title="More"
             type="button"
@@ -1786,13 +1807,18 @@ export function ProjectConsolePanel({
             <MoreHorizontal size={16} />
           </button>
           {moreOpen && (
-            <div className="do-account-menu do-console-more-menu">
+            <div
+              className="do-console-more-menu"
+              data-testid="notion-more-menu"
+              role="menu"
+            >
               <button
                 onClick={() => {
                   setMoreOpen(false);
                   setTab("brief");
                   navigate(`/work/projects/${project.id}`);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Overview
@@ -1802,6 +1828,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("team");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Team
@@ -1811,6 +1838,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("costs");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Costs
@@ -1820,6 +1848,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("risks");
                 }}
+                role="menuitem"
                 type="button"
               >
                 Risks
@@ -1829,15 +1858,17 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setTab("docs");
                 }}
+                role="menuitem"
                 type="button"
               >
-                Docs
+                Documents
               </button>
               <button
                 onClick={() => {
                   setMoreOpen(false);
                   void copySupportFormLink();
                 }}
+                role="menuitem"
                 type="button"
               >
                 {supportLinkCopied ? "Support link copied" : "Copy support link"}
@@ -1847,6 +1878,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   downloadProjectStatusReport(report);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Download PDF
@@ -1856,6 +1888,7 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   update({ favorite: !isProjectFavorite(project) });
                 }}
+                role="menuitem"
                 type="button"
               >
                 {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
@@ -1865,16 +1898,19 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setArchiveConfirm(true);
                 }}
+                role="menuitem"
                 type="button"
               >
                 Archive
               </button>
               {allowDelete && (
                 <button
+                  className="is-quiet-danger"
                   onClick={() => {
                     setMoreOpen(false);
                     setDeleteConfirm(true);
                   }}
+                  role="menuitem"
                   type="button"
                 >
                   Delete
