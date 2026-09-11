@@ -6,14 +6,18 @@ import {
   Archive,
   ArrowLeft,
   ArrowRight,
+  ArrowUpDown,
+  Calendar,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   Circle,
   Copy,
-  Download,
   FileText,
+  Filter,
   Flag,
   FolderKanban,
+  Kanban,
   LayoutGrid,
   Link as LinkIcon,
   ListChecks,
@@ -27,7 +31,6 @@ import {
   Sparkles,
   Star,
   Target,
-  UserPlus,
   Users,
   X,
 } from "./ui/Icon";
@@ -102,6 +105,7 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import type { WorkItemsViewMode } from "../lib/itemViewMemory";
 import { canDeleteProject } from "../lib/projectPermissions";
 import {
   PROJECT_RESOURCE_MAX_BYTES,
@@ -1451,7 +1455,7 @@ export function ProjectConsolePanel({
   sprints = [],
   currentUser = null,
   workspace = null,
-  initialTab = "brief",
+  initialTab = "items",
   onAsk,
   onUpdateProject,
   onArchiveProject,
@@ -1494,7 +1498,7 @@ export function ProjectConsolePanel({
   conversationId?: string | null;
   sprints?: SprintRecord[];
   currentUser?: { uid?: string } | null;
-  workspace?: { ownerId?: string } | null;
+  workspace?: { ownerId?: string; name?: string | null } | null;
   /** Deep-link into Items (same work as tasks / backlog). */
   initialTab?: ProjectConsoleTab;
   onAsk: (prompt: string) => void;
@@ -1546,6 +1550,9 @@ export function ProjectConsolePanel({
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
+  const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
+  const [notionSearchOpen, setNotionSearchOpen] = useState(false);
+  const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [shareMemberId, setShareMemberId] = useState("");
   const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
   const [docTitle, setDocTitle] = useState("");
@@ -1715,7 +1722,7 @@ export function ProjectConsolePanel({
 
   return (
     <section
-      className={`do-project-console${tab === "items" ? " is-items-tab" : ""}${tab === "items" && timelineMode ? " is-gantt-dense" : ""}${tab === "items" && ganttFocus ? " is-gantt-focus" : ""}`}
+      className={`do-project-console is-notion${tab === "items" ? " is-items-tab" : ""}${tab === "items" && timelineMode ? " is-gantt-dense" : ""}${tab === "items" && ganttFocus ? " is-gantt-focus" : ""}`}
       data-testid="project-console"
     >
       {ganttFocus && tab === "items" && (
@@ -1739,188 +1746,250 @@ export function ProjectConsolePanel({
           <option key={owner} value={owner} />
         ))}
       </datalist>
-      {/* Compact project header ≤96px — description lives in Overview only */}
-      <div className="do-console-band">
-        <div className="do-console-band-main">
-          <InlineEdit
-            ariaLabel="Project name"
-            onCommit={(title) => title && update({ title, name: title })}
-            placeholder="Project name"
-            value={projectTitle(project)}
-          />
-          <div className="do-console-band-chips">
-            <span className={`do-chip do-chip-health ${healthClass(currentHealth)}`}>
-              {projectHealthLabel(currentHealth)}
-            </span>
-            <label className="do-chip do-chip-select">
-              <span className="sr-only">Delivery stage</span>
-              <select
-                aria-label="Project delivery stage"
-                onChange={(event) => update({ deliveryStage: event.target.value })}
-                value={deliveryStage(project)}
+
+      <div className="do-notion-top">
+        <span className="crumb">{String(workspace?.name || "Workspace")}</span>
+        <span className="sep">/</span>
+        <span className="crumb is-current">{projectTitle(project)}</span>
+        <span className="spacer" />
+        <button
+          aria-label="Ask Odysseus"
+          onClick={() =>
+            onAsk(
+              `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
+            )
+          }
+          title="Ask Odysseus"
+          type="button"
+        >
+          <MessageSquare size={16} />
+        </button>
+        <button
+          aria-label="Share project"
+          onClick={() => {
+            setTab("team");
+            navigate(`/work/projects/${project.id}`);
+          }}
+          title="Share"
+          type="button"
+        >
+          <Share2 size={16} />
+        </button>
+        <div className="do-console-more" style={{ position: "relative" }}>
+          <button
+            aria-label="More"
+            onClick={() => setMoreOpen((open) => !open)}
+            title="More"
+            type="button"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+          {moreOpen && (
+            <div className="do-account-menu do-console-more-menu">
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("brief");
+                  navigate(`/work/projects/${project.id}`);
+                }}
+                type="button"
               >
-                {DELIVERY_STAGES.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {deliveryStageLabels[stage]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <ProjectStatusSelect onUpdate={update} project={project} />
-          </div>
-          <div className="do-console-stat-strip" aria-label="Project stats">
-            <span className={openTasks.length === 0 ? "is-muted" : ""}>
-              Open <strong>{openTasks.length}</strong>
-            </span>
-            <span
-              className={
-                hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length === 0
-                  ? "is-muted"
-                  : ""
-              }
-            >
-              Epics{" "}
-              <strong>
-                {hierarchy.epics.filter((epic) => taskWorkLane(epic) !== "done").length}
-              </strong>
-            </span>
-            <span
-              className={
-                blockedTasks.length + risks.length === 0 ? "is-muted" : "status-tone-amber"
-              }
-            >
-              Signals <strong>{blockedTasks.length + risks.length}</strong>
-            </span>
-            <span className={blockedTasks.length === 0 ? "is-muted" : "status-tone-red"}>
-              Blocked <strong>{blockedTasks.length}</strong>
-            </span>
-          </div>
-        </div>
-        <div className="do-console-band-actions">
-          <button
-            aria-label="Download status report PDF"
-            className="do-button-secondary do-mobile-advanced"
-            onClick={() => downloadProjectStatusReport(report)}
-            title="Download PDF"
-            type="button"
-          >
-            <Download size={14} /> PDF
-          </button>
-          <button
-            aria-label="Open team"
-            className="do-button-secondary do-mobile-advanced"
-            onClick={() => setTab("team")}
-            title="Team"
-            type="button"
-          >
-            <UserPlus size={14} /> Team
-          </button>
-            <button
-              aria-label="Share project"
-            className="do-button-secondary do-mobile-advanced"
-            onClick={() => setTab("team")}
-            title="Share"
-            type="button"
-          >
-              <Share2 size={14} />
-            </button>
-          <button
-            aria-label="Copy support form link"
-            className="do-button-secondary do-mobile-advanced"
-            onClick={() => void copySupportFormLink()}
-            title="Copy support form"
-            type="button"
-          >
-            <LinkIcon size={14} /> {supportLinkCopied ? "Copied" : "Support"}
-          </button>
-          <button
-            aria-label="Ask Odysseus for a project update"
-            className="do-button-secondary"
-            onClick={() =>
-              onAsk(
-                `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
-              )
-            }
-            title="Ask Odysseus"
-            type="button"
-          >
-            <MessageSquare size={14} />
-          </button>
-          <div className="do-console-more do-mobile-advanced">
-            <button
-              aria-label="More actions"
-              className="do-button-secondary do-kebab"
-              onClick={() => setMoreOpen((open) => !open)}
-              title="More actions"
-              type="button"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-            {moreOpen && (
-              <div className="do-account-menu do-console-more-menu">
+                Overview
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("team");
+                }}
+                type="button"
+              >
+                Team
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("costs");
+                }}
+                type="button"
+              >
+                Costs
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("risks");
+                }}
+                type="button"
+              >
+                Risks
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("docs");
+                }}
+                type="button"
+              >
+                Docs
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  void copySupportFormLink();
+                }}
+                type="button"
+              >
+                {supportLinkCopied ? "Support link copied" : "Copy support link"}
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  downloadProjectStatusReport(report);
+                }}
+                type="button"
+              >
+                Download PDF
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  update({ favorite: !isProjectFavorite(project) });
+                }}
+                type="button"
+              >
+                {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setArchiveConfirm(true);
+                }}
+                type="button"
+              >
+                Archive
+              </button>
+              {allowDelete && (
                 <button
                   onClick={() => {
                     setMoreOpen(false);
-                    update({ favorite: !isProjectFavorite(project) });
+                    setDeleteConfirm(true);
                   }}
                   type="button"
                 >
-                  {isProjectFavorite(project) ? "Unfavorite" : "Favorite"}
+                  Delete
                 </button>
-                <button
-                  onClick={() => {
-                    setMoreOpen(false);
-                    setArchiveConfirm(true);
-                  }}
-                  type="button"
-                >
-                  Archive
-                </button>
-                {allowDelete && (
-                  <button
-                    onClick={() => {
-                      setMoreOpen(false);
-                      setDeleteConfirm(true);
-                    }}
-                    type="button"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      <nav className="do-console-tabs is-sticky" aria-label="Project console sections">
-        {(
-          [
-            ["brief", "Overview", false],
-            ["items", "Items", false],
-            ["team", "Team", true],
-            ["costs", "Costs", true],
-            ["risks", "Risks", true],
-            ["docs", "Docs", true],
-          ] as const
-        ).map(([value, label, advanced]) => (
+      <div className="do-notion-title">
+        <InlineEdit
+          ariaLabel="Project name"
+          onCommit={(title) => title && update({ title, name: title })}
+          placeholder="Project name"
+          value={projectTitle(project)}
+        />
+        <p className="do-notion-meta">
+          <label>
+            <span className="sr-only">Delivery stage</span>
+            <select
+              aria-label="Project delivery stage"
+              onChange={(event) => update({ deliveryStage: event.target.value })}
+              value={deliveryStage(project)}
+            >
+              {DELIVERY_STAGES.map((stage) => (
+                <option key={stage} value={stage}>
+                  {deliveryStageLabels[stage]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {" · "}
+          <ProjectStatusSelect onUpdate={update} project={project} />
+          {" · "}
+          <span className={currentHealth === "on_track" ? "is-ok" : ""}>
+            {projectHealthLabel(currentHealth)}
+          </span>
+          {" · "}
+          {openTasks.length} abiertas
+        </p>
+      </div>
+
+      {tab === "items" && (
+        <div className="do-notion-views" aria-label="Project views">
+          {(
+            [
+              ["list", "Tabla", ListChecks],
+              ["gantt", "Gantt", CalendarRange],
+              ["kanban", "Tablero", Kanban],
+              ["calendar", "Calendario", Calendar],
+            ] as const
+          ).map(([value, label, Icon]) => (
+            <button
+              className={`view-tab${notionMode === value ? " is-active" : ""}`}
+              key={value}
+              onClick={() => setNotionMode(value)}
+              type="button"
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+          <span className="spacer" />
           <button
-            className={`${tab === value ? "is-active" : ""} ${advanced ? "do-mobile-advanced" : ""}`}
-            key={value}
+            aria-label="Filter"
+            className={`tool${notionFilterOpen ? " is-active" : ""}`}
+            onClick={() => setNotionFilterOpen((open) => !open)}
+            title="Filter"
+            type="button"
+          >
+            <Filter size={16} />
+          </button>
+          <button aria-label="Sort" className="tool" title="Sort" type="button">
+            <ArrowUpDown size={16} />
+          </button>
+          <button
+            aria-label="Search"
+            className={`tool${notionSearchOpen ? " is-active" : ""}`}
+            onClick={() => setNotionSearchOpen((open) => !open)}
+            title="Search"
+            type="button"
+          >
+            <Search size={16} />
+          </button>
+          <button
+            className="nueva"
             onClick={() => {
-              setTab(value);
-              if (value === "items") {
-                navigate(`/work/projects/${project.id}/tasks`);
-              } else if (value === "brief") {
-                navigate(`/work/projects/${project.id}`);
-              }
+              setNotionMode("list");
+              // Focus the Nueva input after render.
+              window.setTimeout(() => {
+                const input = document.querySelector(
+                  ".do-notion-add-row input",
+                ) as HTMLInputElement | null;
+                input?.focus();
+              }, 0);
             }}
             type="button"
           >
-            {label}
+            <Plus size={15} /> Nueva
           </button>
-        ))}
-      </nav>
+        </div>
+      )}
+
+      {tab !== "items" && (
+        <button
+          className="do-notion-page-back"
+          onClick={() => {
+            setTab("items");
+            navigate(`/work/projects/${project.id}/tasks`);
+          }}
+          style={{ margin: "8px 24px 0" }}
+          type="button"
+        >
+          <ArrowLeft size={14} /> Volver a la tabla
+        </button>
+      )}
 
       {tab === "brief" && (
         <div className="do-console-section">
@@ -2028,10 +2097,13 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "items" && (
-        <div className="do-console-section" data-testid="project-items">
+        <div className="do-notion-body do-console-section" data-testid="project-items">
           <WorkItemsCenter
             activeProject={project}
             compact
+            notionMode={notionMode}
+            notionSearchOpen={notionSearchOpen}
+            notionSurface
             onAddTask={(projectId, title, status, patch) =>
               onAddTask(title, status, { ...patch, projectId })
             }
@@ -2040,6 +2112,7 @@ export function ProjectConsolePanel({
             onCreateSprint={onCreateSprint}
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
+            onNotionModeChange={setNotionMode}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}

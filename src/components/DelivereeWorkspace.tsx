@@ -585,8 +585,7 @@ export function DelivereeWorkspace() {
     else if (next === "requests") navigate("/requests");
     else navigate("/home");
   };
-  const projectConsoleInitialTab =
-    lens.kind === "project" && lens.tab === "tasks" ? "items" : "brief";
+  const projectConsoleInitialTab = "items";
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
@@ -6206,47 +6205,6 @@ export function DelivereeWorkspace() {
           <Toast kind="success" onDismiss={() => setNotice("")}>
             {notice}
           </Toast>
-        )}
-
-        {lens.kind === "project" && lens.tab !== "tasks" && (
-        <section
-          className="do-center-bar"
-          aria-label="Project views"
-        >
-          <div
-            className="do-view-switch"
-            role="tablist"
-            aria-label="Project views"
-          >
-            <button
-              aria-selected={centerView === "project"}
-              className={centerView === "project" ? "is-active" : ""}
-              onClick={() => goCenterView("project")}
-              role="tab"
-              type="button"
-            >
-              Overview
-            </button>
-            <button
-              aria-selected={centerView === "notes"}
-              className={centerView === "notes" ? "is-active" : ""}
-              onClick={() => goCenterView("notes")}
-              role="tab"
-              type="button"
-            >
-              Notes
-            </button>
-            <button
-              aria-selected={centerView === "strategy"}
-              className={`do-mobile-advanced ${centerView === "strategy" ? "is-active" : ""}`}
-              onClick={() => goCenterView("strategy")}
-              role="tab"
-              type="button"
-            >
-              Strategy
-            </button>
-          </div>
-        </section>
         )}
 
         {centerView === "conversation" ? (
