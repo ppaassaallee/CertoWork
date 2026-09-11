@@ -1544,6 +1544,8 @@ export function ProjectConsolePanel({
   const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
   const [moreOpen, setMoreOpen] = useState(false);
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [timelineMode, setTimelineMode] = useState(false);
+  const [ganttFocus, setGanttFocus] = useState(false);
   const [shareMemberId, setShareMemberId] = useState("");
   const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
   const [docTitle, setDocTitle] = useState("");
@@ -1609,6 +1611,23 @@ export function ProjectConsolePanel({
     setDeleteConfirm(false);
     setMoreOpen(false);
   }, [project.id, initialTab]);
+
+  useEffect(() => {
+    if (tab !== "items") {
+      setTimelineMode(false);
+      setGanttFocus(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    const shell = document.querySelector(".do-shell");
+    if (!shell) return;
+    const active = ganttFocus && tab === "items";
+    shell.classList.toggle("is-gantt-focus", active);
+    return () => {
+      shell.classList.remove("is-gantt-focus");
+    };
+  }, [ganttFocus, tab]);
 
   useEffect(() => {
     if (mobileCore && tab !== "brief" && tab !== "items") setTab("brief");
@@ -1696,9 +1715,25 @@ export function ProjectConsolePanel({
 
   return (
     <section
-      className={`do-project-console${tab === "items" ? " is-items-tab" : ""}`}
+      className={`do-project-console${tab === "items" ? " is-items-tab" : ""}${tab === "items" && timelineMode ? " is-gantt-dense" : ""}${tab === "items" && ganttFocus ? " is-gantt-focus" : ""}`}
       data-testid="project-console"
     >
+      {ganttFocus && tab === "items" && (
+        <div className="do-gantt-focus-bar">
+          <strong>{projectTitle(project)}</strong>
+          <span className={`do-chip do-chip-health ${healthClass(currentHealth)}`}>
+            {projectHealthLabel(currentHealth)}
+          </span>
+          <span className="spacer" />
+          <button
+            className="do-button-secondary"
+            onClick={() => setGanttFocus(false)}
+            type="button"
+          >
+            Salir focus
+          </button>
+        </div>
+      )}
       <datalist id="do-project-member-options">
         {assignmentOptions.map((owner) => (
           <option key={owner} value={owner} />
@@ -1872,7 +1907,14 @@ export function ProjectConsolePanel({
           <button
             className={`${tab === value ? "is-active" : ""} ${advanced ? "do-mobile-advanced" : ""}`}
             key={value}
-            onClick={() => setTab(value)}
+            onClick={() => {
+              setTab(value);
+              if (value === "items") {
+                navigate(`/work/projects/${project.id}/tasks`);
+              } else if (value === "brief") {
+                navigate(`/work/projects/${project.id}`);
+              }
+            }}
             type="button"
           >
             {label}
@@ -1996,11 +2038,13 @@ export function ProjectConsolePanel({
             onAsk={onAsk}
             onCreateControlledOption={onCreateControlledOption}
             onCreateSprint={onCreateSprint}
+            onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
             onOpenProjectConsole={() => undefined}
             onSelectItem={setSelectedWorkItemId}
+            onTimelineModeChange={setTimelineMode}
             onUpdateSprint={onUpdateSprint}
             onUpdateTask={onUpdateTask}
             projects={workspaceProjects?.length ? workspaceProjects : [project]}
