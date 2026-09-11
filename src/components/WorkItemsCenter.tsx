@@ -111,6 +111,7 @@ import { getNextOccurrence } from "../lib/recurrence-utils";
 import type { RecurrenceType } from "../types";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
+import { NotionProjectTable } from "./NotionProjectTable";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
   allowedChildKinds,
@@ -186,6 +187,11 @@ type Props = {
   onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   compact?: boolean;
   forceMode?: WorkItemsViewMode;
+  /** Notion-style project surface: dense table + parent owns chrome. */
+  notionSurface?: boolean;
+  notionMode?: WorkItemsViewMode;
+  onNotionModeChange?: (mode: WorkItemsViewMode) => void;
+  notionSearchOpen?: boolean;
   /** Fired when Gantt/Epics timeline mode is active (for dense project chrome). */
   onTimelineModeChange?: (active: boolean) => void;
   /** Fired when the user enters/exits Gantt focus (fullscreen) mode. */
@@ -698,6 +704,10 @@ export function WorkItemsCenter({
   onInviteAssigneeEmail,
   compact = false,
   forceMode,
+  notionSurface = false,
+  notionMode,
+  onNotionModeChange,
+  notionSearchOpen: _notionSearchOpen = false,
   onTimelineModeChange,
   onGanttFocusChange,
 }: Props) {
@@ -1076,6 +1086,16 @@ export function WorkItemsCenter({
     if (forceMode && mode !== forceMode) setMode(forceMode);
     else if (!forceMode && mobileCore && mode !== "list") setMode("list");
   }, [forceMode, mobileCore, mode]);
+
+  useEffect(() => {
+    if (!notionSurface || !notionMode) return;
+    if (mode !== notionMode) setMode(notionMode);
+  }, [notionSurface, notionMode, mode]);
+
+  useEffect(() => {
+    if (!notionSurface) return;
+    onNotionModeChange?.(mode);
+  }, [notionSurface, mode, onNotionModeChange]);
 
   const owners = useMemo(
     () => [...new Set([
@@ -3052,7 +3072,8 @@ export function WorkItemsCenter({
   const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
-    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""}`} data-testid="work-items-center">
+    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+      {!notionSurface && (
       <section className={`do-items-toolbar ${chromeCollapsed || timelineMode ? "is-compact" : ""}`}>
         {!chromeCollapsed && !timelineMode && (
           <label className="do-items-search">
@@ -3470,8 +3491,9 @@ export function WorkItemsCenter({
           <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
         </div>
       </section>
+      )}
 
-      {activeFilterChips.length > 0 && (
+      {!notionSurface && activeFilterChips.length > 0 && (
         <div className="do-filter-chips" aria-label="Active filters">
           {activeFilterChips.map((chip) => (
             <button key={chip.key} onClick={chip.clear} type="button">{chip.label} <X size={12} /></button>
@@ -3886,6 +3908,7 @@ export function WorkItemsCenter({
 
       <div className="do-items-layout">
         <section className={`do-items-workspace is-${mode}`}>
+          {!notionSurface && (
           <div className="do-items-summary">
             {filtered.length > 0 && (
               <button
@@ -3913,8 +3936,20 @@ export function WorkItemsCenter({
               </span>
             )}
           </div>
-          {mode === "list" && renderColumnHeader()}
-          {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : groupBy === "hierarchy" ? renderHierarchy() : (
+          )}
+          {mode === "list" && !notionSurface && renderColumnHeader()}
+          {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
+            <NotionProjectTable
+              onAddItem={(title) => {
+                if (!activeProject?.id) return;
+                void onAddTask(activeProject.id, title, "backlog", { workItemType: "pbi" });
+              }}
+              onSelectItem={(id) => onSelectItem(id)}
+              selectedItemId={selectedItemId}
+              sprints={sprints}
+              tasks={filtered}
+            />
+          ) : groupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
               {Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(groupBy, left);
