@@ -128,11 +128,35 @@ test("PBIs can only pick epics as parents, and tasks can only pick PBIs", () => 
   assert.deepEqual(parentLinkPatch(null), { parentId: null, epicId: null, featureId: null });
 });
 
-test("epics stored as type=epic still appear as PBI parents, and other projects are a fallback", () => {
-  const typedEpic = { id: "e3", title: "Growth", type: "epic", projectId: "other" };
+test("epics stored as type=epic still appear as PBI parents", () => {
+  const typedEpic = { id: "e3", title: "Growth", type: "epic", projectId: "p" };
   const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
   const otherPbi = { id: "p2", title: "Other PBI", workItemType: "pbi", projectId: "p" };
   assert.deepEqual(allowedParentItems(pbi, [typedEpic, otherPbi]).map((item) => item.id), ["e3"]);
+});
+
+test("parent picker never offers items from another project", () => {
+  const snaTask = { id: "t-sna", title: "Supplies needed", workItemType: "task", projectId: "sna" };
+  const snaPbi = { id: "p-sna", title: "SNA setup", workItemType: "pbi", projectId: "sna" };
+  const kruopsPbi = {
+    id: "p-kru",
+    title: "Insurance coordination with Jacob",
+    workItemType: "pbi",
+    projectId: "kruops",
+  };
+  const orphanPbi = { id: "p-none", title: "Errand", workItemType: "pbi" };
+
+  assert.deepEqual(
+    allowedParentItems(snaTask, [snaPbi, kruopsPbi, orphanPbi]).map((item) => item.id),
+    ["p-sna"],
+  );
+  assert.deepEqual(
+    allowedParentItems(
+      { id: "t-none", title: "Loose", workItemType: "task" },
+      [snaPbi, kruopsPbi, orphanPbi],
+    ).map((item) => item.id),
+    ["p-none"],
+  );
 });
 
 test("allowedChildKinds is the inverse nesting table", () => {
