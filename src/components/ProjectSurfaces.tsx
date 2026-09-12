@@ -2096,7 +2096,6 @@ export function ProjectConsolePanel({
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
             onNotionFilterOpenChange={setNotionFilterOpen}
-            onNotionModeChange={setNotionMode}
             onNotionSortOpenChange={setNotionSortOpen}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
