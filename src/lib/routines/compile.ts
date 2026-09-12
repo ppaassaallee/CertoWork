@@ -157,7 +157,7 @@ function detectTrigger(sentence: string, timezone: string): RoutineTrigger {
   };
 }
 
-function titleFromSentence(sentence: string, scopeTitle: string): string {
+function titleFromSentence(sentence: string, _scopeTitle?: string): string {
   const trimmed = sentence.trim().replace(/\s+/g, " ");
   if (trimmed.length <= 56) return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
   const short = trimmed.slice(0, 52).trim();
