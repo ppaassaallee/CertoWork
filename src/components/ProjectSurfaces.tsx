@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
+  ProjectSummaryStrip,
   ProjectViewTabs,
+  projectDisplayName,
   type ProjectViewId,
 } from "../features/projects/chrome";
 import {
@@ -1885,6 +1887,18 @@ export function ProjectConsolePanel({
         moreOpen={moreOpen}
         onToggleMore={() => setMoreOpen((open) => !open)}
         project={project}
+        titleEditor={
+          <InlineEdit
+            ariaLabel="Project name"
+            onCommit={(title) => title && update({ title, name: title })}
+            placeholder="Project name"
+            value={projectDisplayName(project)}
+          />
+        }
+      />
+
+      <ProjectSummaryStrip
+        project={project}
         stageControl={
           <label className="do-project-inline-edit">
             <span className="sr-only">Delivery stage</span>
@@ -1901,16 +1915,7 @@ export function ProjectConsolePanel({
             </select>
           </label>
         }
-        statusControl={<ProjectStatusSelect onUpdate={update} project={project} />}
         tasks={tasks}
-        titleEditor={
-          <InlineEdit
-            ariaLabel="Project name"
-            onCommit={(title) => title && update({ title, name: title })}
-            placeholder="Project name"
-            value={projectTitle(project)}
-          />
-        }
       />
 
       {(tab === "items" || tab === "docs") && (
