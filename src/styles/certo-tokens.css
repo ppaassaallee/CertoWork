@@ -33,6 +33,10 @@
   --status-neutral: #787774;
   --status-neutral-soft: #f1f1ef;
 
+  /* Delivery stage accents (overview roadmap) */
+  --stage-deploy: #7f77dd;
+  --stage-deploy-soft: color-mix(in srgb, var(--stage-deploy) 15%, white);
+
   /* Legacy aliases → Calm Authority (keep older CSS compiling) */
   --status-green: var(--status-success);
   --status-amber: var(--status-warning);

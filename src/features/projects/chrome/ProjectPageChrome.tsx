@@ -14,6 +14,7 @@ import {
   GitBranch,
   Kanban,
   Layers,
+  LayoutDashboard,
   ListChecks,
   MoreHorizontal,
   Plus,
@@ -29,18 +30,29 @@ import {
 import { hierarchyKind, type HierarchyKind } from "../../../lib/itemHierarchy";
 import { checklistItems, checklistProgress } from "../../../lib/kanbanFeatures";
 import { notionEstimateHours } from "../../../lib/notionProjectTable";
+import { isOverviewEnabled } from "../../overview/overviewFlag";
 
-export type ProjectViewId = WorkItemsViewMode | "docs";
+export type ProjectViewId = WorkItemsViewMode | "docs" | "overview";
 
 type IconType = ComponentType<{ size?: number }>;
 
-const VIEW_TABS: Array<{ id: ProjectViewId; label: string; Icon: IconType }> = [
+const BASE_VIEW_TABS: Array<{ id: ProjectViewId; label: string; Icon: IconType }> = [
   { id: "list", label: "Tabla", Icon: ListChecks },
   { id: "kanban", label: "Tablero", Icon: Kanban },
   { id: "gantt", label: "Gantt", Icon: CalendarRange },
   { id: "calendar", label: "Calendario", Icon: Calendar },
   { id: "docs", label: "Docs", Icon: FileText },
 ];
+
+const OVERVIEW_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
+  id: "overview",
+  label: "Resumen",
+  Icon: LayoutDashboard,
+};
+
+function viewTabs() {
+  return isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : BASE_VIEW_TABS;
+}
 
 function shortDate(value: unknown) {
   const raw = String(value || "").trim();
@@ -344,6 +356,7 @@ type ProjectViewTabsProps = {
   onToggleFilter: () => void;
   onToggleSort: () => void;
   onAddTask: () => void;
+  showActions?: boolean;
 };
 
 export function ProjectViewTabs({
@@ -354,11 +367,13 @@ export function ProjectViewTabs({
   onToggleFilter,
   onToggleSort,
   onAddTask,
+  showActions = true,
 }: ProjectViewTabsProps) {
+  const tabs = viewTabs();
   return (
     <div className="do-project-page-tabs" data-testid="project-page-tabs" aria-label="Project views">
       <div className="do-project-page-tablist" role="tablist">
-        {VIEW_TABS.map(({ id, label, Icon }) => (
+        {tabs.map(({ id, label, Icon }) => (
           <button
             aria-selected={activeView === id}
             className={`do-project-page-tab${activeView === id ? " is-active" : ""}`}
@@ -372,6 +387,7 @@ export function ProjectViewTabs({
           </button>
         ))}
       </div>
+      {showActions ? (
       <div className="do-project-page-tab-actions">
         <span className="do-project-group-label">Agrupar: Épica</span>
         <button
@@ -397,6 +413,7 @@ export function ProjectViewTabs({
           Nueva
         </button>
       </div>
+      ) : null}
     </div>
   );
 }
