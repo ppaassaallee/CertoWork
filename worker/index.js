@@ -1132,6 +1132,129 @@ async function rewriteField(request, env) {
   }
 }
 
+async function previewRoutine(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId) {
+    return json({ error: "userId and workspaceId are required" }, 400);
+  }
+  const authError = await authorize(request, body, env);
+  if (authError) return authError;
+
+  const goal = String(body.goal || body.sentence || "").trim();
+  if (!goal) return json({ error: "goal is required" }, 400);
+
+  const scopeTitle = String(body.scope?.entityTitle || body.scope?.entityType || "alcance").trim();
+  const stats = body.contextStats || {};
+  const itemCount = Number(stats.itemCount || 0);
+  const blockedCount = Number(stats.blockedCount || 0);
+  const overdueCount = Number(stats.overdueCount || 0);
+  const language = body.language === "en" ? "en" : "es";
+
+  const fallbackSteps = [
+    {
+      kind: "read",
+      label: language === "es" ? `Leí el contexto de ${scopeTitle}` : `Read context for ${scopeTitle}`,
+    },
+    {
+      kind: "think",
+      label:
+        language === "es"
+          ? `Encontré ${blockedCount} bloqueos y ${overdueCount} vencidos / por vencer`
+          : `Found ${blockedCount} blocked and ${overdueCount} due / overdue`,
+    },
+    {
+      kind: "draft",
+      label: language === "es" ? "Redacté el resultado" : "Drafted the deliverable",
+    },
+    {
+      kind: "deliver",
+      label:
+        language === "es"
+          ? "Vista previa lista (aún no se envió nada)"
+          : "Preview ready (nothing was sent)",
+    },
+  ];
+
+  const fallbackText =
+    language === "es"
+      ? [
+          `Vista previa — ${scopeTitle}`,
+          "",
+          `Objetivo: ${goal}`,
+          "",
+          `• Ítems en alcance: ${itemCount}`,
+          `• Bloqueados: ${blockedCount}`,
+          `• Vencidos / próximos: ${overdueCount}`,
+          "",
+          "— Certo Rutinas (prueba en seco)",
+        ].join("\n")
+      : [
+          `Preview — ${scopeTitle}`,
+          "",
+          `Goal: ${goal}`,
+          "",
+          `• Items in scope: ${itemCount}`,
+          `• Blocked: ${blockedCount}`,
+          `• Due / overdue: ${overdueCount}`,
+          "",
+          "— Certo Routines (dry run)",
+        ].join("\n");
+
+  if (!openaiApiKey(env)) {
+    return json({ text: fallbackText, steps: fallbackSteps, provider: { provider: "local" } });
+  }
+
+  const model = DEFAULT_EFFICIENT_MODEL;
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${openaiApiKey(env)}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        instructions:
+          language === "es"
+            ? `Sos Certo Rutinas. Generá una vista previa breve (máx 180 palabras) de lo que entregaría una corrida de esta rutina sobre "${scopeTitle}". Usá los números dados. No inventes hechos. Devolvé JSON: {"text":"...", "steps":[{"kind":"read|think|draft|deliver","label":"..."}]}`
+            : `You are Certo Routines. Write a short dry-run preview (max 180 words) of what this routine would deliver for "${scopeTitle}". Use the given numbers. Do not invent facts. Return JSON: {"text":"...","steps":[{"kind":"read|think|draft|deliver","label":"..."}]}`,
+        input: [
+          {
+            role: "user",
+            content: JSON.stringify({
+              goal,
+              scopeTitle,
+              itemCount,
+              blockedCount,
+              overdueCount,
+            }),
+          },
+        ],
+        text: { format: { type: "json_object" } },
+        max_output_tokens: 320,
+        store: false,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      return json({ text: fallbackText, steps: fallbackSteps, provider: { provider: "local", error: payload?.error?.message } });
+    }
+    const result = parseJsonObject(extractOpenAIText(payload));
+    const text = String(result?.text || "").trim() || fallbackText;
+    const steps = Array.isArray(result?.steps) && result.steps.length ? result.steps : fallbackSteps;
+    const usage = openAIUsage(payload);
+    logAIUsage({ env, body, feature: "routine_preview", model, usage });
+    return json({ text, steps, provider: { provider: "openai", model, usage } });
+  } catch {
+    return json({ text: fallbackText, steps: fallbackSteps, provider: { provider: "local" } });
+  }
+}
+
 export function magicProjectInstructions() {
   return `You are Certo Work's Magic Project extractor. Read a pasted project definition and return one JSON object the product can execute.
 
@@ -1763,6 +1886,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/certo/rewrite") {
       return rewriteField(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/routines/preview") {
+      return previewRoutine(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/certo/magic-project") {
       return extractMagicProject(request, env);
