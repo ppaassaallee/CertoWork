@@ -15,6 +15,30 @@ export const LEGACY_COLUMNS_KEY = "certo-items-current-view-config";
 export const LEGACY_WIDTHS_KEY = "certo-items-current-column-widths";
 
 export type WorkItemsViewMode = "list" | "kanban" | "calendar" | "flow" | "gantt" | "epics";
+
+/**
+ * Parent-owned modes (project tabs / forceMode) always win over local state and
+ * view-memory. Keeps project + My Work view switches stable — no bidirectional
+ * sync races that flip the active tab back.
+ */
+export function resolveWorkItemsViewMode(options: {
+  localMode: WorkItemsViewMode;
+  forceMode?: WorkItemsViewMode | null;
+  notionSurface?: boolean;
+  notionMode?: WorkItemsViewMode | null;
+}): WorkItemsViewMode {
+  if (options.forceMode) return options.forceMode;
+  if (options.notionSurface && options.notionMode) return options.notionMode;
+  return options.localMode;
+}
+
+/** Session hydrate must not overwrite a parent-controlled view mode. */
+export function shouldApplySessionMode(options: {
+  forceMode?: WorkItemsViewMode | null;
+  notionSurface?: boolean;
+}): boolean {
+  return !options.forceMode && !options.notionSurface;
+}
 export type ItemGroupBy =
   | "hierarchy"
   | "actionBoard"

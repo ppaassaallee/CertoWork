@@ -3,8 +3,9 @@ import test from "node:test";
 
 import {
   allowedChildKinds,
-  allowedParentItems,
   allowedParentKinds,
+  allowedParentItems,
+  canNestUnder,
   effectiveInheritedField,
   effectivePriority,
   hierarchyChildren,
@@ -15,6 +16,7 @@ import {
   sortHierarchyForest,
   treeNodeExpandedByDefault,
   visibleParentId,
+  wouldCreateHierarchyCycle,
 } from "../src/lib/itemHierarchy";
 
 test("PBIs and tasks nest under an epic even without a feature in between", () => {
@@ -111,28 +113,49 @@ test("a nested feature still follows the epic when sorting families", () => {
   );
 });
 
-test("PBIs can only pick epics as parents, and tasks can only pick PBIs", () => {
+test("PBIs pick Features as parents; Features pick Epics; tasks pick PBIs", () => {
   const epic = { id: "e1", title: "Launch", workItemType: "epic", projectId: "p" };
   const otherEpic = { id: "e2", title: "Platform", workItemType: "epic", projectId: "p" };
+  const feature = {
+    id: "f1",
+    title: "Auth",
+    workItemType: "feature",
+    parentId: "e1",
+    epicId: "e1",
+    projectId: "p",
+  };
   const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
   const task = { id: "t1", title: "Build", workItemType: "task", projectId: "p" };
-  const items = [epic, otherEpic, pbi, task];
+  const items = [epic, otherEpic, feature, pbi, task];
 
   assert.deepEqual(allowedParentKinds("epic"), []);
-  assert.deepEqual(allowedParentKinds("pbi"), ["epic"]);
+  assert.deepEqual(allowedParentKinds("feature"), ["epic"]);
+  assert.deepEqual(allowedParentKinds("pbi"), ["feature"]);
   assert.deepEqual(allowedParentKinds("task"), ["pbi", "story"]);
-  assert.deepEqual(allowedParentItems(pbi, items).map((item) => item.id), ["e1", "e2"]);
+  assert.deepEqual(allowedParentItems(feature, items).map((item) => item.id), ["e1", "e2"]);
+  assert.deepEqual(allowedParentItems(pbi, items).map((item) => item.id), ["f1"]);
   assert.deepEqual(allowedParentItems(epic, items), []);
   assert.deepEqual(allowedParentItems(task, items).map((item) => item.id), ["p1"]);
   assert.deepEqual(parentLinkPatch(epic), { parentId: "e1", epicId: "e1", featureId: null });
+  assert.deepEqual(parentLinkPatch(feature), {
+    parentId: "f1",
+    epicId: "e1",
+    featureId: "f1",
+  });
   assert.deepEqual(parentLinkPatch(null), { parentId: null, epicId: null, featureId: null });
 });
 
-test("epics stored as type=epic still appear as PBI parents", () => {
-  const typedEpic = { id: "e3", title: "Growth", type: "epic", projectId: "p" };
+test("features stored as type=feature still appear as PBI parents", () => {
+  const typedFeature = {
+    id: "f3",
+    title: "Growth",
+    type: "feature",
+    projectId: "p",
+    epicId: "e1",
+  };
   const pbi = { id: "p1", title: "MVP", workItemType: "pbi", projectId: "p" };
   const otherPbi = { id: "p2", title: "Other PBI", workItemType: "pbi", projectId: "p" };
-  assert.deepEqual(allowedParentItems(pbi, [typedEpic, otherPbi]).map((item) => item.id), ["e3"]);
+  assert.deepEqual(allowedParentItems(pbi, [typedFeature, otherPbi]).map((item) => item.id), ["f3"]);
 });
 
 test("parent picker never offers items from another project", () => {
@@ -160,10 +183,10 @@ test("parent picker never offers items from another project", () => {
 });
 
 test("allowedChildKinds is the inverse nesting table", () => {
-  assert.deepEqual(allowedChildKinds("epic"), ["pbi", "feature", "story"]);
+  assert.deepEqual(allowedChildKinds("epic"), ["feature"]);
   assert.deepEqual(allowedChildKinds("feature"), ["pbi", "story"]);
-  assert.deepEqual(allowedChildKinds("pbi"), ["task", "bug", "issue"]);
-  assert.deepEqual(allowedChildKinds("story"), ["task", "bug", "issue"]);
+  assert.deepEqual(allowedChildKinds("pbi"), ["subtask", "task", "bug", "issue"]);
+  assert.deepEqual(allowedChildKinds("story"), ["subtask", "task", "bug", "issue"]);
   assert.deepEqual(allowedChildKinds("task"), ["subtask"]);
   assert.deepEqual(allowedChildKinds("bug"), ["subtask"]);
   assert.deepEqual(allowedChildKinds("issue"), ["subtask"]);
@@ -235,4 +258,36 @@ test("tree nodes start collapsed until the user expands them this visit", () => 
     isTreeNodeCollapsedState({ kind: "pbi", depth: 1, groupKey: "node:p1", expandedKeys: ["node:p1"] }),
     false,
   );
+});
+
+test("canNestUnder mirrors Epic → Feature → PBI → Task rules", () => {
+  assert.equal(canNestUnder("feature", "epic"), true);
+  assert.equal(canNestUnder("pbi", "feature"), true);
+  assert.equal(canNestUnder("pbi", "epic"), false);
+  assert.equal(canNestUnder("feature", "feature"), false);
+  assert.equal(canNestUnder("subtask", "pbi"), true);
+  assert.equal(canNestUnder("task", "pbi"), true);
+});
+
+test("wouldCreateHierarchyCycle blocks dropping an ancestor under its descendant", () => {
+  const epic = { id: "e1", title: "Launch", workItemType: "epic" };
+  const feature = {
+    id: "f1",
+    title: "Auth",
+    workItemType: "feature",
+    parentId: "e1",
+    epicId: "e1",
+  };
+  const pbi = {
+    id: "p1",
+    title: "Login",
+    workItemType: "pbi",
+    parentId: "f1",
+    featureId: "f1",
+    epicId: "e1",
+  };
+  const items = [epic, feature, pbi];
+  assert.equal(wouldCreateHierarchyCycle(epic, pbi, items), true);
+  assert.equal(wouldCreateHierarchyCycle(feature, pbi, items), true);
+  assert.equal(wouldCreateHierarchyCycle(pbi, feature, items), false);
 });

@@ -116,7 +116,11 @@ export async function setRoutineStatus(
   status: RoutineStatus,
   spec?: Pick<RoutineSpec, "trigger">,
 ) {
-  const patch: Record<string, unknown> = {
+  const patch: {
+    status: RoutineStatus;
+    updatedAt: ReturnType<typeof serverTimestamp>;
+    nextRunAt?: string | null;
+  } = {
     status,
     updatedAt: serverTimestamp(),
   };
