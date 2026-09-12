@@ -9,6 +9,12 @@ import {
   type ProjectViewId,
 } from "../features/projects/chrome";
 import {
+  isOverviewEnabled,
+  ProjectOverview,
+  readProjectSurfaceView,
+  writeProjectSurfaceView,
+} from "../features/overview";
+import {
   AlertTriangle,
   Archive,
   ArrowLeft,
@@ -1557,6 +1563,36 @@ export function ProjectConsolePanel({
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
+  const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
+    if (!isOverviewEnabled()) return "list";
+    const saved = readProjectSurfaceView(String(project?.id || ""));
+    if (
+      saved &&
+      ["overview", "list", "kanban", "gantt", "calendar", "docs", "flow", "epics"].includes(saved)
+    ) {
+      return saved as ProjectViewId;
+    }
+    return "overview";
+  });
+  useEffect(() => {
+    if (!isOverviewEnabled()) return;
+    const saved = readProjectSurfaceView(String(project?.id || ""));
+    if (!saved) {
+      setChromeView("overview");
+      return;
+    }
+    if (
+      ["overview", "list", "kanban", "gantt", "calendar", "docs", "flow", "epics"].includes(saved)
+    ) {
+      setChromeView(saved as ProjectViewId);
+      if (saved === "docs") setTab("docs");
+      else {
+        setTab("items");
+        if (saved !== "overview") setNotionMode(saved as WorkItemsViewMode);
+      }
+    }
+  }, [project?.id]);
+
   const [notionSearchOpen, setNotionSearchOpen] = useState(false);
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [notionSortOpen, setNotionSortOpen] = useState(false);
@@ -1942,42 +1978,52 @@ export function ProjectConsolePanel({
         }
       />
 
-      <ProjectSummaryStrip
-        project={project}
-        stageControl={
-          <label className="do-project-inline-edit">
-            <span className="sr-only">Delivery stage</span>
-            <select
-              aria-label="Project delivery stage"
-              onChange={(event) => update({ deliveryStage: event.target.value })}
-              value={deliveryStage(project)}
-            >
-              {DELIVERY_STAGES.map((stage) => (
-                <option key={stage} value={stage}>
-                  {deliveryStageLabels[stage]}
-                </option>
-              ))}
-            </select>
-          </label>
-        }
-        tasks={tasks}
-      />
+      {chromeView !== "overview" || !isOverviewEnabled() ? (
+        <ProjectSummaryStrip
+          project={project}
+          stageControl={
+            <label className="do-project-inline-edit">
+              <span className="sr-only">Delivery stage</span>
+              <select
+                aria-label="Project delivery stage"
+                onChange={(event) => update({ deliveryStage: event.target.value })}
+                value={deliveryStage(project)}
+              >
+                {DELIVERY_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {deliveryStageLabels[stage]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          }
+          tasks={tasks}
+        />
+      ) : null}
 
-      <RoutinesStrip
-        entityId={String(project.id)}
-        entityTitle={projectDisplayName(project)}
-        entityType="project"
-      />
+      {chromeView !== "overview" || !isOverviewEnabled() ? (
+        <RoutinesStrip
+          entityId={String(project.id)}
+          entityTitle={projectDisplayName(project)}
+          entityType="project"
+        />
+      ) : null}
 
-      {(tab === "items" || tab === "docs") && (
+      {(tab === "items" || tab === "docs" || (isOverviewEnabled() && chromeView === "overview")) && (
         <ProjectViewTabs
           activeView={
-            (tab === "docs" ? "docs" : notionMode) as ProjectViewId
+            (tab === "docs"
+              ? "docs"
+              : isOverviewEnabled() && chromeView === "overview"
+                ? "overview"
+                : notionMode) as ProjectViewId
           }
           filterOpen={notionFilterOpen}
           onAddTask={() => {
             setTab("items");
+            setChromeView("list");
             setNotionMode("list");
+            writeProjectSurfaceView(String(project.id), "list");
             window.setTimeout(() => {
               const input = document.querySelector(
                 ".do-notion-add-row input",
@@ -1986,25 +2032,34 @@ export function ProjectConsolePanel({
             }, 0);
           }}
           onChangeView={(view) => {
+            writeProjectSurfaceView(String(project.id), view);
+            setChromeView(view);
             if (view === "docs") {
               setTab("docs");
               return;
             }
             setTab("items");
-            setNotionMode(view);
+            if (view !== "overview") {
+              setNotionMode(view as WorkItemsViewMode);
+            }
           }}
           onToggleFilter={() => {
             setTab("items");
+            setChromeView(notionMode);
+            writeProjectSurfaceView(String(project.id), notionMode);
             setNotionFilterOpen((open) => !open);
             setNotionSortOpen(false);
             setNotionSearchOpen(false);
           }}
           onToggleSort={() => {
             setTab("items");
+            setChromeView(notionMode);
+            writeProjectSurfaceView(String(project.id), notionMode);
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
             setNotionSearchOpen(false);
           }}
+          showActions={chromeView !== "overview"}
           sortOpen={notionSortOpen}
         />
       )}
@@ -2128,7 +2183,28 @@ export function ProjectConsolePanel({
         </div>
       )}
 
-      {tab === "items" && (
+      {tab === "items" && isOverviewEnabled() && chromeView === "overview" && (
+        <div className="do-notion-body do-console-section" data-testid="project-overview-mount">
+          <ProjectOverview
+            members={workspaceMembers as any}
+            milestones={milestones}
+            onOpenGantt={() => {
+              setChromeView("gantt");
+              setNotionMode("gantt");
+              writeProjectSurfaceView(String(project.id), "gantt");
+            }}
+            onOpenList={() => {
+              setChromeView("list");
+              setNotionMode("list");
+              writeProjectSurfaceView(String(project.id), "list");
+            }}
+            project={project}
+            tasks={tasks}
+          />
+        </div>
+      )}
+
+      {tab === "items" && !(isOverviewEnabled() && chromeView === "overview") && (
         <div className="do-notion-body do-console-section" data-testid="project-items">
           <WorkItemsCenter
             activeProject={project}
@@ -2147,7 +2223,11 @@ export function ProjectConsolePanel({
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
             onNotionFilterOpenChange={setNotionFilterOpen}
-            onNotionModeChange={setNotionMode}
+            onNotionModeChange={(mode) => {
+              setNotionMode(mode);
+              setChromeView(mode);
+              writeProjectSurfaceView(String(project.id), mode);
+            }}
             onNotionSortOpenChange={setNotionSortOpen}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
