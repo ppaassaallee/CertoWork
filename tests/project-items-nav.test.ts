@@ -32,10 +32,10 @@ test("project console uses a Notion-style table surface, not Tasks + Backlog tab
   assert.match(consoleSource, /<ProjectPageHeader/);
   assert.match(consoleSource, /<ProjectViewTabs/);
   assert.match(chromeSource, /aria-label="Project views"/);
-  assert.match(chromeSource, /label: "Table"/);
-  assert.match(chromeSource, /label: "Board"/);
+  assert.match(chromeSource, /label: "Tabla"/);
+  assert.match(chromeSource, /label: "Tablero"/);
   assert.match(chromeSource, /label: "Gantt"/);
-  assert.match(chromeSource, /label: "Calendar"/);
+  assert.match(chromeSource, /label: "Calendario"/);
   assert.match(chromeSource, /label: "Docs"/);
   assert.doesNotMatch(consoleSource, /\["backlog", "Backlog"\]/);
   assert.match(consoleSource, /Overview/);

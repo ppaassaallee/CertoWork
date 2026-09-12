@@ -4175,9 +4175,12 @@ export function WorkItemsCenter({
           {mode === "list" && !notionSurface && renderColumnHeader()}
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
-              onAddItem={(title) => {
+              onAddItem={(title, patch) => {
                 if (!activeProject?.id) return;
-                void onAddTask(activeProject.id, title, "backlog", { workItemType: "pbi" });
+                void onAddTask(activeProject.id, title, "backlog", {
+                  workItemType: "pbi",
+                  ...(patch || {}),
+                });
               }}
               onSelectItem={(id) => onSelectItem(id)}
               selectedItemId={selectedItemId}
