@@ -958,7 +958,6 @@ export function DelivereeWorkspace() {
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
     // dataAccessKey captures portfolio/triage mode; avoid restarting ~30 listeners on roster churn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional stable access key
   }, [dataAccessKey]);
 
   useEffect(() => {
