@@ -5,3 +5,4 @@ export {
   projectDateRangeLabel,
   type ProjectViewId,
 } from "./ProjectPageChrome";
+export { ProjectContextPanel } from "../panels/ProjectContextPanel";

@@ -4,6 +4,7 @@ import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
   ProjectViewTabs,
+  ProjectContextPanel,
   type ProjectViewId,
 } from "../features/projects/chrome";
 import {
@@ -2069,39 +2070,51 @@ export function ProjectConsolePanel({
       )}
 
       {tab === "items" && (
-        <div className="do-notion-body do-console-section" data-testid="project-items">
-          <WorkItemsCenter
-            activeProject={project}
-            compact
-            notionFilterOpen={notionFilterOpen}
-            notionMode={notionMode}
-            notionSearchOpen={notionSearchOpen}
-            notionSortOpen={notionSortOpen}
-            notionSurface
-            onAddTask={(projectId, title, status, patch) =>
-              onAddTask(title, status, { ...patch, projectId })
-            }
-            onAsk={onAsk}
-            onCreateControlledOption={onCreateControlledOption}
-            onCreateSprint={onCreateSprint}
-            onGanttFocusChange={setGanttFocus}
-            onInviteAssigneeEmail={onInviteAssigneeEmail}
-            onNotionFilterOpenChange={setNotionFilterOpen}
-            onNotionModeChange={setNotionMode}
-            onNotionSortOpenChange={setNotionSortOpen}
-            onOpenCollabProject={openCollabProject}
-            onOpenFinanceLine={openFinanceLine}
-            onOpenProjectConsole={() => undefined}
+        <div className="do-project-items-layout">
+          <div className="do-notion-body do-console-section" data-testid="project-items">
+            <WorkItemsCenter
+              activeProject={project}
+              compact
+              notionFilterOpen={notionFilterOpen}
+              notionMode={notionMode}
+              notionSearchOpen={notionSearchOpen}
+              notionSortOpen={notionSortOpen}
+              notionSurface
+              onAddTask={(projectId, title, status, patch) =>
+                onAddTask(title, status, { ...patch, projectId })
+              }
+              onAsk={onAsk}
+              onCreateControlledOption={onCreateControlledOption}
+              onCreateSprint={onCreateSprint}
+              onGanttFocusChange={setGanttFocus}
+              onInviteAssigneeEmail={onInviteAssigneeEmail}
+              onNotionFilterOpenChange={setNotionFilterOpen}
+              onNotionModeChange={setNotionMode}
+              onNotionSortOpenChange={setNotionSortOpen}
+              onOpenCollabProject={openCollabProject}
+              onOpenFinanceLine={openFinanceLine}
+              onOpenProjectConsole={() => undefined}
+              onSelectItem={setSelectedWorkItemId}
+              onTimelineModeChange={setTimelineMode}
+              onUpdateSprint={onUpdateSprint}
+              onUpdateTask={onUpdateTask}
+              projects={workspaceProjects?.length ? workspaceProjects : [project]}
+              selectedItemId={selectedWorkItemId}
+              sprints={sprints}
+              tags={tags}
+              tasks={tasks}
+              workspaceMembers={workspaceMembers}
+            />
+          </div>
+          <ProjectContextPanel
+            health={currentHealth}
+            members={activeMembers}
+            onOpenOverview={() => setTab("brief")}
+            onOpenTeam={() => setTab("team")}
             onSelectItem={setSelectedWorkItemId}
-            onTimelineModeChange={setTimelineMode}
-            onUpdateSprint={onUpdateSprint}
-            onUpdateTask={onUpdateTask}
-            projects={workspaceProjects?.length ? workspaceProjects : [project]}
-            selectedItemId={selectedWorkItemId}
-            sprints={sprints}
-            tags={tags}
+            project={project}
+            risks={risks}
             tasks={tasks}
-            workspaceMembers={workspaceMembers}
           />
         </div>
       )}
