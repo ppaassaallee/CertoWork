@@ -8,6 +8,8 @@ import {
   namedViewsStorageKey,
   lastSessionsStorageKey,
   normalizeItemViewFilters,
+  resolveWorkItemsViewMode,
+  shouldApplySessionMode,
   upsertNamedItemView,
 } from "../src/lib/itemViewMemory";
 
@@ -63,4 +65,30 @@ test("normalize forces My Work to project groupBy and restores project session s
   );
   assert.equal(project.groupBy, "priority");
   assert.equal(project.projectFilter, "proj-1");
+});
+
+test("parent-owned notion/force modes win over local mode (no tab thrash)", () => {
+  assert.equal(
+    resolveWorkItemsViewMode({ localMode: "list", notionSurface: true, notionMode: "gantt" }),
+    "gantt",
+  );
+  assert.equal(
+    resolveWorkItemsViewMode({ localMode: "gantt", notionSurface: true, notionMode: "list" }),
+    "list",
+  );
+  assert.equal(
+    resolveWorkItemsViewMode({ localMode: "list", forceMode: "kanban", notionSurface: true, notionMode: "gantt" }),
+    "kanban",
+  );
+  assert.equal(
+    resolveWorkItemsViewMode({ localMode: "calendar", notionSurface: false }),
+    "calendar",
+  );
+});
+
+test("session hydrate skips mode when parent controls the view", () => {
+  assert.equal(shouldApplySessionMode({ notionSurface: true }), false);
+  assert.equal(shouldApplySessionMode({ forceMode: "kanban" }), false);
+  assert.equal(shouldApplySessionMode({}), true);
+  assert.equal(shouldApplySessionMode({ notionSurface: false }), true);
 });

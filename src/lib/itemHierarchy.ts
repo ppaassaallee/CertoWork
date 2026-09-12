@@ -145,18 +145,27 @@ export function hierarchyKind(item: any): HierarchyKind {
 export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[] {
   if (kind === "epic" || kind === "ticket") return [];
   if (kind === "feature") return ["epic"];
-  if (kind === "pbi" || kind === "story") return ["epic"];
+  // Epic → Feature → PBI/Story → Task/Bug/Issue → Subtask
+  if (kind === "pbi" || kind === "story") return ["feature"];
   if (kind === "task" || kind === "bug" || kind === "issue") return ["pbi", "story"];
   return ["pbi", "story", "task", "bug", "issue"];
 }
 
-/** Inverse of parent rules: which kinds may be created directly under a parent. */
+/** Inverse of parent rules: which kinds may be created / dropped directly under a parent. */
 export function allowedChildKinds(parentKind: HierarchyKind | string): HierarchyKind[] {
-  if (parentKind === "epic") return ["pbi", "feature", "story"];
+  if (parentKind === "epic") return ["feature"];
   if (parentKind === "feature") return ["pbi", "story"];
-  if (parentKind === "pbi" || parentKind === "story") return ["task", "bug", "issue"];
+  if (parentKind === "pbi" || parentKind === "story") return ["subtask", "task", "bug", "issue"];
   if (parentKind === "task" || parentKind === "bug" || parentKind === "issue") return ["subtask"];
   return [];
+}
+
+/** True when `childKind` is allowed to nest directly under `parentKind`. */
+export function canNestUnder(
+  childKind: HierarchyKind | string,
+  parentKind: HierarchyKind | string,
+): boolean {
+  return allowedParentKinds(childKind).includes(parentKind as HierarchyKind);
 }
 
 /**
@@ -251,9 +260,31 @@ export function parentLinkPatch(parent: any | null) {
   const id = normalizeItemId(parent?.id) || null;
   return {
     parentId: id,
-    epicId: kind === "epic" ? id : parent?.epicId || null,
-    featureId: kind === "feature" ? id : parent?.featureId || null,
+    epicId: kind === "epic" ? id : normalizeItemId(parent?.epicId) || null,
+    featureId: kind === "feature" ? id : normalizeItemId(parent?.featureId) || null,
   };
+}
+
+/** True when assigning `child` under `parent` would create a cycle. */
+export function wouldCreateHierarchyCycle(child: any, parent: any, items: any[]): boolean {
+  const childId = normalizeItemId(child?.id);
+  const parentId = normalizeItemId(parent?.id);
+  if (!childId || !parentId) return false;
+  if (childId === parentId) return true;
+  const ids = presentItemIds(items);
+  const byId = new Map(items.map((item) => [normalizeItemId(item?.id), item]));
+  let current: any = parent;
+  const seen = new Set<string>();
+  while (current) {
+    const id = normalizeItemId(current?.id);
+    if (!id || seen.has(id)) break;
+    if (id === childId) return true;
+    seen.add(id);
+    const nextId = visibleParentId(current, ids);
+    if (!nextId) break;
+    current = byId.get(nextId);
+  }
+  return false;
 }
 
 export function allowedParentItems(child: any, items: any[] = []): any[] {
