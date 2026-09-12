@@ -117,6 +117,7 @@ import {
   allowedChildKinds,
   allowedParentItems,
   allowedParentKinds,
+  canNestUnder,
   compareHierarchySiblings,
   effectiveInheritedField,
   effectivePriority,
@@ -128,6 +129,7 @@ import {
   parentLinkPatch,
   sortHierarchyForest,
   sortHierarchySiblings,
+  wouldCreateHierarchyCycle,
 } from "../lib/itemHierarchy";
 import {
   dateInputValue,
@@ -844,7 +846,22 @@ export function WorkItemsCenter({
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
-  const attributeColumns = [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
+  /** Project Tabla always exposes the full icon quick-actions (entity, parent, etc.). */
+  const notionQuickAttrColumns: Array<Exclude<ItemColumnKey, "title">> = [
+    "delivery_entity",
+    "client_entity",
+    "tags",
+    "work_category",
+    "product_phase",
+    "status",
+    "priority",
+    "assignees",
+    "due",
+    "sprint",
+  ];
+  const attributeColumns = notionSurface
+    ? notionQuickAttrColumns
+    : [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
     gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
@@ -2123,7 +2140,24 @@ export function WorkItemsCenter({
         }}
         onDrop={async (event) => {
           event.preventDefault();
-          await reorderItem(draggedItemId, item.id, peers);
+          if (!draggedItemId || draggedItemId === item.id) {
+            setDraggedItemId(null);
+            setDragOverItemId(null);
+            return;
+          }
+          const dragged = findPoolItem(draggedItemId);
+          if (
+            dragged &&
+            canNestUnder(workItemKind(dragged), workItemKind(item)) &&
+            !wouldCreateHierarchyCycle(dragged, item, parentPool)
+          ) {
+            await onUpdateTask(draggedItemId, parentLinkPatch(item));
+            setExpandedTreeNodes((current) =>
+              current.includes(item.id) ? current : [...current, item.id],
+            );
+          } else {
+            await reorderItem(draggedItemId, item.id, peers);
+          }
           setDraggedItemId(null);
           setDragOverItemId(null);
         }}
@@ -2134,7 +2168,7 @@ export function WorkItemsCenter({
         </button>
         {renderBulkSelect(item)}
         <button
-          aria-label={`Drag to reorder ${title(item)}`}
+          aria-label={`Drag to nest or reorder ${title(item)}`}
           className="do-items-drag-handle"
           draggable
           onDragEnd={() => {
@@ -2146,7 +2180,7 @@ export function WorkItemsCenter({
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData("text/plain", item.id);
           }}
-          title="Drag to reorder"
+          title="Drag onto a valid parent to nest, or onto a sibling to reorder"
           type="button"
         >
           <GripVertical size={14} />
@@ -4188,6 +4222,7 @@ export function WorkItemsCenter({
           {mode === "list" && !notionSurface && renderColumnHeader()}
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
+              hierarchyPool={parentPool}
               onAddItem={(title, patch) => {
                 if (!activeProject?.id) return;
                 void onAddTask(activeProject.id, title, "backlog", {
@@ -4195,7 +4230,10 @@ export function WorkItemsCenter({
                   ...(patch || {}),
                 });
               }}
+              onReorderPeers={(draggedId, targetId, peers) => reorderItem(draggedId, targetId, peers)}
               onSelectItem={(id) => onSelectItem(id)}
+              onUpdateTask={onUpdateTask}
+              renderAttrs={(item) => renderAttributeIcons(item)}
               selectedItemId={selectedItemId}
               sprints={sprints}
               tasks={filtered}

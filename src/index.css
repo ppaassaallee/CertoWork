@@ -4130,6 +4130,10 @@ a {
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
+.do-notion-table td:has(.do-notion-name-cell),
+.do-notion-table td:has(.do-notion-row-attrs) {
+  overflow: visible;
+}
 .do-notion-table tr.is-selected td {
   background: color-mix(in srgb, var(--accent) 6%, var(--surface-0));
 }
@@ -4138,6 +4142,63 @@ a {
   min-width: 0;
   align-items: center;
   gap: 6px;
+}
+.do-notion-drag-handle {
+  display: grid;
+  width: 16px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0.7;
+}
+.do-notion-name-cell:hover .do-notion-drag-handle,
+.do-notion-table tr.is-dragging .do-notion-drag-handle {
+  opacity: 1;
+  color: var(--text-primary);
+}
+.do-notion-drag-handle:active {
+  cursor: grabbing;
+}
+.do-notion-row-attrs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 2px;
+  position: relative;
+  z-index: 2;
+}
+.do-notion-row-attrs .do-item-attrs {
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.do-notion-row-attrs .do-item-attr.is-off .do-item-attr-btn,
+.do-notion-row-attrs .do-item-attr.is-assignees.is-off .cw-multi-assignee-trigger {
+  opacity: 0.55;
+  filter: none;
+}
+.do-notion-row-attrs .do-item-attr.is-parent .do-item-attr-btn {
+  color: var(--accent);
+  opacity: 0.9;
+}
+.do-notion-row-attrs .do-item-attr-pop {
+  z-index: 80;
+}
+.do-notion-table tr.is-dragging td {
+  opacity: 0.45;
+}
+.do-notion-table tr.is-drop-child td {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-0));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.do-notion-table tr.is-drop-reorder td {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 .do-work-type-glyph {
   display: inline-flex;
