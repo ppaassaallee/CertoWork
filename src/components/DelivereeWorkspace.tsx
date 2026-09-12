@@ -387,8 +387,11 @@ export function DelivereeWorkspace() {
     else setWorkOpened(true);
   }, [onCollab]);
   useEffect(() => {
-    if (!user?.email || !workspace) return;
+    // Warm Chat Collab only when the user opens Collab — never on every app boot.
+    if (!onCollab || !user?.email || !workspace) return;
     let cancelled = false;
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = window.setTimeout(() => controller?.abort(), 8_000);
     void (async () => {
       try {
         const token = await user.getIdToken();
@@ -407,8 +410,10 @@ export function DelivereeWorkspace() {
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
+      controller?.abort();
     };
-  }, [user, workspace]);
+  }, [onCollab, user, workspace]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -635,6 +640,32 @@ export function DelivereeWorkspace() {
   const recognitionRef = useRef<any>(null);
   const voiceSessionRef = useRef(false);
   const restoredCreatorAssignees = useRef(new Set<string>());
+
+  const dataAccessKey = useMemo(() => {
+    if (!user || !workspace) return "";
+    const emailLower = normalizeAccessEmail(user.email);
+    const currentMember = workspaceMembers.find((member) => {
+      if (member.userId === user.uid) return true;
+      const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
+      return Boolean(emailLower && memberEmail && memberEmail === emailLower);
+    });
+    const isOwner = workspace.ownerId === user.uid;
+    const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
+      isOwner,
+      member: currentMember,
+    });
+    const canTriageFeedback = canManageWorkspaceMembers(
+      currentMember?.role,
+      isOwner,
+    );
+    // Stable key: ignore roster churn; only restart when access mode changes.
+    return [
+      user.uid,
+      workspace.id,
+      canSeeWorkspacePortfolio ? "portfolio" : "role",
+      canTriageFeedback ? "triage" : "self",
+    ].join("|");
+  }, [user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -926,7 +957,8 @@ export function DelivereeWorkspace() {
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [user, workspace, workspaceMembers]);
+    // dataAccessKey captures portfolio/triage mode; avoid restarting ~30 listeners on roster churn.
+  }, [dataAccessKey]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1025,7 +1057,7 @@ export function DelivereeWorkspace() {
           portfolioFollowersAutoRef.current = false;
           return;
         }
-        await reloadWorkspaces();
+        // Listeners already pick up project/member writes — do not re-run Auth bootstrap.
         setNotice(result.message);
       } catch (reason) {
         portfolioFollowersAutoRef.current = false;
@@ -1045,7 +1077,6 @@ export function DelivereeWorkspace() {
     portfolioFollowersBusy,
     pricingSyncBusy,
     clearPureAiBusy,
-    reloadWorkspaces,
   ]);
 
   // Move Pure AI followers off empty Personal / email-named workspaces.
@@ -1056,7 +1087,7 @@ export function DelivereeWorkspace() {
     if (!isPersonalOrEmailNamedWorkspace(workspace, user.email)) return;
     const pureAi = workspaces.find((item) => isPureAiWorkspace(item));
     if (!pureAi || pureAi.id === workspace.id) return;
-    setWorkspace(pureAi);
+    setWorkspace(pureAi, { reload: false });
     setNotice("Te moví a Pure AI Workspace para que veas el portafolio.");
   }, [user?.email, user?.uid, workspace?.id, workspaces, setWorkspace]);
 
