@@ -50,18 +50,64 @@ export function projectCheckpointDate(project: any) {
   );
 }
 
+/** Local calendar YYYY-MM-DD for date-only comparisons. */
+export function todayIsoDate(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
- * Live portfolio checkpoints for dashboard "Next Exits".
- * Soft-deleted / archived / completed projects never appear here.
+ * Human checkpoint label: "Apr 30 · in 21 days" / "Apr 30 · today" / "Apr 30 · 3 days ago".
+ * Past dates are flagged via `overdue` for red styling.
  */
-export function upcomingProjectCheckpoints(projects: any[], limit = 8) {
+export function formatCheckpointLabel(isoDate: string, now = new Date()) {
+  const raw = String(isoDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return { text: "No date", overdue: false, relative: "" };
+  }
+  const [year, month, day] = raw.split("-").map(Number);
+  const target = new Date(year, month - 1, day);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const deltaDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  const short = target.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (deltaDays === 0) return { text: `${short} · today`, overdue: false, relative: "today" };
+  if (deltaDays > 0) {
+    return {
+      text: `${short} · in ${deltaDays} day${deltaDays === 1 ? "" : "s"}`,
+      overdue: false,
+      relative: `in ${deltaDays} day${deltaDays === 1 ? "" : "s"}`,
+    };
+  }
+  const ago = Math.abs(deltaDays);
+  return {
+    text: `${short} · ${ago} day${ago === 1 ? "" : "s"} ago`,
+    overdue: true,
+    relative: `${ago} day${ago === 1 ? "" : "s"} ago`,
+  };
+}
+
+/**
+ * Upcoming checkpoints for the Projects home.
+ * Only open projects with a checkpoint date on or after today.
+ * Past dates never appear here — they surface via health / attention.
+ */
+export function upcomingProjectCheckpoints(
+  projects: any[],
+  limit = 8,
+  now = new Date(),
+) {
+  const today = todayIsoDate(now);
   return [...projects]
-    .filter((project) => !isProjectClosed(project))
-    .sort((left, right) => {
-      const leftDate = projectCheckpointDate(left) || "9999-12-31";
-      const rightDate = projectCheckpointDate(right) || "9999-12-31";
-      return leftDate.localeCompare(rightDate);
+    .filter((project) => {
+      if (isProjectClosed(project)) return false;
+      const date = projectCheckpointDate(project);
+      return Boolean(date) && date >= today;
     })
+    .sort((left, right) =>
+      projectCheckpointDate(left).localeCompare(projectCheckpointDate(right)),
+    )
     .slice(0, Math.max(0, limit));
 }
 
@@ -107,6 +153,64 @@ export function projectHealth(project: any, projectTasks: any[] = [], projectRis
 
 export function projectHealthLabel(health: ProjectHealth) {
   return health === "blocked" ? "Blocked" : health === "at_risk" ? "At risk" : "On track";
+}
+
+/** Same definition as portfolio health: open projects that are not on track. */
+export function projectNeedsAttention(
+  project: any,
+  projectTasks: any[] = [],
+  projectRisks: any[] = [],
+) {
+  if (isProjectClosed(project)) return false;
+  return projectHealth(project, projectTasks, projectRisks) !== "on_track";
+}
+
+export function projectAttentionReason(
+  project: any,
+  projectTasks: any[] = [],
+  projectRisks: any[] = [],
+) {
+  const blockedCount = projectTasks.filter(
+    (task) => String(task.status || "").toLowerCase() === "blocked",
+  ).length;
+  if (blockedCount) {
+    return `${blockedCount} blocked item${blockedCount === 1 ? "" : "s"}`;
+  }
+  const openRisks = projectRisks.filter(
+    (risk) =>
+      !["closed", "resolved", "accepted"].includes(
+        String(risk.status || "open").toLowerCase(),
+      ),
+  );
+  if (openRisks.some((risk) => String(risk.severity || "").toLowerCase() === "critical")) {
+    return "Critical open risk";
+  }
+  if (openRisks.length) {
+    return `${openRisks.length} open risk${openRisks.length === 1 ? "" : "s"}`;
+  }
+  const date = projectCheckpointDate(project);
+  if (date && date < todayIsoDate()) {
+    return "Overdue checkpoint";
+  }
+  const explicit = String(
+    project?.healthOverride ||
+      (!project?.importedFrom ? project?.health || project?.healthStatus : "") ||
+      "",
+  ).toLowerCase();
+  if (explicit === "blocked") return "Marked blocked";
+  if (["at_risk", "at risk", "risk"].includes(explicit)) return "Marked at risk";
+  return projectHealthLabel(projectHealth(project, projectTasks, projectRisks));
+}
+
+export function projectOwnerLabel(project: any) {
+  return (
+    String(
+      project?.projectManager ||
+        project?.owner ||
+        project?.scrumMaster ||
+        "",
+    ).trim() || "Unassigned"
+  );
 }
 
 export type WorkLane = "backlog" | "in_progress" | "blocked" | "done";

@@ -6140,15 +6140,18 @@ export function DelivereeWorkspace() {
                 </button>
               </>
             )}
-            <button
-              aria-label="Open command palette"
-              className="do-icon-button"
-              onClick={() => setCommandPaletteOpen(true)}
-              title="Command palette (⌘K)"
-              type="button"
-            >
-              <Search size={15} />
-            </button>
+            {centerView !== "portfolio" && (
+              <button
+                aria-label="Open command palette"
+                className="do-icon-button"
+                onClick={() => setCommandPaletteOpen(true)}
+                title="Command palette (⌘K)"
+                type="button"
+              >
+                <Search size={15} />
+              </button>
+            )}
+            {centerView !== "portfolio" && (
             <div className="do-create-menu" ref={createMenuRef}>
               <button
                 aria-expanded={createMenuOpen}
@@ -6198,6 +6201,7 @@ export function DelivereeWorkspace() {
                 document.body,
               )}
             </div>
+            )}
           </div>
         </header>
 
@@ -6799,38 +6803,6 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
         ) : centerView === "portfolio" ? (
-          <>
-            {canGrantPureAiFollowers ? (
-              <section
-                className="do-pure-ai-followers-callout"
-                data-testid="pure-ai-grant-followers-portfolio"
-                id="pure-ai-followers-callout"
-              >
-                <div>
-                  <span className="do-kicker">Pure AI · acceso</span>
-                  <strong>Regina, César, Rafael y Edgar</strong>
-                  <p>
-                    {workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                      ? "Ya se aplicó el acceso admin + followers al portafolio. Puedes volver a aplicarlo si falta alguien."
-                      : "Dales rol admin y followers en todos los proyectos para que vean el portafolio completo."}
-                  </p>
-                </div>
-                <button
-                  className="do-button do-pure-ai-followers-btn"
-                  data-testid="pure-ai-grant-followers-btn"
-                  disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
-                  onClick={() => void grantPureAiAdminFollowers()}
-                  type="button"
-                >
-                  <Users size={14} />
-                  {portfolioFollowersBusy
-                    ? "Aplicando…"
-                    : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                      ? "Volver a dar acceso"
-                      : "Dar acceso admin ahora"}
-                </button>
-              </section>
-            ) : null}
           <ProjectCommandCenter
             highlightFinanceLineId={highlightFinanceLineId}
             initialPortfolioView={highlightFinanceLineId ? "economics" : undefined}
@@ -6842,6 +6814,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onNewProject={() => setProjectWizardOpen(true)}
             onAddFinanceTask={async (projectId, title, status, patch) =>
               addProjectTask(projectId, title, status, patch || {})
             }
@@ -6876,7 +6849,6 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
-          </>
         ) : centerView === "project" ? (
           consoleProject ? (
             <ProjectConsolePanel
