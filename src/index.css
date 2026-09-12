@@ -4250,6 +4250,270 @@ a {
 .do-project-console.is-gantt-focus .do-gantt-focus-bar {
   display: flex;
 }
+.do-project-console.is-gantt-focus .do-project-page-header,
+.do-project-console.is-gantt-focus .do-project-page-tabs,
+.do-project-console.is-gantt-focus .do-project-context {
+  display: none;
+}
+.do-project-items-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 0;
+  overflow: hidden;
+}
+.do-project-items-layout > .do-notion-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.do-project-context {
+  display: flex;
+  width: 280px;
+  flex: none;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface-0);
+  padding: 12px;
+}
+.do-project-context.is-collapsed {
+  width: 40px;
+  align-items: center;
+  padding: 12px 4px;
+}
+.do-project-context-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.do-project-context-toggle {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.do-project-context-toggle:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.do-project-context-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+  padding: 16px;
+}
+.do-project-context-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.do-project-context-card .is-link {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.do-project-context-ring {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+.do-project-context-ring strong {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.do-project-context-ring span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.do-project-context-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.do-project-context-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.do-project-context-legend em {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.do-project-context-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.do-project-context-legend i.is-done {
+  background: var(--status-success);
+}
+.do-project-context-legend i.is-doing {
+  background: var(--accent);
+}
+.do-project-context-legend i.is-open {
+  background: var(--text-muted);
+}
+.do-project-context-avatars {
+  display: flex;
+  align-items: center;
+}
+.do-project-context-avatars .do-notion-avatar {
+  margin-left: -8px;
+}
+.do-project-context-avatars .do-notion-avatar:first-child {
+  margin-left: 0;
+}
+.do-project-context-more {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.do-project-context-list {
+  display: grid;
+  gap: 8px;
+}
+.do-project-context-deadline,
+.do-project-context-activity {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  border-left: 3px solid var(--border);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.do-project-context-deadline.is-high {
+  border-left-color: var(--status-danger);
+}
+.do-project-context-deadline.is-medium {
+  border-left-color: var(--status-warning);
+}
+.do-project-context-deadline.is-low {
+  border-left-color: var(--accent);
+}
+.do-project-context-deadline strong,
+.do-project-context-activity strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.do-project-context-deadline span,
+.do-project-context-activity small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.do-project-context-activity {
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  border-left: 0;
+  padding-left: 0;
+}
+.do-project-context-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.do-items-center.is-notion-surface .do-kanban-board {
+  gap: 12px;
+  padding: 8px 4px 16px;
+  mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 8px), transparent);
+}
+.do-kanban-col-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+.do-kanban-col-dot.is-backlog { background: var(--text-muted); }
+.do-kanban-col-dot.is-doing { background: var(--accent); }
+.do-kanban-col-dot.is-blocked { background: var(--status-danger); }
+.do-kanban-col-dot.is-done { background: var(--status-success); }
+.do-kanban-card.is-notion-card {
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: none;
+  transition: box-shadow 150ms ease-out;
+}
+.do-kanban-card.is-notion-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+.do-kanban-card.is-notion-card .do-kanban-card-more {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.do-kanban-card.is-notion-card:hover .do-kanban-card-more,
+.do-kanban-card.is-notion-card:focus-within .do-kanban-card-more {
+  opacity: 1;
+}
+.do-kanban-kind-chip {
+  display: inline-flex;
+  margin-bottom: 4px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  padding: 1px 8px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+}
+.do-kanban-card-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .do-gantt-focus-bar strong {
   color: var(--text-primary);
   font-size: 13px;
@@ -11586,30 +11850,32 @@ a {
 }
 .cw-toast {
   position: fixed;
-  top: 16px;
-  left: 50%;
+  right: 16px;
+  bottom: 16px;
+  top: auto;
+  left: auto;
   z-index: 80;
   display: flex;
-  width: min(520px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
   align-items: center;
   gap: 8px;
   margin: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 12px;
   background: var(--surface-0);
-  padding: 8px 10px;
-  box-shadow: var(--shadow-md, 0 8px 24px rgba(17, 24, 39, 0.12));
-  transform: translateX(-50%);
-  animation: cw-toast-in 160ms ease-out;
+  padding: 10px 12px;
+  box-shadow: var(--shadow-md);
+  transform: none;
+  animation: cw-toast-in 200ms ease-out;
 }
 @keyframes cw-toast-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
 }
 .cw-toast--green {

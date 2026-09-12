@@ -2442,15 +2442,18 @@ export function WorkItemsCenter({
       const names = Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee];
       return names.some((name: string) => String(name || "").toLowerCase() === viewer.displayName.toLowerCase());
     });
+    const description = String(item.description || item.notes || "").trim();
     return (
-      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""}`} data-testid="kanban-card" key={item.id}>
+      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""} ${notionSurface ? "is-notion-card" : ""}`} data-testid="kanban-card" key={item.id}>
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
         <div className="do-kanban-card-head">
           <span onPointerDown={stopCardDrag}>{renderBulkSelect(item)}</span>
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
+            {notionSurface ? <span className="do-kanban-kind-chip">{workItemLabel(kind)}</span> : null}
             <strong>{title(item)}</strong>
+            {notionSurface && description ? <small className="do-kanban-card-desc">{description}</small> : null}
           </button>
-          {renderDeleteButton(item)}
+          <span className="do-kanban-card-more">{renderDeleteButton(item)}</span>
         </div>
         {checks.total > 0 && (
           <div className="do-kanban-card-meta" onPointerDown={stopCardDrag}>
@@ -2510,6 +2513,9 @@ export function WorkItemsCenter({
             <time>{dueText || "Date"}</time>
             <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />
           </label>
+          {notionSurface && priority !== "N/A" ? (
+            <span className={`do-kanban-priority-pill is-${priority}`}>P{priority}</span>
+          ) : null}
         </div>
       </article>
     );
@@ -2532,8 +2538,9 @@ export function WorkItemsCenter({
           {...provided.droppableProps}
         >
           <header>
+            <i className={`do-kanban-col-dot is-${columnKey}`} aria-hidden="true" />
             <strong>{kanbanColumnLabels[columnKey] || columnTitle}</strong>
-            <span className={tone === "ok" ? "" : `is-wip-${tone}`} title={kanbanWipLimits[columnKey] ? "Work in progress limit" : "Cards in this column"}>
+            <span className={`do-notion-num ${tone === "ok" ? "" : `is-wip-${tone}`}`} title={kanbanWipLimits[columnKey] ? "Work in progress limit" : "Cards in this column"}>
               {wipCaption(wipCount, kanbanWipLimits[columnKey])}
             </span>
             <button
@@ -2601,7 +2608,7 @@ export function WorkItemsCenter({
                 }}
                 type="button"
               >
-                <Plus size={14} /> Add task
+                <Plus size={14} /> {notionSurface ? "Add new task" : "Add task"}
               </button>
             )}
           </div>

@@ -18,8 +18,9 @@ test("project Items tab fills leftover console height instead of leaving a white
   const controls = readFileSync(resolve("src/components/ProjectControls.tsx"), "utf8");
   assert.match(surfaces, /is-items-tab/);
   assert.match(css, /\.do-main > \.do-project-console\.is-items-tab/);
-  assert.match(css, /\.do-project-console\.is-items-tab > \.do-console-section\[data-testid="project-items"\]/);
-  assert.match(controls, /maxHeight/);
+  assert.match(css, /\.do-project-items-layout/);
+  assert.match(css, /\.do-project-items-layout > \.do-notion-body/);
+  assert.match(surfaces, /data-testid="project-items"/);
   assert.match(controls, /requestAnimationFrame/);
   assert.match(controls, /createPortal/);
 });
