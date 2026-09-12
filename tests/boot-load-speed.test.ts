@@ -10,7 +10,7 @@ test("auth bootstrap opens workspace before invite waterfall", () => {
   assert.match(source, /Promise\.allSettled\(\[/);
   assert.match(source, /openedEarly/);
   assert.match(source, /acceptEmailAndPendingInvites/);
-  assert.match(source, /reload \!== false/);
+  assert.match(source, /options\?\.reload !== false/);
 });
 
 test("workspace data listeners use a stable access key", () => {
