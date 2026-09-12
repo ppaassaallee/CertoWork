@@ -36,8 +36,10 @@ test("canonical IA routes resolve to mental-model lenses", () => {
     section: "home",
   });
   assert.deepEqual(resolveDelivereeLens("/agents/automations"), {
-    kind: "agents",
-    section: "automations",
+    kind: "routines",
+  });
+  assert.deepEqual(resolveDelivereeLens("/rutinas"), {
+    kind: "routines",
   });
   assert.deepEqual(resolveDelivereeLens("/agents/activity"), {
     kind: "agents",
@@ -74,8 +76,7 @@ test("legacy URLs alias into the new IA", () => {
     section: "inbox",
   });
   assert.deepEqual(resolveDelivereeLens("/more/automations"), {
-    kind: "agents",
-    section: "automations",
+    kind: "routines",
   });
   assert.deepEqual(resolveDelivereeLens("/digest"), {
     kind: "agents",
@@ -100,7 +101,8 @@ test("lens writers prefer semantic canonical paths", () => {
   assert.equal(lensToPath({ kind: "notes" }), "/notes");
   assert.equal(lensToPath({ kind: "work", section: "portfolio" }), "/projects");
   assert.equal(lensToPath({ kind: "agents", section: "home" }), "/agents");
-  assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/agents/automations");
+  assert.equal(lensToPath({ kind: "agents", section: "automations" }), "/rutinas");
+  assert.equal(lensToPath({ kind: "routines" }), "/rutinas");
   assert.equal(lensToPath({ kind: "more", section: "workspace" }), "/workspace");
   assert.equal(lensToPath({ kind: "invoices" }), "/invoices");
   assert.equal(lensToPath({ kind: "feedback", section: "submit" }), "/supportops");

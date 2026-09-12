@@ -5,8 +5,11 @@ import { readFileSync } from "node:fs";
 import {
   buildDryRunPreview,
   compileRoutineSentence,
+  computeNextRunAt,
   recipesForEntity,
+  relativeNextRunLabel,
   ROUTINE_RECIPES,
+  routineStatusTone,
 } from "../src/lib/routines";
 
 test("curated recipes cover project and portfolio", () => {
@@ -72,6 +75,16 @@ test("dry-run preview lists read/think/draft/deliver steps", () => {
   assert.equal(preview.steps[3].kind, "deliver");
 });
 
+test("schedule helper computes a future weekday morning slot", () => {
+  const from = new Date("2026-09-14T12:00:00.000Z"); // Monday
+  const next = computeNextRunAt("0 7 * * 1-5", "America/Guatemala", from);
+  assert.ok(next);
+  assert.ok(next.getTime() > from.getTime());
+  assert.match(relativeNextRunLabel(next.toISOString(), from), /en /);
+  assert.equal(routineStatusTone("active"), "green");
+  assert.equal(routineStatusTone("failing"), "red");
+});
+
 test("project and portfolio surfaces expose the Rutina entry points", () => {
   const chrome = readFileSync(
     new URL("../src/features/projects/chrome/ProjectPageChrome.tsx", import.meta.url),
@@ -93,4 +106,23 @@ test("project and portfolio surfaces expose the Rutina entry points", () => {
   assert.match(composer, /routine-compiled-card/);
   assert.match(composer, /Probar ahora/);
   assert.match(composer, /Activar/);
+});
+
+test("Phase 2 surfaces: /rutinas home, cron trigger, and scheduled handler", () => {
+  const home = readFileSync(
+    new URL("../src/components/routines/RoutinesHome.tsx", import.meta.url),
+    "utf8",
+  );
+  const routes = readFileSync(new URL("../src/lib/delivereeRoutes.ts", import.meta.url), "utf8");
+  const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  const scheduler = readFileSync(new URL("../worker/routinesScheduler.js", import.meta.url), "utf8");
+  assert.match(home, /routines-home/);
+  assert.match(home, /Historial/);
+  assert.match(routes, /kind: "routines"/);
+  assert.match(routes, /\/rutinas/);
+  assert.match(wrangler, /\*\/5 \* \* \* \*/);
+  assert.match(worker, /async scheduled\(/);
+  assert.match(scheduler, /processDueRoutines/);
+  assert.match(scheduler, /leaseUntil/);
 });

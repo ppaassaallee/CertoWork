@@ -125,6 +125,7 @@ import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
+import { RoutinesHome } from "./routines/RoutinesHome";
 import { HomeAttention } from "../pages/HomeAttention";
 import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
 import {
@@ -359,6 +360,7 @@ export type CenterView =
   | "portfolio"
   | "project"
   | "agents"
+  | "routines"
   | "invoices"
   | "feedback"
   | "requests";
@@ -538,7 +540,7 @@ export function DelivereeWorkspace() {
       const id = projectConsoleId || (lens.kind === "project" ? lens.projectId : null);
       navigate(id ? `/work/projects/${id}` : "/projects");
     } else if (next === "approvals") navigate("/approvals");
-    else if (next === "skills") navigate("/agents/automations");
+    else if (next === "skills") navigate("/rutinas");
     else if (next === "digest") navigate("/agents/activity");
     else if (next === "workspace") navigate("/workspace");
     else if (next === "settings") navigate("/settings");
@@ -562,6 +564,8 @@ export function DelivereeWorkspace() {
             : "portfolio"
           : lens.kind === "agents"
             ? "agents"
+            : lens.kind === "routines"
+              ? "routines"
             : lens.kind === "invoices"
               ? "invoices"
             : "conversation";
@@ -580,6 +584,7 @@ export function DelivereeWorkspace() {
     else if (next === "items") navigate("/my-work");
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
+    else if (next === "routines") navigate("/rutinas");
     else if (next === "invoices") navigate("/invoices");
     else if (next === "feedback") navigate("/supportops");
     else if (next === "requests") navigate("/requests");
@@ -5204,6 +5209,13 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/projects"),
       },
       {
+        id: "nav-routines",
+        label: "Go to Rutinas",
+        group: "Navigate",
+        keywords: "routines automation schedule recipe brief",
+        onSelect: () => navigate("/rutinas"),
+      },
+      {
         id: "nav-agents",
         label: "Go to Agents",
         group: "Navigate",
@@ -5361,7 +5373,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -6038,15 +6050,16 @@ export function DelivereeWorkspace() {
                 ...(lens.kind === "notes"
                   ? [{ label: "Notes" }]
                   : []),
+                ...(lens.kind === "routines"
+                  ? [{ label: "Rutinas" }]
+                  : []),
                 ...(lens.kind === "agents"
                   ? [
                       {
                         label: "Agents",
                         onClick: () => navigate("/agents"),
                       },
-                      ...(lens.section === "automations"
-                        ? [{ label: "Automations" }]
-                        : lens.section === "activity"
+                      ...(lens.section === "activity"
                           ? [{ label: "Activity" }]
                           : []),
                     ]
@@ -6745,6 +6758,8 @@ export function DelivereeWorkspace() {
               undefined
             }
           />
+        ) : centerView === "routines" ? (
+          <RoutinesHome />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
             <AgentBuilderDraft
@@ -6766,7 +6781,7 @@ export function DelivereeWorkspace() {
               onCreateAgent={() => setAgentBuilderOpen(true)}
               onOpenActivity={() => navigate("/agents/activity")}
               onOpenApprovals={() => setPanel("approvals")}
-              onOpenAutomations={() => navigate("/agents/automations")}
+              onOpenAutomations={() => navigate("/rutinas")}
               onOpenOdysseus={() => void openChiefOfStaff()}
             />
           )

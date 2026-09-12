@@ -18,6 +18,7 @@ export type DelivereeLens =
   | { kind: "my-work"; section: MyWorkSection }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
   | { kind: "agents"; section: AgentsSection }
+  | { kind: "routines" }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
   | { kind: "invoices" }
@@ -102,19 +103,17 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   }
 
   if (
-    path === "/agents" ||
-    path === "/agents/odysseus" ||
-    path === "/work/agent-workspace"
-  ) {
-    return { kind: "agents", section: "home" };
-  }
-  if (
+    path === "/rutinas" ||
+    path === "/routines" ||
     path === "/agents/automations" ||
     path === "/skills" ||
     path === "/more/skills" ||
     path === "/more/automations"
   ) {
-    return { kind: "agents", section: "automations" };
+    return { kind: "routines" };
+  }
+  if (path === "/agents" || path === "/agents/odysseus" || path === "/work/agent-workspace") {
+    return { kind: "agents", section: "home" };
   }
   if (path === "/agents/activity" || path === "/digest" || path === "/more/updates") {
     return { kind: "agents", section: "activity" };
@@ -158,7 +157,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   if (path.startsWith("/more/")) {
     const section = path.slice("/more/".length) as MoreSection;
     if (MORE_SECTIONS.includes(section)) {
-      if (section === "automations") return { kind: "agents", section: "automations" };
+      if (section === "automations") return { kind: "routines" };
       if (section === "updates") return { kind: "agents", section: "activity" };
       return { kind: "more", section };
     }
@@ -205,10 +204,11 @@ export function lensToPath(lens: DelivereeLens) {
     return "/my-work";
   }
   if (lens.kind === "agents") {
-    if (lens.section === "automations") return "/agents/automations";
+    if (lens.section === "automations") return "/rutinas";
     if (lens.section === "activity") return "/agents/activity";
     return "/agents";
   }
+  if (lens.kind === "routines") return "/rutinas";
   if (lens.kind === "work") {
     if (lens.section === "issues") return "/my-work";
     if (lens.section === "intake") return "/my-work/inbox";

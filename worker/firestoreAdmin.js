@@ -233,3 +233,40 @@ export async function firestorePatchDocument(env, collection, docId, data) {
 export function firestoreAdminConfigured(env = {}) {
   return Boolean(parseServiceAccount(env));
 }
+
+/** Structured query against a collection. Returns decoded docs. */
+export async function firestoreRunQuery(env, structuredQuery) {
+  const serviceAccount = parseServiceAccount(env);
+  if (!serviceAccount) {
+    return { ok: false, reason: "FIREBASE_SERVICE_ACCOUNT not configured", documents: [] };
+  }
+  const token = await googleAccessToken(serviceAccount);
+  const project = projectId(env);
+  const database = databaseId(env);
+  const parent = `projects/${project}/databases/${encodeURIComponent(database)}/documents`;
+  const response = await fetch(`https://firestore.googleapis.com/v1/${parent}:runQuery`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  const payload = await response.json().catch(() => ([]));
+  if (!response.ok) {
+    return {
+      ok: false,
+      reason: payload?.error?.message || `Firestore query failed (${response.status})`,
+      documents: [],
+    };
+  }
+  const rows = Array.isArray(payload) ? payload : [];
+  const documents = rows
+    .filter((row) => row.document)
+    .map((row) => {
+      const name = String(row.document.name || "");
+      const id = name.split("/").pop() || "";
+      return { id, ...decodeFirestoreDocument(row.document.fields || {}) };
+    });
+  return { ok: true, documents };
+}
