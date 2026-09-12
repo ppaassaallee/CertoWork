@@ -17,6 +17,7 @@ import {
   ListChecks,
   MoreHorizontal,
   Plus,
+  Sparkles,
   Star,
   Zap,
 } from "../../../components/ui/Icon";
@@ -177,6 +178,7 @@ type ProjectPageHeaderProps = {
   onToggleMore: () => void;
   moreMenu: ReactNode;
   titleEditor: ReactNode;
+  onOpenRoutine?: () => void;
 };
 
 export function ProjectPageHeader({
@@ -188,6 +190,7 @@ export function ProjectPageHeader({
   onToggleMore,
   moreMenu,
   titleEditor,
+  onOpenRoutine,
 }: ProjectPageHeaderProps) {
   const [descExpanded, setDescExpanded] = useState(false);
   const initial = projectDisplayName(project).charAt(0).toUpperCase() || "P";
@@ -241,6 +244,19 @@ export function ProjectPageHeader({
 
       <div className="do-project-page-header-aside">
         <span className={`do-project-health-chip is-${healthTone}`}>{healthLabel}</span>
+        {onOpenRoutine ? (
+          <button
+            aria-label="Rutina"
+            className="do-project-routine-btn"
+            data-testid="project-routine-button"
+            onClick={onOpenRoutine}
+            title="Rutina"
+            type="button"
+          >
+            <Sparkles size={14} />
+            Rutina
+          </button>
+        ) : null}
         <div className="do-console-more">
           <button
             aria-expanded={moreOpen}

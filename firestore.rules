@@ -1238,6 +1238,21 @@ service cloud.firestore {
       allow update: if canAccessBoldiRecord(resource.data);
       allow delete: if false;
     }
+    match /routines/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data)
+        && canAccessBoldiRecord(incoming())
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if canAccessBoldiRecord(resource.data);
+    }
+    match /routine_runs/{id} {
+      allow create: if canAccessBoldiRecord(incoming());
+      allow get, list: if canAccessBoldiRecord(resource.data);
+      allow update: if canAccessBoldiRecord(resource.data);
+      allow delete: if false;
+    }
     match /event_outbox/{id} {
       allow read, write: if false;
     }
