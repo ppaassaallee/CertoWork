@@ -109,7 +109,8 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { ControlledSelect } from "./ControlledSelect";
 import { WorkItemsCenter } from "./WorkItemsCenter";
-import { RoutineComposer } from "./routines/RoutineComposer";
+import { useRoutineHost } from "./routines/RoutineHost";
+import { RoutinesStrip } from "./routines/RoutinesStrip";
 import type { WorkItemsViewMode } from "../lib/itemViewMemory";
 import { canDeleteProject } from "../lib/projectPermissions";
 import {
@@ -1559,7 +1560,7 @@ export function ProjectConsolePanel({
   const [notionSearchOpen, setNotionSearchOpen] = useState(false);
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [notionSortOpen, setNotionSortOpen] = useState(false);
-  const [routineOpen, setRoutineOpen] = useState(false);
+  const { openRoutine } = useRoutineHost();
   const [shareMemberId, setShareMemberId] = useState("");
   const [docType, setDocType] = useState<(typeof PROJECT_RESOURCE_TYPES)[number]["value"]>("note");
   const [docTitle, setDocTitle] = useState("");
@@ -1782,7 +1783,23 @@ export function ProjectConsolePanel({
               <button
                 onClick={() => {
                   setMoreOpen(false);
-                  setRoutineOpen(true);
+                  openRoutine({
+                    entityType: "project",
+                    entityId: String(project.id),
+                    entityTitle: projectDisplayName(project),
+                    contextStats: {
+                      itemCount: tasks.length,
+                      blockedCount: tasks.filter((task) => taskWorkLane(task) === "blocked").length,
+                      overdueCount: tasks.filter((task) => {
+                        const due = String(task?.dueDate || task?.targetDate || "").slice(0, 10);
+                        if (!due) return false;
+                        return (
+                          due < new Date().toISOString().slice(0, 10) &&
+                          taskWorkLane(task) !== "done"
+                        );
+                      }).length,
+                    },
+                  });
                 }}
                 role="menuitem"
                 type="button"
@@ -1897,7 +1914,22 @@ export function ProjectConsolePanel({
           ) : null
         }
         moreOpen={moreOpen}
-        onOpenRoutine={() => setRoutineOpen(true)}
+        onOpenRoutine={() =>
+          openRoutine({
+            entityType: "project",
+            entityId: String(project.id),
+            entityTitle: projectDisplayName(project),
+            contextStats: {
+              itemCount: tasks.length,
+              blockedCount: tasks.filter((task) => taskWorkLane(task) === "blocked").length,
+              overdueCount: tasks.filter((task) => {
+                const due = String(task?.dueDate || task?.targetDate || "").slice(0, 10);
+                if (!due) return false;
+                return due < new Date().toISOString().slice(0, 10) && taskWorkLane(task) !== "done";
+              }).length,
+            },
+          })
+        }
         onToggleMore={() => setMoreOpen((open) => !open)}
         project={project}
         titleEditor={
@@ -1908,25 +1940,6 @@ export function ProjectConsolePanel({
             value={projectDisplayName(project)}
           />
         }
-      />
-
-      <RoutineComposer
-        contextStats={{
-          itemCount: tasks.length,
-          blockedCount: tasks.filter((task) => taskWorkLane(task) === "blocked").length,
-          overdueCount: tasks.filter((task) => {
-            const due = String(task?.dueDate || task?.targetDate || "").slice(0, 10);
-            if (!due) return false;
-            return due < new Date().toISOString().slice(0, 10) && taskWorkLane(task) !== "done";
-          }).length,
-        }}
-        onClose={() => setRoutineOpen(false)}
-        open={routineOpen}
-        scope={{
-          entityType: "project",
-          entityId: String(project.id),
-          entityTitle: projectDisplayName(project),
-        }}
       />
 
       <ProjectSummaryStrip
@@ -1948,6 +1961,12 @@ export function ProjectConsolePanel({
           </label>
         }
         tasks={tasks}
+      />
+
+      <RoutinesStrip
+        entityId={String(project.id)}
+        entityTitle={projectDisplayName(project)}
+        entityType="project"
       />
 
       {(tab === "items" || tab === "docs") && (
@@ -2128,6 +2147,7 @@ export function ProjectConsolePanel({
             onGanttFocusChange={setGanttFocus}
             onInviteAssigneeEmail={onInviteAssigneeEmail}
             onNotionFilterOpenChange={setNotionFilterOpen}
+            onNotionModeChange={setNotionMode}
             onNotionSortOpenChange={setNotionSortOpen}
             onOpenCollabProject={openCollabProject}
             onOpenFinanceLine={openFinanceLine}
@@ -5168,7 +5188,7 @@ export function ProjectCommandCenter({
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [askDraft, setAskDraft] = useState("");
-  const [portfolioRoutineOpen, setPortfolioRoutineOpen] = useState(false);
+  const { openRoutine: openPortfolioRoutine } = useRoutineHost();
   const [askPanel, setAskPanel] = useState<{
     prompt: string;
     answer: string;
@@ -5993,34 +6013,32 @@ export function ProjectCommandCenter({
                 <button
                   className="do-project-routine-btn"
                   data-testid="portfolio-routine-button"
-                  onClick={() => setPortfolioRoutineOpen(true)}
+                  onClick={() =>
+                    openPortfolioRoutine({
+                      entityType: "portfolio",
+                      entityId: null,
+                      entityTitle: "Portafolio",
+                      contextStats: {
+                        itemCount: openProjects.length,
+                        blockedCount: openProjects.filter(
+                          (project) =>
+                            String(project.health || "") === "blocked" ||
+                            String(project.health || "") === "at_risk",
+                        ).length,
+                        overdueCount: 0,
+                      },
+                    })
+                  }
                   type="button"
                 >
                   <Sparkles size={13} />
-                  Rutina
+                  <span>Rutina</span>
                 </button>
                 <button className="do-pm-ask-submit" type="submit">
                   Ask
                 </button>
               </form>
             )}
-
-            <RoutineComposer
-              contextStats={{
-                itemCount: openProjects.length,
-                blockedCount: openProjects.filter(
-                  (project) => String(project.health || "") === "blocked" || String(project.health || "") === "at_risk",
-                ).length,
-                overdueCount: 0,
-              }}
-              onClose={() => setPortfolioRoutineOpen(false)}
-              open={portfolioRoutineOpen}
-              scope={{
-                entityType: "portfolio",
-                entityId: null,
-                entityTitle: "Portafolio",
-              }}
-            />
 
             <div className="do-portfolio-dashboard-grid">
               <section className="do-portfolio-card">

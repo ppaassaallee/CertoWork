@@ -193,14 +193,14 @@ export function RoutineComposer({
                 ? [questionAnswer.trim()]
                 : compiled.spec.deliverable.to,
           },
-          // Phase 1: save as draft only — Activar marks intent; scheduler is Phase 2.
-          status: "draft",
+          status: "active",
         },
       };
       const id = await saveRoutineDraft({
         workspaceId: workspace.id,
         ownerUserId: user.uid,
         compiled: next,
+        activate: true,
       });
       setSavedId(id);
       onSaved?.(id);
@@ -320,7 +320,7 @@ export function RoutineComposer({
             {error ? <p className="do-routine-error">{error}</p> : null}
             {savedId ? (
               <p className="do-routine-saved" data-testid="routine-saved">
-                Guardada como borrador. El scheduler (activar en horario) llega en la siguiente fase.
+                Activada. Próxima corrida según el horario de la tarjeta. Ver todas en Rutinas.
               </p>
             ) : null}
 

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ChevronRight,
   Plus,
+  Sparkles,
   WandSparkles,
 } from "../ui/Icon";
 import { OdysseusMark } from "../odiseus/OdysseusMark";
@@ -17,6 +18,12 @@ import {
   formatAgentActivityLine,
   formatRelativeTime,
 } from "../../lib/agentActivity";
+import {
+  relativeNextRunLabel,
+  routineStatusTone,
+  type RoutineSpec,
+} from "../../lib/routines";
+import { useRoutineHost } from "../routines/RoutineHost";
 
 export type AgentListItem = {
   id: string;
@@ -98,6 +105,13 @@ function agentRowMetric(input: {
   return { label: agentStatusLabel(agent.status), tone: "gray" };
 }
 
+function routineAsAgentStatus(status: string): AgentListItem["status"] {
+  if (status === "active") return "published";
+  if (status === "paused") return "paused";
+  if (status === "failing") return "testing";
+  return "draft";
+}
+
 export function AgentsLibrary({
   onOpenOdysseus,
   onOpenAutomations,
@@ -107,6 +121,7 @@ export function AgentsLibrary({
   activityItems = [],
   pendingApprovals = 0,
   viewerUserId,
+  routines = [],
 }: {
   onOpenOdysseus: () => void;
   onOpenAutomations: () => void;
@@ -116,8 +131,11 @@ export function AgentsLibrary({
   activityItems?: AgentActivityItem[];
   pendingApprovals?: number;
   viewerUserId?: string | null;
+  routines?: RoutineSpec[];
 }) {
   const runsToday = countAgentRunsToday(activityItems, "odysseus");
+  const { openRoutine } = useRoutineHost();
+  const activeRoutines = routines.filter((routine) => routine.status === "active").length;
 
   return (
     <div className="do-agents-home" data-testid="agents-home">
@@ -126,7 +144,8 @@ export function AgentsLibrary({
           <div>
             <strong>{t("navAgents")}</strong>
             <p>
-              Agents own outcomes. Hermes executes; Certo governs data and approvals.
+              Agents and Rutinas own outcomes. Odysseus investigates; Rutinas run on a
+              schedule or event — both wait for approval when they write.
             </p>
           </div>
           <button
@@ -211,6 +230,112 @@ export function AgentsLibrary({
           </div>
         </section>
 
+        <section className="do-agents-section do-agents-routines-section" data-testid="agents-routines">
+          <h3>
+            <span>Rutinas</span>
+            <button
+              className="cw-btn cw-btn-ghost cw-btn-sm"
+              onClick={() =>
+                openRoutine({
+                  entityType: "portfolio",
+                  entityId: null,
+                  entityTitle: "Portafolio",
+                })
+              }
+              type="button"
+            >
+              <Sparkles size={13} /> Nueva
+            </button>
+          </h3>
+          <p className="do-agents-routines-lead">
+            Una frase → una tarjeta. Corren solas; los pasos se ven en cada corrida.
+            {activeRoutines ? ` ${activeRoutines} activas.` : ""}
+          </p>
+          <div className="do-agents-list" role="list">
+            {routines.length === 0 ? (
+              <div className="do-agents-row" role="listitem">
+                <button
+                  className="do-agents-row-hit"
+                  onClick={onOpenAutomations}
+                  type="button"
+                >
+                  <span className="do-agents-row-icon" aria-hidden>
+                    <Sparkles size={18} />
+                  </span>
+                  <span className="do-agents-row-main">
+                    <span className="do-agents-row-title">
+                      <strong>Abrir Rutinas</strong>
+                      <StatusLight status="blue" label="Recetas" size="sm" />
+                    </span>
+                    <small>Brief matutino, vigía de fechas, cazador de bloqueos…</small>
+                  </span>
+                </button>
+                <button
+                  aria-label="Open Rutinas"
+                  className="do-agents-row-chev"
+                  onClick={onOpenAutomations}
+                  type="button"
+                >
+                  <ChevronRight size={14} aria-hidden />
+                </button>
+              </div>
+            ) : (
+              routines.slice(0, 8).map((routine) => {
+                const status = routineAsAgentStatus(routine.status);
+                const tone = routineStatusTone(routine.status);
+                return (
+                  <div
+                    className="do-agents-row"
+                    data-testid={`routine-row-${routine.id}`}
+                    key={routine.id}
+                    role="listitem"
+                  >
+                    <button
+                      className="do-agents-row-hit"
+                      onClick={onOpenAutomations}
+                      type="button"
+                    >
+                      <span className="do-agents-row-icon" aria-hidden>
+                        <Sparkles size={18} />
+                      </span>
+                      <span className="do-agents-row-main">
+                        <span className="do-agents-row-title">
+                          <strong>{routine.title}</strong>
+                          <StatusLight
+                            status={
+                              tone === "green"
+                                ? "green"
+                                : tone === "red"
+                                  ? "amber"
+                                  : agentStatusTone(status)
+                            }
+                            label={routine.status}
+                            size="sm"
+                          />
+                        </span>
+                        <small>
+                          {routine.scope?.entityTitle || routine.scope?.entityType || "—"}
+                          {routine.status === "active"
+                            ? ` · ${relativeNextRunLabel(routine.nextRunAt)}`
+                            : ""}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      aria-label={`Open ${routine.title}`}
+                      className="do-agents-row-chev"
+                      onClick={onOpenAutomations}
+                      type="button"
+                    >
+                      <ChevronRight size={14} aria-hidden />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
         {activityItems.length > 0 && (
           <section className="do-agents-recent" data-testid="agents-activity">
             <h3>Recent activity</h3>
@@ -240,7 +365,7 @@ export function AgentsLibrary({
 
         <nav className="do-agents-foot" aria-label="Agent platform">
           <button onClick={onOpenAutomations} type="button">
-            <WandSparkles size={13} /> {t("agentsAutomations")}
+            <Sparkles size={13} /> Rutinas
           </button>
           <button onClick={onOpenActivity} type="button">
             <Activity size={13} /> {t("agentsActivity")}
@@ -260,6 +385,7 @@ export function AgentBuilderDraft({
   onChange: (value: string) => void;
   onContinue: () => void;
 }) {
+  const { openRoutine } = useRoutineHost();
   return (
     <div className="do-agent-builder" data-testid="agent-builder">
       <h2>What outcome should this agent own?</h2>
@@ -274,14 +400,30 @@ export function AgentBuilderDraft({
         rows={5}
         value={outcome}
       />
-      <button
-        className="cw-btn cw-btn-primary"
-        disabled={!outcome.trim()}
-        onClick={onContinue}
-        type="button"
-      >
-        Draft agent
-      </button>
+      <div className="do-agent-builder-actions">
+        <button
+          className="cw-btn cw-btn-primary"
+          disabled={!outcome.trim()}
+          onClick={onContinue}
+          type="button"
+        >
+          Draft agent
+        </button>
+        <button
+          className="cw-btn cw-btn-ghost"
+          onClick={() =>
+            openRoutine({
+              entityType: "portfolio",
+              entityId: null,
+              entityTitle: "Portafolio",
+              contextStats: undefined,
+            })
+          }
+          type="button"
+        >
+          <Sparkles size={13} /> Mejor como Rutina
+        </button>
+      </div>
     </div>
   );
 }

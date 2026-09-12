@@ -3453,7 +3453,7 @@ a {
   max-height: 64px;
   padding: 10px 16px 6px;
   border-bottom: 0;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   z-index: 5;
 }
@@ -3581,9 +3581,11 @@ a {
 .do-project-page-header-aside {
   display: flex;
   flex: none;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   padding-top: 0;
+  min-width: 0;
 }
 .do-project-kpi-row,
 .do-project-date-pill {
@@ -4130,10 +4132,6 @@ a {
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
-.do-notion-table td:has(.do-notion-name-cell),
-.do-notion-table td:has(.do-notion-row-attrs) {
-  overflow: visible;
-}
 .do-notion-table tr.is-selected td {
   background: color-mix(in srgb, var(--accent) 6%, var(--surface-0));
 }
@@ -4142,63 +4140,6 @@ a {
   min-width: 0;
   align-items: center;
   gap: 6px;
-}
-.do-notion-drag-handle {
-  display: grid;
-  width: 16px;
-  height: 20px;
-  flex: none;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: var(--text-muted);
-  cursor: grab;
-  opacity: 0.7;
-}
-.do-notion-name-cell:hover .do-notion-drag-handle,
-.do-notion-table tr.is-dragging .do-notion-drag-handle {
-  opacity: 1;
-  color: var(--text-primary);
-}
-.do-notion-drag-handle:active {
-  cursor: grabbing;
-}
-.do-notion-row-attrs {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 2px;
-  position: relative;
-  z-index: 2;
-}
-.do-notion-row-attrs .do-item-attrs {
-  justify-content: flex-start;
-  flex-wrap: nowrap;
-  gap: 0;
-}
-.do-notion-row-attrs .do-item-attr.is-off .do-item-attr-btn,
-.do-notion-row-attrs .do-item-attr.is-assignees.is-off .cw-multi-assignee-trigger {
-  opacity: 0.55;
-  filter: none;
-}
-.do-notion-row-attrs .do-item-attr.is-parent .do-item-attr-btn {
-  color: var(--accent);
-  opacity: 0.9;
-}
-.do-notion-row-attrs .do-item-attr-pop {
-  z-index: 80;
-}
-.do-notion-table tr.is-dragging td {
-  opacity: 0.45;
-}
-.do-notion-table tr.is-drop-child td {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-0));
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.do-notion-table tr.is-drop-reorder td {
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 .do-work-type-glyph {
   display: inline-flex;
@@ -19103,6 +19044,7 @@ a {
   align-items: center;
   gap: 5px;
   min-height: 28px;
+  flex: none;
   border: 0;
   border-radius: 6px;
   background: var(--accent-soft, #e7f3f8);
@@ -19112,9 +19054,25 @@ a {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  z-index: 6;
+}
+.do-project-routine-btn.is-compact {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
 }
 .do-project-routine-btn:hover {
   background: color-mix(in srgb, var(--accent) 18%, var(--surface-0));
+}
+@media (max-width: 900px) {
+  .do-project-page-header-aside .do-project-routine-btn span {
+    display: none;
+  }
+  .do-project-page-header-aside .do-project-routine-btn {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 .do-routine-overlay {
   position: fixed;
@@ -19123,6 +19081,103 @@ a {
   display: grid;
   place-items: start center;
   padding: 10vh 16px 24px;
+}
+.do-routines-strip {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+.do-routines-strip > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.do-routines-strip > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.do-routines-strip > header button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-routines-strip ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.do-routines-strip li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.do-routines-strip li .do-routine-status {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex: none;
+}
+.do-routines-strip li .do-routine-status.is-green { background: var(--status-success, #16a34a); }
+.do-routines-strip li .do-routine-status.is-amber { background: var(--status-warning, #d97706); }
+.do-routines-strip li .do-routine-status.is-red { background: var(--status-danger, #dc2626); }
+.do-routines-strip li .do-routine-status.is-gray { background: var(--text-muted, #94a3b8); }
+.do-routines-strip li b {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.do-routines-strip li small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.do-routines-analytics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+.do-routines-analytics div {
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+}
+.do-routines-analytics span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.do-routines-analytics b {
+  font-size: 16px;
+}
+@media (max-width: 720px) {
+  .do-routines-analytics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.do-agents-routines-section {
+  margin-top: 18px;
+}
+.do-agents-routines-section h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .do-routine-backdrop {
   position: absolute;
@@ -19366,3 +19421,216 @@ a {
 .do-pm-ask-bar .do-project-routine-btn {
   flex: none;
 }
+
+/* —— Rutinas home (Phase 2) —— */
+.do-routines-home {
+  display: grid;
+  gap: 16px;
+  padding: 16px 20px 28px;
+  min-height: 0;
+  overflow: auto;
+}
+.do-routines-home-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.do-routines-home-head h1 {
+  margin: 4px 0 2px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.do-routines-home-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.do-routines-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+.do-routines-tabs button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.do-routines-tabs button.is-active {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.do-routines-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .do-routines-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.do-routines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.do-routines-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: left;
+}
+.do-routines-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.do-routines-table tr.is-selected td {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-0));
+}
+.do-routines-table td button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+.do-routines-table td small {
+  color: var(--text-muted);
+}
+.do-routines-table td:last-child button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+.do-routines-table td:last-child button:hover {
+  background: var(--surface-1);
+}
+.do-routine-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+.do-routine-status.is-green {
+  background: var(--status-success-soft, #dbeddb);
+  color: var(--status-success, #1c7a52);
+}
+.do-routine-status.is-amber {
+  background: var(--status-warning-soft, #fdecc8);
+  color: var(--status-warning, #9f6b00);
+}
+.do-routine-status.is-red {
+  background: var(--status-danger-soft, #ffe2dd);
+  color: var(--status-danger, #c4554d);
+}
+.do-routine-status.is-gray {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.do-routines-detail {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+}
+.do-routines-detail > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.do-routines-detail > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.do-routines-run-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.do-routines-run-list li {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-1);
+  font-size: 12px;
+}
+.do-routines-run-list small {
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+.do-routines-empty {
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 48px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.do-routines-recipes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.do-routines-recipes-grid article {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+}
+.do-routines-recipes-grid p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.do-routines-recipes-grid small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.do-routines-recipes-grid button {
+  justify-self: start;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  padding: 6px 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-agents-routines-lead { margin: 0 0 10px; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
+.do-agent-builder-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.do-invoice-head .do-project-routine-btn { margin-top: 10px; }
