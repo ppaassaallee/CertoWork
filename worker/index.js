@@ -10,7 +10,7 @@ import {
 } from "./collab.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
-import { processDueRoutines } from "./routinesScheduler.js";
+import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1818,11 +1818,14 @@ const worker = {
     // Cloudflare Cron Trigger (*/5) — drain due Certo Rutinas.
     const run = async () => {
       try {
+        const events = await processEventOutbox(env, {
+          sendEmail: sendBrevoTransactionalEmail,
+        });
         const result = await processDueRoutines(env, {
           sendEmail: sendBrevoTransactionalEmail,
         });
-        console.log("[routines.scheduled]", JSON.stringify(result));
-        return result;
+        console.log("[routines.scheduled]", JSON.stringify({ events, result }));
+        return { events, result };
       } catch (error) {
         console.error(
           "[routines.scheduled] failed",

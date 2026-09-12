@@ -9,6 +9,7 @@ import {
   Plus,
   Send,
 } from "./ui/Icon";
+import { RoutineLaunchButton } from "./routines/RoutineHost";
 import {
   INVOICE_EXCEPTION_CODES,
   canTransitionInvoice,
@@ -158,6 +159,14 @@ export function InvoiceCenter({
           does: billed, sent, pending approval, approved, paid — or rejected, voided, or
           held as a problem. Clients can update payment from a share link.
         </p>
+        <RoutineLaunchButton
+          scope={{
+            entityType: "invoice",
+            entityId: null,
+            entityTitle: "Facturas",
+          }}
+          testId="invoice-routine-button"
+        />
       </header>
 
       <div className="do-invoice-tiles" role="tablist" aria-label="Invoice queue">

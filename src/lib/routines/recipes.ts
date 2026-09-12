@@ -1,6 +1,6 @@
 import type { RoutineEntityType, RoutineRecipe } from "./types";
 
-/** Curated Phase-1 recipes (project + portfolio). */
+/** Curated recipes — project, portfolio, task, note, request, invoice. */
 export const ROUTINE_RECIPES: RoutineRecipe[] = [
   {
     id: "brief-matutino",
@@ -22,7 +22,7 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     id: "cazador-bloqueos",
     title: "Cazador de bloqueos",
     sentence: "Cuando un ítem se bloquee, avisame por correo con el motivo y una sugerencia de desbloqueo",
-    entityTypes: ["project"],
+    entityTypes: ["project", "task"],
     triggerHint: "Cuando se bloquee",
     deliverableHint: "Correo al dueño",
   },
@@ -50,6 +50,54 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     triggerHint: "Cada 3 días",
     deliverableHint: "Propuestas (pide aprobación)",
   },
+  {
+    id: "preparar-sprint",
+    title: "Preparar el sprint",
+    sentence: "Cada 2 semanas el lunes proponé en una nota qué entra al sprint, qué no, y los riesgos",
+    entityTypes: ["project"],
+    triggerHint: "Cada 2 semanas",
+    deliverableHint: "Nota con propuesta",
+  },
+  {
+    id: "item-pulse",
+    title: "Pulso del ítem",
+    sentence: "Cada mañana avisame por comentario si este ítem está bloqueado o vencido y sugerí el siguiente paso",
+    entityTypes: ["task"],
+    triggerHint: "Diario",
+    deliverableHint: "Comentario en el ítem",
+  },
+  {
+    id: "item-due-watch",
+    title: "Vigía de este ítem",
+    sentence: "Cuando este ítem se acerque a su fecha o se bloquee, avisame por correo",
+    entityTypes: ["task"],
+    triggerHint: "Evento",
+    deliverableHint: "Correo al dueño",
+  },
+  {
+    id: "nota-a-estado",
+    title: "Estado desde las notas",
+    sentence: "Cuando se cree una nota de reunión, proponé actualizar estado y progreso de los ítems mencionados y pedime aprobación",
+    entityTypes: ["note", "project"],
+    triggerHint: "Cuando se cree una nota",
+    deliverableHint: "Actualizar ítems (pide aprobación)",
+  },
+  {
+    id: "seguimiento-request",
+    title: "Seguimiento de request",
+    sentence: "Si esta request lleva 48 h sin respuesta, recordá al asignado por comentario; a las 96 h escalá al owner por correo",
+    entityTypes: ["request"],
+    triggerHint: "48 h / 96 h",
+    deliverableHint: "Comentario + correo",
+  },
+  {
+    id: "cobranza-factura",
+    title: "Cobranza de factura",
+    sentence: "Al vencer más 3 días prepará un borrador de recordatorio al cliente para que yo lo apruebe",
+    entityTypes: ["invoice"],
+    triggerHint: "Vencida +3 d",
+    deliverableHint: "Borrador (pide aprobación)",
+  },
 ];
 
 export function recipesForEntity(entityType: RoutineEntityType): RoutineRecipe[] {
@@ -61,4 +109,6 @@ export const COMPOSER_PLACEHOLDERS = [
   "Avisame por correo si esto se bloquea",
   "Cada 3 días revisá si hay ítems sin dueño y proponé asignarlos",
   "Cada mañana de lunes a viernes a las 7 dame el brief de este proyecto",
+  "Cuando se cree una nota de reunión, actualizá el estado de los ítems mencionados",
+  "Si esta request no tiene respuesta en 48 h, recordá al asignado",
 ];

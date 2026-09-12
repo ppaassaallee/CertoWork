@@ -1254,7 +1254,12 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /event_outbox/{id} {
-      allow read, write: if false;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow get, list: if false;
+      allow update, delete: if false;
     }
     match /agent_audit_log/{id} {
       allow read: if isSignedIn() && isWorkspaceMember(resource.data.workspaceId);

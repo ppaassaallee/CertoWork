@@ -365,3 +365,128 @@ export async function processDueRoutines(env, helpers = {}, now = new Date()) {
 
   return { ok: true, processed: results.filter((row) => row.status).length, results };
 }
+
+async function queryPendingEvents(env) {
+  return firestoreRunQuery(env, {
+    from: [{ collectionId: "event_outbox" }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: "status" },
+        op: "EQUAL",
+        value: { stringValue: "pending" },
+      },
+    },
+    limit: 20,
+  });
+}
+
+async function queryEventRoutines(env, workspaceId, eventType) {
+  return firestoreRunQuery(env, {
+    from: [{ collectionId: "routines" }],
+    where: {
+      compositeFilter: {
+        op: "AND",
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: "workspaceId" },
+              op: "EQUAL",
+              value: { stringValue: workspaceId },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "status" },
+              op: "EQUAL",
+              value: { stringValue: "active" },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "trigger.kind" },
+              op: "EQUAL",
+              value: { stringValue: "event" },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "trigger.eventType" },
+              op: "EQUAL",
+              value: { stringValue: eventType },
+            },
+          },
+        ],
+      },
+    },
+    limit: 20,
+  });
+}
+
+/**
+ * Drain event_outbox and enqueue matching event-triggered routines for immediate run.
+ */
+export async function processEventOutbox(env, helpers = {}, now = new Date()) {
+  if (!firestoreAdminConfigured(env)) {
+    return { ok: false, reason: "admin_not_configured", drained: 0 };
+  }
+  const pending = await queryPendingEvents(env);
+  if (!pending.ok) return { ok: false, reason: pending.reason, drained: 0 };
+
+  let drained = 0;
+  const triggered = [];
+  for (const event of pending.documents || []) {
+    if (!event?.id) continue;
+    const chainDepth = Number(event.chainDepth || 0);
+    if (chainDepth > 3) {
+      await firestorePatchDocument(env, "event_outbox", event.id, {
+        status: "dropped",
+        error: "chain_depth",
+        finishedAt: now.toISOString(),
+      });
+      continue;
+    }
+
+    await firestorePatchDocument(env, "event_outbox", event.id, {
+      status: "processing",
+      claimedAt: now.toISOString(),
+    });
+
+    const matches = await queryEventRoutines(env, event.workspaceId, event.eventType);
+    for (const routine of matches.documents || []) {
+      // Scope filter: portfolio/project routines match projectId; task routines match entityId.
+      const scopeType = routine.scope?.entityType;
+      const scopeId = routine.scope?.entityId;
+      if (scopeType === "task" && scopeId && scopeId !== event.entityId) continue;
+      if (scopeType === "project" && scopeId && event.projectId && scopeId !== event.projectId) continue;
+      if (scopeType === "note" && scopeId && scopeId !== event.entityId) continue;
+      if (scopeType === "request" && scopeId && scopeId !== event.entityId) continue;
+
+      const cooldown = Number(routine.trigger?.cooldownSeconds || 0);
+      if (cooldown > 0 && routine.lastRunAt) {
+        const last = new Date(routine.lastRunAt).getTime();
+        if (Number.isFinite(last) && now.getTime() - last < cooldown * 1000) continue;
+      }
+
+      // Force due now so the schedule tick / same tick can lease it.
+      await firestorePatchDocument(env, "routines", routine.id, {
+        nextRunAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+      triggered.push(routine.id);
+    }
+
+    await firestorePatchDocument(env, "event_outbox", event.id, {
+      status: "done",
+      finishedAt: now.toISOString(),
+      triggeredRoutineIds: triggered,
+    });
+    drained += 1;
+  }
+
+  // After marking due, process schedule leases in the same tick.
+  const due = triggered.length
+    ? await processDueRoutines(env, helpers, now)
+    : { ok: true, processed: 0, results: [] };
+
+  return { ok: true, drained, triggered: triggered.length, due };
+}

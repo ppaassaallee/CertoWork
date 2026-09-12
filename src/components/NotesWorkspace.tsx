@@ -19,6 +19,8 @@ import {
   Tags,
   Undo2,
 } from "./ui/Icon";
+import { RoutineLaunchButton } from "./routines/RoutineHost";
+import { emitDomainEvent } from "../lib/routines";
 import {
   addDoc,
   collection,
@@ -298,6 +300,14 @@ export function NotesWorkspace({
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    void emitDomainEvent({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      eventType: "note.created",
+      entityType: "note",
+      entityId: ref.id,
+      projectId: activeProject?.id || null,
+    });
     setNewNoteTitle("");
     setSelectedNoteId(ref.id);
   };
@@ -504,6 +514,15 @@ export function NotesWorkspace({
                 />
               </div>
               <div className="do-notes-actions">
+                <RoutineLaunchButton
+                  compact
+                  scope={{
+                    entityType: "note",
+                    entityId: String(selectedNoteId || ""),
+                    entityTitle: editor.title || "Nota",
+                  }}
+                  testId="note-routine-button"
+                />
                 <button aria-label={inkOpen ? "Close handwriting" : "Handwrite"} className="do-icon-button" onClick={() => setInkOpen((open) => !open)} title={inkOpen ? "Close handwriting" : "Handwrite"} type="button"><PenLine size={14} /></button>
                 <button aria-label="Analyze note" className="do-icon-button do-mobile-advanced" onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} title="Analyze note" type="button"><Sparkles size={14} /></button>
                 <button className="do-mobile-advanced" onClick={() => onAsk(`Extract actionable tasks, decisions, and follow-ups from this notebook note. Keep changes pending for approval:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button">Extract actions</button>

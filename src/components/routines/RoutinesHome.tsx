@@ -249,6 +249,35 @@ export function RoutinesHome() {
                 </span>
               </header>
               <p>{selected.goal}</p>
+              <div className="do-routines-analytics" data-testid="routine-analytics">
+                <div>
+                  <span>Corridas 30d</span>
+                  <b>{selected.stats?.runs30d || 0}</b>
+                </div>
+                <div>
+                  <span>% OK</span>
+                  <b>
+                    {selected.stats?.runs30d
+                      ? Math.round(
+                          (100 * Number(selected.stats.success30d || 0)) /
+                            Number(selected.stats.runs30d || 1),
+                        )
+                      : 0}
+                    %
+                  </b>
+                </div>
+                <div>
+                  <span>Acciones</span>
+                  <b>
+                    {selected.stats?.actions30d || 0}
+                    {selected.stats?.pending ? ` / ${selected.stats.pending} pend.` : ""}
+                  </b>
+                </div>
+                <div>
+                  <span>Min ahorrados</span>
+                  <b>{selected.stats?.minutesSavedEstimate || 0}</b>
+                </div>
+              </div>
               <div className="do-routine-card">
                 <div className="do-routine-card-row">
                   <span>Cuándo</span>

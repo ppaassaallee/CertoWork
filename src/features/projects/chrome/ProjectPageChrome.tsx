@@ -254,7 +254,7 @@ export function ProjectPageHeader({
             type="button"
           >
             <Sparkles size={14} />
-            Rutina
+            <span>Rutina</span>
           </button>
         ) : null}
         <div className="do-console-more">

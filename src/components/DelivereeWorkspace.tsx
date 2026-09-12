@@ -126,6 +126,11 @@ import { ActionProposal, RichText, UserMessage } from "./conversation/MessagePar
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { RoutinesHome } from "./routines/RoutinesHome";
+import { RoutineHostProvider } from "./routines/RoutineHost";
+import {
+  listRoutinesForWorkspace,
+  type RoutineSpec,
+} from "../lib/routines";
 import { HomeAttention } from "../pages/HomeAttention";
 import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
 import {
@@ -455,6 +460,7 @@ export function DelivereeWorkspace() {
   const [odiseusActivity, setOdysseusActivity] = useState<any[]>([]);
   const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
   const [odiseusSchedules, setOdysseusSchedules] = useState<any[]>([]);
+  const [agentRoutines, setAgentRoutines] = useState<RoutineSpec[]>([]);
   const [liveOdysseusSteps, setLiveOdysseusSteps] = useState<OdysseusRunStep[]>(
     [],
   );
@@ -1081,6 +1087,24 @@ export function DelivereeWorkspace() {
       member: member || null,
     }).catch(() => undefined);
   }, [user?.uid, user?.email, workspace?.id, workspaceMembers]);
+
+  useEffect(() => {
+    if (!workspace?.id || !user?.uid) {
+      setAgentRoutines([]);
+      return;
+    }
+    let cancelled = false;
+    void listRoutinesForWorkspace(workspace.id, user.uid)
+      .then((rows) => {
+        if (!cancelled) setAgentRoutines(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAgentRoutines([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace?.id, user?.uid, centerView]);
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -6777,6 +6801,7 @@ export function DelivereeWorkspace() {
             <AgentsLibrary
               activityItems={odiseusActivity}
               pendingApprovals={reviewItems.length}
+              routines={agentRoutines}
               viewerUserId={user?.uid}
               onCreateAgent={() => setAgentBuilderOpen(true)}
               onOpenActivity={() => navigate("/agents/activity")}
@@ -8432,7 +8457,7 @@ export function DelivereeWorkspace() {
   );
 
   return (
-    <>
+    <RoutineHostProvider>
       {workOpened ? (
         <div aria-hidden={onCollab} className="do-product-pane" hidden={onCollab}>
           {workPane}
@@ -8449,6 +8474,6 @@ export function DelivereeWorkspace() {
           />
         </div>
       ) : null}
-    </>
+    </RoutineHostProvider>
   );
 }

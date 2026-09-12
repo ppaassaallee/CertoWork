@@ -111,6 +111,8 @@ import { getNextOccurrence } from "../lib/recurrence-utils";
 import type { RecurrenceType } from "../types";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
+import { RoutineLaunchButton } from "./routines/RoutineHost";
+import { emitDomainEvent } from "../lib/routines";
 import { NotionProjectTable } from "./NotionProjectTable";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
@@ -4242,6 +4244,15 @@ export function WorkItemsCenter({
                 ))}
               </select>
               <div className="do-item-detail-head-actions">
+                <RoutineLaunchButton
+                  compact
+                  scope={{
+                    entityType: "task",
+                    entityId: String(selectedItem.id),
+                    entityTitle: title(selectedItem),
+                  }}
+                  testId="item-routine-button"
+                />
                 {renderDeleteButton(selectedItem)}
                 <button aria-label="Close item detail" className="do-icon-button" onClick={() => onSelectItem(null)} title="Close" type="button"><X size={14} /></button>
               </div>
@@ -4302,6 +4313,18 @@ export function WorkItemsCenter({
               const nextStatus = event.target.value;
               if (rejectWipMove(selectedItem, kanbanColumnForStatus(nextStatus))) return;
               onUpdateTask(selectedItem.id, { status: nextStatus, statusHistory: appendStatusHistory(selectedItem, nextStatus, kanbanColumnForStatus(nextStatus)), completedAt: nextStatus === "done" ? selectedItem.completedAt || new Date().toISOString() : null });
+              if (user && workspaceId) {
+                const blocked = nextStatus === "blocked" || kanbanColumnForStatus(nextStatus) === "blocked";
+                void emitDomainEvent({
+                  workspaceId,
+                  userId: user.uid,
+                  eventType: blocked ? "item.blocked" : "item.status_changed",
+                  entityType: "task",
+                  entityId: String(selectedItem.id),
+                  projectId: selectedItem.projectId || currentProject?.id || null,
+                  meta: { status: nextStatus },
+                });
+              }
             }} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>

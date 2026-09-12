@@ -11,6 +11,7 @@ import {
   Ticket,
   User,
 } from "./ui/Icon";
+import { RoutineLaunchButton } from "./routines/RoutineHost";
 import {
   TICKET_STATUSES,
   WAITING_REASONS,
@@ -240,6 +241,14 @@ export function RequestsCenter({
                     <p>{toCustomerStatus(selected)}</p>
                   </div>
                   <div className="do-requests-status-fields">
+                    <RoutineLaunchButton
+                      scope={{
+                        entityType: "request",
+                        entityId: String(selected.id),
+                        entityTitle: titleOf(selected),
+                      }}
+                      testId="request-routine-button"
+                    />
                     <label>
                       Status
                       <select

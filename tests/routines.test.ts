@@ -16,7 +16,7 @@ test("curated recipes cover project and portfolio", () => {
   assert.ok(ROUTINE_RECIPES.length >= 5);
   assert.ok(recipesForEntity("project").some((recipe) => recipe.id === "brief-matutino"));
   assert.ok(recipesForEntity("portfolio").some((recipe) => recipe.id === "pulso-portafolio"));
-  assert.equal(recipesForEntity("invoice").length, 0);
+  assert.ok(recipesForEntity("invoice").some((recipe) => recipe.id === "cobranza-factura"));
 });
 
 test("compiler turns a morning brief sentence into a weekday schedule card", () => {
@@ -85,6 +85,13 @@ test("schedule helper computes a future weekday morning slot", () => {
   assert.equal(routineStatusTone("failing"), "red");
 });
 
+test("invoice recipes exist for cobranza", () => {
+  assert.ok(recipesForEntity("invoice").some((recipe) => recipe.id === "cobranza-factura"));
+  assert.ok(recipesForEntity("task").some((recipe) => recipe.id === "item-pulse"));
+  assert.ok(recipesForEntity("request").some((recipe) => recipe.id === "seguimiento-request"));
+  assert.ok(recipesForEntity("note").some((recipe) => recipe.id === "nota-a-estado"));
+});
+
 test("project and portfolio surfaces expose the Rutina entry points", () => {
   const chrome = readFileSync(
     new URL("../src/features/projects/chrome/ProjectPageChrome.tsx", import.meta.url),
@@ -100,7 +107,7 @@ test("project and portfolio surfaces expose the Rutina entry points", () => {
   );
   assert.match(chrome, /project-routine-button/);
   assert.match(chrome, /Rutina/);
-  assert.match(surfaces, /RoutineComposer/);
+  assert.match(surfaces, /useRoutineHost/);
   assert.match(surfaces, /portfolio-routine-button/);
   assert.match(surfaces, /✦ Rutina/);
   assert.match(composer, /routine-compiled-card/);
@@ -108,21 +115,32 @@ test("project and portfolio surfaces expose the Rutina entry points", () => {
   assert.match(composer, /Activar/);
 });
 
-test("Phase 2 surfaces: /rutinas home, cron trigger, and scheduled handler", () => {
+test("Phase 2+ surfaces: /rutinas, Agents Rutinas, event outbox, everywhere entry", () => {
   const home = readFileSync(
     new URL("../src/components/routines/RoutinesHome.tsx", import.meta.url),
     "utf8",
   );
-  const routes = readFileSync(new URL("../src/lib/delivereeRoutes.ts", import.meta.url), "utf8");
-  const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  const worker = readFileSync(new URL("../worker/index.js", import.meta.url), "utf8");
+  const agents = readFileSync(
+    new URL("../src/components/agents/AgentsLibrary.tsx", import.meta.url),
+    "utf8",
+  );
+  const chrome = readFileSync(
+    new URL("../src/features/projects/chrome/ProjectPageChrome.tsx", import.meta.url),
+    "utf8",
+  );
+  const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+  const items = readFileSync(
+    new URL("../src/components/WorkItemsCenter.tsx", import.meta.url),
+    "utf8",
+  );
+  const events = readFileSync(new URL("../src/lib/routines/events.ts", import.meta.url), "utf8");
   const scheduler = readFileSync(new URL("../worker/routinesScheduler.js", import.meta.url), "utf8");
-  assert.match(home, /routines-home/);
-  assert.match(home, /Historial/);
-  assert.match(routes, /kind: "routines"/);
-  assert.match(routes, /\/rutinas/);
-  assert.match(wrangler, /\*\/5 \* \* \* \*/);
-  assert.match(worker, /async scheduled\(/);
-  assert.match(scheduler, /processDueRoutines/);
-  assert.match(scheduler, /leaseUntil/);
+  assert.match(home, /routine-analytics/);
+  assert.match(agents, /agents-routines/);
+  assert.match(agents, /Rutinas/);
+  assert.match(css, /overflow: visible/);
+  assert.match(chrome, /<span>Rutina<\/span>/);
+  assert.match(items, /item-routine-button/);
+  assert.match(events, /emitDomainEvent/);
+  assert.match(scheduler, /processEventOutbox/);
 });
