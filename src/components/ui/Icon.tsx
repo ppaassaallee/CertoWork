@@ -151,6 +151,7 @@ export const Kanban = wrapped.Kanban;
 export const Layers = wrapped.Layers;
 export const Layers3 = wrapped.Layers3;
 export const LayoutGrid = wrapped.LayoutGrid;
+export const LayoutDashboard = wrapped.LayoutDashboard;
 export const Lightbulb = wrapped.Lightbulb;
 export const Link = wrapped.Link;
 export const Link2 = wrapped.Link2;

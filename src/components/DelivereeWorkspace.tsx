@@ -203,6 +203,7 @@ import {
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { MyWorkTodayPanel } from "./MyWorkTodayPanel";
+import { isOverviewEnabled, MyWorkOverview } from "../features/overview";
 import { FeedbackCenter } from "./FeedbackCenter";
 import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
@@ -6634,6 +6635,15 @@ export function DelivereeWorkspace() {
           </>
         ) : centerView === "items" ? (
           <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""}`} data-testid="my-work-shell">
+            {lens.kind === "my-work" && isOverviewEnabled() && user?.uid ? (
+              <MyWorkOverview
+                actor={personalActor}
+                members={workspaceMembers}
+                projects={projects}
+                tasks={tasks}
+                userId={user.uid}
+              />
+            ) : null}
             {lens.kind === "my-work" && (
               <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
                 <button
