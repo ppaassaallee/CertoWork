@@ -150,6 +150,14 @@ export async function pauseRoutine(routineId: string) {
   });
 }
 
+/** User-initiated: grant writeOthers so blocked external deliverables can proceed. */
+export async function allowRoutineWriteOthers(routineId: string) {
+  await updateDoc(doc(db, ROUTINES_COLLECTION, routineId), {
+    "permissions.writeOthers": "always",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function recordManualRoutineRun(input: {
   routine: RoutineSpec;
   workspaceId: string;

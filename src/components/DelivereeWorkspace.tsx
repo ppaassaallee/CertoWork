@@ -124,7 +124,8 @@ import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/e
 import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
-import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
+import { AgentBuilderDraft } from "./agents/AgentsLibrary";
+import { AgentsArea } from "../features/agentsMap";
 import { RoutinesHome } from "./routines/RoutinesHome";
 import { RoutineHostProvider } from "./routines/RoutineHost";
 import {
@@ -6829,16 +6830,23 @@ export function DelivereeWorkspace() {
               outcome={agentOutcomeDraft}
             />
           ) : (
-            <AgentsLibrary
+            <AgentsArea
               activityItems={odiseusActivity}
               pendingApprovals={reviewItems.length}
               routines={agentRoutines}
               viewerUserId={user?.uid}
+              workspaceName={workspace?.name || undefined}
               onCreateAgent={() => setAgentBuilderOpen(true)}
               onOpenActivity={() => navigate("/agents/activity")}
               onOpenApprovals={() => setPanel("approvals")}
               onOpenAutomations={() => navigate("/rutinas")}
               onOpenOdysseus={() => void openChiefOfStaff()}
+              onRoutinesChanged={() => {
+                if (!workspace?.id || !user?.uid) return;
+                void listRoutinesForWorkspace(workspace.id, user.uid)
+                  .then(setAgentRoutines)
+                  .catch(() => undefined);
+              }}
             />
           )
         ) : centerView === "strategy" ? (
