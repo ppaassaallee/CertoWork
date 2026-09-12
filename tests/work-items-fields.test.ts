@@ -160,10 +160,14 @@ test("items list shows faded attribute icons instead of field columns", () => {
   assert.match(workItems, /data-testid="item-attr-icons"/);
   assert.match(workItems, /do-item-attr/);
   assert.match(workItems, /is-off/);
+  assert.match(workItems, /notionQuickAttrColumns/);
+  assert.match(workItems, /"delivery_entity"/);
+  assert.match(workItems, /"client_entity"/);
   assert.doesNotMatch(workItems, /data-testid="item-column-resizer"/);
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(css, /\.do-item-attr\.is-off/);
   assert.match(css, /opacity: 0\.16/);
+  assert.match(css, /\.do-notion-row-attrs/);
 });
 
 test("items list CSS is Asana-like: inline flags, pills, and no boxed fields", () => {
