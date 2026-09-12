@@ -4,6 +4,10 @@ import test from "node:test";
 
 const workItems = readFileSync(new URL("../src/components/WorkItemsCenter.tsx", import.meta.url), "utf8");
 const surfaces = readFileSync(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8");
+const chrome = readFileSync(
+  new URL("../src/features/projects/chrome/ProjectPageChrome.tsx", import.meta.url),
+  "utf8",
+);
 const memory = readFileSync(new URL("../src/lib/itemViewMemory.ts", import.meta.url), "utf8");
 
 test("My Work forces project sections and No Project label", () => {
@@ -17,8 +21,9 @@ test("My Work forces project sections and No Project label", () => {
 });
 
 test("Notion Filter and Sort open real panels in WorkItemsCenter", () => {
-  assert.match(surfaces, /data-testid="notion-filter-button"/);
-  assert.match(surfaces, /data-testid="notion-sort-button"/);
+  // Buttons live in the Phase 1 project chrome; wiring still passes through ProjectSurfaces.
+  assert.match(chrome, /data-testid="notion-filter-button"/);
+  assert.match(chrome, /data-testid="notion-sort-button"/);
   assert.match(surfaces, /notionFilterOpen=\{notionFilterOpen\}/);
   assert.match(surfaces, /notionSortOpen=\{notionSortOpen\}/);
   assert.match(surfaces, /onNotionFilterOpenChange=\{setNotionFilterOpen\}/);

@@ -18,6 +18,10 @@ test("project console uses a Notion-style table surface, not Tasks + Backlog tab
     resolve("src/components/ProjectSurfaces.tsx"),
     "utf8",
   );
+  const chromeSource = readFileSync(
+    resolve("src/features/projects/chrome/ProjectPageChrome.tsx"),
+    "utf8",
+  );
   const workspaceSource = readFileSync(
     resolve("src/components/DelivereeWorkspace.tsx"),
     "utf8",
@@ -25,11 +29,14 @@ test("project console uses a Notion-style table surface, not Tasks + Backlog tab
 
   assert.match(consoleSource, /data-testid="project-items"/);
   assert.match(consoleSource, /notionSurface/);
-  assert.match(consoleSource, /aria-label="Project views"/);
-  assert.match(consoleSource, /\["list", "Tabla"/);
-  assert.match(consoleSource, /\["gantt", "Gantt"/);
-  assert.match(consoleSource, /\["kanban", "Tablero"/);
-  assert.match(consoleSource, /\["calendar", "Calendario"/);
+  assert.match(consoleSource, /<ProjectPageHeader/);
+  assert.match(consoleSource, /<ProjectViewTabs/);
+  assert.match(chromeSource, /aria-label="Project views"/);
+  assert.match(chromeSource, /label: "Table"/);
+  assert.match(chromeSource, /label: "Board"/);
+  assert.match(chromeSource, /label: "Gantt"/);
+  assert.match(chromeSource, /label: "Calendar"/);
+  assert.match(chromeSource, /label: "Docs"/);
   assert.doesNotMatch(consoleSource, /\["backlog", "Backlog"\]/);
   assert.match(consoleSource, /Overview/);
   assert.match(consoleSource, /Volver a la tabla/);

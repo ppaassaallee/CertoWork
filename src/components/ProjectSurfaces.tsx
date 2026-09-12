@@ -2,31 +2,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
+  ProjectPageHeader,
+  ProjectViewTabs,
+  type ProjectViewId,
+} from "../features/projects/chrome";
+import {
   AlertTriangle,
   Archive,
   ArrowLeft,
   ArrowRight,
-  ArrowUpDown,
-  Calendar,
   CalendarDays,
-  CalendarRange,
   CheckCircle2,
   Circle,
   Copy,
   FileText,
-  Filter,
   Flag,
   FolderKanban,
-  Kanban,
   LayoutGrid,
   Link as LinkIcon,
   ListChecks,
   MessageSquare,
   Minus,
-  MoreHorizontal,
   Plus,
   Search,
-  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -1766,52 +1764,13 @@ export function ProjectConsolePanel({
         ))}
       </datalist>
 
-      <div className="do-notion-top">
-        <span className="crumb">{String(workspace?.name || "Workspace")}</span>
-        <span className="sep">/</span>
-        <span className="crumb is-current">{projectTitle(project)}</span>
-        <span className="spacer" />
-        <button
-          aria-label="Ask Odysseus"
-          onClick={() =>
-            onAsk(
-              `Give me the cleanest project update for ${projectTitle(project)}: decision, progress, risk, next action.`,
-            )
-          }
-          title="Ask Odysseus"
-          type="button"
-        >
-          <MessageSquare size={16} />
-        </button>
-        <button
-          aria-label="Share project"
-          onClick={() => {
-            setTab("team");
-            navigate(`/work/projects/${project.id}`);
-          }}
-          title="Share"
-          type="button"
-        >
-          <Share2 size={16} />
-        </button>
-        <div className="do-console-more">
-          <button
-            aria-expanded={moreOpen}
-            aria-haspopup="menu"
-            aria-label="More"
-            data-testid="notion-more-button"
-            onClick={() => setMoreOpen((open) => !open)}
-            title="More"
-            type="button"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-          {moreOpen && (
-            <div
-              className="do-console-more-menu"
-              data-testid="notion-more-menu"
-              role="menu"
-            >
+      <ProjectPageHeader
+        description={String(project.description || project.outcome || project.objective || "").trim()}
+        healthLabel={projectHealthLabel(currentHealth)}
+        healthTone={healthToStatus(currentHealth)}
+        moreMenu={
+          moreOpen ? (
+            <div className="do-console-more-menu" data-testid="notion-more-menu" role="menu">
               <button
                 onClick={() => {
                   setMoreOpen(false);
@@ -1917,19 +1876,13 @@ export function ProjectConsolePanel({
                 </button>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="do-notion-title">
-        <InlineEdit
-          ariaLabel="Project name"
-          onCommit={(title) => title && update({ title, name: title })}
-          placeholder="Project name"
-          value={projectTitle(project)}
-        />
-        <p className="do-notion-meta">
-          <label>
+          ) : null
+        }
+        moreOpen={moreOpen}
+        onToggleMore={() => setMoreOpen((open) => !open)}
+        project={project}
+        stageControl={
+          <label className="do-project-inline-edit">
             <span className="sr-only">Delivery stage</span>
             <select
               aria-label="Project delivery stage"
@@ -1943,98 +1896,60 @@ export function ProjectConsolePanel({
               ))}
             </select>
           </label>
-          {" · "}
-          <ProjectStatusSelect onUpdate={update} project={project} />
-          {" · "}
-          <span className={currentHealth === "on_track" ? "is-ok" : ""}>
-            {projectHealthLabel(currentHealth)}
-          </span>
-          {" · "}
-          {openTasks.length} abiertas
-        </p>
-      </div>
+        }
+        statusControl={<ProjectStatusSelect onUpdate={update} project={project} />}
+        tasks={tasks}
+        titleEditor={
+          <InlineEdit
+            ariaLabel="Project name"
+            onCommit={(title) => title && update({ title, name: title })}
+            placeholder="Project name"
+            value={projectTitle(project)}
+          />
+        }
+      />
 
-      {tab === "items" && (
-        <div className="do-notion-views" aria-label="Project views">
-          {(
-            [
-              ["list", "Tabla", ListChecks],
-              ["gantt", "Gantt", CalendarRange],
-              ["kanban", "Tablero", Kanban],
-              ["calendar", "Calendario", Calendar],
-            ] as const
-          ).map(([value, label, Icon]) => (
-            <button
-              className={`view-tab${notionMode === value ? " is-active" : ""}`}
-              key={value}
-              onClick={() => setNotionMode(value)}
-              type="button"
-            >
-              <Icon size={15} /> {label}
-            </button>
-          ))}
-          <span className="spacer" />
-          <button
-            aria-label="Filter"
-            className={`tool${notionFilterOpen ? " is-active" : ""}`}
-            data-testid="notion-filter-button"
-            onClick={() => {
-              setNotionFilterOpen((open) => !open);
-              setNotionSortOpen(false);
-              setNotionSearchOpen(false);
-            }}
-            title="Filter"
-            type="button"
-          >
-            <Filter size={16} />
-          </button>
-          <button
-            aria-label="Sort"
-            className={`tool${notionSortOpen ? " is-active" : ""}`}
-            data-testid="notion-sort-button"
-            onClick={() => {
-              setNotionSortOpen((open) => !open);
-              setNotionFilterOpen(false);
-              setNotionSearchOpen(false);
-            }}
-            title="Sort"
-            type="button"
-          >
-            <ArrowUpDown size={16} />
-          </button>
-          <button
-            aria-label="Search"
-            className={`tool${notionSearchOpen ? " is-active" : ""}`}
-            onClick={() => {
-              setNotionSearchOpen((open) => !open);
-              setNotionFilterOpen(false);
-              setNotionSortOpen(false);
-            }}
-            title="Search"
-            type="button"
-          >
-            <Search size={16} />
-          </button>
-          <button
-            className="nueva"
-            onClick={() => {
-              setNotionMode("list");
-              // Focus the Nueva input after render.
-              window.setTimeout(() => {
-                const input = document.querySelector(
-                  ".do-notion-add-row input",
-                ) as HTMLInputElement | null;
-                input?.focus();
-              }, 0);
-            }}
-            type="button"
-          >
-            <Plus size={15} /> Nueva
-          </button>
-        </div>
+      {(tab === "items" || tab === "docs") && (
+        <ProjectViewTabs
+          activeView={
+            (tab === "docs" ? "docs" : notionMode) as ProjectViewId
+          }
+          filterOpen={notionFilterOpen}
+          onAddTask={() => {
+            setTab("items");
+            setNotionMode("list");
+            window.setTimeout(() => {
+              const input = document.querySelector(
+                ".do-notion-add-row input",
+              ) as HTMLInputElement | null;
+              input?.focus();
+            }, 0);
+          }}
+          onChangeView={(view) => {
+            if (view === "docs") {
+              setTab("docs");
+              return;
+            }
+            setTab("items");
+            setNotionMode(view);
+          }}
+          onToggleFilter={() => {
+            setTab("items");
+            setNotionFilterOpen((open) => !open);
+            setNotionSortOpen(false);
+            setNotionSearchOpen(false);
+          }}
+          onToggleSort={() => {
+            setTab("items");
+            setNotionSortOpen((open) => !open);
+            setNotionFilterOpen(false);
+            setNotionSearchOpen(false);
+          }}
+          sortOpen={notionSortOpen}
+        />
       )}
 
-      {tab !== "items" && (
+      {tab !== "items" && tab !== "docs" && (
         <button
           className="do-notion-page-back"
           onClick={() => {
