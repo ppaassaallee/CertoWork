@@ -14,7 +14,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Circle,
-  Copy,
   FileText,
   Flag,
   FolderKanban,
@@ -35,14 +34,19 @@ import {
 import {
   PROJECT_HEALTH,
   PROJECT_STATUSES,
+  formatCheckpointLabel,
   isProjectClosed,
   isProjectFavorite,
+  projectAttentionReason,
   projectHealth,
   projectHealthLabel,
+  projectNeedsAttention,
+  projectOwnerLabel,
   projectStatusLabel,
   sortProjectsByRecency,
   taskWorkLane,
   upcomingProjectCheckpoints,
+  type ProjectHealth,
   type WorkLane,
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
@@ -2749,7 +2753,9 @@ type ProjectSortKey =
   | "project_manager"
   | "next_step"
   | "hours"
+  | "hours_variance"
   | "economics";
+type HealthFilter = "all" | ProjectHealth | "needs_attention";
 type PortfolioDimension =
   | "bpo"
   | "client"
@@ -4815,6 +4821,16 @@ function projectProgress(project: any, projectTasks: any[]) {
   return executable.length ? Math.round((done / executable.length) * 100) : 0;
 }
 
+function portfolioUsdFallback(project: any) {
+  const total = moneyValue(project.totalUsd || project.totalCost);
+  if (total) return total;
+  return (
+    moneyValue(project.juneUsd) +
+    moneyValue(project.julyUsd) +
+    moneyValue(project.augustUsd)
+  );
+}
+
 function projectSummary(project: any, projectTasks: any[]) {
   const financial = projectFinancialRollup(project);
   if (financial.periods.length) {
@@ -4823,8 +4839,15 @@ function projectSummary(project: any, projectTasks: any[]) {
       actualHours: financial.actualHours,
       plannedLabor: financial.plannedCost,
       actualLabor: financial.actualCost,
-      initial: financial.buildCost,
-      recurring: financial.latestMonthlyCost,
+      // Prefer build investment; fall back to portfolio USD so the KPI is not a false $0.
+      initial: financial.buildCost || portfolioUsdFallback(project),
+      recurring:
+        financial.latestMonthlyCost ||
+        moneyValue(
+          project.recurringMonthlyCost ||
+            project.monthlyRecurringCost ||
+            project.recurringCost,
+        ),
       openItems: Number.isFinite(Number(project.openItems))
         ? Number(project.openItems)
         : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
@@ -4869,7 +4892,7 @@ function projectSummary(project: any, projectTasks: any[]) {
     actualHours,
     plannedLabor,
     actualLabor,
-    initial: explicitInitial || rowInitial,
+    initial: explicitInitial || rowInitial || portfolioUsdFallback(project),
     recurring: explicitRecurring || rowRecurring,
     openItems: Number.isFinite(Number(project.openItems))
       ? Number(project.openItems)
@@ -4945,6 +4968,12 @@ function projectSortValue(
     return String(project.nextAction || "zzzz").toLowerCase();
   if (key === "hours")
     return String(1_000_000 - summary.plannedHours).padStart(8, "0");
+  if (key === "hours_variance") {
+    const planned = Number(summary.plannedHours || 0);
+    const actual = Number(summary.actualHours || 0);
+    const ratio = planned > 0 ? actual / planned : actual > 0 ? 9 : 0;
+    return String(1_000_000 - Math.round(ratio * 1000)).padStart(8, "0");
+  }
   if (key === "economics")
     return String(
       1_000_000_000 - summary.initial - summary.recurring * 12,
@@ -5017,8 +5046,9 @@ export function ProjectCommandCenter({
   tags = [],
   costTemplates = [],
   projectTemplates = [],
-  onClose,
+  onClose: _onClose,
   onAsk,
+  onNewProject,
   onUpdateProject,
   onArchiveProject,
   onDeleteProject,
@@ -5045,6 +5075,7 @@ export function ProjectCommandCenter({
   projectTemplates?: any[];
   onClose: () => void;
   onAsk?: (prompt: string) => void;
+  onNewProject?: () => void;
   onCreateCostTemplate?: (template: any) => Promise<void> | void;
   onUpdateCostTemplate?: (
     templateId: string,
@@ -5092,7 +5123,7 @@ export function ProjectCommandCenter({
   const [bulkDueDate, setBulkDueDate] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
-  const [healthFilter, setHealthFilter] = useState("all");
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [workCategoryFilter, setWorkCategoryFilter] = useState("all");
   const [productPhaseFilter, setProductPhaseFilter] = useState("all");
@@ -5100,6 +5131,12 @@ export function ProjectCommandCenter({
     useState<PortfolioDimension>("bpo");
   const [taxonomyValue, setTaxonomyValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [askDraft, setAskDraft] = useState("");
+  const [askPanel, setAskPanel] = useState<{
+    prompt: string;
+    answer: string;
+    projectIds: string[];
+  } | null>(null);
   const [view, setView] = useState<PortfolioView>(
     initialPortfolioView || "dashboard",
   );
@@ -5274,7 +5311,7 @@ export function ProjectCommandCenter({
       setFilter(saved.filters.filter || "active");
       setStageFilter(saved.filters.stageFilter || "all");
       setPhaseFilter(saved.filters.phaseFilter || "all");
-      setHealthFilter(saved.filters.healthFilter || "all");
+      setHealthFilter((saved.filters.healthFilter as HealthFilter) || "all");
       setTagFilter(saved.filters.tagFilter || "all");
       setWorkCategoryFilter(saved.filters.workCategoryFilter || "all");
       setProductPhaseFilter(saved.filters.productPhaseFilter || "all");
@@ -5320,7 +5357,12 @@ export function ProjectCommandCenter({
       stageFilter === "all" || deliveryStage(project) === stageFilter;
     const matchesPhase =
       phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
-    const matchesHealth = healthFilter === "all" || health === healthFilter;
+    const matchesHealth =
+      healthFilter === "all"
+        ? true
+        : healthFilter === "needs_attention"
+          ? health !== "on_track"
+          : health === healthFilter;
     const matchesProjectTag = matchesTag(project, tagFilter);
     const matchesWorkCategory =
       workCategoryFilter === "all" || workCategory(project) === workCategoryFilter;
@@ -5388,12 +5430,14 @@ export function ProjectCommandCenter({
     ]);
   };
   const openProjects = portfolio.filter((project) => !isProjectClosed(project));
-  const allAttention = openProjects.filter((project) => {
-    const projectTasks = tasks.filter((task) => task.projectId === project.id);
-    const projectRisks = risks.filter((risk) => risk.projectId === project.id);
-    return projectHealth(project, projectTasks, projectRisks) !== "on_track";
-  });
-  const attention = allAttention.slice(0, 3);
+  const allAttention = openProjects.filter((project) =>
+    projectNeedsAttention(
+      project,
+      tasks.filter((task) => task.projectId === project.id),
+      risks.filter((risk) => risk.projectId === project.id),
+    ),
+  );
+  const attention = allAttention;
   const allRows = openProjects.map((project) =>
     projectSummary(
       project,
@@ -5448,11 +5492,138 @@ export function ProjectCommandCenter({
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || isTypingTarget(event)) return;
-      onClose();
+      if (askPanel) {
+        setAskPanel(null);
+        return;
+      }
+      if (templatesOpen) {
+        setTemplatesOpen(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, [askPanel, templatesOpen]);
+
+  const checkpointLabel = (project: any) =>
+    formatCheckpointLabel(
+      projectDueDate(project) === "No date" ? "" : projectDueDate(project),
+    );
+
+  const openListWith = (patch: {
+    filter?: string;
+    stageFilter?: "all" | DeliveryStage;
+    healthFilter?: HealthFilter;
+    taxonomyValue?: string | null;
+    search?: string;
+    primarySort?: ProjectSortKey;
+    secondarySort?: ProjectSortKey;
+    view?: PortfolioView;
+  }) => {
+    setFilter(patch.filter ?? "all");
+    setStatusFilters([]);
+    setStageFilter(patch.stageFilter ?? "all");
+    setHealthFilter(patch.healthFilter ?? "all");
+    setTaxonomyValue(
+      patch.taxonomyValue === undefined ? null : patch.taxonomyValue,
+    );
+    if (patch.search !== undefined) setSearch(patch.search);
+    else setSearch("");
+    if (patch.primarySort) setPrimarySort(patch.primarySort);
+    if (patch.secondarySort) setSecondarySort(patch.secondarySort);
+    setView(patch.view || "overview");
+  };
+
+  const submitPortfolioAsk = (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+    const lines = [
+      `Live portfolio answer for: “${trimmed}”`,
+      "",
+      allAttention.length
+        ? `${allAttention.length} project${allAttention.length === 1 ? "" : "s"} need attention:`
+        : "No open projects currently need attention.",
+      ...allAttention.slice(0, 8).map((project) => {
+        const projectTasks = tasks.filter((task) => task.projectId === project.id);
+        const projectRisks = risks.filter((risk) => risk.projectId === project.id);
+        return `• ${projectTitle(project)} — ${projectAttentionReason(project, projectTasks, projectRisks)} · ${projectOwnerLabel(project)}`;
+      }),
+      "",
+      upcomingProjects.length
+        ? `Upcoming checkpoints: ${upcomingProjects
+            .slice(0, 5)
+            .map((project) => `${projectTitle(project)} (${checkpointLabel(project).text})`)
+            .join("; ")}`
+        : "No upcoming checkpoints on the calendar.",
+      "",
+      "Open a linked project below, or continue in Odysseus for a deeper pass.",
+    ];
+    setAskPanel({
+      prompt: trimmed,
+      answer: lines.join("\n"),
+      projectIds: [
+        ...allAttention.slice(0, 8).map((project) => project.id),
+        ...upcomingProjects.slice(0, 3).map((project) => project.id),
+      ].filter((id, index, list) => list.indexOf(id) === index),
+    });
+    setAskDraft("");
+  };
+
+  const activeFilterChips: Array<{
+    key: string;
+    label: string;
+    clear: () => void;
+  }> = [];
+  if (healthFilter === "needs_attention") {
+    activeFilterChips.push({
+      key: "health-attention",
+      label: "Needs attention",
+      clear: () => setHealthFilter("all"),
+    });
+  } else if (healthFilter !== "all") {
+    activeFilterChips.push({
+      key: `health-${healthFilter}`,
+      label: projectHealthLabel(healthFilter),
+      clear: () => setHealthFilter("all"),
+    });
+  }
+  if (stageFilter !== "all") {
+    activeFilterChips.push({
+      key: `stage-${stageFilter}`,
+      label: deliveryStageLabels[stageFilter],
+      clear: () => setStageFilter("all"),
+    });
+  }
+  if (taxonomyValue) {
+    activeFilterChips.push({
+      key: `tax-${taxonomyValue}`,
+      label: taxonomyValue,
+      clear: () => setTaxonomyValue(null),
+    });
+  }
+  if (search.trim()) {
+    activeFilterChips.push({
+      key: "search",
+      label: `Search: ${search.trim()}`,
+      clear: () => setSearch(""),
+    });
+  }
+  if (primarySort === "hours_variance") {
+    activeFilterChips.push({
+      key: "hours-var",
+      label: "Sorted by hours deviation",
+      clear: () => {
+        setPrimarySort("stage");
+        setSecondarySort("due");
+      },
+    });
+  }
+
+  const hoursAtCapacity =
+    totals.plannedHours > 0 && totals.actualHours >= totals.plannedHours;
+  const openCount = openProjects.length;
+  const operationsCount = openProjects.filter(
+    (project) => deliveryStage(project) === "operations",
+  ).length;
 
   const renderEconomics = (project: any, projectTasks: any[]) => {
     const summary = projectSummary(project, projectTasks);
@@ -5556,8 +5727,8 @@ export function ProjectCommandCenter({
 
   return (
     <section
-      aria-label="Project command center"
-      className="do-command-center do-command-center-embedded"
+      aria-label="Projects"
+      className={`do-command-center do-command-center-embedded${askPanel ? " has-ask-panel" : ""}`}
       data-testid="project-command-center"
     >
       <datalist id="do-bpo-master">
@@ -5572,32 +5743,40 @@ export function ProjectCommandCenter({
       </datalist>
       <header className="do-command-head is-compact">
         <div>
-          <span className="do-project-card-kicker">DELIVERY CONTROL TOWER</span>
-          <h1>Project command center</h1>
+          <h1>Projects</h1>
         </div>
         <div className="do-command-head-actions">
-          <button
-            className={templatesOpen ? "is-active" : ""}
-            onClick={() => setTemplatesOpen((open) => !open)}
-            type="button"
-          >
-            <Copy size={14} /> Templates
-          </button>
-          <button
-            className={view === "dashboard" ? "is-active" : ""}
-            onClick={() => setView("dashboard")}
-            type="button"
-          >
-            <LayoutGrid size={14} /> Dashboard
-          </button>
-          {!templatesOpen && (
+          <nav aria-label="Projects views" className="do-command-view-tabs">
             <button
-              aria-label="Close command center"
-              onClick={onClose}
-              title="Close"
+              className={view === "dashboard" ? "is-active" : ""}
+              onClick={() => setView("dashboard")}
               type="button"
             >
-              <X size={19} />
+              Overview
+            </button>
+            <button
+              className={view === "overview" ? "is-active" : ""}
+              onClick={() => setView("overview")}
+              type="button"
+            >
+              List
+            </button>
+            <button
+              className={view === "economics" ? "is-active" : ""}
+              onClick={() => setView("economics")}
+              type="button"
+            >
+              Costs
+            </button>
+          </nav>
+          {onNewProject && (
+            <button
+              className="do-command-primary"
+              data-testid="projects-new-project"
+              onClick={onNewProject}
+              type="button"
+            >
+              <Plus size={14} /> New project
             </button>
           )}
         </div>
@@ -5613,137 +5792,184 @@ export function ProjectCommandCenter({
           workspaceMembers={workspaceMembers}
         />
       )}
-      <div className="do-command-metrics">
-        <div>
-          <strong>
-            {
-              realProjects.filter(
-                (project) =>
-                  ![
-                    "completed",
-                    "archived",
-                    "done",
-                    "deleted",
-                    "cancelled",
-                  ].includes(String(project.status || "").toLowerCase()),
-              ).length
-            }{" "}
-            / {realProjects.length}
-          </strong>
-          <span>Open / total projects</span>
-        </div>
-        <div>
-          <strong>
-            {
-              openProjects.filter(
-                (project) => deliveryStage(project) === "operations",
-              ).length
+      <div className="do-command-metrics is-text-row" data-testid="projects-kpi-row">
+        <button
+          onClick={() => openListWith({ filter: "active" })}
+          type="button"
+        >
+          <strong>{openCount}</strong>
+          <span>open</span>
+        </button>
+        <button
+          onClick={() => openListWith({ stageFilter: "operations" })}
+          type="button"
+        >
+          <strong>{operationsCount}</strong>
+          <span>in operations</span>
+        </button>
+        <button
+          className={allAttention.length ? "is-risk" : ""}
+          onClick={() => openListWith({ healthFilter: "needs_attention" })}
+          type="button"
+        >
+          <strong>{allAttention.length}</strong>
+          <span>need attention</span>
+        </button>
+        {(totals.plannedHours > 0 || totals.actualHours > 0) && (
+          <button
+            className={hoursAtCapacity ? "is-risk" : ""}
+            onClick={() =>
+              openListWith({
+                primarySort: "hours_variance",
+                secondarySort: "project",
+                view: "overview",
+              })
             }
-          </strong>
-          <span>In operations</span>
-        </div>
-        <div className="status-tone-amber">
-          <strong>
-            {
-              realProjects.filter(
-                (project) =>
-                  projectHealth(
-                    project,
-                    tasks.filter((task) => task.projectId === project.id),
-                    risks.filter((risk) => risk.projectId === project.id),
-                  ) !== "on_track",
-              ).length
-            }
-          </strong>
-          <span>Need attention</span>
-        </div>
-        <div className={totals.plannedHours === 0 && totals.actualHours === 0 ? "is-muted" : ""}>
-          <strong>
-            {Math.round(totals.actualHours)}h /{" "}
-            {Math.round(totals.plannedHours)}h
-          </strong>
-          <span>
-            Hours used / planned
-            {totals.plannedHours === 0 && totals.actualHours === 0 ? (
-              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add planned hours</button></>
-            ) : null}
-          </span>
-        </div>
-        <div className={totals.recurring === 0 ? "is-muted" : ""}>
-          <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
-          <span>
-            Monthly recurring
-            {totals.recurring === 0 ? " · not configured" : ""}
-          </span>
-        </div>
-        <div className={totals.initial === 0 ? "is-muted" : ""}>
-          <strong>${Math.round(totals.initial).toLocaleString()}</strong>
-          <span>
-            Initial investment
-            {totals.initial === 0 ? (
-              <> · <button className="do-inline-cta" onClick={() => setView("overview")} type="button">Add costs</button></>
-            ) : null}
-          </span>
-        </div>
+            type="button"
+          >
+            <strong>
+              {Math.round(
+                totals.plannedHours
+                  ? (totals.actualHours / totals.plannedHours) * 100
+                  : 0,
+              )}
+              % hours used
+            </strong>
+            <span>
+              {Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h
+              {hoursAtCapacity ? " · at capacity" : ""}
+            </span>
+          </button>
+        )}
+        {totals.recurring > 0 && (
+          <button onClick={() => setView("economics")} type="button">
+            <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
+            <span>monthly recurring</span>
+          </button>
+        )}
+        {totals.initial > 0 && (
+          <button onClick={() => setView("economics")} type="button">
+            <strong>${Math.round(totals.initial).toLocaleString()}</strong>
+            <span>initial investment</span>
+          </button>
+        )}
       </div>
       <div className={`do-command-body do-command-body-${view}`}>
         {view === "dashboard" && (
           <section className="do-portfolio-dashboard">
-            {onAsk && (
-              <section className="do-pm-copilot">
-                <div>
-                  <span>
-                    <Sparkles size={13} /> CERTO FOR PROJECT MANAGERS
-                  </span>
-                  <strong>Ask from the live portfolio</strong>
-                  <small>
-                    Answers use the same projects, risks, dates, assignments and
-                    costs you see here.
-                  </small>
+            <section className="do-portfolio-card do-portfolio-card-wide do-attention-board">
+              <div className="do-portfolio-card-head">
+                <h3>Needs your attention</h3>
+                {allAttention.length > 0 && (
+                  <button
+                    onClick={() => openListWith({ healthFilter: "needs_attention" })}
+                    type="button"
+                  >
+                    Open list <ArrowRight size={13} />
+                  </button>
+                )}
+              </div>
+              {attention.length ? (
+                <div className="do-attention-list" data-testid="projects-attention-list">
+                  {attention.map((project) => {
+                    const projectTasks = tasks.filter(
+                      (task) => task.projectId === project.id,
+                    );
+                    const projectRisks = risks.filter(
+                      (risk) => risk.projectId === project.id,
+                    );
+                    const health = projectHealth(
+                      project,
+                      projectTasks,
+                      projectRisks,
+                    );
+                    return (
+                      <button
+                        key={project.id}
+                        onClick={() => onOpenProject(project)}
+                        type="button"
+                      >
+                        <StatusLight
+                          status={healthToStatus(health)}
+                          label={false}
+                          size="sm"
+                        />
+                        <span>
+                          <strong>{projectTitle(project)}</strong>
+                          <small>
+                            {projectAttentionReason(
+                              project,
+                              projectTasks,
+                              projectRisks,
+                            )}{" "}
+                            · {projectOwnerLabel(project)}
+                          </small>
+                        </span>
+                        <em aria-hidden="true">
+                          <ArrowRight size={13} />
+                        </em>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div>
+              ) : (
+                <div className="do-command-calm">
+                  <CheckCircle2 size={17} />
+                  <span>
+                    <strong>Nothing needs escalation.</strong>
+                    <small>Portfolio signals are on track.</small>
+                  </span>
+                </div>
+              )}
+            </section>
+
+            {onAsk && (
+              <form
+                className="do-pm-ask-bar"
+                data-testid="projects-ask-bar"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitPortfolioAsk(askDraft);
+                }}
+              >
+                <Sparkles size={14} />
+                <input
+                  aria-label="Ask about the portfolio"
+                  onChange={(event) => setAskDraft(event.target.value)}
+                  placeholder="Ask about this portfolio…"
+                  value={askDraft}
+                />
+                <div className="do-pm-ask-chips">
                   {[
                     "What needs my attention today, and why?",
                     "Which projects are likely to miss their date?",
-                    "Where are we over budget or over hours?",
-                    "Prepare a concise stakeholder portfolio update.",
                   ].map((question) => (
                     <button
-                      className="do-pm-prompt-card"
                       key={question}
-                      onClick={() => onAsk(question)}
+                      onClick={() => submitPortfolioAsk(question)}
                       type="button"
                     >
                       {question}
-                      <ArrowRight size={12} />
                     </button>
                   ))}
                 </div>
-              </section>
+                <button className="do-pm-ask-submit" type="submit">
+                  Ask
+                </button>
+              </form>
             )}
+
             <div className="do-portfolio-dashboard-grid">
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <div>
-                    <span className="do-project-card-kicker">
-                      DELIVERY PIPELINE
-                    </span>
-                    <h3>Projects by stage</h3>
-                  </div>
+                  <h3>By stage</h3>
                   <span>{openProjects.length} total</span>
                 </div>
                 <div className="do-stage-bars">
                   {stageCounts.map(({ stage, count }) => (
                     <button
                       key={stage}
-                      onClick={() => {
-                        setFilter("all");
-                        setStageFilter(stage);
-                        setHealthFilter("all");
-                        setTaxonomyValue(null);
-                        setSearch("");
-                        setView("overview");
-                      }}
+                      onClick={() => openListWith({ stageFilter: stage })}
                       type="button"
                     >
                       <span>{deliveryStageLabels[stage]}</span>
@@ -5761,26 +5987,21 @@ export function ProjectCommandCenter({
               </section>
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <div>
-                    <span className="do-project-card-kicker">
-                      PORTFOLIO HEALTH
-                    </span>
-                    <h3>Where attention is needed</h3>
-                  </div>
-                  <AlertTriangle size={15} />
+                  <h3>Health</h3>
+                  <button
+                    aria-label="How health is calculated"
+                    className="do-icon-tip"
+                    title="Health is calculated from overdue dates, blocked work, open risks, and any explicit override."
+                    type="button"
+                  >
+                    <AlertTriangle size={14} />
+                  </button>
                 </div>
                 <div className="do-status-summary">
                   {healthCounts.map(({ health, count }) => (
                     <button
                       key={health}
-                      onClick={() => {
-                        setFilter("all");
-                        setStageFilter("all");
-                        setHealthFilter(health);
-                        setTaxonomyValue(null);
-                        setSearch("");
-                        setView("overview");
-                      }}
+                      onClick={() => openListWith({ healthFilter: health })}
                       type="button"
                     >
                       <StatusLight
@@ -5792,19 +6013,20 @@ export function ProjectCommandCenter({
                     </button>
                   ))}
                 </div>
-                <p className="do-portfolio-note">
-                  Health is calculated from overdue dates, blocked work, open
-                  risks and any explicit override.
-                </p>
               </section>
               <section className="do-portfolio-card do-portfolio-card-wide">
                 <div className="do-portfolio-card-head">
-                  <div>
-                    <span className="do-project-card-kicker">NEXT EXITS</span>
-                    <h3>Upcoming project checkpoints</h3>
-                  </div>
-                  <button onClick={() => setView("overview")} type="button">
-                    Open portfolio <ArrowRight size={13} />
+                  <h3>Upcoming checkpoints</h3>
+                  <button
+                    onClick={() =>
+                      openListWith({
+                        primarySort: "due",
+                        secondarySort: "project",
+                      })
+                    }
+                    type="button"
+                  >
+                    Open list <ArrowRight size={13} />
                   </button>
                 </div>
                 <div className="do-upcoming-list">
@@ -5814,6 +6036,7 @@ export function ProjectCommandCenter({
                       tasks.filter((task) => task.projectId === project.id),
                       risks.filter((risk) => risk.projectId === project.id),
                     );
+                    const label = checkpointLabel(project);
                     return (
                       <button
                         key={project.id}
@@ -5832,28 +6055,27 @@ export function ProjectCommandCenter({
                             {deliveryPhaseLabel(project)}
                           </small>
                         </span>
-                        <time>{projectDueDate(project)}</time>
-                        <ArrowRight size={13} />
+                        <time className={label.overdue ? "is-overdue" : ""}>
+                          {label.text}
+                        </time>
+                        <em aria-hidden="true">
+                          <ArrowRight size={13} />
+                        </em>
                       </button>
                     );
                   })}
                   {upcomingProjects.length === 0 && (
                     <EmptyState
                       icon={<CalendarDays size={18} />}
-                      title="No dates yet"
-                      text="Add a due date from the project console."
+                      title="No upcoming checkpoints"
+                      text="Add a future due date from the project console."
                     />
                   )}
                 </div>
               </section>
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <div>
-                    <span className="do-project-card-kicker">
-                      PORTFOLIO BREAKDOWN
-                    </span>
-                    <h3>Explore the portfolio</h3>
-                  </div>
+                  <h3>Explore</h3>
                   <label className="do-taxonomy-dimension">
                     <span>Group by</span>
                     <select
@@ -5879,14 +6101,7 @@ export function ProjectCommandCenter({
                     <button
                       className={taxonomyValue === value ? "is-active" : ""}
                       key={value}
-                      onClick={() => {
-                        setFilter("all");
-                        setStageFilter("all");
-                        setHealthFilter("all");
-                        setSearch("");
-                        setTaxonomyValue(value);
-                        setView("overview");
-                      }}
+                      onClick={() => openListWith({ taxonomyValue: value })}
                       type="button"
                     >
                       <span>{value}</span>
@@ -5898,74 +6113,37 @@ export function ProjectCommandCenter({
             </div>
           </section>
         )}
-        <details className="do-command-attention">
-          <summary>
-            <span>
-              <AlertTriangle size={15} />
-              <strong>
-                {allAttention.length
-                  ? `${allAttention.length} project${allAttention.length === 1 ? "" : "s"} need attention`
-                  : "No project demands escalation"}
-              </strong>
-              <small>
-                {allAttention.length
-                  ? "Expand to review the strongest risk signals."
-                  : "Portfolio signals are currently on track."}
-              </small>
-            </span>
-            <span>{allAttention.length ? "Review" : "All clear"}</span>
-          </summary>
-          {attention.length ? (
-            <div>
-              {attention.map((project) => {
-                const health = projectHealth(
-                  project,
-                  tasks.filter((task) => task.projectId === project.id),
-                  risks.filter((risk) => risk.projectId === project.id),
-                );
-                return (
-                  <button
-                    key={project.id}
-                    onClick={() => onOpenProject(project)}
-                    type="button"
-                  >
-                    <StatusLight
-                      status={healthToStatus(health)}
-                      label={projectHealthLabel(health)}
-                      size="sm"
-                    />
-                    <strong>{projectTitle(project)}</strong>
-                    <small>
-                      {
-                        tasks.filter(
-                          (task) =>
-                            task.projectId === project.id &&
-                            taskWorkLane(task) === "blocked",
-                        ).length
-                      }{" "}
-                      blocked ·{" "}
-                      {
-                        risks.filter((risk) => risk.projectId === project.id)
-                          .length
-                      }{" "}
-                      risks
-                    </small>
-                    <ArrowRight size={13} />
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="do-command-calm">
-              <CheckCircle2 size={17} />
-              <span>
-                <strong>No project demands escalation.</strong>
-                <small>Review by exception; keep the team moving.</small>
-              </span>
+        <section className="do-command-portfolio">
+          {activeFilterChips.length > 0 && (
+            <div className="do-filter-chips" data-testid="projects-filter-chips">
+              {activeFilterChips.map((chip) => (
+                <button key={chip.key} onClick={chip.clear} type="button">
+                  {chip.label}
+                  <X size={12} />
+                </button>
+              ))}
+              <button
+                className="is-clear"
+                onClick={() => {
+                  setStatusFilters([]);
+                  setFilter("all");
+                  setStageFilter("all");
+                  setPhaseFilter("all");
+                  setHealthFilter("all");
+                  setTagFilter("all");
+                  setWorkCategoryFilter("all");
+                  setProductPhaseFilter("all");
+                  setTaxonomyValue(null);
+                  setSearch("");
+                  setPrimarySort("stage");
+                  setSecondarySort("due");
+                }}
+                type="button"
+              >
+                Clear all
+              </button>
             </div>
           )}
-        </details>
-        <section className="do-command-portfolio">
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
               <div className="do-command-filters">
@@ -5998,26 +6176,12 @@ export function ProjectCommandCenter({
                     setProductPhaseFilter("all");
                     setTaxonomyValue(null);
                     setSearch("");
+                    setPrimarySort("stage");
+                    setSecondarySort("due");
                   }}
                   type="button"
                 >
                   Clear filters
-                </button>
-              </div>
-              <div className="do-command-view-toggle">
-                <button
-                  className={view === "overview" ? "is-active" : ""}
-                  onClick={() => setView("overview")}
-                  type="button"
-                >
-                  Portfolio
-                </button>
-                <button
-                  className={view === "economics" ? "is-active" : ""}
-                  onClick={() => setView("economics")}
-                  type="button"
-                >
-                  Financials
                 </button>
               </div>
             </div>
@@ -6188,10 +6352,13 @@ export function ProjectCommandCenter({
               Health
               <select
                 aria-label="Filter by project health"
-                onChange={(event) => setHealthFilter(event.target.value)}
+                onChange={(event) =>
+                  setHealthFilter(event.target.value as HealthFilter)
+                }
                 value={healthFilter}
               >
                 <option value="all">All health</option>
+                <option value="needs_attention">Needs attention</option>
                 <option value="on_track">On track</option>
                 <option value="at_risk">At risk</option>
                 <option value="blocked">Blocked</option>
@@ -7036,6 +7203,53 @@ export function ProjectCommandCenter({
           )}
         </section>
       </div>
+      {askPanel && (
+        <aside
+          aria-label="Portfolio ask"
+          className="do-portfolio-ask-panel"
+          data-testid="projects-ask-panel"
+        >
+          <header>
+            <div>
+              <strong>Ask</strong>
+              <small>{askPanel.prompt}</small>
+            </div>
+            <button
+              aria-label="Close ask panel"
+              onClick={() => setAskPanel(null)}
+              type="button"
+            >
+              <X size={15} />
+            </button>
+          </header>
+          <pre>{askPanel.answer}</pre>
+          <div className="do-portfolio-ask-links">
+            {askPanel.projectIds.map((id) => {
+              const project = portfolio.find((row) => row.id === id);
+              if (!project) return null;
+              return (
+                <button
+                  key={id}
+                  onClick={() => onOpenProject(project)}
+                  type="button"
+                >
+                  {projectTitle(project)}
+                  <ArrowRight size={12} />
+                </button>
+              );
+            })}
+          </div>
+          {onAsk && (
+            <button
+              className="do-portfolio-ask-continue"
+              onClick={() => onAsk(askPanel.prompt)}
+              type="button"
+            >
+              Continue in Odysseus
+            </button>
+          )}
+        </aside>
+      )}
     </section>
   );
 }
