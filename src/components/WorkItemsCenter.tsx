@@ -147,6 +147,8 @@ import {
   readLastItemSession,
   readLastItemSessions,
   readNamedItemViews,
+  resolveWorkItemsViewMode,
+  shouldApplySessionMode,
   upsertNamedItemView,
   writeLastItemSession,
   writeNamedItemViews,
@@ -715,7 +717,7 @@ export function WorkItemsCenter({
   forceMode,
   notionSurface = false,
   notionMode,
-  onNotionModeChange,
+  onNotionModeChange: _onNotionModeChange,
   notionSearchOpen = false,
   notionFilterOpen = false,
   onNotionFilterOpenChange,
@@ -733,7 +735,21 @@ export function WorkItemsCenter({
   const viewHydrated = useRef(false);
   const skipPersist = useRef(true);
   const remotePushTimer = useRef<number | null>(null);
-  const [mode, setMode] = useState<WorkItemsViewMode>("list");
+  /** Once the user picks a view, session hydrate must not yank it back. */
+  const userChoseMode = useRef(false);
+  const [localMode, setLocalMode] = useState<WorkItemsViewMode>("list");
+  const setMode = (next: WorkItemsViewMode | ((current: WorkItemsViewMode) => WorkItemsViewMode)) => {
+    userChoseMode.current = true;
+    setLocalMode(next);
+  };
+  // Parent tabs (notion) / forceMode own the visible mode — never echo local
+  // mode back up or view-memory will fight the user's click.
+  const mode = resolveWorkItemsViewMode({
+    localMode,
+    forceMode,
+    notionSurface,
+    notionMode,
+  });
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
   const [statusFilter, setStatusFilter] = useState("open");
@@ -854,7 +870,13 @@ export function WorkItemsCenter({
     const filters = normalizeItemViewFilters(session?.filters, activeProject?.id);
     setVisibleItemColumns(selectedItemColumns(session?.columns?.length ? session.columns : defaultItemColumns));
     setItemColumnPixels({ ...defaultItemColumnPixels, ...(session?.widths || {}) });
-    setMode(filters.mode);
+    if (shouldApplySessionMode({ forceMode, notionSurface })) {
+      setLocalMode(filters.mode);
+    } else if (forceMode) {
+      setLocalMode(forceMode);
+    } else if (notionSurface && notionMode) {
+      setLocalMode(notionMode);
+    }
     setProjectFilter(activeProject?.id || filters.projectFilter || "all");
     setStatusFilter(filters.statusFilter);
     setPriorityFilter(filters.priorityFilter);
@@ -873,7 +895,6 @@ export function WorkItemsCenter({
     setKanbanWipLimits(session?.kanbanWipLimits || {});
     setKanbanColumnLabels(session?.kanbanColumnLabels || {});
     setKanbanAutomations(session?.kanbanAutomations || []);
-    if (forceMode) setMode(forceMode);
   };
 
   const persistRemoteMemory = (views: ItemSavedView[], sessions: Record<string, ItemViewSession>) => {
@@ -950,6 +971,7 @@ export function WorkItemsCenter({
   const applyItemView = (name: string) => {
     const saved = savedItemViews.find((candidate) => candidate.name === name);
     if (!saved) return;
+    userChoseMode.current = true;
     applyViewSession({
       columns: saved.columns,
       widths: saved.widths,
@@ -979,6 +1001,7 @@ export function WorkItemsCenter({
   useEffect(() => {
     skipPersist.current = true;
     viewHydrated.current = false;
+    userChoseMode.current = false;
     if (!viewerId) return;
     const localViews = readNamedItemViews(viewerId);
     setSavedItemViews(localViews);
@@ -997,7 +1020,7 @@ export function WorkItemsCenter({
           setSavedItemViews(mergedViews);
           writeNamedItemViews(viewerId, mergedViews);
         }
-        if (!readLastItemSession(viewerId, surface) && remote.sessions[surface]) {
+        if (!readLastItemSession(viewerId, surface) && remote.sessions[surface] && !userChoseMode.current) {
           skipPersist.current = true;
           applyViewSession(remote.sessions[surface]);
           writeLastItemSession(viewerId, surface, remote.sessions[surface]);
@@ -1104,19 +1127,9 @@ export function WorkItemsCenter({
   }, [timelineMode, ganttFocus]);
 
   useEffect(() => {
-    if (forceMode && mode !== forceMode) setMode(forceMode);
-    else if (!forceMode && mobileCore && mode !== "list") setMode("list");
-  }, [forceMode, mobileCore, mode]);
-
-  useEffect(() => {
-    if (!notionSurface || !notionMode) return;
-    if (mode !== notionMode) setMode(notionMode);
-  }, [notionSurface, notionMode, mode]);
-
-  useEffect(() => {
-    if (!notionSurface) return;
-    onNotionModeChange?.(mode);
-  }, [notionSurface, mode, onNotionModeChange]);
+    if (forceMode && localMode !== forceMode) setLocalMode(forceMode);
+    else if (!forceMode && !notionSurface && mobileCore && localMode !== "list") setLocalMode("list");
+  }, [forceMode, mobileCore, localMode, notionSurface]);
 
   useEffect(() => {
     if (!notionSurface) return undefined;
