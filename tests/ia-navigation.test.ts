@@ -130,8 +130,9 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   assert.match(source, /data-testid="nav-invoices"/);
   assert.match(source, /data-testid="nav-feedback"/);
   assert.match(source, /data-testid="nav-requests"/);
-  assert.match(source, /data-testid="nav-workspace"/);
-  assert.match(source, /data-testid="nav-settings"/);
+  assert.match(source, /data-testid="nav-admin-settings"/);
+  assert.doesNotMatch(source, /data-testid="nav-workspace"/);
+  assert.doesNotMatch(source, /data-testid="nav-settings"/);
   assert.match(source, /ProductSwitcher/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);
   assert.doesNotMatch(source, /do-odiseus-hire/);

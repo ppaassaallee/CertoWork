@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, MessageSquare } from "./ui/Icon";
+import { ArrowLeft, Folder, Loader2, MessageSquare, Search, ShieldCheck, Sparkles, Tag, Users } from "./ui/Icon";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { CertoMark } from "./CertoMark";
 import { useAuth } from "../lib/AuthContext";
@@ -117,16 +117,29 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   }, [projectList, projectSignature, selectedProjectId, user, workspace, workspaceName]);
 
   const configured = isConfiguredCollab(status);
+  const selectedProject = projectList.find((project) => project.id === selectedProjectId);
+  const visibleRooms = projectList.slice(0, 5);
 
   return (
     <div className="do-collab-shell" data-testid="chat-collab-module">
       <header className="do-collab-rail">
-        <CertoMark className="do-collab-logo" size={28} />
+        <span className="do-collab-brand">
+          <CertoMark className="do-collab-logo" size={30} />
+          <span>
+            <strong>Collab Desk</strong>
+            <small>{workspaceName || "Certo Work"}</small>
+          </span>
+        </span>
         <ProductSwitcher product="collab" />
+        <label className="do-collab-search">
+          <Search size={14} />
+          <input aria-label="Search Collab" placeholder="Search conversations..." />
+          <kbd>⌘ K</kbd>
+        </label>
         <span className="do-collab-rail-copy">
-          <MessageSquare size={14} />
-          <strong>{t("productCollab")}</strong>
-          <small>{workspaceName || "Certo Work"}</small>
+          <Sparkles size={14} />
+          <strong>{selectedProject ? selectedProject.name : t("productCollab")}</strong>
+          <small>{configured ? "Rooms synced" : "Setup check"}</small>
         </span>
         <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
           <ArrowLeft size={14} />
@@ -134,7 +147,47 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
         </button>
       </header>
       <div className="do-collab-body">
+        <aside className="do-collab-sidebar" aria-label="Collab rooms">
+          <section>
+            <span className="do-kicker">Desk</span>
+            <h2>Team inbox</h2>
+            <p>Project rooms, support conversations, and human follow-ups stay in one place.</p>
+          </section>
+          <div className="do-collab-room-stack">
+            <button className={!selectedProjectId ? "is-active" : ""} onClick={() => navigate("/collab")} type="button">
+              <span><Tag size={14} /></span>
+              <strong>General</strong>
+              <small>Workspace room</small>
+            </button>
+            {visibleRooms.map((project) => (
+              <button
+                className={project.id === selectedProjectId ? "is-active" : ""}
+                key={project.id}
+                onClick={() => navigate(`/collab/project/${encodeURIComponent(project.id)}`)}
+                type="button"
+              >
+                <span><Folder size={14} /></span>
+                <strong>{project.name}</strong>
+                <small>Project room</small>
+              </button>
+            ))}
+          </div>
+          <div className="do-collab-sidebar-note">
+            <ShieldCheck size={15} />
+            <span>Private to workspace members with access. Project rooms sync automatically.</span>
+          </div>
+        </aside>
         <main className="do-collab-stage">
+          <div className="do-collab-stage-head">
+            <div>
+              <span className="do-kicker">{selectedProject ? "Project conversation" : "Workspace conversation"}</span>
+              <h1>{selectedProject ? selectedProject.name : "General team desk"}</h1>
+            </div>
+            <div className="do-collab-stage-pills">
+              <span><Users size={13} /> Team</span>
+              <span><MessageSquare size={13} /> Live chat</span>
+            </div>
+          </div>
           {loading && !embedUrl && (
             <div className="do-collab-state">
               <Loader2 className="spin" size={18} />

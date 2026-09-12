@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bug, Check, Copy, Flag, Folder, Inbox, Lightbulb, Link2, Plus, ShieldCheck } from "./ui/Icon";
+import { Bug, Check, Copy, Flag, Folder, Inbox, Lightbulb, Link2, Plus, ShieldCheck, Sparkles } from "./ui/Icon";
 import {
   FEEDBACK_SEVERITIES,
   feedbackKindLabel,
@@ -100,6 +100,9 @@ export function FeedbackCenter({
   }, [reports, statusFilter]);
 
   const openCount = reports.filter((report) => isOpenFeedback(report.status)).length;
+  const triagedCount = reports.filter((report) => report.status === "triaged").length;
+  const convertedCount = reports.filter((report) => report.status === "converted").length;
+  const routedCount = reports.filter((report) => Boolean(report.projectId)).length;
 
   const submit = async () => {
     if (!title.trim()) return;
@@ -135,19 +138,46 @@ export function FeedbackCenter({
   return (
     <div className="do-feedback-center" data-testid={mode === "queue" ? "feedback-admin-queue" : "feedback-submit"}>
       <header className="do-feedback-head">
-        <span className="do-kicker">{mode === "queue" ? "Admin" : "Workspace"}</span>
-        <h1>{mode === "queue" ? "SupportOps queue" : "Report a bug or request a feature"}</h1>
-        <p>
-          {mode === "queue"
-            ? "Triage submissions, then convert the ones that should become backlog PBIs."
-            : "Tell the workspace what is broken or missing. Admins can convert accepted reports into PBIs."}
-        </p>
-        {mode === "submit" && canManage && onOpenQueue && (
-          <button className="do-button-secondary" onClick={onOpenQueue} type="button">
-            Open admin queue · {openCount} open
-          </button>
-        )}
+        <div>
+          <span className="do-kicker">{mode === "queue" ? "Admin console" : "Support desk"}</span>
+          <h1>{mode === "queue" ? "SupportOps command center" : "SupportOps intake"}</h1>
+          <p>
+            {mode === "queue"
+              ? "Triage, route, and convert incoming reports into backlog work without losing the customer context."
+              : "Capture bugs and feature requests in a clean intake flow. Route them to a project now or let Tier 1 classify them later."}
+          </p>
+        </div>
+        <div className="do-feedback-head-actions">
+          {mode === "submit" && canManage && onOpenQueue && (
+            <button className="do-button-secondary" onClick={onOpenQueue} type="button">
+              <Inbox size={14} /> Queue · {openCount} open
+            </button>
+          )}
+        </div>
       </header>
+
+      <section className="do-feedback-metrics" aria-label="SupportOps summary">
+        <article>
+          <span><Inbox size={16} /></span>
+          <small>Open intake</small>
+          <strong>{openCount}</strong>
+        </article>
+        <article>
+          <span><Flag size={16} /></span>
+          <small>Triaged</small>
+          <strong>{triagedCount}</strong>
+        </article>
+        <article>
+          <span><Check size={16} /></span>
+          <small>Converted</small>
+          <strong>{convertedCount}</strong>
+        </article>
+        <article>
+          <span><Folder size={16} /></span>
+          <small>Project routed</small>
+          <strong>{routedCount}</strong>
+        </article>
+      </section>
 
       {canManage && (
         <section className="do-feedback-link-hub" aria-label="Support form links">
@@ -188,6 +218,7 @@ export function FeedbackCenter({
 
       {mode === "submit" && (
         <section className="do-feedback-submit-card" aria-label="Submit SupportOps request">
+          <span className="do-feedback-ticket-stamp"><Sparkles size={13} /> Smart intake</span>
           <div className="do-feedback-submit-hero">
             <div>
               <span className="do-kicker">{selectedProject ? "Project support form" : "General support intake"}</span>

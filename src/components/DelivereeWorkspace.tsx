@@ -5901,20 +5901,8 @@ export function DelivereeWorkspace() {
 
         <nav className="do-nav-admin" aria-label="Workspace administration">
           <button
-            className={`do-nav-item do-mobile-advanced ${lens.kind === "more" && lens.section === "workspace" ? "is-active" : ""}`}
-            data-testid="nav-workspace"
-            onClick={() => {
-              navigate("/workspace");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Users size="sm" />
-            <span>{t("navWorkspace")}</span>
-          </button>
-          <button
-            className={`do-nav-item ${lens.kind === "settings" ? "is-active" : ""}`}
-            data-testid="nav-settings"
+            className={`do-nav-item ${lens.kind === "settings" || (lens.kind === "more" && lens.section === "workspace") ? "is-active" : ""}`}
+            data-testid="nav-admin-settings"
             onClick={() => {
               navigate("/settings");
               setSidebarOpen(false);
@@ -5922,7 +5910,10 @@ export function DelivereeWorkspace() {
             type="button"
           >
             <Settings size="sm" />
-            <span>{t("navSettings")}</span>
+            <span>Admin & settings</span>
+            {accessRequests.length > 0 && (
+              <em className="do-menu-badge">{accessRequests.length}</em>
+            )}
           </button>
           <button
             className="do-nav-item do-mobile-advanced"
@@ -5960,26 +5951,16 @@ export function DelivereeWorkspace() {
                 <TextSizeControl compact />
               </div>
               <button
-                className="do-mobile-advanced"
-                onClick={() => {
-                  setPanel("workspace");
-                  setWorkspaceOpen(false);
-                }}
-                type="button"
-              >
-                <Users size={14} /> Workspace & team
-                {accessRequests.length > 0 && (
-                  <em className="do-menu-badge">{accessRequests.length}</em>
-                )}
-              </button>
-              <button
                 onClick={() => {
                   setPanel("settings");
                   setWorkspaceOpen(false);
                 }}
                 type="button"
               >
-                <Settings size={14} /> Settings
+                <Settings size={14} /> Admin & settings
+                {accessRequests.length > 0 && (
+                  <em className="do-menu-badge">{accessRequests.length}</em>
+                )}
               </button>
               <button
                 className="do-mobile-advanced"
@@ -7062,7 +7043,7 @@ export function DelivereeWorkspace() {
                       ? "AUTOMATIONS"
                       : panel === "digest"
                         ? "UPDATES"
-                        : panel === "workspace"
+                        : panel === "workspace" || panel === "settings"
                           ? "ADMIN"
                           : "CONTROL"}
             </span>
@@ -7077,10 +7058,8 @@ export function DelivereeWorkspace() {
                       ? "Automations"
                       : panel === "digest"
                         ? "Updates"
-                        : panel === "workspace"
-                          ? "Workspace & team"
-                          : panel === "settings"
-                            ? "Settings"
+                        : panel === "workspace" || panel === "settings"
+                          ? "Admin & settings"
                           : "Pending changes"}
             </h2>
           </div>
@@ -7451,6 +7430,20 @@ export function DelivereeWorkspace() {
 
           {panel === "settings" && (
             <div className="do-panel-settings">
+              <nav className="do-admin-tabs" aria-label="Admin sections">
+                <button className="is-active" type="button">
+                  <Settings size={14} /> Account
+                </button>
+                <button onClick={() => setPanel("workspace")} type="button">
+                  <Users size={14} /> People
+                </button>
+                <button onClick={() => setPanel("workspace")} type="button">
+                  <Inbox size={14} /> Support
+                </button>
+                <button type="button">
+                  <ListTodo size={14} /> Data
+                </button>
+              </nav>
               {canGrantPureAiFollowers ? (
                 <section
                   className="do-pure-ai-followers-callout"
@@ -7607,6 +7600,20 @@ export function DelivereeWorkspace() {
 
           {panel === "workspace" && (
             <>
+              <nav className="do-admin-tabs" aria-label="Admin sections">
+                <button onClick={() => setPanel("settings")} type="button">
+                  <Settings size={14} /> Account
+                </button>
+                <button className="is-active" type="button">
+                  <Users size={14} /> People
+                </button>
+                <button type="button">
+                  <Inbox size={14} /> Support
+                </button>
+                <button onClick={() => setPanel("settings")} type="button">
+                  <ListTodo size={14} /> Data
+                </button>
+              </nav>
               <p className="do-panel-intro">
                 Workspaces separate companies, teams, or operating contexts.
                 This version supports up to {WORKSPACE_LIMIT}; conversations
