@@ -254,7 +254,7 @@ export function NotionProjectTable({
                   event.dataTransfer.effectAllowed = "move";
                   event.dataTransfer.setData("text/plain", row.id);
                 }}
-                title="Drag onto a valid parent to nest, or onto a sibling to reorder"
+                title="Arrastrá sobre un padre válido para anidar, o sobre un hermano para reordenar"
                 type="button"
               >
                 <GripVertical size={13} />
@@ -278,13 +278,19 @@ export function NotionProjectTable({
               {row.childCount > 0 ? (
                 <span className="do-notion-child-count">{row.childCount}</span>
               ) : null}
-              {renderAttrs ? (
-                <div className="do-notion-row-attrs">{renderAttrs(row.item)}</div>
-              ) : null}
             </div>
           );
         },
-        size: 360,
+        size: 280,
+      }),
+      columnHelper.display({
+        id: "attrs",
+        header: () => <span className="sr-only">Atributos</span>,
+        cell: (info) =>
+          renderAttrs ? (
+            <div className="do-notion-row-attrs">{renderAttrs(info.row.original.item)}</div>
+          ) : null,
+        size: 220,
       }),
       columnHelper.accessor("statusLabel", {
         header: "Estado",
@@ -430,7 +436,7 @@ export function NotionProjectTable({
             );
           })}
           <tr className="do-notion-add-row">
-            <td colSpan={7}>
+            <td colSpan={8}>
               <form
                 className="do-notion-add-form"
                 onSubmit={(event) => {
@@ -473,7 +479,7 @@ export function NotionProjectTable({
                   placeholder=""
                   value={draft}
                 />
-                <span className="do-notion-add-hint">Tab = hijo del seleccionado</span>
+                <span className="do-notion-add-hint">Tab = hijo del seleccionado · Arrastrá para anidar</span>
               </form>
             </td>
           </tr>
@@ -481,7 +487,7 @@ export function NotionProjectTable({
         {estimateSum > 0 ? (
           <tfoot>
             <tr>
-              <td colSpan={5} />
+              <td colSpan={6} />
               <td>
                 <span className="do-notion-sum">
                   <em>SUM</em> {estimateSum}

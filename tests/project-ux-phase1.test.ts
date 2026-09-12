@@ -95,7 +95,9 @@ test("notion table renders type glyph, hierarchy indent, attrs, and nest drag", 
   assert.match(table, /depth \* HIERARCHY_INDENT_PX/);
   assert.match(table, /sortHierarchyForest/);
   assert.match(table, /renderAttrs/);
+  assert.match(table, /id: "attrs"/);
   assert.match(table, /canNestUnder/);
   assert.match(table, /parentLinkPatch/);
   assert.match(table, /do-notion-drag-handle/);
+  assert.match(table, /do-notion-row-attrs/);
 });

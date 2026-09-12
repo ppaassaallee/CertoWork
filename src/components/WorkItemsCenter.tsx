@@ -846,7 +846,22 @@ export function WorkItemsCenter({
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
   );
-  const attributeColumns = [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
+  /** Project Tabla always exposes the full icon quick-actions (entity, parent, etc.). */
+  const notionQuickAttrColumns: Array<Exclude<ItemColumnKey, "title">> = [
+    "delivery_entity",
+    "client_entity",
+    "tags",
+    "work_category",
+    "product_phase",
+    "status",
+    "priority",
+    "assignees",
+    "due",
+    "sprint",
+  ];
+  const attributeColumns = notionSurface
+    ? notionQuickAttrColumns
+    : [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
     gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
