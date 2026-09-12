@@ -4139,6 +4139,46 @@ a {
   align-items: center;
   gap: 6px;
 }
+.do-notion-drag-handle {
+  display: grid;
+  width: 16px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-muted);
+  cursor: grab;
+  opacity: 0.35;
+}
+.do-notion-name-cell:hover .do-notion-drag-handle,
+.do-notion-table tr.is-dragging .do-notion-drag-handle {
+  opacity: 1;
+}
+.do-notion-drag-handle:active {
+  cursor: grabbing;
+}
+.do-notion-row-attrs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 8px;
+}
+.do-notion-row-attrs .do-item-attrs {
+  justify-content: flex-start;
+}
+.do-notion-table tr.is-dragging td {
+  opacity: 0.45;
+}
+.do-notion-table tr.is-drop-child td {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-0));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.do-notion-table tr.is-drop-reorder td {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
 .do-work-type-glyph {
   display: inline-flex;
   flex: none;

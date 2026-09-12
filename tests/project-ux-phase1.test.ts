@@ -88,9 +88,14 @@ test("project date range uses earliest and latest dated fields", () => {
   );
 });
 
-test("notion table renders type glyph and hierarchy indent", () => {
+test("notion table renders type glyph, hierarchy indent, attrs, and nest drag", () => {
   assert.match(table, /WorkItemTypeGlyph/);
   assert.match(table, /HierarchyChevron/);
-  assert.match(table, /depth \* 22/);
+  assert.match(table, /HIERARCHY_INDENT_PX/);
+  assert.match(table, /depth \* HIERARCHY_INDENT_PX/);
   assert.match(table, /sortHierarchyForest/);
+  assert.match(table, /renderAttrs/);
+  assert.match(table, /canNestUnder/);
+  assert.match(table, /parentLinkPatch/);
+  assert.match(table, /do-notion-drag-handle/);
 });

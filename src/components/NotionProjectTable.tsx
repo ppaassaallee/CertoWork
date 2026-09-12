@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown, Plus } from "./ui/Icon";
+import { ChevronDown, GripVertical, Plus } from "./ui/Icon";
 import {
   HierarchyChevron,
   WorkItemTypeGlyph,
@@ -22,12 +22,17 @@ import {
 import { checklistItems, checklistProgress } from "../lib/kanbanFeatures";
 import {
   allowedChildKinds,
+  canNestUnder,
   hierarchyChildren,
   hierarchyKind,
   hierarchyRoots,
+  normalizeItemId,
+  parentLinkPatch,
   sortHierarchyForest,
   sortHierarchySiblings,
   treeNodeExpandedByDefault,
+  visibleParentId,
+  wouldCreateHierarchyCycle,
 } from "../lib/itemHierarchy";
 import { type SprintRecord } from "../lib/sprints";
 import { taskWorkLane } from "../lib/projectPortfolio";
@@ -51,6 +56,8 @@ type NotionRow = {
 };
 
 const columnHelper = createColumnHelper<NotionRow>();
+/** Clearer hierarchy indent than a flat list — ~1 tab per level. */
+const HIERARCHY_INDENT_PX = 24;
 
 function itemTitle(item: any) {
   return String(item?.title || item?.name || item?.summary || "Untitled").trim();
@@ -96,7 +103,6 @@ function buildVisibleRows(
   };
 
   sortHierarchySiblings(hierarchyRoots(tasks)).forEach((root) => walk(root, 0));
-  // Orphans already handled by sortHierarchyForest roots; include any leftover
   for (const item of forest) {
     if (!rows.some((row) => row.id === String(item.id))) walk(item, 0);
   }
@@ -104,47 +110,57 @@ function buildVisibleRows(
 }
 
 function defaultCreateKind(parent: any | null) {
-  if (!parent) return "pbi";
+  if (!parent) return "feature";
   const children = allowedChildKinds(hierarchyKind(parent));
+  if (children.includes("feature")) return "feature";
   if (children.includes("pbi")) return "pbi";
-  if (children.includes("task")) return "task";
   if (children.includes("subtask")) return "subtask";
+  if (children.includes("task")) return "task";
   return children[0] || "pbi";
 }
 
 export function NotionProjectTable({
   tasks,
+  hierarchyPool,
   sprints: _sprints = [],
   onSelectItem,
   onAddItem,
+  onUpdateTask,
+  onReorderPeers,
+  renderAttrs,
   selectedItemId,
 }: {
   tasks: any[];
+  /** Full project pool for parent/cycle checks (defaults to `tasks`). */
+  hierarchyPool?: any[];
   sprints?: SprintRecord[];
   onSelectItem: (id: string) => void;
   onAddItem: (title: string, patch?: Record<string, unknown>) => void;
+  onUpdateTask?: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onReorderPeers?: (draggedId: string, targetId: string, peers: any[]) => Promise<void> | void;
+  renderAttrs?: (item: any) => ReactNode;
   selectedItemId?: string | null;
 }) {
+  const pool = hierarchyPool?.length ? hierarchyPool : tasks;
   const [draft, setDraft] = useState("");
   const [createKind, setCreateKind] = useState("pbi");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropMode, setDropMode] = useState<"child" | "reorder" | null>(null);
 
-  // Expand parents that default open for this visit when first seen with children
   useMemo(() => {
     const next = new Set(expanded);
-    let changed = false;
     for (const item of tasks) {
       const id = String(item.id);
       const kids = hierarchyChildren(tasks, id);
       if (
         kids.length &&
         treeNodeExpandedByDefault(hierarchyKind(item), 0) &&
-        !next.has(id) &&
-        !expanded.has(`seen:${id}`)
+        !next.has(id)
       ) {
-        // defaults are collapsed per itemHierarchy — leave collapsed
+        // defaults stay collapsed
       }
-      void changed;
     }
     return next;
   }, [tasks, expanded]);
@@ -168,6 +184,51 @@ export function NotionProjectTable({
     });
   };
 
+  const byId = useMemo(
+    () => new Map(pool.map((item) => [normalizeItemId(item?.id), item])),
+    [pool],
+  );
+  const presentIds = useMemo(
+    () => new Set(pool.map((item) => normalizeItemId(item?.id)).filter(Boolean)),
+    [pool],
+  );
+
+  const resolveDrop = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) return null;
+    const dragged = byId.get(draggedId);
+    const target = byId.get(targetId);
+    if (!dragged || !target) return null;
+    const childKind = hierarchyKind(dragged);
+    const parentKind = hierarchyKind(target);
+    if (
+      canNestUnder(childKind, parentKind) &&
+      !wouldCreateHierarchyCycle(dragged, target, pool)
+    ) {
+      return { mode: "child" as const, dragged, target };
+    }
+    const draggedParent = visibleParentId(dragged, presentIds);
+    const targetParent = visibleParentId(target, presentIds);
+    if (draggedParent === targetParent) {
+      return { mode: "reorder" as const, dragged, target };
+    }
+    return null;
+  };
+
+  const applyDrop = async (targetId: string) => {
+    const resolved = resolveDrop(targetId);
+    if (!resolved || !draggedId) return;
+    if (resolved.mode === "child") {
+      await onUpdateTask?.(draggedId, parentLinkPatch(resolved.target));
+      setExpanded((current) => new Set(current).add(targetId));
+      return;
+    }
+    const parent = visibleParentId(resolved.dragged, presentIds);
+    const peers = parent
+      ? hierarchyChildren(pool, parent)
+      : hierarchyRoots(pool);
+    await onReorderPeers?.(draggedId, targetId, peers);
+  };
+
   const columns = useMemo(
     () => [
       columnHelper.accessor("title", {
@@ -177,8 +238,27 @@ export function NotionProjectTable({
           return (
             <div
               className="do-notion-name-cell"
-              style={{ paddingLeft: `${row.depth * 22}px` }}
+              style={{ paddingLeft: `${row.depth * HIERARCHY_INDENT_PX}px` }}
             >
+              <button
+                aria-label={`Drag to nest or reorder ${row.title}`}
+                className="do-notion-drag-handle"
+                draggable
+                onDragEnd={() => {
+                  setDraggedId(null);
+                  setDropTargetId(null);
+                  setDropMode(null);
+                }}
+                onDragStart={(event) => {
+                  setDraggedId(row.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", row.id);
+                }}
+                title="Drag onto a valid parent to nest, or onto a sibling to reorder"
+                type="button"
+              >
+                <GripVertical size={13} />
+              </button>
               {row.hasChildren ? (
                 <HierarchyChevron
                   expanded={expanded.has(row.id)}
@@ -198,10 +278,13 @@ export function NotionProjectTable({
               {row.childCount > 0 ? (
                 <span className="do-notion-child-count">{row.childCount}</span>
               ) : null}
+              {renderAttrs ? (
+                <div className="do-notion-row-attrs">{renderAttrs(row.item)}</div>
+              ) : null}
             </div>
           );
         },
-        size: 260,
+        size: 360,
       }),
       columnHelper.accessor("statusLabel", {
         header: "Estado",
@@ -253,7 +336,7 @@ export function NotionProjectTable({
         size: 80,
       }),
     ],
-    [onSelectItem, expanded],
+    [onSelectItem, expanded, renderAttrs],
   );
 
   const table = useReactTable({
@@ -262,12 +345,28 @@ export function NotionProjectTable({
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const submitNew = () => {
+  const selectedParent =
+    selectedItemId && byId.has(selectedItemId) ? byId.get(selectedItemId) : null;
+
+  const submitNew = (asChildOfSelected: boolean) => {
     const title = draft.trim();
     if (!title) return;
-    onAddItem(title, { workItemType: createKind, type: createKind, itemType: createKind });
+    const parent =
+      asChildOfSelected && selectedParent && allowedChildKinds(hierarchyKind(selectedParent)).length
+        ? selectedParent
+        : null;
+    const kind = parent ? defaultCreateKind(parent) : createKind;
+    onAddItem(title, {
+      workItemType: kind,
+      type: kind,
+      itemType: kind,
+      ...(parent ? parentLinkPatch(parent) : {}),
+    });
     setDraft("");
     setCreateKind(defaultCreateKind(null));
+    if (parent) {
+      setExpanded((current) => new Set(current).add(String(parent.id)));
+    }
   };
 
   return (
@@ -285,25 +384,58 @@ export function NotionProjectTable({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              className={selectedItemId === row.original.id ? "is-selected" : ""}
-              key={row.id}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row) => {
+            const id = row.original.id;
+            const isDropChild = dropTargetId === id && dropMode === "child";
+            const isDropReorder = dropTargetId === id && dropMode === "reorder";
+            return (
+              <tr
+                className={[
+                  selectedItemId === id ? "is-selected" : "",
+                  draggedId === id ? "is-dragging" : "",
+                  isDropChild ? "is-drop-child" : "",
+                  isDropReorder ? "is-drop-reorder" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                key={row.id}
+                onDragLeave={() => {
+                  setDropTargetId((current) => (current === id ? null : current));
+                  setDropMode((current) => (dropTargetId === id ? null : current));
+                }}
+                onDragOver={(event) => {
+                  if (!draggedId || draggedId === id) return;
+                  const resolved = resolveDrop(id);
+                  if (!resolved) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDropTargetId(id);
+                  setDropMode(resolved.mode);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  void applyDrop(id).finally(() => {
+                    setDraggedId(null);
+                    setDropTargetId(null);
+                    setDropMode(null);
+                  });
+                }}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
           <tr className="do-notion-add-row">
             <td colSpan={7}>
               <form
                 className="do-notion-add-form"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  submitNew();
+                  submitNew(false);
                 }}
               >
                 <Plus size={13} />
@@ -329,10 +461,19 @@ export function NotionProjectTable({
                   aria-label="Nueva"
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => setCreateKind((current) => current || "pbi")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Tab" && !event.shiftKey && draft.trim() && selectedParent) {
+                      const allowed = allowedChildKinds(hierarchyKind(selectedParent));
+                      if (allowed.length) {
+                        event.preventDefault();
+                        submitNew(true);
+                      }
+                    }
+                  }}
                   placeholder=""
                   value={draft}
                 />
-                <span className="do-notion-add-hint">Tab = subtarea</span>
+                <span className="do-notion-add-hint">Tab = hijo del seleccionado</span>
               </form>
             </td>
           </tr>
