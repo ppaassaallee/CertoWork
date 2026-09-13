@@ -39,6 +39,9 @@ export function AgentsArea({
   routines = [],
   workspaceName,
   onRoutinesChanged,
+  areaTitle = "Rutinas",
+  initialTab,
+  flagOffFallback = "routines",
 }: {
   onOpenOdysseus: () => void;
   onOpenAutomations: () => void;
@@ -51,13 +54,21 @@ export function AgentsArea({
   routines?: RoutineSpec[];
   workspaceName?: string;
   onRoutinesChanged?: () => void;
+  /** Shell title — “Rutinas” is the control tower; Agentes when opened from /agents. */
+  areaTitle?: string;
+  initialTab?: AgentsAreaTab;
+  /** What to render when the map flag is off. */
+  flagOffFallback?: "routines" | "agents";
 }) {
   const enabled = isAgentsMapEnabled();
   const navigate = useNavigate();
   const { openRoutine } = useRoutineHost();
-  const [tab, setTab] = useState<AgentsAreaTab>(() =>
-    enabled ? readAgentsAreaTab() : "agents",
-  );
+  const [tab, setTab] = useState<AgentsAreaTab>(() => {
+    if (!enabled) return flagOffFallback === "agents" ? "agents" : "routines";
+    if (initialTab) return initialTab;
+    const saved = readAgentsAreaTab();
+    return saved || "map";
+  });
   const [runsByRoutineId, setRunsByRoutineId] = useState<Record<string, RunLike[]>>({});
 
   useEffect(() => {
@@ -100,19 +111,22 @@ export function AgentsArea({
   }, [routines, runsByRoutineId]);
 
   if (!enabled) {
-    return (
-      <AgentsLibrary
-        activityItems={activityItems}
-        pendingApprovals={pendingApprovals}
-        routines={routines}
-        viewerUserId={viewerUserId}
-        onCreateAgent={onCreateAgent}
-        onOpenActivity={onOpenActivity}
-        onOpenApprovals={onOpenApprovals}
-        onOpenAutomations={onOpenAutomations}
-        onOpenOdysseus={onOpenOdysseus}
-      />
-    );
+    if (flagOffFallback === "agents") {
+      return (
+        <AgentsLibrary
+          activityItems={activityItems}
+          pendingApprovals={pendingApprovals}
+          routines={routines}
+          viewerUserId={viewerUserId}
+          onCreateAgent={onCreateAgent}
+          onOpenActivity={onOpenActivity}
+          onOpenApprovals={onOpenApprovals}
+          onOpenAutomations={onOpenAutomations}
+          onOpenOdysseus={onOpenOdysseus}
+        />
+      );
+    }
+    return <RoutinesHome />;
   }
 
   const selectTab = (next: AgentsAreaTab) => {
@@ -123,8 +137,8 @@ export function AgentsArea({
   return (
     <div className="cw-agents-area" data-testid="agents-area">
       <div className="cw-agents-area-head">
-        <strong>Agentes</strong>
-        <div className="cw-agents-area-tabs" role="tablist" aria-label="Agentes views">
+        <strong>{areaTitle}</strong>
+        <div className="cw-agents-area-tabs" role="tablist" aria-label={`${areaTitle} views`}>
           {TABS.map((item) => (
             <button
               aria-selected={tab === item.id}
