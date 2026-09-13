@@ -101,6 +101,63 @@ export const ODISEUS_TOOLS = [
   },
   {
     type: "function",
+    name: "list_my_items",
+    description:
+      "List items assigned to the current user. Always use this for 'my tasks / mis tareas'. Never infer ownership from chat prose.",
+    parameters: {
+      type: "object",
+      properties: {
+        filter: {
+          type: "string",
+          enum: ["today", "overdue", "week", "open"],
+          description: "today | overdue | week | open",
+        },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "get_item_context",
+    description: "Load one item with title, status, due, project, and recent activity summary.",
+    parameters: {
+      type: "object",
+      properties: {
+        entityType: { type: "string", enum: ["task", "item"] },
+        id: { type: "string" },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "list_my_approvals",
+    description: "List pending approvals / review candidates for the current user.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "list_project_health",
+    description: "Summarize health for specific projects or all open projects.",
+    parameters: {
+      type: "object",
+      properties: {
+        projectIds: { type: "array", items: { type: "string" } },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
     name: "get_activity_summary",
     description: "Summarize portfolio attention: counts on track / at risk / blocked and overdue items.",
     parameters: {
@@ -197,6 +254,10 @@ export const TOOL_LABELS = {
   get_project: "Loading project",
   get_overdue_items: "Checking overdue work",
   list_project_items: "Reviewing project items",
+  list_my_items: "Loading your assigned items",
+  get_item_context: "Loading item context",
+  list_my_approvals: "Checking your approvals",
+  list_project_health: "Checking project health",
   get_activity_summary: "Summarizing portfolio attention",
   propose_followups: "Preparing follow-up actions",
   prepare_status_report: "Preparing project report",
@@ -306,6 +367,154 @@ export function executeOdysseusTool(name, args, workspaceContext) {
         priority: task.priority || null,
       }));
     return { label: TOOL_LABELS.list_project_items, result: { count: items.length, items } };
+  }
+
+  if (name === "list_my_items") {
+    const userId = String(
+      args?.userId ||
+        workspaceContext?.userId ||
+        workspaceContext?.currentUserId ||
+        workspaceContext?.actor?.userId ||
+        "",
+    );
+    const memberId = String(
+      workspaceContext?.currentMemberId || workspaceContext?.actor?.memberId || "",
+    );
+    const filter = String(args?.filter || "open").toLowerCase();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const weekEnd = todayMs + 7 * 86_400_000;
+    const tokens = new Set(
+      [userId, memberId]
+        .concat(asList(workspaceContext?.actor?.labels).map(String))
+        .map((value) => String(value || "").toLowerCase())
+        .filter(Boolean),
+    );
+    const mine = tasks.filter((task) => {
+      if (isClosed(task.status) && filter !== "open") {
+        /* still allow week filter to skip closed */
+      }
+      if (isClosed(task.status)) return false;
+      const ids = []
+        .concat(asList(task.assigneeIds))
+        .concat(task.assigneeId ? [task.assigneeId] : [])
+        .concat(task.assignedTo ? [task.assignedTo] : [])
+        .map((value) => String(value || "").toLowerCase());
+      const names = []
+        .concat(asList(task.assignees))
+        .concat(task.assignee ? [task.assignee] : [])
+        .concat(task.owner ? [task.owner] : [])
+        .map((value) => String(value || "").toLowerCase());
+      const hit =
+        ids.some((id) => tokens.has(id)) ||
+        names.some((label) => tokens.has(label) || [...tokens].some((token) => label.includes(token)));
+      if (!hit && !tokens.size) return false;
+      if (!hit) return false;
+      const due = dueTime(task.dueDate || task.targetDate);
+      if (filter === "today") return due && due >= todayMs && due < todayMs + 86_400_000;
+      if (filter === "overdue") return due && due < todayMs;
+      if (filter === "week") return due && due >= todayMs && due < weekEnd;
+      return true;
+    });
+    const items = mine.slice(0, limit).map((task) => ({
+      id: task.id,
+      title: titleOf(task),
+      projectId: task.projectId || null,
+      projectTitle: titleOf(projects.find((project) => project.id === task.projectId) || {}),
+      status: task.status || "open",
+      dueDate: task.dueDate || task.targetDate || null,
+      priority: task.priority || null,
+      workItemType: task.workItemType || task.itemType || task.type || "task",
+    }));
+    return {
+      label: TOOL_LABELS.list_my_items,
+      result: { count: items.length, filter, items, block: "items" },
+    };
+  }
+
+  if (name === "get_item_context") {
+    const id = String(args?.id || "");
+    const task = tasks.find((entry) => String(entry.id) === id);
+    if (!task) {
+      return {
+        label: TOOL_LABELS.get_item_context,
+        result: { found: false, id },
+      };
+    }
+    const project = projects.find((entry) => entry.id === task.projectId);
+    const children = tasks
+      .filter(
+        (entry) =>
+          String(entry.parentId || entry.featureId || entry.epicId || "") === id &&
+          !isClosed(entry.status),
+      )
+      .slice(0, 12)
+      .map((entry) => ({
+        id: entry.id,
+        title: titleOf(entry),
+        status: entry.status || "open",
+      }));
+    return {
+      label: TOOL_LABELS.get_item_context,
+      result: {
+        found: true,
+        item: {
+          id: task.id,
+          title: titleOf(task),
+          status: task.status || "open",
+          priority: task.priority || null,
+          dueDate: task.dueDate || task.targetDate || null,
+          projectId: task.projectId || null,
+          projectTitle: project ? titleOf(project) : null,
+          description: String(task.description || "").slice(0, 800),
+          children,
+        },
+      },
+    };
+  }
+
+  if (name === "list_my_approvals") {
+    const reviews = asList(workspaceContext?.reviewItems || workspaceContext?.approvals);
+    const items = reviews
+      .filter((entry) =>
+        ["pending", "approved_for_review", "approval_required"].includes(
+          String(entry.status || "").toLowerCase(),
+        ),
+      )
+      .slice(0, limit)
+      .map((entry) => ({
+        id: entry.id,
+        title: titleOf(entry) || String(entry.summary || entry.reason || "Approval"),
+        status: entry.status || "pending",
+        type: entry.type || entry.kind || "approval",
+        createdAt: entry.createdAt || null,
+      }));
+    return { label: TOOL_LABELS.list_my_approvals, result: { count: items.length, items } };
+  }
+
+  if (name === "list_project_health") {
+    const ids = asList(args?.projectIds).map(String).filter(Boolean);
+    const pool = ids.length
+      ? projects.filter((project) => ids.includes(String(project.id)))
+      : projects.filter((project) => !isClosed(project.status));
+    const items = pool.slice(0, limit).map((project) => {
+      const health = projectHealth(project, tasks, risks);
+      const open = tasks.filter(
+        (task) => task.projectId === project.id && !isClosed(task.status),
+      );
+      const blocked = open.filter(
+        (task) => String(task.status || "").toLowerCase() === "blocked",
+      ).length;
+      return {
+        id: project.id,
+        title: titleOf(project),
+        health,
+        openItems: open.length,
+        blocked,
+      };
+    });
+    return { label: TOOL_LABELS.list_project_health, result: { count: items.length, items } };
   }
 
   if (name === "get_activity_summary") {

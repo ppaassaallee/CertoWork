@@ -183,6 +183,8 @@ type Props = {
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   onAsk: (prompt: string) => void;
+  /** Opens Odysseus panel anchored to the selected item when provided. */
+  onAskOdysseus?: (item: any) => void;
   onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
@@ -709,6 +711,7 @@ export function WorkItemsCenter({
   selectedItemId,
   onSelectItem,
   onAsk,
+  onAskOdysseus,
   onAddTask,
   onUpdateTask,
   onCreateControlledOption,
@@ -4287,7 +4290,11 @@ export function WorkItemsCenter({
             item={selectedItem}
             itemKey={String(selectedItem.projectKey || selectedItem.key || selectedItem.id || "").slice(0, 24)}
             onArchive={() => void archiveItem(selectedItem)}
-            onAskOdysseus={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)}
+            onAskOdysseus={() =>
+              onAskOdysseus
+                ? onAskOdysseus(selectedItem)
+                : onAsk(`Help me move this work item forward: ${title(selectedItem)}`)
+            }
             onChangeType={(kind) => changeItemType(selectedItem, kind)}
             onClose={() => onSelectItem(null)}
             onCreateControlledOption={onCreateControlledOption}

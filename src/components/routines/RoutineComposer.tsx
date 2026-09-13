@@ -25,6 +25,8 @@ type RoutineComposerProps = {
   scope: ScopeInput;
   /** Optional counts for dry-run preview. */
   contextStats?: { itemCount?: number; blockedCount?: number; overdueCount?: number };
+  /** Prefill sentence when opened from Odysseus or a chip. */
+  initialSentence?: string;
   onSaved?: (routineId: string) => void;
 };
 
@@ -56,6 +58,7 @@ export function RoutineComposer({
   onClose,
   scope,
   contextStats,
+  initialSentence,
   onSaved,
 }: RoutineComposerProps) {
   const { user, workspace } = useAuth();
@@ -71,6 +74,16 @@ export function RoutineComposer({
   const [busy, setBusy] = useState<"compile" | "preview" | "save" | null>(null);
   const [error, setError] = useState("");
   const [savedId, setSavedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setSentence(String(initialSentence || "").trim());
+    setCompiled(null);
+    setPreview(null);
+    setError("");
+    setSavedId(null);
+    setQuestionAnswer("");
+  }, [open, initialSentence, scope.entityType, scope.entityId]);
 
   useEffect(() => {
     if (!open) return undefined;
