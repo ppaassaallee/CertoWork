@@ -91,20 +91,6 @@ export function RitualRunner({
     return () => window.clearTimeout(handle);
   }, [answers, stepIndex, open, persist]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault();
-        void goNext();
-      }
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, stepIndex, answers]);
-
   const goBack = async () => {
     if (stepIndex <= 0) return;
     const next = stepIndex - 1;
@@ -157,6 +143,19 @@ export function RitualRunner({
     setStepIndex(next);
     await persist({ stepIndex: next });
   };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        void goNext();
+      }
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, stepIndex, answers, onClose, session, manifest, locale, steps.length, persist, onFinished]);
 
   const skip = async () => {
     if (!step?.skippable) return;
