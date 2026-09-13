@@ -42,6 +42,7 @@ import {
 } from "../../../lib/kanbanFeatures";
 import { workCategory, productPhase, WORK_CATEGORIES, PRODUCT_PHASES } from "../../../lib/workClassification";
 import { getLocale } from "../../../lib/i18n";
+import { compileItemSentence } from "../../capture/compileItemSentence";
 import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
 import "./ItemModal.css";
 
