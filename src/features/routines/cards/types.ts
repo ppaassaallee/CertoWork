@@ -1,4 +1,4 @@
-import type { RitualCardType } from "../../lib/routines/manifest";
+import type { RitualCardType } from "../../../lib/routines/manifest";
 
 export type CardAnswer = unknown;
 

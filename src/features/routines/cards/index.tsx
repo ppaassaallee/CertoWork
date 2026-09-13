@@ -7,7 +7,7 @@ import { TimeBlocksCard } from "./TimeBlocks";
 import { CapacityCard } from "./Capacity";
 import { SummaryCard } from "./Summary";
 import type { RitualCardProps } from "./types";
-import type { RitualCardType } from "../../lib/routines/manifest";
+import type { RitualCardType } from "../../../lib/routines/manifest";
 
 export type { RitualCardProps, CardAnswer } from "./types";
 export {
