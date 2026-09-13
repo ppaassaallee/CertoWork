@@ -42,7 +42,9 @@ test("item modal v2 is behind a Vite flag with safe defaults", () => {
   const flag = readFileSync(resolve("src/features/items/ItemModal/itemModalFlag.ts"), "utf8");
   const env = readFileSync(resolve(".env.example"), "utf8");
   assert.match(flag, /VITE_ITEM_MODAL_V2/);
-  assert.match(env, /VITE_ITEM_MODAL_V2=0/);
+  // Default ON unless explicitly disabled (0 / false / off / no)
+  assert.match(flag, /raw === ["']0["']/);
+  assert.match(env, /VITE_ITEM_MODAL_V2=1/);
   assert.equal(typeof isItemModalV2Enabled(), "boolean");
 });
 
