@@ -1,5 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { htmlToMarkdown, markdownToHtml } from "../lib/noteMarkup";
+import {
+  insertBlockIntoMarkdown,
+  SEMANTIC_BLOCKS,
+  type SemanticBlockType,
+} from "../lib/semanticBlocks";
+import { getLocale } from "../lib/i18n";
+import "./semanticBlocks.css";
 
 type Props = {
   noteId: string;
@@ -33,6 +40,9 @@ function wrapCode() {
 export function NoteRichEditor({ noteId, value, onChange }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const focusedRef = useRef(false);
+  const locale = getLocale();
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashQuery, setSlashQuery] = useState("");
 
   useEffect(() => {
     const field = editorRef.current;
@@ -60,6 +70,30 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     }
     emit();
   };
+
+  const insertBlock = (type: SemanticBlockType) => {
+    const next = insertBlockIntoMarkdown(value, type, "");
+    onChange(next);
+    setSlashOpen(false);
+    setSlashQuery("");
+    // Force DOM refresh even if focused
+    requestAnimationFrame(() => {
+      const field = editorRef.current;
+      if (!field) return;
+      field.innerHTML = markdownToHtml(next);
+      field.dataset.empty = "false";
+    });
+  };
+
+  const slashOptions = SEMANTIC_BLOCKS.filter((block) => !block.aiOnly).filter((block) => {
+    if (!slashQuery) return true;
+    const q = slashQuery.toLowerCase();
+    return (
+      block.type.includes(q) ||
+      block.labelEs.toLowerCase().includes(q) ||
+      block.labelEn.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="do-notes-write">
@@ -140,13 +174,55 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
         >
           List
         </button>
+        <button
+          data-testid="notes-slash-blocks"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            setSlashOpen((open) => !open);
+            setSlashQuery("");
+          }}
+          title={locale === "es" ? "Bloques /" : "Blocks /"}
+          type="button"
+        >
+          /
+        </button>
       </div>
+
+      {slashOpen && (
+        <div className="cw-slash-menu" data-testid="semantic-slash-menu">
+          <input
+            autoFocus
+            onChange={(event) => setSlashQuery(event.target.value)}
+            placeholder={locale === "es" ? "Buscar bloque…" : "Search block…"}
+            value={slashQuery}
+          />
+          <div className="cw-slash-list">
+            {slashOptions.map((block) => (
+              <button
+                key={block.type}
+                onClick={() => insertBlock(block.type)}
+                type="button"
+              >
+                <span className="cw-semantic-chip" data-hue={block.hue}>
+                  {locale === "es" ? block.labelEs : block.labelEn}
+                </span>
+              </button>
+            ))}
+            {!slashOptions.length && (
+              <span className="cw-slash-empty">
+                {locale === "es" ? "Sin resultados" : "No matches"}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         aria-label="Note content"
         className="do-notes-rich"
         contentEditable
         data-empty="true"
-        data-placeholder="Write the note here. Use Title, headings, bold, and italic — what you see is what you get."
+        data-placeholder="Write the note here. Use Title, headings, bold, italic, or / for blocks."
         onBlur={() => {
           focusedRef.current = false;
           emit();
@@ -154,7 +230,20 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
         onFocus={() => {
           focusedRef.current = true;
         }}
-        onInput={emit}
+        onInput={(event) => {
+          emit();
+          const text = (event.target as HTMLDivElement).innerText || "";
+          if (text.trimEnd().endsWith("/")) {
+            setSlashOpen(true);
+            setSlashQuery("");
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && slashOpen) {
+            event.preventDefault();
+            setSlashOpen(false);
+          }
+        }}
         ref={editorRef}
         role="textbox"
         suppressContentEditableWarning

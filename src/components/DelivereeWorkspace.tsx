@@ -7381,6 +7381,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onOpenProject={openProjectRecord}
             projects={projects}
             tasks={tasks}
           />
