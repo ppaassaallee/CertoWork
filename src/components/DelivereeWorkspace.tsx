@@ -13,7 +13,6 @@ import {
   Archive,
   ArrowUp,
   BookOpen,
-  Bot,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -485,12 +484,14 @@ export function DelivereeWorkspace() {
     favorites: boolean;
     recent: boolean;
     conversations: boolean;
+    management: boolean;
   }>(() => {
     const defaults = {
       projects: true,
       favorites: true,
       recent: true,
       conversations: true,
+      management: false,
     };
     if (typeof window === "undefined") return defaults;
     try {
@@ -502,7 +503,7 @@ export function DelivereeWorkspace() {
     }
   });
   const toggleSidebarSection = (
-    key: "projects" | "favorites" | "recent" | "conversations",
+    key: "projects" | "favorites" | "recent" | "conversations" | "management",
   ) => {
     setSidebarSections((current) => {
       const next = { ...current, [key]: !current[key] };
@@ -5528,36 +5529,6 @@ export function DelivereeWorkspace() {
             <span>{t("navMyWork")}</span>
           </button>
           <button
-            className={`do-nav-item is-requests do-mobile-advanced ${lens.kind === "requests" ? "is-active" : ""}`}
-            data-testid="nav-requests"
-            onClick={() => {
-              navigate("/requests");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Inbox size="sm" />
-            <span>Requests</span>
-            {requestTickets.filter((item) => {
-              const status = String(item.ticketStatus || "").toLowerCase();
-              return status === "new" || status === "in_progress" || status === "waiting" || !status;
-            }).length > 0 && (
-              <em className="do-nav-badge">
-                {
-                  requestTickets.filter((item) => {
-                    const status = String(item.ticketStatus || "").toLowerCase();
-                    return (
-                      status === "new" ||
-                      status === "in_progress" ||
-                      status === "waiting" ||
-                      (!status && String(item.status || "") !== "done")
-                    );
-                  }).length
-                }
-              </em>
-            )}
-          </button>
-          <button
             className={`do-nav-item is-projects ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
             data-testid="nav-projects"
             onClick={() => {
@@ -5582,18 +5553,6 @@ export function DelivereeWorkspace() {
             <span>{t("navNotes")}</span>
           </button>
           <button
-            className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" ? "is-active" : ""}`}
-            data-testid="nav-agents"
-            onClick={() => {
-              navigate("/agents");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Bot size="sm" />
-            <span>{t("navAgents")}</span>
-          </button>
-          <button
             className={`do-nav-item is-approvals do-mobile-advanced ${lens.kind === "approvals" ? "is-active" : ""}`}
             data-testid="nav-approvals"
             onClick={() => {
@@ -5613,59 +5572,18 @@ export function DelivereeWorkspace() {
             )}
           </button>
           <button
-            className={`do-nav-item is-invoices do-mobile-advanced ${lens.kind === "invoices" ? "is-active" : ""}`}
-            data-testid="nav-invoices"
+            className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" || lens.kind === "routines" ? "is-active" : ""}`}
+            data-testid="nav-rutinas"
             onClick={() => {
-              navigate("/invoices");
+              navigate("/rutinas");
               setSidebarOpen(false);
             }}
             type="button"
           >
-            <Receipt size="sm" />
-            <span>{t("navInvoices")}</span>
-            {(pendingInvoiceQueue.length > 0 ||
-              invoiceDocuments.some((item) => isInvoiceOverdue(item))) && (
-              <em className="do-nav-badge">
-                {pendingInvoiceQueue.length +
-                  invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length}
-              </em>
-            )}
-          </button>
-          <button
-            className={`do-nav-item is-feedback do-mobile-advanced ${lens.kind === "feedback" ? "is-active" : ""}`}
-            data-testid="nav-feedback"
-            onClick={() => {
-              navigate("/supportops");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Flag size="sm" />
-            <span>{t("navFeedback")}</span>
-            {canManageMembers &&
-              feedbackReports.filter((item) => isOpenFeedback(item.status)).length > 0 && (
-                <em className="do-nav-badge">
-                  {feedbackReports.filter((item) => isOpenFeedback(item.status)).length}
-                </em>
-              )}
+            <Sparkles size="sm" />
+            <span>{t("navRutinas")}</span>
           </button>
         </nav>
-
-        <button
-          className="do-new-conversation"
-          data-testid="new-conversation"
-          disabled={creatingConversation}
-          onClick={createConversation}
-          type="button"
-        >
-          {creatingConversation ? (
-            <Loader2 className="spin" size={15} />
-          ) : (
-            <Plus size={15} />
-          )}
-          <span>{creatingConversation ? "Starting…" : "New"}</span>
-          <kbd>N</kbd>
-        </button>
 
         <div className="do-sidebar-scroll">
           <div className="do-sidebar-section">
@@ -5847,6 +5765,100 @@ export function DelivereeWorkspace() {
             )}
           </div>
 
+          <div className="do-sidebar-section do-management do-mobile-advanced">
+            <div className="do-section-head">
+              <button
+                aria-expanded={sidebarSections.management}
+                className="do-section-toggle"
+                data-testid="nav-management-toggle"
+                onClick={() => toggleSidebarSection("management")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.management ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>{t("navManagement")}</span>
+              </button>
+            </div>
+            {sidebarSections.management && (
+              <div className="do-section-body">
+                <button
+                  className={`do-nav-item is-requests ${lens.kind === "requests" ? "is-active" : ""}`}
+                  data-testid="nav-requests"
+                  onClick={() => {
+                    navigate("/requests");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Inbox size="sm" />
+                  <span>Requests</span>
+                  {requestTickets.filter((item) => {
+                    const status = String(item.ticketStatus || "").toLowerCase();
+                    return (
+                      status === "new" ||
+                      status === "in_progress" ||
+                      status === "waiting" ||
+                      (!status && String(item.status || "") !== "done")
+                    );
+                  }).length > 0 && (
+                    <em className="do-nav-badge">
+                      {
+                        requestTickets.filter((item) => {
+                          const status = String(item.ticketStatus || "").toLowerCase();
+                          return (
+                            status === "new" ||
+                            status === "in_progress" ||
+                            status === "waiting" ||
+                            (!status && String(item.status || "") !== "done")
+                          );
+                        }).length
+                      }
+                    </em>
+                  )}
+                </button>
+                <button
+                  className={`do-nav-item is-invoices ${lens.kind === "invoices" ? "is-active" : ""}`}
+                  data-testid="nav-invoices"
+                  onClick={() => {
+                    navigate("/invoices");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Receipt size="sm" />
+                  <span>{t("navInvoices")}</span>
+                  {(pendingInvoiceQueue.length > 0 ||
+                    invoiceDocuments.some((item) => isInvoiceOverdue(item))) && (
+                    <em className="do-nav-badge">
+                      {pendingInvoiceQueue.length +
+                        invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length}
+                    </em>
+                  )}
+                </button>
+                <button
+                  className={`do-nav-item is-feedback ${lens.kind === "feedback" ? "is-active" : ""}`}
+                  data-testid="nav-feedback"
+                  onClick={() => {
+                    navigate("/supportops");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Flag size="sm" />
+                  <span>{t("navFeedback")}</span>
+                  {canManageMembers &&
+                    feedbackReports.filter((item) => isOpenFeedback(item.status)).length > 0 && (
+                      <em className="do-nav-badge">
+                        {feedbackReports.filter((item) => isOpenFeedback(item.status)).length}
+                      </em>
+                    )}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
               <button
@@ -5859,15 +5871,32 @@ export function DelivereeWorkspace() {
                   className={sidebarSections.conversations ? "" : "is-collapsed"}
                   size={13}
                 />
-                <span>Recent</span>
+                <span>Conversations</span>
               </button>
-              <button
-                aria-label="Search conversations"
-                onClick={() => setSearchOpen((open) => !open)}
-                type="button"
-              >
-                <Search size={13} />
-              </button>
+              <span className="do-section-actions">
+                <button
+                  aria-label="Search conversations"
+                  onClick={() => setSearchOpen((open) => !open)}
+                  type="button"
+                >
+                  <Search size={13} />
+                </button>
+                <button
+                  aria-label="New conversation"
+                  className="do-new-conversation-inline"
+                  data-testid="new-conversation"
+                  disabled={creatingConversation}
+                  onClick={createConversation}
+                  title="New conversation (N)"
+                  type="button"
+                >
+                  {creatingConversation ? (
+                    <Loader2 className="spin" size={13} />
+                  ) : (
+                    <Plus size={13} />
+                  )}
+                </button>
+              </span>
             </div>
             {sidebarSections.conversations && (
             <>

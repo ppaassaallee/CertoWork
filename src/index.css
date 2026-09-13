@@ -750,6 +750,27 @@ a {
   text-transform: none;
   letter-spacing: 0;
 }
+.do-section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.do-section-actions > button,
+.do-new-conversation-inline {
+  border: 0;
+  background: none;
+  padding: 2px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.do-section-actions > button:hover,
+.do-new-conversation-inline:hover {
+  color: var(--text-primary);
+}
+.do-new-conversation-inline:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 .do-section-toggle {
   display: inline-flex;
   min-width: 0;
@@ -900,9 +921,12 @@ a {
   border-radius: 8px;
   transition: background 0.15s;
 }
-.do-project-row:hover,
+.do-project-row:hover {
+  background: var(--surface-1);
+}
 .do-project-row.is-active {
-  background: rgba(25, 76, 54, 0.09);
+  background: var(--surface-0);
+  box-shadow: 0 1px 2px rgba(15, 23, 20, 0.06);
 }
 .do-project-context {
   display: flex;
@@ -995,19 +1019,20 @@ a {
   min-width: 0;
   flex-direction: column;
   border-radius: 9px;
-  background: rgba(25, 62, 46, 0.035);
+  background: transparent;
   transition:
     background 0.15s,
     color 0.15s,
     box-shadow 0.15s;
 }
-.do-conversation-row:hover,
-.do-conversation-row.is-active {
-  background: rgba(25, 76, 54, 0.11);
-  color: var(--accent-hover);
+.do-conversation-row:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
 }
 .do-conversation-row.is-active {
-  box-shadow: inset 2px 0 var(--accent);
+  background: var(--surface-0);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 20, 0.06);
 }
 .do-conversation-main {
   display: flex;
@@ -12136,20 +12161,10 @@ a {
   color: var(--text-primary);
 }
 .do-nav-item.is-active {
-  background: var(--accent-soft);
-  color: var(--accent-hover);
-  font-weight: 600;
-}
-.do-nav-item.is-home.is-active,
-.do-nav-item.is-work.is-active,
-.do-nav-item.is-my-work.is-active,
-.do-nav-item.is-projects.is-active,
-.do-nav-item.is-agents.is-active,
-.do-nav-item.is-approvals.is-active,
-.do-nav-item.is-invoices.is-active,
-.do-nav-item.is-feedback.is-active,
-.do-nav-item.is-settings.is-active {
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(15, 23, 20, 0.06);
 }
 .do-nav-item.is-blocked {
   background: var(--status-red-bg);
@@ -18346,10 +18361,15 @@ a {
   color: var(--accent-on) !important;
 }
 .do-console-tabs button.is-active,
-.do-view-switch button.is-active,
-.do-nav-item.is-active {
+.do-view-switch button.is-active {
   background: var(--accent-soft) !important;
   color: var(--accent) !important;
+}
+.do-nav-item.is-active {
+  background: var(--surface-0) !important;
+  color: var(--text-primary) !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 20, 0.06) !important;
 }
 .do-project-card-kicker,
 .do-context-eyebrow,
