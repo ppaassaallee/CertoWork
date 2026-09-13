@@ -140,6 +140,7 @@ export const Globe = wrapped.Globe;
 export const Grid = wrapped.Grid;
 export const GripVertical = wrapped.GripVertical;
 export const HardHat = wrapped.HardHat;
+export const Hash = wrapped.Hash;
 export const Headphones = wrapped.Headphones;
 export const Heart = wrapped.Heart;
 export const HelpCircle = wrapped.HelpCircle;
