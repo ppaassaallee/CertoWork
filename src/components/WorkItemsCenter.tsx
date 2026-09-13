@@ -67,6 +67,7 @@ import {
 } from "../lib/financeBillingStatuses";
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
+import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
 import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn } from "../lib/kanbanBoard";
 import {
   KANBAN_SWIMLANES,
@@ -4271,7 +4272,81 @@ export function WorkItemsCenter({
           )}
         </section>
 
-        {selectedItem && createPortal(
+        {selectedItem && isItemModalV2Enabled() && createPortal(
+          <ItemModal
+            actionBoardBucketLabel={displayDueBucket(selectedItem)}
+            clientEntityOptions={clientEntityOptions}
+            clientEntityValue={clientEntity(selectedItem, projects)}
+            deleteImpact={[
+              `${checklistItems(selectedItem).length} checklist item(s)`,
+              `${(hierarchyTasks || tasks).filter((candidate) => parentId(candidate) === selectedItem.id).length} child item(s)`,
+              "Item is archived (not hard-deleted) and can be restored from Deleted filters when available",
+            ]}
+            deliveryEntityOptions={deliveryEntityOptions}
+            deliveryEntityValue={deliveryEntity(selectedItem, projects)}
+            item={selectedItem}
+            itemKey={String(selectedItem.projectKey || selectedItem.key || selectedItem.id || "").slice(0, 24)}
+            onArchive={() => void archiveItem(selectedItem)}
+            onAskOdysseus={() => onAsk(`Help me move this work item forward: ${title(selectedItem)}`)}
+            onChangeType={(kind) => changeItemType(selectedItem, kind)}
+            onClose={() => onSelectItem(null)}
+            onCreateControlledOption={onCreateControlledOption}
+            onInviteAssigneeEmail={onInviteAssigneeEmail}
+            onOpenCollab={
+              currentProject && onOpenCollabProject
+                ? () => onOpenCollabProject(currentProject.id)
+                : undefined
+            }
+            onOpenParent={(id) => onSelectItem(id)}
+            onOpenProjectConsole={
+              currentProject ? () => onOpenProjectConsole(currentProject) : undefined
+            }
+            onStatusChanged={(entry, nextStatus) => {
+              if (!user || !workspaceId) return;
+              const blocked = nextStatus === "blocked" || kanbanColumnForStatus(nextStatus) === "blocked";
+              void emitDomainEvent({
+                workspaceId,
+                userId: user.uid,
+                eventType: blocked ? "item.blocked" : "item.status_changed",
+                entityType: "task",
+                entityId: String(entry.id),
+                projectId: entry.projectId || currentProject?.id || null,
+                meta: { status: nextStatus },
+              });
+            }}
+            onUpdateTask={onUpdateTask}
+            parentBreadcrumb={(() => {
+              const crumbs: Array<{ id: string; title: string; kind: string }> = [];
+              let cursor = findPoolItem(parentId(selectedItem));
+              let guard = 0;
+              while (cursor && guard < 4) {
+                crumbs.unshift({
+                  id: String(cursor.id),
+                  title: title(cursor),
+                  kind: workItemKind(cursor),
+                });
+                cursor = findPoolItem(parentId(cursor));
+                guard += 1;
+              }
+              return crumbs;
+            })()}
+            parentEditor={renderParentEditor(selectedItem)}
+            projects={projects}
+            rejectStatusMove={(entry, nextStatus) =>
+              rejectWipMove(entry, kanbanColumnForStatus(nextStatus))
+            }
+            sprints={sprints}
+            subtaskItems={(hierarchyTasks || tasks).filter(
+              (candidate) => parentId(candidate) === selectedItem.id,
+            )}
+            tags={tags}
+            tasks={tasks}
+            workspaceMembers={workspaceMembers}
+          />,
+          document.body,
+        )}
+
+        {selectedItem && !isItemModalV2Enabled() && createPortal(
           <div
             className="do-item-modal-backdrop"
             data-testid="item-expanded-modal"
