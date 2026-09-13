@@ -2314,7 +2314,16 @@ a {
 .do-main > .do-composer-note {
   flex: none;
 }
-.do-main > .do-thread-viewport,
+/* Thread viewport is the scroll container (Home + chat). Do not set
+   overflow:hidden here — it overrides .do-thread-viewport { overflow-y:auto }
+   and traps Home content with no vertical scroll. */
+.do-main > .do-thread-viewport {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .do-main > .do-items-center,
 .do-main > .do-notes-center {
   min-height: 0;

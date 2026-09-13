@@ -154,6 +154,18 @@ export function OdysseusPanel({
   }, [key, open, locale]);
 
   useEffect(() => {
+    const onSeed = (event: Event) => {
+      const prompt = String(
+        (event as CustomEvent<{ prompt?: string }>).detail?.prompt || "",
+      ).trim();
+      if (prompt) setInput(prompt);
+    };
+    window.addEventListener("certo:odysseus-seed-prompt", onSeed as EventListener);
+    return () =>
+      window.removeEventListener("certo:odysseus-seed-prompt", onSeed as EventListener);
+  }, []);
+
+  useEffect(() => {
     const list = threadsByScope[key];
     if (list?.length && !list.some((thread) => thread.id === activeThreadId)) {
       setActiveThreadId(list[0].id);

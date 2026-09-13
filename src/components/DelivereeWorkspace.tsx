@@ -6853,7 +6853,6 @@ export function DelivereeWorkspace() {
                   onApprove={(item) => {
                     if (item) void processReview(item, "approve");
                   }}
-                  onNew={() => setCreateMenuOpen(true)}
                   onOpenApprovals={() => setPanel("approvals")}
                   onOpenItem={(itemId) => {
                     setSelectedWorkItemId(itemId);
@@ -6861,12 +6860,19 @@ export function DelivereeWorkspace() {
                       replace: true,
                     });
                   }}
-                  onOpenOdysseus={() => {
+                  onOpenOdysseus={(opts) => {
                     void openOdysseusPanel({
                       kind: "day",
                       entityId: null,
                       label: "Mi día",
                     });
+                    if (opts?.prompt) {
+                      window.dispatchEvent(
+                        new CustomEvent("certo:odysseus-seed-prompt", {
+                          detail: { prompt: opts.prompt },
+                        }),
+                      );
+                    }
                   }}
                   onOpenProject={(projectId) => {
                     const project = projects.find((entry) => entry.id === projectId);
