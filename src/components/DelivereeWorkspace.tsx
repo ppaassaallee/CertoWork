@@ -142,6 +142,8 @@ import { OdysseusVoiceCall } from "./odiseus/OdysseusVoiceCall";
 import { OdysseusSchedules } from "./odiseus/OdysseusSchedules";
 import { AppBreadcrumbs } from "./AppBreadcrumbs";
 import { CommandPalette, type CommandPaletteItem } from "./CommandPalette";
+import { DestructiveDialog } from "./ui/DestructiveDialog";
+import { MediaPicker, type MediaAsset } from "./ui/MediaPicker";
 import {
   ODISEUS_CONVERSATION_TITLE,
   ODISEUS_HANDOFF_PREFIX,
@@ -515,6 +517,17 @@ export function DelivereeWorkspace() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [destructiveDialog, setDestructiveDialog] = useState<{
+    verb: string;
+    entityName: string;
+    description?: string;
+    impact: string[];
+    options?: { id: string; title: string; explanation: string }[];
+    defaultOptionId?: string;
+    onConfirm: (optionId?: string) => void | Promise<void>;
+  } | null>(null);
+  const [destructiveBusy, setDestructiveBusy] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [contextTaskSearch, setContextTaskSearch] = useState("");
   const [chatsExpanded, setChatsExpanded] = useState(false);
@@ -3506,40 +3519,90 @@ export function DelivereeWorkspace() {
       return;
     }
     const label = memberLabel(member);
-    const confirmed = window.confirm(`Remove ${label} from this workspace?`);
-    if (!confirmed) return;
-    const email = normalizeInviteEmail(member.email || member.emailLower || "");
-    await updateDoc(doc(db, "workspace_members", member.id), {
-      status: "removed",
-      removedBy: user.uid,
-      removedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    const assignedCount = openTasks.filter(
+      (task) =>
+        task.assigneeId === member.userId ||
+        String(task.assignee || "").toLowerCase() === String(member.alias || member.email || "").toLowerCase(),
+    ).length;
+    setDestructiveDialog({
+      verb: "Remove member",
+      entityName: label,
+      description: undefined,
+      impact: [
+        `${assignedCount} open item${assignedCount === 1 ? "" : "s"} currently assigned to ${label}`,
+        "Their workspace access ends immediately",
+      ],
+      options: [
+        {
+          id: "unassign",
+          title: "Leave items unassigned",
+          explanation: "Assigned work stays in the project without an owner.",
+        },
+        {
+          id: "keep",
+          title: "Keep assignments as-is",
+          explanation: "Items still show this person until someone reassigns them.",
+        },
+      ],
+      defaultOptionId: "unassign",
+      onConfirm: async (optionId) => {
+        if (!workspace || !user) return;
+        setDestructiveBusy(true);
+        try {
+          if (optionId === "unassign" && assignedCount > 0) {
+            const batch = writeBatch(db);
+            for (const task of openTasks) {
+              const matches =
+                task.assigneeId === member.userId ||
+                String(task.assignee || "").toLowerCase() ===
+                  String(member.alias || member.email || "").toLowerCase();
+              if (!matches) continue;
+              batch.update(doc(db, "tasks", task.id), {
+                assigneeId: null,
+                assignee: null,
+                updatedAt: serverTimestamp(),
+              });
+            }
+            await batch.commit();
+          }
+          const email = normalizeInviteEmail(member.email || member.emailLower || "");
+          await updateDoc(doc(db, "workspace_members", member.id), {
+            status: "removed",
+            removedBy: user.uid,
+            removedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+          if (email) {
+            const roles = { ...(workspace.roles || {}) };
+            delete roles[email];
+            await updateDoc(doc(db, "workspaces", workspace.id), {
+              members: (workspace.members || []).filter(
+                (item) => String(item).toLowerCase() !== email,
+              ),
+              roles,
+              updatedAt: serverTimestamp(),
+            });
+            const matchingInvites = workspaceInvites.filter(
+              (invite) =>
+                inviteIsUsable(invite) &&
+                normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
+            );
+            for (const invite of matchingInvites) {
+              await updateDoc(doc(db, "agent_invites", invite.id), {
+                status: "revoked",
+                revokedBy: user.uid,
+                updatedAt: serverTimestamp(),
+              });
+            }
+            await reloadWorkspaces();
+          }
+          setNotice(`${label} removed from the workspace.`);
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
     });
-    if (email) {
-      const roles = { ...(workspace.roles || {}) };
-      delete roles[email];
-      await updateDoc(doc(db, "workspaces", workspace.id), {
-        members: (workspace.members || []).filter(
-          (item) => String(item).toLowerCase() !== email,
-        ),
-        roles,
-        updatedAt: serverTimestamp(),
-      });
-      const matchingInvites = workspaceInvites.filter(
-        (invite) =>
-          inviteIsUsable(invite) &&
-          normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
-      );
-      for (const invite of matchingInvites) {
-        await updateDoc(doc(db, "agent_invites", invite.id), {
-          status: "revoked",
-          revokedBy: user.uid,
-          updatedAt: serverTimestamp(),
-        });
-      }
-      await reloadWorkspaces();
-    }
-    setNotice(`${label} removed from the workspace.`);
   };
 
   const revokeWorkspaceInvite = async (invite: any) => {
@@ -3705,28 +3768,49 @@ export function DelivereeWorkspace() {
       setNotice("Only the Project Manager or workspace owner can delete this project.");
       return;
     }
-    const confirmed = window.confirm(
-      `Move "${entityTitle(project)}" to Deleted? It can be restored for 30 days.`,
-    );
-    if (!confirmed || !user || !workspace) return;
-    const deletedAt = new Date();
-    const purgeAfter = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
-    await updateProject(project.id, {
-      status: "deleted",
-      previousStatus: project.status || "active",
-      deletedAt,
-      purgeAfter,
-      archivedAt: null,
+    if (!user || !workspace) return;
+    const itemCount = openTasks.filter((task) => task.projectId === project.id).length;
+    const docCount = knowledgeItems.filter((item) => item.projectId === project.id).length;
+    const routineCount = agentRoutines.filter(
+      (routine) => routine.scope?.entityId === project.id,
+    ).length;
+    setDestructiveDialog({
+      verb: "Move to deleted",
+      entityName: entityTitle(project),
+      impact: [
+        `${itemCount} open item${itemCount === 1 ? "" : "s"} stay linked and can be restored`,
+        `${docCount} document${docCount === 1 ? "" : "s"} remain in the project`,
+        `${routineCount} routine${routineCount === 1 ? "" : "s"} may reference this project`,
+        "Restorable for 30 days, then permanently purged",
+      ],
+      onConfirm: async () => {
+        if (!user || !workspace) return;
+        setDestructiveBusy(true);
+        try {
+          const deletedAt = new Date();
+          const purgeAfter = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+          await updateProject(project.id, {
+            status: "deleted",
+            previousStatus: project.status || "active",
+            deletedAt,
+            purgeAfter,
+            archivedAt: null,
+          });
+          if (projectConsoleId === project.id) {
+            setProjectConsoleId(null);
+            setPanel(null);
+            goCenterView("portfolio");
+          }
+          if (activeProject?.id === project.id) navigate("/");
+          setNotice(
+            `${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
+          );
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
     });
-    if (projectConsoleId === project.id) {
-      setProjectConsoleId(null);
-      setPanel(null);
-      goCenterView("portfolio");
-    }
-    if (activeProject?.id === project.id) navigate("/");
-    setNotice(
-      `${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
-    );
   };
 
   const clearPureAiPortfolioProjects = async () => {
@@ -3740,36 +3824,54 @@ export function DelivereeWorkspace() {
       return;
     }
     const projectCount = projects.filter((project) => project.workspaceId === workspace.id).length;
-    const confirmed = window.confirm(
-      `Delete all ${projectCount} Pure AI projects now?\n\nMy Work items without a project stay. Project-linked tasks are removed. This cannot be undone.`,
-    );
-    if (!confirmed) return;
-    setClearPureAiBusy(true);
-    try {
-      const result = await clearPureAiProjects({ db, user, workspace });
-      if (result.skipped) {
-        setNotice(
-          result.reason === "not-owner"
-            ? "Only the Pure AI workspace owner can clear all projects."
-            : "Could not clear Pure AI projects.",
-        );
-        return;
-      }
-      setProjectConsoleId(null);
-      setPanel(null);
-      goCenterView("portfolio");
-      setNotice(
-        `Cleared ${result.removedProjects} Pure AI projects (${result.removedProjectTasks} project tasks removed). Kept ${result.preservedMyWorkTasks} My Work / unassigned items.`,
-      );
-    } catch (reason) {
-      setNotice(
-        reason instanceof Error
-          ? `Could not clear Pure AI projects: ${reason.message}`
-          : "Could not clear Pure AI projects.",
-      );
-    } finally {
-      setClearPureAiBusy(false);
-    }
+    const linkedTaskCount = openTasks.filter((task) =>
+      Boolean(task.projectId) &&
+      projects.some(
+        (project) =>
+          project.workspaceId === workspace.id && project.id === task.projectId,
+      ),
+    ).length;
+    setDestructiveDialog({
+      verb: "Clear all projects",
+      entityName: "Pure AI portfolio",
+      impact: [
+        `${projectCount} project${projectCount === 1 ? "" : "s"} will be removed`,
+        `${linkedTaskCount} project-linked task${linkedTaskCount === 1 ? "" : "s"} will be removed`,
+        "My Work items without a project stay",
+        "This cannot be undone",
+      ],
+      onConfirm: async () => {
+        setDestructiveBusy(true);
+        setClearPureAiBusy(true);
+        try {
+          const result = await clearPureAiProjects({ db, user, workspace });
+          if (result.skipped) {
+            setNotice(
+              result.reason === "not-owner"
+                ? "Only the Pure AI workspace owner can clear all projects."
+                : "Could not clear Pure AI projects.",
+            );
+            return;
+          }
+          setProjectConsoleId(null);
+          setPanel(null);
+          goCenterView("portfolio");
+          setNotice(
+            `Cleared ${result.removedProjects} Pure AI projects (${result.removedProjectTasks} project tasks removed). Kept ${result.preservedMyWorkTasks} My Work / unassigned items.`,
+          );
+          setDestructiveDialog(null);
+        } catch (reason) {
+          setNotice(
+            reason instanceof Error
+              ? `Could not clear Pure AI projects: ${reason.message}`
+              : "Could not clear Pure AI projects.",
+          );
+        } finally {
+          setDestructiveBusy(false);
+          setClearPureAiBusy(false);
+        }
+      },
+    });
   };
 
   const grantPureAiAdminFollowers = async () => {
@@ -5357,6 +5459,19 @@ export function DelivereeWorkspace() {
         onSelect: () => void createConversation(),
       },
       {
+        id: "add-media",
+        label: "Add media to project",
+        group: "Create",
+        keywords: "attach upload file document gallery",
+        onSelect: () => {
+          if (!activeProject) {
+            setNotice("Open a project first to add media.");
+            return;
+          }
+          setMediaPickerOpen(true);
+        },
+      },
+      {
         id: "new-project",
         label: "Create project",
         group: "Create",
@@ -5420,6 +5535,7 @@ export function DelivereeWorkspace() {
         item.id.startsWith("nav-collab-room-"),
     );
   }, [
+    activeProject,
     activeProjects,
     createConversation,
     mobileCore,
@@ -5434,7 +5550,77 @@ export function DelivereeWorkspace() {
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
+        onCreateItem={(query) => {
+          setComposer(`Create a task: ${query}`);
+          navigate("/home");
+        }}
+        onCreateProject={() => setProjectWizardOpen(true)}
         open={commandPaletteOpen}
+        scopeLabel={
+          activeProject
+            ? `${workspace?.name || "Workspace"} › ${entityTitle(activeProject)}`
+            : workspace?.name || "Workspace"
+        }
+      />
+      {destructiveDialog && (
+        <DestructiveDialog
+          busy={destructiveBusy}
+          defaultOptionId={destructiveDialog.defaultOptionId}
+          description={
+            destructiveDialog.description || (
+              <>
+                This will affect <strong>{destructiveDialog.entityName}</strong>.
+              </>
+            )
+          }
+          entityName={destructiveDialog.entityName}
+          impact={destructiveDialog.impact}
+          onCancel={() => {
+            if (destructiveBusy) return;
+            setDestructiveDialog(null);
+          }}
+          onConfirm={destructiveDialog.onConfirm}
+          open
+          options={destructiveDialog.options}
+          verb={destructiveDialog.verb}
+        />
+      )}
+      <MediaPicker
+        busy={false}
+        onAdd={async ({ files, selected }) => {
+          if (!activeProject) {
+            setMediaPickerOpen(false);
+            return;
+          }
+          for (const file of files) {
+            await addProjectDocument(activeProject.id, {
+              resourceType: "file",
+              title: file.name,
+              file,
+            });
+          }
+          setMediaPickerOpen(false);
+          const total = files.length + selected.length;
+          if (total > 0) {
+            setNotice(
+              total === 1 ? "Media ready" : `${total} media items ready`,
+            );
+          }
+        }}
+        onClose={() => setMediaPickerOpen(false)}
+        open={mediaPickerOpen}
+        projectMedia={knowledgeItems
+          .filter((item) => item.projectId === activeProject?.id)
+          .map(
+            (item): MediaAsset => ({
+              id: item.id,
+              name: item.title || item.name || "Document",
+              url: item.url || item.downloadUrl,
+              mimeType: item.mimeType || item.contentType,
+              sizeBytes: item.sizeBytes || item.size,
+            }),
+          )}
+        title="Add media"
       />
       <button
         aria-label="Close navigation"

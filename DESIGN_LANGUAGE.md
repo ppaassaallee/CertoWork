@@ -21,22 +21,30 @@ Quiet, editorial, ops-grade UI. Deep green means **decide / act**. Everything el
 | `--text-secondary` | `#5B645F` | Supporting copy |
 | `--text-muted` | `#8A938D` | Eyebrows, hints |
 
-### Accent (max ~5% of any screen)
+### Accent (links / focus / soft chrome — not primary fill)
 
 | Token | Value |
 | --- | --- |
-| `--accent` | `#1E4633` |
-| `--accent-hover` | `#163828` |
-| `--accent-soft` | `#E7EFEA` |
+| `--accent` | Notion blue / Calm green (see tokens) |
+| `--accent-soft` | Soft fill for active chrome |
+
+**Primary CTA** uses `--btn-primary-bg` (`--text-primary`) with `--radius-btn` (20px pill) — black primary, not accent fill. Still one single primary button per screen.
 
 **Accent may appear only on:**
 
-1. The single primary button of a screen  
-2. Active tab / nav indicator (`--accent-soft` pill or soft fill)  
-3. Links and focus rings  
-4. Progress fill  
+1. Links and focus rings  
+2. Active tab / nav soft fill (`--accent-soft`)  
+3. Progress fill  
 
 Never fill large surfaces. Never two filled primary buttons on one screen. Never decorative accent blocks.
+
+### AI glow (sole gradient exception)
+
+`--ai-glow` — radial pink→violet at ~12% opacity. Use **only** around Odysseus / ✦ Structure moments. Nowhere else.
+
+### Semantic hues (chips / blocks)
+
+Twelve pairs `--hue-<name>` / `--hue-<name>-soft`: blue, green, amber, red, pink, purple, teal, orange, lime, indigo, brown, gray. Chip text uses the strong hue on the soft background.
 
 ### Status (meaning only)
 
@@ -72,11 +80,14 @@ Status color **always** ships with a text label or icon + accessible name. Soft 
 
 Use CSS primitives in `certo-tokens.css` / shared classes:
 
-- **Button** — primary / secondary / tertiary / destructive · heights 32 / 40  
+- **Button** — primary (black pill) / secondary / tertiary / destructive · heights 32 / 40 · radius 20  
+- **Kbd** — `.cw-kbd` inline shortcut hint  
+- **DestructiveDialog** — consequence-first; never "are you sure?"  
+- **MediaPicker** — upload + numbered gallery  
 - **Input + Select** — 40px, shared chevron  
 - **Tabs** — active = `--accent-soft` pill  
-- **Chip** — status, filter, removable  
-- **EmptyState** — 24px muted icon + headline + one line + one primary CTA  
+- **Chip** — status, filter, removable; semantic chips use hue pairs  
+- **EmptyState** — one line + one CTA + optional monochrome schematic rows  
 - **Modal/Sheet, Toast (+ undo), Tooltip, Avatar, Breadcrumb, Table row (56px, hover `--surface-2`)**
 
 Locally styled clones that bypass these are violations.

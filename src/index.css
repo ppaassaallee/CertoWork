@@ -4763,13 +4763,27 @@ a {
 .do-cmdk-panel {
   position: relative;
   z-index: 1;
-  width: min(560px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-modal);
   background: var(--surface-0);
-  box-shadow: 0 20px 48px rgba(17, 24, 39, 0.12);
+  box-shadow: var(--shadow-md);
   animation: do-overlay-in 0.18s ease-out;
+}
+.do-cmdk-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 0;
+}
+.do-cmdk-mode-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
 }
 .do-cmdk-search {
   display: flex;
@@ -4804,6 +4818,31 @@ a {
   text-align: left;
   cursor: pointer;
 }
+.do-cmdk-row-main {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+.do-cmdk-row-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted);
+  flex: none;
+}
+.do-cmdk-row-main strong {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.do-cmdk-row-hint {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  font-style: normal;
+}
 .do-cmdk-list button.is-active,
 .do-cmdk-list button:hover {
   background: var(--surface-2);
@@ -4813,9 +4852,26 @@ a {
   font-size: var(--text-caption);
 }
 .do-cmdk-empty {
-  padding: 16px;
+  padding: 8px;
   color: var(--text-muted);
   text-align: center;
+}
+.do-cmdk-empty .cw-empty {
+  padding: var(--space-5) var(--space-3);
+}
+.do-cmdk-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  border-top: 1px solid var(--border);
+  padding: 8px 14px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+.do-cmdk-footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 @keyframes do-overlay-in {
   from {
@@ -18356,9 +18412,10 @@ a {
 .do-skill-foot button.do-skill-create,
 .do-approval-item button:last-child,
 .do-notes-empty button {
-  background: var(--accent) !important;
-  border-color: var(--accent) !important;
-  color: var(--accent-on) !important;
+  background: var(--btn-primary-bg) !important;
+  border-color: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-on) !important;
+  border-radius: var(--radius-btn) !important;
 }
 .do-console-tabs button.is-active,
 .do-view-switch button.is-active {
