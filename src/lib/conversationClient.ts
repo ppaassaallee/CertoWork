@@ -5,6 +5,8 @@ type BoldiChatRequest = {
   conversationId: string;
   messages: Array<{ role: string; content: string }>;
   workspaceContext: any;
+  /** "panel" raises ODYSSEUS_MAX_ROUNDS and uses the panel system prompt. */
+  surface?: "panel" | "chat" | string;
   onStep?: (step: {
     id?: string;
     tool?: string;
@@ -18,6 +20,12 @@ export type BoldiChatResult = {
   reply?: string;
   citations?: Array<{ id: string; title: string; type?: string }>;
   suggestedChips?: string[];
+  blocks?: Array<{
+    type: string;
+    items?: Array<Record<string, unknown>>;
+    headers?: string[];
+    rows?: string[][];
+  }>;
   actionPlan?: any;
   provider?: any;
   run?: {
@@ -95,6 +103,7 @@ export async function sendBoldiChat({
   conversationId,
   messages,
   workspaceContext,
+  surface,
   onStep,
 }: BoldiChatRequest): Promise<BoldiChatResult> {
   const response = await fetch("/api/boldi/chat", {
@@ -110,6 +119,7 @@ export async function sendBoldiChat({
       conversationId,
       messages,
       workspaceContext,
+      surface: surface || workspaceContext?.surface || undefined,
       stream: true,
     }),
   });

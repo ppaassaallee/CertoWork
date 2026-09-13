@@ -1,5 +1,6 @@
 /**
- * VITE_ITEM_MODAL_V2 — default on in dev, off in production until flipped.
+ * VITE_ITEM_MODAL_V2 — on unless explicitly disabled (0/false/off).
+ * Shipped on for production so the redesign is visible after deploy.
  */
 export function isItemModalV2Enabled(): boolean {
   const raw = String(
@@ -9,8 +10,5 @@ export function isItemModalV2Enabled(): boolean {
     .trim()
     .toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
-  if (raw === "1" || raw === "true" || raw === "on" || raw === "yes") return true;
-  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean; PROD?: boolean } }).env;
-  if (env?.DEV) return true;
-  return false;
+  return true;
 }

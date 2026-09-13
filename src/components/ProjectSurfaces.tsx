@@ -1469,6 +1469,7 @@ export function ProjectConsolePanel({
   workspace = null,
   initialTab = "items",
   onAsk,
+  onAskOdysseus,
   onUpdateProject,
   onArchiveProject,
   onDeleteProject,
@@ -1514,6 +1515,7 @@ export function ProjectConsolePanel({
   /** Deep-link into Items (same work as tasks / backlog). */
   initialTab?: ProjectConsoleTab;
   onAsk: (prompt: string) => void;
+  onAskOdysseus?: (item: any) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
   onArchiveProject: SharedProjectActions["onArchiveProject"];
   onDeleteProject?: SharedProjectActions["onDeleteProject"];
@@ -2218,6 +2220,7 @@ export function ProjectConsolePanel({
               onAddTask(title, status, { ...patch, projectId })
             }
             onAsk={onAsk}
+            onAskOdysseus={onAskOdysseus}
             onCreateControlledOption={onCreateControlledOption}
             onCreateSprint={onCreateSprint}
             onGanttFocusChange={setGanttFocus}

@@ -45,6 +45,7 @@ export async function runOdysseusAgent({
   const steps = [];
   const collectedActions = [];
   let artifact = null;
+  let itemsBlock = null;
   let input = [
     {
       role: "user",
@@ -155,6 +156,13 @@ export async function runOdysseusAgent({
       if (executed.artifact) {
         artifact = executed.artifact;
       }
+      if (
+        call.name === "list_my_items" &&
+        Array.isArray(executed?.result?.items) &&
+        executed.result.items.length
+      ) {
+        itemsBlock = { type: "items", items: executed.result.items };
+      }
       input = [
         ...input,
         {
@@ -200,6 +208,12 @@ export async function runOdysseusAgent({
       safetyLevel: result?.actionPlan?.safetyLevel || 2,
       proposedActions: [...existing, ...collectedActions].slice(0, 24),
     };
+  }
+
+  if (itemsBlock) {
+    const existingBlocks = Array.isArray(result.blocks) ? result.blocks : [];
+    const hasItems = existingBlocks.some((block) => block?.type === "items");
+    result.blocks = hasItems ? existingBlocks : [itemsBlock, ...existingBlocks];
   }
 
   let finalUsage = null;

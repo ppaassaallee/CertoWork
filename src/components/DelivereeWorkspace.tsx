@@ -131,7 +131,10 @@ import {
   type RoutineSpec,
 } from "../lib/routines";
 import { HomeAttention } from "../pages/HomeAttention";
-import { OdysseusBadge, OdysseusMark } from "./odiseus/OdysseusMark";
+import { HomeCockpit } from "../features/home";
+import { OdysseusPanel, type OdysseusPanelScope } from "../features/odysseus/panel";
+import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
+import { OdysseusMark } from "./odiseus/OdysseusMark";
 import {
   OdysseusArtifactCard,
   OdysseusAgentHome,
@@ -523,6 +526,14 @@ export function DelivereeWorkspace() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [odysseusPanelOpen, setOdysseusPanelOpen] = useState(false);
+  const [odysseusPanelToken, setOdysseusPanelToken] = useState<string | null>(null);
+  const [odysseusPanelScope, setOdysseusPanelScope] = useState<OdysseusPanelScope>({
+    kind: "day",
+    entityId: null,
+    label: "Mi día",
+  });
+  const [homeItemLayout, setHomeItemLayout] = useState<"panel" | "expanded">("panel");
   const [destructiveDialog, setDestructiveDialog] = useState<{
     verb: string;
     entityName: string;
@@ -1657,10 +1668,60 @@ export function DelivereeWorkspace() {
   }, [createMenuOpen]);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const itemId = params.get("item");
+    if (itemId) setSelectedWorkItemId(itemId);
+  }, [location.search]);
+
+  const openOdysseusPanel = useCallback(
+    async (nextScope?: OdysseusPanelScope) => {
+      if (nextScope) setOdysseusPanelScope(nextScope);
+      else if (selectedWorkItem) {
+        setOdysseusPanelScope({
+          kind: "item",
+          entityId: String(selectedWorkItem.id),
+          label: entityTitle(selectedWorkItem),
+        });
+      } else if (activeProject) {
+        setOdysseusPanelScope({
+          kind: "project",
+          entityId: String(activeProject.id),
+          label: entityTitle(activeProject),
+        });
+      } else {
+        setOdysseusPanelScope({
+          kind: "day",
+          entityId: null,
+          label: "Mi día",
+        });
+      }
+      try {
+        if (user) setOdysseusPanelToken(await user.getIdToken());
+      } catch {
+        setOdysseusPanelToken(null);
+      }
+      setOdysseusPanelOpen(true);
+    },
+    [activeProject, selectedWorkItem, user],
+  );
+
+  const toggleOdysseusPanel = useCallback(async () => {
+    if (odysseusPanelOpen) {
+      setOdysseusPanelOpen(false);
+      return;
+    }
+    await openOdysseusPanel();
+  }, [odysseusPanelOpen, openOdysseusPanel]);
+
+  useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandPaletteOpen(true);
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        void toggleOdysseusPanel();
       }
       const target = event.target as HTMLElement | null;
       const typing =
@@ -1683,6 +1744,11 @@ export function DelivereeWorkspace() {
         if (quickCaptureOpen) {
           event.preventDefault();
           setQuickCaptureOpen(false);
+          return;
+        }
+        if (odysseusPanelOpen) {
+          event.preventDefault();
+          setOdysseusPanelOpen(false);
           return;
         }
         if (commandPaletteOpen) {
@@ -1713,9 +1779,11 @@ export function DelivereeWorkspace() {
     commandPaletteOpen,
     createMenuOpen,
     magicProjectOpen,
+    odysseusPanelOpen,
     panel,
     quickCaptureOpen,
     sidebarOpen,
+    toggleOdysseusPanel,
   ]);
 
   useEffect(() => {
@@ -5660,6 +5728,71 @@ export function DelivereeWorkspace() {
             : workspace?.name || "Workspace"
         }
       />
+      <OdysseusPanel
+        fallbackItems={personalTodayTasks.slice(0, 8).map((task) => ({
+          id: String(task.id),
+          title: entityTitle(task),
+          status: task.status || null,
+          dueDate: task.dueDate || task.targetDate || null,
+          workItemType: task.workItemType || task.itemType || "task",
+          projectTitle: entityTitle(
+            projects.find((project) => project.id === task.projectId) || {},
+          ),
+        }))}
+        onClose={() => setOdysseusPanelOpen(false)}
+        onOpenItem={(itemId) => {
+          setSelectedWorkItemId(itemId);
+          if (lens.kind === "home") {
+            navigate(`/home?item=${encodeURIComponent(itemId)}`, { replace: true });
+          }
+        }}
+        onScopeChange={setOdysseusPanelScope}
+        open={odysseusPanelOpen}
+        scope={odysseusPanelScope}
+        scopeOptions={[
+          ...(selectedWorkItem
+            ? [
+                {
+                  kind: "item" as const,
+                  entityId: String(selectedWorkItem.id),
+                  label: entityTitle(selectedWorkItem),
+                },
+              ]
+            : []),
+          ...(activeProject
+            ? [
+                {
+                  kind: "project" as const,
+                  entityId: String(activeProject.id),
+                  label: entityTitle(activeProject),
+                },
+              ]
+            : []),
+          { kind: "day" as const, entityId: null, label: "Mi día" },
+          {
+            kind: "workspace" as const,
+            entityId: null,
+            label: "Todo el workspace",
+          },
+        ]}
+        token={odysseusPanelToken}
+        userId={user?.uid || ""}
+        workspaceContext={{
+          tasks,
+          projects,
+          risks,
+          reviewItems,
+          userId: user?.uid,
+          currentMemberId: personalActor.memberId,
+          actor: personalActor,
+          todayTaskCount: personalTodayTasks.length,
+          pendingReviewCount: reviewItems.length,
+          activeProject: activeProject || null,
+          contextProjects: activeProject ? [activeProject] : [],
+          contextTasks: selectedWorkItem ? [selectedWorkItem] : [],
+        }}
+        workspaceId={workspace?.id || ""}
+      />
       {destructiveDialog && (
         <DestructiveDialog
           busy={destructiveBusy}
@@ -6493,6 +6626,16 @@ export function DelivereeWorkspace() {
               }}
               userId={user?.uid}
             />
+            <button
+              aria-label="Odysseus"
+              className={`do-icon-button ${odysseusPanelOpen ? "is-active" : ""}`}
+              data-testid="header-odysseus"
+              onClick={() => void toggleOdysseusPanel()}
+              title="Odysseus (⌘J)"
+              type="button"
+            >
+              <Sparkles size={15} />
+            </button>
             {mobileCore && (
               <>
                 <button
@@ -6595,6 +6738,109 @@ export function DelivereeWorkspace() {
         )}
 
         {centerView === "conversation" ? (
+          lens.kind === "home" && !isFocusedConversation ? (
+            <>
+              <div className="do-thread-viewport">
+                <HomeCockpit
+                  accessRequests={accessRequests}
+                  activityItems={odiseusActivity}
+                  actor={personalActor}
+                  members={workspaceMembers}
+                  onApprove={(item) => {
+                    if (item) void processReview(item, "approve");
+                  }}
+                  onNew={() => setCreateMenuOpen(true)}
+                  onOpenApprovals={() => setPanel("approvals")}
+                  onOpenItem={(itemId) => {
+                    setSelectedWorkItemId(itemId);
+                    navigate(`${location.pathname}?item=${encodeURIComponent(itemId)}`, {
+                      replace: true,
+                    });
+                  }}
+                  onOpenOdysseus={() => {
+                    void openOdysseusPanel({
+                      kind: "day",
+                      entityId: null,
+                      label: "Mi día",
+                    });
+                  }}
+                  onOpenProject={(projectId) => {
+                    const project = projects.find((entry) => entry.id === projectId);
+                    if (project) openProjectRecord(project);
+                  }}
+                  onRespondRequest={() => setPanel("workspace")}
+                  projects={projects}
+                  reviewItems={reviewItems}
+                  risks={risks}
+                  tasks={tasks}
+                  userName={
+                    user?.displayName ||
+                    workspaceMembers.find((member) => member.userId === user?.uid)
+                      ?.displayName ||
+                    user?.email ||
+                    "there"
+                  }
+                />
+              </div>
+              {selectedWorkItem && isItemModalV2Enabled() && createPortal(
+                <ItemModal
+                  item={selectedWorkItem}
+                  itemKey={String(
+                    selectedWorkItem.projectKey ||
+                      selectedWorkItem.key ||
+                      selectedWorkItem.id ||
+                      "",
+                  ).slice(0, 24)}
+                  layout={homeItemLayout}
+                  onArchive={() =>
+                    void updateProjectTask(selectedWorkItem.id, {
+                      status: "archived",
+                      archivedAt: new Date().toISOString(),
+                    })
+                  }
+                  onAskOdysseus={() => {
+                    void openOdysseusPanel({
+                      kind: "item",
+                      entityId: String(selectedWorkItem.id),
+                      label: entityTitle(selectedWorkItem),
+                    });
+                  }}
+                  onChangeType={(kind) =>
+                    void updateProjectTask(selectedWorkItem.id, {
+                      workItemType: kind,
+                      itemType: kind,
+                    })
+                  }
+                  onClose={() => {
+                    setSelectedWorkItemId(null);
+                    const params = new URLSearchParams(location.search);
+                    params.delete("item");
+                    const next = params.toString();
+                    navigate(
+                      `${location.pathname}${next ? `?${next}` : ""}`,
+                      { replace: true },
+                    );
+                  }}
+                  onCreateControlledOption={createControlledOption}
+                  onLayoutChange={setHomeItemLayout}
+                  onOpenCollab={
+                    selectedWorkItem.projectId
+                      ? () => navigate(collabProjectPath(String(selectedWorkItem.projectId)))
+                      : undefined
+                  }
+                  onOpenParent={(id) => setSelectedWorkItemId(id)}
+                  onUpdateTask={updateProjectTask}
+                  parentEditor={<span />}
+                  projects={projects}
+                  sprints={sprints}
+                  tags={categories}
+                  tasks={tasks}
+                  workspaceMembers={workspaceMembers}
+                />,
+                document.body,
+              )}
+            </>
+          ) : (
           <>
             <div className="do-thread-viewport">
               <div className="do-thread">
@@ -6704,11 +6950,8 @@ export function DelivereeWorkspace() {
                               <OdysseusMark size="sm" />
                             </div>
                             <div className="do-assistant-content">
-                              <div className="do-assistant-name">
-                                <OdysseusBadge />
-                                {message.offline && <span>safe mode</span>}
-                              </div>
                               <RichText text={message.content} />
+                              {message.offline && <span className="do-safe-mode">safe mode</span>}
                               {message.citations &&
                                 message.citations.length > 0 && (
                                   <div className="do-citations">
@@ -6790,9 +7033,6 @@ export function DelivereeWorkspace() {
                             <OdysseusMark size="sm" />
                           </div>
                           <div className="do-assistant-content">
-                            <div className="do-assistant-name">
-                              <OdysseusBadge />
-                            </div>
                             {streamed ? (
                               <RichText text={streamed} />
                             ) : (
@@ -6960,12 +7200,9 @@ export function DelivereeWorkspace() {
                   </button>
                 </div>
               </div>
-              <p className="do-composer-note">
-                You stay in control. Suggested changes remain pending until
-                approved.
-              </p>
             </div>
           </>
+          )
         ) : centerView === "items" ? (
           <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""}`} data-testid="my-work-shell">
             {lens.kind === "my-work" && isOverviewEnabled() && user?.uid ? (
@@ -7051,6 +7288,13 @@ export function DelivereeWorkspace() {
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
+            }}
+            onAskOdysseus={(item) => {
+              void openOdysseusPanel({
+                kind: "item",
+                entityId: String(item.id),
+                label: entityTitle(item),
+              });
             }}
             onCreateSprint={createSprint}
             onOpenCollabProject={(projectId) => navigate(collabProjectPath(projectId))}
@@ -7347,6 +7591,13 @@ export function DelivereeWorkspace() {
                 setComposer(prompt);
                 goCenterView("conversation");
               }}
+              onAskOdysseus={(item) => {
+                void openOdysseusPanel({
+                  kind: "item",
+                  entityId: String(item.id),
+                  label: entityTitle(item),
+                });
+              }}
               onUpdateProject={updateProject}
               onUpdateCostTemplate={updateCostTemplate}
               onUpdateSprint={updateSprint}
@@ -7525,6 +7776,13 @@ export function DelivereeWorkspace() {
                 onDeleteProject={deleteProject}
                 onRestoreProject={restoreProject}
                 onAsk={setComposer}
+                onAskOdysseus={(item) => {
+                  void openOdysseusPanel({
+                    kind: "item",
+                    entityId: String(item.id),
+                    label: entityTitle(item),
+                  });
+                }}
                 onUpdateProject={updateProject}
                 onUpdateCostTemplate={updateCostTemplate}
                 onUpdateTask={updateProjectTask}

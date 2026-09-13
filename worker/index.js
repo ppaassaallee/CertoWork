@@ -783,6 +783,8 @@ function compactEvidence(citations, workspaceContext) {
 
 export function assistantInstructions(body, citations) {
   const context = body.workspaceContext || {};
+  const surface = String(body.surface || context.surface || "").toLowerCase();
+  const panelMode = surface === "panel";
   const focusedDelivery = ["project_delivery", "focused_delivery"].includes(context.mode) &&
     ((context.contextProjects || []).length > 0 || (context.contextTasks || []).length > 0 || Boolean(context.activeProject?.id));
   const focusedLabel = context.activeProject?.title || context.activeProject?.name ||
@@ -791,6 +793,49 @@ export function assistantInstructions(body, citations) {
     ...(context.contextProjects || []).map((project) => project.id).filter(Boolean),
     context.activeProject?.id,
   ].filter(Boolean))];
+  if (panelMode) {
+    const scope = context.scope || {};
+    return `You are Odysseus in the Certo Work side panel (not the full-page chat).
+
+PANEL RULES:
+- Answer in the user's language.
+- First answer in at most three short lines. No essays. Never narrate which fields you cannot see.
+- For "my tasks / mis tareas / my work", ALWAYS call list_my_items with the right filter (today|overdue|week|open). Never infer assignees from chat prose.
+- When the question is about one item or the open item context, call get_item_context.
+- For approvals, call list_my_approvals. For project health, call list_project_health.
+- If results are items, return them in a top-level "blocks" array: [{ "type": "items", "items": [{ "id", "title", "status", "dueDate", "workItemType", "projectTitle" }] }].
+- suggestedChips: exactly 3 short chips; when the ask is repeatable include one like "↻ Cada mañana" / "↻ Every morning".
+- If a tool cannot resolve something, say so in one line and propose one action. Do not apologize at length.
+
+Anchored scope (already resolved — use tools, do not guess):
+${JSON.stringify({
+  scope,
+  userId: context.userId || body.userId || scope.userId || null,
+  currentMemberId: context.currentMemberId || null,
+  locale: scope.locale || context.locale || null,
+})}
+
+Active conversational context:
+${JSON.stringify({
+  project: context.activeProject || null,
+  contextProjects: context.contextProjects || [],
+  contextTasks: context.contextTasks || [],
+  todayTaskCount: context.todayTaskCount || 0,
+  pendingReviewCount: context.pendingReviewCount || 0,
+})}
+
+Grounded evidence:
+${JSON.stringify(compactEvidence(citations, context))}
+
+Return one valid JSON object and no Markdown fence:
+{
+  "reply": "≤3 lines",
+  "blocks": [{ "type": "items", "items": [] }],
+  "suggestedChips": ["chip1", "chip2", "↻ Cada mañana"],
+  "actionPlan": null,
+  "citations": []
+}`;
+  }
   const operatingMode = focusedDelivery
     ? `FOCUSED DELIVERY MODE — embedded in ${focusedLabel}:
 - Act as the practical project manager, engineer, delivery advisor, and assistant for the entities attached to this conversation. Help the team finish the work.
@@ -1008,6 +1053,7 @@ function normalizeAssistantResult(result, citations, model, latestUserMessage = 
     suggestedChips: Array.isArray(result.suggestedChips)
       ? result.suggestedChips.slice(0, 4).map(String)
       : [],
+    blocks: Array.isArray(result.blocks) ? result.blocks.slice(0, 6) : undefined,
     citations,
     provider: {
       provider: "openai",
@@ -1402,7 +1448,17 @@ async function chat(request, env) {
     180,
     1_200,
   );
-  const maxRounds = numberFromEnv(env.ODYSSEUS_MAX_ROUNDS, 1, 1, 3);
+  const maxRounds = (() => {
+    const surface = String(body.surface || body.workspaceContext?.surface || "").toLowerCase();
+    const panel = surface === "panel";
+    // Panel needs tool→answer rounds; chat stays conservative.
+    return numberFromEnv(
+      env.ODYSSEUS_MAX_ROUNDS,
+      panel ? 4 : 1,
+      1,
+      panel ? 4 : 3,
+    );
+  })();
   const wantsStream =
     body.stream === true ||
     String(request.headers.get("accept") || "").includes("text/event-stream");

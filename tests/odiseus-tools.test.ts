@@ -97,3 +97,60 @@ test("Odysseus list_schedules returns configured jobs", () => {
   assert.equal(result.result.count, 1);
   assert.equal(result.result.schedules[0].id, "sch1");
 });
+
+test("Odysseus list_my_items filters by assignee and today", () => {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const todayIso = today.toISOString().slice(0, 10);
+  const withMine = {
+    ...context,
+    userId: "u1",
+    currentMemberId: "m1",
+    actor: { userId: "u1", memberId: "m1" },
+    tasks: [
+      {
+        id: "mine-today",
+        title: "Ship cockpit",
+        assigneeId: "u1",
+        status: "open",
+        dueDate: todayIso,
+        projectId: "p2",
+      },
+      {
+        id: "other",
+        title: "Someone else",
+        assigneeId: "u9",
+        status: "open",
+        dueDate: todayIso,
+        projectId: "p2",
+      },
+      {
+        id: "mine-later",
+        title: "Later task",
+        assigneeId: "u1",
+        status: "open",
+        dueDate: "2099-12-01",
+        projectId: "p2",
+      },
+    ],
+  };
+  const result = executeOdysseusTool("list_my_items", { filter: "today" }, withMine);
+  assert.equal(result.result.count, 1);
+  assert.equal(result.result.items[0].id, "mine-today");
+  assert.equal(result.result.block, "items");
+});
+
+test("Odysseus get_item_context returns item and children", () => {
+  const withTree = {
+    ...context,
+    tasks: [
+      ...context.tasks,
+      { id: "parent", title: "Parent", status: "open", projectId: "p1" },
+      { id: "child", title: "Child", status: "open", projectId: "p1", parentId: "parent" },
+    ],
+  };
+  const result = executeOdysseusTool("get_item_context", { id: "parent" }, withTree);
+  assert.equal(result.result.found, true);
+  assert.equal(result.result.item.id, "parent");
+  assert.equal(result.result.item.children.length, 1);
+});

@@ -15,6 +15,8 @@ export type RoutineLaunchScope = {
   entityId: string | null;
   entityTitle?: string;
   contextStats?: { itemCount?: number; blockedCount?: number; overdueCount?: number };
+  /** Prefill the composer sentence (e.g. from Odysseus “↻ Cada mañana”). */
+  initialSentence?: string;
 };
 
 type RoutineHostValue = {
@@ -49,6 +51,7 @@ export function RoutineHostProvider({ children }: { children: ReactNode }) {
       {children}
       <RoutineComposer
         contextStats={scope.contextStats}
+        initialSentence={scope.initialSentence}
         onClose={() => setOpen(false)}
         open={open}
         scope={{
