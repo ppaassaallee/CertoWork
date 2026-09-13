@@ -1,4 +1,12 @@
-import { addDays, format, isValid, parseISO, startOfDay } from "date-fns";
+import {
+  addDays,
+  differenceInCalendarDays,
+  format,
+  isValid,
+  parseISO,
+  startOfDay,
+  startOfWeek,
+} from "date-fns";
 import { es, enUS } from "date-fns/locale";
 import { getLocale, type Locale } from "../../lib/i18n";
 import {
@@ -22,23 +30,29 @@ export type HomeItemRow = {
   dueIso: string | null;
   workItemType: string;
   priority: string | null;
+  ageLabel?: string;
 };
 
 export type HomeActionRow = {
   id: string;
-  kind: "approval" | "request" | "blocked" | "mention";
+  kind: "approval" | "request" | "blocked" | "mention" | "routine_session";
   title: string;
   meta: string;
-  actionLabel: "approve" | "respond" | "open";
+  actionLabel: "approve" | "respond" | "open" | "start";
   payload?: unknown;
 };
 
 export type HomeProjectCard = {
   id: string;
   title: string;
+  shortName: string;
   health: ProjectHealth;
   pct: number;
   line: string;
+  lineTone: "muted" | "warning" | "danger";
+  milestonePast: boolean;
+  blockedCount: number;
+  ownerInitials: string;
 };
 
 export type HomeDayChip = {
@@ -50,22 +64,63 @@ export type HomeDayChip = {
 export type HomeActivityRow = {
   id: string;
   text: string;
+  verb?: string;
+  object?: string;
   when: string;
   avatar?: string;
+  itemId?: string | null;
+};
+
+export type EditorialPart = {
+  text: string;
+  tone?: "plain" | "link" | "danger";
+  action?: "overdue" | "today" | "week" | "approvals" | "plan" | "project";
+  projectId?: string;
+};
+
+export type QuietStat = {
+  id: "open" | "overdue" | "done" | "projects" | "routines";
+  value: number;
+  label: string;
+  tone: "plain" | "danger";
+  action?: "overdue" | "today" | "week" | "projects" | "approvals";
+};
+
+export type HomeWeekDay = {
+  iso: string;
+  dayNum: string;
+  weekday: string;
+  isToday: boolean;
+  isWeekend: boolean;
+  items: HomeItemRow[];
+  routines: Array<{ id: string; title: string }>;
+  restLabel?: string;
+};
+
+export type HomeRoutineHint = {
+  id: string;
+  title: string;
+  nextRunAt: string | null;
 };
 
 export type HomeCockpitModel = {
   greeting: string;
   longDate: string;
+  editorial: EditorialPart[];
+  editorialFallback: string;
   dayLine: string;
   dayChips: HomeDayChip[];
   dayLineTail: string;
+  quietStats: QuietStat[];
   actions: HomeActionRow[];
+  actionCounts: { approvals: number; requests: number; mentions: number };
   todayItems: HomeItemRow[];
   overdueItems: HomeItemRow[];
   weekItems: HomeItemRow[];
+  defaultItemTab: "today" | "overdue" | "week";
   projects: HomeProjectCard[];
-  next7Days: Array<{ iso: string; label: string; isToday: boolean; items: HomeItemRow[] }>;
+  next7Days: HomeWeekDay[];
+  weekSubtitle: string;
   activity: HomeActivityRow[];
 };
 
@@ -92,7 +147,23 @@ function titleOf(row: any) {
   return String(row?.title || row?.name || "Untitled");
 }
 
-function relativeAge(value: unknown, locale: Locale) {
+export function shortProjectName(title: string, project?: any): string {
+  const explicit = String(project?.shortName || project?.short_name || "").trim();
+  if (explicit) return explicit;
+  let name = String(title || "")
+    .replace(/\b(19|20)\d{2}\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Drop trailing client/year debris after last middot when still long
+  if (name.length > 42 && name.includes("·")) {
+    const parts = name.split("·").map((p) => p.trim()).filter(Boolean);
+    name = parts.slice(0, 2).join(" · ");
+  }
+  if (name.length > 42) name = `${name.slice(0, 40)}…`;
+  return name || String(title || "Project");
+}
+
+function relativeAge(value: unknown, locale: Locale, now = new Date()) {
   const ms =
     typeof (value as { toMillis?: () => number })?.toMillis === "function"
       ? (value as { toMillis: () => number }).toMillis()
@@ -104,32 +175,317 @@ function relativeAge(value: unknown, locale: Locale) {
             ? value
             : 0;
   if (!ms) return locale === "es" ? "hace un rato" : "just now";
-  const hours = Math.max(0, Math.round((Date.now() - ms) / 3_600_000));
+  const hours = Math.max(0, Math.round((now.getTime() - ms) / 3_600_000));
   if (hours < 1) return locale === "es" ? "hace un rato" : "just now";
   if (hours < 24) return locale === "es" ? `hace ${hours} h` : `${hours}h ago`;
   const days = Math.round(hours / 24);
   return locale === "es" ? `hace ${days} d` : `${days}d ago`;
 }
 
+function dueAgeLabel(dueIso: string | null, todayIso: string, locale: Locale) {
+  if (!dueIso) return "";
+  const days = differenceInCalendarDays(parseISO(todayIso), parseISO(dueIso));
+  if (days === 0) return locale === "es" ? "hoy" : "today";
+  if (days > 0) {
+    if (days >= 60) {
+      const months = Math.max(1, Math.round(days / 30));
+      return locale === "es" ? `hace ${months} m` : `${months}mo ago`;
+    }
+    return locale === "es" ? `hace ${days} d` : `${days}d ago`;
+  }
+  return dueIso.slice(5).replace("-", " ");
+}
+
 function greetingFor(name: string, locale: Locale, now = new Date()) {
   const hour = now.getHours();
   const first = name.trim().split(/\s+/)[0] || (locale === "es" ? "ahí" : "there");
   if (locale === "es") {
-    if (hour < 12) return `Buenos días, ${first}`;
-    if (hour < 19) return `Buenas tardes, ${first}`;
-    return `Buenas noches, ${first}`;
+    if (hour < 12) return `Buenos días, ${first}.`;
+    if (hour < 19) return `Buenas tardes, ${first}.`;
+    return `Buenas noches, ${first}.`;
   }
-  if (hour < 12) return `Good morning, ${first}`;
-  if (hour < 19) return `Good afternoon, ${first}`;
-  return `Good evening, ${first}`;
+  if (hour < 12) return `Good morning, ${first}.`;
+  if (hour < 19) return `Good afternoon, ${first}.`;
+  return `Good evening, ${first}.`;
 }
 
 function projectPct(projectTasks: any[]) {
   const open = projectTasks.filter((task) => !isClosed(task.status));
-  if (!open.length) return 0;
   const done = projectTasks.filter((task) => taskWorkLane(task) === "done").length;
   const total = done + open.length;
-  return total ? Math.round((done / total) * 100) : 0;
+  if (!total) return 0;
+  return Math.round((done / total) * 100);
+}
+
+/** Deterministic health + milestone honesty for Home rows. */
+export function homeProjectStatus(
+  project: any,
+  projectTasks: any[],
+  projectRisks: any[],
+  pct: number,
+  now: Date,
+  locale: Locale = "es",
+): {
+  health: ProjectHealth;
+  milestoneIso: string | null;
+  milestoneLabel: string;
+  lineTone: "muted" | "warning" | "danger";
+  milestonePast: boolean;
+} {
+  const milestoneIso = asIsoDay(
+    project.revisedDueDate || project.dueDate || project.targetDate || project.originalDueDate,
+  );
+  let health = projectHealth(project, projectTasks, projectRisks);
+  let lineTone: "muted" | "warning" | "danger" = "muted";
+  let milestoneLabel = "";
+  let milestonePast = false;
+
+  if (milestoneIso) {
+    const days = differenceInCalendarDays(parseISO(milestoneIso), startOfDay(now));
+    const parsed = parseISO(milestoneIso);
+    const dateBit = isValid(parsed)
+      ? format(parsed, "MMM d", { locale: locale === "es" ? es : enUS })
+      : milestoneIso;
+    if (days < 0) {
+      milestonePast = true;
+      const ago = Math.abs(days);
+      const age =
+        ago >= 60
+          ? locale === "es"
+            ? `vencido hace ${Math.max(1, Math.round(ago / 30))} m`
+            : `${Math.max(1, Math.round(ago / 30))}mo overdue`
+          : locale === "es"
+            ? `vencido hace ${ago} d`
+            : `${ago}d overdue`;
+      milestoneLabel = `${locale === "es" ? "hito" : "milestone"} ${dateBit} · ${age}`;
+      lineTone = "danger";
+      if (health === "on_track") health = "at_risk";
+      if (pct === 0) health = health === "blocked" ? "blocked" : "at_risk";
+    } else if (days <= 7) {
+      milestoneLabel =
+        locale === "es"
+          ? `hito ${dateBit} · en ${days} d`
+          : `milestone ${dateBit} · in ${days}d`;
+      lineTone = "warning";
+      if (health === "on_track" && days <= 2) health = "at_risk";
+    } else {
+      milestoneLabel = locale === "es" ? `hito ${dateBit}` : `milestone ${dateBit}`;
+    }
+  }
+
+  if (pct === 0 && milestonePast && health === "on_track") {
+    health = "at_risk";
+  }
+
+  return { health, milestoneIso, milestoneLabel, lineTone, milestonePast };
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function buildEditorial(input: {
+  locale: Locale;
+  now: Date;
+  todayCount: number;
+  overdueCount: number;
+  approvalCount: number;
+  blockedCount: number;
+  tomorrowItems: HomeItemRow[];
+  doneToday: number;
+  hasWeeklyPlan: boolean;
+}): EditorialPart[] {
+  const { locale, now } = input;
+  const dow = now.getDay(); // 0 Sun
+  const hour = now.getHours();
+  const isWeekend = dow === 0 || dow === 6;
+
+  if (isWeekend) {
+    const parts: EditorialPart[] = [];
+    if (input.todayCount === 0) {
+      parts.push({
+        text: locale === "es" ? "Nada vence hoy. " : "Nothing due today. ",
+      });
+    } else {
+      parts.push({
+        text: locale === "es" ? "Hoy tienes " : "Today you have ",
+      });
+      parts.push({
+        text:
+          locale === "es"
+            ? `${input.todayCount} ítem${input.todayCount === 1 ? "" : "s"}`
+            : `${input.todayCount} item${input.todayCount === 1 ? "" : "s"}`,
+        tone: "link",
+        action: "today",
+      });
+      parts.push({ text: ". " });
+    }
+
+    const tomorrowByProject = new Map<string, { count: number; title: string; id: string }>();
+    for (const item of input.tomorrowItems) {
+      const key = item.projectId || item.projectTitle || "x";
+      const cur = tomorrowByProject.get(key) || {
+        count: 0,
+        title: item.projectTitle || (locale === "es" ? "sin proyecto" : "no project"),
+        id: item.projectId || "",
+      };
+      cur.count += 1;
+      tomorrowByProject.set(key, cur);
+    }
+    const top = [...tomorrowByProject.values()].sort((a, b) => b.count - a.count)[0];
+    const tomorrowTotal = input.tomorrowItems.length;
+
+    if (tomorrowTotal > 0 && top) {
+      parts.push({
+        text:
+          locale === "es"
+            ? "Tu semana arranca mañana con "
+            : "Your week starts tomorrow with ",
+      });
+      parts.push({
+        text:
+          locale === "es"
+            ? `${top.count} ítem${top.count === 1 ? "" : "s"} en ${top.title}`
+            : `${top.count} item${top.count === 1 ? "" : "s"} in ${top.title}`,
+        tone: "link",
+        action: top.id ? "project" : "week",
+        projectId: top.id || undefined,
+      });
+    } else {
+      parts.push({
+        text:
+          locale === "es"
+            ? "Tu semana arranca mañana."
+            : "Your week starts tomorrow.",
+      });
+    }
+
+    if (input.overdueCount > 0) {
+      parts.push({ text: locale === "es" ? ", y " : ", and " });
+      parts.push({
+        text:
+          locale === "es"
+            ? `${input.overdueCount} ítems siguen vencidos`
+            : `${input.overdueCount} items are still overdue`,
+        tone: "danger",
+        action: "overdue",
+      });
+      if (input.hasWeeklyPlan) {
+        parts.push({
+          text:
+            locale === "es"
+              ? ": un buen candidato para el "
+              : ": a good fit for ",
+        });
+        parts.push({
+          text: locale === "es" ? "Plan semanal" : "Weekly plan",
+          tone: "link",
+          action: "plan",
+        });
+        parts.push({
+          text: locale === "es" ? " del lunes a las 8." : " on Monday at 8.",
+        });
+      } else {
+        parts.push({ text: "." });
+      }
+    } else {
+      parts.push({ text: "." });
+    }
+    return parts;
+  }
+
+  if (hour >= 18) {
+    const parts: EditorialPart[] = [];
+    parts.push({
+      text:
+        locale === "es"
+          ? `Hoy cerraste ${input.doneToday}. `
+          : `You closed ${input.doneToday} today. `,
+    });
+    if (input.overdueCount > 0) {
+      parts.push({
+        text: locale === "es" ? "Siguen " : "Still ",
+      });
+      parts.push({
+        text:
+          locale === "es"
+            ? `${input.overdueCount} vencidos`
+            : `${input.overdueCount} overdue`,
+        tone: "danger",
+        action: "overdue",
+      });
+      parts.push({
+        text: locale === "es" ? " para mañana." : " for tomorrow.",
+      });
+    } else if (input.todayCount > 0) {
+      parts.push({
+        text:
+          locale === "es"
+            ? "Queda algo por mover a mañana."
+            : "A few things can move to tomorrow.",
+      });
+    } else {
+      parts.push({
+        text: locale === "es" ? "Día limpio." : "Clean day.",
+      });
+    }
+    return parts;
+  }
+
+  // Weekday morning / daytime
+  const parts: EditorialPart[] = [];
+  if (input.todayCount > 0) {
+    parts.push({
+      text: locale === "es" ? "Hoy vencen " : "Due today: ",
+    });
+    parts.push({
+      text: String(input.todayCount),
+      tone: "link",
+      action: "today",
+    });
+  } else {
+    parts.push({
+      text: locale === "es" ? "Nada vence hoy" : "Nothing due today",
+    });
+  }
+  if (input.blockedCount > 0) {
+    parts.push({ text: locale === "es" ? ", " : ", " });
+    parts.push({
+      text:
+        locale === "es"
+          ? `${input.blockedCount} bloqueado${input.blockedCount === 1 ? "" : "s"}`
+          : `${input.blockedCount} blocked`,
+      tone: "link",
+      action: "approvals",
+    });
+  }
+  if (input.approvalCount > 0) {
+    parts.push({ text: locale === "es" ? ", " : ", " });
+    parts.push({
+      text:
+        locale === "es"
+          ? `${input.approvalCount} aprobación${input.approvalCount === 1 ? "" : "es"}`
+          : `${input.approvalCount} approval${input.approvalCount === 1 ? "" : "s"}`,
+      tone: "link",
+      action: "approvals",
+    });
+  }
+  if (input.overdueCount > 0) {
+    parts.push({ text: locale === "es" ? ", y " : ", and " });
+    parts.push({
+      text:
+        locale === "es"
+          ? `${input.overdueCount} vencidos`
+          : `${input.overdueCount} overdue`,
+      tone: "danger",
+      action: "overdue",
+    });
+  }
+  parts.push({ text: "." });
+  return parts;
 }
 
 export function buildHomeCockpitData(input: {
@@ -142,35 +498,42 @@ export function buildHomeCockpitData(input: {
   reviewItems?: any[];
   accessRequests?: any[];
   activityItems?: any[];
+  routines?: HomeRoutineHint[];
+  routinesRan7d?: number;
   now?: Date;
   locale?: Locale;
 }): HomeCockpitModel {
   const locale = input.locale || getLocale();
   const now = input.now || new Date();
   const todayIso = now.toISOString().slice(0, 10);
+  const tomorrowIso = addDays(startOfDay(now), 1).toISOString().slice(0, 10);
   const weekEndIso = addDays(startOfDay(now), 7).toISOString().slice(0, 10);
+  const weekStartIso = startOfWeek(now, { weekStartsOn: 1 }).toISOString().slice(0, 10);
   const members = input.members || [];
   const risks = input.risks || [];
   const projects = input.projects || [];
   const projectById = new Map(projects.map((p) => [String(p.id), p] as const));
+  const routines = input.routines || [];
 
   const mine = (input.tasks || []).filter((task) =>
     isAssignedToActor(task, input.actor, members),
   );
   const openMine = mine.filter((task) => taskWorkLane(task) !== "done" && !isClosed(task.status));
 
-  const toRow = (task: any): HomeItemRow => ({
-    id: String(task.id),
-    title: titleOf(task),
-    projectId: task.projectId ? String(task.projectId) : null,
-    projectTitle: titleOf(projectById.get(String(task.projectId || "")) || {}),
-    status: String(task.status || "open"),
-    dueIso: asIsoDay(task.dueDate || task.targetDate),
-    workItemType: String(
-      task.workItemType || task.itemType || task.type || "task",
-    ),
-    priority: task.priority != null ? String(task.priority) : null,
-  });
+  const toRow = (task: any): HomeItemRow => {
+    const dueIso = asIsoDay(task.dueDate || task.targetDate);
+    return {
+      id: String(task.id),
+      title: titleOf(task),
+      projectId: task.projectId ? String(task.projectId) : null,
+      projectTitle: titleOf(projectById.get(String(task.projectId || "")) || {}),
+      status: String(task.status || "open"),
+      dueIso,
+      workItemType: String(task.workItemType || task.itemType || task.type || "task"),
+      priority: task.priority != null ? String(task.priority) : null,
+      ageLabel: dueAgeLabel(dueIso, todayIso, locale),
+    };
+  };
 
   const todayItems = openMine
     .filter((task) => asIsoDay(task.dueDate || task.targetDate) === todayIso)
@@ -180,17 +543,32 @@ export function buildHomeCockpitData(input: {
       const due = asIsoDay(task.dueDate || task.targetDate);
       return due && due < todayIso;
     })
-    .map(toRow);
+    .map(toRow)
+    .sort((a, b) => String(a.dueIso).localeCompare(String(b.dueIso)));
   const weekItems = openMine
     .filter((task) => {
       const due = asIsoDay(task.dueDate || task.targetDate);
       return due && due >= todayIso && due < weekEndIso;
     })
     .map(toRow);
+  const tomorrowItems = openMine
+    .filter((task) => asIsoDay(task.dueDate || task.targetDate) === tomorrowIso)
+    .map(toRow);
 
   const blockedMine = openMine
     .filter((task) => String(task.status || "").toLowerCase() === "blocked")
     .map(toRow);
+
+  const doneThisWeek = mine.filter((task) => {
+    if (taskWorkLane(task) !== "done" && !isClosed(task.status)) return false;
+    const day = asIsoDay(task.completedAt || task.updatedAt);
+    return day != null && day >= weekStartIso && day <= todayIso;
+  }).length;
+
+  const doneToday = mine.filter((task) => {
+    if (taskWorkLane(task) !== "done" && !isClosed(task.status)) return false;
+    return asIsoDay(task.completedAt || task.updatedAt) === todayIso;
+  }).length;
 
   const actions: HomeActionRow[] = [];
   for (const item of input.reviewItems || []) {
@@ -198,7 +576,7 @@ export function buildHomeCockpitData(input: {
       id: `approval-${item.id}`,
       kind: "approval",
       title: titleOf(item) || String(item.summary || item.why || "Approval"),
-      meta: `${locale === "es" ? "Aprobación" : "Approval"} · ${relativeAge(item.createdAt, locale)}`,
+      meta: `${locale === "es" ? "Aprobación" : "Approval"} · ${relativeAge(item.createdAt, locale, now)}`,
       actionLabel: "approve",
       payload: item,
     });
@@ -208,11 +586,8 @@ export function buildHomeCockpitData(input: {
     actions.push({
       id: `request-${request.id}`,
       kind: "request",
-      title:
-        locale === "es"
-          ? `${who} pide acceso`
-          : `${who} requests access`,
-      meta: `Request · ${relativeAge(request.requestedAt || request.updatedAt, locale)}`,
+      title: locale === "es" ? `${who} pide acceso` : `${who} requests access`,
+      meta: `Request · ${relativeAge(request.requestedAt || request.updatedAt, locale, now)}`,
       actionLabel: "respond",
       payload: request,
     });
@@ -228,10 +603,14 @@ export function buildHomeCockpitData(input: {
     });
   }
   const actionQueue = actions.slice(0, 6);
+  const actionCounts = {
+    approvals: (input.reviewItems || []).length,
+    requests: (input.accessRequests || []).length,
+    mentions: 0,
+  };
 
   const openProjects = projects.filter((project) => !isClosed(project.status));
   const projectCards: HomeProjectCard[] = openProjects
-    .slice(0, 6)
     .map((project) => {
       const projectTasks = (input.tasks || []).filter(
         (task) => String(task.projectId) === String(project.id),
@@ -239,121 +618,218 @@ export function buildHomeCockpitData(input: {
       const projectRisks = risks.filter(
         (risk) => String(risk.projectId) === String(project.id),
       );
-      const health = projectHealth(project, projectTasks, projectRisks);
+      const pct = projectPct(projectTasks);
+      const status = homeProjectStatus(project, projectTasks, projectRisks, pct, now, locale);
       const blocked = projectTasks.filter(
         (task) => String(task.status || "").toLowerCase() === "blocked",
       ).length;
-      const pct = projectPct(projectTasks);
-      const due = asIsoDay(
-        project.revisedDueDate || project.dueDate || project.targetDate,
-      );
-      const lineParts: string[] = [];
-      if (due) {
-        const parsed = parseISO(due);
-        lineParts.push(
-          isValid(parsed)
-            ? `${locale === "es" ? "Hito" : "Milestone"} ${format(parsed, "MMM d", { locale: locale === "es" ? es : enUS })}`
-            : due,
-        );
-      }
+      const owner =
+        members.find((m) => m.userId === project.ownerId || m.userId === project.createdBy) ||
+        null;
+      const healthLabel =
+        status.health === "on_track"
+          ? locale === "es"
+            ? "en fecha"
+            : "on track"
+          : status.health === "blocked"
+            ? locale === "es"
+              ? "bloqueado"
+              : "blocked"
+            : pct === 0 && status.milestonePast
+              ? locale === "es"
+                ? "sin avance"
+                : "no progress"
+              : locale === "es"
+                ? "en riesgo"
+                : "at risk";
+
+      const lineBits = [`${pct}%`];
+      if (status.milestoneLabel) lineBits.push(status.milestoneLabel);
+      else lineBits.push(healthLabel);
       if (blocked) {
-        lineParts.push(
+        lineBits.push(
           locale === "es"
             ? `${blocked} bloqueado${blocked === 1 ? "" : "s"}`
             : `${blocked} blocked`,
         );
       }
-      if (!lineParts.length) {
-        lineParts.push(
-          health === "on_track"
-            ? locale === "es"
-              ? "Va en fecha"
-              : "On track"
-            : health === "blocked"
-              ? locale === "es"
-                ? "Bloqueado"
-                : "Blocked"
-              : locale === "es"
-                ? "En riesgo"
-                : "At risk",
-        );
-      }
+
       return {
         id: String(project.id),
         title: titleOf(project),
-        health,
+        shortName: shortProjectName(titleOf(project), project),
+        health: status.health,
         pct,
-        line: lineParts.join(" · "),
+        line: lineBits.join(" · "),
+        lineTone: status.lineTone,
+        milestonePast: status.milestonePast,
+        blockedCount: blocked,
+        ownerInitials: initials(
+          String(owner?.displayName || owner?.email || project.ownerName || "?"),
+        ),
       };
-    });
+    })
+    .sort((a, b) => {
+      if (a.blockedCount !== b.blockedCount) return b.blockedCount - a.blockedCount;
+      if (a.milestonePast !== b.milestonePast) return a.milestonePast ? -1 : 1;
+      if (a.health !== b.health) {
+        const rank = { blocked: 0, at_risk: 1, on_track: 2 } as const;
+        return rank[a.health] - rank[b.health];
+      }
+      return a.shortName.localeCompare(b.shortName);
+    })
+    .slice(0, 6);
 
   const dueCount = todayItems.length + overdueItems.length;
-  const blockedCount = blockedMine.length;
-  const approvalCount = (input.reviewItems || []).length;
   const dayChips: HomeDayChip[] = [
-    { id: "due", count: dueCount, tone: "danger" },
-    { id: "blocked", count: blockedCount, tone: "warning" },
-    { id: "approvals", count: approvalCount, tone: "info" },
-  ].filter((chip) => chip.count > 0) as HomeDayChip[];
+    { id: "due" as const, count: dueCount, tone: "danger" as const },
+    { id: "blocked" as const, count: blockedMine.length, tone: "warning" as const },
+    {
+      id: "approvals" as const,
+      count: actionCounts.approvals,
+      tone: "info" as const,
+    },
+  ].filter((chip) => chip.count > 0);
 
-  const spotlight = projectCards.find((p) => p.health === "on_track") || projectCards[0];
-  let dayLineTail = "";
-  if (spotlight) {
-    dayLineTail =
-      locale === "es"
-        ? `${spotlight.title} al ${spotlight.pct}%, ${spotlight.health === "on_track" ? "va en fecha" : spotlight.line}.`
-        : `${spotlight.title} at ${spotlight.pct}%, ${spotlight.health === "on_track" ? "on track" : spotlight.line}.`;
-  }
+  const hasWeeklyPlan = routines.some((r) =>
+    /plan\s*semanal|weekly\s*plan/i.test(r.title),
+  );
 
-  let dayLine: string;
-  if (!dayChips.length && !dayLineTail) {
-    const oldestInProgress =
-      openMine
-        .filter((task) => taskWorkLane(task) === "in_progress")
-        .sort((a, b) => String(a.updatedAt || "").localeCompare(String(b.updatedAt || "")))[0] ||
-      openMine[0];
-    const focus = oldestInProgress ? titleOf(oldestInProgress) : null;
-    dayLine = focus
-      ? locale === "es"
-        ? `Sin vencimientos ni bloqueos. Buen día para avanzar en ${focus}`
-        : `Nothing due or blocked. Good day to advance ${focus}`
-      : locale === "es"
-        ? "Sin vencimientos ni bloqueos. Buen día para avanzar."
-        : "Nothing due or blocked. Good day to make progress.";
-  } else {
-    const prefix = locale === "es" ? "Hoy:" : "Today:";
-    dayLine = `${prefix} ${dayLineTail}`.trim();
-    if (dayLine.length > 140) dayLine = dayLine.slice(0, 137) + "…";
-  }
+  const editorial = buildEditorial({
+    locale,
+    now,
+    todayCount: todayItems.length,
+    overdueCount: overdueItems.length,
+    approvalCount: actionCounts.approvals,
+    blockedCount: blockedMine.length,
+    tomorrowItems,
+    doneToday,
+    hasWeeklyPlan: hasWeeklyPlan || true, // point to plan even before recipe ships
+  });
+
+  const editorialFallback =
+    locale === "es"
+      ? `${overdueItems.length} vencidos · ${todayItems.length} hoy · ${actionCounts.approvals} aprobaciones`
+      : `${overdueItems.length} overdue · ${todayItems.length} today · ${actionCounts.approvals} approvals`;
+
+  const quietStats: QuietStat[] = [
+    {
+      id: "open",
+      value: openMine.length,
+      label:
+        locale === "es"
+          ? `ítems abiertos · ${openProjects.length} proyectos`
+          : `open items · ${openProjects.length} projects`,
+      tone: "plain",
+      action: "today",
+    },
+    {
+      id: "overdue",
+      value: overdueItems.length,
+      label: locale === "es" ? "vencidos" : "overdue",
+      tone: overdueItems.length > 0 ? "danger" : "plain",
+      action: "overdue",
+    },
+    {
+      id: "done",
+      value: doneThisWeek,
+      label: locale === "es" ? "completados esta semana" : "completed this week",
+      tone: "plain",
+      action: "week",
+    },
+    {
+      id: "projects",
+      value: openProjects.length,
+      label: locale === "es" ? "proyectos activos" : "active projects",
+      tone: "plain",
+      action: "projects",
+    },
+    {
+      id: "routines",
+      value: input.routinesRan7d ?? 0,
+      label: locale === "es" ? "rutinas corrieron · 7 d" : "routines ran · 7d",
+      tone: "plain",
+    },
+  ];
 
   const dateLocale = locale === "es" ? es : enUS;
   const longDate = format(now, "EEEE d 'de' MMMM", { locale: dateLocale });
   const longDateEn = format(now, "EEEE, MMMM d", { locale: enUS });
 
-  const next7Days = Array.from({ length: 7 }, (_, index) => {
+  const next7Days: HomeWeekDay[] = Array.from({ length: 7 }, (_, index) => {
     const day = addDays(startOfDay(now), index);
     const iso = day.toISOString().slice(0, 10);
     const items = openMine
       .filter((task) => asIsoDay(task.dueDate || task.targetDate) === iso)
       .map(toRow);
+    const dayRoutines = routines
+      .filter((routine) => {
+        const runDay = asIsoDay(routine.nextRunAt);
+        return runDay === iso;
+      })
+      .map((routine) => ({ id: routine.id, title: routine.title }));
+
+    // Seed default WRAP / Plan chips when recipes not yet activated but weekend/Monday/Friday
+    if (!dayRoutines.length && index > 0) {
+      const dow = day.getDay();
+      if (dow === 1) {
+        dayRoutines.push({ id: "weekly-plan", title: locale === "es" ? "Plan semanal" : "Weekly plan" });
+      }
+      if (dow === 5) {
+        dayRoutines.push({ id: "wrap-review", title: "WRAP Review" });
+      }
+    }
+
+    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
     return {
       iso,
-      label: format(day, "EEE d", { locale: dateLocale }),
+      dayNum: format(day, "d"),
+      weekday: format(day, "EEE", { locale: dateLocale }),
       isToday: index === 0,
+      isWeekend,
       items,
+      routines: dayRoutines,
+      restLabel:
+        index === 0 && !items.length && isWeekend
+          ? locale === "es"
+            ? "Descanso"
+            : "Rest"
+          : undefined,
     };
   });
+
+  const weekItemCount = next7Days.reduce((n, d) => n + d.items.length, 0);
+  const nextRoutine = routines
+    .map((r) => ({ ...r, day: asIsoDay(r.nextRunAt) }))
+    .filter((r) => r.day && r.day >= todayIso)
+    .sort((a, b) => String(a.day).localeCompare(String(b.day)))[0];
+  let weekSubtitle =
+    locale === "es"
+      ? `${weekItemCount} ítem${weekItemCount === 1 ? "" : "s"}`
+      : `${weekItemCount} item${weekItemCount === 1 ? "" : "s"}`;
+  if (nextRoutine?.day) {
+    const parsed = parseISO(nextRoutine.day);
+    const when = isValid(parsed)
+      ? format(parsed, "EEE HH:mm", { locale: dateLocale })
+      : nextRoutine.day;
+    weekSubtitle += ` · ${nextRoutine.title} ${when}`;
+  } else {
+    weekSubtitle +=
+      locale === "es" ? " · Plan semanal lun 08:00" : " · Weekly plan Mon 08:00";
+  }
 
   const activity: HomeActivityRow[] = (input.activityItems || [])
     .slice(0, 6)
     .map((item, index) => ({
       id: String(item.id || `act-${index}`),
       text: String(item.summary || item.text || item.action || "Update"),
-      when: relativeAge(item.createdAt || item.at, locale),
+      verb: item.verb ? String(item.verb) : undefined,
+      object: item.objectTitle ? String(item.objectTitle) : undefined,
+      when: relativeAge(item.createdAt || item.at, locale, now),
       avatar: item.avatar || undefined,
+      itemId: item.itemId ? String(item.itemId) : null,
     }));
 
-  // Also surface recent task updates the user owns/follows
   if (activity.length < 6) {
     const recent = [...openMine, ...mine.filter((t) => taskWorkLane(t) === "done")]
       .sort((a, b) =>
@@ -365,27 +841,42 @@ export function buildHomeCockpitData(input: {
     for (const task of recent) {
       activity.push({
         id: `task-${task.id}`,
-        text:
-          locale === "es"
-            ? `${titleOf(task)} · ${task.status || "actualizado"}`
-            : `${titleOf(task)} · ${task.status || "updated"}`,
-        when: relativeAge(task.updatedAt, locale),
+        text: titleOf(task),
+        verb: locale === "es" ? "actualizó" : "updated",
+        object: titleOf(task),
+        when: relativeAge(task.updatedAt, locale, now),
+        itemId: String(task.id),
       });
     }
   }
 
+  const defaultItemTab: "today" | "overdue" | "week" =
+    todayItems.length > 0
+      ? "today"
+      : overdueItems.length > 0
+        ? "overdue"
+        : "week";
+
+  const dayLine = editorial.map((p) => p.text).join("");
+
   return {
     greeting: greetingFor(input.userName, locale, now),
     longDate: locale === "es" ? longDate : longDateEn,
+    editorial,
+    editorialFallback,
     dayLine,
     dayChips,
-    dayLineTail,
+    dayLineTail: "",
+    quietStats,
     actions: actionQueue,
+    actionCounts,
     todayItems,
     overdueItems,
     weekItems,
+    defaultItemTab,
     projects: projectCards,
     next7Days,
+    weekSubtitle,
     activity: activity.slice(0, 6),
   };
 }
