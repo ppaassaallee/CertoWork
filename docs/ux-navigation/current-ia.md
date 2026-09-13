@@ -1,34 +1,35 @@
 # Current information architecture (audit)
 
-Audit date: 2026-08-23  
+Audit date: 2026-09-13  
 Live shell: `DelivereeWorkspace` via `App.tsx` catch-all `path="*"`.
 
-## Primary navigation (as shipped before this refactor)
+## Primary navigation (sidebar philosophy)
+
+Essentials stay short and flat. Secondary destinations collapse under **Management**. One AI noun in the rail: **Rutinas** (`/rutinas`; `/agents` still resolves).
 
 ```
-Home → /home
-Work → /work                    (Project Command Center)
-Approvals → /approvals
-Settings → /settings
-More ▾
-  Automations → /more/automations
-  Updates → /more/updates
-  Workspace & team → /more/workspace
-[New conversation]
-[Odysseus hire card]
-Projects (favorites / recent) · Command center
-Conversations (expanding list)
+Search (⌘K)
+Essentials
+  Home → /home
+  My Work → /my-work
+  Projects → /projects
+  Notes → /notes
+  Approvals → /approvals
+  Rutinas → /rutinas
+Projects (favorites / recent)
+Management ▾ (collapsed by default)
+  Requests → /requests
+  Invoices → /invoices
+  SupportOps → /supportops
+Conversations (+ new / search)
 Account → Workspace & team / Settings / Sign out
 ```
 
-## Problems
+## Look and feel
 
-- Work, Projects, and Command Center compete for the same job.
-- Odysseus sits beside primary nav as a parallel product concept.
-- More hides Automations / Updates / Workspace without a user job.
-- Conversations compete with Projects as a second file tree.
-- Settings is treated as a daily destination.
-- Capture / Action Board / Intake vocabulary leaks into navigation.
+- Quiet active: surface highlight + soft shadow (no accent bar, no loud tint).
+- Section headers carry actions (+ / search), not mid-rail CTAs.
+- Color reserved for project health / badges, not every selected row.
 
 ## Live resolver
 

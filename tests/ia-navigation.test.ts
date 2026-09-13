@@ -112,7 +112,7 @@ test("lens writers prefer semantic canonical paths", () => {
   );
 });
 
-test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () => {
+test("primary sidebar keeps essentials short; management is secondary", () => {
   const source = readFileSync(
     resolve("src/components/DelivereeWorkspace.tsx"),
     "utf8",
@@ -127,12 +127,16 @@ test("primary sidebar uses Home / My Work / Projects / Agents / Approvals", () =
   const notes = readFileSync(resolve("src/components/NotesWorkspace.tsx"), "utf8");
   assert.match(source, /data-testid="nav-notes"/);
   assert.match(notes, /data-testid="notes-workspace"/);
-  assert.match(source, /data-testid="nav-agents"/);
+  assert.match(source, /data-testid="nav-rutinas"/);
   assert.match(source, /data-testid="nav-approvals"/);
+  assert.match(source, /data-testid="nav-management-toggle"/);
   assert.match(source, /data-testid="nav-invoices"/);
   assert.match(source, /data-testid="nav-feedback"/);
   assert.match(source, /data-testid="nav-requests"/);
   assert.match(source, /data-testid="nav-admin-settings"/);
+  assert.match(source, /data-testid="new-conversation"/);
+  assert.doesNotMatch(source, /data-testid="nav-agents"/);
+  assert.doesNotMatch(source, /className="do-new-conversation"/);
   assert.doesNotMatch(source, /data-testid="nav-workspace"/);
   assert.doesNotMatch(source, /data-testid="nav-settings"/);
   assert.match(source, /ProductSwitcher/);

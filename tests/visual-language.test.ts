@@ -54,7 +54,7 @@ test("primary navigation uses consistent English labels", async () => {
   assert.match(source, /navHome|Home/);
   assert.match(source, /navMyWork|My Work/);
   assert.match(source, /navProjects|Projects/);
-  assert.match(source, /navAgents|Agents/);
+  assert.match(source, /navRutinas|Rutinas|Routines/);
   assert.match(source, /navApprovals|Approvals/);
   assert.equal(/Conversación|Ítems|Notas|Pendientes/.test(source), false);
 });
