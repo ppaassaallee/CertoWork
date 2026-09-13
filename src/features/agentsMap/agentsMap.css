@@ -1,0 +1,359 @@
+.cw-agents-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cw-agents-area-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cw-agents-area-head > strong {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.cw-agents-area-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cw-agents-area-tabs button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 5px 9px;
+  border-radius: 14px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cw-agents-area-tabs button.is-active {
+  background: var(--text-primary);
+  color: var(--surface-0);
+}
+
+.cw-agents-area-live {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cw-agents-map-chip {
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.cw-agents-map-chip.is-success {
+  background: var(--status-success-soft);
+  color: var(--status-success);
+}
+
+.cw-agents-map-chip.is-warning {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+
+.cw-agents-map-chip.is-danger {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+}
+
+.cw-agents-map-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cw-agents-map-filters button {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 9px;
+  background: var(--surface-0);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cw-agents-map-filters button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+.cw-agents-map-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 10px;
+  align-items: start;
+}
+
+.cw-agents-map-canvas,
+.cw-agents-map-side {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.cw-agents-map-canvas-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.cw-agents-map-canvas-head strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cw-agents-map-empty {
+  margin: 12px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cw-agents-map-handoffs {
+  margin-top: 10px;
+}
+
+.cw-agents-map-handoffs-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 2px 4px;
+}
+
+.cw-agents-map-handoffs-head strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cw-agents-map-handoffs-head span {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cw-agents-map-handoff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 5px;
+  background: var(--surface-1);
+}
+
+.cw-agents-map-handoff b {
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-agents-map-handoff i {
+  color: var(--text-muted);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-agents-map-side {
+  position: sticky;
+  top: 8px;
+}
+
+.cw-agents-map-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin: 0 0 6px;
+}
+
+.cw-agents-map-selected-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cw-agents-map-selected-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cw-agents-map-selected-head strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cw-agents-map-selected-head small {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.cw-agents-map-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.cw-agents-map-kpis > div {
+  background: var(--surface-1);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.cw-agents-map-kpis span {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cw-agents-map-kpis b {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-agents-map-kpis small {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.cw-agents-map-perm {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface-1);
+  margin-bottom: 3px;
+  color: var(--text-primary);
+}
+
+.cw-agents-map-perm.is-bad {
+  background: var(--status-danger-soft);
+  color: var(--status-danger);
+}
+
+.cw-agents-map-anomalies {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cw-agents-map-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cw-agents-map-actions button {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.cw-agents-map-actions button.is-primary {
+  flex: 1;
+  background: var(--text-primary);
+  color: var(--surface-0);
+  border-color: transparent;
+}
+
+.cw-agents-runs,
+.cw-agents-analytics {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.cw-agents-runs table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cw-agents-runs th,
+.cw-agents-runs td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cw-agents-runs th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.cw-agents-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cw-agents-analytics-grid article {
+  background: var(--surface-1);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.cw-agents-analytics-grid span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cw-agents-analytics-grid strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+  .cw-agents-map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cw-agents-analytics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

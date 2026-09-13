@@ -124,8 +124,8 @@ import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/e
 import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
-import { AgentsLibrary, AgentBuilderDraft } from "./agents/AgentsLibrary";
-import { RoutinesHome } from "./routines/RoutinesHome";
+import { AgentBuilderDraft } from "./agents/AgentsLibrary";
+import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
 import {
   listRoutinesForWorkspace,
@@ -6824,7 +6824,30 @@ export function DelivereeWorkspace() {
             }
           />
         ) : centerView === "routines" ? (
-          <RoutinesHome />
+          <AgentsArea
+            activityItems={odiseusActivity}
+            areaTitle="Rutinas"
+            flagOffFallback="routines"
+            initialTab="map"
+            pendingApprovals={reviewItems.length}
+            routines={agentRoutines}
+            viewerUserId={user?.uid}
+            workspaceName={workspace?.name || undefined}
+            onCreateAgent={() => {
+              setAgentBuilderOpen(true);
+              navigate("/agents");
+            }}
+            onOpenActivity={() => navigate("/agents/activity")}
+            onOpenApprovals={() => setPanel("approvals")}
+            onOpenAutomations={() => navigate("/rutinas")}
+            onOpenOdysseus={() => void openChiefOfStaff()}
+            onRoutinesChanged={() => {
+              if (!workspace?.id || !user?.uid) return;
+              void listRoutinesForWorkspace(workspace.id, user.uid)
+                .then(setAgentRoutines)
+                .catch(() => undefined);
+            }}
+          />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
             <AgentBuilderDraft
@@ -6839,16 +6862,26 @@ export function DelivereeWorkspace() {
               outcome={agentOutcomeDraft}
             />
           ) : (
-            <AgentsLibrary
+            <AgentsArea
               activityItems={odiseusActivity}
+              areaTitle="Agentes"
+              flagOffFallback="agents"
+              initialTab="agents"
               pendingApprovals={reviewItems.length}
               routines={agentRoutines}
               viewerUserId={user?.uid}
+              workspaceName={workspace?.name || undefined}
               onCreateAgent={() => setAgentBuilderOpen(true)}
               onOpenActivity={() => navigate("/agents/activity")}
               onOpenApprovals={() => setPanel("approvals")}
               onOpenAutomations={() => navigate("/rutinas")}
               onOpenOdysseus={() => void openChiefOfStaff()}
+              onRoutinesChanged={() => {
+                if (!workspace?.id || !user?.uid) return;
+                void listRoutinesForWorkspace(workspace.id, user.uid)
+                  .then(setAgentRoutines)
+                  .catch(() => undefined);
+              }}
             />
           )
         ) : centerView === "strategy" ? (
