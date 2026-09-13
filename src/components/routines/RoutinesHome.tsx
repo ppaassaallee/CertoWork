@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, Pause, Play, Sparkles } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import {
+  activateGuidedRecipe,
   activateRoutine,
   buildDryRunPreview,
   listRoutineRuns,
@@ -10,7 +11,7 @@ import {
   pauseRoutine,
   recordManualRoutineRun,
   relativeNextRunLabel,
-  ROUTINE_RECIPES,
+  recipesForDomain,
   routineStatusTone,
   type RoutineSpec,
 } from "../../lib/routines";
@@ -33,6 +34,9 @@ export function RoutinesHome() {
   const { user, workspace } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<"list" | "recipes">("list");
+  const [recipeDomain, setRecipeDomain] = useState<"all" | "personal" | "project" | "portfolio">(
+    "all",
+  );
   const [routines, setRoutines] = useState<RoutineSpec[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -44,6 +48,7 @@ export function RoutinesHome() {
     () => routines.find((routine) => routine.id === selectedId) || null,
     [routines, selectedId],
   );
+  const gallery = useMemo(() => recipesForDomain(recipeDomain), [recipeDomain]);
 
   const reload = async () => {
     if (!workspace?.id) return;
@@ -118,6 +123,24 @@ export function RoutinesHome() {
     }
   };
 
+  const activatePersonal = async (recipeId: string) => {
+    if (!workspace?.id || !user?.uid) return;
+    setBusyId(recipeId);
+    try {
+      await activateGuidedRecipe({
+        workspaceId: workspace.id,
+        ownerUserId: user.uid,
+        recipeId,
+      });
+      setTab("list");
+      await reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No pude activar la rutina.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="do-routines-home" data-testid="routines-home">
       <header className="do-routines-home-head">
@@ -151,25 +174,51 @@ export function RoutinesHome() {
       {error ? <p className="do-routine-error">{error}</p> : null}
 
       {tab === "recipes" ? (
-        <div className="do-routines-recipes-grid" data-testid="routines-recipes">
-          {ROUTINE_RECIPES.map((recipe) => (
-            <article key={recipe.id}>
-              <strong>{recipe.title}</strong>
-              <p>{recipe.sentence}</p>
-              <small>
-                {recipe.triggerHint} · {recipe.deliverableHint}
-              </small>
+        <div>
+          <div className="do-routine-domain-filters" role="tablist" aria-label="Dominio">
+            {(
+              [
+                ["all", "Todas"],
+                ["personal", "Personal"],
+                ["project", "Proyecto"],
+                ["portfolio", "Portafolio"],
+              ] as const
+            ).map(([id, label]) => (
               <button
-                onClick={() => {
-                  if (recipe.entityTypes.includes("portfolio")) navigate("/projects");
-                  else navigate("/projects");
-                }}
+                className={recipeDomain === id ? "is-active" : ""}
+                key={id}
+                onClick={() => setRecipeDomain(id)}
                 type="button"
               >
-                Usar en…
+                {label}
               </button>
-            </article>
-          ))}
+            ))}
+          </div>
+          <div className="do-routines-recipes-grid" data-testid="routines-recipes">
+            {gallery.map((recipe) => (
+              <article key={recipe.id}>
+                <strong>{recipe.title}</strong>
+                <p>{recipe.sentence}</p>
+                <small>
+                  {recipe.triggerHint} · {recipe.deliverableHint}
+                  {recipe.estimatedMinutes ? ` · ~${recipe.estimatedMinutes} min` : ""}
+                </small>
+                {recipe.class === "guided" ? (
+                  <button
+                    disabled={busyId === recipe.id}
+                    onClick={() => void activatePersonal(recipe.id)}
+                    type="button"
+                  >
+                    Activar en Mi trabajo
+                  </button>
+                ) : (
+                  <button onClick={() => navigate("/projects")} type="button">
+                    Usar en…
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="do-routines-layout">

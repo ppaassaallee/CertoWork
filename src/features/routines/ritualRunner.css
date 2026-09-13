@@ -1,0 +1,461 @@
+.cw-ritual-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+}
+
+.cw-ritual-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 20, 18, 0.35);
+}
+
+.cw-ritual-modal {
+  position: relative;
+  z-index: 1;
+  width: min(560px, calc(100vw - 24px));
+  max-height: min(920px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-0, #fff);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .cw-ritual-modal {
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
+
+.cw-ritual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cw-ritual-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.cw-ritual-brand strong {
+  font-weight: 600;
+}
+
+.cw-ritual-brand em {
+  font-style: normal;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-ritual-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.cw-ritual-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.cw-ritual-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  display: block;
+}
+
+.cw-ritual-dots i.is-on {
+  background: var(--text-primary);
+}
+
+.cw-ritual-progress button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.cw-ritual-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 18px 12px;
+}
+
+.cw-ritual-step-label {
+  margin: 0 0 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cw-ritual-body h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.cw-ritual-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.cw-ritual-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cw-ritual-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.cw-ritual-footer-left,
+.cw-ritual-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cw-ritual-footer button {
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.cw-ritual-primary {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  background: var(--btn-primary-bg, #111) !important;
+  color: var(--btn-primary-fg, #fff) !important;
+  font-weight: 500 !important;
+}
+
+.cw-ritual-error {
+  color: var(--status-danger);
+  font-size: 12px;
+}
+
+.cw-ritual-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cw-ritual-findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cw-ritual-findings li {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.cw-ritual-findings li.is-off {
+  opacity: 0.55;
+}
+
+.cw-ritual-finding-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-1);
+  font-size: 12px;
+}
+
+.cw-ritual-finding-icon.is-epic {
+  background: color-mix(in srgb, #639922 18%, transparent);
+}
+.cw-ritual-finding-icon.is-progress {
+  background: color-mix(in srgb, #378add 18%, transparent);
+}
+.cw-ritual-finding-icon.is-mention {
+  background: color-mix(in srgb, #c4a574 22%, transparent);
+}
+
+.cw-ritual-findings strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.cw-ritual-findings em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.cw-ritual-findings button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-0);
+  cursor: pointer;
+}
+
+.cw-ritual-findings button.is-check {
+  background: color-mix(in srgb, #639922 18%, transparent);
+  border-color: transparent;
+  color: #639922;
+}
+
+.cw-ritual-reflection-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #639922 14%, transparent);
+  color: #3d6b14;
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.cw-ritual-reflection textarea,
+.cw-ritual-direction input,
+.cw-ritual-goal input,
+.cw-ritual-timeblocks input,
+.cw-ritual-timeblocks select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  background: var(--surface-0);
+}
+
+.cw-ritual-reflection textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.cw-ritual-direction {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cw-ritual-scale {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cw-ritual-scale button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-0);
+  cursor: pointer;
+}
+
+.cw-ritual-scale button.is-active {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: transparent;
+}
+
+.cw-ritual-metrics,
+.cw-ritual-capacity {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.cw-ritual-metrics div,
+.cw-ritual-capacity div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cw-ritual-metrics b,
+.cw-ritual-capacity b {
+  font-size: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-ritual-metrics span,
+.cw-ritual-capacity span {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cw-ritual-metrics .is-danger b,
+.cw-ritual-capacity.is-over b {
+  color: var(--status-danger);
+}
+
+.cw-ritual-capacity {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.cw-ritual-capacity p {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.cw-ritual-triage-bulk {
+  margin-bottom: 8px;
+}
+
+.cw-ritual-triage-bulk button,
+.cw-ritual-triage-actions button,
+.cw-ritual-goals button,
+.cw-ritual-timeblocks > button {
+  border: 1px solid var(--border);
+  background: var(--surface-0);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cw-ritual-triage ul,
+.cw-ritual-goals ul,
+.cw-ritual-timeblocks ul,
+.cw-ritual-summary ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cw-ritual-triage li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cw-ritual-triage li strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.cw-ritual-triage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cw-ritual-triage-actions button.is-active {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: transparent;
+}
+
+.cw-ritual-goal {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cw-ritual-goal label span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.cw-ritual-goal ul {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cw-ritual-add-goal {
+  margin-top: 8px;
+}
+
+.cw-ritual-timeblocks li {
+  display: grid;
+  grid-template-columns: 70px 90px 90px 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.cw-ritual-dayoff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.cw-ritual-summary p {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.cw-ritual-summary li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}

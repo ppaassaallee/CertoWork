@@ -98,10 +98,40 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     triggerHint: "Vencida +3 d",
     deliverableHint: "Borrador (pide aprobación)",
   },
+  {
+    id: "wrap-review",
+    title: "WRAP Review",
+    sentence: "Cada viernes a las 4 guiame por mi revisión de la semana.",
+    entityTypes: ["person", "portfolio"],
+    triggerHint: "Vie 16:00",
+    deliverableHint: "Sesión guiada · ~12 min",
+    domain: "personal",
+    estimatedMinutes: 12,
+    class: "guided",
+  },
+  {
+    id: "weekly-plan",
+    title: "Plan semanal",
+    sentence:
+      "Cada lunes a las 8 ayudame a planear la semana con 2 o 3 metas y tiempo protegido.",
+    entityTypes: ["person", "portfolio"],
+    triggerHint: "Lun 08:00",
+    deliverableHint: "Sesión guiada · ~7 min",
+    domain: "personal",
+    estimatedMinutes: 7,
+    class: "guided",
+  },
 ];
 
 export function recipesForEntity(entityType: RoutineEntityType): RoutineRecipe[] {
   return ROUTINE_RECIPES.filter((recipe) => recipe.entityTypes.includes(entityType));
+}
+
+export function recipesForDomain(
+  domain: "personal" | "project" | "portfolio" | "all" = "all",
+): RoutineRecipe[] {
+  if (domain === "all") return ROUTINE_RECIPES;
+  return ROUTINE_RECIPES.filter((recipe) => (recipe.domain || "project") === domain);
 }
 
 export const COMPOSER_PLACEHOLDERS = [

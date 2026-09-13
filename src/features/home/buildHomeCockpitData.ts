@@ -26,10 +26,10 @@ export type HomeItemRow = {
 
 export type HomeActionRow = {
   id: string;
-  kind: "approval" | "request" | "blocked" | "mention";
+  kind: "approval" | "request" | "blocked" | "mention" | "routine_session";
   title: string;
   meta: string;
-  actionLabel: "approve" | "respond" | "open";
+  actionLabel: "approve" | "respond" | "open" | "start";
   payload?: unknown;
 };
 
@@ -142,6 +142,15 @@ export function buildHomeCockpitData(input: {
   reviewItems?: any[];
   accessRequests?: any[];
   activityItems?: any[];
+  /** Pending guided ritual sessions for the action queue. */
+  routineSessions?: Array<{
+    id: string;
+    recipeId: string;
+    status: string;
+    estimatedMinutes?: number | null;
+    condensed?: boolean;
+    weekOf?: string;
+  }>;
   now?: Date;
   locale?: Locale;
 }): HomeCockpitModel {
@@ -193,6 +202,26 @@ export function buildHomeCockpitData(input: {
     .map(toRow);
 
   const actions: HomeActionRow[] = [];
+  for (const session of input.routineSessions || []) {
+    const isWrap = session.recipeId === "wrap-review";
+    const name = isWrap ? "WRAP Review" : session.recipeId === "weekly-plan" ? (locale === "es" ? "Plan semanal" : "Weekly plan") : session.recipeId;
+    const mins = session.estimatedMinutes || (isWrap ? 12 : 7);
+    const missed = session.status === "missed" || session.condensed;
+    actions.push({
+      id: `routine-${session.id}`,
+      kind: "routine_session",
+      title: missed
+        ? locale === "es"
+          ? `${session.weekOf || "Semana"} sin revisar · Hacerla en ${Math.max(8, mins - 4)} min (resumida)`
+          : `${session.weekOf || "Week"} missed · Do it in ${Math.max(8, mins - 4)} min (condensed)`
+        : locale === "es"
+          ? `Tu ${name} está lista`
+          : `Your ${name} is ready`,
+      meta: `~${missed ? Math.max(8, mins - 4) : mins} min · ${locale === "es" ? "Empezar" : "Start"}`,
+      actionLabel: "start",
+      payload: session,
+    });
+  }
   for (const item of input.reviewItems || []) {
     actions.push({
       id: `approval-${item.id}`,

@@ -102,6 +102,24 @@ function slotKey(iso) {
   return at.toISOString().slice(0, 16).replace(/[-:T]/g, "");
 }
 
+function isoWeekOf(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function mondayExpiryIso(from = new Date()) {
+  const d = new Date(from);
+  const day = d.getDay();
+  const add = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+  d.setDate(d.getDate() + add);
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+}
+
 function stringValue(value) {
   return { stringValue: String(value) };
 }
@@ -311,6 +329,78 @@ export async function processDueRoutines(env, helpers = {}, now = new Date()) {
     }
 
     const startedAt = now.toISOString();
+    const guided =
+      routine.class === "guided" ||
+      routine.deliverable?.channel === "session" ||
+      ["wrap-review", "weekly-plan"].includes(String(routine.recipeId || ""));
+
+    if (guided) {
+      const recipeId = String(routine.recipeId || routine.id || "wrap-review");
+      const weekOf = isoWeekOf(now);
+      const expiresAt =
+        recipeId === "wrap-review" ? mondayExpiryIso(now) : null;
+      const sessionId = `${routine.id}_${slotKey(scheduledFor)}_session`;
+      const existingSession = await firestoreGetDocument(env, "routine_sessions", sessionId);
+      if (!existingSession) {
+        await firestoreCreateDocument(
+          env,
+          "routine_sessions",
+          {
+            workspaceId: routine.workspaceId,
+            userId: routine.ownerUserId || routine.userId || "",
+            routineId: routine.id,
+            recipeId,
+            weekOf,
+            status: "ready",
+            stepIndex: 0,
+            condensed: false,
+            prepared: { deferred: true },
+            answers: {},
+            noteId: null,
+            actions: [],
+            expiresAt,
+            estimatedMinutes: recipeId === "weekly-plan" ? 7 : 12,
+            createdAt: startedAt,
+            updatedAt: startedAt,
+          },
+          sessionId,
+        );
+      }
+      const finishedAt = new Date().toISOString();
+      await firestoreCreateDocument(
+        env,
+        "routine_runs",
+        {
+          routineId: routine.id,
+          workspaceId: routine.workspaceId,
+          userId: routine.ownerUserId || routine.userId || "",
+          triggerType: "schedule",
+          scheduledFor,
+          startedAt,
+          finishedAt,
+          status: "completed",
+          steps: [
+            { t: 0, kind: "prepare", label: "Prepared guided session" },
+            { t: 1, kind: "deliver", label: "Posted session card (channel=session)" },
+          ],
+          output: { text: `Guided session ready: ${recipeId}`, sessionId },
+          actions: [],
+          usage: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },
+          chainDepth: 0,
+          emailSent: false,
+          error: null,
+          createdAt: finishedAt,
+        },
+        runId,
+      );
+      await finishRoutine(env, claim.fresh || routine, scheduledFor, {
+        status: "completed",
+        finishedAt,
+      });
+      results.push({ id: routine.id, status: "completed", runId, sessionId, guided: true });
+      continue;
+    }
+
     const { text, steps } = buildScheduledOutput(claim.fresh || routine);
     let status = "completed";
     let error;

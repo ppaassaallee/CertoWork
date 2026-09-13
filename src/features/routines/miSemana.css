@@ -1,0 +1,75 @@
+.cw-mi-semana {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.cw-mi-semana header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cw-mi-semana h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cw-mi-semana header button {
+  border: none;
+  background: none;
+  color: var(--accent, #2f6fed);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cw-mi-semana ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cw-mi-semana li {
+  display: grid;
+  grid-template-columns: 1fr 80px 28px;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 12px;
+}
+
+.cw-mi-semana li:last-child {
+  border-bottom: none;
+}
+
+.cw-mi-semana-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2, #eee);
+  overflow: hidden;
+}
+
+.cw-mi-semana-bar i {
+  display: block;
+  height: 100%;
+  background: var(--text-primary);
+}
+
+.cw-mi-semana em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cw-mi-semana-block {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}

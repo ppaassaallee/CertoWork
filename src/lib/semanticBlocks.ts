@@ -21,7 +21,13 @@ export type SemanticBlockType =
   | "decision"
   | "bloqueo"
   | "notas_odysseus"
-  | "notas";
+  | "notas"
+  | "wins"
+  | "resultados"
+  | "alineacion"
+  | "metas"
+  | "tiempo_protegido"
+  | "plan";
 
 export type SemanticBlock = {
   type: SemanticBlockType;
@@ -131,6 +137,30 @@ export const SEMANTIC_BLOCKS: SemanticBlockDef[] = [
     group: "ai",
     aiOnly: true,
   },
+  { type: "wins", labelEs: "Wins", labelEn: "Wins", hue: "green", group: "control" },
+  {
+    type: "resultados",
+    labelEs: "Resultados",
+    labelEn: "Results",
+    hue: "blue",
+    group: "control",
+  },
+  {
+    type: "alineacion",
+    labelEs: "Alineación",
+    labelEn: "Alignment",
+    hue: "indigo",
+    group: "control",
+  },
+  { type: "metas", labelEs: "Metas", labelEn: "Goals", hue: "teal", group: "control" },
+  {
+    type: "tiempo_protegido",
+    labelEs: "Tiempo protegido",
+    labelEn: "Protected time",
+    hue: "amber",
+    group: "control",
+  },
+  { type: "plan", labelEs: "Plan", labelEn: "Plan", hue: "purple", group: "control" },
 ];
 
 const TYPE_SET = new Set(SEMANTIC_BLOCKS.map((block) => block.type));

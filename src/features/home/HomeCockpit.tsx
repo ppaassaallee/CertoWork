@@ -11,6 +11,7 @@ import { getLocale, t } from "../../lib/i18n";
 import type { MyWorkActor } from "../../lib/myWorkItems";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { buildHomeCockpitData, type HomeActionRow, type HomeItemRow } from "./buildHomeCockpitData";
+import { MiSemanaCard } from "../routines/MiSemanaCard";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -23,6 +24,15 @@ export type HomeCockpitProps = {
   reviewItems?: any[];
   accessRequests?: any[];
   activityItems?: any[];
+  routineSessions?: Array<{
+    id: string;
+    recipeId: string;
+    status: string;
+    estimatedMinutes?: number | null;
+    condensed?: boolean;
+    weekOf?: string;
+  }>;
+  weeklyPlanSession?: any | null;
   onOpenOdysseus: () => void;
   onNew: () => void;
   onOpenItem: (itemId: string) => void;
@@ -30,6 +40,8 @@ export type HomeCockpitProps = {
   onApprove: (item: any) => void;
   onRespondRequest: (request: any) => void;
   onOpenApprovals: () => void;
+  onStartRitual?: (session: any) => void;
+  onReviewFriday?: () => void;
 };
 
 function TypeGlyph({ type }: { type: string }) {
@@ -68,6 +80,8 @@ export function HomeCockpit({
   reviewItems = [],
   accessRequests = [],
   activityItems = [],
+  routineSessions = [],
+  weeklyPlanSession = null,
   onOpenOdysseus,
   onNew,
   onOpenItem,
@@ -75,6 +89,8 @@ export function HomeCockpit({
   onApprove,
   onRespondRequest,
   onOpenApprovals,
+  onStartRitual,
+  onReviewFriday,
 }: HomeCockpitProps) {
   const locale = getLocale();
   const [itemTab, setItemTab] = useState<"today" | "overdue" | "week">("today");
@@ -92,6 +108,7 @@ export function HomeCockpit({
         reviewItems,
         accessRequests,
         activityItems,
+        routineSessions,
         locale,
       }),
     [
@@ -104,6 +121,7 @@ export function HomeCockpit({
       reviewItems,
       accessRequests,
       activityItems,
+      routineSessions,
       locale,
     ],
   );
@@ -212,6 +230,7 @@ export function HomeCockpit({
                     onClick={() => {
                       if (row.actionLabel === "approve") onApprove(row.payload);
                       else if (row.actionLabel === "respond") onRespondRequest(row.payload);
+                      else if (row.actionLabel === "start") onStartRitual?.(row.payload);
                       else if (row.kind === "blocked" && row.payload && (row.payload as HomeItemRow).id) {
                         onOpenItem((row.payload as HomeItemRow).id);
                       }
@@ -226,9 +245,13 @@ export function HomeCockpit({
                         ? locale === "es"
                           ? "Responder"
                           : "Respond"
-                        : locale === "es"
-                          ? "Abrir"
-                          : "Open"}
+                        : row.actionLabel === "start"
+                          ? locale === "es"
+                            ? "Empezar"
+                            : "Start"
+                          : locale === "es"
+                            ? "Abrir"
+                            : "Open"}
                   </button>
                 </li>
               ))}
@@ -236,6 +259,8 @@ export function HomeCockpit({
           )}
         </section>
       )}
+
+      <MiSemanaCard session={weeklyPlanSession} onReviewFriday={onReviewFriday} />
 
       <div className="cw-home-split">
         <section className="cw-home-card" data-testid="home-my-items">
