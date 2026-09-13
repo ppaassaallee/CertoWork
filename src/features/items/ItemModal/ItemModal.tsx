@@ -42,6 +42,7 @@ import {
 } from "../../../lib/kanbanFeatures";
 import { workCategory, productPhase, WORK_CATEGORIES, PRODUCT_PHASES } from "../../../lib/workClassification";
 import { getLocale } from "../../../lib/i18n";
+import { compileItemSentence } from "../../capture/compileItemSentence";
 import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
 import "./ItemModal.css";
 
@@ -702,8 +703,22 @@ export function ItemModal({
               {bodyFocused && (
                 <button
                   className="cw-item-structure"
-                  disabled
-                  title={copy("structureSoon", locale)}
+                  onClick={() => {
+                    const result = compileItemSentence({
+                      title: titleDraft || itemTitle(item),
+                      body: bodyDraft,
+                    });
+                    setTitleDraft(result.title);
+                    setBodyDraft(result.description);
+                    void onUpdateTask(item.id, {
+                      title: result.title,
+                      description: result.description,
+                      acceptanceCriteria:
+                        result.blocks.find((block) => block.type === "criterios_aceptacion")
+                          ?.text || item.acceptanceCriteria || "",
+                    });
+                  }}
+                  title={copy("structure", locale)}
                   type="button"
                 >
                   <Sparkles size={13} /> {copy("structure", locale)}
