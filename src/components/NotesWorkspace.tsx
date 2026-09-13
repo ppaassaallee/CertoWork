@@ -39,6 +39,8 @@ import {
 } from "../lib/notebookContext";
 import { plainNoteText } from "../lib/noteMarkup";
 import { NoteRichEditor } from "./NoteRichEditor";
+import { EntityPeek } from "./EntityPeek";
+import { getBlocks } from "../lib/semanticBlocks";
 
 type StrokePoint = { x: number; y: number; pressure?: number };
 type Stroke = { color: string; width: number; points: StrokePoint[] };
@@ -48,6 +50,7 @@ type NotesWorkspaceProps = {
   entries: NotebookEntry[];
   knowledgeItems: any[];
   onAsk: (prompt: string) => void;
+  onOpenProject?: (project: any) => void;
   projects: any[];
   tasks: any[];
 };
@@ -70,6 +73,7 @@ export function NotesWorkspace({
   entries,
   knowledgeItems,
   onAsk,
+  onOpenProject,
   projects,
   tasks,
 }: NotesWorkspaceProps) {
@@ -89,6 +93,15 @@ export function NotesWorkspace({
   const [inkWidth, setInkWidth] = useState(2.5);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [peekEntity, setPeekEntity] = useState<{
+    id: string;
+    kind: "task" | "project" | "note" | "person" | "doc";
+    title: string;
+    status?: string | null;
+    owner?: string | null;
+    dueDate?: string | null;
+    excerpt?: string | null;
+  } | null>(null);
 
   const visibleEntries = useMemo(() => activeEntries(entries), [entries]);
   const notebooks = useMemo(
@@ -550,6 +563,31 @@ export function NotesWorkspace({
                 <option value="">No project link</option>
                 {projects.map((project) => <option key={project.id} value={project.id}>{entityTitle(project)}</option>)}
               </select>
+              {editor.projectId && (
+                <button
+                  className="cw-semantic-chip"
+                  data-hue="blue"
+                  onClick={() => {
+                    const project = projects.find((entry) => entry.id === editor.projectId);
+                    if (!project) return;
+                    setPeekEntity({
+                      id: String(project.id),
+                      kind: "project",
+                      title: entityTitle(project),
+                      status: project.status || null,
+                      owner: project.owner || project.projectManager || null,
+                      dueDate: project.dueDate || project.targetDate || null,
+                      excerpt: String(project.outcome || project.description || "").slice(0, 280),
+                    });
+                  }}
+                  type="button"
+                >
+                  ~{entityTitle(projects.find((entry) => entry.id === editor.projectId) || { title: "Project" })}
+                </button>
+              )}
+              {getBlocks(editor.content).length > 0 && (
+                <span className="do-kicker">{getBlocks(editor.content).length} blocks</span>
+              )}
               <span>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : "Ready"}</span>
             </div>
 
@@ -588,6 +626,24 @@ export function NotesWorkspace({
                 <button onClick={archiveNote} type="button"><Archive size={13} /> Archive note</button>
               </div>
             </footer>
+            <EntityPeek
+              entity={peekEntity}
+              onClose={() => setPeekEntity(null)}
+              onExpand={() => {
+                if (peekEntity?.kind === "project") {
+                  const project = projects.find((entry) => entry.id === peekEntity.id);
+                  if (project) onOpenProject?.(project);
+                }
+                setPeekEntity(null);
+              }}
+              onOpenSplit={() => {
+                if (peekEntity?.kind === "project") {
+                  const project = projects.find((entry) => entry.id === peekEntity.id);
+                  if (project) onOpenProject?.(project);
+                }
+                setPeekEntity(null);
+              }}
+            />
           </>
         ) : (
           <div className="do-notes-empty">

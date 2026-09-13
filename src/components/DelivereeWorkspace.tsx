@@ -206,6 +206,11 @@ import {
 } from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { WorkItemsCenter } from "./WorkItemsCenter";
+import {
+  QuickCaptureModal,
+  parentLinkPatch,
+  type QuickCaptureCreatePayload,
+} from "../features/capture";
 import { MyWorkTodayPanel } from "./MyWorkTodayPanel";
 import { isOverviewEnabled, MyWorkOverview } from "../features/overview";
 import { FeedbackCenter } from "./FeedbackCenter";
@@ -517,6 +522,7 @@ export function DelivereeWorkspace() {
     });
   };
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1717,7 +1723,29 @@ export function DelivereeWorkspace() {
         event.preventDefault();
         void toggleOdysseusPanel();
       }
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (
+        !typing &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "n"
+      ) {
+        event.preventDefault();
+        setCreateMenuOpen(false);
+        setQuickCaptureOpen(true);
+      }
       if (event.key === "Escape") {
+        if (quickCaptureOpen) {
+          event.preventDefault();
+          setQuickCaptureOpen(false);
+          return;
+        }
         if (odysseusPanelOpen) {
           event.preventDefault();
           setOdysseusPanelOpen(false);
@@ -1753,6 +1781,7 @@ export function DelivereeWorkspace() {
     magicProjectOpen,
     odysseusPanelOpen,
     panel,
+    quickCaptureOpen,
     sidebarOpen,
     toggleOdysseusPanel,
   ]);
@@ -4164,6 +4193,69 @@ export function DelivereeWorkspace() {
     return created.id;
   };
 
+  const createFromQuickCapture = async (
+    payload: QuickCaptureCreatePayload,
+    options?: { createAnother?: boolean },
+  ) => {
+    if (!user || !workspace) return;
+    const basePatch = {
+      source: payload.source,
+      priority: payload.priority,
+      dueDate: payload.dueDate,
+      estimateHours: payload.estimateHours,
+      tagIds: payload.tagIds,
+      tags: payload.tagIds,
+      description: payload.description,
+      acceptanceCriteria: payload.acceptanceCriteria || undefined,
+      ...payload.assignmentPatch,
+      ...parentLinkPatch(payload.parent),
+    };
+
+    if (payload.bulkNodes?.length) {
+      const walk = async (
+        nodes: NonNullable<QuickCaptureCreatePayload["bulkNodes"]>,
+        parent: any | null,
+      ) => {
+        for (const node of nodes) {
+          const kind = parent ? "subtask" : node.kind === "subtask" ? "subtask" : "pbi";
+          const id = await addProjectTask(payload.projectId || "", node.title, "backlog", {
+            ...basePatch,
+            workItemType: kind,
+            type: kind,
+            itemType: kind,
+            description: parent ? "" : payload.description,
+            ...parentLinkPatch(parent),
+          });
+          const created = { id, title: node.title, workItemType: kind, projectId: payload.projectId };
+          if (node.children?.length) await walk(node.children as any, created);
+        }
+      };
+      await walk(payload.bulkNodes, payload.parent);
+      setNotice(
+        options?.createAnother
+          ? "Items created."
+          : `Created ${payload.bulkNodes.length} item tree(s) from capture.`,
+      );
+      return;
+    }
+
+    const id = await addProjectTask(
+      payload.projectId || "",
+      payload.title,
+      "backlog",
+      {
+        ...basePatch,
+        workItemType: payload.workItemType,
+        type: payload.workItemType,
+        itemType: payload.workItemType,
+      },
+    );
+    if (id) {
+      setSelectedWorkItemId(id);
+      setNotice("Item created.");
+    }
+  };
+
   const submitFeedbackReport = async (input: {
     kind: FeedbackKind;
     title: string;
@@ -5522,8 +5614,7 @@ export function DelivereeWorkspace() {
         label: "Quick Capture",
         group: "Create",
         onSelect: () => {
-          setComposer("Capture this: ");
-          navigate("/home");
+          setQuickCaptureOpen(true);
         },
       },
       {
@@ -5625,8 +5716,9 @@ export function DelivereeWorkspace() {
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
         onCreateItem={(query) => {
-          setComposer(`Create a task: ${query}`);
-          navigate("/home");
+          setQuickCaptureOpen(true);
+          // Seed via sessionStorage so the modal can pick it up on open
+          if (query) sessionStorage.setItem("certo-quick-capture-seed", query);
         }}
         onCreateProject={() => setProjectWizardOpen(true)}
         open={commandPaletteOpen}
@@ -5760,6 +5852,26 @@ export function DelivereeWorkspace() {
             }),
           )}
         title="Add media"
+      />
+      <QuickCaptureModal
+        defaults={{
+          projectId: activeProject?.id || null,
+          workItemType: activeProject
+            ? "pbi"
+            : selectedWorkItem
+              ? "subtask"
+              : lens.kind === "my-work"
+                ? "task"
+                : "task",
+          parentId: selectedWorkItem?.id || null,
+        }}
+        members={workspaceMembers}
+        onClose={() => setQuickCaptureOpen(false)}
+        onCreate={createFromQuickCapture}
+        open={quickCaptureOpen}
+        projects={projects}
+        tags={categories}
+        tasks={tasks}
       />
       <button
         aria-label="Close navigation"
@@ -6592,7 +6704,7 @@ export function DelivereeWorkspace() {
                     role="menu"
                     style={{ top: createMenuPos.top, right: createMenuPos.right }}
                   >
-                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Create a task: "); }} type="button">
+                    <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
                       {t("createTask")}
                     </button>
                     <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
@@ -6601,7 +6713,7 @@ export function DelivereeWorkspace() {
                     <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
                       {t("createMagicProject")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); setComposer("Capture this: "); }} type="button">
+                    <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
                       {t("createCapture")}
                     </button>
                     <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); navigate("/report-bug"); }} type="button">
@@ -7520,6 +7632,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
+            onOpenProject={openProjectRecord}
             projects={projects}
             tasks={tasks}
           />
