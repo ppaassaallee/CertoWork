@@ -16,6 +16,7 @@ import {
   type HomeItemRow,
   type HomeRoutineHint,
 } from "./buildHomeCockpitData";
+import { MiSemanaCard } from "../routines/MiSemanaCard";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -32,6 +33,15 @@ export type HomeCockpitProps = {
   routinesRan7d?: number;
   /** Optional clock for Sunday/weekday polish screenshots. */
   now?: Date;
+  routineSessions?: Array<{
+    id: string;
+    recipeId: string;
+    status: string;
+    estimatedMinutes?: number | null;
+    condensed?: boolean;
+    weekOf?: string;
+  }>;
+  weeklyPlanSession?: any | null;
   onOpenOdysseus: (opts?: { prompt?: string }) => void;
   onNew?: () => void;
   onOpenItem: (itemId: string) => void;
@@ -39,6 +49,8 @@ export type HomeCockpitProps = {
   onApprove: (item: any) => void;
   onRespondRequest: (request: any) => void;
   onOpenApprovals: () => void;
+  onStartRitual?: (session: any) => void;
+  onReviewFriday?: () => void;
 };
 
 function TypeGlyph({ type }: { type: string }) {
@@ -159,12 +171,16 @@ export function HomeCockpit({
   routines = [],
   routinesRan7d = 0,
   now,
+  routineSessions = [],
+  weeklyPlanSession = null,
   onOpenOdysseus,
   onOpenItem,
   onOpenProject,
   onApprove,
   onRespondRequest,
   onOpenApprovals,
+  onStartRitual,
+  onReviewFriday,
 }: HomeCockpitProps) {
   const locale = getLocale();
   const model = useMemo(
@@ -181,6 +197,7 @@ export function HomeCockpit({
         activityItems,
         routines,
         routinesRan7d,
+        routineSessions,
         now,
         locale,
       }),
@@ -196,6 +213,7 @@ export function HomeCockpit({
       activityItems,
       routines,
       routinesRan7d,
+      routineSessions,
       now,
       locale,
     ],
@@ -345,6 +363,7 @@ export function HomeCockpit({
                     onClick={() => {
                       if (row.actionLabel === "approve") onApprove(row.payload);
                       else if (row.actionLabel === "respond") onRespondRequest(row.payload);
+                      else if (row.actionLabel === "start") onStartRitual?.(row.payload);
                       else if (
                         row.kind === "blocked" &&
                         row.payload &&
@@ -363,15 +382,21 @@ export function HomeCockpit({
                         ? locale === "es"
                           ? "Responder"
                           : "Respond"
-                        : locale === "es"
-                          ? "Abrir"
-                          : "Open"}
+                        : row.actionLabel === "start"
+                          ? locale === "es"
+                            ? "Empezar"
+                            : "Start"
+                          : locale === "es"
+                            ? "Abrir"
+                            : "Open"}
                   </button>
                 </li>
               ))}
             </ul>
           </section>
         ))}
+
+      <MiSemanaCard session={weeklyPlanSession} onReviewFriday={onReviewFriday} />
 
       <div className="cw-home-split cw-home-stagger" style={{ ["--i" as string]: 4 }}>
         <section className="cw-home-card" data-testid="home-my-items">

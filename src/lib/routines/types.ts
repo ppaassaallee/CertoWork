@@ -21,7 +21,11 @@ export type RoutineChannel =
   | "whatsapp"
   | "slack"
   | "webhook"
-  | "update_items";
+  | "update_items"
+  | "session";
+
+/** How the routine runs when due. */
+export type RoutineClass = "automatic" | "guided" | "manual";
 
 export type RoutineStatus = "draft" | "active" | "paused" | "failing";
 
@@ -98,11 +102,13 @@ export type RoutineSpec = {
   deliverable: RoutineDeliverable;
   permissions: RoutinePermissions;
   status: RoutineStatus;
+  /** automatic (default) | guided ritual | manual */
+  class?: RoutineClass;
+  recipeId?: string;
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastRunStatus: string | null;
   stats: RoutineStats;
-  recipeId?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -145,11 +151,16 @@ export type RoutineRecipe = {
   entityTypes: RoutineEntityType[];
   triggerHint: string;
   deliverableHint: string;
+  /** Gallery filter — personal rituals vs project/portfolio. */
+  domain?: "personal" | "project" | "portfolio";
+  estimatedMinutes?: number;
+  class?: RoutineClass;
 };
 
 export const ROUTINES_COLLECTION = "routines";
 export const ROUTINE_RUNS_COLLECTION = "routine_runs";
 export const ROUTINE_RECIPES_COLLECTION = "recipes";
+export const ROUTINE_SESSIONS_COLLECTION = "routine_sessions";
 
 export function emptyRoutineStats(): RoutineStats {
   return {

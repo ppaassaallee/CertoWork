@@ -56,6 +56,7 @@ const CHANNEL_LABEL: Record<RoutineChannel, string> = {
   slack: "Slack",
   webhook: "Webhook",
   update_items: "Editar ítems",
+  session: "Sesión guiada",
 };
 
 function triggerKey(routine: RoutineSpec) {

@@ -4,3 +4,8 @@ export * from "./compile";
 export * from "./schedule";
 export * from "./storage";
 export * from "./events";
+export * from "./manifest";
+export * from "./sessions";
+export * from "./prepare";
+export * from "./activateGuided";
+export * from "./guided";

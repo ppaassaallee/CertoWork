@@ -101,7 +101,7 @@ import {
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
-import { t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import {
   entityTitle,
   findMatchingProject,
@@ -129,9 +129,17 @@ import { RoutineHostProvider } from "./routines/RoutineHost";
 import {
   listRoutinesForWorkspace,
   type RoutineSpec,
+  listReadySessions,
+  getLatestWeeklyPlanSession,
+  applySessionExpiry,
+  getManifest,
+  prepareRitualData,
+  createRoutineSession,
+  type RoutineSession,
 } from "../lib/routines";
 import { HomeAttention } from "../pages/HomeAttention";
 import { HomeCockpit } from "../features/home";
+import { RitualRunner, RevisionesView } from "../features/routines";
 import { OdysseusPanel, type OdysseusPanelScope } from "../features/odysseus/panel";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
 import { OdysseusMark } from "./odiseus/OdysseusMark";
@@ -533,6 +541,9 @@ export function DelivereeWorkspace() {
     entityId: null,
     label: "Mi día",
   });
+  const [ritualSessions, setRitualSessions] = useState<RoutineSession[]>([]);
+  const [weeklyPlanSession, setWeeklyPlanSession] = useState<RoutineSession | null>(null);
+  const [activeRitual, setActiveRitual] = useState<RoutineSession | null>(null);
   const [homeItemLayout, setHomeItemLayout] = useState<"panel" | "expanded">("panel");
   const [destructiveDialog, setDestructiveDialog] = useState<{
     verb: string;
@@ -1168,6 +1179,99 @@ export function DelivereeWorkspace() {
       cancelled = true;
     };
   }, [workspace?.id, user?.uid, centerView]);
+
+  useEffect(() => {
+    if (!workspace?.id || !user?.uid) {
+      setRitualSessions([]);
+      setWeeklyPlanSession(null);
+      return;
+    }
+    let cancelled = false;
+    void Promise.all([
+      listReadySessions(workspace.id, user.uid),
+      getLatestWeeklyPlanSession(workspace.id, user.uid),
+    ])
+      .then(([ready, weekly]) => {
+        if (cancelled) return;
+        setRitualSessions(
+          ready.map((session) =>
+            applySessionExpiry(session, getManifest(session.recipeId)),
+          ),
+        );
+        setWeeklyPlanSession(weekly);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRitualSessions([]);
+          setWeeklyPlanSession(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace?.id, user?.uid, activeRitual?.id]);
+
+  const openRitualSession = async (sessionLike: any) => {
+    if (!sessionLike?.id) return;
+    let session = ritualSessions.find((row) => row.id === sessionLike.id) || null;
+    if (!session && workspace?.id && user?.uid) {
+      const ready = await listReadySessions(workspace.id, user.uid);
+      session = ready.find((row) => row.id === sessionLike.id) || null;
+    }
+    if (!session) return;
+    const manifest = getManifest(session.recipeId);
+    if (!manifest) return;
+    if (!session.prepared || session.prepared.deferred) {
+      const prepared = prepareRitualData(manifest.prepare.gather, {
+        userId: user?.uid || "",
+        tasks,
+        projects,
+      });
+      session = { ...session, prepared };
+    }
+    setActiveRitual(applySessionExpiry(session, manifest));
+  };
+
+  const chainOrRefreshRitual = async (result: {
+    sessionId: string;
+    noteId: string;
+    chainTo?: string;
+  }) => {
+    setActiveRitual(null);
+    if (result.chainTo && workspace?.id && user?.uid) {
+      const nextManifest = getManifest(result.chainTo);
+      if (nextManifest) {
+        const prepared = prepareRitualData(nextManifest.prepare.gather, {
+          userId: user.uid,
+          tasks,
+          projects,
+        });
+        const id = await createRoutineSession({
+          workspaceId: workspace.id,
+          userId: user.uid,
+          routineId: `chain-${result.sessionId}`,
+          recipeId: nextManifest.id,
+          prepared,
+          estimatedMinutes: nextManifest.estimatedMinutes,
+        });
+        const ready = await listReadySessions(workspace.id, user.uid);
+        const created = ready.find((row) => row.id === id);
+        if (created) setActiveRitual(created);
+      }
+    }
+    if (workspace?.id && user?.uid) {
+      const [ready, weekly] = await Promise.all([
+        listReadySessions(workspace.id, user.uid),
+        getLatestWeeklyPlanSession(workspace.id, user.uid),
+      ]);
+      setRitualSessions(
+        ready.map((session) =>
+          applySessionExpiry(session, getManifest(session.recipeId)),
+        ),
+      );
+      setWeeklyPlanSession(weekly);
+    }
+  };
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -6775,9 +6879,12 @@ export function DelivereeWorkspace() {
                     if (project) openProjectRecord(project);
                   }}
                   onRespondRequest={() => setPanel("workspace")}
+                  onReviewFriday={() => navigate("/my-work/reviews")}
+                  onStartRitual={(session) => void openRitualSession(session)}
                   projects={projects}
                   reviewItems={reviewItems}
                   risks={risks}
+                  routineSessions={ritualSessions}
                   tasks={tasks}
                   userName={
                     user?.displayName ||
@@ -6786,7 +6893,17 @@ export function DelivereeWorkspace() {
                     user?.email ||
                     "there"
                   }
+                  weeklyPlanSession={weeklyPlanSession}
                 />
+                {activeRitual && getManifest(activeRitual.recipeId) ? (
+                  <RitualRunner
+                    manifest={getManifest(activeRitual.recipeId)!}
+                    onClose={() => setActiveRitual(null)}
+                    onFinished={(result) => void chainOrRefreshRitual(result)}
+                    open
+                    session={activeRitual}
+                  />
+                ) : null}
               </div>
               {selectedWorkItem && isItemModalV2Enabled() && createPortal(
                 <ItemModal
@@ -7273,8 +7390,24 @@ export function DelivereeWorkspace() {
                 >
                   Captured
                 </button>
+                <button
+                  className={lens.section === "reviews" ? "is-active" : ""}
+                  data-testid="my-work-reviews-tab"
+                  onClick={() => navigate("/my-work/reviews")}
+                  role="tab"
+                  type="button"
+                >
+                  {getLocale() === "es" ? "Revisiones" : "Reviews"}
+                </button>
               </div>
             )}
+            {lens.kind === "my-work" && lens.section === "reviews" && user?.uid && workspace?.id ? (
+              <RevisionesView
+                onOpenNote={() => navigate("/notes")}
+                userId={user.uid}
+                workspaceId={workspace.id}
+              />
+            ) : null}
             {lens.kind === "my-work" && lens.section === "captured" && (
               <div className="do-capture-ingest" data-testid="capture-ingest">
                 <CaptureIngestForm onCapture={(subject, body) => void ingestCapturedEmail(subject, body)} />

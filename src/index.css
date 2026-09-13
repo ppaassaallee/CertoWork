@@ -19744,6 +19744,27 @@ a {
   color: var(--text-secondary);
   text-align: center;
 }
+.do-routine-domain-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.do-routine-domain-filters button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.do-routine-domain-filters button.is-active {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: transparent;
+}
 .do-routines-recipes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
