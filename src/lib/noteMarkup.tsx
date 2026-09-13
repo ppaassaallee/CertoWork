@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { blockDef } from "./semanticBlocks";
 
 function splitKeep(text: string, pattern: RegExp) {
   return String(text || "").split(pattern);
@@ -84,7 +85,25 @@ function inlineHtml(text: string): string {
 }
 
 export function markdownToHtml(text: string) {
-  const lines = String(text || "").split(/\n/);
+  const source = String(text || "");
+  // Protect semantic fences so they round-trip as block cards.
+  const fences: string[] = [];
+  const withPlaceholders = source.replace(
+    /:::([a-z0-9_]+)\s*\n([\s\S]*?)\n:::/g,
+    (_, type: string, body: string) => {
+      const index = fences.length;
+      const clean = body.replace(/^\*\*[^*]+\*\*\s*/m, "").trim();
+      const def = blockDef(type);
+      const hue = def?.hue || "gray";
+      const label = def?.labelEs || type;
+      fences.push(
+        `<div class="cw-sem-block" data-block="${escapeHtml(type)}" contenteditable="false"><div class="cw-sem-block-head" data-hue="${escapeHtml(hue)}">${escapeHtml(label)}</div><div class="cw-sem-block-body">${inlineHtml(clean)}</div></div>`,
+      );
+      return `\n%%SEM_BLOCK_${index}%%\n`;
+    },
+  );
+
+  const lines = withPlaceholders.split(/\n/);
   const blocks: string[] = [];
   let list: string[] = [];
 
@@ -95,6 +114,12 @@ export function markdownToHtml(text: string) {
   };
 
   lines.forEach((line) => {
+    const placeholder = line.match(/^%%SEM_BLOCK_(\d+)%%$/);
+    if (placeholder) {
+      flushList();
+      blocks.push(fences[Number(placeholder[1])] || "");
+      return;
+    }
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     const bullet = line.match(/^\s*[-*+]\s+(.+)$/);
     if (heading) {
@@ -136,6 +161,17 @@ export function htmlToMarkdown(html: string) {
   let value = String(html || "")
     .replace(/\u00a0/g, " ")
     .replace(/<br\s*\/?>/gi, "\n");
+
+  value = value.replace(
+    /<div[^>]*data-block="([^"]+)"[^>]*class="[^"]*cw-sem-block[^"]*"[^>]*>[\s\S]*?<div[^>]*class="cw-sem-block-body"[^>]*>([\s\S]*?)<\/div>[\s\S]*?<\/div>/gi,
+    (_, type: string, bodyHtml: string) =>
+      `\n:::${type}\n${unwrapInlineHtml(bodyHtml).trim()}\n:::\n`,
+  );
+  value = value.replace(
+    /<div[^>]*class="[^"]*cw-sem-block[^"]*"[^>]*data-block="([^"]+)"[^>]*>[\s\S]*?<div[^>]*class="cw-sem-block-body"[^>]*>([\s\S]*?)<\/div>[\s\S]*?<\/div>/gi,
+    (_, type: string, bodyHtml: string) =>
+      `\n:::${type}\n${unwrapInlineHtml(bodyHtml).trim()}\n:::\n`,
+  );
 
   value = value.replace(/<h1(?:\s[^>]*)?>([\s\S]*?)<\/h1>/gi, (_, inner) => `\n# ${unwrapInlineHtml(inner).replace(/\n+/g, " ").trim()}\n`);
   value = value.replace(/<h2(?:\s[^>]*)?>([\s\S]*?)<\/h2>/gi, (_, inner) => `\n## ${unwrapInlineHtml(inner).replace(/\n+/g, " ").trim()}\n`);
