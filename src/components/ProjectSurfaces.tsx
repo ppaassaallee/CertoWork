@@ -2074,6 +2074,7 @@ export function ProjectConsolePanel({
           }
           filterOpen={notionFilterOpen}
           onAddTask={() => {
+            if (isDeletedProject) return;
             setTab("items");
             setChromeView("list");
             setNotionMode("list");
@@ -2113,7 +2114,7 @@ export function ProjectConsolePanel({
             setNotionFilterOpen(false);
             setNotionSearchOpen(false);
           }}
-          showActions={chromeView !== "overview"}
+          showActions={chromeView !== "overview" && !isDeletedProject}
           sortOpen={notionSortOpen}
         />
       )}
