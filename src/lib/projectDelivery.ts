@@ -91,7 +91,11 @@ export function inferDeliveryStageFromPhase(value: unknown): DeliveryStage | nul
     normalized.includes("diseno") ||
     normalized.includes("propuesta") ||
     normalized.includes("hold") ||
-    normalized === "tbc"
+    normalized === "tbc" ||
+    normalized === "planning" ||
+    normalized === "planned" ||
+    normalized === "draft" ||
+    normalized === "proposal"
   )
     return "define";
   if (normalized.includes("onboard") || normalized.includes("discovery"))
@@ -134,7 +138,8 @@ export function normalizeDeliveryStage(project: any): DeliveryStage {
     inferDeliveryStageFromPhase(project?.productPhase) ||
     inferDeliveryStageFromPhase(project?.sourceStatus) ||
     inferDeliveryStageFromPhase(project?.status);
-  return inferred || "build";
+  // New / unstaged projects belong in Define (intake), not Build.
+  return inferred || "define";
 }
 
 /** Keep an existing stage unless the sheet/phase clearly says the project is live. */

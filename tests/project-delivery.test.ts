@@ -56,6 +56,16 @@ test("Spanish Excel phases map to delivery stages instead of collapsing to Build
   );
 });
 
+test("unstaged and planning projects land in Define so they stay findable by stage", () => {
+  assert.equal(normalizeDeliveryStage({ status: "planning" }), "define");
+  assert.equal(normalizeDeliveryStage({}), "define");
+  assert.equal(normalizeDeliveryStage({ title: "Great Wolf Lodge" }), "define");
+  assert.equal(
+    normalizeDeliveryStage({ deliveryStage: "build", status: "planning" }),
+    "build",
+  );
+});
+
 test("pricing sync preserves Operations and restores Producción from the sheet", () => {
   assert.equal(
     resolvePricingDeliveryStage({

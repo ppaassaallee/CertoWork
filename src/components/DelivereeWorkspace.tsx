@@ -116,6 +116,7 @@ import {
   reviewTypeLabel,
   timeAgo,
   timestamp,
+  projectWorkKey,
 } from "../lib/workspaceDisplay";
 import { productPhase, workCategory } from "../lib/workClassification";
 import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, dueInviteEmailRetry, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
@@ -2687,6 +2688,11 @@ export function DelivereeWorkspace() {
             ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
             title: proposedTitle(proposed, candidate.title),
             status: proposed.status || "planning",
+            deliveryStage: proposed.deliveryStage || "define",
+            deliveryPhase: proposed.deliveryPhase || "intake",
+            projectKey:
+              proposed.projectKey ||
+              projectWorkKey({ title: proposedTitle(proposed, candidate.title) }),
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -5260,6 +5266,9 @@ export function DelivereeWorkspace() {
       health: "on_track",
       methodology: draft.methodology,
       projectManager: draft.owner.trim(),
+      deliveryStage: "define",
+      deliveryPhase: "intake",
+      projectKey: projectWorkKey({ title: draft.title.trim() }),
       targetDate,
       dueDate: targetDate,
       successCriteria,
@@ -5406,6 +5415,9 @@ export function DelivereeWorkspace() {
       health: "on_track",
       methodology: blueprint.methodology,
       projectManager: blueprint.owner.trim(),
+      deliveryStage: "define",
+      deliveryPhase: "intake",
+      projectKey: projectWorkKey({ title: blueprint.title.trim() }),
       targetDate,
       dueDate: targetDate,
       successCriteria,
@@ -5751,7 +5763,7 @@ export function DelivereeWorkspace() {
         id: `nav-collab-room-${project.id}`,
         label: `Open room · ${entityTitle(project)}`,
         group: "Navigate",
-        keywords: `chat collab room chatwoot ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""}`,
+        keywords: `chat collab room chatwoot ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -5839,6 +5851,7 @@ export function DelivereeWorkspace() {
           project.clientEntity || project.client || "",
           project.deliveryEntity || project.bpo || "",
           project.projectKey || "",
+          projectWorkKey(project),
           project.serviceLine || "",
           workCategory(project),
           productPhase(project),
