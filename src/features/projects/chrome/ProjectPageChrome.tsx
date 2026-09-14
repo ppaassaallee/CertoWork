@@ -28,6 +28,7 @@ import {
   taskWorkLane,
 } from "../../../lib/projectPortfolio";
 import { hierarchyKind, type HierarchyKind } from "../../../lib/itemHierarchy";
+import { workItemTypeLabel } from "../../../lib/workItemTypeLabels";
 import { checklistItems, checklistProgress } from "../../../lib/kanbanFeatures";
 import { notionEstimateHours } from "../../../lib/notionProjectTable";
 import { isOverviewEnabled } from "../../overview/overviewFlag";
@@ -170,14 +171,17 @@ export function projectSummaryStats(project: any, tasks: any[]) {
 
 export function workItemTypeIcon(kind: HierarchyKind | string) {
   const value = String(kind || "pbi").toLowerCase();
-  if (value === "epic") return { Icon: Zap, color: "#7F77DD", label: "Epic" };
-  if (value === "feature") return { Icon: Star, color: "#0F7B6C", label: "Feature" };
-  if (value === "story") return { Icon: Bookmark, color: "#639922", label: "Story" };
-  if (value === "pbi") return { Icon: Bookmark, color: "#639922", label: "PBI" };
-  if (value === "task") return { Icon: CheckSquare, color: "#378ADD", label: "Task" };
-  if (value === "bug") return { Icon: Bug, color: "#E24B4A", label: "Bug" };
-  if (value === "subtask") return { Icon: CornerDownRight, color: "#888780", label: "Subtask" };
-  if (value === "issue") return { Icon: GitBranch, color: "#888780", label: "Issue" };
+  const label = workItemTypeLabel(value);
+  if (value === "epic") return { Icon: Zap, color: "#7F77DD", label };
+  if (value === "feature") return { Icon: Star, color: "#0F7B6C", label };
+  if (value === "story" || value === "pbi" || value === "task") {
+    return { Icon: value === "task" ? CheckSquare : Bookmark, color: value === "task" ? "#378ADD" : "#639922", label };
+  }
+  if (value === "bug") return { Icon: Bug, color: "#E24B4A", label };
+  if (value === "subtask") return { Icon: CornerDownRight, color: "#888780", label };
+  if (value === "issue" || value === "ticket") return { Icon: GitBranch, color: "#888780", label };
+  if (value === "idea") return { Icon: Star, color: "#C2A336", label };
+  if (value === "note") return { Icon: Layers, color: "#888780", label };
   return { Icon: Layers, color: "#888780", label: "Item" };
 }
 

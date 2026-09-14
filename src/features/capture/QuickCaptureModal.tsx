@@ -4,6 +4,7 @@ import { Kbd } from "../../components/ui/Kbd";
 import { MediaPicker, type MediaAsset } from "../../components/ui/MediaPicker";
 import { getLocale } from "../../lib/i18n";
 import { parentLinkPatch } from "../../lib/itemHierarchy";
+import { workItemTypeLabel } from "../../lib/workItemTypeLabels";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { memberPublicLabel } from "../../lib/workspaceCollaboration";
 import {
@@ -55,28 +56,10 @@ export type QuickCaptureModalProps = {
   defaults?: QuickCaptureDefaults;
 };
 
-const TYPES: CaptureWorkType[] = ["pbi", "task", "bug", "subtask", "feature", "epic", "story"];
+const TYPES: CaptureWorkType[] = ["epic", "feature", "pbi", "subtask", "bug"];
 
 function typeLabel(type: CaptureWorkType, locale: string) {
-  const es: Record<CaptureWorkType, string> = {
-    pbi: "PBI",
-    task: "Tarea",
-    bug: "Bug",
-    subtask: "Subtarea",
-    feature: "Feature",
-    epic: "Épica",
-    story: "Story",
-  };
-  const en: Record<CaptureWorkType, string> = {
-    pbi: "PBI",
-    task: "Task",
-    bug: "Bug",
-    subtask: "Subtask",
-    feature: "Feature",
-    epic: "Epic",
-    story: "Story",
-  };
-  return (locale === "es" ? es : en)[type];
+  return workItemTypeLabel(type, locale === "es" ? "es" : "en");
 }
 
 export function QuickCaptureModal({
@@ -92,7 +75,7 @@ export function QuickCaptureModal({
   const locale = getLocale();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [workItemType, setWorkItemType] = useState<CaptureWorkType>(defaults.workItemType || "task");
+  const [workItemType, setWorkItemType] = useState<CaptureWorkType>(defaults.workItemType || "pbi");
   const [projectId, setProjectId] = useState(String(defaults.projectId || ""));
   const [priority, setPriority] = useState<CapturePriority>(null);
   const [assigneeId, setAssigneeId] = useState("");

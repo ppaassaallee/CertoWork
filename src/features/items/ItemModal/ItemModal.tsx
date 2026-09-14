@@ -112,13 +112,15 @@ const WORK_TYPES: WorkItemKind[] = [
   "epic",
   "feature",
   "pbi",
-  "story",
-  "bug",
-  "task",
   "subtask",
-  "ticket",
+  "bug",
   "issue",
 ];
+
+function typeSelectOptions(current: WorkItemKind): WorkItemKind[] {
+  if (WORK_TYPES.includes(current)) return WORK_TYPES;
+  return [...WORK_TYPES, current];
+}
 const WORK_STATUSES = [
   "backlog",
   "ready",
@@ -162,9 +164,20 @@ function workItemKind(item: any): WorkItemKind {
     item?.workItemType || item?.taskType || item?.issueType || item?.kind || item?.type || "",
   ).toLowerCase();
   const legacyItemType = String(item?.itemType || "").toLowerCase();
+  const known: WorkItemKind[] = [
+    "epic",
+    "feature",
+    "pbi",
+    "story",
+    "bug",
+    "task",
+    "subtask",
+    "ticket",
+    "issue",
+  ];
   const value =
     structuralValue ||
-    (WORK_TYPES.includes(legacyItemType as WorkItemKind) ? legacyItemType : "");
+    (known.includes(legacyItemType as WorkItemKind) ? legacyItemType : "");
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
   if (value.includes("subtask") || value.includes("sub_task")) return "subtask";
@@ -489,7 +502,7 @@ export function ItemModal({
                 onChange={(event) => onChangeType(event.target.value as WorkItemKind)}
                 value={kind}
               >
-                {WORK_TYPES.map((entry) => (
+                {typeSelectOptions(kind).map((entry) => (
                   <option key={entry} value={entry}>
                     {typeLabel(entry, locale)}
                   </option>
