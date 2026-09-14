@@ -169,24 +169,27 @@ function portfolioMemberOptions(members: AssignmentMember[] = []): PortfolioMemb
     .filter((member) => isAssignableMember(member))
     // Pending invites / no user yet never appear in PM/Member pickers.
     .filter((member) => !isInvitedMember(member) && isJoinedWorkspaceMember(member))
-    .map((member) => {
+    .flatMap((member): PortfolioMemberOption[] => {
       const email = normalizeInviteEmail(member.email || member.emailLower || "");
       const alias = effectiveMemberAlias(member);
       // Skip anyone we still cannot name (no alias, display name, or email).
-      if (!alias) return null;
+      if (!alias) return [];
+      const id = String(member.id || "").trim();
+      if (!id) return [];
       const avatar = memberAvatar(member);
-      return {
-        id: String(member.id || ""),
-        userId: member.userId,
-        email: email || undefined,
-        name: memberAssignmentValue(member) || alias,
-        label: `${avatar} ${alias}`,
-        ready: true,
-        pending: false,
-        needsAlias: false,
-      };
+      return [
+        {
+          id,
+          userId: member.userId,
+          email: email || undefined,
+          name: memberAssignmentValue(member) || alias,
+          label: `${avatar} ${alias}`,
+          ready: true,
+          pending: false,
+          needsAlias: false,
+        },
+      ];
     })
-    .filter((member): member is PortfolioMemberOption => Boolean(member?.id))
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
