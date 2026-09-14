@@ -1334,7 +1334,9 @@ export function WorkItemsCenter({
 
   const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
-  const canCreate = Boolean(newTitle.trim());
+  const projectCreateBlocked =
+    String(activeProject?.status || "").toLowerCase() === "deleted";
+  const canCreate = Boolean(newTitle.trim()) && !projectCreateBlocked;
   const pasteTree = useMemo(() => parseBulkPasteItems(pasteText), [pasteText]);
   const pasteCounts = useMemo(() => countBulkPasteItems(pasteTree), [pasteTree]);
 
@@ -1356,6 +1358,7 @@ export function WorkItemsCenter({
   const createItem = async () => {
     const projectId = newProjectId || baseProjectId;
     if (!newTitle.trim()) return;
+    if (projectCreateBlocked) return;
     const project = projects.find((candidate) => candidate.id === projectId);
     const inheritedDeliveryEntity = String(
       newDeliveryEntity || project?.deliveryEntity || project?.bpo || "",
@@ -4228,9 +4231,11 @@ export function WorkItemsCenter({
           {mode === "list" && !notionSurface && renderColumnHeader()}
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
+              createDisabled={projectCreateBlocked}
+              createDisabledReason="This project is in Deleted. Restore it to add items."
               hierarchyPool={parentPool}
               onAddItem={(title, patch) => {
-                if (!activeProject?.id) return;
+                if (!activeProject?.id || projectCreateBlocked) return;
                 void onAddTask(activeProject.id, title, "backlog", {
                   workItemType: "pbi",
                   ...(patch || {}),
