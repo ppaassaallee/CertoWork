@@ -33,7 +33,7 @@ export function WorkspaceSwitcher({ isMobile = false, isCollapsed = false }: { i
         userId: user.uid,
         email: user.email || "",
         emailLower: (user.email || "").toLowerCase(),
-        ...membershipPublicPatch({ displayName: user.displayName }),
+        ...membershipPublicPatch({ displayName: user.displayName, email: user.email }),
         role: "owner",
         status: "active",
         createdAt: serverTimestamp(),

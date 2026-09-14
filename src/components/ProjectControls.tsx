@@ -4,11 +4,11 @@ import { Info, Users } from "./ui/Icon";
 import {
   DEFAULT_MEMBER_EMOJI,
   MEMBER_EMOJI_CHOICES,
+  effectiveMemberAlias,
   isAssignableMember,
   isInvitedMember,
   memberAssignmentValue,
   memberAvatar,
-  memberHasAlias,
   memberMatchesSelection,
   memberPublicLabel,
   type WorkspaceMember,
@@ -180,20 +180,18 @@ export function MultiAssigneePicker({
   const single = maxSelections === 1;
   const activeMembers = useMemo(() => {
     const pool = members.filter((member) => isAssignableMember(member));
+    // Joined members only — pending invites never appear. Alias falls back to email local-part.
     const ready = pool.filter(
-      (member) => memberHasAlias(member) && !isInvitedMember(member),
+      (member) => !isInvitedMember(member) && Boolean(effectiveMemberAlias(member)),
     );
-    const pending = pool.filter((member) => isInvitedMember(member));
-    const alreadyListed = new Set(
-      [...ready, ...pending].map((member) => String(member.id)),
-    );
+    const alreadyListed = new Set(ready.map((member) => String(member.id)));
     const selectedKeep = pool.filter(
       (member) =>
         !alreadyListed.has(String(member.id)) &&
+        !isInvitedMember(member) &&
         memberMatchesSelection(member, selectedIds, selectedNames),
     );
-    // Prefer people with aliases; keep pending invites; preserve current selection.
-    return [...ready, ...pending, ...selectedKeep];
+    return [...ready, ...selectedKeep];
   }, [members, selectedIds, selectedNames]);
   const selected = activeMembers.filter((member) =>
     memberMatchesSelection(member, selectedIds, selectedNames),
@@ -376,7 +374,6 @@ export function MultiAssigneePicker({
             )}
             {activeMembers.map((member) => {
               const checked = selected.some((candidate) => candidate.id === member.id);
-              const pending = isInvitedMember(member);
               return (
                 <label key={member.id}>
                   <input
@@ -388,21 +385,15 @@ export function MultiAssigneePicker({
                   <em aria-hidden="true">{memberAvatar(member)}</em>
                   <span>
                     <strong>{memberName(member)}</strong>
-                    <small>
-                      {pending
-                        ? "Invite pending — no user yet"
-                        : memberHasAlias(member)
-                          ? "Workspace member"
-                          : "Needs alias"}
-                    </small>
+                    <small>Workspace member</small>
                   </span>
                 </label>
               );
             })}
             {activeMembers.length === 0 && (
               <p className="cw-multi-assignee-empty">
-                No people with an alias yet. Open <strong>Workspace &amp; team</strong>, invite
-                someone, and have them set an alias — then they will appear here.
+                No joined teammates yet. Open <strong>Workspace &amp; team</strong> and invite
+                someone — once they accept, they will appear here.
               </p>
             )}
             {onInviteEmail && (

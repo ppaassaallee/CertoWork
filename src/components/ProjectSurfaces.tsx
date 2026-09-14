@@ -105,8 +105,7 @@ import {
   looksLikeEmail,
   memberAssignmentValue,
   memberAvatar,
-  memberHasAlias,
-  memberPublicLabel,
+  effectiveMemberAlias,
   normalizeInviteEmail,
 } from "../lib/workspaceCollaboration";
 import {
@@ -168,38 +167,27 @@ type PortfolioMemberOption = {
 function portfolioMemberOptions(members: AssignmentMember[] = []): PortfolioMemberOption[] {
   return members
     .filter((member) => isAssignableMember(member))
+    // Pending invites / no user yet never appear in PM/Member pickers.
+    .filter((member) => !isInvitedMember(member) && isJoinedWorkspaceMember(member))
     .map((member) => {
       const email = normalizeInviteEmail(member.email || member.emailLower || "");
-      const pending =
-        isInvitedMember(member) || !isJoinedWorkspaceMember(member);
-      const hasAlias = memberHasAlias(member);
-      const publicLabel = memberPublicLabel(member);
+      const alias = effectiveMemberAlias(member);
+      // Skip anyone we still cannot name (no alias, display name, or email).
+      if (!alias) return null;
       const avatar = memberAvatar(member);
-      let label = `${avatar} ${publicLabel}`;
-      if (pending) {
-        label = email
-          ? `Pending · ${email}`
-          : `Pending · ${publicLabel}`;
-      } else if (!hasAlias) {
-        label = email ? `Needs alias · ${email}` : "Needs alias";
-      }
       return {
         id: String(member.id || ""),
         userId: member.userId,
         email: email || undefined,
-        name: memberAssignmentValue(member),
-        label,
-        ready: !pending && hasAlias,
-        pending,
-        needsAlias: !pending && !hasAlias,
+        name: memberAssignmentValue(member) || alias,
+        label: `${avatar} ${alias}`,
+        ready: true,
+        pending: false,
+        needsAlias: false,
       };
     })
-    .filter((member) => Boolean(member.id))
-    .sort((left, right) => {
-      if (left.ready !== right.ready) return left.ready ? -1 : 1;
-      if (left.pending !== right.pending) return left.pending ? 1 : -1;
-      return left.label.localeCompare(right.label);
-    });
+    .filter((member): member is PortfolioMemberOption => Boolean(member?.id))
+    .sort((left, right) => left.label.localeCompare(right.label));
 }
 
 type PortfolioColumnKey =
@@ -5468,11 +5456,7 @@ export function ProjectCommandCenter({
   const realProjects = sorted;
   const allMemberOptions = portfolioMemberOptions(workspaceMembers);
   const readyMemberOptions = allMemberOptions.filter((member) => member.ready);
-  const pendingMemberOptions = allMemberOptions.filter((member) => member.pending);
-  const shareMemberOptions = [
-    ...readyMemberOptions,
-    ...pendingMemberOptions,
-  ];
+  const shareMemberOptions = readyMemberOptions;
 
   const runBulkProjectAction = async (
     label: string,
@@ -6684,7 +6668,7 @@ export function ProjectCommandCenter({
                     ))}
                     {readyMemberOptions.length === 0 ? (
                       <option disabled value="__none_ready">
-                        No people with an alias yet
+                        Invite someone from Workspace &amp; team first
                       </option>
                     ) : null}
                   </select>
@@ -6704,8 +6688,8 @@ export function ProjectCommandCenter({
                       }
                       const member = readyMemberOptions.find((item) => item.id === bulkManagerId);
                       if (!member) {
-                        onNotice?.("Pick someone with an alias to assign as PM.");
-                        setBulkFeedback("Pick someone with an alias to assign as PM.");
+                        onNotice?.("Pick a joined teammate to assign as PM.");
+                        setBulkFeedback("Pick a joined teammate to assign as PM.");
                         return;
                       }
                       void runBulkProjectAction("Assign PM", () =>
@@ -6735,15 +6719,6 @@ export function ProjectCommandCenter({
                     {readyMemberOptions.map((member) => (
                       <option key={`team-${member.id}`} value={member.id}>{member.label}</option>
                     ))}
-                    {pendingMemberOptions.length > 0 ? (
-                      <optgroup label="Pending invite (no user yet)">
-                        {pendingMemberOptions.map((member) => (
-                          <option key={`pending-${member.id}`} value={member.id}>
-                            {member.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : null}
                     {shareMemberOptions.length === 0 ? (
                       <option disabled value="__none_share">
                         Invite someone from Workspace &amp; team first
@@ -6756,17 +6731,12 @@ export function ProjectCommandCenter({
                     onClick={() => {
                       const member = shareMemberOptions.find((item) => item.id === bulkTeamId);
                       if (!member) return;
-                      if (member.needsAlias) {
-                        onNotice?.("That person still needs an alias before you can add them.");
-                        setBulkFeedback("That person still needs an alias before you can add them.");
-                        return;
-                      }
                       const grant = collaborationShareGrant({
                         id: member.id,
                         userId: member.userId,
                         email: member.email,
                         emailLower: member.email,
-                        status: member.pending ? "invited" : "active",
+                        status: "active",
                       });
                       void runBulkProjectAction(`Add ${member.name}`, () =>
                         selectedProjectIds.map((id) => {
@@ -6786,7 +6756,13 @@ export function ProjectCommandCenter({
                                 ? project.teamMembers.map(String)
                                 : []),
                               member.name,
-                            ].filter((value) => value && value !== "Needs alias" && value !== "Pending acceptance")),
+                            ].filter(
+                              (value) =>
+                                value &&
+                                value !== "Needs alias" &&
+                                value !== "Pending acceptance" &&
+                                value !== "Member",
+                            )),
                           ];
                           return onUpdateProject(id, {
                             teamMemberIds,
