@@ -7711,6 +7711,7 @@ export function DelivereeWorkspace() {
               navigate("/my-work");
             }}
             onUpdateProject={updateProject}
+            onNotice={setNotice}
             onApplyProjectTemplate={applyProjectTemplate}
             onCreateProjectTemplate={createProjectTemplate}
             onDeleteProjectTemplate={deleteProjectTemplate}
