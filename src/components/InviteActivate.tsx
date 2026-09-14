@@ -87,7 +87,7 @@ export function InviteActivate({ token }: Props) {
         userId: current.uid,
         email: current.email,
         emailLower: current.email.toLowerCase(),
-        ...membershipPublicPatch({ displayName: displayName || current.displayName }),
+        ...membershipPublicPatch({ displayName: displayName || current.displayName, email: current.email }),
         role: invite.role || "member",
         status: "active",
         portfolioViewer: String(invite.role || "member").toLowerCase() !== "viewer",

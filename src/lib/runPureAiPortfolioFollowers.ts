@@ -110,7 +110,7 @@ export async function grantPureAiPortfolioFollowers(input: {
           userId: `pending:${email}`,
           email,
           emailLower: email,
-          ...membershipPublicPatch({}),
+          ...membershipPublicPatch({ email }),
           ...buildPureAiFollowerMemberPatch(),
           status: "invited",
           invitedBy: input.user.uid,

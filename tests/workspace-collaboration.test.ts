@@ -67,9 +67,10 @@ test("workspace invite emails and assignment labels stay private", () => {
   assert.equal(looksLikeEmail("ana@example.com"), true);
   assert.equal(normalizeAlias("ana@example.com"), "");
   assert.equal(memberAssignmentValue({ displayName: "Ana Ops", email: "ana@example.com" }), "Ana Ops");
-  assert.equal(memberPublicLabel({ email: "ana@example.com" }), "Needs alias");
+  assert.equal(memberPublicLabel({ email: "ana@example.com" }), "ana");
   assert.equal(memberPublicLabel({ alias: "Ana Ops", email: "ana@example.com" }), "Ana Ops");
   assert.equal(memberHasAlias({ displayName: "ana@example.com" }), false);
+  assert.equal(memberHasAlias({ email: "ana@example.com" }), true);
   assert.equal(memberAvatar({ emoji: "🦊" }), "🦊");
   assert.equal(roleLabel("admin"), "Admin");
   assert.equal(roleLabel("unknown"), "Member");
@@ -97,6 +98,11 @@ test("membership public patch never stores email as alias", () => {
     emoji: "🎯",
     alias: "Certo",
     displayName: "Certo",
+  });
+  assert.deepEqual(membershipPublicPatch({ email: "jane.doe@company.com", emoji: "🙂" }), {
+    emoji: "🙂",
+    alias: "jane doe",
+    displayName: "jane doe",
   });
 });
 
@@ -141,7 +147,7 @@ test("workspace admin labels show invite emails instead of unknown user", () => 
       status: "invited",
       email: "agustin@getboldr.ai",
     }),
-    "Pending acceptance",
+    "agustin",
   );
   assert.equal(memberVisibleEmail({ email: "ana@example.com" }, false), "");
   assert.equal(memberVisibleEmail({ email: "Ana@Example.com" }, true), "ana@example.com");

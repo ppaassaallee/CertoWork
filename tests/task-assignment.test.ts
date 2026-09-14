@@ -251,12 +251,13 @@ test("assignment notifications target auth users, not pending seats", () => {
   assert.equal(docs[0].type, "task_assigned");
 });
 
-test("invited members store email labels instead of Pending acceptance", () => {
-  assert.equal(memberAssignmentValue(pendingLuis), "luis@certo.work");
-  assert.deepEqual(assignmentFieldsFromMembers([pendingLuis as any]).assignees, [
-    "luis@certo.work",
-  ]);
+test("invited members store email-derived aliases instead of Pending acceptance", () => {
+  assert.equal(memberAssignmentValue(pendingLuis), "luis");
+  assert.deepEqual(assignmentFieldsFromMembers([pendingLuis as any]).assignees, ["luis"]);
   assert.deepEqual(resolveAssigneeNamePatch("luis@certo.work", [pendingLuis as any]).assigneeIds, [
+    "ws_invite_luis",
+  ]);
+  assert.deepEqual(resolveAssigneeNamePatch("luis", [pendingLuis as any]).assigneeIds, [
     "ws_invite_luis",
   ]);
   assert.deepEqual(resolveAssigneeSwimlanePatch("Unassigned"), {

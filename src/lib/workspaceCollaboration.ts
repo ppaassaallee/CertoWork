@@ -82,30 +82,52 @@ export function normalizeAlias(value?: string | null) {
   return alias.slice(0, 32);
 }
 
-export function normalizeMemberEmoji(value?: string | null) {
-  const emoji = String(value || "").trim();
-  if (!emoji || looksLikeEmail(emoji)) return DEFAULT_MEMBER_EMOJI;
-  return Array.from(emoji)[0] || DEFAULT_MEMBER_EMOJI;
+/** Local-part of an email (before @), cleaned for use as an automatic alias. */
+export function aliasFromEmail(email?: string | null) {
+  const normalized = normalizeInviteEmail(String(email || ""));
+  if (!normalized.includes("@")) return "";
+  let local = normalized.split("@")[0] || "";
+  // Drop plus-addressing tags: jane.doe+ops → jane.doe
+  local = local.split("+")[0] || local;
+  // turn jane.doe into "jane doe"
+  return normalizeAlias(local.replace(/[._\-]+/g, " "));
 }
 
-export function suggestedAlias(member: Pick<WorkspaceMember, "alias" | "displayName">, fallbackName?: string | null) {
+export function suggestedAlias(member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower">, fallbackName?: string | null) {
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
+    aliasFromEmail(member.email || member.emailLower) ||
     normalizeAlias(fallbackName)
   );
 }
 
-export function memberHasAlias(member: Pick<WorkspaceMember, "alias" | "displayName">) {
-  return Boolean(normalizeAlias(member.alias) || normalizeAlias(member.displayName));
-}
-
-export function memberPublicLabel(member: Pick<WorkspaceMember, "alias" | "displayName" | "status">) {
+/** Alias for pickers/lists: stored alias, display name, or email local-part. Never "Needs alias". */
+export function effectiveMemberAlias(
+  member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower">,
+) {
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
-    (String(member.status || "").toLowerCase() === "invited" ? "Pending acceptance" : "Needs alias")
+    aliasFromEmail(member.email || member.emailLower)
   );
+}
+
+export function memberHasAlias(member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower">) {
+  return Boolean(effectiveMemberAlias(member));
+}
+
+export function memberPublicLabel(
+  member: Pick<WorkspaceMember, "alias" | "displayName" | "status" | "email" | "emailLower">,
+) {
+  // Never surface "Needs alias" / "Pending acceptance" in people pickers.
+  return effectiveMemberAlias(member) || "Member";
+}
+
+export function normalizeMemberEmoji(value?: string | null) {
+  const emoji = String(value || "").trim();
+  if (!emoji || looksLikeEmail(emoji)) return DEFAULT_MEMBER_EMOJI;
+  return Array.from(emoji)[0] || DEFAULT_MEMBER_EMOJI;
 }
 
 export function memberManageLabel(
@@ -251,8 +273,7 @@ export function memberAssignmentValue(
   member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
 ) {
   return (
-    normalizeAlias(member.alias) ||
-    normalizeAlias(member.displayName) ||
+    effectiveMemberAlias(member) ||
     normalizeInviteEmail(member.email || member.emailLower || "") ||
     memberPublicLabel(member)
   );
@@ -357,8 +378,13 @@ export function membershipPublicPatch(input: {
   displayName?: string | null;
   alias?: string | null;
   emoji?: string | null;
+  /** When no alias/display name, store the email local-part (before @) as alias. */
+  email?: string | null;
 }) {
-  const alias = normalizeAlias(input.alias) || normalizeAlias(input.displayName);
+  const alias =
+    normalizeAlias(input.alias) ||
+    normalizeAlias(input.displayName) ||
+    aliasFromEmail(input.email);
   const patch: Record<string, string> = {
     emoji: normalizeMemberEmoji(input.emoji),
   };

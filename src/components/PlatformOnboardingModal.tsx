@@ -82,7 +82,7 @@ export function PlatformOnboardingModal() {
           emailLower: nextEmail.toLowerCase(),
           company: nextCompany,
           platformOnboardedAt: serverTimestamp(),
-          ...membershipPublicPatch({ displayName: nextName }),
+          ...membershipPublicPatch({ displayName: nextName, email: nextEmail }),
           updatedAt: serverTimestamp(),
         },
         { merge: true },
