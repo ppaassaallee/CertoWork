@@ -5269,6 +5269,7 @@ export function ProjectCommandCenter({
   highlightFinanceLineId = null,
   onFinanceHighlightConsumed,
   initialPortfolioView,
+  onNotice,
 }: {
   projects: any[];
   tasks: any[];
@@ -5279,6 +5280,7 @@ export function ProjectCommandCenter({
   projectTemplates?: any[];
   onClose: () => void;
   onAsk?: (prompt: string) => void;
+  onNotice?: (message: string) => void;
   onNewProject?: () => void;
   onCreateCostTemplate?: (template: any) => Promise<void> | void;
   onUpdateCostTemplate?: (
@@ -5325,6 +5327,8 @@ export function ProjectCommandCenter({
   const [bulkManagerId, setBulkManagerId] = useState("");
   const [bulkTeamId, setBulkTeamId] = useState("");
   const [bulkDueDate, setBulkDueDate] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
@@ -5404,7 +5408,42 @@ export function ProjectCommandCenter({
   const realProjects = sorted;
   const activeMemberOptions = workspaceMembers
     .filter((member) => String(member.status || "active") !== "removed")
-    .map((member) => ({ id: member.id, name: memberName(member) }));
+    .map((member) => ({
+      id: member.id,
+      userId: member.userId,
+      email: member.email || member.emailLower,
+      name: memberName(member),
+    }));
+
+  const runBulkProjectAction = async (
+    label: string,
+    buildJobs: () => Array<Promise<unknown> | void>,
+  ) => {
+    if (bulkBusy || selectedProjectIds.length === 0) return;
+    setBulkBusy(true);
+    setBulkFeedback("Updating…");
+    try {
+      const results = await Promise.allSettled(
+        buildJobs().map((job) => Promise.resolve(job)),
+      );
+      const failed = results.filter((result) => result.status === "rejected").length;
+      const ok = results.length - failed;
+      const message = failed
+        ? `${label}: ${ok} updated, ${failed} failed`
+        : `${label}: ${ok} project${ok === 1 ? "" : "s"} updated`;
+      setBulkFeedback(message);
+      onNotice?.(message);
+    } catch (reason) {
+      const message =
+        reason instanceof Error
+          ? `${label} failed: ${reason.message}`
+          : `${label} failed. Try again.`;
+      setBulkFeedback(message);
+      onNotice?.(message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
   const discoveredDeliveryEntities = [
     ...realProjects.map((project) => project.deliveryEntity || project.bpo),
     ...tasks.map((task) => task.deliveryEntity || task.bpo),
@@ -6429,108 +6468,271 @@ export function ProjectCommandCenter({
             </label>
           </div>
           {selectedProjectIds.length > 0 && (
-            <div className="do-items-bulk" aria-label="Project bulk actions">
-              <span>{selectedProjectIds.length} selected</span>
-              <button
-                aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
-                className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
-                data-testid="projects-select-all"
-                disabled={visibleProjectIds.length === 0}
-                onClick={toggleSelectAllProjects}
-                type="button"
-              >
-                {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
-              </button>
-              <button onClick={() => setSelectedProjectIds([])} type="button">Clear</button>
-              <select aria-label="Bulk project status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>
-                {PROJECT_STATUSES.map((status) => (
-                  <option key={status} value={status}>{projectStatusLabel(status)}</option>
-                ))}
-              </select>
-              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { status: bulkStatus })))} type="button">Change status</button>
-              <select aria-label="Bulk project stage" onChange={(event) => setBulkStage(event.target.value as DeliveryStage)} value={bulkStage}>
-                {DELIVERY_STAGES.map((stage) => (
-                  <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>
-                ))}
-              </select>
-              <button onClick={() => Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { deliveryStage: bulkStage })))} type="button">Change stage</button>
-              <input
-                aria-label="Bulk project due date"
-                onChange={(event) => setBulkDueDate(event.target.value)}
-                type="date"
-                value={bulkDueDate}
-              />
-              <button
-                onClick={() =>
-                  Promise.all(selectedProjectIds.map((id) =>
-                    onUpdateProject(id, {
-                      revisedDueDate: bulkDueDate || null,
-                      dueDate: bulkDueDate || null,
-                      targetDate: bulkDueDate || null,
-                    }),
-                  ))
-                }
-                type="button"
-              >
-                Apply date
-              </button>
-              <button
-                onClick={() =>
-                  Promise.all(selectedProjectIds.map((id) =>
-                    onUpdateProject(id, {
-                      revisedDueDate: null,
-                      dueDate: null,
-                      targetDate: null,
-                    }),
-                  ))
-                }
-                type="button"
-              >
-                Clear date
-              </button>
-              <select aria-label="Bulk project manager" onChange={(event) => setBulkManagerId(event.target.value)} value={bulkManagerId}>
-                <option value="">Project manager</option>
-                <option value="none">Unassigned</option>
-                {activeMemberOptions.map((member) => (
-                  <option key={member.id} value={member.id}>{member.name}</option>
-                ))}
-              </select>
-              <button
-                disabled={!bulkManagerId}
-                onClick={() => {
-                  if (bulkManagerId === "none") {
-                    return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: null, projectManager: "" })));
-                  }
-                  const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
-                  return Promise.all(selectedProjectIds.map((id) => onUpdateProject(id, { projectManagerId: bulkManagerId, projectManager: member?.name || "" })));
-                }}
-                type="button"
-              >
-                {bulkManagerId === "none" ? "Unassign PM" : "Assign PM"}
-              </button>
-              <select aria-label="Bulk add team member" onChange={(event) => setBulkTeamId(event.target.value)} value={bulkTeamId}>
-                <option value="">Add team member</option>
-                {activeMemberOptions.map((member) => (
-                  <option key={`team-${member.id}`} value={member.id}>{member.name}</option>
-                ))}
-              </select>
-              <button
-                disabled={!bulkTeamId}
-                onClick={() =>
-                  Promise.all(selectedProjectIds.map((id) => {
-                    const project = projects.find((item) => item.id === id);
-                    const teamMemberIds = [...new Set([...(project?.teamMemberIds || []), bulkTeamId])];
-                    return onUpdateProject(id, { teamMemberIds });
-                  }))
-                }
-                type="button"
-              >
-                Add member
-              </button>
-              <button onClick={() => Promise.all(selectedProjectIds.map((id) => {
-                const project = projects.find((item) => item.id === id);
-                return project ? onArchiveProject(project) : Promise.resolve();
-              }))} type="button">Archive</button>
+            <div
+              className="do-items-bulk do-command-bulk"
+              aria-label="Project bulk actions"
+              data-testid="project-bulk-actions"
+            >
+              <div className="do-command-bulk-lead">
+                <strong className="do-command-bulk-count">
+                  {selectedProjectIds.length} selected
+                </strong>
+                <button
+                  aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
+                  className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
+                  data-testid="projects-select-all"
+                  disabled={visibleProjectIds.length === 0 || bulkBusy}
+                  onClick={toggleSelectAllProjects}
+                  type="button"
+                >
+                  {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
+                </button>
+                <button
+                  className="do-command-bulk-ghost"
+                  disabled={bulkBusy}
+                  onClick={() => {
+                    setSelectedProjectIds([]);
+                    setBulkFeedback("");
+                  }}
+                  type="button"
+                >
+                  Clear
+                </button>
+                {bulkFeedback ? (
+                  <span
+                    className={`do-command-bulk-feedback${bulkBusy ? " is-busy" : ""}`}
+                    data-testid="project-bulk-feedback"
+                    role="status"
+                  >
+                    {bulkFeedback}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="do-command-bulk-groups">
+                <label className="do-command-bulk-group">
+                  <span>Status</span>
+                  <select
+                    aria-label="Bulk project status"
+                    disabled={bulkBusy}
+                    onChange={(event) => setBulkStatus(event.target.value)}
+                    value={bulkStatus}
+                  >
+                    {PROJECT_STATUSES.map((status) => (
+                      <option key={status} value={status}>{projectStatusLabel(status)}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={bulkBusy}
+                    onClick={() =>
+                      void runBulkProjectAction("Status", () =>
+                        selectedProjectIds.map((id) =>
+                          onUpdateProject(id, { status: bulkStatus }),
+                        ),
+                      )
+                    }
+                    type="button"
+                  >
+                    Apply
+                  </button>
+                </label>
+
+                <label className="do-command-bulk-group">
+                  <span>Stage</span>
+                  <select
+                    aria-label="Bulk project stage"
+                    disabled={bulkBusy}
+                    onChange={(event) => setBulkStage(event.target.value as DeliveryStage)}
+                    value={bulkStage}
+                  >
+                    {DELIVERY_STAGES.map((stage) => (
+                      <option key={stage} value={stage}>{deliveryStageLabels[stage]}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={bulkBusy}
+                    onClick={() =>
+                      void runBulkProjectAction("Stage", () =>
+                        selectedProjectIds.map((id) =>
+                          onUpdateProject(id, { deliveryStage: bulkStage }),
+                        ),
+                      )
+                    }
+                    type="button"
+                  >
+                    Apply
+                  </button>
+                </label>
+
+                <label className="do-command-bulk-group">
+                  <span>Due</span>
+                  <input
+                    aria-label="Bulk project due date"
+                    disabled={bulkBusy}
+                    onChange={(event) => setBulkDueDate(event.target.value)}
+                    type="date"
+                    value={bulkDueDate}
+                  />
+                  <button
+                    disabled={bulkBusy || !bulkDueDate}
+                    onClick={() =>
+                      void runBulkProjectAction("Due date", () =>
+                        selectedProjectIds.map((id) =>
+                          onUpdateProject(id, {
+                            revisedDueDate: bulkDueDate || null,
+                            dueDate: bulkDueDate || null,
+                            targetDate: bulkDueDate || null,
+                          }),
+                        ),
+                      )
+                    }
+                    type="button"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    className="do-command-bulk-ghost"
+                    disabled={bulkBusy}
+                    onClick={() =>
+                      void runBulkProjectAction("Clear due date", () =>
+                        selectedProjectIds.map((id) =>
+                          onUpdateProject(id, {
+                            revisedDueDate: null,
+                            dueDate: null,
+                            targetDate: null,
+                          }),
+                        ),
+                      )
+                    }
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                </label>
+
+                <label className="do-command-bulk-group">
+                  <span>PM</span>
+                  <select
+                    aria-label="Bulk project manager"
+                    disabled={bulkBusy}
+                    onChange={(event) => setBulkManagerId(event.target.value)}
+                    value={bulkManagerId}
+                  >
+                    <option value="">Choose…</option>
+                    <option value="none">Unassigned</option>
+                    {activeMemberOptions.map((member) => (
+                      <option key={member.id} value={member.id}>{member.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={bulkBusy || !bulkManagerId}
+                    onClick={() => {
+                      if (bulkManagerId === "none") {
+                        void runBulkProjectAction("Unassign PM", () =>
+                          selectedProjectIds.map((id) =>
+                            onUpdateProject(id, {
+                              projectManagerId: null,
+                              projectManager: "",
+                            }),
+                          ),
+                        );
+                        return;
+                      }
+                      const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
+                      void runBulkProjectAction("Assign PM", () =>
+                        selectedProjectIds.map((id) =>
+                          onUpdateProject(id, {
+                            projectManagerId: bulkManagerId,
+                            projectManager: member?.name || "",
+                          }),
+                        ),
+                      );
+                    }}
+                    type="button"
+                  >
+                    {bulkManagerId === "none" ? "Unassign" : "Assign"}
+                  </button>
+                </label>
+
+                <label className="do-command-bulk-group">
+                  <span>Member</span>
+                  <select
+                    aria-label="Bulk add team member"
+                    disabled={bulkBusy}
+                    onChange={(event) => setBulkTeamId(event.target.value)}
+                    value={bulkTeamId}
+                  >
+                    <option value="">Choose…</option>
+                    {activeMemberOptions.map((member) => (
+                      <option key={`team-${member.id}`} value={member.id}>{member.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    data-testid="project-bulk-add-member"
+                    disabled={bulkBusy || !bulkTeamId}
+                    onClick={() => {
+                      const member = activeMemberOptions.find((item) => item.id === bulkTeamId);
+                      if (!member) return;
+                      const grant = collaborationShareGrant({
+                        id: member.id,
+                        userId: member.userId,
+                        email: member.email,
+                        emailLower: member.email,
+                        status: "active",
+                      });
+                      void runBulkProjectAction(`Add ${member.name}`, () =>
+                        selectedProjectIds.map((id) => {
+                          const project = projects.find((item) => item.id === id);
+                          if (!project) return Promise.resolve();
+                          const teamMemberIds = [
+                            ...new Set([
+                              ...(Array.isArray(project.teamMemberIds)
+                                ? project.teamMemberIds.map(String)
+                                : []),
+                              member.id,
+                            ]),
+                          ];
+                          const teamMembers = [
+                            ...new Set([
+                              ...(Array.isArray(project.teamMembers)
+                                ? project.teamMembers.map(String)
+                                : []),
+                              member.name,
+                            ]),
+                          ];
+                          return onUpdateProject(id, {
+                            teamMemberIds,
+                            teamMembers,
+                            ...withCollaboratorAccess(project, grant),
+                          });
+                        }),
+                      );
+                    }}
+                    type="button"
+                  >
+                    Add
+                  </button>
+                </label>
+
+                <div className="do-command-bulk-group is-danger">
+                  <span>Danger</span>
+                  <button
+                    className="do-command-bulk-danger"
+                    disabled={bulkBusy}
+                    onClick={() =>
+                      void runBulkProjectAction("Archive", () =>
+                        selectedProjectIds.map((id) => {
+                          const project = projects.find((item) => item.id === id);
+                          return project ? onArchiveProject(project) : Promise.resolve();
+                        }),
+                      )
+                    }
+                    type="button"
+                  >
+                    Archive
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           <div className="do-command-subtoolbar">

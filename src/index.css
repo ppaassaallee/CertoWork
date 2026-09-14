@@ -6943,6 +6943,100 @@ a {
   font-size: var(--text-caption);
   font-weight: 600;
 }
+.do-command-bulk {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-0));
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.do-command-bulk-lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.do-command-bulk-count {
+  color: var(--text-primary);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+}
+.do-command-bulk-feedback {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 500;
+}
+.do-command-bulk-feedback.is-busy {
+  color: var(--accent);
+}
+.do-command-bulk-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.do-command-bulk-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+}
+.do-command-bulk-group > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.do-command-bulk-group select,
+.do-command-bulk-group input[type="date"] {
+  min-width: 0;
+  max-width: 160px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surface-1);
+  padding: 0 8px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+}
+.do-command-bulk-group button {
+  height: 28px;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: var(--accent-soft) !important;
+  padding: 0 10px !important;
+  color: var(--accent) !important;
+  font-size: var(--text-caption) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+.do-command-bulk-group button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.do-command-bulk-group button.do-command-bulk-ghost,
+.do-command-bulk-lead > button.do-command-bulk-ghost {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+.do-command-bulk-group.is-danger {
+  border-color: color-mix(in srgb, var(--status-danger) 22%, var(--border));
+}
+.do-command-bulk-group button.do-command-bulk-danger {
+  background: color-mix(in srgb, var(--status-danger) 10%, var(--surface-0)) !important;
+  color: var(--status-danger) !important;
+}
 .do-items-layout {
   display: grid;
   min-height: 0;
@@ -13327,14 +13421,48 @@ a {
 }
 .do-command-table-head {
   color: var(--text-muted);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-1) 70%, var(--surface-0));
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .do-command-table-head > span {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+.do-command-table .do-project-select,
+.do-command-table .do-stage-select,
+.do-command-table select {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  text-transform: none;
+  box-shadow: none;
+}
+.do-command-table .do-project-select:hover,
+.do-command-table .do-stage-select:hover,
+.do-command-table select:hover,
+.do-command-table .do-project-select:focus,
+.do-command-table .do-stage-select:focus,
+.do-command-table select:focus {
+  background: var(--surface-1);
+}
+.do-command-table .do-stage-pill,
+.do-command-table .do-stage-select {
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
 }
 .do-tag-picker {
   display: block;
@@ -13909,18 +14037,23 @@ a {
   font-weight: 600;
 }
 .do-command-project-block {
-  border-top: 1px solid var(--border);
+  border-top: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
 }
 .do-command-project-block > article {
-  min-height: 52px;
+  min-height: 40px;
+  padding-top: 5px;
+  padding-bottom: 5px;
   color: var(--text-secondary);
   font-size: var(--text-caption);
 }
 .do-command-project-block > article:hover {
-  background: var(--surface-0);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface-0));
 }
-.do-command-project-block > article:hover {
-  background: var(--surface-0);
+.do-command-table .do-project-select {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: var(--text-caption);
 }
 .do-command-project-name {
   display: flex;
