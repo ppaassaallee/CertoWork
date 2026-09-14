@@ -3,6 +3,7 @@ import {
   memberPublicLabel,
   normalizeInviteEmail,
   normalizeAlias,
+  aliasFromEmail,
   type WorkspaceMember,
 } from "./workspaceCollaboration";
 import type { CollaborationMember } from "./collaborationAccess";
@@ -33,13 +34,14 @@ export function patchTouchesCollaborators(patch: Record<string, unknown> | null 
   return COLLABORATOR_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
-/** Stable label for task assignee arrays — prefer email over generic placeholders. */
+/** Stable label for task assignee arrays — alias, then email local-part (never "Pending acceptance"). */
 export function memberAssigneeLabel(
   member: Pick<WorkspaceMember, "alias" | "displayName" | "email" | "emailLower" | "status">,
 ) {
   return (
     normalizeAlias(member.alias) ||
     normalizeAlias(member.displayName) ||
+    aliasFromEmail(member.email || member.emailLower) ||
     normalizeInviteEmail(member.email || member.emailLower || "") ||
     memberPublicLabel(member)
   );
