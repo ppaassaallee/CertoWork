@@ -1,4 +1,5 @@
 import { getLocale, t, type Locale } from "../../../lib/i18n";
+import { workItemTypeLabel } from "../../../lib/workItemTypeLabels";
 
 const PRIORITY_LABELS: Record<string, { en: string; es: string }> = {
   "1": { en: "P1 · Critical", es: "P1 · Crítica" },
@@ -8,25 +9,12 @@ const PRIORITY_LABELS: Record<string, { en: string; es: string }> = {
   "N/A": { en: "No priority", es: "Sin prioridad" },
 };
 
-const TYPE_LABELS: Record<string, { en: string; es: string }> = {
-  epic: { en: "Epic", es: "Épica" },
-  feature: { en: "Feature", es: "Feature" },
-  pbi: { en: "PBI", es: "PBI" },
-  story: { en: "Story", es: "Historia" },
-  task: { en: "Task", es: "Tarea" },
-  bug: { en: "Bug", es: "Bug" },
-  subtask: { en: "Subtask", es: "Subtarea" },
-  ticket: { en: "Ticket", es: "Ticket" },
-  issue: { en: "Issue", es: "Issue" },
-};
-
 export function itemModalLocale(locale: Locale = getLocale()): Locale {
   return locale;
 }
 
 export function typeLabel(kind: string, locale: Locale = getLocale()) {
-  const entry = TYPE_LABELS[kind] || TYPE_LABELS.pbi;
-  return entry[locale] || entry.en;
+  return workItemTypeLabel(kind, locale);
 }
 
 export function priorityLabel(value: string, locale: Locale = getLocale()) {
@@ -59,7 +47,7 @@ export const ITEM_MODAL_COPY = {
   inheritedFromProject: { en: "inherited from project", es: "heredado del proyecto" },
   routines: { en: "Routines", es: "Rutinas" },
   activity: { en: "Activity", es: "Actividad" },
-  subtasks: { en: "Subtasks", es: "Subtareas" },
+  subtasks: { en: "Sub Task", es: "Sub Task" },
   attachments: { en: "Attachments", es: "Adjuntos" },
   comments: { en: "Comments", es: "Comentarios" },
   openCollab: { en: "Open Collab", es: "Abrir Collab" },

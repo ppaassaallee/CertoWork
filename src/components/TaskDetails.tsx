@@ -319,13 +319,14 @@ export function TaskDetails() {
                     onChange={(e) => handleUpdate('itemType', e.target.value)}
                     className="bg-transparent border-none p-0 text-sm font-medium text-gray-900 focus:ring-0 w-full cursor-pointer"
                   >
-                     <option value="task">Task</option>
+                     <option value="task">PBI/Task</option>
                      <option value="2mins">2 Mins (Do it now)</option>
-                     <option value="idea">Idea</option>
+                     <option value="idea">idea</option>
                      <option value="decision">Decision</option>
                      <option value="presentation">Presentation</option>
                      <option value="meeting">Meeting</option>
                      <option value="routine_follow_up">Routine Follow Up</option>
+                     <option value="note">note</option>
                   </select>
                </div>
             </div>

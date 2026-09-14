@@ -455,11 +455,10 @@ export function NotionProjectTable({
                   >
                     <option value="epic">Epic</option>
                     <option value="feature">Feature</option>
-                    <option value="pbi">PBI</option>
-                    <option value="story">Story</option>
-                    <option value="task">Task</option>
-                    <option value="bug">Bug</option>
-                    <option value="subtask">Subtask</option>
+                    <option value="pbi">PBI/Task</option>
+                    <option value="subtask">Sub Task</option>
+                    <option value="bug">bug</option>
+                    <option value="issue">issue</option>
                   </select>
                   <ChevronDown size={10} aria-hidden="true" />
                 </label>

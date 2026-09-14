@@ -145,7 +145,7 @@ export function hierarchyKind(item: any): HierarchyKind {
 export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[] {
   if (kind === "epic" || kind === "ticket") return [];
   if (kind === "feature") return ["epic"];
-  // Epic → Feature → PBI/Story → Task/Bug/Issue → Subtask
+  // Epic → Feature → PBI/Task → bug/issue → Sub Task
   if (kind === "pbi" || kind === "story") return ["feature"];
   if (kind === "task" || kind === "bug" || kind === "issue") return ["pbi", "story"];
   return ["pbi", "story", "task", "bug", "issue"];

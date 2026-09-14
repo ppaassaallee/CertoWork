@@ -2323,9 +2323,9 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                  className="absolute inset-0 opacity-0 cursor-pointer w-[200%] max-w-[200px]"
                  title="Select Item Type"
                >
-                 <option value="task">Task</option>
+                 <option value="task">PBI/Task</option>
                  <option value="2mins">2 Mins (Do it now)</option>
-                 <option value="idea">Idea</option>
+                 <option value="idea">idea</option>
                  <option value="decision">Decision</option>
                  <option value="presentation">Presentation</option>
                  <option value="meeting">Meeting</option>

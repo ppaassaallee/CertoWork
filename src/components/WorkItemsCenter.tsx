@@ -135,6 +135,12 @@ import {
   wouldCreateHierarchyCycle,
 } from "../lib/itemHierarchy";
 import {
+  joinWorkItemTypeLabels,
+  uniqueWorkItemTypes,
+  workItemTypeLabel,
+  WORK_ITEM_CREATE_TYPES,
+} from "../lib/workItemTypeLabels";
+import {
   dateInputValue,
   dueBucket,
   dueDateTimingPatch,
@@ -211,7 +217,26 @@ type Props = {
   onGanttFocusChange?: (focused: boolean) => void;
 };
 
-const workTypes: WorkItemKind[] = ["epic", "feature", "pbi", "story", "bug", "task", "subtask", "ticket", "issue"];
+const workTypes: WorkItemKind[] = [
+  "epic",
+  "feature",
+  "pbi",
+  "story",
+  "bug",
+  "task",
+  "subtask",
+  "ticket",
+  "issue",
+];
+const createWorkTypes: WorkItemKind[] = [...WORK_ITEM_CREATE_TYPES];
+const pickerWorkTypes = (current?: WorkItemKind | string | null): WorkItemKind[] => {
+  const base = uniqueWorkItemTypes(createWorkTypes);
+  const kind = String(current || "").toLowerCase() as WorkItemKind;
+  if (kind && workTypes.includes(kind) && !base.includes(kind)) {
+    return [...base, kind];
+  }
+  return base;
+};
 const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
 const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Next action", "Waiting", "Someday", "Reference", "No sector"];
@@ -488,10 +513,8 @@ function workItemKind(item: any): WorkItemKind {
   return "pbi";
 }
 
-function workItemLabel(kind: WorkItemKind) {
-  if (kind === "pbi") return "PBI";
-  if (kind === "subtask") return "Subtask";
-  return kind.charAt(0).toUpperCase() + kind.slice(1);
+function workItemLabel(kind: WorkItemKind | string) {
+  return workItemTypeLabel(kind);
 }
 
 const WORK_ITEM_TYPE_ICONS: Record<WorkItemKind, typeof Gem> = {
@@ -1930,13 +1953,14 @@ export function WorkItemsCenter({
       ? options.filter((candidate) => `${workItemLabel(workItemKind(candidate))} ${title(candidate)}`.toLowerCase().includes(needle))
       : options
     ).slice(0, 40);
-    const labels = allowed.map((value) => workItemLabel(value)).join(" or ");
+    const labels = joinWorkItemTypeLabels(allowed);
     return (
       <div className="do-parent-picker" data-testid="item-parent-field">
         <input
           aria-label={`Search ${labels} parent`}
           onChange={(event) => setParentSearch(event.target.value)}
           placeholder={`Search ${labels}…`}
+          type="text"
           value={parentSearch}
         />
         <div className="do-parent-options" role="listbox" aria-label={`${labels} parents`}>
@@ -1945,7 +1969,7 @@ export function WorkItemsCenter({
             onClick={() => assignParent(item, "")}
             type="button"
           >
-            No parent
+            <span className="do-parent-title">No parent</span>
           </button>
           {visible.map((candidate) => (
             <button
@@ -1957,7 +1981,7 @@ export function WorkItemsCenter({
               type="button"
             >
               <span className="do-parent-kind">{workItemLabel(workItemKind(candidate))}</span>
-              <span>{title(candidate)}</span>
+              <span className="do-parent-title">{title(candidate)}</span>
             </button>
           ))}
         </div>
@@ -2454,7 +2478,7 @@ export function WorkItemsCenter({
     return (
       <div className="do-items-tree" data-testid="item-hierarchy-forest">
         {roots.map((item) => walk(item, 0, new Set()))}
-        {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI, task or bug for this context.</span></div>}
+        {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI/Task, bug or issue for this context.</span></div>}
       </div>
     );
   };
@@ -3124,9 +3148,9 @@ export function WorkItemsCenter({
             >
               <Plus size={13} />
               <input
-                aria-label="Add PBI"
+                aria-label="Add PBI/Task"
                 onChange={(event) => setNewTitle(event.target.value)}
-                placeholder="Add PBI…"
+                placeholder="Add PBI/Task…"
                 value={newTitle}
               />
             </form>
@@ -3534,7 +3558,7 @@ export function WorkItemsCenter({
                 {filterDraft === "type" && (
                   <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
                     <option value="all">Any type</option>
-                    {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+                    {pickerWorkTypes().map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
                   </select>
                 )}
                 {filterDraft === "owner" && (
@@ -3593,7 +3617,7 @@ export function WorkItemsCenter({
             {sortPanelOpen && !notionSurface && (
               <div className="do-popover" data-testid="items-sort-popover">
                 {isMyWork ? (
-                  <p className="do-items-views-label">Grouped by project (epic → PBI → subtask inside each)</p>
+                  <p className="do-items-views-label">Grouped by project (Epic → PBI/Task → Sub Task inside each)</p>
                 ) : (
                   <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
                 )}
@@ -3704,7 +3728,7 @@ export function WorkItemsCenter({
               {filterDraft === "type" && (
                 <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
                   <option value="all">Any type</option>
-                  {workTypes.map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
+                  {pickerWorkTypes().map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
                 </select>
               )}
               {filterDraft === "owner" && (
@@ -3804,7 +3828,7 @@ export function WorkItemsCenter({
                 ? title(parentOptions.find((item) => item.id === newParentId) || { title: "Parent" })
                 : newType === "epic"
                   ? "No parent"
-                  : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`;
+                  : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`;
               const deliveryLabel = newDeliveryEntity || "Delivery entity";
               const open = (key: string) => createAttr === key;
               const toggle = (key: string) => {
@@ -3857,7 +3881,7 @@ export function WorkItemsCenter({
                       <div className="do-item-attr-pop do-items-create-type-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                         <strong>Type</strong>
                         <div className="do-items-create-type-grid">
-                          {workTypes.map((kind) => {
+                          {pickerWorkTypes(newType).map((kind) => {
                             const Icon = WORK_ITEM_TYPE_ICONS[kind] || Target;
                             return (
                               <button
@@ -3899,7 +3923,7 @@ export function WorkItemsCenter({
                           onChange={(event) => { setNewParentId(event.target.value); setCreateAttr(null); }}
                           value={newParentId}
                         >
-                          <option value="">{newType === "epic" ? "No parent" : `Choose ${allowedParentKinds(newType).map((kind) => workItemLabel(kind)).join(" or ")}`}</option>
+                          <option value="">{newType === "epic" ? "No parent" : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`}</option>
                           {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
                         </select>
                       </div>
@@ -4066,7 +4090,7 @@ export function WorkItemsCenter({
                   <small>{activeProject ? projectTitle(activeProject) : "My Work"}</small>
                   <h2>Paste bulk items</h2>
                   <p>
-                    Each line becomes a PBI{activeProject ? " on this project" : " as a general item"}.
+                    Each line becomes a PBI/Task{activeProject ? " on this project" : " as a general item"}.
                     Indent with Tab (or two spaces) to create a subtask under the line above.
                   </p>
                 </div>
@@ -4083,7 +4107,7 @@ export function WorkItemsCenter({
                   value={pasteText}
                 />
                 <small>
-                  {pasteCounts.pbis} PBI{pasteCounts.pbis === 1 ? "" : "s"}
+                  {pasteCounts.pbis} PBI/Task{pasteCounts.pbis === 1 ? "" : "s"}
                   {pasteCounts.subtasks ? ` · ${pasteCounts.subtasks} subtask${pasteCounts.subtasks === 1 ? "" : "s"}` : ""}
                   {activeProject ? ` · ${projectTitle(activeProject)}` : " · general items"}
                 </small>
@@ -4372,7 +4396,7 @@ export function WorkItemsCenter({
                 onChange={(event) => changeItemType(selectedItem, event.target.value as WorkItemKind)}
                 value={workItemKind(selectedItem)}
               >
-                {workTypes.map((kind) => (
+                {pickerWorkTypes(workItemKind(selectedItem)).map((kind) => (
                   <option key={kind} value={kind}>{workItemLabel(kind)}</option>
                 ))}
               </select>
@@ -4395,7 +4419,7 @@ export function WorkItemsCenter({
               <div className="do-item-finance-banner" data-testid="item-finance-banner">
                 <div>
                   <strong>Finance follow-up</strong>
-                  <small>This PBI tracks a specific portfolio financials line.</small>
+                  <small>This PBI/Task tracks a specific portfolio financials line.</small>
                 </div>
                 <button
                   onClick={() => onOpenFinanceLine(financeLineIdFromTask(selectedItem))}
