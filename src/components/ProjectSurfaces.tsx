@@ -129,6 +129,7 @@ import { useRoutineHost } from "./routines/RoutineHost";
 import { RoutinesStrip } from "./routines/RoutinesStrip";
 import type { WorkItemsViewMode } from "../lib/itemViewMemory";
 import { canDeleteProject } from "../lib/projectPermissions";
+import { projectWorkKey } from "../lib/workspaceDisplay";
 import {
   PROJECT_RESOURCE_MAX_BYTES,
   PROJECT_RESOURCE_TYPES,
@@ -5676,7 +5677,7 @@ export function ProjectCommandCenter({
       portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
         taxonomyValue;
     const haystack =
-      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${workCategory(project)} ${productPhase(project)} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""}`.toLowerCase();
+      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${workCategory(project)} ${productPhase(project)} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`.toLowerCase();
     return (
       matchesFilter &&
       matchesStage &&
@@ -5894,6 +5895,14 @@ export function ProjectCommandCenter({
       key: `stage-${stageFilter}`,
       label: deliveryStageLabels[stageFilter],
       clear: () => setStageFilter("all"),
+    });
+  }
+  for (const value of statusFilters) {
+    activeFilterChips.push({
+      key: `status-${value}`,
+      label: `Status: ${projectStatusLabel(value)}`,
+      clear: () =>
+        setStatusFilters((current) => current.filter((item) => item !== value)),
     });
   }
   if (taxonomyValue) {
@@ -6476,7 +6485,7 @@ export function ProjectCommandCenter({
               <div className="do-command-filters">
                 {["planning", "active", "paused", "completed", "archived", "deleted"].map((value) => (
                   <button
-                    className={statusFilters.includes(value) || (statusFilters.length === 0 && filter === value) ? "is-active" : ""}
+                    className={statusFilters.includes(value) ? "is-active" : ""}
                     key={value}
                     onClick={() => {
                       setFilter("all");
