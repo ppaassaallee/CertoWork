@@ -98,7 +98,17 @@ import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { collabProjectPath } from "../lib/collabModule";
-import { looksLikeEmail, normalizeInviteEmail } from "../lib/workspaceCollaboration";
+import {
+  isAssignableMember,
+  isInvitedMember,
+  isJoinedWorkspaceMember,
+  looksLikeEmail,
+  memberAssignmentValue,
+  memberAvatar,
+  memberHasAlias,
+  memberPublicLabel,
+  normalizeInviteEmail,
+} from "../lib/workspaceCollaboration";
 import {
   buildProjectCollaboratorAccessPatch,
   collaborationShareGrant,
@@ -141,6 +151,56 @@ type AssignmentMember = {
   emailLower?: string;
   status?: string;
 };
+
+type PortfolioMemberOption = {
+  id: string;
+  userId?: string;
+  email?: string;
+  /** Durable label stored on project fields (alias preferred). */
+  name: string;
+  /** Visible option text in selects. */
+  label: string;
+  ready: boolean;
+  pending: boolean;
+  needsAlias: boolean;
+};
+
+function portfolioMemberOptions(members: AssignmentMember[] = []): PortfolioMemberOption[] {
+  return members
+    .filter((member) => isAssignableMember(member))
+    .map((member) => {
+      const email = normalizeInviteEmail(member.email || member.emailLower || "");
+      const pending =
+        isInvitedMember(member) || !isJoinedWorkspaceMember(member);
+      const hasAlias = memberHasAlias(member);
+      const publicLabel = memberPublicLabel(member);
+      const avatar = memberAvatar(member);
+      let label = `${avatar} ${publicLabel}`;
+      if (pending) {
+        label = email
+          ? `Pending · ${email}`
+          : `Pending · ${publicLabel}`;
+      } else if (!hasAlias) {
+        label = email ? `Needs alias · ${email}` : "Needs alias";
+      }
+      return {
+        id: String(member.id || ""),
+        userId: member.userId,
+        email: email || undefined,
+        name: memberAssignmentValue(member),
+        label,
+        ready: !pending && hasAlias,
+        pending,
+        needsAlias: !pending && !hasAlias,
+      };
+    })
+    .filter((member) => Boolean(member.id))
+    .sort((left, right) => {
+      if (left.ready !== right.ready) return left.ready ? -1 : 1;
+      if (left.pending !== right.pending) return left.pending ? 1 : -1;
+      return left.label.localeCompare(right.label);
+    });
+}
 
 type PortfolioColumnKey =
   | "project"
@@ -5406,14 +5466,13 @@ export function ProjectCommandCenter({
   const sorted = sortProjectsByRecency(projects);
   const portfolio = sorted;
   const realProjects = sorted;
-  const activeMemberOptions = workspaceMembers
-    .filter((member) => String(member.status || "active") !== "removed")
-    .map((member) => ({
-      id: member.id,
-      userId: member.userId,
-      email: member.email || member.emailLower,
-      name: memberName(member),
-    }));
+  const allMemberOptions = portfolioMemberOptions(workspaceMembers);
+  const readyMemberOptions = allMemberOptions.filter((member) => member.ready);
+  const pendingMemberOptions = allMemberOptions.filter((member) => member.pending);
+  const shareMemberOptions = [
+    ...readyMemberOptions,
+    ...pendingMemberOptions,
+  ];
 
   const runBulkProjectAction = async (
     label: string,
@@ -6620,9 +6679,14 @@ export function ProjectCommandCenter({
                   >
                     <option value="">Choose…</option>
                     <option value="none">Unassigned</option>
-                    {activeMemberOptions.map((member) => (
-                      <option key={member.id} value={member.id}>{member.name}</option>
+                    {readyMemberOptions.map((member) => (
+                      <option key={member.id} value={member.id}>{member.label}</option>
                     ))}
+                    {readyMemberOptions.length === 0 ? (
+                      <option disabled value="__none_ready">
+                        No people with an alias yet
+                      </option>
+                    ) : null}
                   </select>
                   <button
                     disabled={bulkBusy || !bulkManagerId}
@@ -6638,12 +6702,17 @@ export function ProjectCommandCenter({
                         );
                         return;
                       }
-                      const member = activeMemberOptions.find((item) => item.id === bulkManagerId);
+                      const member = readyMemberOptions.find((item) => item.id === bulkManagerId);
+                      if (!member) {
+                        onNotice?.("Pick someone with an alias to assign as PM.");
+                        setBulkFeedback("Pick someone with an alias to assign as PM.");
+                        return;
+                      }
                       void runBulkProjectAction("Assign PM", () =>
                         selectedProjectIds.map((id) =>
                           onUpdateProject(id, {
                             projectManagerId: bulkManagerId,
-                            projectManager: member?.name || "",
+                            projectManager: member.name,
                           }),
                         ),
                       );
@@ -6663,22 +6732,41 @@ export function ProjectCommandCenter({
                     value={bulkTeamId}
                   >
                     <option value="">Choose…</option>
-                    {activeMemberOptions.map((member) => (
-                      <option key={`team-${member.id}`} value={member.id}>{member.name}</option>
+                    {readyMemberOptions.map((member) => (
+                      <option key={`team-${member.id}`} value={member.id}>{member.label}</option>
                     ))}
+                    {pendingMemberOptions.length > 0 ? (
+                      <optgroup label="Pending invite (no user yet)">
+                        {pendingMemberOptions.map((member) => (
+                          <option key={`pending-${member.id}`} value={member.id}>
+                            {member.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {shareMemberOptions.length === 0 ? (
+                      <option disabled value="__none_share">
+                        Invite someone from Workspace &amp; team first
+                      </option>
+                    ) : null}
                   </select>
                   <button
                     data-testid="project-bulk-add-member"
                     disabled={bulkBusy || !bulkTeamId}
                     onClick={() => {
-                      const member = activeMemberOptions.find((item) => item.id === bulkTeamId);
+                      const member = shareMemberOptions.find((item) => item.id === bulkTeamId);
                       if (!member) return;
+                      if (member.needsAlias) {
+                        onNotice?.("That person still needs an alias before you can add them.");
+                        setBulkFeedback("That person still needs an alias before you can add them.");
+                        return;
+                      }
                       const grant = collaborationShareGrant({
                         id: member.id,
                         userId: member.userId,
                         email: member.email,
                         emailLower: member.email,
-                        status: "active",
+                        status: member.pending ? "invited" : "active",
                       });
                       void runBulkProjectAction(`Add ${member.name}`, () =>
                         selectedProjectIds.map((id) => {
@@ -6698,7 +6786,7 @@ export function ProjectCommandCenter({
                                 ? project.teamMembers.map(String)
                                 : []),
                               member.name,
-                            ]),
+                            ].filter((value) => value && value !== "Needs alias" && value !== "Pending acceptance")),
                           ];
                           return onUpdateProject(id, {
                             teamMemberIds,
@@ -7478,7 +7566,7 @@ export function ProjectCommandCenter({
                           onUpdateProject(project.id, {
                             solutionArchitectId: event.target.value || null,
                             solutionArchitect:
-                              activeMemberOptions.find(
+                              readyMemberOptions.find(
                                 (member) => member.id === event.target.value,
                               )?.name || "",
                           })
@@ -7488,9 +7576,9 @@ export function ProjectCommandCenter({
                         <option value="">
                           {project.solutionArchitect || "Unassigned"}
                         </option>
-                        {activeMemberOptions.map((member) => (
+                        {readyMemberOptions.map((member) => (
                           <option key={member.id} value={member.id}>
-                            {member.name}
+                            {member.label}
                           </option>
                         ))}
                       </select>
@@ -7503,7 +7591,7 @@ export function ProjectCommandCenter({
                           onUpdateProject(project.id, {
                             projectManagerId: event.target.value || null,
                             projectManager:
-                              activeMemberOptions.find(
+                              readyMemberOptions.find(
                                 (member) => member.id === event.target.value,
                               )?.name || "",
                           })
@@ -7515,9 +7603,9 @@ export function ProjectCommandCenter({
                             project.owner ||
                             "Unassigned"}
                         </option>
-                        {activeMemberOptions.map((member) => (
+                        {readyMemberOptions.map((member) => (
                           <option key={member.id} value={member.id}>
-                            {member.name}
+                            {member.label}
                           </option>
                         ))}
                       </select>
