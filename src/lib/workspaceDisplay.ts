@@ -78,7 +78,7 @@ export function projectWorkKey(project: any) {
 }
 
 export function isClosed(status?: string) {
-  return ["done", "completed", "closed", "archived", "cancelled"].includes(
+  return ["done", "completed", "closed", "archived", "cancelled", "deleted"].includes(
     String(status || "").toLowerCase(),
   );
 }

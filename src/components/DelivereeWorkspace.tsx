@@ -4185,7 +4185,9 @@ export function DelivereeWorkspace() {
         ? new Date(project.purgeAfter)
         : null;
     if (purgeDate && purgeDate.getTime() < Date.now()) {
-      setNotice("The 30-day restoration period has expired.");
+      setNotice(
+        "The 30-day restoration period has expired. You can still Delete forever to remove this duplicate.",
+      );
       return;
     }
     await updateProject(project.id, {
@@ -4195,7 +4197,61 @@ export function DelivereeWorkspace() {
       archivedAt: null,
       restoredAt: serverTimestamp(),
     });
-    setNotice(`${entityTitle(project)} restored.`);
+    setNotice(`${entityTitle(project)} restored. You can add items again.`);
+    openProjectRecord(project);
+  };
+
+  const permanentlyDeleteProject = async (project: any) => {
+    const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
+    if (!canDeleteProject(project, user, workspace, memberId)) {
+      setNotice("Only the Project Manager or workspace owner can delete this project forever.");
+      return;
+    }
+    if (!user || !workspace) return;
+    if (String(project.status || "").toLowerCase() !== "deleted") {
+      setNotice("Move the project to Deleted first, or use Delete forever from a deleted row.");
+      return;
+    }
+    const linkedTasks = openTasks.filter((task) => task.projectId === project.id);
+    const docCount = knowledgeItems.filter((item) => item.projectId === project.id).length;
+    setDestructiveDialog({
+      verb: "Delete forever",
+      entityName: entityTitle(project),
+      impact: [
+        "This cannot be undone",
+        `${linkedTasks.length} linked item${linkedTasks.length === 1 ? "" : "s"} will also be removed`,
+        `${docCount} document${docCount === 1 ? "" : "s"} stay in knowledge unless removed separately`,
+        "Use this for empty duplicates you do not want to restore",
+      ],
+      onConfirm: async () => {
+        if (!user || !workspace) return;
+        setDestructiveBusy(true);
+        try {
+          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [
+            ...linkedTasks.map(
+              (task) => (batch: ReturnType<typeof writeBatch>) =>
+                batch.delete(doc(db, "tasks", task.id)),
+            ),
+            (batch) => batch.delete(doc(db, "projects", project.id)),
+          ];
+          for (let index = 0; index < deletions.length; index += 400) {
+            const batch = writeBatch(db);
+            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
+            await batch.commit();
+          }
+          if (projectConsoleId === project.id) {
+            setProjectConsoleId(null);
+            setPanel(null);
+            goCenterView("portfolio");
+          }
+          if (activeProject?.id === project.id) navigate("/");
+          setNotice(`${entityTitle(project)} deleted forever.`);
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
+    });
   };
 
   const saveDigestRequest = async (
@@ -4236,6 +4292,13 @@ export function DelivereeWorkspace() {
     patch: Record<string, unknown> = {},
   ) => {
     if (!user || !workspace) return;
+    const project = projects.find((entry) => entry.id === projectId);
+    if (String(project?.status || "").toLowerCase() === "deleted") {
+      setNotice(
+        `${entityTitle(project)} is in Deleted. Restore it before adding items.`,
+      );
+      return;
+    }
     const requestedKey = String(patch.key || "").trim().toUpperCase();
     const key = isModernWorkItemKey(requestedKey)
       ? requestedKey
@@ -7620,6 +7683,7 @@ export function DelivereeWorkspace() {
             onArchiveProject={archiveProject}
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
+            onPermanentlyDeleteProject={permanentlyDeleteProject}
             onClose={() => goCenterView("conversation")}
             onAsk={(prompt) => {
               setComposer(prompt);
@@ -7726,6 +7790,7 @@ export function DelivereeWorkspace() {
               onCreateSprint={createSprint}
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
+              onPermanentlyDeleteProject={permanentlyDeleteProject}
               onAsk={(prompt) => {
                 setComposer(prompt);
                 goCenterView("conversation");
@@ -7914,6 +7979,7 @@ export function DelivereeWorkspace() {
                 }
                 onDeleteProject={deleteProject}
                 onRestoreProject={restoreProject}
+                onPermanentlyDeleteProject={permanentlyDeleteProject}
                 onAsk={setComposer}
                 onAskOdysseus={(item) => {
                   void openOdysseusPanel({

@@ -291,6 +291,7 @@ type SharedProjectActions = {
   onOpenProject: (project: any) => void;
   onDeleteProject?: (project: any) => Promise<void> | void;
   onRestoreProject?: (project: any) => Promise<void> | void;
+  onPermanentlyDeleteProject?: (project: any) => Promise<void> | void;
 };
 
 function projectTitle(project: any) {
@@ -1474,6 +1475,7 @@ export function ProjectConsolePanel({
   onArchiveProject,
   onDeleteProject,
   onRestoreProject,
+  onPermanentlyDeleteProject,
   onAddTask,
   onUpdateTask,
   onAddRisk,
@@ -1520,6 +1522,7 @@ export function ProjectConsolePanel({
   onArchiveProject: SharedProjectActions["onArchiveProject"];
   onDeleteProject?: SharedProjectActions["onDeleteProject"];
   onRestoreProject?: SharedProjectActions["onRestoreProject"];
+  onPermanentlyDeleteProject?: SharedProjectActions["onPermanentlyDeleteProject"];
   onAddTask: (
     title: string,
     status: WorkLane,
@@ -1763,8 +1766,19 @@ export function ProjectConsolePanel({
           (severityOrder[String(right.severity || "medium").toLowerCase()] ??
             2),
       )[0] || blockedTasks[0];
+  const projectStatus = String(project.status || "").toLowerCase();
+  const isDeletedProject = projectStatus === "deleted";
   const allowDelete = Boolean(
     onDeleteProject &&
+      canDeleteProject(
+        project,
+        currentUser,
+        workspace,
+        workspaceMembers.find((member) => member.userId === currentUser?.uid)?.id,
+      ),
+  );
+  const allowPermanentDelete = Boolean(
+    onPermanentlyDeleteProject &&
       canDeleteProject(
         project,
         currentUser,
@@ -1789,6 +1803,31 @@ export function ProjectConsolePanel({
       className={`do-project-console is-notion${tab === "items" ? " is-items-tab" : ""}${tab === "items" && timelineMode ? " is-gantt-dense" : ""}${tab === "items" && ganttFocus ? " is-gantt-focus" : ""}`}
       data-testid="project-console"
     >
+      {isDeletedProject && (
+        <div className="do-project-deleted-banner" data-testid="project-deleted-banner" role="status">
+          <div>
+            <strong>This project is in Deleted</strong>
+            <span>Restore it to add items again, or delete it forever if it is a duplicate.</span>
+          </div>
+          <div className="do-project-deleted-banner-actions">
+            {onRestoreProject && (
+              <button onClick={() => void onRestoreProject(project)} type="button">
+                Restore
+              </button>
+            )}
+            {allowPermanentDelete && (
+              <button
+                className="is-danger"
+                onClick={() => void onPermanentlyDeleteProject?.(project)}
+                type="button"
+              >
+                Delete forever
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {ganttFocus && tab === "items" && (
         <div className="do-gantt-focus-bar">
           <strong>{projectTitle(project)}</strong>
@@ -1930,12 +1969,25 @@ export function ProjectConsolePanel({
                   setMoreOpen(false);
                   setArchiveConfirm(true);
                 }}
+                disabled={isDeletedProject}
                 role="menuitem"
                 type="button"
               >
                 Archive
               </button>
-              {allowDelete && (
+              {isDeletedProject && allowPermanentDelete ? (
+                <button
+                  className="is-quiet-danger"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    void onPermanentlyDeleteProject?.(project);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  Delete forever
+                </button>
+              ) : allowDelete && !isDeletedProject ? (
                 <button
                   className="is-quiet-danger"
                   onClick={() => {
@@ -1947,7 +1999,7 @@ export function ProjectConsolePanel({
                 >
                   Delete
                 </button>
-              )}
+              ) : null}
             </div>
           ) : null
         }
@@ -2840,13 +2892,25 @@ export function ProjectConsolePanel({
         />
       )}
 
-      {(archiveConfirm || deleteConfirm || String(project.status || "").toLowerCase() === "deleted") && (
+      {(archiveConfirm || deleteConfirm || isDeletedProject) && (
       <div className="do-console-danger">
-        {String(project.status || "").toLowerCase() === "deleted" &&
-        onRestoreProject ? (
-          <button onClick={() => onRestoreProject(project)} type="button">
-            Restore project
-          </button>
+        {isDeletedProject ? (
+          <>
+            {onRestoreProject ? (
+              <button onClick={() => void onRestoreProject(project)} type="button">
+                Restore project
+              </button>
+            ) : null}
+            {allowPermanentDelete ? (
+              <button
+                className="is-danger"
+                onClick={() => void onPermanentlyDeleteProject?.(project)}
+                type="button"
+              >
+                Delete forever
+              </button>
+            ) : null}
+          </>
         ) : archiveConfirm ? (
               <>
                 <button onClick={() => setArchiveConfirm(false)} type="button">
@@ -5192,6 +5256,7 @@ export function ProjectCommandCenter({
   onArchiveProject,
   onDeleteProject,
   onRestoreProject,
+  onPermanentlyDeleteProject,
   onOpenProject,
   onCreateCostTemplate,
   onUpdateCostTemplate,
@@ -6311,7 +6376,7 @@ export function ProjectCommandCenter({
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
               <div className="do-command-filters">
-                {["planning", "active", "paused", "completed", "archived"].map((value) => (
+                {["planning", "active", "paused", "completed", "archived", "deleted"].map((value) => (
                   <button
                     className={statusFilters.includes(value) || (statusFilters.length === 0 && filter === value) ? "is-active" : ""}
                     key={value}
@@ -7279,13 +7344,26 @@ export function ProjectCommandCenter({
                         ) : ["deleted", "archived"].includes(
                             String(project.status || "").toLowerCase(),
                           ) ? (
-                          <button
-                            disabled={!onRestoreProject}
-                            onClick={() => onRestoreProject?.(project)}
-                            type="button"
-                          >
-                            Restore
-                          </button>
+                          <>
+                            <button
+                              disabled={!onRestoreProject}
+                              onClick={() => onRestoreProject?.(project)}
+                              type="button"
+                            >
+                              Restore
+                            </button>
+                            {String(project.status || "").toLowerCase() === "deleted" &&
+                              onPermanentlyDeleteProject && (
+                              <button
+                                aria-label={`Delete forever ${projectTitle(project)}`}
+                                className="is-danger"
+                                onClick={() => onPermanentlyDeleteProject(project)}
+                                type="button"
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <button
                             onClick={() => onOpenProject(project)}

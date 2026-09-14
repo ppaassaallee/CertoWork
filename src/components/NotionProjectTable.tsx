@@ -129,6 +129,8 @@ export function NotionProjectTable({
   onReorderPeers,
   renderAttrs,
   selectedItemId,
+  createDisabled = false,
+  createDisabledReason = "",
 }: {
   tasks: any[];
   /** Full project pool for parent/cycle checks (defaults to `tasks`). */
@@ -140,6 +142,8 @@ export function NotionProjectTable({
   onReorderPeers?: (draggedId: string, targetId: string, peers: any[]) => Promise<void> | void;
   renderAttrs?: (item: any) => ReactNode;
   selectedItemId?: string | null;
+  createDisabled?: boolean;
+  createDisabledReason?: string;
 }) {
   const pool = hierarchyPool?.length ? hierarchyPool : tasks;
   const [draft, setDraft] = useState("");
@@ -355,6 +359,7 @@ export function NotionProjectTable({
     selectedItemId && byId.has(selectedItemId) ? byId.get(selectedItemId) : null;
 
   const submitNew = (asChildOfSelected: boolean) => {
+    if (createDisabled) return;
     const title = draft.trim();
     if (!title) return;
     const parent =
@@ -437,6 +442,11 @@ export function NotionProjectTable({
           })}
           <tr className="do-notion-add-row">
             <td colSpan={8}>
+              {createDisabled ? (
+                <div className="do-notion-add-disabled" role="status">
+                  {createDisabledReason || "Restore this project to add items."}
+                </div>
+              ) : (
               <form
                 className="do-notion-add-form"
                 onSubmit={(event) => {
@@ -480,6 +490,7 @@ export function NotionProjectTable({
                 />
                 <span className="do-notion-add-hint">Tab = hijo del seleccionado · Arrastrá para anidar</span>
               </form>
+              )}
             </td>
           </tr>
         </tbody>
