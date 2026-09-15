@@ -525,8 +525,10 @@ export function buildHomeCockpitData(input: {
     title: string;
     start: string;
     end: string;
+    allDay?: boolean;
     meetingUrl?: string | null;
     privacy?: string;
+    accountId?: string;
   }>;
 }): HomeCockpitModel {
   const locale = input.locale || getLocale();
@@ -922,10 +924,15 @@ export function buildHomeCockpitData(input: {
   const dayLine = editorial.map((p) => p.text).join("");
 
   const nowMs = now.getTime();
+  const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const nextMeetings: HomeMeetingChip[] = (input.calendarEvents || [])
     .filter((event) => {
+      if (event.allDay) return false;
       const start = Date.parse(event.start);
-      return Number.isFinite(start) && start >= nowMs - 5 * 60_000 && String(event.start).slice(0, 10) === todayIso;
+      if (!Number.isFinite(start) || start < nowMs - 5 * 60_000) return false;
+      const local = new Date(event.start);
+      const key = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
+      return key === todayLocal;
     })
     .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
     .slice(0, 3)
