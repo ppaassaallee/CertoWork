@@ -10789,6 +10789,90 @@ a {
 .do-skill-form::-webkit-scrollbar {
   display: none;
 }
+.do-calendar-connect-modal {
+  width: min(560px, calc(100vw - 32px));
+  height: auto;
+  max-height: min(760px, calc(100dvh - 32px));
+}
+.do-calendar-connect-modal .do-skill-body {
+  display: block;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface-1) 42%);
+}
+.do-calendar-connect-modal .do-skill-readiness {
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+}
+.do-calendar-connect-modal .do-skill-readiness > div {
+  grid-template-columns: 1fr;
+}
+.do-calendar-connect-form {
+  overflow: visible;
+}
+.do-calendar-provider-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.do-calendar-provider-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-0);
+  padding: 16px;
+  color: var(--text-primary);
+  text-align: left;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+.do-calendar-provider-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+.do-calendar-provider-card.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.do-calendar-provider-card svg {
+  color: var(--accent);
+}
+.do-calendar-provider-card strong {
+  display: block;
+  font-size: var(--text-body);
+}
+.do-calendar-provider-card span {
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+.do-calendar-wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+}
+.do-calendar-wizard-button {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  cursor: pointer;
+}
+.do-calendar-wizard-button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.do-calendar-wizard-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 .do-skill-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -127,7 +127,7 @@ export function CalendarConnectWizard({
       data-testid="calendar-connect-wizard"
       role="dialog"
     >
-      <section className="do-skill-modal">
+      <section className="do-skill-modal do-calendar-connect-modal">
         <header className="do-skill-head">
           <div className="do-skill-title">
             <span>
@@ -174,17 +174,13 @@ export function CalendarConnectWizard({
             </div>
           </aside>
 
-          <main className="do-skill-form">
+          <main className="do-skill-form do-calendar-connect-form">
             {step === "provider" ? (
               <div className="space-y-4">
                 <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.pickProvider")}</p>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="do-calendar-provider-grid">
                   <button
-                    className={`rounded-xl border p-4 text-left transition-colors ${
-                      provider === "google"
-                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft,var(--surface-2))]"
-                        : "border-[color:var(--border)] hover:bg-[color:var(--surface-2)]"
-                    }`}
+                    className={`do-calendar-provider-card ${provider === "google" ? "is-selected" : ""}`}
                     data-testid="calendar-wizard-provider-google"
                     onClick={() => setProvider("google")}
                     type="button"
@@ -196,11 +192,7 @@ export function CalendarConnectWizard({
                     </span>
                   </button>
                   <button
-                    className={`rounded-xl border p-4 text-left transition-colors ${
-                      provider === "microsoft"
-                        ? "border-[color:var(--accent)] bg-[color:var(--accent-soft,var(--surface-2))]"
-                        : "border-[color:var(--border)] hover:bg-[color:var(--surface-2)]"
-                    }`}
+                    className={`do-calendar-provider-card ${provider === "microsoft" ? "is-selected" : ""}`}
                     data-testid="calendar-wizard-provider-outlook"
                     onClick={() => setProvider("microsoft")}
                     type="button"
@@ -217,9 +209,9 @@ export function CalendarConnectWizard({
                     {t("calendar.wizard.outlookSoonDetail")}
                   </p>
                 ) : null}
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="do-calendar-wizard-actions">
                   <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
+                    className="do-calendar-wizard-button is-primary"
                     disabled={provider === "microsoft"}
                     onClick={() => setStep("authorize")}
                     type="button"
