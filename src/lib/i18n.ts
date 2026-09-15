@@ -97,11 +97,13 @@ const dictionaries = {
     "calendar.wizard.kicker": "Personal connector",
     "calendar.wizard.summary":
       "Link Google or Outlook so Certo can show your day, protect focus, and prep meetings with Odysseus.",
+    "calendar.wizard.summaryShort": "Link Google or Outlook for your day and Odysseus prep.",
     "calendar.wizard.close": "Close",
     "calendar.wizard.progress": "Your setup",
     "calendar.wizard.stepOf": "Step {current} of {total}",
     "calendar.wizard.personalNote":
       "This is your personal calendar — not shared with the whole workspace.",
+    "calendar.wizard.personalNoteShort": "Personal to you — not shared with the workspace.",
     "calendar.wizard.stepProvider": "Choose provider",
     "calendar.wizard.stepAuthorize": "Authorize",
     "calendar.wizard.stepCalendars": "Pick calendars",
@@ -241,11 +243,13 @@ const dictionaries = {
     "calendar.wizard.kicker": "Conector personal",
     "calendar.wizard.summary":
       "Vinculá Google u Outlook para ver tu día, proteger el foco y preparar reuniones con Odysseus.",
+    "calendar.wizard.summaryShort": "Vinculá Google u Outlook para tu día y prep con Odysseus.",
     "calendar.wizard.close": "Cerrar",
     "calendar.wizard.progress": "Tu configuración",
     "calendar.wizard.stepOf": "Paso {current} de {total}",
     "calendar.wizard.personalNote":
       "Este calendario es personal tuyo — no se comparte con todo el workspace.",
+    "calendar.wizard.personalNoteShort": "Personal tuyo — no se comparte con el workspace.",
     "calendar.wizard.stepProvider": "Elegir proveedor",
     "calendar.wizard.stepAuthorize": "Autorizar",
     "calendar.wizard.stepCalendars": "Elegir calendarios",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calendar as CalendarIcon, Check, ChevronRight, Cloud, Mail, X } from "../../components/ui/Icon";
+import { Calendar as CalendarIcon, Check, Cloud, Mail, X } from "../../components/ui/Icon";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { t, type MessageKey } from "../../lib/i18n";
@@ -78,6 +78,12 @@ export function CalendarConnectWizard({
   if (!isOpen) return null;
 
   const stepIndex = calendarConnectStepIndex(step);
+  const canContinueProvider = provider === "google";
+
+  const close = () => {
+    clearCalendarWizardPending();
+    onClose();
+  };
 
   const goNext = () => {
     const next = nextCalendarConnectStep(step);
@@ -111,7 +117,7 @@ export function CalendarConnectWizard({
       try {
         await onSyncAccount(latestAccount.id);
       } catch {
-        /* sync is best-effort on finish */
+        /* best-effort */
       }
     }
     clearCalendarWizardPending();
@@ -119,289 +125,258 @@ export function CalendarConnectWizard({
     onOpenWeek?.();
   };
 
+  const primaryDisabled =
+    (step === "provider" && !canContinueProvider) ||
+    (step === "authorize" && (busy || capabilitiesLoading || !googleConfigured)) ||
+    (step === "calendars" && !latestAccount) ||
+    busy;
+
+  const onPrimary = () => {
+    if (step === "provider") {
+      if (canContinueProvider) setStep("authorize");
+      return;
+    }
+    if (step === "authorize") {
+      void startAuthorize();
+      return;
+    }
+    if (step === "calendars" || step === "privacy") {
+      goNext();
+      return;
+    }
+    if (step === "done") void finish();
+  };
+
+  const primaryLabel =
+    step === "authorize"
+      ? busy || capabilitiesLoading
+        ? t("calendar.connecting")
+        : t("calendar.wizard.continueGoogle")
+      : step === "done"
+        ? t("calendar.wizard.openWeek")
+        : t("calendar.wizard.continue");
+
   return (
     <div
       aria-label={t("calendar.wizard.title")}
       aria-modal="true"
-      className="do-skill-layer"
+      className="do-skill-layer cw-cal-wizard-layer"
       data-testid="calendar-connect-wizard"
       role="dialog"
     >
-      <section className="do-skill-modal do-calendar-connect-modal">
-        <header className="do-skill-head">
-          <div className="do-skill-title">
-            <span>
+      <section className="cw-cal-wizard">
+        <header className="cw-cal-wizard-head">
+          <div className="cw-cal-wizard-brand">
+            <span className="cw-cal-wizard-icon" aria-hidden>
               <CalendarIcon size={18} />
             </span>
-            <div>
+            <div className="cw-cal-wizard-titles">
               <small>{t("calendar.wizard.kicker")}</small>
               <h2>{t("calendar.wizard.title")}</h2>
-              <p>{t("calendar.wizard.summary")}</p>
+              <p>{t("calendar.wizard.summaryShort")}</p>
             </div>
           </div>
           <button
             aria-label={t("calendar.wizard.close")}
-            onClick={() => {
-              clearCalendarWizardPending();
-              onClose();
-            }}
+            className="cw-cal-wizard-close"
+            onClick={close}
             type="button"
           >
             <X size={18} />
           </button>
         </header>
 
-        <div className="do-skill-body">
-          <aside className="do-skill-readiness">
-            <span className="do-kicker">{t("calendar.wizard.progress")}</span>
-            <h3>
-              {t("calendar.wizard.stepOf")
-                .replace("{current}", String(stepIndex + 1))
-                .replace("{total}", String(CALENDAR_CONNECT_STEPS.length))}
-            </h3>
-            <p>{t("calendar.wizard.personalNote")}</p>
-            <div>
-              {CALENDAR_CONNECT_STEPS.map((id) => {
-                const done = calendarConnectStepIndex(id) < stepIndex;
-                const current = id === step;
-                return (
-                  <span className={done || current ? "is-done" : ""} key={id}>
-                    {done ? <Check size={12} /> : <ChevronRight size={12} />}
-                    {t(STEP_LABEL_KEYS[id])}
-                  </span>
-                );
-              })}
+        <nav aria-label={t("calendar.wizard.progress")} className="cw-cal-wizard-steps">
+          {CALENDAR_CONNECT_STEPS.map((id, index) => {
+            const done = index < stepIndex;
+            const current = id === step;
+            return (
+              <div
+                className={`cw-cal-wizard-step${done ? " is-done" : ""}${current ? " is-current" : ""}`}
+                key={id}
+              >
+                <span className="cw-cal-wizard-step-dot" aria-hidden>
+                  {done ? <Check size={11} /> : index + 1}
+                </span>
+                <span className="cw-cal-wizard-step-label">{t(STEP_LABEL_KEYS[id])}</span>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="cw-cal-wizard-body">
+          {step === "provider" ? (
+            <div className="cw-cal-wizard-panel">
+              <h3>{t("calendar.wizard.pickProvider")}</h3>
+              <p className="cw-cal-wizard-note">{t("calendar.wizard.personalNoteShort")}</p>
+              <div className="cw-cal-wizard-providers">
+                <button
+                  className={`cw-cal-wizard-card${provider === "google" ? " is-selected" : ""}`}
+                  data-testid="calendar-wizard-provider-google"
+                  onClick={() => setProvider("google")}
+                  onDoubleClick={() => setStep("authorize")}
+                  type="button"
+                >
+                  <Cloud size={20} />
+                  <strong>{t("calendar.wizard.google")}</strong>
+                  <span>{t("calendar.wizard.googleHint")}</span>
+                </button>
+                <button
+                  className={`cw-cal-wizard-card${provider === "microsoft" ? " is-selected" : ""} is-soon`}
+                  data-testid="calendar-wizard-provider-outlook"
+                  onClick={() => setProvider("microsoft")}
+                  type="button"
+                >
+                  <Mail size={20} />
+                  <strong>{t("calendar.wizard.outlook")}</strong>
+                  <span>{t("calendar.wizard.outlookHint")}</span>
+                </button>
+              </div>
+              {provider === "microsoft" ? (
+                <p className="cw-cal-wizard-banner" role="status">
+                  {t("calendar.wizard.outlookSoonDetail")}
+                </p>
+              ) : null}
             </div>
-          </aside>
+          ) : null}
 
-          <main className="do-skill-form do-calendar-connect-form">
-            {step === "provider" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.pickProvider")}</p>
-                <div className="do-calendar-provider-grid">
-                  <button
-                    className={`do-calendar-provider-card ${provider === "google" ? "is-selected" : ""}`}
-                    data-testid="calendar-wizard-provider-google"
-                    onClick={() => setProvider("google")}
-                    type="button"
-                  >
-                    <Cloud className="mb-2 h-5 w-5" />
-                    <strong className="block text-sm">{t("calendar.wizard.google")}</strong>
-                    <span className="text-xs text-[color:var(--muted)]">
-                      {t("calendar.wizard.googleHint")}
-                    </span>
-                  </button>
-                  <button
-                    className={`do-calendar-provider-card ${provider === "microsoft" ? "is-selected" : ""}`}
-                    data-testid="calendar-wizard-provider-outlook"
-                    onClick={() => setProvider("microsoft")}
-                    type="button"
-                  >
-                    <Mail className="mb-2 h-5 w-5" />
-                    <strong className="block text-sm">{t("calendar.wizard.outlook")}</strong>
-                    <span className="text-xs text-[color:var(--muted)]">
-                      {t("calendar.wizard.outlookHint")}
-                    </span>
-                  </button>
+          {step === "authorize" ? (
+            <div className="cw-cal-wizard-panel">
+              <h3>{t("calendar.wizard.stepAuthorize")}</h3>
+              <p>{t("calendar.wizard.authorizeBody")}</p>
+              {!capabilitiesLoading && !googleConfigured ? (
+                <div className="cw-cal-wizard-banner is-warn" role="status">
+                  <strong>{t("calendar.wizard.platformPending")}</strong>
+                  <span>{t("calendar.wizard.platformPendingHint")}</span>
                 </div>
-                {provider === "microsoft" ? (
-                  <p className="text-sm text-amber-800" role="status">
-                    {t("calendar.wizard.outlookSoonDetail")}
-                  </p>
-                ) : null}
-                <div className="do-calendar-wizard-actions">
-                  <button
-                    className="do-calendar-wizard-button is-primary"
-                    disabled={provider === "microsoft"}
-                    onClick={() => setStep("authorize")}
-                    type="button"
-                  >
-                    {t("calendar.wizard.continue")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {step === "authorize" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.authorizeBody")}</p>
-                {!capabilitiesLoading && !googleConfigured ? (
-                  <div
-                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900"
-                    role="status"
-                  >
-                    <p className="font-medium">{t("calendar.wizard.platformPending")}</p>
-                    <p className="mt-1 text-xs opacity-90">{t("calendar.wizard.platformPendingHint")}</p>
-                  </div>
-                ) : (
-                  <ul className="space-y-2 text-sm text-[color:var(--muted)]">
-                    <li className="flex gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--accent)]" />
-                      {t("calendar.wizard.authorizeBullet1")}
-                    </li>
-                    <li className="flex gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--accent)]" />
-                      {t("calendar.wizard.authorizeBullet2")}
-                    </li>
-                    <li className="flex gap-2">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--accent)]" />
-                      {t("calendar.wizard.authorizeBullet3")}
-                    </li>
-                  </ul>
-                )}
-                {error ? (
-                  <p className="text-sm text-red-700" role="alert">
-                    {error}
-                  </p>
-                ) : null}
-                <div className="flex justify-between gap-2 pt-2">
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    onClick={() => setStep("provider")}
-                    type="button"
-                  >
-                    {t("calendar.wizard.back")}
-                  </button>
-                  <button
-                    className="rounded-xl border border-[color:var(--accent)] bg-[color:var(--accent)] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-                    data-testid="calendar-wizard-authorize"
-                    disabled={busy || capabilitiesLoading || !googleConfigured}
-                    onClick={() => void startAuthorize()}
-                    type="button"
-                  >
-                    {busy || capabilitiesLoading ? t("calendar.connecting") : t("calendar.wizard.continueGoogle")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {step === "calendars" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.calendarsBody")}</p>
-                {latestAccount ? (
-                  <p className="text-sm font-medium">
-                    {latestAccount.email || latestAccount.displayName}
-                  </p>
-                ) : (
-                  <p className="text-sm text-amber-800">{t("calendar.wizard.waitingAccount")}</p>
-                )}
-                <ul className="space-y-2">
-                  {accountCalendars.map((calendar) => (
-                    <li
-                      className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] px-3 py-2 text-sm"
-                      key={calendar.id}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ background: calendar.color || "var(--accent)" }}
-                      />
-                      <span className="flex-1">{calendar.name}</span>
-                      <label className="flex items-center gap-1 text-xs">
-                        <input
-                          checked={calendar.visible !== false}
-                          onChange={(event) =>
-                            void updateDoc(doc(db, "calendars", calendar.id), {
-                              visible: event.target.checked,
-                            })
-                          }
-                          type="checkbox"
-                        />
-                        {t("calendar.show")}
-                      </label>
-                    </li>
-                  ))}
+              ) : (
+                <ul className="cw-cal-wizard-bullets">
+                  <li>
+                    <Check size={14} />
+                    {t("calendar.wizard.authorizeBullet1")}
+                  </li>
+                  <li>
+                    <Check size={14} />
+                    {t("calendar.wizard.authorizeBullet2")}
+                  </li>
+                  <li>
+                    <Check size={14} />
+                    {t("calendar.wizard.authorizeBullet3")}
+                  </li>
                 </ul>
-                <div className="flex justify-between gap-2 pt-2">
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    onClick={() => setStep("authorize")}
-                    type="button"
-                  >
-                    {t("calendar.wizard.back")}
-                  </button>
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    disabled={!latestAccount}
-                    onClick={goNext}
-                    type="button"
-                  >
-                    {t("calendar.wizard.continue")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+              )}
+              {error ? (
+                <p className="cw-cal-wizard-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
-            {step === "privacy" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.privacyBody")}</p>
-                <ul className="space-y-2">
-                  {accountCalendars.map((calendar) => (
-                    <li
-                      className="flex items-center gap-3 rounded-xl border border-[color:var(--border)] px-3 py-2 text-sm"
-                      key={calendar.id}
-                    >
-                      <span className="flex-1">{calendar.name}</span>
-                      <select
-                        className="rounded-lg border px-2 py-1 text-xs"
+          {step === "calendars" ? (
+            <div className="cw-cal-wizard-panel">
+              <h3>{t("calendar.wizard.stepCalendars")}</h3>
+              <p>{t("calendar.wizard.calendarsBody")}</p>
+              {latestAccount ? (
+                <p className="cw-cal-wizard-account">
+                  {latestAccount.email || latestAccount.displayName}
+                </p>
+              ) : (
+                <p className="cw-cal-wizard-banner is-warn" role="status">
+                  {t("calendar.wizard.waitingAccount")}
+                </p>
+              )}
+              <ul className="cw-cal-wizard-list">
+                {accountCalendars.map((calendar) => (
+                  <li key={calendar.id}>
+                    <span
+                      className="cw-cal-wizard-dot"
+                      style={{ background: calendar.color || "var(--accent)" }}
+                    />
+                    <span className="cw-cal-wizard-list-name">{calendar.name}</span>
+                    <label>
+                      <input
+                        checked={calendar.visible !== false}
                         onChange={(event) =>
                           void updateDoc(doc(db, "calendars", calendar.id), {
-                            privacy: event.target.value,
+                            visible: event.target.checked,
                           })
                         }
-                        value={calendar.privacy || "full"}
-                      >
-                        <option value="full">{t("calendar.privacyFull")}</option>
-                        <option value="busy">{t("calendar.privacyBusy")}</option>
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex justify-between gap-2 pt-2">
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    onClick={() => setStep("calendars")}
-                    type="button"
-                  >
-                    {t("calendar.wizard.back")}
-                  </button>
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    onClick={goNext}
-                    type="button"
-                  >
-                    {t("calendar.wizard.continue")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
+                        type="checkbox"
+                      />
+                      {t("calendar.show")}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
-            {step === "done" ? (
-              <div className="space-y-4">
-                <p className="text-sm text-[color:var(--muted)]">{t("calendar.wizard.doneBody")}</p>
-                <div className="flex flex-wrap justify-end gap-2 pt-2">
-                  <button
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                    onClick={() => {
-                      clearCalendarWizardPending();
-                      onClose();
-                    }}
-                    type="button"
-                  >
-                    {t("calendar.wizard.close")}
-                  </button>
-                  <button
-                    className="rounded-xl border border-[color:var(--accent)] bg-[color:var(--accent)] px-3 py-2 text-xs font-bold text-white"
-                    data-testid="calendar-wizard-finish"
-                    onClick={() => void finish()}
-                    type="button"
-                  >
-                    {t("calendar.wizard.openWeek")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </main>
+          {step === "privacy" ? (
+            <div className="cw-cal-wizard-panel">
+              <h3>{t("calendar.wizard.stepPrivacy")}</h3>
+              <p>{t("calendar.wizard.privacyBody")}</p>
+              <ul className="cw-cal-wizard-list">
+                {accountCalendars.map((calendar) => (
+                  <li key={calendar.id}>
+                    <span className="cw-cal-wizard-list-name">{calendar.name}</span>
+                    <select
+                      onChange={(event) =>
+                        void updateDoc(doc(db, "calendars", calendar.id), {
+                          privacy: event.target.value,
+                        })
+                      }
+                      value={calendar.privacy || "full"}
+                    >
+                      <option value="full">{t("calendar.privacyFull")}</option>
+                      <option value="busy">{t("calendar.privacyBusy")}</option>
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {step === "done" ? (
+            <div className="cw-cal-wizard-panel">
+              <h3>{t("calendar.wizard.stepDone")}</h3>
+              <p>{t("calendar.wizard.doneBody")}</p>
+            </div>
+          ) : null}
         </div>
+
+        <footer className="cw-cal-wizard-foot">
+          {step === "provider" || step === "done" ? (
+            <button className="cw-cal-wizard-btn" onClick={close} type="button">
+              {t("calendar.wizard.close")}
+            </button>
+          ) : (
+            <button
+              className="cw-cal-wizard-btn"
+              onClick={() =>
+                setStep(
+                  step === "authorize"
+                    ? "provider"
+                    : step === "calendars"
+                      ? "authorize"
+                      : "calendars",
+                )
+              }
+              type="button"
+            >
+              {t("calendar.wizard.back")}
+            </button>
+          )}
+          <button
+            className="cw-cal-wizard-btn is-primary"
+            data-testid={step === "authorize" ? "calendar-wizard-authorize" : "calendar-wizard-continue"}
+            disabled={primaryDisabled}
+            onClick={onPrimary}
+            type="button"
+          >
+            {primaryLabel}
+          </button>
+        </footer>
       </section>
     </div>
   );
