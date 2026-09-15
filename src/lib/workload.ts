@@ -1,5 +1,5 @@
-import type { MyWorkActor } from "../myWorkItems";
-import { isClosed, localDateKey } from "../workspaceDisplay";
+import type { MyWorkActor } from "./myWorkItems";
+import { isClosed, localDateKey } from "./workspaceDisplay";
 
 export type WorkloadItem = {
   id: string;

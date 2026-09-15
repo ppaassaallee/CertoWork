@@ -68,15 +68,15 @@ export function PublicTableForm({ token }: { token: string }) {
         updatedBy: "form",
         linkCount: 0,
       });
-      await updateDoc(doc(db, TABLE_FORMS, token), {
-        submissionCount: increment(1),
-        updatedAt: new Date().toISOString(),
-        lastSubmissionAt: serverTimestamp(),
-      });
-      await updateDoc(doc(db, "tables", form.tableId), {
-        recordCount: increment(1),
-        updatedAt: new Date().toISOString(),
-      });
+      try {
+        await updateDoc(doc(db, TABLE_FORMS, token), {
+          submissionCount: increment(1),
+          updatedAt: new Date().toISOString(),
+          lastSubmissionAt: serverTimestamp(),
+        });
+      } catch {
+        /* count is best-effort for anonymous submitters */
+      }
       setDone(true);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not submit the form.");

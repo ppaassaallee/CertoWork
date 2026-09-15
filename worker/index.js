@@ -32,6 +32,8 @@ import {
   syncCalendar,
 } from "./calendarSync.js";
 import {
+  firestoreAdminConfigured,
+  firestoreCreateDocument,
   firestoreGetDocument,
   firestorePatchDocument,
   firestoreRunQuery,
@@ -1822,6 +1824,113 @@ async function sendBrevoTransactionalEmail(env, message) {
   return { sent: true, configured: true, messageId: payload?.messageId };
 }
 
+async function notifyItemUpdate(request, env) {
+  const auth = await authorize(request, env);
+  if (!auth.ok) return auth.response;
+  const body = await readJson(request);
+  const itemTitle = String(body.itemTitle || "Item").trim();
+  const message = String(body.message || "").trim();
+  const kind = String(body.kind || "update");
+  const recipientEmails = Array.isArray(body.recipientEmails)
+    ? body.recipientEmails.map((email) => String(email || "").trim()).filter(Boolean)
+    : [];
+  const slackWebhookUrl = String(body.slackWebhookUrl || "").trim();
+  const actorName = String(body.actorName || "").trim();
+  const projectTitle = String(body.projectTitle || "").trim();
+  const itemId = String(body.itemId || "").trim();
+
+  const results = { email: [], slack: null };
+
+  if (recipientEmails.length && env.BREVO_API_KEY) {
+    const subject = `[Certo] ${itemTitle}: ${kind}`;
+    const textContent = [
+      actorName ? `${actorName} updated an item.` : "An item was updated.",
+      "",
+      `Item: ${itemTitle}`,
+      projectTitle ? `Project: ${projectTitle}` : null,
+      "",
+      message,
+      itemId ? `\nOpen in Certo: /my-work?item=${encodeURIComponent(itemId)}` : null,
+    ]
+      .filter((line) => line != null)
+      .join("\n");
+    for (const email of recipientEmails.slice(0, 10)) {
+      // eslint-disable-next-line no-await-in-loop
+      const sent = await sendBrevoTransactionalEmail(env, {
+        sender: {
+          name: env.CERTO_EMAIL_FROM_NAME || "Certo Work",
+          email: env.CERTO_EMAIL_FROM || "noreply@certo.work",
+        },
+        to: [{ email }],
+        subject,
+        textContent,
+      });
+      results.email.push({ email, ...sent });
+    }
+  }
+
+  if (slackWebhookUrl.startsWith("https://hooks.slack.com/")) {
+    const slackPayload = {
+      text: `${itemTitle}: ${message}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*${itemTitle}*\n${message || kind}`,
+          },
+        },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: [projectTitle && `Project: ${projectTitle}`, actorName && `By: ${actorName}`, `Kind: ${kind}`]
+                .filter(Boolean)
+                .join(" · "),
+            },
+          ],
+        },
+      ],
+    };
+    const slackRes = await fetch(slackWebhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(slackPayload),
+    });
+    results.slack = { ok: slackRes.ok, status: slackRes.status };
+  }
+
+  return json({ ok: true, results });
+}
+
+async function inboundItemUpdate(request, env) {
+  const body = await readJson(request);
+  const text = String(body.text || body.message || body.body || "").trim();
+  const match =
+    text.match(/^(?:item|task)\s*[:#]\s*([a-zA-Z0-9_-]+)\s+([\s\S]+)$/i) ||
+    text.match(/\[certo-item:([a-zA-Z0-9_-]+)\]([\s\S]*)/i);
+  const itemId = match ? match[1] : String(body.itemId || "").trim();
+  const message = match ? String(match[2] || "").trim() : text;
+  if (!itemId || !message) {
+    return json({ ok: false, error: "Expected item:<id> message or [certo-item:id]" }, 400);
+  }
+  // Persist via admin when configured; otherwise acknowledge parse for clients.
+  if (firestoreAdminConfigured(env)) {
+    await firestoreCreateDocument(env, "work_item_messages", {
+      workItemId: itemId,
+      body: message,
+      channel: body.source === "slack" ? "slack" : "email",
+      visibility: "public",
+      authorRole: "external",
+      authorName: String(body.actorName || body.user_name || "External"),
+      createdAt: new Date().toISOString(),
+      workspaceId: String(body.workspaceId || ""),
+    });
+  }
+  return json({ ok: true, itemId, message });
+}
+
 function summarizeInviteDeliveryEvents(events = []) {
   const ordered = [...events];
   const priority = ["hardBounces", "softBounces", "bounces", "blocked", "invalid", "error", "spam", "delivered", "opened", "clicks", "requests", "deferred"];
@@ -2137,6 +2246,15 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite/delivery") {
       return inviteDeliveryStatus(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/items/notify") {
+      return notifyItemUpdate(request, env);
+    }
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/api/items/inbound" || url.pathname === "/api/slack/commands")
+    ) {
+      return inboundItemUpdate(request, env);
     }
     {
       const capture = createCaptureRequestsHandlers({
