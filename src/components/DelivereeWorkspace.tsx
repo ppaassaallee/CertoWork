@@ -124,6 +124,7 @@ import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/e
 import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
+import { Integrations } from "./Settings/Integrations";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
@@ -8520,7 +8521,13 @@ export function DelivereeWorkspace() {
             </>
           )}
 
-          {panel === "settings" && (
+          {panel === "settings" && location.pathname.startsWith("/settings/integrations") ? (
+            <div className="do-panel-settings" data-testid="settings-integrations-panel">
+              <Integrations />
+            </div>
+          ) : null}
+
+          {panel === "settings" && !location.pathname.startsWith("/settings/integrations") && (
             <div className="do-panel-settings">
               <nav className="do-admin-tabs" aria-label="Admin sections">
                 <button className="is-active" type="button">
@@ -8529,6 +8536,13 @@ export function DelivereeWorkspace() {
                 <button onClick={() => setPanel("workspace")} type="button">
                   <Users size={14} /> People
                 </button>
+                <button
+                  data-testid="settings-open-integrations"
+                  onClick={() => navigate("/settings/integrations")}
+                  type="button"
+                >
+                  <CalendarDays size={14} /> Integrations
+                </button>
                 <button onClick={() => setPanel("workspace")} type="button">
                   <Inbox size={14} /> Support
                 </button>
@@ -8536,6 +8550,23 @@ export function DelivereeWorkspace() {
                   <ListTodo size={14} /> Data
                 </button>
               </nav>
+              <section className="do-workspace-admin-card" data-testid="settings-calendars-entry">
+                <div className="do-workspace-admin-head">
+                  <span className="do-kicker">{t("calendar.calendars")}</span>
+                  <strong>{t("calendar.connectGoogle")}</strong>
+                </div>
+                <p className="do-panel-intro">
+                  Google Calendar read overlay — connect, sync, and choose Full vs Busy privacy.
+                </p>
+                <button
+                  className="do-button"
+                  onClick={() => navigate("/settings/integrations")}
+                  type="button"
+                >
+                  <CalendarDays size={14} />
+                  Open calendars
+                </button>
+              </section>
               {canGrantPureAiFollowers ? (
                 <section
                   className="do-pure-ai-followers-callout"
