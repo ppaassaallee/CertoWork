@@ -7,7 +7,7 @@ export type MoreSection =
   | "warroom"
   | "knowledge"
   | "workspace";
-export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "this_week" | "captured" | "reviews";
+export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "this_week" | "week" | "captured" | "reviews";
 export type AgentsSection = "home" | "automations" | "activity";
 
 export type FeedbackSection = "submit" | "queue";
@@ -138,6 +138,9 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
   }
   if (path === "/my-work/this-week") {
     return { kind: "my-work", section: "this_week" };
+  }
+  if (path === "/my-work/week" || path === "/my-work/semana") {
+    return { kind: "my-work", section: "week" };
   }
   if (path === "/my-work/captured" || path === "/capture/inbox") {
     return { kind: "my-work", section: "captured" };

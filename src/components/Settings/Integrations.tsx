@@ -10,20 +10,50 @@ import { db } from "../../lib/firebase";
 import { t } from "../../lib/i18n";
 import { DestructiveDialog } from "../ui/DestructiveDialog";
 
+function calendarConnectErrorMessage(payload: { error?: string; code?: string }, status: number): string {
+  const code = String(payload.code || "");
+  const error = String(payload.error || "");
+  if (
+    code === "GOOGLE_CALENDAR_NOT_CONFIGURED" ||
+    /GOOGLE_CALENDAR_CLIENT/i.test(error) ||
+    /not configured/i.test(error)
+  ) {
+    return t("calendar.oauthNotConfigured");
+  }
+  if (code === "CALENDAR_TOKEN_KEY_MISSING" || /CALENDAR_TOKEN_KEY/i.test(error)) {
+    return t("calendar.oauthNotConfigured");
+  }
+  if (status === 401 || /Authentication required/i.test(error)) {
+    return t("calendar.connectError");
+  }
+  if (status === 403 || /Forbidden/i.test(error)) {
+    return t("calendar.needWorkspace");
+  }
+  return error || t("calendar.connectError");
+}
+
 export function Integrations() {
   const navigate = useNavigate();
   const { user, workspace } = useAuth();
   const { capabilities, loading } = usePlatformCapabilities();
   const { accounts, calendars } = useCalendarEvents();
   const [disconnectId, setDisconnectId] = useState<string | null>(null);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [connectNotice, setConnectNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const voiceAvailable =
     typeof window !== "undefined" &&
     !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+  const calendarConfigured = capabilities?.googleCalendar?.configured !== false;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("calendar") === "connected") {
-      // Soft notice via URL; keep page clean.
+    const calendarParam = params.get("calendar");
+    if (calendarParam === "connected") {
+      setConnectNotice({ kind: "ok", text: t("calendar.connected") });
+    } else if (calendarParam === "error") {
+      setConnectNotice({ kind: "error", text: t("calendar.callbackError") });
+    }
+    if (calendarParam) {
       params.delete("calendar");
       const next = params.toString();
       window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
@@ -71,22 +101,49 @@ export function Integrations() {
   ];
 
   const connectGoogle = async () => {
-    if (!user || !workspace) return;
-    const token = await user.getIdToken();
-    const response = await fetch("/api/calendar/oauth/google/start", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ userId: user.uid, workspaceId: workspace.id }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.url) {
-      console.error("[calendar.oauth.start]", payload.error || response.status);
+    if (!user || !workspace) {
+      setConnectNotice({ kind: "error", text: t("calendar.needWorkspace") });
       return;
     }
-    window.location.assign(String(payload.url));
+    if (capabilities?.googleCalendar && !capabilities.googleCalendar.configured) {
+      setConnectNotice({ kind: "error", text: t("calendar.oauthNotConfigured") });
+      return;
+    }
+    setConnectBusy(true);
+    setConnectNotice(null);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/calendar/oauth/google/start", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ userId: user.uid, workspaceId: workspace.id }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        code?: string;
+      };
+      if (!response.ok || !payload.url) {
+        console.error("[calendar.oauth.start]", payload.error || response.status);
+        setConnectNotice({
+          kind: "error",
+          text: calendarConnectErrorMessage(payload, response.status),
+        });
+        return;
+      }
+      window.location.assign(String(payload.url));
+    } catch (reason) {
+      console.error("[calendar.oauth.start]", reason);
+      setConnectNotice({
+        kind: "error",
+        text: reason instanceof Error ? reason.message : t("calendar.connectError"),
+      });
+    } finally {
+      setConnectBusy(false);
+    }
   };
 
   const syncAccount = async (accountId: string) => {
@@ -134,24 +191,41 @@ export function Integrations() {
       </header>
 
       <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden" data-testid="calendar-integrations">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-gray-100">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-50 border border-gray-100">
               <Calendar className="w-5 h-5 text-gray-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="font-medium text-gray-900 block">{t("calendar.calendars")}</span>
-              <span className="text-xs text-gray-500 block">Google Calendar · read overlay</span>
+              <span className="text-xs text-gray-500 block">{t("calendar.subtitle")}</span>
             </div>
           </div>
           <button
-            className="text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50"
-            onClick={connectGoogle}
+            className="text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            disabled={connectBusy || (!loading && !calendarConfigured)}
+            onClick={() => void connectGoogle()}
             type="button"
           >
-            {t("calendar.connectGoogle")}
+            {connectBusy ? t("calendar.connecting") : t("calendar.connectGoogle")}
           </button>
         </div>
+        {connectNotice ? (
+          <div
+            className={`px-4 py-3 text-sm border-b border-gray-100 ${
+              connectNotice.kind === "ok" ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50"
+            }`}
+            data-testid="calendar-connect-notice"
+            role="status"
+          >
+            {connectNotice.text}
+          </div>
+        ) : null}
+        {!loading && capabilities?.googleCalendar && !capabilities.googleCalendar.configured ? (
+          <div className="px-4 py-3 text-sm text-amber-800 bg-amber-50 border-b border-gray-100" role="status">
+            {t("calendar.oauthNotConfigured")}
+          </div>
+        ) : null}
         {accounts.map((account) => (
           <div className="p-4 border-b border-gray-100 space-y-3" key={account.id}>
             <div className="flex items-center justify-between gap-3">

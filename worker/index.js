@@ -1683,6 +1683,13 @@ function capabilities(env) {
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
     collab: collabStatusPayload(env),
+    googleCalendar: {
+      configured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET),
+      tokenKey: Boolean(env.CALENDAR_TOKEN_KEY),
+      description: env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET
+        ? "Google Calendar OAuth is configured on this Worker."
+        : "Add GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET as Cloudflare Worker secrets to enable Connect Google.",
+    },
   };
 }
 
@@ -2065,7 +2072,26 @@ const worker = {
         const isMember = member && String(member.status || "") === "active";
         if (!isOwner && !isMember) return json({ error: "Forbidden" }, 403);
         const clientId = env.GOOGLE_CALENDAR_CLIENT_ID;
-        if (!clientId) return json({ error: "GOOGLE_CALENDAR_CLIENT_ID is not configured" }, 503);
+        const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET;
+        if (!clientId || !clientSecret) {
+          return json(
+            {
+              error:
+                "Google Calendar OAuth is not configured. Set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET on the Worker.",
+              code: "GOOGLE_CALENDAR_NOT_CONFIGURED",
+            },
+            503,
+          );
+        }
+        if (!String(env.CALENDAR_TOKEN_KEY || "").trim()) {
+          return json(
+            {
+              error: "CALENDAR_TOKEN_KEY is not configured on the Worker.",
+              code: "CALENDAR_TOKEN_KEY_MISSING",
+            },
+            503,
+          );
+        }
         const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
         const state = signCalendarState(env, auth.subject, workspaceId);
         const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");

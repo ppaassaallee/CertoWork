@@ -18,6 +18,7 @@ import {
 } from "./buildHomeCockpitData";
 import { MiSemanaCard } from "../routines/MiSemanaCard";
 import { useCalendarEvents } from "../calendar/useCalendarEvents";
+import { eventDayKeys } from "../../lib/calendar/dates";
 import "../calendar/calendarOverlay.css";
 import { FocusRing } from "../dayplan/FocusRing";
 import { useDayPlan } from "../dayplan/useDayPlan";
@@ -634,7 +635,12 @@ export function HomeCockpit({
                   </span>
                 ))}
                 {calendarEvents
-                  .filter((event) => String(event.start).slice(0, 10) === day.iso)
+                  .filter(
+                    (event) =>
+                      !event.allDay &&
+                      event.privacy !== "busy" &&
+                      eventDayKeys(event).includes(day.iso),
+                  )
                   .slice(0, 3)
                   .map((event) => (
                     <span className="cw-home-week-chip is-event" key={event.id}>
@@ -645,6 +651,18 @@ export function HomeCockpit({
                       {event.title}
                     </span>
                   ))}
+                {(() => {
+                  const extra =
+                    calendarEvents.filter(
+                      (event) =>
+                        !event.allDay &&
+                        event.privacy !== "busy" &&
+                        eventDayKeys(event).includes(day.iso),
+                    ).length - 3;
+                  return extra > 0 ? (
+                    <span className="cw-home-week-chip is-event">+{extra}</span>
+                  ) : null;
+                })()}
                 {day.items.slice(0, 3).map((item) => (
                   <button
                     className="cw-home-week-chip"

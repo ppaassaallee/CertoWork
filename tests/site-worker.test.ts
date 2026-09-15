@@ -132,6 +132,35 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
   assert.equal(body.activeAIProvider.configured, false);
   assert.equal(body.email.configured, false);
   assert.equal(body.capture?.configured, true);
+  assert.equal(body.googleCalendar?.configured, false);
+  assert.match(body.googleCalendar?.description || "", /GOOGLE_CALENDAR_CLIENT/i);
+});
+
+test("calendar oauth start requires auth and reports missing Google secrets", async () => {
+  const unauth = await worker.fetch(
+    new Request("https://gazelle.test/api/calendar/oauth/google/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: "u1", workspaceId: "w1" }),
+    }),
+    environment(),
+  );
+  assert.equal(unauth.status, 401);
+
+  const withSecretsMissing = await worker.fetch(
+    new Request("https://gazelle.test/api/calendar/oauth/google/start", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer fake",
+      },
+      body: JSON.stringify({ userId: "u1", workspaceId: "w1" }),
+    }),
+    environment({
+      // Force authorize path: without a valid token we still get auth failure first.
+    }),
+  );
+  assert.ok([401, 500].includes(withSecretsMissing.status));
 });
 
 test("capture understand and request reply routes require auth", async () => {

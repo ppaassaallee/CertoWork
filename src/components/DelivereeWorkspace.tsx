@@ -125,6 +125,8 @@ import { usePlatformCapabilities } from "../lib/capabilities";
 import { ActionProposal, RichText, UserMessage } from "./conversation/MessageParts";
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { Integrations } from "./Settings/Integrations";
+import { WeekGrid } from "../features/calendar/WeekGrid";
+import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
@@ -1568,6 +1570,7 @@ export function DelivereeWorkspace() {
     workspaceId: workspace?.id,
     items: dayPlanScoreItems,
   });
+  const { events: calendarEventsForAi } = useCalendarEvents();
   const dayLocale = getLocale() === "es" ? "es" : "en";
   const keyItemTitle = useMemo(() => {
     if (!dayPlan.plan?.keyItemId) return null;
@@ -2248,6 +2251,8 @@ export function DelivereeWorkspace() {
         odiseusMemory,
         skills: workspaceSkills,
         schedules: odiseusSchedules,
+        calendarEvents: calendarEventsForAi,
+        odysseusScope: odysseusPanelScope,
       });
       const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);
@@ -7641,6 +7646,15 @@ export function DelivereeWorkspace() {
                   {t("myWorkThisWeek")}
                 </button>
                 <button
+                  className={lens.section === "week" ? "is-active" : ""}
+                  data-testid="my-work-week-tab"
+                  onClick={() => navigate("/my-work/week")}
+                  role="tab"
+                  type="button"
+                >
+                  {getLocale() === "es" ? "Semana" : "Week"}
+                </button>
+                <button
                   className={lens.section === "captured" ? "is-active" : ""}
                   data-testid="my-work-captured-tab"
                   onClick={() => navigate("/my-work/captured")}
@@ -7693,6 +7707,19 @@ export function DelivereeWorkspace() {
                 />
               </>
             )}
+            {lens.kind === "my-work" && lens.section === "week" ? (
+              <WeekGrid
+                onPrepareEvent={(event) => {
+                  void openOdysseusPanel({
+                    kind: "event",
+                    entityId: event.id,
+                    label: event.title,
+                  });
+                }}
+                projects={projects}
+                tasks={tasks}
+              />
+            ) : (
             <WorkItemsCenter
             activeProject={null}
             hierarchyTasks={tasks}
@@ -7738,6 +7765,7 @@ export function DelivereeWorkspace() {
                 : undefined
             }
           />
+            )}
           </div>
         ) : centerView === "invoices" ? (
           <InvoiceCenter
