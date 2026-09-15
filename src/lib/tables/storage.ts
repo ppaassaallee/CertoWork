@@ -142,6 +142,7 @@ export async function createRecord(input: {
     values: coerced,
     order,
     createdBy: input.actorId,
+    userId: input.actorId,
     createdAt: now,
     updatedAt: now,
     updatedBy: input.actorId,

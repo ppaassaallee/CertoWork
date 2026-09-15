@@ -284,6 +284,12 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
   const [columnsEditorOpen, setColumnsEditorOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const phraseRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef(preview);
+  const busyRef = useRef(busy);
+  const closeRef = useRef<() => void>(() => {});
+  const createRef = useRef<() => Promise<void>>(async () => {});
+  previewRef.current = preview;
+  busyRef.current = busy;
 
   const templates = useMemo(() => TABLE_TEMPLATES, []);
   const visibleTemplates = showAllTemplates ? templates : templates.slice(0, 4);
@@ -301,17 +307,17 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        requestClose();
+        closeRef.current();
+        return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && preview) {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && previewRef.current) {
         event.preventDefault();
-        void create();
+        void createRef.current();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- bind once per open/preview
-  }, [open, preview, busy]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -330,13 +336,14 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
   };
 
   const requestClose = () => {
-    if (preview?.dirty) {
+    if (previewRef.current?.dirty) {
       setDiscardOpen(true);
       return;
     }
     reset();
     onClose();
   };
+  closeRef.current = requestClose;
 
   const forceClose = () => {
     reset();
@@ -461,23 +468,27 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
   };
 
   const create = async () => {
-    if (!preview || !user?.uid || !workspace?.id || busy) return;
+    if (!preview || !user?.uid || !workspace?.id || busyRef.current === "create") return;
     const name = preview.name.trim() || t("tables.untitled");
     if (!preview.columns.length) {
       setError(t("tables.create.needColumns"));
       return;
     }
+    // Project scope without a projectId is invisible in canSeeTable — fall back to workspace.
+    const resolvedVisibility: TableVisibility =
+      visibility === "project" ? "workspace" : visibility;
     setBusy("create");
     setError("");
     try {
       const now = new Date().toISOString();
+      const color = preview.color.startsWith("var(") ? "#3C3489" : preview.color;
       const id = await createTable({
         workspaceId: workspace.id,
         projectId: null,
         name,
         icon: preview.iconName === "Sparkles" ? "✦" : "▦",
-        color: preview.color,
-        visibility,
+        color,
+        visibility: resolvedVisibility,
         columns: preview.columns,
         keyColumns: preview.keyColumns,
         createdBy: user.uid,
@@ -552,8 +563,8 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
         projectId: null,
         name,
         icon: preview.iconName === "Sparkles" ? "✦" : "▦",
-        color: preview.color,
-        visibility,
+        color,
+        visibility: resolvedVisibility,
         columns: preview.columns,
         keyColumns: preview.keyColumns,
         recordCount: sampleCount,
@@ -567,11 +578,13 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       reset();
       onCreated(created);
     } catch (reason) {
+      console.error("createTable failed", reason);
       setError(reason instanceof Error ? reason.message : t("tables.createFailed"));
     } finally {
       setBusy(null);
     }
   };
+  createRef.current = create;
 
   const draftTable: TableDoc | null = preview
     ? {
@@ -604,9 +617,9 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
         : t("tables.create.scope.team");
 
   const cycleScope = () => {
-    setVisibility((v) =>
-      v === "workspace" ? "private" : v === "private" ? "project" : "workspace",
-    );
+    // Only Personal ↔ Team until the modal has a project picker; bare "project"
+    // visibility without projectId makes canSeeTable hide the table.
+    setVisibility((v) => (v === "private" ? "workspace" : "private"));
     if (preview) setPreview({ ...preview, dirty: true });
   };
 

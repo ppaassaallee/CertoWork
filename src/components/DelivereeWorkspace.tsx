@@ -1037,7 +1037,7 @@ export function DelivereeWorkspace() {
             })),
           ),
         false,
-        true,
+        false,
       ),
       makeQuery(
         "review_candidates",
