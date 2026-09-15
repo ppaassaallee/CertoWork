@@ -126,6 +126,7 @@ import { ActionProposal, RichText, UserMessage } from "./conversation/MessagePar
 import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { Integrations } from "./Settings/Integrations";
 import { WeekGrid } from "../features/calendar/WeekGrid";
+import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
@@ -1569,6 +1570,7 @@ export function DelivereeWorkspace() {
     workspaceId: workspace?.id,
     items: dayPlanScoreItems,
   });
+  const { events: calendarEventsForAi } = useCalendarEvents();
   const dayLocale = getLocale() === "es" ? "es" : "en";
   const keyItemTitle = useMemo(() => {
     if (!dayPlan.plan?.keyItemId) return null;
@@ -2249,6 +2251,8 @@ export function DelivereeWorkspace() {
         odiseusMemory,
         skills: workspaceSkills,
         schedules: odiseusSchedules,
+        calendarEvents: calendarEventsForAi,
+        odysseusScope: odysseusPanelScope,
       });
       const nextJudgment = requestContext.judgment;
       setJudgment(nextJudgment);

@@ -57,6 +57,8 @@ type ConversationContextBuildParams = {
   odiseusMemory?: any[];
   skills?: any[];
   schedules?: any[];
+  calendarEvents?: any[];
+  odysseusScope?: { kind?: string; entityId?: string | null; label?: string } | null;
 };
 
 export type ConversationRequestContext = {
@@ -200,6 +202,53 @@ function compactGoal(record: any) {
   };
 }
 
+function compactCalendarEvent(event: any) {
+  const privacy = String(event?.privacy || "full");
+  if (privacy === "busy") {
+    return {
+      id: event.id,
+      start: event.start,
+      end: event.end,
+      busy: true,
+      allDay: Boolean(event.allDay),
+    };
+  }
+  return {
+    id: event.id,
+    title: event.title || "(No title)",
+    start: event.start,
+    end: event.end,
+    allDay: Boolean(event.allDay),
+    attendees: Array.isArray(event.attendees)
+      ? event.attendees.map((a: any) => a.displayName || a.email || "").filter(Boolean).slice(0, 8)
+      : [],
+    meetingUrl: event.meetingUrl || null,
+    linkedProjectId: event.linkedProjectId || null,
+    linkedItemId: event.linkedItemId || null,
+    linkedNoteId: event.linkedNoteId || null,
+  };
+}
+
+function eventsForTodayTomorrow(events: any[]) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 2);
+  return (events || [])
+    .filter((event) => {
+      const key = String(event?.start || "");
+      if (event?.allDay && /^\d{4}-\d{2}-\d{2}$/.test(key)) {
+        const day = new Date(`${key}T12:00:00`);
+        return day >= start && day < end;
+      }
+      const ms = Date.parse(key);
+      return Number.isFinite(ms) && ms >= start.getTime() && ms < end.getTime();
+    })
+    .slice(0, 30)
+    .map(compactCalendarEvent);
+}
+
 export function buildConversationRequestContext({
   text,
   currentUserMessageId,
@@ -237,6 +286,8 @@ export function buildConversationRequestContext({
   odiseusMemory,
   skills,
   schedules,
+  calendarEvents = [],
+  odysseusScope = null,
 }: ConversationContextBuildParams): ConversationRequestContext {
   const actor: PersonalHomeActor = {
     userId,
@@ -286,13 +337,26 @@ export function buildConversationRequestContext({
     viewerUid: userId,
     viewerProjectIds: activeProjects.map((project) => String(project.id)),
   });
+  const aiCalendarEvents = eventsForTodayTomorrow(calendarEvents);
+  let focusedEvent: any = null;
+  if (odysseusScope?.kind === "event" && odysseusScope.entityId) {
+    const raw = (calendarEvents || []).find((event: any) => String(event.id) === String(odysseusScope.entityId));
+    if (raw) {
+      focusedEvent = {
+        ...compactCalendarEvent(raw),
+        linkedProject: projects.find((p) => p.id === raw.linkedProjectId) || null,
+        linkedItem: tasks.find((task) => task.id === raw.linkedItemId) || null,
+        linkedNote: notebookEntries.find((entry) => entry.id === raw.linkedNoteId) || null,
+      };
+    }
+  }
   const workspaceSnapshot = {
     tasks: scopedTasks,
     projects: scopedProjects,
     milestones: scopedMilestones,
     risks: scopedRisks,
     goals: strategicGoals,
-    events: [],
+    events: aiCalendarEvents,
     dailyCapacityMinutes: 360,
     loaded: true,
     scope: (isFocusedConversation
@@ -334,7 +398,8 @@ export function buildConversationRequestContext({
       milestones: aiMilestones,
       risks: aiRisks,
       goals: aiGoals,
-      events: [],
+      events: aiCalendarEvents,
+      focusedEvent,
       dailyCapacityMinutes: workspaceSnapshot.dailyCapacityMinutes,
       loaded: true,
       scope: workspaceSnapshot.scope,
