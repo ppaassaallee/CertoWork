@@ -12,10 +12,26 @@
   flex-wrap: wrap;
 }
 
+.cw-agents-area-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  max-width: 420px;
+}
+
+.cw-agents-area-titles > strong,
 .cw-agents-area-head > strong {
   font-size: 16px;
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.cw-agents-area-titles > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-secondary);
 }
 
 .cw-agents-area-tabs {
@@ -127,6 +143,19 @@
   margin: 12px 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.cw-agents-map-empty-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 4px 16px;
+}
+
+.cw-agents-map-skeleton {
+  max-width: 520px;
+  margin: 0 auto;
+  opacity: 0.9;
 }
 
 .cw-agents-map-handoffs {

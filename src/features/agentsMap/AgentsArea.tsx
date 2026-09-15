@@ -137,12 +137,19 @@ export function AgentsArea({
   return (
     <div className="cw-agents-area" data-testid="agents-area">
       <div className="cw-agents-area-head">
-        <strong>{areaTitle}</strong>
+        <div className="cw-agents-area-titles">
+          <strong>{areaTitle}</strong>
+          <p>
+            Diagrama en vivo: Disparadores → Rutinas → Agentes → Salidas. Aunque el LLM
+            ejecute los pasos, acá ves el flujo, la salud y los handoffs.
+          </p>
+        </div>
         <div className="cw-agents-area-tabs" role="tablist" aria-label={`${areaTitle} views`}>
           {TABS.map((item) => (
             <button
               aria-selected={tab === item.id}
               className={tab === item.id ? "is-active" : ""}
+              data-testid={item.id === "map" ? "agents-area-tab-map" : undefined}
               key={item.id}
               onClick={() => selectTab(item.id)}
               role="tab"

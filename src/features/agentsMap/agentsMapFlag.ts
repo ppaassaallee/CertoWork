@@ -1,5 +1,6 @@
 /**
- * VITE_AGENTS_MAP_ENABLED — default on in dev, off in production until flipped.
+ * VITE_AGENTS_MAP_ENABLED — shipped on by default.
+ * Set to 0/false/off only to force the legacy Lista/Recetas shell.
  */
 export function isAgentsMapEnabled(): boolean {
   const raw = String(
@@ -9,9 +10,8 @@ export function isAgentsMapEnabled(): boolean {
     .trim()
     .toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
-  if (raw === "1" || raw === "true" || raw === "on" || raw === "yes") return true;
-  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
-  return Boolean(env?.DEV);
+  // Unset, empty, or any truthy value → map on (including production).
+  return true;
 }
 
 export type AgentsAreaTab = "map" | "agents" | "routines" | "runs" | "analytics";
