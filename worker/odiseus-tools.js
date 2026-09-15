@@ -288,6 +288,117 @@ export const ODISEUS_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    type: "function",
+    name: "create_record",
+    description: "Propose creating a table record. Returns a structured proposal; does not write unless approved.",
+    parameters: {
+      type: "object",
+      properties: {
+        tableId: { type: "string" },
+        values: { type: "object", additionalProperties: true },
+        title: { type: "string" },
+      },
+      required: ["tableId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "update_record_field",
+    description: "Propose updating one field on a table record.",
+    parameters: {
+      type: "object",
+      properties: {
+        tableId: { type: "string" },
+        recordId: { type: "string" },
+        columnId: { type: "string" },
+        value: {},
+      },
+      required: ["recordId", "columnId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "create_ticket",
+    description: "Propose creating a support ticket linked to a record or project.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        body: { type: "string" },
+        projectId: { type: "string" },
+        recordId: { type: "string" },
+        tableId: { type: "string" },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+      },
+      required: ["title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "create_note_from_template",
+    description: "Propose creating a note from a template, optionally linked to a record.",
+    parameters: {
+      type: "object",
+      properties: {
+        templateId: { type: "string" },
+        title: { type: "string" },
+        recordId: { type: "string" },
+        tableId: { type: "string" },
+        projectId: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "link_entities",
+    description: "Propose linking two entities (record↔task/note/ticket/record).",
+    parameters: {
+      type: "object",
+      properties: {
+        fromType: { type: "string", enum: ["record", "task", "note", "ticket", "project"] },
+        fromId: { type: "string" },
+        toType: { type: "string", enum: ["record", "task", "note", "ticket", "project"] },
+        toId: { type: "string" },
+        relation: { type: "string" },
+      },
+      required: ["fromType", "fromId", "toType", "toId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "list_table_records",
+    description: "List records for a table from the authorized workspace context.",
+    parameters: {
+      type: "object",
+      properties: {
+        tableId: { type: "string" },
+        limit: { type: "number" },
+        status: { type: "string" },
+      },
+      required: ["tableId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "get_record",
+    description: "Load one table record with values and linked entities from context.",
+    parameters: {
+      type: "object",
+      properties: {
+        recordId: { type: "string" },
+        tableId: { type: "string" },
+      },
+      required: ["recordId"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 export const TOOL_LABELS = {
@@ -309,6 +420,13 @@ export const TOOL_LABELS = {
   list_my_events: "Reviewing your calendar",
   find_free_slots: "Finding free time",
   prepare_meeting: "Preparing for the meeting",
+  create_record: "Creating table record",
+  update_record_field: "Updating record field",
+  create_ticket: "Creating ticket",
+  create_note_from_template: "Creating note from template",
+  link_entities: "Linking entities",
+  list_table_records: "Listing table records",
+  get_record: "Loading record",
 };
 
 export function executeOdysseusTool(name, args, workspaceContext) {
@@ -842,6 +960,194 @@ export function executeOdysseusTool(name, args, workspaceContext) {
     return {
       label: TOOL_LABELS.prepare_meeting,
       result: { event, brief: lines.join("\n") },
+    };
+  }
+
+  if (name === "list_table_records") {
+    const tableId = String(args?.tableId || "");
+    const records = asList(workspaceContext?.records || workspaceContext?.tableRecords);
+    const tables = asList(workspaceContext?.tables);
+    const table = tables.find((row) => String(row.id) === tableId);
+    const statusFilter = args?.status != null ? String(args.status) : null;
+    const statusCol = table?.keyColumns?.status;
+    const matched = records
+      .filter((row) => String(row.tableId) === tableId)
+      .filter((row) => {
+        if (!statusFilter || !statusCol) return true;
+        return String(row.values?.[statusCol] ?? "") === statusFilter;
+      })
+      .slice(0, limit)
+      .map((row) => ({
+        id: row.id,
+        tableId: row.tableId,
+        values: row.values || {},
+        updatedAt: row.updatedAt || null,
+      }));
+    return {
+      label: TOOL_LABELS.list_table_records,
+      result: {
+        count: matched.length,
+        table: table ? { id: table.id, name: titleOf(table) } : { id: tableId },
+        records: matched,
+      },
+    };
+  }
+
+  if (name === "get_record") {
+    const recordId = String(args?.recordId || "");
+    const tableId = args?.tableId ? String(args.tableId) : null;
+    const records = asList(workspaceContext?.records || workspaceContext?.tableRecords);
+    const links = asList(workspaceContext?.entityLinks);
+    const record =
+      records.find(
+        (row) =>
+          String(row.id) === recordId && (!tableId || String(row.tableId) === tableId),
+      ) || null;
+    if (!record) {
+      return { label: TOOL_LABELS.get_record, result: { error: "Record not found in context." } };
+    }
+    const recordLinks = links.filter(
+      (link) =>
+        (String(link.fromEntityType) === "record" && String(link.fromEntityId) === recordId) ||
+        (String(link.toEntityType) === "record" && String(link.toEntityId) === recordId),
+    );
+    return {
+      label: TOOL_LABELS.get_record,
+      result: { record, links: recordLinks },
+    };
+  }
+
+  if (name === "create_record") {
+    const tableId = String(args?.tableId || "");
+    if (!tableId) {
+      return { label: TOOL_LABELS.create_record, result: { error: "tableId required" } };
+    }
+    const values = args?.values && typeof args.values === "object" ? args.values : {};
+    if (args?.title) values.title = args.title;
+    const proposedActions = [
+      {
+        type: "create_record",
+        safetyLevel: 1,
+        confidence: 0.9,
+        reason: "Create a table record",
+        proposedChange: { tableId, values },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.create_record,
+      result: { ok: true, proposed: { tableId, values }, proposedActions },
+      proposedActions,
+    };
+  }
+
+  if (name === "update_record_field") {
+    const recordId = String(args?.recordId || "");
+    const columnId = String(args?.columnId || "");
+    if (!recordId || !columnId) {
+      return {
+        label: TOOL_LABELS.update_record_field,
+        result: { error: "recordId and columnId required" },
+      };
+    }
+    const proposedActions = [
+      {
+        type: "update_record_field",
+        safetyLevel: 1,
+        confidence: 0.9,
+        reason: "Update a table record field",
+        proposedChange: {
+          tableId: args?.tableId ? String(args.tableId) : null,
+          recordId,
+          columnId,
+          value: args?.value ?? null,
+        },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.update_record_field,
+      result: { ok: true, proposedActions },
+      proposedActions,
+    };
+  }
+
+  if (name === "create_ticket") {
+    const title = String(args?.title || "").trim();
+    if (!title) {
+      return { label: TOOL_LABELS.create_ticket, result: { error: "title required" } };
+    }
+    const proposedActions = [
+      {
+        type: "create_ticket",
+        safetyLevel: 2,
+        confidence: 0.85,
+        reason: "Create a support ticket",
+        proposedChange: {
+          title,
+          body: String(args?.body || ""),
+          projectId: args?.projectId ? String(args.projectId) : null,
+          recordId: args?.recordId ? String(args.recordId) : null,
+          tableId: args?.tableId ? String(args.tableId) : null,
+          priority: String(args?.priority || "medium"),
+        },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.create_ticket,
+      result: { ok: true, proposedActions },
+      proposedActions,
+    };
+  }
+
+  if (name === "create_note_from_template") {
+    const proposedActions = [
+      {
+        type: "create_note_from_template",
+        safetyLevel: 1,
+        confidence: 0.85,
+        reason: "Create a note from a template",
+        proposedChange: {
+          templateId: args?.templateId ? String(args.templateId) : null,
+          title: args?.title ? String(args.title) : null,
+          recordId: args?.recordId ? String(args.recordId) : null,
+          tableId: args?.tableId ? String(args.tableId) : null,
+          projectId: args?.projectId ? String(args.projectId) : null,
+        },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.create_note_from_template,
+      result: { ok: true, proposedActions },
+      proposedActions,
+    };
+  }
+
+  if (name === "link_entities") {
+    const fromType = String(args?.fromType || "");
+    const fromId = String(args?.fromId || "");
+    const toType = String(args?.toType || "");
+    const toId = String(args?.toId || "");
+    if (!fromType || !fromId || !toType || !toId) {
+      return { label: TOOL_LABELS.link_entities, result: { error: "from/to type and id required" } };
+    }
+    const proposedActions = [
+      {
+        type: "link_entities",
+        safetyLevel: 1,
+        confidence: 0.9,
+        reason: "Link two entities",
+        proposedChange: {
+          fromType,
+          fromId,
+          toType,
+          toId,
+          relation: args?.relation ? String(args.relation) : "related",
+        },
+      },
+    ];
+    return {
+      label: TOOL_LABELS.link_entities,
+      result: { ok: true, proposedActions },
+      proposedActions,
     };
   }
 

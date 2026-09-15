@@ -65,6 +65,65 @@ function detectTrigger(sentence: string, timezone: string): RoutineTrigger {
     };
   }
 
+  // Table automations — structured composer usually sets triggerOverride; these are light NL hints.
+  if (
+    /cuando\s+(se\s+)?cree\s+(un\s+)?registro|when\s+(a\s+)?record\s+is\s+created|nuevo\s+registro/.test(
+      lower,
+    )
+  ) {
+    return {
+      kind: "event",
+      eventType: "table.record_created",
+      cooldownSeconds: 60,
+      human: /when|record is created/i.test(lower)
+        ? "When a record is created"
+        : "Cuando se cree un registro",
+    };
+  }
+  if (
+    /cuando\s+(el\s+)?estado\s*(→|->|pase|cambia)|when\s+(the\s+)?status\s*(→|->|changes?)/.test(
+      lower,
+    )
+  ) {
+    const toMatch = lower.match(/(?:→|->|pase a|cambia a|changes? to)\s*([^\s,·]+)/i);
+    const to = toMatch?.[1] ? String(toMatch[1]).replace(/['"]/g, "") : undefined;
+    return {
+      kind: "event",
+      eventType: "table.status_changed",
+      filter: to ? { to } : undefined,
+      cooldownSeconds: 60,
+      human: to
+        ? /when|status|changes/i.test(lower)
+          ? `When status → ${to}`
+          : `Cuando el estado → ${to}`
+        : /when|status/i.test(lower)
+          ? "When status changes"
+          : "Cuando cambie el estado",
+    };
+  }
+  if (
+    /(\d+)\s*d[ií]as?\s*(antes|before)|antes\s+de\s+la\s+fecha|before\s+(the\s+)?date|date_reached/.test(
+      lower,
+    )
+  ) {
+    const nMatch = lower.match(/(\d+)\s*d[ií]as?/);
+    const offsetDays = nMatch ? Math.max(0, Number(nMatch[1])) : 0;
+    return {
+      kind: "event",
+      eventType: "table.date_reached",
+      filter: { offsetDays },
+      cooldownSeconds: 86_400,
+      human:
+        offsetDays === 0
+          ? /before|date|when/i.test(lower)
+            ? "On the key date"
+            : "El día de la fecha clave"
+          : /before|when|days/i.test(lower)
+            ? `${offsetDays} days before the date`
+            : `${offsetDays} días antes de la fecha`,
+    };
+  }
+
   const weekdayMatch = lower.match(
     /(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|monday|tuesday|wednesday|thursday|friday)/,
   );
@@ -181,6 +240,10 @@ function needsThirdPartyApproval(sentence: string, channel: RoutineChannel): boo
 /**
  * Deterministic sentence → RoutineSpec compiler (Phase 1).
  * Fast path — no LLM required. Worker may refine later.
+ *
+ * Table automations prefer a structured composer that passes `triggerOverride`
+ * so event types table.* are fixed without relying on NL guess. Light NL
+ * recognition for table.* still exists in detectTrigger as a fallback.
  */
 export function compileRoutineSentence(input: {
   sentence: string;
@@ -188,12 +251,14 @@ export function compileRoutineSentence(input: {
   ownerEmail?: string;
   timezone?: string;
   recipeId?: string;
+  /** When set (e.g. TableAutomationComposer), replaces NL-detected trigger. */
+  triggerOverride?: RoutineTrigger;
 }): RoutineCompileResult {
   const sentence = String(input.sentence || "").trim();
   const timezone = input.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const language = detectLanguage(sentence);
   const channel = detectChannel(sentence);
-  const trigger = detectTrigger(sentence, timezone);
+  const trigger = input.triggerOverride || detectTrigger(sentence, timezone);
   const toThirdParties = needsThirdPartyApproval(sentence, channel);
   const owner = String(input.ownerEmail || "").trim();
 
