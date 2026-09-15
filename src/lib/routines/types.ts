@@ -105,6 +105,26 @@ export type RoutineSpec = {
   /** automatic (default) | guided ritual | manual */
   class?: RoutineClass;
   recipeId?: string;
+  /**
+   * Persisted flow plan for automatic routines (and optional overrides).
+   * Guided rituals usually rebuild from their manifest; plan is the drawn sentence.
+   */
+  plan?: Array<{
+    id: string;
+    type: string;
+    title: string;
+    detail: string;
+    badge?: { text: string; tone: string };
+    branches?: { yes: string; no: string };
+    editable: string[];
+    sourceStepId?: string;
+    meta?: Record<string, unknown>;
+  }>;
+  /** User overrides for guided step questions keyed by step id. */
+  stepOverrides?: Record<
+    string,
+    { question?: string; hint?: string; skippable?: boolean; skipInSummary?: boolean }
+  >;
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastRunStatus: string | null;
@@ -140,6 +160,8 @@ export type RoutinePreviewResult = {
   steps: Array<{
     kind: "read" | "think" | "draft" | "action" | "deliver";
     label: string;
+    /** Maps onto FlowNode.id when the plan is drawn / a run is overlaid. */
+    nodeId?: string;
   }>;
   usage?: { inputTokens?: number; outputTokens?: number; costUsd?: number; durationMs?: number };
 };

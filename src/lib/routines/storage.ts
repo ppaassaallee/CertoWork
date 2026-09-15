@@ -150,6 +150,25 @@ export async function pauseRoutine(routineId: string) {
   });
 }
 
+/** Persist a compiled / lazy-built flow plan on the routine doc. */
+export async function saveRoutinePlan(routineId: string, plan: RoutineSpec["plan"]) {
+  await updateDoc(doc(db, ROUTINES_COLLECTION, routineId), {
+    plan: plan || [],
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Patch guided step overrides (question / hint / skippable). */
+export async function saveRoutineStepOverrides(
+  routineId: string,
+  stepOverrides: NonNullable<RoutineSpec["stepOverrides"]>,
+) {
+  await updateDoc(doc(db, ROUTINES_COLLECTION, routineId), {
+    stepOverrides,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 /** User-initiated: grant writeOthers so blocked external deliverables can proceed. */
 export async function allowRoutineWriteOthers(routineId: string) {
   await updateDoc(doc(db, ROUTINES_COLLECTION, routineId), {
@@ -163,7 +182,7 @@ export async function recordManualRoutineRun(input: {
   workspaceId: string;
   userId: string;
   outputText: string;
-  steps: Array<{ kind: string; label: string }>;
+  steps: Array<{ kind: string; label: string; nodeId?: string }>;
 }) {
   const startedAt = new Date().toISOString();
   const finishedAt = new Date().toISOString();
@@ -175,7 +194,12 @@ export async function recordManualRoutineRun(input: {
     startedAt,
     finishedAt,
     status: "completed",
-    steps: input.steps.map((step, index) => ({ t: index, ...step })),
+    steps: input.steps.map((step, index) => ({
+      t: index,
+      kind: step.kind,
+      label: step.label,
+      nodeId: step.nodeId || "unplanned",
+    })),
     output: { text: input.outputText },
     actions: [],
     usage: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },

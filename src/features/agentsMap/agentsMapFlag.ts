@@ -1,6 +1,7 @@
 /**
- * VITE_AGENTS_MAP_ENABLED — shipped on by default.
- * Set to 0/false/off only to force the legacy Lista/Recetas shell.
+ * VITE_AGENTS_MAP_ENABLED — aggregate “Red de agentes” map.
+ * Default OFF. The per-routine Flujo is the Rutinas entry point.
+ * Opt in with 1/true/on for Agentes › Analítica.
  */
 export function isAgentsMapEnabled(): boolean {
   const raw = String(
@@ -9,9 +10,8 @@ export function isAgentsMapEnabled(): boolean {
   )
     .trim()
     .toLowerCase();
-  if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
-  // Unset, empty, or any truthy value → map on (including production).
-  return true;
+  if (raw === "1" || raw === "true" || raw === "on" || raw === "yes") return true;
+  return false;
 }
 
 export type AgentsAreaTab = "map" | "agents" | "routines" | "runs" | "analytics";
@@ -19,7 +19,7 @@ export type AgentsAreaTab = "map" | "agents" | "routines" | "runs" | "analytics"
 const TAB_KEY = "certo-agents-area-tab";
 
 export function readAgentsAreaTab(): AgentsAreaTab {
-  if (typeof localStorage === "undefined") return "map";
+  if (typeof localStorage === "undefined") return "agents";
   try {
     const raw = localStorage.getItem(TAB_KEY);
     if (
@@ -34,7 +34,7 @@ export function readAgentsAreaTab(): AgentsAreaTab {
   } catch {
     /* ignore */
   }
-  return "map";
+  return "agents";
 }
 
 export function writeAgentsAreaTab(tab: AgentsAreaTab) {

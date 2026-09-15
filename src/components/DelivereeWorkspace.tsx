@@ -127,6 +127,7 @@ import { AppleWidgetSettings } from "./AppleWidgetSettings";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
+import { RoutinesHome } from "./routines/RoutinesHome";
 import {
   listRoutinesForWorkspace,
   type RoutineSpec,
@@ -5714,17 +5715,16 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-routines",
-        label: "Go to Rutinas · Mapa de flujos",
+        label: "Go to Rutinas",
         group: "Navigate",
-        keywords:
-          "routines automation schedule recipe brief mapa flujo workflow agents map diagram disparadores salidas retell",
+        keywords: "routines automation schedule recipe brief flujo wrap",
         onSelect: () => navigate("/rutinas"),
       },
       {
         id: "nav-agents",
-        label: "Go to Agents · Live map",
+        label: "Go to Agents",
         group: "Navigate",
-        keywords: "odysseus ai automations mapa agentes handoffs live map",
+        keywords: "odysseus ai automations analítica red de agentes",
         onSelect: () => navigate("/agents"),
       },
       {
@@ -5862,6 +5862,15 @@ export function DelivereeWorkspace() {
         onSelect: () => openProjectRecord(project),
       });
     }
+    for (const routine of agentRoutines.filter((row) => row.status === "active").slice(0, 24)) {
+      items.push({
+        id: `routine-flow-${routine.id}`,
+        label: `Ver flujo de ${routine.title}`,
+        group: "Rutinas",
+        keywords: `${routine.title} ${routine.sentence || ""} flujo wrap ritual`,
+        onSelect: () => navigate(`/rutinas/${routine.id}`),
+      });
+    }
     if (!mobileCore) return items;
     const mobileIds = new Set([
       "nav-home",
@@ -5883,6 +5892,7 @@ export function DelivereeWorkspace() {
   }, [
     activeProject,
     activeProjects,
+    agentRoutines,
     createConversation,
     mobileCore,
     navigate,
@@ -7617,29 +7627,10 @@ export function DelivereeWorkspace() {
             }
           />
         ) : centerView === "routines" ? (
-          <AgentsArea
-            activityItems={odiseusActivity}
-            areaTitle="Rutinas"
-            flagOffFallback="routines"
-            initialTab="map"
-            pendingApprovals={reviewItems.length}
-            routines={agentRoutines}
-            viewerUserId={user?.uid}
-            workspaceName={workspace?.name || undefined}
-            onCreateAgent={() => {
-              setAgentBuilderOpen(true);
-              navigate("/agents");
-            }}
-            onOpenActivity={() => navigate("/agents/activity")}
-            onOpenApprovals={() => setPanel("approvals")}
-            onOpenAutomations={() => navigate("/rutinas")}
-            onOpenOdysseus={() => void openChiefOfStaff()}
-            onRoutinesChanged={() => {
-              if (!workspace?.id || !user?.uid) return;
-              void listRoutinesForWorkspace(workspace.id, user.uid)
-                .then(setAgentRoutines)
-                .catch(() => undefined);
-            }}
+          <RoutinesHome
+            selectedRoutineId={
+              lens.kind === "routines" ? lens.routineId || null : null
+            }
           />
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (

@@ -29,7 +29,7 @@ const TABS: Array<{ id: AgentsAreaTab; label: string }> = [
 
 export function AgentsArea({
   onOpenOdysseus,
-  onOpenAutomations,
+  onOpenAutomations: _onOpenAutomations,
   onOpenActivity,
   onCreateAgent,
   onOpenApprovals,
@@ -63,16 +63,25 @@ export function AgentsArea({
   const enabled = isAgentsMapEnabled();
   const navigate = useNavigate();
   const { openRoutine } = useRoutineHost();
+  const visibleTabs = useMemo(
+    () => TABS.filter((item) => item.id !== "map" || enabled),
+    [enabled],
+  );
   const [tab, setTab] = useState<AgentsAreaTab>(() => {
+    if (initialTab && (initialTab !== "map" || enabled)) return initialTab;
     if (!enabled) return flagOffFallback === "agents" ? "agents" : "routines";
-    if (initialTab) return initialTab;
     const saved = readAgentsAreaTab();
-    return saved || "map";
+    if (saved === "map" && !enabled) return "agents";
+    return saved || "agents";
   });
   const [runsByRoutineId, setRunsByRoutineId] = useState<Record<string, RunLike[]>>({});
 
   useEffect(() => {
-    if (!enabled || (tab !== "map" && tab !== "runs" && tab !== "analytics")) return;
+    if (tab === "map" && !enabled) setTab("analytics");
+  }, [enabled, tab]);
+
+  useEffect(() => {
+    if (tab !== "map" && tab !== "runs" && tab !== "analytics") return;
     let cancelled = false;
     const targets = routines.slice(0, 40);
     void Promise.all(
@@ -91,7 +100,7 @@ export function AgentsArea({
     return () => {
       cancelled = true;
     };
-  }, [enabled, routines, tab]);
+  }, [routines, tab]);
 
   const flatRuns = useMemo(() => {
     const rows: Array<RunLike & { routineTitle: string; routineId: string }> = [];
@@ -110,22 +119,8 @@ export function AgentsArea({
       .slice(0, 40);
   }, [routines, runsByRoutineId]);
 
-  if (!enabled) {
-    if (flagOffFallback === "agents") {
-      return (
-        <AgentsLibrary
-          activityItems={activityItems}
-          pendingApprovals={pendingApprovals}
-          routines={routines}
-          viewerUserId={viewerUserId}
-          onCreateAgent={onCreateAgent}
-          onOpenActivity={onOpenActivity}
-          onOpenApprovals={onOpenApprovals}
-          onOpenAutomations={onOpenAutomations}
-          onOpenOdysseus={onOpenOdysseus}
-        />
-      );
-    }
+  // Legacy: Rutinas entry no longer uses AgentsArea; keep fallback for safety.
+  if (!enabled && flagOffFallback === "routines") {
     return <RoutinesHome />;
   }
 
@@ -140,12 +135,11 @@ export function AgentsArea({
         <div className="cw-agents-area-titles">
           <strong>{areaTitle}</strong>
           <p>
-            Diagrama en vivo: Disparadores → Rutinas → Agentes → Salidas. Aunque el LLM
-            ejecute los pasos, acá ves el flujo, la salud y los handoffs.
+            Agentes, corridas y analítica. El flujo de cada rutina vive en Rutinas.
           </p>
         </div>
         <div className="cw-agents-area-tabs" role="tablist" aria-label={`${areaTitle} views`}>
-          {TABS.map((item) => (
+          {visibleTabs.map((item) => (
             <button
               aria-selected={tab === item.id}
               className={tab === item.id ? "is-active" : ""}
@@ -165,7 +159,7 @@ export function AgentsArea({
         </div>
       </div>
 
-      {tab === "map" ? (
+      {tab === "map" && enabled ? (
         <AgentsMapView
           activityItems={activityItems}
           pendingApprovals={pendingApprovals}
@@ -267,6 +261,30 @@ export function AgentsArea({
               </strong>
             </article>
           </div>
+          {isAgentsMapEnabled() ? (
+            <p className="cw-agents-map-empty">
+              <button
+                className="cw-overview-link"
+                data-testid="agents-network-link"
+                onClick={() => selectTab("map")}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--accent)",
+                  cursor: "pointer",
+                }}
+                type="button"
+              >
+                Red de agentes
+              </button>{" "}
+              — mapa agregado de disparadores, rutinas, agentes y salidas.
+            </p>
+          ) : (
+            <p className="cw-agents-map-empty">
+              La red de agentes está apagada. Activá{" "}
+              <code>VITE_AGENTS_MAP_ENABLED=1</code> para ver el mapa agregado.
+            </p>
+          )}
           {pendingApprovals > 0 ? (
             <p className="cw-agents-map-empty">
               Hay aprobaciones pendientes.{" "}
