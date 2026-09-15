@@ -1,6 +1,18 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "../../components/ui/Icon";
-import type { Column, ColumnType, KeyColumns, TableDoc } from "../../lib/tables";
+import type {
+  Column,
+  ColumnType,
+  KeyColumns,
+  StatusOption,
+  TableDoc,
+} from "../../lib/tables";
+import {
+  STATUS_TONES,
+  ensureStatusOptionTones,
+  nextStatusTone,
+  withStatusTone,
+} from "../../lib/tables";
 import { t } from "../../lib/i18n";
 
 export type ColumnsEditorProps = {
@@ -37,11 +49,26 @@ function slugId(name: string) {
   return `${base || "col"}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function defaultStatusSeed(): StatusOption[] {
+  return ensureStatusOptionTones([
+    { id: "todo", label: t("tables.status.todo"), tone: "neutral" },
+    { id: "doing", label: t("tables.status.doing"), tone: "info" },
+    { id: "done", label: t("tables.status.done"), tone: "success" },
+  ]);
+}
+
 export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) {
-  const [columns, setColumns] = useState<Column[]>(() => [...table.columns]);
+  const [columns, setColumns] = useState<Column[]>(() =>
+    table.columns.map((col) =>
+      col.type === "status"
+        ? { ...col, options: ensureStatusOptionTones(col.options || []) }
+        : col,
+    ),
+  );
   const [keys, setKeys] = useState<KeyColumns>(() => ({ ...table.keyColumns }));
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<ColumnType>("text");
+  const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({});
 
   const statusCandidates = useMemo(
     () => columns.filter((c) => c.type === "status"),
@@ -57,9 +84,21 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
   );
 
   const commit = (nextCols: Column[], nextKeys: KeyColumns) => {
-    setColumns(nextCols);
+    const normalized = nextCols.map((col) =>
+      col.type === "status"
+        ? { ...col, options: ensureStatusOptionTones(col.options || []) }
+        : col,
+    );
+    setColumns(normalized);
     setKeys(nextKeys);
-    onChange(nextCols, nextKeys);
+    onChange(normalized, nextKeys);
+  };
+
+  const updateColumn = (columnId: string, patch: Partial<Column>) => {
+    commit(
+      columns.map((col) => (col.id === columnId ? { ...col, ...patch } : col)),
+      keys,
+    );
   };
 
   const addColumn = () => {
@@ -68,19 +107,60 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
       id: slugId(name),
       name,
       type: newType,
-      ...(newType === "status"
-        ? {
-            options: [
-              { id: "todo", label: t("tables.status.todo"), tone: "neutral" as const },
-              { id: "doing", label: t("tables.status.doing"), tone: "info" as const },
-              { id: "done", label: t("tables.status.done"), tone: "success" as const },
-            ],
-          }
-        : {}),
+      ...(newType === "status" ? { options: defaultStatusSeed() } : {}),
     };
     commit([...columns, col], keys);
     setNewName("");
     setNewType("text");
+  };
+
+  const addStatusOption = (columnId: string) => {
+    const col = columns.find((c) => c.id === columnId);
+    if (!col || col.type !== "status") return;
+    const draft = (optionDrafts[columnId] || "").trim();
+    const label = draft || t("tables.columns.optionUntitled");
+    const existing = col.options || [];
+    const option = withStatusTone(
+      {
+        id: slugId(label),
+        label,
+      },
+      existing,
+    );
+    updateColumn(columnId, { options: [...existing, option] });
+    setOptionDrafts((current) => ({ ...current, [columnId]: "" }));
+  };
+
+  const setOptionTone = (
+    columnId: string,
+    optionId: string,
+    tone: StatusOption["tone"],
+  ) => {
+    const col = columns.find((c) => c.id === columnId);
+    if (!col?.options) return;
+    updateColumn(columnId, {
+      options: col.options.map((opt) =>
+        opt.id === optionId ? { ...opt, tone } : opt,
+      ),
+    });
+  };
+
+  const renameOption = (columnId: string, optionId: string, label: string) => {
+    const col = columns.find((c) => c.id === columnId);
+    if (!col?.options) return;
+    updateColumn(columnId, {
+      options: col.options.map((opt) =>
+        opt.id === optionId ? { ...opt, label } : opt,
+      ),
+    });
+  };
+
+  const removeOption = (columnId: string, optionId: string) => {
+    const col = columns.find((c) => c.id === columnId);
+    if (!col?.options) return;
+    updateColumn(columnId, {
+      options: col.options.filter((opt) => opt.id !== optionId),
+    });
   };
 
   return (
@@ -104,10 +184,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
                 value={col.name}
                 disabled={col.id === keys.title}
                 onChange={(e) => {
-                  const next = columns.map((c) =>
-                    c.id === col.id ? { ...c, name: e.target.value } : c,
-                  );
-                  commit(next, keys);
+                  updateColumn(col.id, { name: e.target.value });
                 }}
               />
               <span className="cw-tables-col-type">{col.type}</span>
@@ -117,6 +194,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
                 <button
                   type="button"
                   className="cw-tables-btn-ghost"
+                  data-testid={`tables-remove-col-${col.id}`}
                   onClick={() => {
                     const next = columns.filter((c) => c.id !== col.id);
                     const nextKeys: KeyColumns = { ...keys };
@@ -130,6 +208,82 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
                 </button>
               )}
             </div>
+
+            {col.type === "status" ? (
+              <div className="cw-tables-status-options" data-testid={`tables-status-options-${col.id}`}>
+                <div className="cw-tables-status-options-label">
+                  {t("tables.columns.statusOptions")}
+                </div>
+                <ul className="cw-tables-status-option-list">
+                  {(col.options || []).map((opt) => (
+                    <li key={opt.id}>
+                      <input
+                        className="cw-tables-input cw-tables-status-option-label"
+                        value={opt.label}
+                        aria-label={t("tables.columns.optionLabel")}
+                        onChange={(e) => renameOption(col.id, opt.id, e.target.value)}
+                      />
+                      <div
+                        className="cw-tables-tone-swatches"
+                        role="group"
+                        aria-label={t("tables.columns.optionColor")}
+                      >
+                        {STATUS_TONES.map((tone) => (
+                          <button
+                            key={tone}
+                            type="button"
+                            className={`cw-tables-tone-swatch cw-tables-tone-${tone}${
+                              opt.tone === tone ? " is-on" : ""
+                            }`}
+                            title={tone}
+                            aria-label={tone}
+                            aria-pressed={opt.tone === tone}
+                            data-testid={`tables-tone-${col.id}-${opt.id}-${tone}`}
+                            onClick={() => setOptionTone(col.id, opt.id, tone)}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        className="cw-tables-icon-btn"
+                        aria-label={t("tables.columns.removeOption")}
+                        onClick={() => removeOption(col.id, opt.id)}
+                      >
+                        <X size={12} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <form
+                  className="cw-tables-status-option-add"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    addStatusOption(col.id);
+                  }}
+                >
+                  <input
+                    className="cw-tables-input"
+                    placeholder={t("tables.columns.optionPlaceholder")}
+                    value={optionDrafts[col.id] || ""}
+                    onChange={(e) =>
+                      setOptionDrafts((current) => ({
+                        ...current,
+                        [col.id]: e.target.value,
+                      }))
+                    }
+                  />
+                  <button type="submit" className="cw-tables-btn-ghost">
+                    <Plus size={12} /> {t("tables.columns.addOption")}
+                  </button>
+                  <span className="cw-tables-muted cw-tables-tone-hint">
+                    {t("tables.columns.autoColorHint").replace(
+                      "{tone}",
+                      nextStatusTone(col.options || []),
+                    )}
+                  </span>
+                </form>
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -146,11 +300,13 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
           placeholder={t("tables.columns.namePlaceholder")}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
+          data-testid="tables-columns-new-name"
         />
         <select
           className="cw-tables-select"
           value={newType}
           onChange={(e) => setNewType(e.target.value as ColumnType)}
+          data-testid="tables-columns-new-type"
         >
           {ADDABLE_TYPES.map((type) => (
             <option key={type} value={type}>
@@ -158,7 +314,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
             </option>
           ))}
         </select>
-        <button type="submit" className="cw-tables-btn">
+        <button type="submit" className="cw-tables-btn" data-testid="tables-columns-add">
           <Plus size={14} /> {t("tables.columns.add")}
         </button>
       </form>
