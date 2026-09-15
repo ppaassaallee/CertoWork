@@ -208,7 +208,6 @@ export function TableAutomationComposer({
     setStatusTo(options[0]?.id || "");
     setOffsetDays(3);
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, table.id, workspace?.id]);
 
   const trigger = useMemo(
