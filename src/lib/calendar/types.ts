@@ -17,9 +17,12 @@ export type CalendarAccount = {
   email: string;
   displayName: string;
   status: CalendarAccountStatus;
+  color?: string | null;
   defaultWriteCalendarId: string | null;
   syncCursor: string | null;
   pushChannel: { id: string; expiresAt: string } | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -35,6 +38,9 @@ export type Calendar = {
   writable: boolean;
   privacy: CalendarPrivacy;
   isWorkTarget: boolean;
+  syncToken?: string | null;
+  lastSyncAt?: string | null;
+  pushChannel?: { id: string; resourceId?: string | null; expiresAt: string } | null;
 };
 
 export type CalendarEvent = {
@@ -48,12 +54,13 @@ export type CalendarEvent = {
   start: string;
   end: string;
   allDay: boolean;
-  attendees: Array<{ email?: string; displayName?: string }>;
+  timeZone?: string | null;
+  attendees: Array<{ email?: string; displayName?: string; self?: boolean }>;
   location: string | null;
   meetingUrl: string | null;
   organizer: string | null;
   status: string;
-  privacy: CalendarPrivacy;
+  privacy?: CalendarPrivacy;
   linkedItemId?: string | null;
   linkedProjectId?: string | null;
   linkedNoteId?: string | null;
