@@ -47,6 +47,7 @@ import {
   TABLE_TEMPLATES,
 } from "../../lib/tables";
 import { ColumnsEditor } from "./ColumnsEditor";
+import { blankKeyColumns, blankTableColumns } from "./defaults";
 import "./createTable.css";
 
 export type CreateTableWizardProps = {
@@ -55,7 +56,7 @@ export type CreateTableWizardProps = {
   onCreated(table: TableDoc): void;
 };
 
-type PreviewSource = "template" | "phrase";
+type PreviewSource = "template" | "phrase" | "blank";
 
 type PreviewState = {
   source: PreviewSource;
@@ -429,6 +430,29 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
     });
   };
 
+  const loadBlank = () => {
+    setError("");
+    setQuestion("");
+    setEnableAutomation(false);
+    setIncludeSamples(false);
+    const columns = blankTableColumns(locale);
+    setPreview({
+      source: "blank",
+      name: t("tables.untitled"),
+      iconName: "LayoutGrid",
+      iconBg: "#F1F1EF",
+      iconFg: "#37352F",
+      color: "#787774",
+      columns,
+      keyColumns: blankKeyColumns(),
+      templateId: null,
+      suggestedAutomation: null,
+      sampleRows: [],
+      dirty: false,
+    });
+    setColumnsEditorOpen(true);
+  };
+
   const applyCompiled = (schema: CompiledTableSchema) => {
     const columns = schema.columns;
     setPreview({
@@ -745,6 +769,20 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
             ) : null}
 
             <div className="cw-tables-create-eyebrow">{t("tables.create.orTemplates")}</div>
+            <button
+              type="button"
+              className={`cw-tables-create-blank${preview?.source === "blank" ? " is-on" : ""}`}
+              data-testid="tables-create-blank"
+              onClick={() => loadBlank()}
+            >
+              <span className="cw-tables-create-blank-ic" aria-hidden>
+                +
+              </span>
+              <span>
+                <strong>{t("tables.create.blank")}</strong>
+                <em>{t("tables.create.blankHint")}</em>
+              </span>
+            </button>
             <div className="cw-tables-create-gallery" data-testid="tables-create-gallery">
               {visibleTemplates.map((template) => (
                 <button
