@@ -247,6 +247,47 @@ export const ODISEUS_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    type: "function",
+    name: "list_my_events",
+    description: "List the user's calendar events in a date range (privacy already applied by the client).",
+    parameters: {
+      type: "object",
+      properties: {
+        from: { type: "string" },
+        to: { type: "string" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "find_free_slots",
+    description: "Find free gaps in the user's calendar between from/to.",
+    parameters: {
+      type: "object",
+      properties: {
+        minMinutes: { type: "number" },
+        from: { type: "string" },
+        to: { type: "string" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    type: "function",
+    name: "prepare_meeting",
+    description: "Load structured context for preparing a calendar meeting.",
+    parameters: {
+      type: "object",
+      properties: {
+        eventId: { type: "string" },
+      },
+      required: ["eventId"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 export const TOOL_LABELS = {
@@ -265,6 +306,9 @@ export const TOOL_LABELS = {
   remember_fact: "Saving memory",
   run_skill: "Running skill",
   list_schedules: "Checking schedules",
+  list_my_events: "Reviewing your calendar",
+  find_free_slots: "Finding free time",
+  prepare_meeting: "Preparing for the meeting",
 };
 
 export function executeOdysseusTool(name, args, workspaceContext) {
@@ -743,5 +787,97 @@ export function executeOdysseusTool(name, args, workspaceContext) {
     return { label: TOOL_LABELS.list_schedules, result: { count: items.length, schedules: items } };
   }
 
+  if (name === "list_my_events") {
+    const events = asList(workspaceContext?.events);
+    const fromMs = args?.from ? Date.parse(args.from) : null;
+    const toMs = args?.to ? Date.parse(args.to) : null;
+    const items = events
+      .filter((event) => {
+        const start = Date.parse(event.start);
+        if (!Number.isFinite(start) && !event.allDay) return false;
+        const ms = event.allDay ? Date.parse(`${event.start}T12:00:00`) : start;
+        if (fromMs != null && ms < fromMs) return false;
+        if (toMs != null && ms > toMs) return false;
+        return true;
+      })
+      .slice(0, limit);
+    return { label: TOOL_LABELS.list_my_events, result: { count: items.length, events: items } };
+  }
+
+  if (name === "find_free_slots") {
+    const events = asList(workspaceContext?.events).filter((event) => !event.allDay && !event.busy);
+    const from = String(args?.from || new Date().toISOString());
+    const to = String(args?.to || new Date(Date.now() + 2 * 86400000).toISOString());
+    const minMinutes = Math.max(15, Number(args?.minMinutes || 90) || 90);
+    const slots = findFreeSlotsJs(events, {
+      from,
+      to,
+      minMinutes,
+      workHours: { start: 8, end: 18 },
+      timezone: "UTC",
+    });
+    return { label: TOOL_LABELS.find_free_slots, result: { count: slots.length, slots } };
+  }
+
+  if (name === "prepare_meeting") {
+    const eventId = String(args?.eventId || "");
+    const focused = workspaceContext?.focusedEvent;
+    const events = asList(workspaceContext?.events);
+    const event =
+      (focused && String(focused.id) === eventId ? focused : null) ||
+      events.find((row) => String(row.id) === eventId) ||
+      null;
+    if (!event) {
+      return { label: TOOL_LABELS.prepare_meeting, result: { error: "Event not found in context." } };
+    }
+    const lines = [
+      `Meeting: ${event.title || (event.busy ? "Busy" : "Untitled")}`,
+      `When: ${event.start} → ${event.end}`,
+      event.meetingUrl ? `Join: ${event.meetingUrl}` : null,
+      event.attendees?.length ? `Attendees: ${event.attendees.join(", ")}` : null,
+      event.linkedProject ? `Project: ${titleOf(event.linkedProject)}` : event.linkedProjectId ? `Project id: ${event.linkedProjectId}` : null,
+      event.linkedItem ? `Item: ${titleOf(event.linkedItem)}` : event.linkedItemId ? `Item id: ${event.linkedItemId}` : null,
+      event.linkedNote ? `Note: ${event.linkedNote.title || event.linkedNoteId}` : null,
+    ].filter(Boolean);
+    return {
+      label: TOOL_LABELS.prepare_meeting,
+      result: { event, brief: lines.join("\n") },
+    };
+  }
+
   return { label: name, result: { error: `Unknown tool: ${name}` } };
+}
+
+/** Minimal free-slot finder (mirrors src/lib/calendar/freeSlots.ts for worker tools). */
+function findFreeSlotsJs(events, opts) {
+  const fromMs = Date.parse(opts.from);
+  const toMs = Date.parse(opts.to);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return [];
+  const minMs = Math.max(1, opts.minMinutes) * 60_000;
+  const busy = (events || [])
+    .map((event) => {
+      const start = Date.parse(event.start);
+      const end = Date.parse(event.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+      return [Math.max(start, fromMs), Math.min(end, toMs)];
+    })
+    .filter((row) => row && row[1] > row[0])
+    .sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const row of busy) {
+    if (!merged.length || row[0] > merged[merged.length - 1][1]) merged.push([...row]);
+    else merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], row[1]);
+  }
+  const slots = [];
+  let pointer = fromMs;
+  for (const [s, e] of merged) {
+    if (s - pointer >= minMs) {
+      slots.push({ start: new Date(pointer).toISOString(), end: new Date(s).toISOString() });
+    }
+    pointer = Math.max(pointer, e);
+  }
+  if (toMs - pointer >= minMs) {
+    slots.push({ start: new Date(pointer).toISOString(), end: new Date(toMs).toISOString() });
+  }
+  return slots;
 }
