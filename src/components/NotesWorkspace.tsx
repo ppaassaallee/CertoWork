@@ -1,49 +1,39 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import {
-  Archive,
-  BookOpen,
-  Check,
-  ChevronRight,
-  Eraser,
-  FileText,
-  Folder,
-  PenLine,
-  Plus,
-  Sparkles,
-  Tags,
-  Undo2,
-} from "./ui/Icon";
-import { RoutineLaunchButton } from "./routines/RoutineHost";
+import { useEffect, useMemo, useState } from "react";
+import { Archive, Maximize2, MoreHorizontal, Sparkles } from "./ui/Icon";
 import { emitDomainEvent } from "../lib/routines";
 import {
   addDoc,
   collection,
   doc,
-  onSnapshot,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
 import {
-  collectWorkspaceTags,
   parseTags,
   type NotebookEntry,
 } from "../lib/notebookContext";
-import { plainNoteText } from "../lib/noteMarkup";
 import { NoteRichEditor } from "./NoteRichEditor";
 import { EntityPeek } from "./EntityPeek";
-import { getBlocks } from "../lib/semanticBlocks";
-
-type StrokePoint = { x: number; y: number; pressure?: number };
-type Stroke = { color: string; width: number; points: StrokePoint[] };
+import { getLocale, t } from "../lib/i18n";
+import {
+  createNote as createNoteDoc,
+  ensurePersonalNotebook,
+  ensureProjectNotebook,
+  linkNote,
+  noteTemplate,
+  setNoteAiVisible,
+  setNoteVisibility,
+  withDefaults,
+  type NoteType,
+  type NoteVisibility,
+} from "../lib/notes";
+import { NotebookSidebar } from "../features/notes/NotebookSidebar";
+import { NotesList } from "../features/notes/NotesList";
+import { NoteMetaChips } from "../features/notes/NoteMetaChips";
+import { NoteLinksPopover } from "../features/notes/NoteLinksPopover";
+import "../features/notes/notes.css";
 
 type NotesWorkspaceProps = {
   activeProject?: any | null;
@@ -51,17 +41,21 @@ type NotesWorkspaceProps = {
   knowledgeItems: any[];
   onAsk: (prompt: string) => void;
   onOpenProject?: (project: any) => void;
+  onQuickCaptureItem?: () => void;
   projects: any[];
   tasks: any[];
+  workspaceMembers?: Array<{
+    id: string;
+    displayName?: string;
+    name?: string;
+    userId?: string;
+  }>;
+  initialNoteId?: string | null;
 };
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;
   return typeof value === "number" ? value : 0;
-}
-
-function entityTitle(entity: any) {
-  return String(entity?.title || entity?.name || "Untitled");
 }
 
 function activeEntries(entries: NotebookEntry[]) {
@@ -71,28 +65,28 @@ function activeEntries(entries: NotebookEntry[]) {
 export function NotesWorkspace({
   activeProject,
   entries,
-  knowledgeItems,
   onAsk,
   onOpenProject,
+  onQuickCaptureItem,
   projects,
   tasks,
+  workspaceMembers = [],
+  initialNoteId,
 }: NotesWorkspaceProps) {
   const { user, workspace } = useAuth();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingRef = useRef<StrokePoint[]>([]);
+  const locale = getLocale() === "es" ? "es" : "en";
   const [selectedNotebookId, setSelectedNotebookId] = useState("");
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [editor, setEditor] = useState({ title: "", content: "", tagsText: "", projectId: "" });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const [newNotebookTitle, setNewNotebookTitle] = useState("");
-  const [newSectionTitle, setNewSectionTitle] = useState("");
-  const [newNoteTitle, setNewNoteTitle] = useState("");
-  const [inkOpen, setInkOpen] = useState(false);
-  const [inkColor, setInkColor] = useState("var(--accent)");
-  const [inkWidth, setInkWidth] = useState(2.5);
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 1280 : false,
+  );
+  const [search, setSearch] = useState("");
+  const [listTab, setListTab] = useState<"all" | "meetings" | "mine" | "linked">("all");
+  const [focusMode, setFocusMode] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [peekEntity, setPeekEntity] = useState<{
     id: string;
     kind: "task" | "project" | "note" | "person" | "doc";
@@ -103,31 +97,73 @@ export function NotesWorkspace({
     excerpt?: string | null;
   } | null>(null);
 
-  const visibleEntries = useMemo(() => activeEntries(entries), [entries]);
+  const visibleEntries = useMemo(() => activeEntries(entries).map(withDefaults), [entries]);
   const notebooks = useMemo(
-    () => visibleEntries.filter((entry) => entry.kind === "notebook").sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt)),
+    () =>
+      visibleEntries
+        .filter((entry) => entry.kind === "notebook")
+        .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt)),
     [visibleEntries],
   );
   const sections = useMemo(
-    () => visibleEntries.filter((entry) => entry.kind === "section" && entry.notebookId === selectedNotebookId).sort((a, b) => timestamp(a.createdAt) - timestamp(b.createdAt)),
+    () =>
+      visibleEntries
+        .filter((entry) => entry.kind === "section" && entry.notebookId === selectedNotebookId)
+        .sort((a, b) => timestamp(a.createdAt) - timestamp(b.createdAt)),
     [selectedNotebookId, visibleEntries],
   );
   const notes = useMemo(
-    () => visibleEntries
-      .filter((entry) => entry.kind === "note" && entry.notebookId === selectedNotebookId && (!selectedSectionId || entry.sectionId === selectedSectionId))
-      .sort((a, b) => timestamp(b.updatedAt || b.createdAt) - timestamp(a.updatedAt || a.createdAt)),
+    () =>
+      visibleEntries
+        .filter(
+          (entry) =>
+            entry.kind === "note" &&
+            entry.notebookId === selectedNotebookId &&
+            (!selectedSectionId || entry.sectionId === selectedSectionId),
+        )
+        .sort(
+          (a, b) =>
+            timestamp(b.lastEditedAt || b.updatedAt || b.createdAt) -
+            timestamp(a.lastEditedAt || a.updatedAt || a.createdAt),
+        ),
     [selectedNotebookId, selectedSectionId, visibleEntries],
   );
-  const selectedNote = useMemo(
-    () => visibleEntries.find((entry) => entry.id === selectedNoteId && entry.kind === "note") || null,
-    [selectedNoteId, visibleEntries],
+  const allNotes = useMemo(
+    () =>
+      visibleEntries
+        .filter((entry) => entry.kind === "note")
+        .sort(
+          (a, b) =>
+            timestamp(b.lastEditedAt || b.updatedAt || b.createdAt) -
+            timestamp(a.lastEditedAt || a.updatedAt || a.createdAt),
+        ),
+    [visibleEntries],
   );
+  const selectedNote =
+    visibleEntries.find((entry) => entry.id === selectedNoteId && entry.kind === "note") || null;
   const selectedNotebook = notebooks.find((entry) => entry.id === selectedNotebookId) || null;
   const selectedSection = visibleEntries.find((entry) => entry.id === selectedSectionId) || null;
-  const tagSuggestions = useMemo(
-    () => collectWorkspaceTags([...entries, ...projects, ...tasks, ...knowledgeItems]),
-    [entries, knowledgeItems, projects, tasks],
-  );
+
+  useEffect(() => {
+    if (!user || !workspace) return;
+    void ensurePersonalNotebook(user.uid, workspace.id);
+  }, [user?.uid, workspace?.id]);
+
+  useEffect(() => {
+    if (!user || !workspace || !activeProject?.id) return;
+    void ensureProjectNotebook(
+      workspace.id,
+      String(activeProject.id),
+      String(activeProject.title || activeProject.name || "Project"),
+      user.uid,
+    ).then((notebookId) => {
+      if (notebookId) setSelectedNotebookId(notebookId);
+    });
+  }, [activeProject?.id, user?.uid, workspace?.id]);
+
+  useEffect(() => {
+    if (initialNoteId) setSelectedNoteId(initialNoteId);
+  }, [initialNoteId]);
 
   useEffect(() => {
     if (selectedNotebookId && notebooks.some((entry) => entry.id === selectedNotebookId)) return;
@@ -135,14 +171,9 @@ export function NotesWorkspace({
   }, [notebooks, selectedNotebookId]);
 
   useEffect(() => {
-    if (selectedSectionId && sections.some((entry) => entry.id === selectedSectionId)) return;
-    setSelectedSectionId(sections[0]?.id || "");
-  }, [sections, selectedSectionId]);
-
-  useEffect(() => {
-    if (selectedNoteId && notes.some((entry) => entry.id === selectedNoteId)) return;
+    if (selectedNoteId && (notes.some((entry) => entry.id === selectedNoteId) || allNotes.some((e) => e.id === selectedNoteId))) return;
     setSelectedNoteId(notes[0]?.id || "");
-  }, [notes, selectedNoteId]);
+  }, [notes, selectedNoteId, allNotes]);
 
   useEffect(() => {
     setEditor({
@@ -166,10 +197,12 @@ export function NotesWorkspace({
     setSaveState("saving");
     const timer = window.setTimeout(async () => {
       await updateDoc(doc(db, "notebook_entries", selectedNote.id), {
-        title: editor.title.trim() || "Untitled note",
+        title: editor.title.trim() || t("notes.untitled"),
         content: editor.content,
         tags,
         projectId: editor.projectId || "",
+        lastEditedBy: user.uid,
+        lastEditedAt: new Date().toISOString(),
         updatedAt: serverTimestamp(),
       });
       setSaveState("saved");
@@ -178,56 +211,62 @@ export function NotesWorkspace({
   }, [editor.content, editor.projectId, editor.tagsText, editor.title, selectedNote, user, workspace]);
 
   useEffect(() => {
-    if (!selectedNoteId || !user) {
-      setStrokes([]);
-      return;
-    }
-    const assetRef = doc(db, "notebook_handwriting_assets", `note_${selectedNoteId}`);
-    return onSnapshot(assetRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        setStrokes([]);
-        return;
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setSidebarCollapsed(false);
+        setFocusMode(false);
       }
-      try {
-        setStrokes(JSON.parse(String(snapshot.data().strokesJson || "[]")));
-      } catch {
-        setStrokes([]);
-      }
-    });
-  }, [selectedNoteId, user]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
-  const drawStrokes = (source: Stroke[] = strokes) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, rect.width * dpr);
-    canvas.height = Math.max(1, rect.height * dpr);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    source.forEach((stroke) => {
-      if (stroke.points.length < 2) return;
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.width;
-      ctx.beginPath();
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      stroke.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
-      ctx.stroke();
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return null;
+    return allNotes.filter((note) =>
+      `${note.title || ""} ${note.content || ""}`.toLowerCase().includes(q),
+    );
+  }, [allNotes, search]);
+
+  const listNotes = searchResults || notes;
+  const selectedNotebookVis = selectedNotebook
+    ? withDefaults(selectedNotebook).visibility || "private"
+    : "private";
+
+  const createTypedNote = async (noteType: NoteType) => {
+    if (!user || !workspace) return;
+    let notebookId = selectedNotebookId;
+    if (!notebookId) {
+      const personal = await ensurePersonalNotebook(user.uid, workspace.id);
+      notebookId = personal.notebookId;
+      setSelectedNotebookId(personal.notebookId);
+      setSelectedSectionId(personal.inboxId);
+    }
+    const tpl = noteTemplate(noteType, { date: new Date().toISOString().slice(0, 10) });
+    const id = await createNoteDoc({
+      userId: user.uid,
+      workspaceId: workspace.id,
+      notebookId,
+      sectionId: selectedSectionId || sections[0]?.id || null,
+      title: tpl.title,
+      noteType,
+      projectId: activeProject?.id || null,
+      contentMarkdown: tpl.content,
     });
+    void emitDomainEvent({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      eventType: "note.created",
+      entityType: "note",
+      entityId: id,
+      projectId: activeProject?.id || null,
+    });
+    setSelectedNoteId(id);
   };
 
-  useEffect(() => {
-    if (!inkOpen) return;
-    const frame = window.requestAnimationFrame(() => drawStrokes(strokes));
-    window.addEventListener("resize", () => drawStrokes(strokes), { once: true });
-    return () => window.cancelAnimationFrame(frame);
-  }, [inkOpen, strokes]);
-
-  const createNotebook = async (title = newNotebookTitle || "New notebook") => {
+  const createNotebookWithVisibility = async (title: string, visibility: NoteVisibility) => {
     if (!user || !workspace) return;
     const notebookRef = await addDoc(collection(db, "notebook_entries"), {
       userId: user.uid,
@@ -236,424 +275,269 @@ export function NotesWorkspace({
       title: title.trim(),
       status: "active",
       tags: [],
+      visibility,
+      system: visibility === "private" ? "personal" : visibility === "project" ? "project" : null,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    const sectionRef = await addDoc(collection(db, "notebook_entries"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      kind: "section",
-      title: "Inbox",
-      notebookId: notebookRef.id,
-      status: "active",
-      tags: [],
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    const noteRef = await addDoc(collection(db, "notebook_entries"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      kind: "note",
-      title: "Untitled note",
-      content: "",
-      notebookId: notebookRef.id,
-      sectionId: sectionRef.id,
-      projectId: activeProject?.id || "",
-      tags: [],
-      status: "active",
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNewNotebookTitle("");
     setSelectedNotebookId(notebookRef.id);
-    setSelectedSectionId(sectionRef.id);
-    setSelectedNoteId(noteRef.id);
-  };
-
-  const createSection = async () => {
-    if (!user || !workspace || !selectedNotebookId || !newSectionTitle.trim()) return;
-    const ref = await addDoc(collection(db, "notebook_entries"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      kind: "section",
-      title: newSectionTitle.trim(),
-      notebookId: selectedNotebookId,
-      status: "active",
-      tags: [],
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNewSectionTitle("");
-    setSelectedSectionId(ref.id);
-  };
-
-  const createNote = async () => {
-    if (!user || !workspace) return;
-    if (!selectedNotebookId) {
-      await createNotebook("General");
-      return;
-    }
-    const sectionId = selectedSectionId || sections[0]?.id || "";
-    const ref = await addDoc(collection(db, "notebook_entries"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      kind: "note",
-      title: newNoteTitle.trim() || "Untitled note",
-      content: "",
-      notebookId: selectedNotebookId,
-      sectionId,
-      projectId: activeProject?.id || "",
-      tags: activeProject ? [entityTitle(activeProject).toLowerCase().replace(/\s+/g, "-")] : [],
-      status: "active",
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    void emitDomainEvent({
-      workspaceId: workspace.id,
-      userId: user.uid,
-      eventType: "note.created",
-      entityType: "note",
-      entityId: ref.id,
-      projectId: activeProject?.id || null,
-    });
-    setNewNoteTitle("");
-    setSelectedNoteId(ref.id);
-  };
-
-  const saveKnowledgeCopy = async () => {
-    if (!selectedNote || !user || !workspace) return;
-    await addDoc(collection(db, "knowledge_items"), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      title: editor.title.trim() || "Untitled note",
-      type: "Notebook Note",
-      docType: "note",
-      status: "active",
-      content: editor.content,
-      body: editor.content,
-      summary: `Notebook: ${selectedNotebook?.title || "Notebook"}${selectedSection ? ` / ${selectedSection.title}` : ""}`,
-      tags: parseTags(editor.tagsText),
-      projectId: editor.projectId || "",
-      aiReadable: true,
-      isAIReadable: true,
-      aiUsageScope: "all",
-      sourceType: "notebook_entry",
-      sourceId: selectedNote.id,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setSaveState("saved");
-  };
-
-  const archiveNote = async () => {
-    if (!selectedNote) return;
-    await updateDoc(doc(db, "notebook_entries", selectedNote.id), {
-      status: "archived",
-      updatedAt: serverTimestamp(),
-    });
-  };
-
-  const saveStrokes = async (nextStrokes: Stroke[]) => {
-    if (!user || !workspace || !selectedNoteId) return;
-    await setDoc(doc(db, "notebook_handwriting_assets", `note_${selectedNoteId}`), {
-      userId: user.uid,
-      workspaceId: workspace.id,
-      notebookEntryId: selectedNoteId,
-      strokesJson: JSON.stringify(nextStrokes),
-      format: "strokes_json",
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  };
-
-  const pointerPoint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-      pressure: event.pressure || 0.5,
-    };
-  };
-
-  const pointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drawingRef.current = [pointerPoint(event)];
-    setIsDrawing(true);
-  };
-
-  const pointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    event.preventDefault();
-    const point = pointerPoint(event);
-    drawingRef.current = [...drawingRef.current, point];
-    drawStrokes([...strokes, { color: inkColor, width: inkWidth, points: drawingRef.current }]);
-  };
-
-  const pointerUp = async (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    event.preventDefault();
-    setIsDrawing(false);
-    if (drawingRef.current.length < 2) return;
-    const nextStrokes = [...strokes, { color: inkColor, width: inkWidth, points: drawingRef.current }];
-    drawingRef.current = [];
-    setStrokes(nextStrokes);
-    await saveStrokes(nextStrokes);
-  };
-
-  const undoStroke = async () => {
-    const next = strokes.slice(0, -1);
-    setStrokes(next);
-    await saveStrokes(next);
-  };
-
-  const clearInk = async () => {
-    setStrokes([]);
-    await saveStrokes([]);
   };
 
   return (
-    <section className="do-notes-center" data-testid="notes-workspace">
-      <aside className="do-notes-nav">
-        <div className="do-notes-create">
-          <input
-            aria-label="New notebook title"
-            onChange={(event) => setNewNotebookTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") createNotebook();
-            }}
-            placeholder="New notebook..."
-            value={newNotebookTitle}
-          />
-          <button onClick={() => createNotebook()} type="button"><Plus size={13} /></button>
-        </div>
-
-        <div className="do-notes-list">
-          {notebooks.map((notebook) => (
-            <button
-              className={notebook.id === selectedNotebookId ? "is-active" : ""}
-              key={notebook.id}
-              onClick={() => {
-                setSelectedNotebookId(notebook.id);
-                setSelectedSectionId("");
-                setSelectedNoteId("");
-              }}
-              type="button"
-            >
-              <BookOpen size={13} />
-              <span>{notebook.title || "Notebook"}</span>
-              <small>{visibleEntries.filter((entry) => entry.kind === "note" && entry.notebookId === notebook.id).length}</small>
-            </button>
-          ))}
-          {notebooks.length === 0 && (
-            <div className="do-notes-empty-mini">Create one notebook. Small, clean, useful.</div>
-          )}
-        </div>
-
-        {selectedNotebookId && (
-          <div className="do-notes-sections">
-            <span className="do-notes-label">Sections</span>
-            {sections.map((section) => (
-              <button className={section.id === selectedSectionId ? "is-active" : ""} key={section.id} onClick={() => setSelectedSectionId(section.id)} type="button">
-                <Folder size={12} /><span>{section.title || "Section"}</span>
-              </button>
-            ))}
-            <div className="do-notes-create">
-              <input
-                aria-label="New section title"
-                onChange={(event) => setNewSectionTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") createSection();
-                }}
-                placeholder="New section..."
-                value={newSectionTitle}
-              />
-              <button disabled={!newSectionTitle.trim()} onClick={createSection} type="button"><Plus size={13} /></button>
-            </div>
-          </div>
-        )}
-      </aside>
-
-      <aside className="do-notes-note-list">
-        <div className="do-notes-list-head">
-          <div>
-            <span className="do-kicker">Notes</span>
-            <strong>{selectedSection?.title || selectedNotebook?.title || "Notebook"}</strong>
-          </div>
-          <small>{notes.length}</small>
-        </div>
-        <div className="do-notes-create">
-          <input
-            aria-label="New note title"
-            onChange={(event) => setNewNoteTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") createNote();
-            }}
-            placeholder="New note..."
-            value={newNoteTitle}
-          />
-          <button onClick={createNote} type="button"><Plus size={13} /></button>
-        </div>
-        <div className="do-notes-cards">
-          {notes.map((note) => (
-            <button className={note.id === selectedNoteId ? "is-active" : ""} key={note.id} onClick={() => setSelectedNoteId(note.id)} type="button">
-              <FileText size={13} />
-              <span>
-                <strong>{note.title || "Untitled note"}</strong>
-                <small>{plainNoteText(note.content || "Empty note").slice(0, 86) || "Empty note"}</small>
-              </span>
-            </button>
-          ))}
-          {notes.length === 0 && <div className="do-notes-empty-mini">No notes here yet.</div>}
-        </div>
-      </aside>
-
-      <main className="do-notes-editor">
+    <section className="cw-notes-shell" data-testid="notes-workspace">
+      {!focusMode ? (
+        <NotebookSidebar
+          collapsed={sidebarCollapsed}
+          locale={locale}
+          notebooks={notebooks}
+          notes={allNotes}
+          onCreateNotebook={(title, visibility) => void createNotebookWithVisibility(title, visibility)}
+          onSearch={setSearch}
+          onSelectNotebook={(id, sectionId) => {
+            setSelectedNotebookId(id);
+            setSelectedSectionId(sectionId || "");
+            setSelectedNoteId("");
+          }}
+          search={search}
+          sections={visibleEntries.filter((e) => e.kind === "section")}
+          selectedNotebookId={selectedNotebookId}
+          selectedSectionId={selectedSectionId}
+        />
+      ) : null}
+      {!focusMode ? (
+        <NotesList
+          currentUserId={user?.uid}
+          locale={locale}
+          notebookTitle={selectedSection?.title || selectedNotebook?.title || ""}
+          notes={listNotes}
+          onCreate={(type) => void createTypedNote(type)}
+          onSelect={setSelectedNoteId}
+          onTab={setListTab}
+          selectedNoteId={selectedNoteId}
+          showLinkedTab={Boolean(searchResults)}
+          showMineTab={selectedNotebookVis !== "private"}
+          tab={listTab}
+        />
+      ) : null}
+      <div className="cw-notes-editor">
         {selectedNote ? (
           <>
-            <header>
-              <div>
-                <span className="do-kicker">Notebook note</span>
-                <input
-                  aria-label="Note title"
-                  onChange={(event) => setEditor((current) => ({ ...current, title: event.target.value }))}
-                  placeholder="Untitled note"
-                  value={editor.title}
-                />
-              </div>
-              <div className="do-notes-actions">
-                <RoutineLaunchButton
-                  compact
-                  scope={{
-                    entityType: "note",
-                    entityId: String(selectedNoteId || ""),
-                    entityTitle: editor.title || "Nota",
-                  }}
-                  testId="note-routine-button"
-                />
-                <button aria-label={inkOpen ? "Close handwriting" : "Handwrite"} className="do-icon-button" onClick={() => setInkOpen((open) => !open)} title={inkOpen ? "Close handwriting" : "Handwrite"} type="button"><PenLine size={14} /></button>
-                <button aria-label="Analyze note" className="do-icon-button do-mobile-advanced" onClick={() => onAsk(`Analyze this notebook note and tell me the key ideas, decisions, risks, and next actions:\n\nTitle: ${editor.title}\n\n${editor.content}`)} title="Analyze note" type="button"><Sparkles size={14} /></button>
-                <button className="do-mobile-advanced" onClick={() => onAsk(`Extract actionable tasks, decisions, and follow-ups from this notebook note. Keep changes pending for approval:\n\nTitle: ${editor.title}\n\n${editor.content}`)} type="button">Extract actions</button>
-              </div>
-            </header>
-
-            <div className="do-notes-meta">
-              <label>
-                <Tags size={12} />
-                <input
-                  list="do-note-tag-suggestions"
-                  onChange={(event) => setEditor((current) => ({ ...current, tagsText: event.target.value }))}
-                  placeholder="tags: client, prd, idea..."
-                  value={editor.tagsText}
-                />
-                <datalist id="do-note-tag-suggestions">
-                  {tagSuggestions.map((tag) => <option key={tag} value={tag} />)}
-                </datalist>
-              </label>
-              <select
-                aria-label="Link note to project"
-                onChange={(event) => setEditor((current) => ({ ...current, projectId: event.target.value }))}
-                value={editor.projectId}
-              >
-                <option value="">No project link</option>
-                {projects.map((project) => <option key={project.id} value={project.id}>{entityTitle(project)}</option>)}
-              </select>
-              {editor.projectId && (
+            <div className="cw-notes-editor-bar">
+              <span>
+                {(selectedNotebookVis === "private"
+                  ? locale === "es"
+                    ? "Personales"
+                    : "Personal"
+                  : selectedNotebookVis === "workspace"
+                    ? locale === "es"
+                      ? "Equipo"
+                      : "Team"
+                    : locale === "es"
+                      ? "Proyectos"
+                      : "Projects")}{" "}
+                › {selectedNotebook?.title || t("notes.untitled")}
+              </span>
+              <div className="cw-notes-bar-actions">
+                <span>
+                  {saveState === "saving"
+                    ? t("notes.saving")
+                    : saveState === "saved"
+                      ? t("notes.saved")
+                      : ""}
+                </span>
                 <button
-                  className="cw-semantic-chip"
-                  data-hue="blue"
+                  className="cw-notes-icon-btn"
+                  onClick={() =>
+                    onAsk(
+                      locale === "es"
+                        ? `Ayudame con esta nota: ${editor.title}`
+                        : `Help with this note: ${editor.title}`,
+                    )
+                  }
+                  type="button"
+                >
+                  <Sparkles size={13} />
+                </button>
+                <button
+                  className="cw-notes-icon-btn"
                   onClick={() => {
-                    const project = projects.find((entry) => entry.id === editor.projectId);
-                    if (!project) return;
-                    setPeekEntity({
-                      id: String(project.id),
-                      kind: "project",
-                      title: entityTitle(project),
-                      status: project.status || null,
-                      owner: project.owner || project.projectManager || null,
-                      dueDate: project.dueDate || project.targetDate || null,
-                      excerpt: String(project.outcome || project.description || "").slice(0, 280),
-                    });
+                    setFocusMode((v) => !v);
+                    setSidebarCollapsed(true);
                   }}
                   type="button"
                 >
-                  ~{entityTitle(projects.find((entry) => entry.id === editor.projectId) || { title: "Project" })}
+                  <Maximize2 size={13} />
                 </button>
-              )}
-              {getBlocks(editor.content).length > 0 && (
-                <span className="do-kicker">{getBlocks(editor.content).length} blocks</span>
-              )}
-              <span>{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : "Ready"}</span>
-            </div>
-
-            <div className="do-notes-paper">
-              {inkOpen && (
-                <div className="do-notes-ink">
-                  <div className="do-notes-ink-tools">
-                    {["var(--accent)", "var(--accent)", "var(--status-danger)", "var(--text-primary)"].map((color) => (
-                      <button aria-label={`Ink color ${color}`} className={inkColor === color ? "is-active" : ""} key={color} onClick={() => setInkColor(color)} style={{ background: color }} type="button" />
-                    ))}
-                    <button className={inkWidth === 2.5 ? "is-active" : ""} onClick={() => setInkWidth(2.5)} type="button">Fine</button>
-                    <button className={inkWidth === 5 ? "is-active" : ""} onClick={() => setInkWidth(5)} type="button">Bold</button>
-                    <button aria-label="Undo stroke" className="do-icon-button" onClick={undoStroke} title="Undo stroke" type="button"><Undo2 size={13} /></button>
-                    <button aria-label="Clear handwriting" className="do-icon-button" onClick={clearInk} title="Clear handwriting" type="button"><Eraser size={13} /></button>
+                <details style={{ position: "relative" }}>
+                  <summary className="cw-notes-icon-btn" style={{ listStyle: "none" }}>
+                    <MoreHorizontal size={13} />
+                  </summary>
+                  <div className="cw-notes-popover">
+                    <button
+                      onClick={() =>
+                        void updateDoc(doc(db, "notebook_entries", selectedNote.id), {
+                          status: "archived",
+                          updatedAt: serverTimestamp(),
+                        })
+                      }
+                      style={{ color: "var(--status-danger)" }}
+                      type="button"
+                    >
+                      <Archive size={12} /> {locale === "es" ? "Archivar" : "Archive"}
+                    </button>
                   </div>
-                  <canvas
-                    ref={canvasRef}
-                    onPointerCancel={pointerUp}
-                    onPointerDown={pointerDown}
-                    onPointerMove={pointerMove}
-                    onPointerUp={pointerUp}
-                  />
-                </div>
-              )}
+                </details>
+                <button
+                  className="cw-notes-icon-btn"
+                  onClick={() => setSidebarCollapsed((v) => !v)}
+                  type="button"
+                >
+                  ☰
+                </button>
+              </div>
+            </div>
+            <input
+              className="cw-notes-title"
+              onChange={(e) => setEditor((cur) => ({ ...cur, title: e.target.value }))}
+              placeholder={t("notes.untitled")}
+              value={editor.title}
+            />
+            <NoteMetaChips
+              locale={locale}
+              note={withDefaults(selectedNote)}
+              onAiVisible={(value) => void setNoteAiVisible(selectedNote.id, value)}
+              onOpenLinks={() => setLinksOpen(true)}
+              onTags={(tags) => setEditor((cur) => ({ ...cur, tagsText: tags.join(", ") }))}
+              onType={(type) => {
+                const empty = !String(selectedNote.content || "").trim();
+                const tpl = noteTemplate(type, {
+                  date: new Date().toISOString().slice(0, 10),
+                });
+                void updateDoc(doc(db, "notebook_entries", selectedNote.id), {
+                  noteType: type,
+                  ...(empty ? { title: tpl.title, content: tpl.content } : {}),
+                  updatedAt: serverTimestamp(),
+                });
+              }}
+              onVisibility={(visibility) =>
+                void setNoteVisibility(
+                  selectedNote.id,
+                  visibility,
+                  visibility === "project" ? activeProject?.id || null : null,
+                )
+              }
+              projectTitle={
+                projects.find((p) => p.id === selectedNote.projectId)?.title ||
+                activeProject?.title
+              }
+            />
+            {linksOpen ? (
+              <div style={{ position: "relative", zIndex: 20 }}>
+                <NoteLinksPopover
+                  items={tasks.map((task) => ({
+                    id: String(task.id),
+                    title: String(task.title || task.name || ""),
+                    key: String(task.key || task.projectKey || ""),
+                    projectTitle: projects.find((p) => p.id === task.projectId)?.title,
+                  }))}
+                  locale={locale}
+                  noteId={selectedNote.id}
+                  notes={allNotes.map((n) => ({ id: n.id, title: n.title }))}
+                  onClose={() => setLinksOpen(false)}
+                  onCreateItem={() => onQuickCaptureItem?.()}
+                  people={workspaceMembers.map((m) => ({
+                    id: String(m.id),
+                    displayName: m.displayName || m.name,
+                    name: m.name,
+                  }))}
+                  projects={projects.map((p) => ({
+                    id: String(p.id),
+                    title: p.title || p.name,
+                    name: p.name,
+                  }))}
+                  userId={user?.uid || ""}
+                  workspaceId={workspace?.id || ""}
+                />
+              </div>
+            ) : null}
+            <div className="cw-notes-body">
               <NoteRichEditor
+                items={tasks.map((task) => ({
+                  id: String(task.id),
+                  title: String(task.title || task.name || ""),
+                  key: String(task.key || task.projectKey || ""),
+                  projectTitle: projects.find((p) => p.id === task.projectId)?.title,
+                  kind: String(task.workItemType || task.itemType || "task"),
+                }))}
                 noteId={selectedNote.id}
-                onChange={(content) => setEditor((current) => ({ ...current, content }))}
+                onChange={(content) => setEditor((cur) => ({ ...cur, content }))}
+                onLinkTask={(taskId) => {
+                  if (!user || !workspace) return;
+                  void linkNote({
+                    workspaceId: workspace.id,
+                    userId: user.uid,
+                    noteId: selectedNote.id,
+                    target: { type: "task", id: taskId },
+                  });
+                }}
+                onMentionPerson={(person) => {
+                  if (!user || !workspace) return;
+                  const targetUid = person.userId || person.id;
+                  if (!targetUid || targetUid === user.uid) return;
+                  void addDoc(collection(db, "user_notifications"), {
+                    type: "mention",
+                    workspaceId: workspace.id,
+                    userId: targetUid,
+                    noteId: selectedNote.id,
+                    noteTitle: editor.title || t("notes.untitled"),
+                    mentionedByUserId: user.uid,
+                    mentionedByName: user.displayName || user.email || "",
+                    read: false,
+                    createdAt: serverTimestamp(),
+                  });
+                }}
+                people={workspaceMembers.map((m) => ({
+                  id: String(m.id),
+                  displayName: m.displayName || m.name,
+                  name: m.name,
+                  userId: m.userId,
+                }))}
                 value={editor.content}
               />
             </div>
-
-            <footer className="do-notes-footer">
-              <span>{selectedNotebook?.title || "Notebook"} {selectedSection ? <><ChevronRight size={12} /> {selectedSection.title}</> : null}</span>
-              <div>
-                <button onClick={saveKnowledgeCopy} type="button"><Check size={13} /> Make AI-readable</button>
-                <button onClick={archiveNote} type="button"><Archive size={13} /> Archive note</button>
-              </div>
-            </footer>
-            <EntityPeek
-              entity={peekEntity}
-              onClose={() => setPeekEntity(null)}
-              onExpand={() => {
-                if (peekEntity?.kind === "project") {
-                  const project = projects.find((entry) => entry.id === peekEntity.id);
-                  if (project) onOpenProject?.(project);
-                }
-                setPeekEntity(null);
-              }}
-              onOpenSplit={() => {
-                if (peekEntity?.kind === "project") {
-                  const project = projects.find((entry) => entry.id === peekEntity.id);
-                  if (project) onOpenProject?.(project);
-                }
-                setPeekEntity(null);
-              }}
-            />
+            <div className="cw-notes-foot">
+              <span>/ bloque · # ítem · @ persona</span>
+              <button onClick={() => onAsk(editor.content.slice(0, 400))} type="button">
+                ✦ {t("notes.createItems")}
+              </button>
+            </div>
           </>
         ) : (
-          <div className="do-notes-empty">
-            <BookOpen size={26} />
-            <h2>Your notebooks live here.</h2>
-            <p>Create a notebook, capture notes, tag them, and let Certo Work analyze or extract actions when you need it.</p>
-            <button onClick={() => createNotebook("General")} type="button"><Plus size={14} /> Create General notebook</button>
+          <div className="cw-notes-empty">
+            <div className="cw-notes-empty-sketch">
+              <i style={{ width: "70%" }} />
+              <i style={{ width: "90%" }} />
+              <i style={{ width: "55%" }} />
+            </div>
+            <p style={{ textAlign: "center" }}>{t("notes.pickOrCreate")}</p>
           </div>
         )}
-      </main>
+      </div>
+      {peekEntity ? (
+        <EntityPeek
+          entity={peekEntity}
+          onClose={() => setPeekEntity(null)}
+          onExpand={() => {
+            if (peekEntity.kind === "project") {
+              const project = projects.find((row) => row.id === peekEntity.id);
+              if (project) onOpenProject?.(project);
+            }
+            setPeekEntity(null);
+          }}
+          onOpenSplit={() => setPeekEntity(null)}
+        />
+      ) : null}
     </section>
   );
 }

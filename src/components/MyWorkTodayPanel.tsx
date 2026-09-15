@@ -1,4 +1,4 @@
-import { Calendar, Check, Circle, Star, Zap } from "./ui/Icon";
+import { Calendar, Check, Circle, FileText, Star, Zap } from "./ui/Icon";
 import { todayPlanGroups } from "../lib/myWorkItems";
 import "../features/dayplan/dayplan.css";
 
@@ -63,6 +63,9 @@ export function MyWorkTodayPanel({
                   const done = isDone(item);
                   const id = String(item.id || "");
                   const isKey = Boolean(keyItemId && id === keyItemId);
+                  const linked = Array.isArray(item.linkedDocumentIds)
+                    ? item.linkedDocumentIds.length
+                    : 0;
                   return (
                     <li className={done ? "is-done" : ""} key={id}>
                       <button
@@ -78,6 +81,13 @@ export function MyWorkTodayPanel({
                       <button onClick={() => onSelectItem(id)} type="button">
                         {titleOf(item)}
                       </button>
+                      {linked > 0 ? (
+                        <FileText
+                          aria-hidden
+                          size={12}
+                          style={{ color: "var(--text-muted)", marginLeft: 4 }}
+                        />
+                      ) : null}
                       {onSetKey ? (
                         <button
                           aria-label={

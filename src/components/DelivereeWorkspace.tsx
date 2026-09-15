@@ -7153,6 +7153,11 @@ export function DelivereeWorkspace() {
                   tags={categories}
                   tasks={tasks}
                   workspaceMembers={workspaceMembers}
+                  notebookEntries={notebookEntries}
+                  onOpenNote={(noteId) => {
+                    setSelectedWorkItemId(null);
+                    navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                  }}
                 />,
                 document.body,
               )}
@@ -7660,6 +7665,11 @@ export function DelivereeWorkspace() {
             tags={categories}
             tasks={myWorkTasks}
             workspaceMembers={workspaceMembers}
+            notebookEntries={notebookEntries}
+            onOpenNote={(noteId) => {
+              setSelectedWorkItemId(null);
+              navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+            }}
             onInviteAssigneeEmail={
               canManageMembers
                 ? async (email) => {
@@ -7958,6 +7968,7 @@ export function DelivereeWorkspace() {
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
             entries={notebookEntries}
+            initialNoteId={new URLSearchParams(location.search).get("note")}
             knowledgeItems={knowledgeItems}
             onAsk={(prompt) => {
               setComposer(prompt);
@@ -7966,6 +7977,7 @@ export function DelivereeWorkspace() {
             onOpenProject={openProjectRecord}
             projects={projects}
             tasks={tasks}
+            workspaceMembers={workspaceMembers}
           />
         )}
       </main>

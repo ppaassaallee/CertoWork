@@ -49,6 +49,7 @@ export const ITEM_MODAL_COPY = {
   activity: { en: "Activity", es: "Actividad" },
   subtasks: { en: "Sub Task", es: "Sub Task" },
   attachments: { en: "Attachments", es: "Adjuntos" },
+  notes: { en: "Notes", es: "Notas" },
   comments: { en: "Comments", es: "Comentarios" },
   openCollab: { en: "Open Collab", es: "Abrir Collab" },
   commentPlaceholder: {
