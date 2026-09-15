@@ -141,7 +141,7 @@ export function Integrations() {
             </div>
             <div>
               <span className="font-medium text-gray-900 block">{t("calendar.calendars")}</span>
-              <span className="text-xs text-gray-500 block">Google Calendar · read overlay</span>
+              <span className="text-xs text-gray-500 block">{t("calendar.subtitle")}</span>
             </div>
           </div>
           <button
