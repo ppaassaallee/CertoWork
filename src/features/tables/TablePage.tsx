@@ -7,14 +7,17 @@ import {
   where,
 } from "firebase/firestore";
 import {
+  Archive,
   CalendarDays,
   Filter,
   Kanban,
   LayoutGrid,
+  ListChecks,
   MoreHorizontal,
   Plus,
   Settings2,
   Sparkles,
+  Trash2,
   Zap,
 } from "../../components/ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
@@ -24,12 +27,14 @@ import {
   TABLE_RECORDS,
   createRecord,
   deleteRecord,
+  tableLifecycleStatus,
   updateRecordField,
   updateTableColumns,
   type KeyColumns,
   type Column,
   type RecordActivity,
   type RecordDoc,
+  type RecordLinkTarget,
   type RecordValue,
   type TableDoc,
 } from "../../lib/tables";
@@ -39,14 +44,19 @@ import { RecordsBoard } from "./RecordsBoard";
 import { RecordsCalendar } from "./RecordsCalendar";
 import { RecordsGrid } from "./RecordsGrid";
 import { TableAutomationComposer } from "./TableAutomationComposer";
+import {
+  TableItemsPanel,
+  type TableItemCandidate,
+} from "./TableItemsPanel";
 import type { TableMember } from "./cells/RecordCells";
 
-export type TableViewMode = "table" | "board" | "calendar";
+export type TableViewMode = "table" | "board" | "calendar" | "items";
 
 export type TablePageProps = {
   table: TableDoc;
   records?: RecordDoc[];
   members: TableMember[];
+  itemCandidates?: TableItemCandidate[];
   recordId?: string | null;
   activity?: RecordActivity[];
   onOpenRecord?(id: string | null): void;
@@ -60,6 +70,12 @@ export type TablePageProps = {
   onLinkNote?(recordId: string): void;
   onLinkTicket?(recordId: string): void;
   onLinkRecord?(recordId: string): void;
+  onOpenLink?(target: RecordLinkTarget): void;
+  onOpenItem?(itemId: string): void;
+  onArchiveTable?(): void;
+  onDeleteTable?(): void;
+  onRestoreTable?(): void;
+  onPermanentlyDeleteTable?(): void;
   onOpenOdysseus?(opts: {
     kind: "table" | "record";
     entityId: string;
@@ -72,6 +88,7 @@ export function TablePage({
   table,
   records: recordsProp,
   members,
+  itemCandidates = [],
   recordId = null,
   activity = [],
   onOpenRecord,
@@ -85,6 +102,12 @@ export function TablePage({
   onLinkNote,
   onLinkTicket,
   onLinkRecord,
+  onOpenLink,
+  onOpenItem,
+  onArchiveTable,
+  onDeleteTable,
+  onRestoreTable,
+  onPermanentlyDeleteTable,
   onOpenOdysseus,
 }: TablePageProps) {
   const { user } = useAuth();
@@ -94,7 +117,9 @@ export function TablePage({
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [automationsOpen, setAutomationsOpen] = useState(false);
   const [liveRecords, setLiveRecords] = useState<RecordDoc[]>([]);
+  const [itemCount, setItemCount] = useState(Number(table.itemCount || 0));
   const ownsData = recordsProp === undefined;
+  const lifecycle = tableLifecycleStatus(table);
 
   useEffect(() => {
     if (!ownsData) return;
@@ -113,6 +138,10 @@ export function TablePage({
       () => setLiveRecords([]),
     );
   }, [ownsData, table.id]);
+
+  useEffect(() => {
+    setItemCount(Number(table.itemCount || 0));
+  }, [table.itemCount, table.id]);
 
   const records = recordsProp ?? liveRecords;
 
@@ -191,14 +220,17 @@ export function TablePage({
   const meta = useMemo(() => {
     const parts = [
       t("tables.meta.records").replace("{n}", String(records.length)),
+      t("tables.meta.items").replace("{n}", String(itemCount)),
       table.visibility === "private"
         ? t("tables.visibility.private")
         : table.visibility === "project"
           ? t("tables.visibility.project")
           : t("tables.visibility.workspace"),
     ];
+    if (lifecycle === "archived") parts.push(t("tables.status.archived"));
+    if (lifecycle === "deleted") parts.push(t("tables.status.deleted"));
     return parts.join(" · ");
-  }, [records.length, table.visibility]);
+  }, [records.length, itemCount, table.visibility, lifecycle]);
 
   return (
     <div className="cw-tables-page" data-testid="tables-page">
@@ -250,12 +282,13 @@ export function TablePage({
               type="button"
               className="cw-tables-icon-btn"
               aria-label={t("tables.page.menu")}
+              data-testid="tables-page-menu"
               onClick={() => setMenuOpen((v) => !v)}
             >
               <MoreHorizontal size={16} />
             </button>
             {menuOpen ? (
-              <div className="cw-tables-popover">
+              <div className="cw-tables-popover" data-testid="tables-page-menu-pop">
                 <button
                   type="button"
                   onClick={() => {
@@ -265,17 +298,69 @@ export function TablePage({
                 >
                   <Settings2 size={14} /> {t("tables.page.editColumns")}
                 </button>
+                {lifecycle === "active" && onArchiveTable ? (
+                  <button
+                    type="button"
+                    data-testid="tables-archive"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onArchiveTable();
+                    }}
+                  >
+                    <Archive size={14} /> {t("tables.page.archive")}
+                  </button>
+                ) : null}
+                {lifecycle !== "deleted" && onDeleteTable ? (
+                  <button
+                    type="button"
+                    className="is-danger"
+                    data-testid="tables-delete"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDeleteTable();
+                    }}
+                  >
+                    <Trash2 size={14} /> {t("tables.page.delete")}
+                  </button>
+                ) : null}
+                {lifecycle !== "active" && onRestoreTable ? (
+                  <button
+                    type="button"
+                    data-testid="tables-restore"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onRestoreTable();
+                    }}
+                  >
+                    <Archive size={14} /> {t("tables.page.restore")}
+                  </button>
+                ) : null}
+                {lifecycle === "deleted" && onPermanentlyDeleteTable ? (
+                  <button
+                    type="button"
+                    className="is-danger"
+                    data-testid="tables-delete-forever"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onPermanentlyDeleteTable();
+                    }}
+                  >
+                    <Trash2 size={14} /> {t("tables.page.deleteForever")}
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            className="cw-tables-btn"
-            onClick={() => void handleCreate()}
-          >
-            <Plus size={14} />
-            {t("tables.page.newRecord")}
-          </button>
+          {view !== "items" ? (
+            <button
+              type="button"
+              className="cw-tables-btn"
+              onClick={() => void handleCreate()}
+            >
+              <Plus size={14} />
+              {t("tables.page.newRecord")}
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -285,12 +370,14 @@ export function TablePage({
             ["table", t("tables.tabs.table"), LayoutGrid],
             ["board", t("tables.tabs.board"), Kanban],
             ["calendar", t("tables.tabs.calendar"), CalendarDays],
+            ["items", t("tables.tabs.items"), ListChecks],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
             key={id}
             type="button"
             className={view === id ? "is-active" : ""}
+            data-testid={`tables-tab-${id}`}
             onClick={() => setView(id)}
           >
             <Icon size={14} />
@@ -329,9 +416,21 @@ export function TablePage({
               onOpenRecord={(id) => openRecord(id)}
             />
           ) : null}
+          {view === "items" ? (
+            <TableItemsPanel
+              tableId={table.id}
+              workspaceId={table.workspaceId}
+              candidates={itemCandidates}
+              onOpenItem={onOpenItem}
+              onItemsChanged={(ids) => {
+                setItemCount(ids.length);
+                onTableChange?.({ ...table, itemCount: ids.length });
+              }}
+            />
+          ) : null}
         </div>
 
-        {activeRecord ? (
+        {activeRecord && view !== "items" ? (
           <RecordPanel
             table={table}
             record={activeRecord}
@@ -344,6 +443,7 @@ export function TablePage({
             onLinkNote={onLinkNote ? () => onLinkNote(activeRecord.id) : undefined}
             onLinkTicket={onLinkTicket ? () => onLinkTicket(activeRecord.id) : undefined}
             onLinkRecord={onLinkRecord ? () => onLinkRecord(activeRecord.id) : undefined}
+            onOpenLink={onOpenLink}
           />
         ) : null}
 

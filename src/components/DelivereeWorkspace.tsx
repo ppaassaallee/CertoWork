@@ -240,9 +240,15 @@ import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import {
   TABLES,
   TABLE_RECORDS,
+  archiveTable,
   canSeeTable,
   createRecord,
   buildMyWorkRecords,
+  linkRecord,
+  permanentlyDeleteTable,
+  restoreTable,
+  softDeleteTable,
+  tableLifecycleStatus,
   type TableDoc,
   type RecordDoc,
 } from "../lib/tables";
@@ -1486,10 +1492,34 @@ export function DelivereeWorkspace() {
         return String(a.name || "").localeCompare(String(b.name || ""));
       });
   }, [user?.uid, viewerProjectIds, workspaceTables]);
+  const archivedTables = useMemo(() => {
+    if (!user?.uid) return [];
+    return workspaceTables
+      .filter((table) =>
+        canSeeTable(table, user.uid, viewerProjectIds, { includeArchived: true }),
+      )
+      .filter((table) => tableLifecycleStatus(table) === "archived")
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }, [user?.uid, viewerProjectIds, workspaceTables]);
+  const deletedTables = useMemo(() => {
+    if (!user?.uid) return [];
+    return workspaceTables
+      .filter((table) =>
+        canSeeTable(table, user.uid, viewerProjectIds, { includeDeleted: true }),
+      )
+      .filter((table) => tableLifecycleStatus(table) === "deleted")
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }, [user?.uid, viewerProjectIds, workspaceTables]);
   const activeTable = useMemo(() => {
     if (lens.kind !== "tables" || !lens.tableId) return null;
-    return visibleTables.find((table) => table.id === lens.tableId) || null;
-  }, [lens, visibleTables]);
+    const fromVisible = visibleTables.find((table) => table.id === lens.tableId);
+    if (fromVisible) return fromVisible;
+    return (
+      archivedTables.find((table) => table.id === lens.tableId) ||
+      deletedTables.find((table) => table.id === lens.tableId) ||
+      null
+    );
+  }, [lens, visibleTables, archivedTables, deletedTables]);
   const openCreateTableWizard = () => {
     setCreateTableWizardOpen(true);
   };
@@ -4501,6 +4531,152 @@ export function DelivereeWorkspace() {
     });
   };
 
+  const leaveTableSurface = (tableId: string) => {
+    if (lens.kind === "tables" && lens.tableId === tableId) {
+      navigate("/");
+    }
+  };
+
+  const archiveWorkspaceTable = async (table: TableDoc) => {
+    await archiveTable(table.id, tableLifecycleStatus(table));
+    setWorkspaceTables((current) =>
+      current.map((row) =>
+        row.id === table.id
+          ? {
+              ...row,
+              status: "archived",
+              previousStatus: tableLifecycleStatus(table),
+              archivedAt: new Date().toISOString(),
+              deletedAt: null,
+              purgeAfter: null,
+            }
+          : row,
+      ),
+    );
+    leaveTableSurface(table.id);
+    setNotice(
+      t("tables.archive.notice").replace("{name}", table.name || t("tables.untitled")),
+    );
+  };
+
+  const deleteWorkspaceTable = (table: TableDoc) => {
+    const recordCount = workspaceRecords.filter((row) => row.tableId === table.id).length;
+    const itemCount = Number(table.itemCount || 0);
+    setDestructiveDialog({
+      verb: t("tables.page.delete"),
+      entityName: table.name || t("tables.untitled"),
+      impact: [
+        t("tables.delete.impact.records")
+          .replace("{n}", String(recordCount))
+          .replace("{s}", recordCount === 1 ? "" : "s"),
+        t("tables.delete.impact.items")
+          .replace("{n}", String(itemCount))
+          .replace("{s}", itemCount === 1 ? "" : "s"),
+        t("tables.delete.impact.purge"),
+      ],
+      onConfirm: async () => {
+        setDestructiveBusy(true);
+        try {
+          const { purgeAfter } = await softDeleteTable(
+            table.id,
+            tableLifecycleStatus(table),
+          );
+          setWorkspaceTables((current) =>
+            current.map((row) =>
+              row.id === table.id
+                ? {
+                    ...row,
+                    status: "deleted",
+                    previousStatus: tableLifecycleStatus(table),
+                    deletedAt: new Date().toISOString(),
+                    purgeAfter: purgeAfter.toISOString(),
+                    archivedAt: null,
+                  }
+                : row,
+            ),
+          );
+          leaveTableSurface(table.id);
+          setNotice(
+            t("tables.delete.notice")
+              .replace("{name}", table.name || t("tables.untitled"))
+              .replace("{date}", purgeAfter.toLocaleDateString()),
+          );
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
+    });
+  };
+
+  const restoreWorkspaceTable = async (table: TableDoc) => {
+    const purgeDate = table.purgeAfter ? new Date(table.purgeAfter) : null;
+    if (purgeDate && !Number.isNaN(purgeDate.getTime()) && purgeDate.getTime() < Date.now()) {
+      setNotice(
+        "The 30-day restoration period has expired. You can still Delete forever to remove this table.",
+      );
+      return;
+    }
+    await restoreTable(table.id, table.previousStatus || "active");
+    setWorkspaceTables((current) =>
+      current.map((row) =>
+        row.id === table.id
+          ? {
+              ...row,
+              status: "active",
+              deletedAt: null,
+              purgeAfter: null,
+              archivedAt: null,
+              restoredAt: new Date().toISOString(),
+            }
+          : row,
+      ),
+    );
+    setNotice(
+      t("tables.restore.notice").replace("{name}", table.name || t("tables.untitled")),
+    );
+    navigate(`/tables/${encodeURIComponent(table.id)}`);
+  };
+
+  const permanentlyDeleteWorkspaceTable = (table: TableDoc) => {
+    if (tableLifecycleStatus(table) !== "deleted") {
+      setNotice("Move the table to Deleted first, or use Delete forever from a deleted row.");
+      return;
+    }
+    const recordCount = workspaceRecords.filter((row) => row.tableId === table.id).length;
+    setDestructiveDialog({
+      verb: t("tables.page.deleteForever"),
+      entityName: table.name || t("tables.untitled"),
+      impact: [
+        t("tables.deleteForever.impact"),
+        t("tables.deleteForever.records")
+          .replace("{n}", String(recordCount))
+          .replace("{s}", recordCount === 1 ? "" : "s"),
+        t("tables.deleteForever.items"),
+      ],
+      onConfirm: async () => {
+        setDestructiveBusy(true);
+        try {
+          await permanentlyDeleteTable(table.id);
+          setWorkspaceTables((current) => current.filter((row) => row.id !== table.id));
+          setWorkspaceRecords((current) =>
+            current.filter((row) => row.tableId !== table.id),
+          );
+          leaveTableSurface(table.id);
+          setNotice(
+            t("tables.deleteForever.notice").replace(
+              "{name}",
+              table.name || t("tables.untitled"),
+            ),
+          );
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
+    });
+  };
+
   const saveDigestRequest = async (
     kind: "email_reminder" | "daily_digest" | "weekly_summary",
   ) => {
@@ -6752,7 +6928,9 @@ export function DelivereeWorkspace() {
             </div>
             {sidebarSections.tables && (
               <div className="do-project-list">
-                {visibleTables.length === 0 ? (
+                {visibleTables.length === 0 &&
+                archivedTables.length === 0 &&
+                deletedTables.length === 0 ? (
                   <button
                     className="do-empty-link"
                     onClick={() => openCreateTableWizard()}
@@ -6761,33 +6939,151 @@ export function DelivereeWorkspace() {
                     {t("tables.empty.tables")}
                   </button>
                 ) : (
-                  visibleTables.map((table) => (
-                    <div
-                      className={`do-project-row ${
-                        lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
-                      }`}
-                      key={table.id}
-                    >
-                      <button
-                        className="do-project-context"
-                        data-testid={`open-table-${table.id}`}
-                        onClick={() => {
-                          navigate(`/tables/${encodeURIComponent(table.id)}`);
-                          setSidebarOpen(false);
-                        }}
-                        title={table.name}
-                        type="button"
+                  <>
+                    {visibleTables.map((table) => (
+                      <div
+                        className={`do-project-row ${
+                          lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
+                        }`}
+                        key={table.id}
                       >
-                        <span
-                          aria-hidden
-                          className="cw-tables-sidebar-swatch"
-                          style={{ background: table.color || "var(--accent)" }}
-                        />
-                        <span className="do-project-title">{table.name}</span>
-                        {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
-                      </button>
-                    </div>
-                  ))
+                        <button
+                          className="do-project-context"
+                          data-testid={`open-table-${table.id}`}
+                          onClick={() => {
+                            navigate(`/tables/${encodeURIComponent(table.id)}`);
+                            setSidebarOpen(false);
+                          }}
+                          title={table.name}
+                          type="button"
+                        >
+                          <span
+                            aria-hidden
+                            className="cw-tables-sidebar-swatch"
+                            style={{ background: table.color || "var(--accent)" }}
+                          />
+                          <span className="do-project-title">{table.name}</span>
+                          {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
+                        </button>
+                        <span className="do-project-actions do-mobile-advanced">
+                          <button
+                            aria-label={`${t("tables.page.archive")} ${table.name}`}
+                            className="do-project-icon"
+                            data-testid={`archive-table-${table.id}`}
+                            onClick={() => void archiveWorkspaceTable(table)}
+                            title={t("tables.page.archive")}
+                            type="button"
+                          >
+                            <Archive size={11} />
+                          </button>
+                          <button
+                            aria-label={`${t("tables.page.delete")} ${table.name}`}
+                            className="do-project-icon is-danger"
+                            data-testid={`delete-table-${table.id}`}
+                            onClick={() => deleteWorkspaceTable(table)}
+                            title={t("tables.page.delete")}
+                            type="button"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                    {archivedTables.length > 0 ? (
+                      <>
+                        <div className="do-project-group-label">{t("tables.sidebar.archived")}</div>
+                        {archivedTables.map((table) => (
+                          <div className="do-project-row" key={`archived-${table.id}`}>
+                            <button
+                              className="do-project-context"
+                              data-testid={`open-archived-table-${table.id}`}
+                              onClick={() => {
+                                navigate(`/tables/${encodeURIComponent(table.id)}`);
+                                setSidebarOpen(false);
+                              }}
+                              title={table.name}
+                              type="button"
+                            >
+                              <span
+                                aria-hidden
+                                className="cw-tables-sidebar-swatch"
+                                style={{ background: table.color || "var(--accent)" }}
+                              />
+                              <span className="do-project-title">{table.name}</span>
+                            </button>
+                            <span className="do-project-actions do-mobile-advanced">
+                              <button
+                                aria-label={`${t("tables.page.restore")} ${table.name}`}
+                                className="do-project-icon"
+                                data-testid={`restore-table-${table.id}`}
+                                onClick={() => void restoreWorkspaceTable(table)}
+                                title={t("tables.page.restore")}
+                                type="button"
+                              >
+                                <Archive size={11} />
+                              </button>
+                              <button
+                                aria-label={`${t("tables.page.delete")} ${table.name}`}
+                                className="do-project-icon is-danger"
+                                onClick={() => deleteWorkspaceTable(table)}
+                                title={t("tables.page.delete")}
+                                type="button"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+                    {deletedTables.length > 0 ? (
+                      <>
+                        <div className="do-project-group-label">{t("tables.sidebar.deleted")}</div>
+                        {deletedTables.map((table) => (
+                          <div className="do-project-row" key={`deleted-${table.id}`}>
+                            <button
+                              className="do-project-context"
+                              data-testid={`open-deleted-table-${table.id}`}
+                              onClick={() => {
+                                navigate(`/tables/${encodeURIComponent(table.id)}`);
+                                setSidebarOpen(false);
+                              }}
+                              title={table.name}
+                              type="button"
+                            >
+                              <span
+                                aria-hidden
+                                className="cw-tables-sidebar-swatch"
+                                style={{ background: table.color || "var(--accent)" }}
+                              />
+                              <span className="do-project-title">{table.name}</span>
+                            </button>
+                            <span className="do-project-actions do-mobile-advanced">
+                              <button
+                                aria-label={`${t("tables.page.restore")} ${table.name}`}
+                                className="do-project-icon"
+                                onClick={() => void restoreWorkspaceTable(table)}
+                                title={t("tables.page.restore")}
+                                type="button"
+                              >
+                                <Archive size={11} />
+                              </button>
+                              <button
+                                aria-label={`${t("tables.page.deleteForever")} ${table.name}`}
+                                className="do-project-icon is-danger"
+                                data-testid={`purge-table-${table.id}`}
+                                onClick={() => permanentlyDeleteWorkspaceTable(table)}
+                                title={t("tables.page.deleteForever")}
+                                type="button"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+                  </>
                 )}
               </div>
             )}
@@ -8348,6 +8644,17 @@ export function DelivereeWorkspace() {
         ) : centerView === "tables" ? (
           activeTable ? (
             <TablePage
+              itemCandidates={openTasks.map((task) => ({
+                id: String(task.id),
+                title: entityTitle(task),
+                projectId: task.projectId ? String(task.projectId) : null,
+                projectTitle: task.projectId
+                  ? entityTitle(
+                      projects.find((project) => project.id === task.projectId) || {},
+                    )
+                  : "",
+                status: String(task.status || ""),
+              }))}
               members={workspaceMembers.map((member) => ({
                 id: String(member.userId || member.id || ""),
                 name:
@@ -8355,7 +8662,47 @@ export function DelivereeWorkspace() {
                   String(member.displayName || member.email || member.userId || ""),
                 email: String(member.email || ""),
               }))}
+              onArchiveTable={() => void archiveWorkspaceTable(activeTable)}
+              onDeleteTable={() => deleteWorkspaceTable(activeTable)}
+              onLinkTask={(recordId) => {
+                const pick = openTasks.slice(0, 40);
+                if (!user || !workspace || !pick.length) {
+                  setNotice(t("tables.items.noMatches"));
+                  return;
+                }
+                const labels = pick.map(
+                  (task, index) =>
+                    `${index + 1}. ${entityTitle(task)}${
+                      task.projectId ? "" : ` (${t("tables.items.general")})`
+                    }`,
+                );
+                const answer = window.prompt(
+                  `${t("tables.panel.linkTask")}\n\n${labels.join("\n")}\n\n#`,
+                );
+                const index = Number(answer) - 1;
+                const task = pick[index];
+                if (!task) return;
+                void linkRecord({
+                  workspaceId: workspace.id,
+                  userId: user.uid,
+                  tableId: activeTable.id,
+                  recordId,
+                  target: { type: "task", id: String(task.id) },
+                }).then(() =>
+                  setNotice(`${t("tables.panel.linkTask")}: ${entityTitle(task)}`),
+                );
+              }}
               onOpenAutomations={() => navigate("/rutinas")}
+              onOpenItem={(itemId) => {
+                setSelectedWorkItemId(itemId);
+              }}
+              onOpenLink={(target) => {
+                if (target.type === "task") setSelectedWorkItemId(target.id);
+                if (target.type === "project") {
+                  const project = projects.find((row) => row.id === target.id);
+                  if (project) openProjectRecord(project);
+                }
+              }}
               onOpenOdysseus={(opts) => {
                 void openOdysseusPanel({
                   kind: opts.kind,
@@ -8383,6 +8730,10 @@ export function DelivereeWorkspace() {
                   { replace: true },
                 );
               }}
+              onPermanentlyDeleteTable={() =>
+                permanentlyDeleteWorkspaceTable(activeTable)
+              }
+              onRestoreTable={() => void restoreWorkspaceTable(activeTable)}
               onTableChange={(next) => {
                 setWorkspaceTables((current) =>
                   current.map((row) => (row.id === next.id ? next : row)),

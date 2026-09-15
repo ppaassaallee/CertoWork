@@ -19,6 +19,7 @@ import { coerceValue, validateRecord } from "./validate";
 import {
   RECORD_ACTIVITY,
   RECORD_LINK_RELATION,
+  TABLE_ITEM_RELATION,
   TABLE_RECORDS,
   TABLES,
   type Column,
@@ -27,8 +28,12 @@ import {
   type RecordLinkTarget,
   type RecordValue,
   type TableDoc,
+  type TableStatus,
   type TableVisibility,
 } from "./types";
+
+const BATCH_LIMIT = 400;
+const PURGE_DAYS = 30;
 
 function nowIso() {
   return new Date().toISOString();
@@ -38,11 +43,31 @@ function linkDocId(recordId: string, target: RecordLinkTarget) {
   return `${recordId}__${target.type}__${target.id}`;
 }
 
+function tableItemLinkId(tableId: string, itemId: string) {
+  return `table__${tableId}__task__${itemId}`;
+}
+
+export function tableLifecycleStatus(
+  table: Pick<TableDoc, "status"> | null | undefined,
+): TableStatus {
+  const raw = String(table?.status || "active").toLowerCase();
+  if (raw === "archived" || raw === "deleted") return raw;
+  return "active";
+}
+
+export function isActiveTable(table: Pick<TableDoc, "status"> | null | undefined) {
+  return tableLifecycleStatus(table) === "active";
+}
+
 export function canSeeTable(
-  table: Pick<TableDoc, "visibility" | "createdBy" | "projectId">,
+  table: Pick<TableDoc, "visibility" | "createdBy" | "projectId" | "status">,
   uid: string,
   projectIds: string[],
+  opts?: { includeArchived?: boolean; includeDeleted?: boolean },
 ): boolean {
+  const status = tableLifecycleStatus(table);
+  if (status === "archived" && !opts?.includeArchived) return false;
+  if (status === "deleted" && !opts?.includeDeleted) return false;
   if (table.visibility === "private") return table.createdBy === uid;
   if (table.visibility === "project") {
     return Boolean(table.projectId && projectIds.includes(String(table.projectId)));
@@ -61,11 +86,162 @@ export async function createTable(
     ...rest,
     // Keep userId in sync with createdBy so workspace listeners that filter by userId still match.
     userId: explicitUserId || rest.createdBy,
+    status: rest.status || "active",
     recordCount: 0,
+    itemCount: rest.itemCount ?? 0,
     createdAt: now,
     updatedAt: now,
   });
   return ref.id;
+}
+
+export async function archiveTable(tableId: string, previousStatus?: TableStatus | string | null) {
+  const now = nowIso();
+  await updateDoc(doc(db, TABLES, tableId), {
+    status: "archived",
+    previousStatus: previousStatus || "active",
+    archivedAt: now,
+    deletedAt: null,
+    purgeAfter: null,
+    updatedAt: now,
+  });
+}
+
+export async function softDeleteTable(tableId: string, previousStatus?: TableStatus | string | null) {
+  const deletedAt = new Date();
+  const purgeAfter = new Date(deletedAt.getTime() + PURGE_DAYS * 24 * 60 * 60 * 1000);
+  await updateDoc(doc(db, TABLES, tableId), {
+    status: "deleted",
+    previousStatus: previousStatus || "active",
+    deletedAt: deletedAt.toISOString(),
+    purgeAfter: purgeAfter.toISOString(),
+    archivedAt: null,
+    updatedAt: nowIso(),
+  });
+  return { deletedAt, purgeAfter };
+}
+
+export async function restoreTable(tableId: string, previousStatus?: TableStatus | string | null) {
+  const now = nowIso();
+  const nextStatus =
+    previousStatus === "archived" || previousStatus === "deleted" ? "active" : previousStatus || "active";
+  await updateDoc(doc(db, TABLES, tableId), {
+    status: nextStatus === "deleted" ? "active" : nextStatus,
+    deletedAt: null,
+    purgeAfter: null,
+    archivedAt: null,
+    restoredAt: now,
+    updatedAt: now,
+  });
+}
+
+async function commitInChunks(
+  ops: Array<(batch: ReturnType<typeof writeBatch>) => void>,
+) {
+  for (let index = 0; index < ops.length; index += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    ops.slice(index, index + BATCH_LIMIT).forEach((apply) => apply(batch));
+    await batch.commit();
+  }
+}
+
+export async function permanentlyDeleteTable(tableId: string): Promise<void> {
+  const recordsSnap = await getDocs(
+    query(collection(db, TABLE_RECORDS), where("tableId", "==", tableId)),
+  );
+  const tableLinksSnap = await getDocs(
+    query(
+      collection(db, "entity_links"),
+      where("fromEntityType", "==", "table"),
+      where("fromEntityId", "==", tableId),
+    ),
+  );
+
+  const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+
+  for (const recordDoc of recordsSnap.docs) {
+    const recordId = recordDoc.id;
+    const activitySnap = await getDocs(
+      query(collection(db, RECORD_ACTIVITY), where("recordId", "==", recordId)),
+    );
+    const linksSnap = await getDocs(
+      query(
+        collection(db, "entity_links"),
+        where("fromEntityType", "==", "record"),
+        where("fromEntityId", "==", recordId),
+      ),
+    );
+    for (const row of activitySnap.docs) {
+      ops.push((batch) => batch.delete(row.ref));
+    }
+    for (const row of linksSnap.docs) {
+      ops.push((batch) => batch.delete(row.ref));
+    }
+    ops.push((batch) => batch.delete(recordDoc.ref));
+  }
+
+  for (const row of tableLinksSnap.docs) {
+    ops.push((batch) => batch.delete(row.ref));
+  }
+
+  ops.push((batch) => batch.delete(doc(db, TABLES, tableId)));
+  await commitInChunks(ops);
+}
+
+export async function linkTableItem(input: {
+  workspaceId: string;
+  userId: string;
+  tableId: string;
+  itemId: string;
+}): Promise<void> {
+  const id = tableItemLinkId(input.tableId, input.itemId);
+  const existing = await getDoc(doc(db, "entity_links", id));
+  if (existing.exists()) return;
+
+  await setDoc(doc(db, "entity_links", id), {
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    createdBy: input.userId,
+    fromEntityType: "table",
+    fromEntityId: input.tableId,
+    toEntityType: "task",
+    toEntityId: input.itemId,
+    relationType: TABLE_ITEM_RELATION,
+    createdAt: serverTimestamp(),
+  });
+
+  await updateDoc(doc(db, TABLES, input.tableId), {
+    itemCount: increment(1),
+    updatedAt: nowIso(),
+  });
+}
+
+export async function unlinkTableItem(input: {
+  tableId: string;
+  itemId: string;
+}): Promise<void> {
+  const id = tableItemLinkId(input.tableId, input.itemId);
+  const existing = await getDoc(doc(db, "entity_links", id));
+  if (!existing.exists()) return;
+  await deleteDoc(doc(db, "entity_links", id));
+  await updateDoc(doc(db, TABLES, input.tableId), {
+    itemCount: increment(-1),
+    updatedAt: nowIso(),
+  });
+}
+
+export async function listTableItems(tableId: string): Promise<string[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, "entity_links"),
+      where("fromEntityType", "==", "table"),
+      where("fromEntityId", "==", tableId),
+      where("relationType", "==", TABLE_ITEM_RELATION),
+    ),
+  );
+  return snap.docs
+    .map((row) => String((row.data() as { toEntityId?: string }).toEntityId || ""))
+    .filter(Boolean);
 }
 
 export async function updateTableColumns(

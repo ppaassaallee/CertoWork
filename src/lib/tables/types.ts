@@ -3,6 +3,9 @@ export const TABLE_RECORDS = "table_records";
 export const RECORD_ACTIVITY = "table_record_activity";
 
 export const RECORD_LINK_RELATION = "record_reference";
+export const TABLE_ITEM_RELATION = "table_item";
+
+export type TableStatus = "active" | "archived" | "deleted";
 
 export type ColumnType =
   | "text"
@@ -67,7 +70,14 @@ export type TableDoc = {
   columns: Column[];
   keyColumns: KeyColumns;
   recordCount: number;
+  itemCount?: number;
   templateId?: string | null;
+  status?: TableStatus;
+  previousStatus?: TableStatus | string | null;
+  archivedAt?: string | null;
+  deletedAt?: string | null;
+  purgeAfter?: string | null;
+  restoredAt?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
