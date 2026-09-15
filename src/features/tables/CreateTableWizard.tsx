@@ -30,6 +30,7 @@ import {
 import {
   createRecord,
   createTable,
+  compileTablePhrase,
   resolveSampleCell,
   sampleRowsToRecordValues,
   templateAutoHint,
@@ -51,7 +52,7 @@ import "./createTable.css";
 export type CreateTableWizardProps = {
   open: boolean;
   onClose(): void;
-  onCreated(tableId: string): void;
+  onCreated(table: TableDoc): void;
 };
 
 type PreviewSource = "template" | "phrase";
@@ -398,36 +399,51 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
     setQuestion("");
     setColumnsEditorOpen(false);
     try {
-      const token = await user.getIdToken();
-      const response = await fetch("/api/tables/compile", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          phrase: text,
-          userId: user.uid,
-          workspaceId: workspace.id,
-          locale,
-        }),
-      });
-      const payload = (await response.json()) as {
-        schema?: CompiledTableSchema;
-        question?: string;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(payload.error || t("tables.create.compileFailed"));
+      let schema: CompiledTableSchema | undefined;
+      let clarifying: string | undefined;
+
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/tables/compile", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            phrase: text,
+            userId: user.uid,
+            workspaceId: workspace.id,
+            locale,
+          }),
+        });
+        if (response.ok) {
+          const payload = (await response.json()) as {
+            schema?: CompiledTableSchema;
+            question?: string;
+            error?: string;
+          };
+          schema = payload.schema;
+          clarifying = payload.question;
+        }
+      } catch {
+        /* fall through to local compiler */
       }
-      if (payload.question && !payload.schema) {
-        setQuestion(payload.question);
+
+      if (!schema && !clarifying) {
+        const local = compileTablePhrase({ phrase: text, locale });
+        schema = local.schema;
+        clarifying = local.question;
+      }
+
+      if (clarifying && !schema) {
+        setQuestion(clarifying);
         return;
       }
-      if (!payload.schema) {
+      if (!schema) {
         throw new Error(t("tables.create.compileFailed"));
       }
-      applyCompiled(payload.schema);
+      applyCompiled(schema);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : t("tables.create.compileFailed"),
@@ -454,6 +470,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
     setBusy("create");
     setError("");
     try {
+      const now = new Date().toISOString();
       const id = await createTable({
         workspaceId: workspace.id,
         projectId: null,
@@ -468,6 +485,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
         templateId: preview.templateId || null,
       });
 
+      let sampleCount = 0;
       if (
         includeSamples &&
         preview.source === "template" &&
@@ -480,6 +498,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
             values: sampleRowsToRecordValues(preview.columns, row),
             actorId: user.uid,
           });
+          sampleCount += 1;
         }
       }
 
@@ -527,8 +546,26 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
         }
       }
 
+      const created: TableDoc = {
+        id,
+        workspaceId: workspace.id,
+        projectId: null,
+        name,
+        icon: preview.iconName === "Sparkles" ? "✦" : "▦",
+        color: preview.color,
+        visibility,
+        columns: preview.columns,
+        keyColumns: preview.keyColumns,
+        recordCount: sampleCount,
+        templateId: preview.templateId || null,
+        createdBy: user.uid,
+        createdAt: now,
+        updatedAt: now,
+        favorite: false,
+      };
+
       reset();
-      onCreated(id);
+      onCreated(created);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("tables.createFailed"));
     } finally {

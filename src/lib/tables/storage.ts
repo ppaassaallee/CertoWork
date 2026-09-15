@@ -51,11 +51,16 @@ export function canSeeTable(
 }
 
 export async function createTable(
-  input: Omit<TableDoc, "id" | "recordCount" | "createdAt" | "updatedAt">,
+  input: Omit<TableDoc, "id" | "recordCount" | "createdAt" | "updatedAt"> & {
+    userId?: string;
+  },
 ): Promise<string> {
   const now = nowIso();
+  const { userId: explicitUserId, ...rest } = input;
   const ref = await addDoc(collection(db, TABLES), {
-    ...input,
+    ...rest,
+    // Keep userId in sync with createdBy so workspace listeners that filter by userId still match.
+    userId: explicitUserId || rest.createdBy,
     recordCount: 0,
     createdAt: now,
     updatedAt: now,
