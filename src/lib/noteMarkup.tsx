@@ -60,11 +60,19 @@ function decodeEntities(value: string) {
     .replace(/&#39;/g, "'");
 }
 
+function entityClass(kind: string) {
+  if (kind === "item") return "task";
+  if (kind === "record") return "record";
+  return "person";
+}
+
 function inlineHtml(text: string): string {
   const withEntities = String(text || "").replace(
-    /\[([^\]]+)\]\((item|person):([^)]+)\)/g,
-    (_, label: string, kind: string, id: string) =>
-      `<span class="cw-notes-ent cw-notes-ent-${kind === "item" ? "task" : "person"}" data-ent-kind="${kind === "item" ? "task" : "person"}" data-ent-id="${escapeHtml(id)}" contenteditable="false">${escapeHtml(label)}</span>`,
+    /\[([^\]]+)\]\((item|person|record):([^)]+)\)/g,
+    (_, label: string, kind: string, id: string) => {
+      const ent = entityClass(kind);
+      return `<span class="cw-notes-ent cw-notes-ent-${ent}" data-ent-kind="${ent}" data-ent-id="${escapeHtml(id)}" contenteditable="false">${escapeHtml(label)}</span>`;
+    },
   );
   const token = /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|~~[^~]+~~)/g;
   return splitKeep(withEntities, token)
@@ -169,9 +177,9 @@ export function htmlToMarkdown(html: string) {
     .replace(/<br\s*\/?>/gi, "\n");
 
   value = value.replace(
-    /<span[^>]*data-ent-kind="(task|person)"[^>]*data-ent-id="([^"]+)"[^>]*>([\s\S]*?)<\/span>/gi,
+    /<span[^>]*data-ent-kind="(task|person|record)"[^>]*data-ent-id="([^"]+)"[^>]*>([\s\S]*?)<\/span>/gi,
     (_, kind: string, id: string, label: string) => {
-      const prefix = kind === "task" ? "item" : "person";
+      const prefix = kind === "task" ? "item" : kind === "record" ? "record" : "person";
       return `[${unwrapInlineHtml(label).trim()}](${prefix}:${id})`;
     },
   );

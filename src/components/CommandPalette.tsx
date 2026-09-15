@@ -197,7 +197,7 @@ export function CommandPalette({
                 runActive();
               }
             }}
-            placeholder="Search · > actions · # items · @ people · / docs"
+            placeholder="Search · > actions · # items/records · @ people · / docs"
             value={query}
           />
         </label>

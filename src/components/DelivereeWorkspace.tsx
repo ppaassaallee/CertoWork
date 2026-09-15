@@ -47,6 +47,7 @@ import {
   Users,
   WandSparkles,
   X,
+  LayoutGrid,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -181,7 +182,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels } from "../lib/myWorkItems";
+import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -237,9 +238,13 @@ import { NotesWorkspace } from "./NotesWorkspace";
 import { TablePage } from "../features/tables/TablePage";
 import {
   TABLES,
+  TABLE_RECORDS,
   canSeeTable,
   createTable,
+  createRecord,
+  buildMyWorkRecords,
   type TableDoc,
+  type RecordDoc,
 } from "../lib/tables";
 import { defaultKeyColumns, defaultTableColumns } from "../features/tables/defaults";
 import { NoteQuickCapture } from "../features/notes/NoteQuickCapture";
@@ -473,6 +478,7 @@ export function DelivereeWorkspace() {
   const [categories, setCategories] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
+  const [workspaceRecords, setWorkspaceRecords] = useState<RecordDoc[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
@@ -1014,6 +1020,18 @@ export function DelivereeWorkspace() {
         (items) =>
           setWorkspaceTables(
             (items as TableDoc[]).map((row) => ({
+              ...row,
+              id: row.id,
+            })),
+          ),
+        false,
+        true,
+      ),
+      makeQuery(
+        TABLE_RECORDS,
+        (items) =>
+          setWorkspaceRecords(
+            (items as RecordDoc[]).map((row) => ({
               ...row,
               id: row.id,
             })),
@@ -1603,19 +1621,67 @@ export function DelivereeWorkspace() {
     () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
     [personalActor, todayTasks],
   );
-  const myWorkTasks = useMemo(
-    () =>
-      filterMyWorkTasks(
-        tasks,
-        lens.kind === "my-work" ? lens.section : "assigned",
-        personalActor,
-        workspaceMembers,
-      ),
-    [lens, personalActor, tasks, workspaceMembers],
-  );
-  const todayMyWorkTasks = useMemo(
-    () => filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers),
-    [personalActor, tasks, workspaceMembers],
+  const myWorkTasks = useMemo(() => {
+    const section = lens.kind === "my-work" ? lens.section : "assigned";
+    const tasksOnly = filterMyWorkTasks(tasks, section, personalActor, workspaceMembers);
+    const recordSection =
+      section === "today"
+        ? "today"
+        : section === "this_week" || section === "week"
+          ? "this_week"
+          : "assigned";
+    const recordItems = buildMyWorkRecords({
+      tables: visibleTables,
+      records: workspaceRecords,
+      actor: personalActor,
+      memberIds: actorEquivalentMemberIds(personalActor, workspaceMembers),
+      section: recordSection as "today" | "this_week" | "assigned",
+    });
+    return [...tasksOnly, ...recordItems] as Array<Record<string, unknown>>;
+  }, [
+    lens,
+    personalActor,
+    tasks,
+    visibleTables,
+    workspaceMembers,
+    workspaceRecords,
+  ]);
+  const todayMyWorkTasks = useMemo(() => {
+    const tasksOnly = filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers);
+    const recordItems = buildMyWorkRecords({
+      tables: visibleTables,
+      records: workspaceRecords,
+      actor: personalActor,
+      memberIds: actorEquivalentMemberIds(personalActor, workspaceMembers),
+      section: "today",
+    });
+    return [...tasksOnly, ...recordItems] as Array<Record<string, unknown>>;
+  }, [personalActor, tasks, visibleTables, workspaceMembers, workspaceRecords]);
+  const openWorkOrRecord = useCallback(
+    (id: string | null) => {
+      if (!id) {
+        setSelectedWorkItemId(null);
+        return;
+      }
+      const recordHit =
+        myWorkTasks.find(
+          (row: any) => String(row.id) === id && row.entityKind === "record",
+        ) ||
+        workspaceRecords.find((row) => row.id === id);
+      if (recordHit) {
+        const tableId =
+          (recordHit as any).tableId ||
+          (recordHit as RecordDoc).tableId;
+        if (tableId) {
+          navigate(
+            `/tables/${encodeURIComponent(String(tableId))}?record=${encodeURIComponent(id)}`,
+          );
+          return;
+        }
+      }
+      setSelectedWorkItemId(id);
+    },
+    [myWorkTasks, navigate, workspaceRecords],
   );
   const dayPlanScoreItems = useMemo(
     () =>
@@ -6063,6 +6129,35 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate(`/rutinas/${routine.id}`),
       });
     }
+    for (const table of visibleTables) {
+      items.push({
+        id: `table-${table.id}`,
+        label: table.name,
+        group: "Tables",
+        mode: "docs",
+        keywords: `table tabla ${table.name}`,
+        icon: <LayoutGrid size={14} />,
+        hint: table.icon || undefined,
+        onSelect: () => navigate(`/tables/${encodeURIComponent(table.id)}`),
+      });
+      for (const record of workspaceRecords.filter((row) => row.tableId === table.id).slice(0, 40)) {
+        const title =
+          String(record.values[table.keyColumns.title] ?? "").trim() || table.name;
+        items.push({
+          id: `record-${record.id}`,
+          label: title,
+          group: "Records",
+          mode: "items",
+          keywords: `# ${title} ${table.name} record registro`,
+          icon: <LayoutGrid size={14} />,
+          hint: table.name,
+          onSelect: () =>
+            navigate(
+              `/tables/${encodeURIComponent(table.id)}?record=${encodeURIComponent(record.id)}`,
+            ),
+        });
+      }
+    }
     if (!mobileCore) return items;
     const mobileIds = new Set([
       "nav-home",
@@ -6091,6 +6186,8 @@ export function DelivereeWorkspace() {
     openChiefOfStaff,
     openProjectRecord,
     startVoiceCall,
+    visibleTables,
+    workspaceRecords,
   ]);
 
   const workPane = (
@@ -6251,8 +6348,30 @@ export function DelivereeWorkspace() {
         members={workspaceMembers}
         onClose={() => setQuickCaptureOpen(false)}
         onCreate={createFromQuickCapture}
+        onCreateRecord={async ({ tableId, title }) => {
+          if (!user || !workspace) return;
+          const table = visibleTables.find((row) => row.id === tableId);
+          if (!table) return;
+          const recordId = await createRecord({
+            tableId,
+            workspaceId: workspace.id,
+            values: { [table.keyColumns.title]: title },
+            actorId: user.uid,
+          });
+          setNotice(
+            getLocale() === "es" ? "Registro creado." : "Record created.",
+          );
+          navigate(
+            `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+          );
+        }}
         open={quickCaptureOpen}
         projects={projects}
+        tables={visibleTables.map((table) => ({
+          id: table.id,
+          name: table.name,
+          icon: table.icon,
+        }))}
         tags={categories}
         tasks={tasks}
       />
@@ -7250,6 +7369,11 @@ export function DelivereeWorkspace() {
                       replace: true,
                     });
                   }}
+                  onOpenRecord={(tableId, recordId) => {
+                    navigate(
+                      `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                    );
+                  }}
                   onOpenOdysseus={(opts) => {
                     void openOdysseusPanel({
                       kind: "day",
@@ -7272,9 +7396,11 @@ export function DelivereeWorkspace() {
                   onReviewFriday={() => navigate("/my-work/reviews")}
                   onStartRitual={(session) => void openRitualSession(session)}
                   projects={projects}
+                  records={workspaceRecords}
                   reviewItems={reviewItems}
                   risks={risks}
                   routineSessions={ritualSessions}
+                  tables={visibleTables}
                   tasks={tasks}
                   userName={
                     user?.displayName ||
@@ -7350,9 +7476,17 @@ export function DelivereeWorkspace() {
                   tasks={tasks}
                   workspaceMembers={workspaceMembers}
                   notebookEntries={notebookEntries}
+                  workspaceTables={visibleTables}
+                  workspaceRecords={workspaceRecords}
                   onOpenNote={(noteId) => {
                     setSelectedWorkItemId(null);
                     navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                  }}
+                  onOpenRecord={(tableId, recordId) => {
+                    setSelectedWorkItemId(null);
+                    navigate(
+                      `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                    );
                   }}
                 />,
                 document.body,
@@ -7831,7 +7965,7 @@ export function DelivereeWorkspace() {
                 <MyWorkTodayPanel
                   keyItemId={dayPlan.plan?.keyItemId || null}
                   locale={dayLocale}
-                  onSelectItem={setSelectedWorkItemId}
+                  onSelectItem={openWorkOrRecord}
                   onSetKey={(itemId) => void dayPlan.setKey(itemId)}
                   onUpdateTask={updateProjectTask}
                   tasks={myWorkTasks}
@@ -7873,7 +8007,7 @@ export function DelivereeWorkspace() {
               navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
             }}
             onOpenProjectConsole={openProjectRecord}
-            onSelectItem={setSelectedWorkItemId}
+            onSelectItem={openWorkOrRecord}
             onCreateControlledOption={createControlledOption}
             onUpdateSprint={updateSprint}
             onUpdateTask={updateProjectTask}
@@ -7887,6 +8021,14 @@ export function DelivereeWorkspace() {
             onOpenNote={(noteId) => {
               setSelectedWorkItemId(null);
               navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+            }}
+            workspaceTables={visibleTables}
+            workspaceRecords={workspaceRecords}
+            onOpenRecord={(tableId, recordId) => {
+              setSelectedWorkItemId(null);
+              navigate(
+                `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+              );
             }}
             onInviteAssigneeEmail={
               canManageMembers
@@ -8206,6 +8348,18 @@ export function DelivereeWorkspace() {
             }}
             onOpenProject={openProjectRecord}
             projects={projects}
+            records={workspaceRecords.map((record) => {
+              const table = visibleTables.find((row) => row.id === record.tableId);
+              return {
+                id: record.id,
+                title: table
+                  ? String(record.values[table.keyColumns.title] ?? "").trim() || table.name
+                  : record.id,
+                tableId: record.tableId,
+                tableName: table?.name || "",
+                tableIcon: table?.icon,
+              };
+            })}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
@@ -8220,6 +8374,23 @@ export function DelivereeWorkspace() {
                 email: String(member.email || ""),
               }))}
               onOpenAutomations={() => navigate("/rutinas")}
+              onOpenOdysseus={(opts) => {
+                void openOdysseusPanel({
+                  kind: opts.kind,
+                  entityId: opts.entityId,
+                  label: opts.label,
+                  ...(opts.kind === "record"
+                    ? { tableId: activeTable.id }
+                    : {}),
+                });
+                if (opts.prompt) {
+                  window.dispatchEvent(
+                    new CustomEvent("certo:odysseus-seed-prompt", {
+                      detail: { prompt: opts.prompt },
+                    }),
+                  );
+                }
+              }}
               onOpenRecord={(id) => {
                 const params = new URLSearchParams(location.search);
                 if (id) params.set("record", id);

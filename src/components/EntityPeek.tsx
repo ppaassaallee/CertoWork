@@ -1,16 +1,20 @@
 import { useEffect } from "react";
-import { X } from "./ui/Icon";
-import { getLocale } from "../lib/i18n";
+import { LayoutGrid, X } from "./ui/Icon";
+import { getLocale, t } from "../lib/i18n";
 import "./semanticBlocks.css";
 
 export type EntityPeekModel = {
   id: string;
-  kind: "task" | "project" | "note" | "person" | "doc";
+  kind: "task" | "project" | "note" | "person" | "doc" | "record";
   title: string;
   status?: string | null;
   owner?: string | null;
   dueDate?: string | null;
   excerpt?: string | null;
+  /** Record-only */
+  tableName?: string | null;
+  tableIcon?: string | null;
+  previewFields?: Array<{ label: string; value: string }>;
 };
 
 export function EntityPeek({
@@ -37,12 +41,21 @@ export function EntityPeek({
 
   if (!entity) return null;
 
+  const isRecord = entity.kind === "record";
+
   return (
-    <aside className="cw-entity-peek" data-testid="entity-peek">
+    <aside className="cw-entity-peek" data-testid="entity-peek" data-kind={entity.kind}>
       <div className="cw-entity-peek-head">
         <div>
           <em style={{ fontStyle: "normal", fontSize: 11, color: "var(--text-muted)" }}>
-            {entity.kind}
+            {isRecord ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                {entity.tableIcon || <LayoutGrid size={11} />}
+                {entity.tableName || t("tables.sidebar")}
+              </span>
+            ) : (
+              entity.kind
+            )}
           </em>
           <strong>{entity.title}</strong>
         </div>
@@ -51,15 +64,43 @@ export function EntityPeek({
         </button>
       </div>
       <div className="cw-entity-peek-meta">
-        {entity.status && <span>{entity.status}</span>}
-        {entity.owner && <span>{entity.owner}</span>}
-        {entity.dueDate && <span>{entity.dueDate}</span>}
+        {entity.status ? (
+          <span>
+            {isRecord ? `${t("tables.key.status")}: ` : ""}
+            {entity.status}
+          </span>
+        ) : null}
+        {entity.owner ? (
+          <span>
+            {isRecord ? `${t("tables.key.owner")}: ` : ""}
+            {entity.owner}
+          </span>
+        ) : null}
+        {entity.dueDate ? (
+          <span>
+            {isRecord ? `${t("tables.key.date")}: ` : ""}
+            {entity.dueDate}
+          </span>
+        ) : null}
       </div>
-      {entity.excerpt && <div className="cw-entity-peek-body">{entity.excerpt}</div>}
+      {isRecord && entity.previewFields && entity.previewFields.length > 0 ? (
+        <div className="cw-entity-peek-body" data-testid="entity-peek-record-fields">
+          {entity.previewFields.slice(0, 3).map((field) => (
+            <div key={field.label} style={{ marginBottom: 4 }}>
+              <em style={{ fontStyle: "normal", color: "var(--text-muted)", fontSize: 11 }}>
+                {field.label}
+              </em>
+              <div>{field.value || "—"}</div>
+            </div>
+          ))}
+        </div>
+      ) : entity.excerpt ? (
+        <div className="cw-entity-peek-body">{entity.excerpt}</div>
+      ) : null}
       <div className="cw-entity-peek-actions">
         {onOpenSplit && (
           <button onClick={onOpenSplit} type="button">
-            {locale === "es" ? "Abrir en split" : "Open in split"}
+            {locale === "es" ? "Abrir" : "Open"}
           </button>
         )}
         {onExpand && (

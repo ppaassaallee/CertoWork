@@ -86,9 +86,27 @@ function noteScopeChips(locale: string) {
     : ["Summarize", "Structure into blocks", "Create items"];
 }
 
+function tableScopeChips(locale: string) {
+  return locale === "es"
+    ? ["Resumir esta tabla", "¿Qué está atrasado?", "Sugerí automatizaciones"]
+    : ["Summarize this table", "What's overdue?", "Suggest automations"];
+}
+
+function recordScopeChips(locale: string) {
+  return locale === "es"
+    ? ["Resumir este registro", "Siguiente paso", "Borrá un update"]
+    : ["Summarize this record", "Next step", "Draft an update"];
+}
+
 function ensureRoutineSuggestion(chips: string[], locale: string, lastAsk: string, scopeKind?: string) {
   if (scopeKind === "note") {
     return noteScopeChips(locale).slice(0, 3);
+  }
+  if (scopeKind === "table") {
+    return tableScopeChips(locale).slice(0, 3);
+  }
+  if (scopeKind === "record") {
+    return recordScopeChips(locale).slice(0, 3);
   }
   const routine =
     locale === "es" ? "↻ Cada mañana" : "↻ Every morning";
@@ -320,6 +338,9 @@ export function OdysseusPanel({
     if (scope.kind === "item") return scope.label;
     if (scope.kind === "project") return scope.label;
     if (scope.kind === "note") return scope.label;
+    if (scope.kind === "table") return scope.label;
+    if (scope.kind === "record") return scope.label;
+    if (scope.kind === "event") return scope.label;
     if (scope.kind === "day") return locale === "es" ? "Mi día" : "My day";
     return locale === "es" ? "Todo el workspace" : "Whole workspace";
   }, [scope, locale]);
@@ -443,6 +464,23 @@ export function OdysseusPanel({
                 {chip}
               </button>
             ))}
+          </div>
+        ) : null}
+        {(scope.kind === "table" || scope.kind === "record") &&
+        !(activeThread?.messages || []).length ? (
+          <div className="cw-odysseus-suggestions" data-testid="odysseus-table-chips">
+            {(scope.kind === "table" ? tableScopeChips(locale) : recordScopeChips(locale)).map(
+              (chip) => (
+                <button
+                  className="cw-odysseus-chip"
+                  key={chip}
+                  onClick={() => void send(chip)}
+                  type="button"
+                >
+                  {chip}
+                </button>
+              ),
+            )}
           </div>
         ) : null}
         {(activeThread?.messages || []).map((message) => (

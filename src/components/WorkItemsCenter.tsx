@@ -226,6 +226,9 @@ type Props = {
   onGanttFocusChange?: (focused: boolean) => void;
   notebookEntries?: any[];
   onOpenNote?: (noteId: string) => void;
+  workspaceTables?: any[];
+  workspaceRecords?: any[];
+  onOpenRecord?: (tableId: string, recordId: string) => void;
 };
 
 const workTypes: WorkItemKind[] = [
@@ -769,6 +772,9 @@ export function WorkItemsCenter({
   onGanttFocusChange,
   notebookEntries = [],
   onOpenNote,
+  workspaceTables = [],
+  workspaceRecords = [],
+  onOpenRecord,
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
@@ -4463,6 +4469,9 @@ export function WorkItemsCenter({
             workspaceMembers={workspaceMembers}
             notebookEntries={notebookEntries}
             onOpenNote={onOpenNote}
+            workspaceTables={workspaceTables}
+            workspaceRecords={workspaceRecords}
+            onOpenRecord={onOpenRecord}
           />,
           document.body,
         )}

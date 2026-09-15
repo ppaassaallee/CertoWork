@@ -2,6 +2,8 @@ export type OdysseusPanelScope =
   | { kind: "item"; entityId: string; label: string }
   | { kind: "project"; entityId: string; label: string }
   | { kind: "note"; entityId: string; label: string }
+  | { kind: "table"; entityId: string; label: string }
+  | { kind: "record"; entityId: string; label: string; tableId?: string }
   | { kind: "event"; entityId: string; label: string }
   | { kind: "day"; entityId: null; label: string }
   | { kind: "workspace"; entityId: null; label: string };

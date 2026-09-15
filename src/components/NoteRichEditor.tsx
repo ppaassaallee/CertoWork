@@ -6,6 +6,7 @@ import {
   type SemanticBlockType,
 } from "../lib/semanticBlocks";
 import { getLocale, t } from "../lib/i18n";
+import { LayoutGrid } from "./ui/Icon";
 import "./semanticBlocks.css";
 import "../features/notes/notes.css";
 
@@ -24,15 +25,31 @@ export type NoteMentionPerson = {
   userId?: string;
 };
 
+export type NoteMentionRecord = {
+  id: string;
+  title?: string;
+  tableId: string;
+  tableName: string;
+  tableIcon?: string;
+};
+
 type Props = {
   noteId: string;
   value: string;
   onChange: (content: string) => void;
   items?: NoteMentionItem[];
+  records?: NoteMentionRecord[];
   people?: NoteMentionPerson[];
   onLinkTask?: (taskId: string) => void;
+  onLinkRecord?: (recordId: string, tableId: string) => void;
   onMentionPerson?: (person: NoteMentionPerson) => void;
 };
+
+type MentionKind = "task" | "person" | "record";
+
+type CombinedMention =
+  | { kind: "task"; item: NoteMentionItem }
+  | { kind: "record"; item: NoteMentionRecord };
 
 function runCommand(command: string, argument?: string) {
   document.execCommand("styleWithCSS", false, "false");
@@ -91,8 +108,10 @@ export function NoteRichEditor({
   value,
   onChange,
   items = [],
+  records = [],
   people = [],
   onLinkTask,
+  onLinkRecord,
   onMentionPerson,
 }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -101,7 +120,7 @@ export function NoteRichEditor({
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
   const [mentionOpen, setMentionOpen] = useState(false);
-  const [mentionKind, setMentionKind] = useState<"task" | "person">("task");
+  const [mentionKind, setMentionKind] = useState<MentionKind>("task");
   const [mentionQuery, setMentionQuery] = useState("");
   const [float, setFloat] = useState<{ top: number; left: number } | null>(null);
 
@@ -178,23 +197,34 @@ export function NoteRichEditor({
     );
   });
 
-  const mentionOptions = useMemo(() => {
+  const hashMentions = useMemo((): CombinedMention[] => {
     const q = mentionQuery.trim().toLowerCase();
-    if (mentionKind === "task") {
-      return items
-        .filter((item) => {
-          const hay = `${item.key || ""} ${item.title || ""} ${item.projectTitle || ""}`.toLowerCase();
-          return !q || hay.includes(q);
-        })
-        .slice(0, 8);
-    }
+    const taskHits: CombinedMention[] = items
+      .filter((item) => {
+        const hay = `${item.key || ""} ${item.title || ""} ${item.projectTitle || ""}`.toLowerCase();
+        return !q || hay.includes(q);
+      })
+      .slice(0, 6)
+      .map((item) => ({ kind: "task" as const, item }));
+    const recordHits: CombinedMention[] = records
+      .filter((record) => {
+        const hay = `${record.title || ""} ${record.tableName || ""}`.toLowerCase();
+        return !q || hay.includes(q);
+      })
+      .slice(0, 6)
+      .map((item) => ({ kind: "record" as const, item }));
+    return [...taskHits, ...recordHits].slice(0, 10);
+  }, [items, mentionQuery, records]);
+
+  const personMentions = useMemo(() => {
+    const q = mentionQuery.trim().toLowerCase();
     return people
       .filter((person) => {
         const hay = `${person.displayName || ""} ${person.name || ""}`.toLowerCase();
         return !q || hay.includes(q);
       })
       .slice(0, 8);
-  }, [items, mentionKind, mentionQuery, people]);
+  }, [mentionQuery, people]);
 
   const pickTask = (item: NoteMentionItem) => {
     const field = editorRef.current;
@@ -204,6 +234,17 @@ export function NoteRichEditor({
     onLinkTask?.(item.id);
     setMentionOpen(false);
     setMentionQuery("");
+  };
+
+  const pickRecord = (record: NoteMentionRecord) => {
+    const field = editorRef.current;
+    if (!field) return;
+    const label = `#${record.title || record.id}`;
+    insertMarkdownChip(`[${label}](record:${record.id})`, field, onChange);
+    onLinkRecord?.(record.id, record.tableId);
+    setMentionOpen(false);
+    setMentionQuery("");
+    setMentionKind("record");
   };
 
   const pickPerson = (person: NoteMentionPerson) => {
@@ -318,34 +359,54 @@ export function NoteRichEditor({
             autoFocus
             onChange={(event) => setMentionQuery(event.target.value)}
             placeholder={
-              mentionKind === "task"
+              mentionKind === "person"
                 ? locale === "es"
-                  ? "Buscar ítem…"
-                  : "Search item…"
-                : locale === "es"
                   ? "Buscar persona…"
                   : "Search person…"
+                : locale === "es"
+                  ? "Buscar ítem o registro…"
+                  : "Search item or record…"
             }
             value={mentionQuery}
           />
           <div className="cw-slash-list">
-            {mentionKind === "task"
-              ? (mentionOptions as NoteMentionItem[]).map((item) => (
-                  <button key={item.id} onClick={() => pickTask(item)} type="button">
-                    <span className="cw-notes-ent cw-notes-ent-task">#{item.key || item.title || item.id}</span>
-                    {item.projectTitle ? (
-                      <em style={{ color: "var(--text-muted)", marginLeft: 6 }}>{item.projectTitle}</em>
-                    ) : null}
-                  </button>
-                ))
-              : (mentionOptions as NoteMentionPerson[]).map((person) => (
+            {mentionKind === "person"
+              ? personMentions.map((person) => (
                   <button key={person.id} onClick={() => pickPerson(person)} type="button">
                     <span className="cw-notes-ent cw-notes-ent-person">
                       @{person.displayName || person.name || person.id}
                     </span>
                   </button>
-                ))}
-            {!mentionOptions.length && (
+                ))
+              : hashMentions.map((entry) =>
+                  entry.kind === "task" ? (
+                    <button key={`task-${entry.item.id}`} onClick={() => pickTask(entry.item)} type="button">
+                      <span className="cw-notes-ent cw-notes-ent-task">
+                        #{entry.item.key || entry.item.title || entry.item.id}
+                      </span>
+                      {entry.item.projectTitle ? (
+                        <em style={{ color: "var(--text-muted)", marginLeft: 6 }}>
+                          {entry.item.projectTitle}
+                        </em>
+                      ) : null}
+                    </button>
+                  ) : (
+                    <button
+                      key={`record-${entry.item.id}`}
+                      onClick={() => pickRecord(entry.item)}
+                      type="button"
+                    >
+                      <span className="cw-notes-ent cw-notes-ent-record">
+                        <LayoutGrid size={12} style={{ marginRight: 4 }} />
+                        #{entry.item.title || entry.item.id}
+                      </span>
+                      <em style={{ color: "var(--text-muted)", marginLeft: 6 }}>
+                        {entry.item.tableName}
+                      </em>
+                    </button>
+                  ),
+                )}
+            {(mentionKind === "person" ? !personMentions.length : !hashMentions.length) && (
               <span className="cw-slash-empty">
                 {locale === "es" ? "Sin resultados" : "No matches"}
               </span>
