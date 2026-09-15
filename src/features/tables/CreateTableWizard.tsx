@@ -219,17 +219,48 @@ function inventSampleRows(columns: Column[], locale: "es" | "en"): Array<Record<
   });
 }
 
+function shortLabel(name: string, max = 9): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= max) return trimmed;
+  const first = trimmed.split(/\s+/)[0] || trimmed;
+  if (first.length <= max) return first;
+  return `${first.slice(0, Math.max(3, max - 1))}…`;
+}
+
+function cardPreviewColumns(columns: Column[], keyColumns: KeyColumns): Column[] {
+  const picked: Column[] = [];
+  const title = columns.find((c) => c.id === keyColumns.title);
+  const status = columns.find((c) => c.id === keyColumns.status);
+  const money = columns.find((c) => c.type === "currency" || c.type === "number");
+  const date = columns.find((c) => c.id === keyColumns.date) || columns.find((c) => c.type === "date");
+  for (const col of [title, status, money || date]) {
+    if (col && !picked.some((p) => p.id === col.id)) picked.push(col);
+  }
+  for (const col of columns) {
+    if (picked.length >= 3) break;
+    if (!picked.some((p) => p.id === col.id)) picked.push(col);
+  }
+  return picked.slice(0, 3);
+}
+
 function MiniTable(props: {
   columns: Column[];
   rows: Array<Record<string, string>>;
   maxCols?: number;
   large?: boolean;
   enter?: boolean;
+  shortHeaders?: boolean;
 }) {
   const cols = props.columns.slice(0, props.maxCols ?? 4);
   const grid = {
     gridTemplateColumns: cols
-      .map((c, i) => (i === 0 ? "1.6fr" : c.type === "currency" || c.type === "number" ? "0.9fr" : "1fr"))
+      .map((c, i) =>
+        i === 0
+          ? "minmax(0, 1.5fr)"
+          : c.type === "currency" || c.type === "number"
+            ? "minmax(0, 0.85fr)"
+            : "minmax(0, 1fr)",
+      )
       .join(" "),
   };
   const opacities = [1, 0.6, 0.35];
@@ -240,7 +271,9 @@ function MiniTable(props: {
     >
       <div className="cw-tables-create-mini-r" style={grid}>
         {cols.map((c) => (
-          <span key={c.id}>{c.name}</span>
+          <span key={c.id} title={c.name}>
+            {props.shortHeaders ? shortLabel(c.name, props.large ? 12 : 8) : c.name}
+          </span>
         ))}
       </div>
       {props.rows.slice(0, props.large ? 3 : 2).map((row, ri) => (
@@ -253,14 +286,19 @@ function MiniTable(props: {
             const cell = resolveSampleCell(props.columns, c.id, row[c.id]);
             if (cell.tone) {
               return (
-                <span key={c.id}>
+                <span key={c.id} title={cell.text}>
                   <span className={`cw-tables-create-st cw-tables-tone-${cell.tone}`}>
-                    {cell.text}
+                    {props.shortHeaders ? shortLabel(cell.text, 8) : cell.text}
                   </span>
                 </span>
               );
             }
-            return <span key={c.id}>{cell.text}</span>;
+            const text = props.shortHeaders ? shortLabel(cell.text, 9) : cell.text;
+            return (
+              <span key={c.id} title={cell.text}>
+                {text}
+              </span>
+            );
           })}
         </div>
       ))}
@@ -288,6 +326,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
   const busyRef = useRef(busy);
   const closeRef = useRef<() => void>(() => {});
   const createRef = useRef<() => Promise<void>>(async () => {});
+  const compileRef = useRef<(override?: string) => Promise<void>>(async () => {});
   previewRef.current = preview;
   busyRef.current = busy;
 
@@ -300,6 +339,21 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       setPlaceholderIdx((i) => (i + 1) % EXAMPLE_PHRASE_KEYS.length);
     }, 4000);
     return () => window.clearInterval(id);
+  }, [open, phrase]);
+
+  // Auto-compile shortly after the user pauses typing a real phrase.
+  useEffect(() => {
+    if (!open) return;
+    const text = phrase.trim();
+    if (text.length < 12) return;
+    if (busyRef.current) return;
+    const looksLikePhrase =
+      /[,\n]|(\s(with|con|and|y|de|para|for)\s)/i.test(text) || text.split(/\s+/).length >= 5;
+    if (!looksLikePhrase) return;
+    const timer = window.setTimeout(() => {
+      void compileRef.current?.(undefined);
+    }, 700);
+    return () => window.clearTimeout(timer);
   }, [open, phrase]);
 
   useEffect(() => {
@@ -395,11 +449,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
 
   const compilePhrase = async (override?: string) => {
     const text = (override ?? phrase).trim();
-    if (!text || busy) return;
-    if (!user?.uid || !workspace?.id) {
-      setError(t("tables.create.needAuth"));
-      return;
-    }
+    if (!text || busyRef.current === "compile" || busyRef.current === "create") return;
     if (override) setPhrase(override);
     setBusy("compile");
     setError("");
@@ -409,32 +459,34 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       let schema: CompiledTableSchema | undefined;
       let clarifying: string | undefined;
 
-      try {
-        const token = await user.getIdToken();
-        const response = await fetch("/api/tables/compile", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            phrase: text,
-            userId: user.uid,
-            workspaceId: workspace.id,
-            locale,
-          }),
-        });
-        if (response.ok) {
-          const payload = (await response.json()) as {
-            schema?: CompiledTableSchema;
-            question?: string;
-            error?: string;
-          };
-          schema = payload.schema;
-          clarifying = payload.question;
+      if (user?.uid && workspace?.id) {
+        try {
+          const token = await user.getIdToken();
+          const response = await fetch("/api/tables/compile", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              phrase: text,
+              userId: user.uid,
+              workspaceId: workspace.id,
+              locale,
+            }),
+          });
+          if (response.ok) {
+            const payload = (await response.json()) as {
+              schema?: CompiledTableSchema;
+              question?: string;
+              error?: string;
+            };
+            schema = payload.schema;
+            clarifying = payload.question;
+          }
+        } catch {
+          /* fall through to local compiler */
         }
-      } catch {
-        /* fall through to local compiler */
       }
 
       if (!schema && !clarifying) {
@@ -459,6 +511,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       setBusy(null);
     }
   };
+  compileRef.current = compilePhrase;
 
   const onPhraseKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -716,9 +769,10 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
                     </div>
                   </div>
                   <MiniTable
-                    columns={template.columns}
+                    columns={cardPreviewColumns(template.columns, template.keyColumns)}
                     rows={template.sampleRows}
-                    maxCols={4}
+                    maxCols={3}
+                    shortHeaders
                   />
                   <div className="cw-tables-create-card-f">
                     <Sparkles size={9} aria-hidden />
@@ -782,6 +836,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
                   ))}
                 </div>
                 <p className="cw-tables-create-empty-msg">{t("tables.create.previewEmpty")}</p>
+                <p className="cw-tables-create-empty-hint">{t("tables.create.previewHint")}</p>
               </div>
             ) : columnsEditorOpen && draftTable ? (
               <div className="cw-tables-create-editor-wrap">

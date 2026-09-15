@@ -5,9 +5,9 @@
 }
 
 .cw-tables-create-modal {
-  width: min(880px, calc(100vw - 32px));
-  max-width: 880px;
-  height: min(620px, 92vh);
+  width: min(1040px, calc(100vw - 24px));
+  max-width: 1040px;
+  height: min(680px, 92vh);
   max-height: 92vh;
   display: flex;
   flex-direction: column;
@@ -67,7 +67,7 @@
 
 .cw-tables-create-body {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: minmax(360px, 400px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -77,20 +77,21 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-right: 0.5px solid var(--border);
   overflow: auto;
   min-height: 0;
+  background: var(--surface-2);
 }
 
 .cw-tables-create-right {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   overflow: auto;
   min-height: 0;
-  background: var(--surface-2);
+  background: var(--surface-1);
 }
 
 /* Phrase + AI halo */
@@ -216,22 +217,23 @@
 .cw-tables-create-gallery {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 8px;
 }
 
 .cw-tables-create-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 9px;
+  gap: 7px;
+  padding: 9px 10px;
   border-radius: 10px;
   border: 0.5px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface-1);
   cursor: pointer;
   text-align: left;
   font: inherit;
   color: inherit;
-  min-height: 120px;
+  min-height: 118px;
+  min-width: 0;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -293,13 +295,15 @@
   border: 0.5px solid var(--border);
   border-radius: 5px;
   overflow: hidden;
-  font-size: 7.5px;
-  background: var(--surface-1);
+  font-size: 8px;
+  line-height: 1.25;
+  background: var(--surface-2);
 }
 
 .cw-tables-create-mini.is-lg {
-  font-size: 9.5px;
+  font-size: 10px;
   margin-bottom: 2px;
+  background: var(--surface-0, #fff);
 }
 
 .cw-tables-create-mini.is-enter {
@@ -319,16 +323,17 @@
   display: grid;
   gap: 0;
   border-top: 0.5px solid var(--border);
+  min-width: 0;
 }
 
 .cw-tables-create-mini-r:first-child {
   border-top: 0;
-  background: var(--surface-1);
+  background: color-mix(in srgb, var(--surface-1) 80%, var(--border));
   color: var(--text-muted);
 }
 
 .cw-tables-create-mini-r > span {
-  padding: 2px 4px;
+  padding: 3px 5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -344,13 +349,19 @@
 .cw-tables-create-st {
   display: inline-block;
   border-radius: 3px;
-  padding: 0 3px;
+  padding: 0 4px;
   font-weight: 500;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: baseline;
   background: var(--cw-tone-soft, var(--surface-1));
   color: var(--cw-tone, var(--text-secondary));
+}
+
+.cw-tables-create-card .cw-tables-create-st {
+  font-size: 7.5px;
+  padding: 0 3px;
 }
 
 .cw-tables-create-card-f {
@@ -389,16 +400,25 @@
 .cw-tables-create-empty {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   align-items: stretch;
   justify-content: center;
   min-height: 100%;
   color: var(--text-muted);
+  padding: 8px 4px;
 }
 
 .cw-tables-create-empty-msg {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.cw-tables-create-empty-hint {
+  margin: 0;
+  font-size: 11px;
   text-align: center;
   color: var(--text-muted);
 }
@@ -770,19 +790,18 @@
   background: transparent;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 860px) {
   .cw-tables-create-modal {
-    width: calc(100vw - 16px);
-    height: min(92vh, 720px);
+    width: calc(100vw - 12px);
+    height: min(94vh, 760px);
   }
   .cw-tables-create-body {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: minmax(240px, 42%) minmax(0, 1fr);
   }
   .cw-tables-create-left {
     border-right: 0;
     border-bottom: 0.5px solid var(--border);
-    max-height: 42%;
   }
   .cw-tables-create-schema {
     grid-template-columns: 1fr;
