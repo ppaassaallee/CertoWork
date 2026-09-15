@@ -148,8 +148,17 @@ import {
   todayTimingPatch,
   weekTimingPatch,
 } from "../lib/itemTiming";
+import { useNavigate } from "react-router-dom";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useMobileCore } from "../hooks/useMobileCore";
 import { useAuth } from "../lib/AuthContext";
+import { db } from "../lib/firebase";
+import { CHART_COLORS } from "../lib/chartColors";
+import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
+import {
+  CalendarEventChip,
+  CalendarEventPopover,
+} from "../features/calendar/CalendarEventChip";
 import {
   itemViewSurface,
   normalizeItemViewFilters,
@@ -759,6 +768,12 @@ export function WorkItemsCenter({
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
+  const navigate = useNavigate();
+  const { events: calendarEvents, accounts: calendarAccounts } = useCalendarEvents();
+  const calendarAccountColor = (accountId: string) => {
+    const index = Math.max(0, calendarAccounts.findIndex((row) => row.id === accountId));
+    return CHART_COLORS[index % CHART_COLORS.length] || "var(--accent)";
+  };
   const viewerId = user?.uid || "";
   const workspaceId = workspace?.id || "";
   const surface = itemViewSurface(activeProject?.id);
@@ -862,6 +877,7 @@ export function WorkItemsCenter({
   const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState(() => new Date());
   const [calendarScale, setCalendarScale] = useState<"week" | "month">("month");
+  const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<string | null>(null);
   const [checklistDraft, setChecklistDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [commentMentionOpen, setCommentMentionOpen] = useState(false);
@@ -2804,6 +2820,59 @@ export function WorkItemsCenter({
       setCalendarAnchor(next);
     };
     const weekCount = Math.max(1, Math.round(monthDays.length / 7));
+    const renderExternalEvents = (dayKey: string) => {
+      const dayEvents = calendarEvents.filter((event) => String(event.start).slice(0, 10) === dayKey);
+      return dayEvents.map((event) => {
+        const color = calendarAccountColor(event.accountId);
+        return (
+          <div className="cw-cal-layer" key={event.id} style={{ position: "relative" }}>
+            <CalendarEventChip
+              accountColor={color}
+              event={event}
+              onSelect={(row) => setSelectedCalendarEventId(row.id)}
+            />
+            {selectedCalendarEventId === event.id ? (
+              <CalendarEventPopover
+                accountColor={color}
+                event={event}
+                onClose={() => setSelectedCalendarEventId(null)}
+                onJoin={() => {
+                  if (event.meetingUrl) window.open(event.meetingUrl, "_blank");
+                }}
+                onNotes={() => {
+                  if (!user || !workspace) return;
+                  void addDoc(collection(db, "notebook_entries"), {
+                    userId: user.uid,
+                    workspaceId: workspace.id,
+                    kind: "note",
+                    title: event.title,
+                    content: "",
+                    noteType: "meeting",
+                    meetingDate: String(event.start).slice(0, 10),
+                    attendeeIds: (event.attendees || []).map(
+                      (a) => a.email || a.displayName || "",
+                    ),
+                    status: "active",
+                    createdBy: user.uid,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                  }).then(() => navigate("/notes"));
+                }}
+                onOpenExternal={() => {
+                  window.open(
+                    `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(event.externalId)}`,
+                    "_blank",
+                  );
+                }}
+                onPrepare={() => {
+                  navigate(`/home?prepareEvent=${encodeURIComponent(event.id)}`);
+                }}
+              />
+            ) : null}
+          </div>
+        );
+      });
+    };
     const renderDayItems = (dayKey: string, compact: boolean) => {
       const items = filtered.filter((item) => itemDueKey(item) === dayKey);
       return items.map((item, index) => (
@@ -2911,6 +2980,7 @@ export function WorkItemsCenter({
                               <strong>{day.dayNumber}</strong>
                               {items.length > 0 ? <span>{items.length}</span> : null}
                             </header>
+                            {renderExternalEvents(day.key)}
                             {renderDayItems(day.key, true)}
                             {provided.placeholder}
                           </section>
@@ -2935,6 +3005,7 @@ export function WorkItemsCenter({
                         {...provided.droppableProps}
                       >
                         <header><strong>{day.label}</strong><span>{items.length}</span></header>
+                        {renderExternalEvents(day.key)}
                         {renderDayItems(day.key, false)}
                         {provided.placeholder}
                       </section>
