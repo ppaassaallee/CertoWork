@@ -45,6 +45,8 @@ import { getLocale } from "../../../lib/i18n";
 import { compileItemSentence } from "../../capture/compileItemSentence";
 import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
 import { ItemNotesSection } from "./ItemNotesSection";
+import { ItemRecordsSection } from "./ItemRecordsSection";
+import type { RecordDoc, TableDoc } from "../../../lib/tables";
 import "./ItemModal.css";
 
 export type WorkItemKind =
@@ -109,6 +111,9 @@ export type ItemModalProps = {
   deleteImpact?: string[];
   notebookEntries?: any[];
   onOpenNote?: (noteId: string) => void;
+  workspaceTables?: TableDoc[];
+  workspaceRecords?: RecordDoc[];
+  onOpenRecord?: (tableId: string, recordId: string) => void;
 };
 
 const WORK_TYPES: WorkItemKind[] = [
@@ -331,6 +336,9 @@ export function ItemModal({
   deleteImpact,
   notebookEntries = [],
   onOpenNote,
+  workspaceTables = [],
+  workspaceRecords = [],
+  onOpenRecord,
 }: ItemModalProps) {
   const locale = getLocale();
   const [layout, setLayout] = useState<"panel" | "expanded">(layoutProp || "expanded");
@@ -873,6 +881,12 @@ export function ItemModal({
               item={item}
               notebookEntries={notebookEntries}
               onOpenNote={onOpenNote}
+            />
+            <ItemRecordsSection
+              item={item}
+              onOpenRecord={onOpenRecord}
+              records={workspaceRecords}
+              tables={workspaceTables}
             />
           </div>
 

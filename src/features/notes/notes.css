@@ -264,6 +264,30 @@
   background: var(--accent-soft);
 }
 
+.cw-notes-ent {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cw-notes-ent-task {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text-primary);
+}
+
+.cw-notes-ent-person {
+  background: color-mix(in srgb, var(--status-info, #378add) 12%, transparent);
+}
+
+.cw-notes-ent-record {
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+  color: var(--text-primary);
+}
+
 .cw-notes-body {
   flex: 1;
   min-height: 0;

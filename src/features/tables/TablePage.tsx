@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Plus,
   Settings2,
+  Sparkles,
   Zap,
 } from "../../components/ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
@@ -59,6 +60,12 @@ export type TablePageProps = {
   onLinkNote?(recordId: string): void;
   onLinkTicket?(recordId: string): void;
   onLinkRecord?(recordId: string): void;
+  onOpenOdysseus?(opts: {
+    kind: "table" | "record";
+    entityId: string;
+    label: string;
+    prompt?: string;
+  }): void;
 };
 
 export function TablePage({
@@ -78,6 +85,7 @@ export function TablePage({
   onLinkNote,
   onLinkTicket,
   onLinkRecord,
+  onOpenOdysseus,
 }: TablePageProps) {
   const { user } = useAuth();
   const actorId = user?.uid || table.createdBy;
@@ -206,6 +214,25 @@ export function TablePage({
         </div>
 
         <div className="cw-tables-page-actions">
+          {onOpenOdysseus ? (
+            <button
+              type="button"
+              className="cw-tables-chip-btn"
+              data-testid="tables-odysseus-chip"
+              onClick={() =>
+                onOpenOdysseus({
+                  kind: activeRecord ? "record" : "table",
+                  entityId: activeRecord ? activeRecord.id : table.id,
+                  label: activeRecord
+                    ? String(activeRecord.values[table.keyColumns.title] ?? table.name)
+                    : table.name,
+                })
+              }
+            >
+              <Sparkles size={14} />
+              Odysseus
+            </button>
+          ) : null}
           <button
             type="button"
             className="cw-tables-chip-btn"

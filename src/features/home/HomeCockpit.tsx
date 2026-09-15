@@ -4,11 +4,13 @@ import {
   Bookmark,
   CheckSquare,
   Flag,
+  LayoutGrid,
   Sparkles,
 } from "../../components/ui/Icon";
 import { getLocale } from "../../lib/i18n";
 import type { MyWorkActor } from "../../lib/myWorkItems";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
+import type { RecordDoc, TableDoc } from "../../lib/tables";
 import {
   buildHomeCockpitData,
   type EditorialPart,
@@ -50,6 +52,7 @@ export type HomeCockpitProps = {
   onOpenOdysseus: (opts?: { prompt?: string }) => void;
   onNew?: () => void;
   onOpenItem: (itemId: string) => void;
+  onOpenRecord?: (tableId: string, recordId: string) => void;
   onOpenProject: (projectId: string) => void;
   onApprove: (item: any) => void;
   onRespondRequest: (request: any) => void;
@@ -60,9 +63,12 @@ export type HomeCockpitProps = {
   workspaceId?: string;
   dayPlanItems?: Array<{ id: string; status: "open" | "done" | "archived" }>;
   focusScore?: number;
+  tables?: TableDoc[];
+  records?: RecordDoc[];
 };
 
-function TypeGlyph({ type }: { type: string }) {
+function TypeGlyph({ type, entityKind }: { type: string; entityKind?: string }) {
+  if (entityKind === "record" || type === "record") return <LayoutGrid size={12} />;
   const lower = type.toLowerCase();
   if (lower.includes("epic") || lower.includes("épica")) return <Bookmark size={12} />;
   if (lower.includes("bug")) return <AlertTriangle size={12} />;
@@ -184,6 +190,7 @@ export function HomeCockpit({
   weeklyPlanSession = null,
   onOpenOdysseus,
   onOpenItem,
+  onOpenRecord,
   onOpenProject,
   onApprove,
   onRespondRequest,
@@ -194,6 +201,8 @@ export function HomeCockpit({
   workspaceId,
   dayPlanItems = [],
   focusScore,
+  tables = [],
+  records = [],
 }: HomeCockpitProps) {
   const locale = getLocale();
   const { events: calendarEvents } = useCalendarEvents();
@@ -221,6 +230,8 @@ export function HomeCockpit({
         now,
         locale,
         calendarEvents,
+        tables,
+        records,
       }),
     [
       userName,
@@ -238,6 +249,8 @@ export function HomeCockpit({
       now,
       locale,
       calendarEvents,
+      tables,
+      records,
     ],
   );
 
@@ -515,9 +528,18 @@ export function HomeCockpit({
             <>
               <ul className="cw-home-item-list">
                 {items.slice(0, 5).map((item) => (
-                  <li key={item.id}>
-                    <button onClick={() => onOpenItem(item.id)} type="button">
-                      <TypeGlyph type={item.workItemType} />
+                  <li key={`${item.entityKind || "task"}-${item.id}`}>
+                    <button
+                      onClick={() => {
+                        if (item.entityKind === "record" && item.tableId && onOpenRecord) {
+                          onOpenRecord(item.tableId, item.id);
+                          return;
+                        }
+                        onOpenItem(item.id);
+                      }}
+                      type="button"
+                    >
+                      <TypeGlyph entityKind={item.entityKind} type={item.workItemType} />
                       <span className="cw-home-item-main">
                         <strong title={item.title}>{item.title}</strong>
                         <em>
@@ -666,11 +688,17 @@ export function HomeCockpit({
                 {day.items.slice(0, 3).map((item) => (
                   <button
                     className="cw-home-week-chip"
-                    key={item.id}
-                    onClick={() => onOpenItem(item.id)}
+                    key={`${item.entityKind || "task"}-${item.id}`}
+                    onClick={() => {
+                      if (item.entityKind === "record" && item.tableId && onOpenRecord) {
+                        onOpenRecord(item.tableId, item.id);
+                        return;
+                      }
+                      onOpenItem(item.id);
+                    }}
                     type="button"
                   >
-                    <TypeGlyph type={item.workItemType} />
+                    <TypeGlyph entityKind={item.entityKind} type={item.workItemType} />
                     <span>{item.title}</span>
                   </button>
                 ))}
