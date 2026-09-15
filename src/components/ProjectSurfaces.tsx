@@ -2778,6 +2778,16 @@ export function ProjectConsolePanel({
             </div>
             <span>{documents.length}</span>
           </header>
+          <div style={{ margin: "0 0 12px" }}>
+            <button
+              className="do-btn"
+              data-testid="project-open-notes"
+              onClick={() => navigate(`/work/projects/${project.id}/notes`)}
+              type="button"
+            >
+              <FileText size={13} /> Notas del proyecto
+            </button>
+          </div>
           <div className="do-docs-compose">
             <select aria-label="Document type" onChange={(event) => setDocType(event.target.value as typeof docType)} value={docType}>
               {PROJECT_RESOURCE_TYPES.map((type) => (

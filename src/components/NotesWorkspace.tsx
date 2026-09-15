@@ -20,6 +20,8 @@ import { getLocale, t } from "../lib/i18n";
 import {
   createNote as createNoteDoc,
   ensurePersonalNotebook,
+  ensureProjectNotebook,
+  linkNote,
   noteTemplate,
   setNoteAiVisible,
   setNoteVisibility,
@@ -30,6 +32,7 @@ import {
 import { NotebookSidebar } from "../features/notes/NotebookSidebar";
 import { NotesList } from "../features/notes/NotesList";
 import { NoteMetaChips } from "../features/notes/NoteMetaChips";
+import { NoteLinksPopover } from "../features/notes/NoteLinksPopover";
 import "../features/notes/notes.css";
 
 type NotesWorkspaceProps = {
@@ -38,8 +41,16 @@ type NotesWorkspaceProps = {
   knowledgeItems: any[];
   onAsk: (prompt: string) => void;
   onOpenProject?: (project: any) => void;
+  onQuickCaptureItem?: () => void;
   projects: any[];
   tasks: any[];
+  workspaceMembers?: Array<{
+    id: string;
+    displayName?: string;
+    name?: string;
+    userId?: string;
+  }>;
+  initialNoteId?: string | null;
 };
 
 function timestamp(value: any) {
@@ -56,7 +67,11 @@ export function NotesWorkspace({
   entries,
   onAsk,
   onOpenProject,
+  onQuickCaptureItem,
   projects,
+  tasks,
+  workspaceMembers = [],
+  initialNoteId,
 }: NotesWorkspaceProps) {
   const { user, workspace } = useAuth();
   const locale = getLocale() === "es" ? "es" : "en";
@@ -71,6 +86,7 @@ export function NotesWorkspace({
   const [search, setSearch] = useState("");
   const [listTab, setListTab] = useState<"all" | "meetings" | "mine" | "linked">("all");
   const [focusMode, setFocusMode] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [peekEntity, setPeekEntity] = useState<{
     id: string;
     kind: "task" | "project" | "note" | "person" | "doc";
@@ -134,14 +150,30 @@ export function NotesWorkspace({
   }, [user?.uid, workspace?.id]);
 
   useEffect(() => {
+    if (!user || !workspace || !activeProject?.id) return;
+    void ensureProjectNotebook(
+      workspace.id,
+      String(activeProject.id),
+      String(activeProject.title || activeProject.name || "Project"),
+      user.uid,
+    ).then((notebookId) => {
+      if (notebookId) setSelectedNotebookId(notebookId);
+    });
+  }, [activeProject?.id, user?.uid, workspace?.id]);
+
+  useEffect(() => {
+    if (initialNoteId) setSelectedNoteId(initialNoteId);
+  }, [initialNoteId]);
+
+  useEffect(() => {
     if (selectedNotebookId && notebooks.some((entry) => entry.id === selectedNotebookId)) return;
     setSelectedNotebookId(notebooks[0]?.id || "");
   }, [notebooks, selectedNotebookId]);
 
   useEffect(() => {
-    if (selectedNoteId && notes.some((entry) => entry.id === selectedNoteId)) return;
+    if (selectedNoteId && (notes.some((entry) => entry.id === selectedNoteId) || allNotes.some((e) => e.id === selectedNoteId))) return;
     setSelectedNoteId(notes[0]?.id || "");
-  }, [notes, selectedNoteId]);
+  }, [notes, selectedNoteId, allNotes]);
 
   useEffect(() => {
     setEditor({
@@ -375,6 +407,7 @@ export function NotesWorkspace({
               locale={locale}
               note={withDefaults(selectedNote)}
               onAiVisible={(value) => void setNoteAiVisible(selectedNote.id, value)}
+              onOpenLinks={() => setLinksOpen(true)}
               onTags={(tags) => setEditor((cur) => ({ ...cur, tagsText: tags.join(", ") }))}
               onType={(type) => {
                 const empty = !String(selectedNote.content || "").trim();
@@ -399,10 +432,77 @@ export function NotesWorkspace({
                 activeProject?.title
               }
             />
+            {linksOpen ? (
+              <div style={{ position: "relative", zIndex: 20 }}>
+                <NoteLinksPopover
+                  items={tasks.map((task) => ({
+                    id: String(task.id),
+                    title: String(task.title || task.name || ""),
+                    key: String(task.key || task.projectKey || ""),
+                    projectTitle: projects.find((p) => p.id === task.projectId)?.title,
+                  }))}
+                  locale={locale}
+                  noteId={selectedNote.id}
+                  notes={allNotes.map((n) => ({ id: n.id, title: n.title }))}
+                  onClose={() => setLinksOpen(false)}
+                  onCreateItem={() => onQuickCaptureItem?.()}
+                  people={workspaceMembers.map((m) => ({
+                    id: String(m.id),
+                    displayName: m.displayName || m.name,
+                    name: m.name,
+                  }))}
+                  projects={projects.map((p) => ({
+                    id: String(p.id),
+                    title: p.title || p.name,
+                    name: p.name,
+                  }))}
+                  userId={user?.uid || ""}
+                  workspaceId={workspace?.id || ""}
+                />
+              </div>
+            ) : null}
             <div className="cw-notes-body">
               <NoteRichEditor
+                items={tasks.map((task) => ({
+                  id: String(task.id),
+                  title: String(task.title || task.name || ""),
+                  key: String(task.key || task.projectKey || ""),
+                  projectTitle: projects.find((p) => p.id === task.projectId)?.title,
+                  kind: String(task.workItemType || task.itemType || "task"),
+                }))}
                 noteId={selectedNote.id}
                 onChange={(content) => setEditor((cur) => ({ ...cur, content }))}
+                onLinkTask={(taskId) => {
+                  if (!user || !workspace) return;
+                  void linkNote({
+                    workspaceId: workspace.id,
+                    userId: user.uid,
+                    noteId: selectedNote.id,
+                    target: { type: "task", id: taskId },
+                  });
+                }}
+                onMentionPerson={(person) => {
+                  if (!user || !workspace) return;
+                  const targetUid = person.userId || person.id;
+                  if (!targetUid || targetUid === user.uid) return;
+                  void addDoc(collection(db, "user_notifications"), {
+                    type: "mention",
+                    workspaceId: workspace.id,
+                    userId: targetUid,
+                    noteId: selectedNote.id,
+                    noteTitle: editor.title || t("notes.untitled"),
+                    mentionedByUserId: user.uid,
+                    mentionedByName: user.displayName || user.email || "",
+                    read: false,
+                    createdAt: serverTimestamp(),
+                  });
+                }}
+                people={workspaceMembers.map((m) => ({
+                  id: String(m.id),
+                  displayName: m.displayName || m.name,
+                  name: m.name,
+                  userId: m.userId,
+                }))}
                 value={editor.content}
               />
             </div>
