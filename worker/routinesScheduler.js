@@ -513,14 +513,221 @@ async function queryEventRoutines(env, workspaceId, eventType) {
 }
 
 /**
+ * Pure filter match for table.* event triggers.
+ * Mirrors src/lib/routines/tableEventMatch.ts — keep in sync.
+ */
+export function matchesTableEventFilter(filter, meta) {
+  if (!filter || typeof filter !== "object") return true;
+  const m = meta || {};
+
+  if (filter.tableId != null && String(filter.tableId) !== "") {
+    if (m.tableId == null || String(m.tableId) !== String(filter.tableId)) return false;
+  }
+  if (filter.to != null && String(filter.to) !== "") {
+    if (m.to == null || String(m.to) !== String(filter.to)) return false;
+  }
+  if (filter.columnId != null && String(filter.columnId) !== "") {
+    if (m.columnId == null || String(m.columnId) !== String(filter.columnId)) return false;
+  }
+  if (filter.offsetDays != null && Number.isFinite(Number(filter.offsetDays))) {
+    if (m.offsetDays == null || Number(m.offsetDays) !== Number(filter.offsetDays)) return false;
+  }
+  return true;
+}
+
+function isoDay(value) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const day = value.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+  }
+  return null;
+}
+
+function addDaysIso(dayIso, days) {
+  const d = new Date(`${dayIso}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + Number(days || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+async function queryActiveDateReachedRoutines(env) {
+  return firestoreRunQuery(env, {
+    from: [{ collectionId: "routines" }],
+    where: {
+      compositeFilter: {
+        op: "AND",
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: "status" },
+              op: "EQUAL",
+              value: { stringValue: "active" },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "trigger.kind" },
+              op: "EQUAL",
+              value: { stringValue: "event" },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "trigger.eventType" },
+              op: "EQUAL",
+              value: { stringValue: "table.date_reached" },
+            },
+          },
+        ],
+      },
+    },
+    limit: 50,
+  });
+}
+
+async function queryTablesWithDateKey(env) {
+  // Simple scan — filter keyColumns.date in memory (Firestore inequality on nested maps is awkward).
+  return firestoreRunQuery(env, {
+    from: [{ collectionId: "tables" }],
+    limit: 80,
+  });
+}
+
+async function queryRecordsForTable(env, tableId) {
+  return firestoreRunQuery(env, {
+    from: [{ collectionId: "table_records" }],
+    where: {
+      fieldFilter: {
+        field: { fieldPath: "tableId" },
+        op: "EQUAL",
+        value: { stringValue: tableId },
+      },
+    },
+    limit: 200,
+  });
+}
+
+/**
+ * Daily sweep: emit table.date_reached for records whose key date is offsetDays from today.
+ * Idempotent outbox id: `${recordId}_${columnId}_${date}`.
+ */
+export async function emitTableDateReachedEvents(env, now = new Date()) {
+  if (!firestoreAdminConfigured(env)) {
+    return { ok: false, reason: "admin_not_configured", emitted: 0 };
+  }
+
+  const routinesRes = await queryActiveDateReachedRoutines(env);
+  if (!routinesRes.ok) return { ok: false, reason: routinesRes.reason, emitted: 0 };
+  const routines = routinesRes.documents || [];
+  if (!routines.length) return { ok: true, emitted: 0, skipped: "no_routines" };
+
+  // Collect (tableId, columnId?, offsetDays) from active routines.
+  const watches = [];
+  for (const routine of routines) {
+    const filter = routine.trigger?.filter || {};
+    const tableId = filter.tableId || (routine.scope?.entityType === "table" ? routine.scope?.entityId : null);
+    if (!tableId) continue;
+    const offsetDays = Number.isFinite(Number(filter.offsetDays)) ? Number(filter.offsetDays) : 0;
+    watches.push({
+      tableId: String(tableId),
+      columnId: filter.columnId ? String(filter.columnId) : null,
+      offsetDays,
+      workspaceId: routine.workspaceId,
+      ownerUserId: routine.ownerUserId || routine.userId || "",
+    });
+  }
+  if (!watches.length) return { ok: true, emitted: 0, skipped: "no_table_filters" };
+
+  const tablesRes = await queryTablesWithDateKey(env);
+  if (!tablesRes.ok) return { ok: false, reason: tablesRes.reason, emitted: 0 };
+  const tablesById = new Map(
+    (tablesRes.documents || [])
+      .filter((row) => row?.id && row.keyColumns?.date)
+      .map((row) => [String(row.id), row]),
+  );
+
+  const todayIso = now.toISOString().slice(0, 10);
+  let emitted = 0;
+
+  // Dedupe watches by table+column+offset
+  const seenWatch = new Set();
+  for (const watch of watches) {
+    const key = `${watch.tableId}|${watch.columnId || ""}|${watch.offsetDays}`;
+    if (seenWatch.has(key)) continue;
+    seenWatch.add(key);
+
+    const table = tablesById.get(watch.tableId);
+    if (!table) continue;
+    const columnId = watch.columnId || String(table.keyColumns?.date || "");
+    if (!columnId) continue;
+
+    const targetDate = addDaysIso(todayIso, watch.offsetDays);
+    const recordsRes = await queryRecordsForTable(env, watch.tableId);
+    if (!recordsRes.ok) continue;
+
+    for (const record of recordsRes.documents || []) {
+      if (!record?.id) continue;
+      const raw = record.values?.[columnId];
+      const date = isoDay(raw);
+      if (!date || date !== targetDate) continue;
+
+      const eventId = `${record.id}_${columnId}_${date}`;
+      const existing = await firestoreGetDocument(env, "event_outbox", eventId);
+      if (existing) continue;
+
+      const created = await firestoreCreateDocument(
+        env,
+        "event_outbox",
+        {
+          workspaceId: watch.workspaceId || table.workspaceId,
+          userId: watch.ownerUserId || table.createdBy || "",
+          eventType: "table.date_reached",
+          entityType: "record",
+          entityId: record.id,
+          projectId: table.projectId ?? null,
+          meta: {
+            tableId: watch.tableId,
+            recordId: record.id,
+            columnId,
+            offsetDays: watch.offsetDays,
+            date,
+          },
+          status: "pending",
+          chainDepth: 0,
+          createdAt: now.toISOString(),
+          availableAt: now.toISOString(),
+        },
+        eventId,
+      );
+      if (created.ok) emitted += 1;
+    }
+  }
+
+  return { ok: true, emitted };
+}
+
+/**
  * Drain event_outbox and enqueue matching event-triggered routines for immediate run.
  */
 export async function processEventOutbox(env, helpers = {}, now = new Date()) {
   if (!firestoreAdminConfigured(env)) {
     return { ok: false, reason: "admin_not_configured", drained: 0 };
   }
+
+  // Daily date_reached sweep before draining so same tick can match them.
+  let dateSweep = { ok: true, emitted: 0 };
+  try {
+    dateSweep = await emitTableDateReachedEvents(env, now);
+  } catch (error) {
+    dateSweep = {
+      ok: false,
+      reason: error instanceof Error ? error.message : "date_sweep_failed",
+      emitted: 0,
+    };
+  }
+
   const pending = await queryPendingEvents(env);
-  if (!pending.ok) return { ok: false, reason: pending.reason, drained: 0 };
+  if (!pending.ok) return { ok: false, reason: pending.reason, drained: 0, dateSweep };
 
   let drained = 0;
   const triggered = [];
@@ -541,6 +748,7 @@ export async function processEventOutbox(env, helpers = {}, now = new Date()) {
       claimedAt: now.toISOString(),
     });
 
+    const eventTriggered = [];
     const matches = await queryEventRoutines(env, event.workspaceId, event.eventType);
     for (const routine of matches.documents || []) {
       // Scope filter: portfolio/project routines match projectId; task routines match entityId.
@@ -550,6 +758,16 @@ export async function processEventOutbox(env, helpers = {}, now = new Date()) {
       if (scopeType === "project" && scopeId && event.projectId && scopeId !== event.projectId) continue;
       if (scopeType === "note" && scopeId && scopeId !== event.entityId) continue;
       if (scopeType === "request" && scopeId && scopeId !== event.entityId) continue;
+      if (scopeType === "table" && scopeId && event.meta?.tableId && scopeId !== event.meta.tableId) {
+        continue;
+      }
+      if (scopeType === "record" && scopeId && scopeId !== event.entityId) continue;
+
+      // Table event filters: require tableId (and optional to / columnId / offsetDays).
+      const eventType = String(event.eventType || "");
+      if (eventType.startsWith("table.")) {
+        if (!matchesTableEventFilter(routine.trigger?.filter, event.meta)) continue;
+      }
 
       const cooldown = Number(routine.trigger?.cooldownSeconds || 0);
       if (cooldown > 0 && routine.lastRunAt) {
@@ -563,12 +781,13 @@ export async function processEventOutbox(env, helpers = {}, now = new Date()) {
         updatedAt: now.toISOString(),
       });
       triggered.push(routine.id);
+      eventTriggered.push(routine.id);
     }
 
     await firestorePatchDocument(env, "event_outbox", event.id, {
       status: "done",
       finishedAt: now.toISOString(),
-      triggeredRoutineIds: triggered,
+      triggeredRoutineIds: eventTriggered,
     });
     drained += 1;
   }
@@ -578,5 +797,5 @@ export async function processEventOutbox(env, helpers = {}, now = new Date()) {
     ? await processDueRoutines(env, helpers, now)
     : { ok: true, processed: 0, results: [] };
 
-  return { ok: true, drained, triggered: triggered.length, due };
+  return { ok: true, drained, triggered: triggered.length, due, dateSweep };
 }

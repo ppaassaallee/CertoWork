@@ -37,6 +37,7 @@ import { RecordPanel } from "./RecordPanel";
 import { RecordsBoard } from "./RecordsBoard";
 import { RecordsCalendar } from "./RecordsCalendar";
 import { RecordsGrid } from "./RecordsGrid";
+import { TableAutomationComposer } from "./TableAutomationComposer";
 import type { TableMember } from "./cells/RecordCells";
 
 export type TableViewMode = "table" | "board" | "calendar";
@@ -67,7 +68,7 @@ export function TablePage({
   recordId = null,
   activity = [],
   onOpenRecord,
-  onOpenAutomations,
+  onOpenAutomations: _onOpenAutomations,
   onTableChange,
   onFieldChange,
   onCreateRecord,
@@ -83,6 +84,7 @@ export function TablePage({
   const [view, setView] = useState<TableViewMode>("table");
   const [menuOpen, setMenuOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [automationsOpen, setAutomationsOpen] = useState(false);
   const [liveRecords, setLiveRecords] = useState<RecordDoc[]>([]);
   const ownsData = recordsProp === undefined;
 
@@ -207,7 +209,7 @@ export function TablePage({
           <button
             type="button"
             className="cw-tables-chip-btn"
-            onClick={() => onOpenAutomations?.()}
+            onClick={() => setAutomationsOpen(true)}
           >
             <Zap size={14} />
             {t("tables.page.automations")}
@@ -325,6 +327,12 @@ export function TablePage({
             onChange={(cols, keys) => void handleColumnsChange(cols, keys)}
           />
         ) : null}
+
+        <TableAutomationComposer
+          open={automationsOpen}
+          table={table}
+          onClose={() => setAutomationsOpen(false)}
+        />
       </div>
     </div>
   );

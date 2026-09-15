@@ -11,3 +11,4 @@ export * from "./activateGuided";
 export * from "./guided";
 export * from "./flowBuild";
 export * from "./flowModel";
+export * from "./tableEventMatch";

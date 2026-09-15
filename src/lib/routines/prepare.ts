@@ -45,6 +45,14 @@ export type PrepareContext = {
   dayPlan?: DayPlan | null;
   /** Optional override for "my" items when assignee matching differs from prepare's filter. */
   myItems?: any[];
+  /** Table / record scope for record_context gather. */
+  tables?: any[];
+  records?: any[];
+  entityLinks?: any[];
+  scopeEntityType?: string;
+  scopeEntityId?: string | null;
+  tableId?: string | null;
+  recordId?: string | null;
 };
 
 function normalizeItemStatus(status: unknown): "open" | "done" | "archived" {
@@ -341,6 +349,81 @@ export function prepareRitualData(
         doneCount,
         remainingCount,
         nearestDeadline,
+      };
+    }
+    if (key === "record_context") {
+      const scopeType = String(ctx.scopeEntityType || "").toLowerCase();
+      const scopeId = ctx.scopeEntityId ? String(ctx.scopeEntityId) : null;
+      const tableId =
+        ctx.tableId != null
+          ? String(ctx.tableId)
+          : scopeType === "table"
+            ? scopeId
+            : null;
+      const recordId =
+        ctx.recordId != null
+          ? String(ctx.recordId)
+          : scopeType === "record"
+            ? scopeId
+            : null;
+
+      const tables = ctx.tables || [];
+      const records = ctx.records || [];
+      const links = ctx.entityLinks || [];
+
+      const table =
+        (tableId && tables.find((row) => String(row.id) === tableId)) ||
+        (recordId
+          ? tables.find((row) =>
+              records.some(
+                (rec) => String(rec.id) === recordId && String(rec.tableId) === String(row.id),
+              ),
+            )
+          : null) ||
+        null;
+
+      const record =
+        (recordId && records.find((row) => String(row.id) === recordId)) ||
+        (tableId
+          ? records.find((row) => String(row.tableId) === String(table?.id || tableId))
+          : null) ||
+        null;
+
+      const recordLinks = record
+        ? links.filter(
+            (link) =>
+              (String(link.fromEntityType || "") === "record" &&
+                String(link.fromEntityId || "") === String(record.id)) ||
+              (String(link.toEntityType || "") === "record" &&
+                String(link.toEntityId || "") === String(record.id)),
+          )
+        : [];
+
+      out.record_context = {
+        table: table
+          ? {
+              id: String(table.id),
+              name: titleOf(table),
+              keyColumns: table.keyColumns || null,
+              columns: Array.isArray(table.columns) ? table.columns : [],
+            }
+          : null,
+        record: record
+          ? {
+              id: String(record.id),
+              tableId: String(record.tableId || table?.id || ""),
+              values: record.values || {},
+              updatedAt: record.updatedAt || null,
+            }
+          : null,
+        links: recordLinks.map((link) => ({
+          id: String(link.id || ""),
+          fromEntityType: link.fromEntityType || null,
+          fromEntityId: link.fromEntityId || null,
+          toEntityType: link.toEntityType || null,
+          toEntityId: link.toEntityId || null,
+          relation: link.relation || link.kind || null,
+        })),
       };
     }
   }
