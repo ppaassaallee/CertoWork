@@ -98,7 +98,7 @@ export function Integrations() {
       className="p-4 max-w-2xl mx-auto space-y-6 pb-24"
     >
       <header className="mb-6 mt-4 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+        <button onClick={() => navigate("/settings")} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
           <ArrowLeft className="w-5 h-5 text-gray-500" />
         </button>
         <div>
