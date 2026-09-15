@@ -234,6 +234,14 @@ import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
+import { TablePage } from "../features/tables/TablePage";
+import {
+  TABLES,
+  canSeeTable,
+  createTable,
+  type TableDoc,
+} from "../lib/tables";
+import { defaultKeyColumns, defaultTableColumns } from "../features/tables/defaults";
 import { NoteQuickCapture } from "../features/notes/NoteQuickCapture";
 import {
   createNote as createNotebookNote,
@@ -393,6 +401,7 @@ export type CenterView =
   | "conversation"
   | "items"
   | "notes"
+  | "tables"
   | "strategy"
   | "portfolio"
   | "project"
@@ -463,6 +472,7 @@ export function DelivereeWorkspace() {
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
+  const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
@@ -513,6 +523,7 @@ export function DelivereeWorkspace() {
   );
   const [sidebarSections, setSidebarSections] = useState<{
     projects: boolean;
+    tables: boolean;
     favorites: boolean;
     recent: boolean;
     conversations: boolean;
@@ -520,6 +531,7 @@ export function DelivereeWorkspace() {
   }>(() => {
     const defaults = {
       projects: true,
+      tables: true,
       favorites: true,
       recent: true,
       conversations: true,
@@ -535,7 +547,7 @@ export function DelivereeWorkspace() {
     }
   });
   const toggleSidebarSection = (
-    key: "projects" | "favorites" | "recent" | "conversations" | "management",
+    key: "projects" | "tables" | "favorites" | "recent" | "conversations" | "management",
   ) => {
     setSidebarSections((current) => {
       const next = { ...current, [key]: !current[key] };
@@ -617,6 +629,8 @@ export function DelivereeWorkspace() {
   const centerView: CenterView =
     lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
       ? "notes"
+      : lens.kind === "tables"
+      ? "tables"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -647,6 +661,7 @@ export function DelivereeWorkspace() {
       if (projectId && lens.kind === "project") navigate(`/work/projects/${projectId}/notes`);
       else navigate("/notes");
     }
+    else if (next === "tables") navigate("/tables");
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -991,6 +1006,18 @@ export function DelivereeWorkspace() {
       makeQuery(
         "notebook_entries",
         (items) => setNotebookEntries(items as NotebookEntry[]),
+        false,
+        true,
+      ),
+      makeQuery(
+        TABLES,
+        (items) =>
+          setWorkspaceTables(
+            (items as TableDoc[]).map((row) => ({
+              ...row,
+              id: row.id,
+            })),
+          ),
         false,
         true,
       ),
@@ -1427,6 +1454,45 @@ export function DelivereeWorkspace() {
     () => sidebarProjectGroups(projects),
     [projects],
   );
+  const viewerProjectIds = useMemo(
+    () => projects.map((project) => String(project.id)),
+    [projects],
+  );
+  const visibleTables = useMemo(() => {
+    if (!user?.uid) return [];
+    return workspaceTables
+      .filter((table) => canSeeTable(table, user.uid, viewerProjectIds))
+      .sort((a, b) => {
+        const fav = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite));
+        if (fav) return fav;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+  }, [user?.uid, viewerProjectIds, workspaceTables]);
+  const activeTable = useMemo(() => {
+    if (lens.kind !== "tables" || !lens.tableId) return null;
+    return visibleTables.find((table) => table.id === lens.tableId) || null;
+  }, [lens, visibleTables]);
+  const createBlankTable = async () => {
+    if (!user?.uid || !workspace?.id) return;
+    try {
+      const id = await createTable({
+        workspaceId: workspace.id,
+        projectId: null,
+        name: t("tables.untitled"),
+        icon: "▦",
+        color: "var(--accent)",
+        visibility: "workspace",
+        columns: defaultTableColumns(),
+        keyColumns: defaultKeyColumns(),
+        createdBy: user.uid,
+        favorite: false,
+      });
+      navigate(`/tables/${encodeURIComponent(id)}`);
+      setSidebarOpen(false);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : t("tables.createFailed"));
+    }
+  };
   const openTasks = useMemo(
     () => tasks.filter((task) => !isClosed(task.status)),
     [tasks],
@@ -6028,7 +6094,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -6558,6 +6624,71 @@ export function DelivereeWorkspace() {
                 </button>
               )}
             </div>
+            )}
+          </div>
+
+          <div className="do-sidebar-section" data-testid="sidebar-tables">
+            <div className="do-section-head">
+              <button
+                aria-expanded={sidebarSections.tables}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("tables")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.tables ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>{t("tables.sidebar")}</span>
+              </button>
+              <button
+                aria-label={t("tables.new")}
+                onClick={() => void createBlankTable()}
+                type="button"
+              >
+                + {t("tables.newShort")}
+              </button>
+            </div>
+            {sidebarSections.tables && (
+              <div className="do-project-list">
+                {visibleTables.length === 0 ? (
+                  <button
+                    className="do-empty-link"
+                    onClick={() => void createBlankTable()}
+                    type="button"
+                  >
+                    {t("tables.empty.tables")}
+                  </button>
+                ) : (
+                  visibleTables.map((table) => (
+                    <div
+                      className={`do-project-row ${
+                        lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
+                      }`}
+                      key={table.id}
+                    >
+                      <button
+                        className="do-project-context"
+                        data-testid={`open-table-${table.id}`}
+                        onClick={() => {
+                          navigate(`/tables/${encodeURIComponent(table.id)}`);
+                          setSidebarOpen(false);
+                        }}
+                        title={table.name}
+                        type="button"
+                      >
+                        <span
+                          aria-hidden
+                          className="cw-tables-sidebar-swatch"
+                          style={{ background: table.color || "var(--accent)" }}
+                        />
+                        <span className="do-project-title">{table.name}</span>
+                        {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
 
@@ -8052,7 +8183,7 @@ export function DelivereeWorkspace() {
               <span>Choose a project from the portfolio.</span>
             </div>
           )
-        ) : (
+        ) : centerView === "notes" ? (
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
             entries={notebookEntries}
@@ -8078,7 +8209,49 @@ export function DelivereeWorkspace() {
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
-        )}
+        ) : centerView === "tables" ? (
+          activeTable ? (
+            <TablePage
+              members={workspaceMembers.map((member) => ({
+                id: String(member.userId || member.id || ""),
+                name:
+                  memberPublicLabel(member) ||
+                  String(member.displayName || member.email || member.userId || ""),
+                email: String(member.email || ""),
+              }))}
+              onOpenAutomations={() => navigate("/rutinas")}
+              onOpenRecord={(id) => {
+                const params = new URLSearchParams(location.search);
+                if (id) params.set("record", id);
+                else params.delete("record");
+                const qs = params.toString();
+                navigate(
+                  `/tables/${encodeURIComponent(activeTable.id)}${qs ? `?${qs}` : ""}`,
+                  { replace: true },
+                );
+              }}
+              onTableChange={(next) => {
+                setWorkspaceTables((current) =>
+                  current.map((row) => (row.id === next.id ? next : row)),
+                );
+              }}
+              recordId={new URLSearchParams(location.search).get("record")}
+              table={activeTable}
+            />
+          ) : (
+            <div className="cw-tables-empty-page" data-testid="tables-empty">
+              <strong>{t("tables.sidebar")}</strong>
+              <p>{t("tables.empty.tables")}</p>
+              <button
+                className="cw-tables-btn-primary"
+                onClick={() => void createBlankTable()}
+                type="button"
+              >
+                + {t("tables.new")}
+              </button>
+            </div>
+          )
+        ) : null}
       </main>
 
       <nav aria-label="Mobile core" className="do-mobile-dock">
