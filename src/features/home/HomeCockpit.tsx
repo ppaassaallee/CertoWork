@@ -17,6 +17,8 @@ import {
   type HomeRoutineHint,
 } from "./buildHomeCockpitData";
 import { MiSemanaCard } from "../routines/MiSemanaCard";
+import { useCalendarEvents } from "../calendar/useCalendarEvents";
+import "../calendar/calendarOverlay.css";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -183,6 +185,7 @@ export function HomeCockpit({
   onReviewFriday,
 }: HomeCockpitProps) {
   const locale = getLocale();
+  const { events: calendarEvents } = useCalendarEvents();
   const model = useMemo(
     () =>
       buildHomeCockpitData({
@@ -200,6 +203,7 @@ export function HomeCockpit({
         routineSessions,
         now,
         locale,
+        calendarEvents,
       }),
     [
       userName,
@@ -216,6 +220,7 @@ export function HomeCockpit({
       routineSessions,
       now,
       locale,
+      calendarEvents,
     ],
   );
 
@@ -290,6 +295,45 @@ export function HomeCockpit({
 
       <div className="cw-home-stagger" style={{ ["--i" as string]: 1 }}>
         <EditorialLine parts={model.editorial} onPart={handleEditorial} />
+        {model.nextMeetings.length > 0 ? (
+          <div className="cw-home-meetings" data-testid="home-meetings-strip">
+            {model.nextMeetings.map((meeting) => {
+              const time = new Date(meeting.start).toLocaleTimeString(
+                locale === "es" ? "es" : "en",
+                { hour: "2-digit", minute: "2-digit" },
+              );
+              const platform = meeting.meetingUrl
+                ? /teams/i.test(meeting.meetingUrl)
+                  ? "Teams"
+                  : "Meet"
+                : "";
+              return (
+                <span className="cw-home-meeting-chip" key={meeting.id}>
+                  {time} {meeting.title}
+                  {platform ? ` · ${platform}` : ""}
+                </span>
+              );
+            })}
+            {model.nextMeetings[0]?.minutesUntil <= 60 ? (
+              <button
+                className="cw-home-meeting-prepare"
+                onClick={() =>
+                  onOpenOdysseus({
+                    prompt:
+                      locale === "es"
+                        ? `Prepará la reunión “${model.nextMeetings[0].title}”`
+                        : `Prepare for meeting “${model.nextMeetings[0].title}”`,
+                  })
+                }
+                type="button"
+              >
+                {locale === "es"
+                  ? `Tu próxima reunión en ${model.nextMeetings[0].minutesUntil} min · Preparar`
+                  : `Your next meeting in ${model.nextMeetings[0].minutesUntil} min · Prepare`}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -553,6 +597,18 @@ export function HomeCockpit({
                     <Sparkles size={9} /> {routine.title}
                   </span>
                 ))}
+                {calendarEvents
+                  .filter((event) => String(event.start).slice(0, 10) === day.iso)
+                  .slice(0, 3)
+                  .map((event) => (
+                    <span className="cw-home-week-chip is-event" key={event.id}>
+                      {new Date(event.start).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}{" "}
+                      {event.title}
+                    </span>
+                  ))}
                 {day.items.slice(0, 3).map((item) => (
                   <button
                     className="cw-home-week-chip"

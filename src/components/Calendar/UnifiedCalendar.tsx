@@ -3,20 +3,33 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, CheckCircle2, Zap, Dumbbell, Plus, X, Check, ShieldMinus, Ban } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../../lib/firestore-errors";
 import { logHabit, deleteHabitLog } from "../../lib/habits";
+import { useCalendarEvents } from "../../features/calendar/useCalendarEvents";
+import {
+  CalendarEventChip,
+  CalendarEventPopover,
+  eventsForDay,
+} from "../../features/calendar/CalendarEventChip";
 
 export function UnifiedCalendar() {
   const { user, workspace } = useAuth();
   const navigate = useNavigate();
   const [view, setView] = useState<'week' | 'agenda'>('week');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   
   const [tasks, setTasks] = useState<any[]>([]);
   const [habits, setHabits] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [habitLogs, setHabitLogs] = useState<Record<string, any>>({});
+  const { events, accounts } = useCalendarEvents();
+  const accountColor = (accountId: string) => {
+    const colors = ["#5B8DEF", "#2F9E7F", "#C46B3A"];
+    const index = Math.max(0, accounts.findIndex((row) => row.id === accountId));
+    return colors[index % colors.length];
+  };
   
   useEffect(() => {
     if (!user || !workspace) return;
@@ -160,6 +173,58 @@ export function UnifiedCalendar() {
                             <div className="text-sm font-bold">{day.getDate()}</div>
                          </div>
                          <div className="space-y-2 flex-1">
+                            {eventsForDay(events, day).map((event) => {
+                              const color = accountColor(event.accountId);
+                              return (
+                                <div key={event.id} style={{ position: "relative" }}>
+                                  <CalendarEventChip
+                                    accountColor={color}
+                                    event={event}
+                                    onSelect={(row) => setSelectedEventId(row.id)}
+                                  />
+                                  {selectedEventId === event.id ? (
+                                    <CalendarEventPopover
+                                      accountColor={color}
+                                      event={event}
+                                      onClose={() => setSelectedEventId(null)}
+                                      onJoin={() => {
+                                        if (event.meetingUrl) window.open(event.meetingUrl, "_blank");
+                                      }}
+                                      onNotes={() => {
+                                        if (!user || !workspace) return;
+                                        void addDoc(collection(db, "notebook_entries"), {
+                                          userId: user.uid,
+                                          workspaceId: workspace.id,
+                                          kind: "note",
+                                          title: event.title,
+                                          content: "",
+                                          noteType: "meeting",
+                                          meetingDate: String(event.start).slice(0, 10),
+                                          attendeeIds: (event.attendees || []).map(
+                                            (a) => a.email || a.displayName || "",
+                                          ),
+                                          status: "active",
+                                          createdBy: user.uid,
+                                          createdAt: serverTimestamp(),
+                                          updatedAt: serverTimestamp(),
+                                        }).then(() => navigate("/notes"));
+                                      }}
+                                      onOpenExternal={() => {
+                                        window.open(
+                                          `https://calendar.google.com/calendar/u/0/r/eventedit/${encodeURIComponent(event.externalId)}`,
+                                          "_blank",
+                                        );
+                                      }}
+                                      onPrepare={() => {
+                                        navigate(
+                                          `/home?prepareEvent=${encodeURIComponent(event.id)}`,
+                                        );
+                                      }}
+                                    />
+                                  ) : null}
+                                </div>
+                              );
+                            })}
                             {items.map(item => (
                                 <CalendarItem 
                                   key={`${item.dataType}_${item.id}_${item.date || ''}`} 
@@ -167,7 +232,7 @@ export function UnifiedCalendar() {
                                   onHabitLog={handleHabitCalendarLog}
                                 />
                             ))}
-                            {items.length === 0 && <div className="h-20 border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center">
+                            {items.length === 0 && eventsForDay(events, day).length === 0 && <div className="h-20 border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center">
                                <Plus className="w-4 h-4 text-gray-200" />
                             </div>}
                          </div>

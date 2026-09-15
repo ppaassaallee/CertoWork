@@ -1,0 +1,114 @@
+.cw-cal-ev {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.cw-cal-ev strong {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.cw-cal-ev span {
+  color: var(--text-muted);
+  font-size: 9.5px;
+}
+
+.cw-cal-busy {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    color-mix(in srgb, var(--text-muted) 12%, transparent) 3px,
+    color-mix(in srgb, var(--text-muted) 12%, transparent) 6px
+  );
+}
+
+.cw-cal-popover {
+  position: absolute;
+  z-index: 30;
+  width: 260px;
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: var(--shadow-2, 0 8px 24px rgba(0, 0, 0, 0.12));
+}
+
+.cw-cal-popover header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.cw-cal-popover-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.cw-cal-popover-meta {
+  margin: 8px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cw-cal-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cw-cal-popover-actions button {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  cursor: pointer;
+}
+
+.cw-home-meetings {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+}
+
+.cw-home-meeting-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+}
+
+.cw-home-meeting-prepare {
+  color: var(--accent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cw-home-week-chip.is-event {
+  border-style: solid;
+  background: transparent;
+}
