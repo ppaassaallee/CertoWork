@@ -103,6 +103,14 @@ export type HomeRoutineHint = {
   nextRunAt: string | null;
 };
 
+export type HomeMeetingChip = {
+  id: string;
+  title: string;
+  start: string;
+  meetingUrl: string | null;
+  minutesUntil: number;
+};
+
 export type HomeCockpitModel = {
   greeting: string;
   longDate: string;
@@ -122,6 +130,7 @@ export type HomeCockpitModel = {
   next7Days: HomeWeekDay[];
   weekSubtitle: string;
   activity: HomeActivityRow[];
+  nextMeetings: HomeMeetingChip[];
 };
 
 function asIsoDay(value: unknown): string | null {
@@ -511,6 +520,14 @@ export function buildHomeCockpitData(input: {
   }>;
   now?: Date;
   locale?: Locale;
+  calendarEvents?: Array<{
+    id: string;
+    title: string;
+    start: string;
+    end: string;
+    meetingUrl?: string | null;
+    privacy?: string;
+  }>;
 }): HomeCockpitModel {
   const locale = input.locale || getLocale();
   const now = input.now || new Date();
@@ -904,6 +921,22 @@ export function buildHomeCockpitData(input: {
 
   const dayLine = editorial.map((p) => p.text).join("");
 
+  const nowMs = now.getTime();
+  const nextMeetings: HomeMeetingChip[] = (input.calendarEvents || [])
+    .filter((event) => {
+      const start = Date.parse(event.start);
+      return Number.isFinite(start) && start >= nowMs - 5 * 60_000 && String(event.start).slice(0, 10) === todayIso;
+    })
+    .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
+    .slice(0, 3)
+    .map((event) => ({
+      id: event.id,
+      title: event.privacy === "busy" ? (locale === "es" ? "Ocupado" : "Busy") : event.title,
+      start: event.start,
+      meetingUrl: event.meetingUrl || null,
+      minutesUntil: Math.max(0, Math.round((Date.parse(event.start) - nowMs) / 60_000)),
+    }));
+
   return {
     greeting: greetingFor(input.userName, locale, now),
     longDate: locale === "es" ? longDate : longDateEn,
@@ -923,5 +956,6 @@ export function buildHomeCockpitData(input: {
     next7Days,
     weekSubtitle,
     activity: activity.slice(0, 6),
+    nextMeetings,
   };
 }

@@ -1513,5 +1513,24 @@ service cloud.firestore {
     match /agent_widgets/{id} { allow read, write: if isSignedIn(); }
     match /agent_widget_versions/{id} { allow read, write: if isSignedIn(); }
     match /workspace_settings/{id} { allow read, write: if isSignedIn(); }
+
+    match /calendar_accounts/{id} {
+      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    match /calendars/{id} {
+      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    match /calendar_events/{id} {
+      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    match /calendar_tokens/{id} {
+      allow read, write: if false;
+    }
   }
 }

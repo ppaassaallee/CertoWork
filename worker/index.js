@@ -11,6 +11,27 @@ import {
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
+import {
+  encryptCalendarSecrets,
+  signCalendarState,
+  verifyCalendarState,
+} from "./calendarCrypto.js";
+import {
+  CALENDAR_ACCOUNTS,
+  CALENDARS,
+  CALENDAR_TOKENS,
+  exchangeGoogleCode,
+  fetchGoogleProfile,
+  listGoogleCalendars,
+  renewCalendarChannels,
+  syncAccount,
+} from "./calendarSync.js";
+import {
+  firestoreCreateDocument,
+  firestoreGetDocument,
+  firestorePatchDocument,
+  firestoreRunQuery,
+} from "./firestoreAdmin.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1880,8 +1901,24 @@ const worker = {
         const result = await processDueRoutines(env, {
           sendEmail: sendBrevoTransactionalEmail,
         });
-        console.log("[routines.scheduled]", JSON.stringify({ events, result }));
-        return { events, result };
+        let calendar = { ok: true, skipped: true };
+        try {
+          const origin =
+            env.PUBLIC_ORIGIN ||
+            env.CERTO_PUBLIC_ORIGIN ||
+            "https://certo.work";
+          calendar = await renewCalendarChannels(env, origin);
+        } catch (calendarError) {
+          calendar = {
+            ok: false,
+            reason:
+              calendarError instanceof Error
+                ? calendarError.message
+                : "calendar_renew_failed",
+          };
+        }
+        console.log("[routines.scheduled]", JSON.stringify({ events, result, calendar }));
+        return { events, result, calendar };
       } catch (error) {
         console.error(
           "[routines.scheduled] failed",
@@ -2006,6 +2043,152 @@ const worker = {
     if (request.method === "GET" && url.pathname === "/api/collab/status") {
       return json(collabStatusPayload(env, url.origin));
     }
+    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/google/start") {
+      try {
+        const uid = String(url.searchParams.get("uid") || "").trim();
+        const workspaceId = String(url.searchParams.get("workspaceId") || "").trim();
+        if (!uid || !workspaceId) {
+          return json({ error: "uid and workspaceId are required" }, 400);
+        }
+        const clientId = env.GOOGLE_CALENDAR_CLIENT_ID;
+        if (!clientId) return json({ error: "GOOGLE_CALENDAR_CLIENT_ID is not configured" }, 503);
+        const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
+        const state = signCalendarState(env, uid, workspaceId);
+        const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+        auth.searchParams.set("client_id", clientId);
+        auth.searchParams.set("redirect_uri", redirectUri);
+        auth.searchParams.set("response_type", "code");
+        auth.searchParams.set("scope", "https://www.googleapis.com/auth/calendar");
+        auth.searchParams.set("access_type", "offline");
+        auth.searchParams.set("prompt", "consent");
+        auth.searchParams.set("state", state);
+        return Response.redirect(auth.toString(), 302);
+      } catch (error) {
+        return json(
+          { error: error instanceof Error ? error.message : "oauth_start_failed" },
+          500,
+        );
+      }
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/google/callback") {
+      try {
+        const code = String(url.searchParams.get("code") || "");
+        const state = verifyCalendarState(env, url.searchParams.get("state"));
+        if (!code || !state) {
+          return Response.redirect(`${url.origin}/settings/integrations?calendar=error`, 302);
+        }
+        const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
+        const tokens = await exchangeGoogleCode(env, code, redirectUri);
+        const profile = await fetchGoogleProfile(tokens.access_token);
+        const accountId = `google_${state.uid}_${String(profile.id || profile.email || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        const sealed = await encryptCalendarSecrets(env, {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: new Date(Date.now() + Number(tokens.expires_in || 3600) * 1000).toISOString(),
+        });
+        await firestoreCreateDocument(
+          env,
+          CALENDAR_TOKENS,
+          sealed,
+          accountId,
+        );
+        await firestoreCreateDocument(
+          env,
+          CALENDAR_ACCOUNTS,
+          {
+            userId: state.uid,
+            workspaceId: state.workspaceId,
+            provider: "google",
+            email: profile.email || "",
+            displayName: profile.name || profile.email || "Google Calendar",
+            status: "ok",
+            defaultWriteCalendarId: null,
+            syncCursor: null,
+            pushChannel: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          accountId,
+        );
+        const calendars = await listGoogleCalendars(tokens.access_token);
+        for (const calendar of calendars) {
+          const calendarId = `${accountId}__${String(calendar.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+          await firestoreCreateDocument(
+            env,
+            CALENDARS,
+            {
+              accountId,
+              userId: state.uid,
+              externalId: calendar.id,
+              name: calendar.summary || calendar.id,
+              color: calendar.backgroundColor || "var(--accent)",
+              visible: true,
+              writable: calendar.accessRole === "owner" || calendar.accessRole === "writer",
+              privacy: "full",
+              isWorkTarget: Boolean(calendar.primary),
+            },
+            calendarId,
+          );
+          if (calendar.primary) {
+            await firestorePatchDocument(env, CALENDAR_ACCOUNTS, accountId, {
+              defaultWriteCalendarId: calendarId,
+            });
+          }
+        }
+        await syncAccount(env, accountId);
+        return Response.redirect(
+          `${url.origin}/settings/integrations?calendar=connected`,
+          302,
+        );
+      } catch (error) {
+        console.error("[calendar.oauth.callback]", error);
+        return Response.redirect(`${url.origin}/settings/integrations?calendar=error`, 302);
+      }
+    }
+
+    if (request.method === "POST" && url.pathname.startsWith("/api/calendar/sync/")) {
+      try {
+        const accountId = decodeURIComponent(url.pathname.split("/").pop() || "");
+        const body = await readJson(request);
+        const auth = await authorize(request, body, env);
+        const account = await firestoreGetDocument(env, CALENDAR_ACCOUNTS, accountId);
+        if (!account || account.userId !== auth.subject) {
+          return json({ error: "Forbidden" }, 403);
+        }
+        const result = await syncAccount(env, accountId);
+        return json(result, result.ok ? 200 : 502);
+      } catch (error) {
+        return json(
+          { error: error instanceof Error ? error.message : "sync_failed" },
+          500,
+        );
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/calendar/webhook/google") {
+      const channelId = request.headers.get("X-Goog-Channel-ID") || "";
+      try {
+        const result = await firestoreRunQuery(env, {
+          from: [{ collectionId: CALENDAR_ACCOUNTS }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "pushChannel.id" },
+              op: "EQUAL",
+              value: { stringValue: channelId },
+            },
+          },
+          limit: 5,
+        });
+        for (const account of result.documents || []) {
+          await syncAccount(env, account.id);
+        }
+      } catch (error) {
+        console.error("[calendar.webhook]", error);
+      }
+      return new Response(null, { status: 200 });
+    }
+
     if (request.method === "POST" && url.pathname === "/api/collab/sso") {
       try {
         const body = await readJson(request);
