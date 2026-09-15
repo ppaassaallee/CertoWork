@@ -54,7 +54,8 @@ export async function decryptCalendarSecrets(env, sealed) {
 }
 
 export function signCalendarState(env, uid, workspaceId) {
-  const body = `${uid}:${workspaceId}:${Date.now()}`;
+  const iat = Date.now();
+  const body = `${uid}:${workspaceId}:${iat}`;
   return `${body}|${btoa(body + ":" + String(env.CALENDAR_TOKEN_KEY || "dev"))}`;
 }
 
@@ -64,7 +65,9 @@ export function verifyCalendarState(env, state) {
   if (!body || !sig) return null;
   const expected = btoa(body + ":" + String(env.CALENDAR_TOKEN_KEY || "dev"));
   if (sig !== expected) return null;
-  const [uid, workspaceId] = body.split(":");
+  const [uid, workspaceId, iatRaw] = body.split(":");
   if (!uid || !workspaceId) return null;
-  return { uid, workspaceId };
+  const iat = Number(iatRaw);
+  if (!Number.isFinite(iat) || Date.now() - iat > 10 * 60 * 1000) return null;
+  return { uid, workspaceId, iat };
 }

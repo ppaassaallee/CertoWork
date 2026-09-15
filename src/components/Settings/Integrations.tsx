@@ -70,16 +70,42 @@ export function Integrations() {
     }
   ];
 
-  const connectGoogle = () => {
+  const connectGoogle = async () => {
     if (!user || !workspace) return;
-    const url = `/api/calendar/oauth/google/start?uid=${encodeURIComponent(user.uid)}&workspaceId=${encodeURIComponent(workspace.id)}`;
-    window.location.href = url;
+    const token = await user.getIdToken();
+    const response = await fetch("/api/calendar/oauth/google/start", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ userId: user.uid, workspaceId: workspace.id }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.url) {
+      console.error("[calendar.oauth.start]", payload.error || response.status);
+      return;
+    }
+    window.location.assign(String(payload.url));
   };
 
   const syncAccount = async (accountId: string) => {
     if (!user) return;
     const token = await user.getIdToken();
     await fetch(`/api/calendar/sync/${encodeURIComponent(accountId)}`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ userId: user.uid }),
+    });
+  };
+
+  const disconnectAccount = async (accountId: string) => {
+    if (!user) return;
+    const token = await user.getIdToken();
+    await fetch(`/api/calendar/accounts/${encodeURIComponent(accountId)}/disconnect`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${token}`,
@@ -227,13 +253,11 @@ export function Integrations() {
       <DestructiveDialog
         confirmLabel={t("calendar.disconnect")}
         entityName={accounts.find((a) => a.id === disconnectId)?.email || "Google"}
-        impact={["Scheduled blocks stay in Google but stop syncing."]}
+        impact={[t("calendar.disconnectImpact")]}
         onCancel={() => setDisconnectId(null)}
         onConfirm={() => {
           if (disconnectId) {
-            void updateDoc(doc(db, "calendar_accounts", disconnectId), {
-              status: "disconnected",
-            });
+            void disconnectAccount(disconnectId);
           }
           setDisconnectId(null);
         }}

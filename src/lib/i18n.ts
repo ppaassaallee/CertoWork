@@ -76,6 +76,8 @@ const dictionaries = {
     "calendar.calendars": "Calendars",
     "calendar.syncNow": "Sync now",
     "calendar.disconnect": "Disconnect",
+    "calendar.disconnectImpact":
+      "Events stop showing in Certo. What is already in Google is untouched.",
     "calendar.privacyFull": "Full",
     "calendar.privacyBusy": "Busy only",
     "calendar.show": "Show",
@@ -167,6 +169,8 @@ const dictionaries = {
     "calendar.calendars": "Calendarios",
     "calendar.syncNow": "Sincronizar ahora",
     "calendar.disconnect": "Desconectar",
+    "calendar.disconnectImpact":
+      "Los eventos dejan de verse en Certo. Lo que ya está en Google no se toca.",
     "calendar.privacyFull": "Completo",
     "calendar.privacyBusy": "Solo ocupado",
     "calendar.show": "Mostrar",

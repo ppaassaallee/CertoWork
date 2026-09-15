@@ -19,18 +19,23 @@ import {
 import {
   CALENDAR_ACCOUNTS,
   CALENDARS,
+  CALENDAR_EVENTS,
   CALENDAR_TOKENS,
+  disconnectAccount,
   exchangeGoogleCode,
   fetchGoogleProfile,
   listGoogleCalendars,
+  queryByField,
+  refreshGoogleAccess,
   renewCalendarChannels,
   syncAccount,
+  syncCalendar,
 } from "./calendarSync.js";
 import {
-  firestoreCreateDocument,
   firestoreGetDocument,
   firestorePatchDocument,
   firestoreRunQuery,
+  firestoreUpsertDocument,
 } from "./firestoreAdmin.js";
 
 /**
@@ -2043,31 +2048,39 @@ const worker = {
     if (request.method === "GET" && url.pathname === "/api/collab/status") {
       return json(collabStatusPayload(env, url.origin));
     }
-    if (request.method === "GET" && url.pathname === "/api/calendar/oauth/google/start") {
+    if (request.method === "POST" && url.pathname === "/api/calendar/oauth/google/start") {
       try {
-        const uid = String(url.searchParams.get("uid") || "").trim();
-        const workspaceId = String(url.searchParams.get("workspaceId") || "").trim();
-        if (!uid || !workspaceId) {
-          return json({ error: "uid and workspaceId are required" }, 400);
-        }
+        const body = await readJson(request);
+        const auth = await authorize(request, body, env);
+        const workspaceId = String(body.workspaceId || "").trim();
+        if (!workspaceId) return json({ error: "workspaceId is required" }, 400);
+        const workspace = await firestoreGetDocument(env, "workspaces", workspaceId);
+        if (!workspace) return json({ error: "Forbidden" }, 403);
+        const member = await firestoreGetDocument(
+          env,
+          "workspace_members",
+          `${workspaceId}_${auth.subject}`,
+        );
+        const isOwner = workspace.ownerId === auth.subject;
+        const isMember = member && String(member.status || "") === "active";
+        if (!isOwner && !isMember) return json({ error: "Forbidden" }, 403);
         const clientId = env.GOOGLE_CALENDAR_CLIENT_ID;
         if (!clientId) return json({ error: "GOOGLE_CALENDAR_CLIENT_ID is not configured" }, 503);
         const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
-        const state = signCalendarState(env, uid, workspaceId);
-        const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-        auth.searchParams.set("client_id", clientId);
-        auth.searchParams.set("redirect_uri", redirectUri);
-        auth.searchParams.set("response_type", "code");
-        auth.searchParams.set("scope", "https://www.googleapis.com/auth/calendar");
-        auth.searchParams.set("access_type", "offline");
-        auth.searchParams.set("prompt", "consent");
-        auth.searchParams.set("state", state);
-        return Response.redirect(auth.toString(), 302);
+        const state = signCalendarState(env, auth.subject, workspaceId);
+        const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+        authUrl.searchParams.set("client_id", clientId);
+        authUrl.searchParams.set("redirect_uri", redirectUri);
+        authUrl.searchParams.set("response_type", "code");
+        authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/calendar");
+        authUrl.searchParams.set("access_type", "offline");
+        authUrl.searchParams.set("prompt", "consent");
+        authUrl.searchParams.set("state", state);
+        return json({ url: authUrl.toString() });
       } catch (error) {
-        return json(
-          { error: error instanceof Error ? error.message : "oauth_start_failed" },
-          500,
-        );
+        const message = error instanceof Error ? error.message : "oauth_start_failed";
+        const status = /Authentication required/i.test(message) ? 401 : 500;
+        return json({ error: message }, status);
       }
     }
 
@@ -2087,37 +2100,42 @@ const worker = {
           refreshToken: tokens.refresh_token,
           expiresAt: new Date(Date.now() + Number(tokens.expires_in || 3600) * 1000).toISOString(),
         });
-        await firestoreCreateDocument(
-          env,
-          CALENDAR_TOKENS,
-          sealed,
-          accountId,
-        );
-        await firestoreCreateDocument(
-          env,
-          CALENDAR_ACCOUNTS,
-          {
-            userId: state.uid,
-            workspaceId: state.workspaceId,
-            provider: "google",
-            email: profile.email || "",
-            displayName: profile.name || profile.email || "Google Calendar",
-            status: "ok",
-            defaultWriteCalendarId: null,
-            syncCursor: null,
-            pushChannel: null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          accountId,
-        );
+        await firestoreUpsertDocument(env, CALENDAR_TOKENS, accountId, sealed);
+        const existingAccount = await firestoreGetDocument(env, CALENDAR_ACCOUNTS, accountId);
+        const existingAccounts = await queryByField(env, CALENDAR_ACCOUNTS, "userId", state.uid);
+        const palette = ["#2383e2", "#1c7a52", "#9f6b00", "#c4554d", "#9065b0", "#d9730d"];
+        const accountColor =
+          existingAccount?.color ||
+          palette[existingAccounts.filter((a) => a.status !== "disconnected").length % palette.length];
+        await firestoreUpsertDocument(env, CALENDAR_ACCOUNTS, accountId, {
+          userId: state.uid,
+          workspaceId: state.workspaceId,
+          provider: "google",
+          email: profile.email || existingAccount?.email || "",
+          displayName: profile.name || profile.email || existingAccount?.displayName || "Google Calendar",
+          status: "ok",
+          color: accountColor,
+          defaultWriteCalendarId: existingAccount?.defaultWriteCalendarId || null,
+          lastError: null,
+          createdAt: existingAccount?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
         const calendars = await listGoogleCalendars(tokens.access_token);
         for (const calendar of calendars) {
           const calendarId = `${accountId}__${String(calendar.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-          await firestoreCreateDocument(
-            env,
-            CALENDARS,
-            {
+          const existingCal = await firestoreGetDocument(env, CALENDARS, calendarId);
+          if (existingCal) {
+            await firestorePatchDocument(env, CALENDARS, calendarId, {
+              name: calendar.summary || calendar.id,
+              externalId: calendar.id,
+              writable: calendar.accessRole === "owner" || calendar.accessRole === "writer",
+              isWorkTarget:
+                existingCal.isWorkTarget != null
+                  ? existingCal.isWorkTarget
+                  : Boolean(calendar.primary),
+            });
+          } else {
+            await firestoreUpsertDocument(env, CALENDARS, calendarId, {
               accountId,
               userId: state.uid,
               externalId: calendar.id,
@@ -2127,9 +2145,10 @@ const worker = {
               writable: calendar.accessRole === "owner" || calendar.accessRole === "writer",
               privacy: "full",
               isWorkTarget: Boolean(calendar.primary),
-            },
-            calendarId,
-          );
+              syncToken: null,
+              pushChannel: null,
+            });
+          }
           if (calendar.primary) {
             await firestorePatchDocument(env, CALENDAR_ACCOUNTS, accountId, {
               defaultWriteCalendarId: calendarId,
@@ -2166,11 +2185,44 @@ const worker = {
       }
     }
 
+    if (
+      request.method === "POST" &&
+      url.pathname.match(/^\/api\/calendar\/accounts\/[^/]+\/disconnect$/)
+    ) {
+      try {
+        const accountId = decodeURIComponent(url.pathname.split("/")[4] || "");
+        const body = await readJson(request);
+        const auth = await authorize(request, body, env);
+        const account = await firestoreGetDocument(env, CALENDAR_ACCOUNTS, accountId);
+        if (!account || account.userId !== auth.subject) {
+          return json({ error: "Forbidden" }, 403);
+        }
+        const result = await disconnectAccount(env, accountId);
+        return json(result, result.ok ? 200 : 502);
+      } catch (error) {
+        return json(
+          { error: error instanceof Error ? error.message : "disconnect_failed" },
+          500,
+        );
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/calendar/webhook/google") {
+      const channelToken = request.headers.get("X-Goog-Channel-Token") || "";
+      if (
+        env.CALENDAR_WEBHOOK_TOKEN &&
+        channelToken !== String(env.CALENDAR_WEBHOOK_TOKEN)
+      ) {
+        return new Response("Unauthorized", { status: 401 });
+      }
       const channelId = request.headers.get("X-Goog-Channel-ID") || "";
+      const resourceState = String(request.headers.get("X-Goog-Resource-State") || "");
+      if (resourceState === "sync") {
+        return new Response("ok", { status: 200 });
+      }
       try {
         const result = await firestoreRunQuery(env, {
-          from: [{ collectionId: CALENDAR_ACCOUNTS }],
+          from: [{ collectionId: CALENDARS }],
           where: {
             fieldFilter: {
               field: { fieldPath: "pushChannel.id" },
@@ -2180,13 +2232,17 @@ const worker = {
           },
           limit: 5,
         });
-        for (const account of result.documents || []) {
-          await syncAccount(env, account.id);
+        for (const calendar of result.documents || []) {
+          const account = await firestoreGetDocument(env, CALENDAR_ACCOUNTS, calendar.accountId);
+          const tokenDoc = await firestoreGetDocument(env, CALENDAR_TOKENS, calendar.accountId);
+          if (!account || !tokenDoc?.ciphertext) continue;
+          const secrets = await refreshGoogleAccess(env, calendar.accountId, tokenDoc);
+          await syncCalendar(env, account, calendar, secrets);
         }
       } catch (error) {
         console.error("[calendar.webhook]", error);
       }
-      return new Response(null, { status: 200 });
+      return new Response("ok", { status: 200 });
     }
 
     if (request.method === "POST" && url.pathname === "/api/collab/sso") {
