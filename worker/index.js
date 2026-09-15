@@ -1690,6 +1690,12 @@ function capabilities(env) {
         ? "Google Calendar OAuth is configured on this Worker."
         : "Add GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET as Cloudflare Worker secrets to enable Connect Google.",
     },
+    outlookCalendar: {
+      configured: Boolean(env.MICROSOFT_CALENDAR_CLIENT_ID && env.MICROSOFT_CALENDAR_CLIENT_SECRET),
+      description: env.MICROSOFT_CALENDAR_CLIENT_ID && env.MICROSOFT_CALENDAR_CLIENT_SECRET
+        ? "Outlook Calendar OAuth is configured on this Worker."
+        : "Outlook Calendar connector is next — same personal wizard path as Google.",
+    },
   };
 }
 

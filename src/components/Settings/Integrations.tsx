@@ -5,6 +5,11 @@ import { useNavigate } from "react-router-dom";
 import { usePlatformCapabilities } from "../../lib/capabilities";
 import { useAuth } from "../../lib/AuthContext";
 import { useCalendarEvents } from "../../features/calendar/useCalendarEvents";
+import { CalendarConnectWizard } from "../../features/calendar/CalendarConnectWizard";
+import {
+  type CalendarConnectStep,
+  consumeCalendarWizardPending,
+} from "../../lib/calendar/connectWizard";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { t } from "../../lib/i18n";
@@ -18,10 +23,10 @@ function calendarConnectErrorMessage(payload: { error?: string; code?: string },
     /GOOGLE_CALENDAR_CLIENT/i.test(error) ||
     /not configured/i.test(error)
   ) {
-    return t("calendar.oauthNotConfigured");
+    return t("calendar.wizard.platformPending");
   }
   if (code === "CALENDAR_TOKEN_KEY_MISSING" || /CALENDAR_TOKEN_KEY/i.test(error)) {
-    return t("calendar.oauthNotConfigured");
+    return t("calendar.wizard.platformPending");
   }
   if (status === 401 || /Authentication required/i.test(error)) {
     return t("calendar.connectError");
@@ -40,21 +45,34 @@ export function Integrations() {
   const [disconnectId, setDisconnectId] = useState<string | null>(null);
   const [connectBusy, setConnectBusy] = useState(false);
   const [connectNotice, setConnectNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<CalendarConnectStep>("provider");
   const voiceAvailable =
     typeof window !== "undefined" &&
     !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-  const calendarConfigured = capabilities?.googleCalendar?.configured !== false;
+  const googleConfigured = capabilities?.googleCalendar?.configured === true;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const calendarParam = params.get("calendar");
     if (calendarParam === "connected") {
       setConnectNotice({ kind: "ok", text: t("calendar.connected") });
+      const pending = consumeCalendarWizardPending();
+      if (pending?.provider === "google" || params.get("wizard") === "1") {
+        setWizardStep("calendars");
+        setWizardOpen(true);
+      }
     } else if (calendarParam === "error") {
       setConnectNotice({ kind: "error", text: t("calendar.callbackError") });
+      const pending = consumeCalendarWizardPending();
+      if (pending) {
+        setWizardStep("authorize");
+        setWizardOpen(true);
+      }
     }
-    if (calendarParam) {
+    if (calendarParam || params.get("wizard")) {
       params.delete("calendar");
+      params.delete("wizard");
       const next = params.toString();
       window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
     }
@@ -102,12 +120,10 @@ export function Integrations() {
 
   const connectGoogle = async () => {
     if (!user || !workspace) {
-      setConnectNotice({ kind: "error", text: t("calendar.needWorkspace") });
-      return;
+      throw new Error(t("calendar.needWorkspace"));
     }
     if (capabilities?.googleCalendar && !capabilities.googleCalendar.configured) {
-      setConnectNotice({ kind: "error", text: t("calendar.oauthNotConfigured") });
-      return;
+      throw new Error(t("calendar.wizard.platformPending"));
     }
     setConnectBusy(true);
     setConnectNotice(null);
@@ -128,19 +144,14 @@ export function Integrations() {
       };
       if (!response.ok || !payload.url) {
         console.error("[calendar.oauth.start]", payload.error || response.status);
-        setConnectNotice({
-          kind: "error",
-          text: calendarConnectErrorMessage(payload, response.status),
-        });
-        return;
+        throw new Error(calendarConnectErrorMessage(payload, response.status));
       }
       window.location.assign(String(payload.url));
     } catch (reason) {
       console.error("[calendar.oauth.start]", reason);
-      setConnectNotice({
-        kind: "error",
-        text: reason instanceof Error ? reason.message : t("calendar.connectError"),
-      });
+      const text = reason instanceof Error ? reason.message : t("calendar.connectError");
+      setConnectNotice({ kind: "error", text });
+      throw reason instanceof Error ? reason : new Error(text);
     } finally {
       setConnectBusy(false);
     }
@@ -203,11 +214,15 @@ export function Integrations() {
           </div>
           <button
             className="text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            disabled={connectBusy || (!loading && !calendarConfigured)}
-            onClick={() => void connectGoogle()}
+            data-testid="calendar-open-wizard"
+            disabled={connectBusy}
+            onClick={() => {
+              setWizardStep("provider");
+              setWizardOpen(true);
+            }}
             type="button"
           >
-            {connectBusy ? t("calendar.connecting") : t("calendar.connectGoogle")}
+            {t("calendar.connectCalendar")}
           </button>
         </div>
         {connectNotice ? (
@@ -223,7 +238,8 @@ export function Integrations() {
         ) : null}
         {!loading && capabilities?.googleCalendar && !capabilities.googleCalendar.configured ? (
           <div className="px-4 py-3 text-sm text-amber-800 bg-amber-50 border-b border-gray-100" role="status">
-            {t("calendar.oauthNotConfigured")}
+            <p>{t("calendar.wizard.platformPending")}</p>
+            <p className="mt-1 text-xs opacity-90">{t("calendar.wizard.platformPendingHint")}</p>
           </div>
         ) : null}
         {accounts.map((account) => (
@@ -323,6 +339,20 @@ export function Integrations() {
           </button>
         ))}
       </div>
+
+      <CalendarConnectWizard
+        accounts={accounts}
+        calendars={calendars}
+        capabilitiesLoading={loading}
+        googleConfigured={googleConfigured}
+        initialProvider="google"
+        initialStep={wizardStep}
+        isOpen={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onConnectGoogle={connectGoogle}
+        onOpenWeek={() => navigate("/my-work/week")}
+        onSyncAccount={syncAccount}
+      />
 
       <DestructiveDialog
         confirmLabel={t("calendar.disconnect")}

@@ -16,6 +16,7 @@ export interface PlatformCapabilities {
   hubspot: CapabilityInfo;
   googleDrive: CapabilityInfo;
   googleCalendar?: CapabilityInfo & { tokenKey?: boolean };
+  outlookCalendar?: CapabilityInfo;
   oneDrive?: CapabilityInfo;
   email?: CapabilityInfo & { provider?: string };
 }
