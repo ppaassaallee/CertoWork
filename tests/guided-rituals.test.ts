@@ -10,17 +10,22 @@ import { prepareRitualData } from "../src/lib/routines/prepare";
 import { formatSemanticBlock, getBlocks } from "../src/lib/semanticBlocks";
 import { buildHomeCockpitData } from "../src/features/home/buildHomeCockpitData";
 
-test("guided manifests cover WRAP and Plan with eight card types only", () => {
-  assert.equal(GUIDED_MANIFESTS.length, 2);
+test("guided manifests cover WRAP, Plan and Close Day", () => {
+  assert.equal(GUIDED_MANIFESTS.length, 3);
   const wrap = getManifest("wrap-review");
   const plan = getManifest("weekly-plan");
+  const close = getManifest("close-day");
   assert.ok(wrap);
   assert.ok(plan);
+  assert.ok(close);
   assert.equal(wrap!.class, "guided");
   assert.equal(plan!.chainsTo, undefined);
   assert.equal(wrap!.chainsTo, "weekly-plan");
+  assert.equal(close!.estimatedMinutes, 2);
   const types = new Set(
-    [...wrap!.steps, ...plan!.steps].flatMap((s) => s.cards.map((c) => c.type)),
+    [...wrap!.steps, ...plan!.steps, ...close!.steps].flatMap((s) =>
+      s.cards.map((c) => c.type),
+    ),
   );
   for (const needed of [
     "ItemTriage",
@@ -31,6 +36,8 @@ test("guided manifests cover WRAP and Plan with eight card types only", () => {
     "TimeBlocks",
     "Capacity",
     "Summary",
+    "Choice",
+    "EnergyTag",
   ]) {
     assert.ok(types.has(needed as any), `missing card ${needed}`);
   }

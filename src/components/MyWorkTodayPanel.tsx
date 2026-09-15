@@ -1,5 +1,6 @@
-import { Calendar, Check, Circle, Zap } from "./ui/Icon";
+import { Calendar, Check, Circle, Star, Zap } from "./ui/Icon";
 import { todayPlanGroups } from "../lib/myWorkItems";
+import "../features/dayplan/dayplan.css";
 
 function titleOf(item: Record<string, unknown>) {
   return String(item?.title || item?.name || "Untitled").trim() || "Untitled";
@@ -13,10 +14,16 @@ export function MyWorkTodayPanel({
   tasks,
   onSelectItem,
   onUpdateTask,
+  keyItemId = null,
+  onSetKey,
+  locale = "es",
 }: {
   tasks: Array<Record<string, unknown>>;
   onSelectItem: (id: string | null) => void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  keyItemId?: string | null;
+  onSetKey?: (itemId: string | null) => void;
+  locale?: "es" | "en";
 }) {
   const plan = todayPlanGroups(tasks);
   const sections = [
@@ -55,6 +62,7 @@ export function MyWorkTodayPanel({
                 {section.items.map((item) => {
                   const done = isDone(item);
                   const id = String(item.id || "");
+                  const isKey = Boolean(keyItemId && id === keyItemId);
                   return (
                     <li className={done ? "is-done" : ""} key={id}>
                       <button
@@ -70,6 +78,24 @@ export function MyWorkTodayPanel({
                       <button onClick={() => onSelectItem(id)} type="button">
                         {titleOf(item)}
                       </button>
+                      {onSetKey ? (
+                        <button
+                          aria-label={
+                            isKey
+                              ? locale === "es"
+                                ? "Quitar tarea clave"
+                                : "Remove key task"
+                              : locale === "es"
+                                ? "Tarea clave de hoy"
+                                : "Key task today"
+                          }
+                          className={`cw-dayplan-star ${isKey ? "is-key" : ""}`}
+                          onClick={() => onSetKey(isKey ? null : id)}
+                          type="button"
+                        >
+                          <Star size={14} />
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}

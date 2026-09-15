@@ -17,6 +17,8 @@ import {
   type HomeRoutineHint,
 } from "./buildHomeCockpitData";
 import { MiSemanaCard } from "../routines/MiSemanaCard";
+import { FocusRing } from "../dayplan/FocusRing";
+import { useDayPlan } from "../dayplan/useDayPlan";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -51,6 +53,10 @@ export type HomeCockpitProps = {
   onOpenApprovals: () => void;
   onStartRitual?: (session: any) => void;
   onReviewFriday?: () => void;
+  userId?: string;
+  workspaceId?: string;
+  dayPlanItems?: Array<{ id: string; status: "open" | "done" | "archived" }>;
+  focusScore?: number;
 };
 
 function TypeGlyph({ type }: { type: string }) {
@@ -181,8 +187,18 @@ export function HomeCockpit({
   onOpenApprovals,
   onStartRitual,
   onReviewFriday,
+  userId,
+  workspaceId,
+  dayPlanItems = [],
+  focusScore,
 }: HomeCockpitProps) {
   const locale = getLocale();
+  const day = useDayPlan({
+    userId,
+    workspaceId,
+    items: dayPlanItems,
+  });
+  const scoreValue = day.score.value || focusScore || 0;
   const model = useMemo(
     () =>
       buildHomeCockpitData({
@@ -285,7 +301,27 @@ export function HomeCockpit({
     <div className="cw-home" data-testid="home-cockpit">
       <header className="cw-home-header cw-home-stagger" style={{ ["--i" as string]: 0 }}>
         <p className="cw-home-date">{model.longDate}</p>
-        <h1>{model.greeting}</h1>
+        <div className="cw-home-greeting-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h1 style={{ margin: 0 }}>{model.greeting}</h1>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              marginLeft: "auto",
+              color: "var(--text-muted)",
+              fontSize: 11,
+            }}
+            title={locale === "es" ? "Focus score de hoy" : "Today focus score"}
+          >
+            <FocusRing
+              label={locale === "es" ? "Focus score de hoy" : "Today focus score"}
+              size="sm"
+              value={scoreValue}
+            />
+            {scoreValue}%
+          </span>
+        </div>
       </header>
 
       <div className="cw-home-stagger" style={{ ["--i" as string]: 1 }}>

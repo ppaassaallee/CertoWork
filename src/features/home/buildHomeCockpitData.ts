@@ -588,8 +588,14 @@ export function buildHomeCockpitData(input: {
         ? locale === "es"
           ? "Plan semanal"
           : "Weekly plan"
-        : session.recipeId;
-    const mins = session.estimatedMinutes || (isWrap ? 12 : 7);
+        : session.recipeId === "close-day"
+          ? locale === "es"
+            ? "Cerrar el día"
+            : "Close the day"
+          : session.recipeId;
+    const mins =
+      session.estimatedMinutes ||
+      (isWrap ? 12 : session.recipeId === "close-day" ? 2 : 7);
     const missed = session.status === "missed" || session.condensed;
     actions.push({
       id: `routine-${session.id}`,
@@ -598,9 +604,13 @@ export function buildHomeCockpitData(input: {
         ? locale === "es"
           ? `${session.weekOf || "Semana"} sin revisar · Hacerla en ${Math.max(8, mins - 4)} min (resumida)`
           : `${session.weekOf || "Week"} missed · Do it in ${Math.max(8, mins - 4)} min (condensed)`
-        : locale === "es"
-          ? `Tu ${name} está lista`
-          : `Your ${name} is ready`,
+        : session.recipeId === "close-day"
+          ? locale === "es"
+            ? `Cerrar el día · ~${mins} min`
+            : `Close the day · ~${mins} min`
+          : locale === "es"
+            ? `Tu ${name} está lista`
+            : `Your ${name} is ready`,
       meta: `~${missed ? Math.max(8, mins - 4) : mins} min · ${locale === "es" ? "Empezar" : "Start"}`,
       actionLabel: "start",
       payload: session,

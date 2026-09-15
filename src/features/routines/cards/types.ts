@@ -20,3 +20,5 @@ export { GoalComposerCard } from "./GoalComposer";
 export { TimeBlocksCard } from "./TimeBlocks";
 export { CapacityCard } from "./Capacity";
 export { SummaryCard } from "./Summary";
+export { ChoiceCard } from "./Choice";
+export { EnergyTagCard } from "./EnergyTag";
