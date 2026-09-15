@@ -4,9 +4,12 @@ import type {
   Column,
   RecordActivity,
   RecordDoc,
+  RecordLinkTarget,
   RecordValue,
   TableDoc,
 } from "../../lib/tables";
+import { listRecordLinks, unlinkRecord } from "../../lib/tables";
+import { useAuth } from "../../lib/AuthContext";
 import { t } from "../../lib/i18n";
 import { CellRenderer, type TableMember } from "./cells/RecordCells";
 
@@ -22,6 +25,7 @@ export type RecordPanelProps = {
   onLinkNote?(): void;
   onLinkTicket?(): void;
   onLinkRecord?(): void;
+  onOpenLink?(target: RecordLinkTarget): void;
 };
 
 function QuickChip({
@@ -39,6 +43,14 @@ function QuickChip({
   );
 }
 
+function linkLabel(target: RecordLinkTarget) {
+  if (target.type === "task") return t("tables.panel.linkTask");
+  if (target.type === "note") return t("tables.panel.linkNote");
+  if (target.type === "ticket") return t("tables.panel.linkTicket");
+  if (target.type === "record") return t("tables.panel.linkRecord");
+  return target.type;
+}
+
 export function RecordPanel({
   table,
   record,
@@ -51,7 +63,9 @@ export function RecordPanel({
   onLinkNote,
   onLinkTicket,
   onLinkRecord,
+  onOpenLink,
 }: RecordPanelProps) {
+  const { user } = useAuth();
   const titleColId = table.keyColumns.title;
   const statusCol = table.columns.find((c) => c.id === table.keyColumns.status);
   const ownerCol = table.columns.find((c) => c.id === table.keyColumns.owner);
@@ -60,8 +74,19 @@ export function RecordPanel({
   const [draftTitle, setDraftTitle] = useState(title);
   const [comment, setComment] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
+  const [links, setLinks] = useState<RecordLinkTarget[]>([]);
 
   useEffect(() => setDraftTitle(title), [title, record.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listRecordLinks(record.id).then((rows) => {
+      if (!cancelled) setLinks(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [record.id, record.linkCount]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,6 +118,20 @@ export function RecordPanel({
         members={members}
         onChange={(next) => onFieldChange(column.id, next)}
       />
+    );
+  };
+
+  const handleUnlink = async (target: RecordLinkTarget) => {
+    if (!user) return;
+    await unlinkRecord({
+      workspaceId: table.workspaceId,
+      userId: user.uid,
+      recordId: record.id,
+      tableId: table.id,
+      target,
+    });
+    setLinks((current) =>
+      current.filter((row) => !(row.type === target.type && row.id === target.id)),
     );
   };
 
@@ -173,7 +212,32 @@ export function RecordPanel({
             ) : null}
           </div>
         </div>
-        <p className="cw-tables-muted cw-tables-panel-stub">{t("tables.panel.linkedStub")}</p>
+        {links.length ? (
+          <ul className="cw-tables-panel-links" data-testid="tables-record-links">
+            {links.map((link) => (
+              <li key={`${link.type}:${link.id}`}>
+                <button
+                  type="button"
+                  className="cw-tables-panel-link"
+                  onClick={() => onOpenLink?.(link)}
+                >
+                  <span>{linkLabel(link)}</span>
+                  <em>{link.id}</em>
+                </button>
+                <button
+                  type="button"
+                  className="cw-tables-icon-btn"
+                  aria-label={t("tables.panel.unlink")}
+                  onClick={() => void handleUnlink(link)}
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="cw-tables-muted cw-tables-panel-stub">{t("tables.panel.linkedEmpty")}</p>
+        )}
       </section>
 
       <section className="cw-tables-panel-section cw-tables-panel-activity">
