@@ -283,6 +283,8 @@ export function buildConversationRequestContext({
   const notebookDocuments = buildNotebookContext(notebookEntries, text, {
     activeProjectId: primaryProject?.id || activeProject?.id || null,
     limit: isFocusedConversation ? 4 : 6,
+    viewerUid: userId,
+    viewerProjectIds: activeProjects.map((project) => String(project.id)),
   });
   const workspaceSnapshot = {
     tasks: scopedTasks,

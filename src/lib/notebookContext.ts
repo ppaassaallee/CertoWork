@@ -1,9 +1,12 @@
 import type { NoteExtension } from "./notes/types";
+import { canSee, withDefaults } from "./notes/storage";
 
 export type NotebookEntryKind = "notebook" | "section" | "note";
 
 export type NotebookEntry = {
   id: string;
+  userId?: string;
+  workspaceId?: string;
   kind?: NotebookEntryKind;
   title?: string;
   content?: string;
@@ -71,12 +74,25 @@ export function collectWorkspaceTags(records: Array<{ tags?: string[]; labels?: 
 export function buildNotebookContext(
   entries: NotebookEntry[],
   query: string,
-  options: { activeProjectId?: string | null; limit?: number } = {},
+  options: {
+    activeProjectId?: string | null;
+    limit?: number;
+    viewerUid?: string | null;
+    viewerProjectIds?: string[];
+  } = {},
 ) {
   const queryTokens = tokens(query);
   const notebooks = new Map(entries.filter((entry) => entry.kind === "notebook").map((entry) => [entry.id, entry]));
   const sections = new Map(entries.filter((entry) => entry.kind === "section").map((entry) => [entry.id, entry]));
-  const notes = entries.filter((entry) => entry.kind === "note" && entry.status !== "archived");
+  const viewerUid = options.viewerUid || "";
+  const viewerProjectIds = options.viewerProjectIds || [];
+  const notes = entries
+    .filter((entry) => entry.kind === "note" && entry.status !== "archived")
+    .map(withDefaults)
+    .filter((entry) => {
+      if (!viewerUid) return Boolean(entry.aiVisible);
+      return Boolean(entry.aiVisible) && canSee(entry, viewerUid, viewerProjectIds);
+    });
   const limit = options.limit || 5;
 
   return notes
