@@ -18,7 +18,7 @@ export type DelivereeLens =
   | { kind: "my-work"; section: MyWorkSection }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
   | { kind: "agents"; section: AgentsSection }
-  | { kind: "routines" }
+  | { kind: "routines"; routineId?: string }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
   | { kind: "invoices" }
@@ -100,6 +100,11 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (path === "/workspace" || path === "/more/workspace") {
     return { kind: "more", section: "workspace" };
+  }
+
+  const routinesMatch = path.match(/^\/(?:rutinas|routines)\/([^/]+)$/);
+  if (routinesMatch) {
+    return { kind: "routines", routineId: decodeURIComponent(routinesMatch[1]) };
   }
 
   if (
@@ -212,7 +217,11 @@ export function lensToPath(lens: DelivereeLens) {
     if (lens.section === "activity") return "/agents/activity";
     return "/agents";
   }
-  if (lens.kind === "routines") return "/rutinas";
+  if (lens.kind === "routines") {
+    return lens.routineId
+      ? `/rutinas/${encodeURIComponent(lens.routineId)}`
+      : "/rutinas";
+  }
   if (lens.kind === "work") {
     if (lens.section === "issues") return "/my-work";
     if (lens.section === "intake") return "/my-work/inbox";

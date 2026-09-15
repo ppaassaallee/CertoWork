@@ -7,6 +7,7 @@ import {
   type RoutineScope,
   type RoutineTrigger,
 } from "./types";
+import { buildFlowFromPlan } from "./flowBuild";
 
 function detectLanguage(sentence: string): "es" | "en" {
   const lower = sentence.toLowerCase();
@@ -216,30 +217,40 @@ export function compileRoutineSentence(input: {
   const estimatedMinutesSaved =
     trigger.kind === "schedule" ? 12 : trigger.kind === "event" ? 8 : 5;
 
+  const draftSpec = {
+    title: titleFromSentence(sentence, scopeTitle),
+    sentence,
+    scope: input.scope,
+    trigger,
+    goal: goalFromSentence(sentence),
+    deliverable: {
+      channel,
+      to: channel === "email" && owner && !toThirdParties ? [owner] : owner ? [owner] : [],
+      format: (/largo|long|detalle/.test(sentence.toLowerCase()) ? "long" : "short") as
+        | "short"
+        | "long",
+      language,
+    },
+    permissions: {
+      ...defaultRoutinePermissions(),
+      editItems: editItems as "ask" | "never" | "always",
+      writeOthers: writeOthers as "ask" | "never" | "always",
+    },
+    status: "draft" as const,
+    recipeId: input.recipeId,
+    class: "automatic" as const,
+    stats: emptyRoutineStats(),
+    nextRunAt: null,
+    lastRunAt: null,
+    lastRunStatus: null,
+  };
+
+  const plan = buildFlowFromPlan(draftSpec).nodes;
+
   return {
     spec: {
-      title: titleFromSentence(sentence, scopeTitle),
-      sentence,
-      scope: input.scope,
-      trigger,
-      goal: goalFromSentence(sentence),
-      deliverable: {
-        channel,
-        to: channel === "email" && owner && !toThirdParties ? [owner] : owner ? [owner] : [],
-        format: /largo|long|detalle/.test(sentence.toLowerCase()) ? "long" : "short",
-        language,
-      },
-      permissions: {
-        ...defaultRoutinePermissions(),
-        editItems,
-        writeOthers: writeOthers as "ask" | "never",
-      },
-      status: "draft",
-      recipeId: input.recipeId,
-      stats: emptyRoutineStats(),
-      nextRunAt: null,
-      lastRunAt: null,
-      lastRunStatus: null,
+      ...draftSpec,
+      plan,
     },
     questions,
     estimatedCostUsd: 0.02,
@@ -265,6 +276,7 @@ export function buildDryRunPreview(input: {
   const steps = [
     {
       kind: "read" as const,
+      nodeId: "prepare",
       label:
         lang === "es"
           ? `Leí el contexto de ${name}${items ? ` (${items} ítems)` : ""}`
@@ -272,6 +284,7 @@ export function buildDryRunPreview(input: {
     },
     {
       kind: "think" as const,
+      nodeId: "step:think",
       label:
         lang === "es"
           ? `Encontré ${blocked} bloqueos y ${overdue} vencidos / por vencer`
@@ -279,10 +292,12 @@ export function buildDryRunPreview(input: {
     },
     {
       kind: "draft" as const,
+      nodeId: "step:think",
       label: lang === "es" ? "Redacté el resultado" : "Drafted the deliverable",
     },
     {
       kind: "deliver" as const,
+      nodeId: "deliver",
       label:
         lang === "es"
           ? "Vista previa lista (aún no se envió nada)"

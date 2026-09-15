@@ -135,7 +135,9 @@ test("Phase 2+ surfaces: /rutinas, Agents Rutinas, event outbox, everywhere entr
   );
   const events = readFileSync(new URL("../src/lib/routines/events.ts", import.meta.url), "utf8");
   const scheduler = readFileSync(new URL("../worker/routinesScheduler.js", import.meta.url), "utf8");
-  assert.match(home, /routine-analytics/);
+  assert.match(home, /Mis rutinas/);
+  assert.match(home, /FlowMini|flow-mini/);
+  assert.match(home, /RoutineDetail|routine-detail/);
   assert.match(agents, /agents-routines/);
   assert.match(agents, /Rutinas/);
   assert.match(css, /overflow: visible/);
