@@ -121,6 +121,17 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     estimatedMinutes: 7,
     class: "guided",
   },
+  {
+    id: "close-day",
+    title: "Cerrar el día",
+    sentence: "Cada día laboral a las 6 ayudame a cerrar el día en un minuto",
+    entityTypes: ["person"],
+    triggerHint: "Lun–Vie 18:00",
+    deliverableHint: "Nota diaria + score",
+    domain: "personal",
+    estimatedMinutes: 2,
+    class: "guided",
+  },
 ];
 
 export function recipesForEntity(entityType: RoutineEntityType): RoutineRecipe[] {

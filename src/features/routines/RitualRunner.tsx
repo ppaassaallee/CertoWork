@@ -29,10 +29,41 @@ export type RitualRunnerProps = {
   }) => void;
 };
 
-function activeSteps(manifest: RecipeManifest, condensed?: boolean): StepSpec[] {
-  if (!condensed || !manifest.summaryStepIds?.length) return manifest.steps;
-  const allow = new Set(manifest.summaryStepIds);
-  return manifest.steps.filter((step) => allow.has(step.id) || step.id === "cierre-final" || step.id === "compromiso");
+function activeSteps(
+  manifest: RecipeManifest,
+  condensed?: boolean,
+  prepared?: Record<string, unknown>,
+): StepSpec[] {
+  let steps = manifest.steps;
+  if (condensed && manifest.summaryStepIds?.length) {
+    const allow = new Set(manifest.summaryStepIds);
+    steps = manifest.steps.filter(
+      (step) => allow.has(step.id) || step.id === "cierre-final" || step.id === "compromiso",
+    );
+  }
+  return steps.filter((step) => {
+    if (step.id !== "deadline") return true;
+    const summary = prepared?.day_summary as
+      | { nearestDeadline?: { touchedToday?: boolean } | null }
+      | undefined;
+    const nearest = summary?.nearestDeadline;
+    if (!nearest || nearest.touchedToday) return false;
+    return true;
+  });
+}
+
+function resolveQuestion(step: StepSpec, prepared?: Record<string, unknown>): string {
+  if (step.question.includes("deadline más cercano")) {
+    const nearest = (
+      prepared?.day_summary as
+        | { nearestDeadline?: { title: string; daysLeft: number } | null }
+        | undefined
+    )?.nearestDeadline;
+    if (nearest) {
+      return `${nearest.title} vence en ${nearest.daysLeft} días y no recibió tiempo hoy. ¿Cómo lo ves?`;
+    }
+  }
+  return step.question;
 }
 
 export function RitualRunner({
@@ -44,8 +75,13 @@ export function RitualRunner({
 }: RitualRunnerProps) {
   const locale = getLocale() === "es" ? "es" : "en";
   const steps = useMemo(
-    () => activeSteps(manifest, session.condensed || session.status === "missed"),
-    [manifest, session.condensed, session.status],
+    () =>
+      activeSteps(
+        manifest,
+        session.condensed || session.status === "missed",
+        session.prepared,
+      ),
+    [manifest, session.condensed, session.status, session.prepared],
   );
   const [stepIndex, setStepIndex] = useState(
     Math.min(session.stepIndex || 0, Math.max(0, steps.length - 1)),
@@ -206,7 +242,7 @@ export function RitualRunner({
 
         <div className="cw-ritual-body">
           <p className="cw-ritual-step-label">{step.label}</p>
-          <h1>{step.question}</h1>
+          <h1>{resolveQuestion(step, session.prepared)}</h1>
           {step.hint ? <p className="cw-ritual-hint">{step.hint}</p> : null}
 
           <div className="cw-ritual-cards">

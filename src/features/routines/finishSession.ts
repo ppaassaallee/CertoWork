@@ -16,6 +16,12 @@ import type { ReflectionAnswer } from "./cards/Reflection";
 import type { TriageAnswer } from "./cards/ItemTriage";
 import type { GoalComposerAnswer } from "./cards/GoalComposer";
 import type { TimeBlocksAnswer } from "./cards/TimeBlocks";
+import {
+  closeDayPlan,
+  localDateKey,
+  type DayFeel,
+  type EnergyTag,
+} from "../../lib/dayplan";
 
 async function ensureNotebook(
   workspaceId: string,
@@ -125,6 +131,18 @@ export async function finishRitualSession(input: {
   const answers = session.answers || {};
   const parts: string[] = [];
 
+  if (manifest.id === "close-day") {
+    const feel = answers["feel-choice"] as DayFeel | undefined;
+    const energy = (answers["energy-tags"] as Record<string, EnergyTag> | undefined) ?? {};
+    const carry = answers["carry-text"] as { text?: string } | string | undefined;
+    const carryText = typeof carry === "string" ? carry : carry?.text ?? null;
+    await closeDayPlan(session.userId, session.workspaceId, localDateKey(), {
+      feel: feel ?? "normal",
+      energy,
+      carryForward: carryText,
+    });
+  }
+
   for (const step of manifest.steps) {
     if (!step.savesAs?.blockType) continue;
     const texts: string[] = [];
@@ -143,10 +161,9 @@ export async function finishRitualSession(input: {
     session.userId,
     manifest.output.note.notebook,
   );
-  const title = manifest.output.note.titleTemplate.replace(
-    "{weekLabel}",
-    weekLabel(session.weekOf, locale),
-  );
+  const title = manifest.output.note.titleTemplate
+    .replace("{weekLabel}", weekLabel(session.weekOf, locale))
+    .replace("{date}", localDateKey());
   const noteRef = await addDoc(collection(db, "notebook_entries"), {
     kind: "note",
     title,

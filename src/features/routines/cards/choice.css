@@ -1,0 +1,51 @@
+.cw-ritual-choice {
+  display: grid;
+  gap: 8px;
+}
+
+.cw-ritual-choice--cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cw-ritual-choice--cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.cw-ritual-choice-card {
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cw-ritual-choice-card strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cw-ritual-choice-card em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted, var(--text-secondary, #787774));
+}
+
+.cw-ritual-choice-card.is-selected,
+.cw-ritual-choice-card.is-focused.is-selected {
+  border-color: var(--text-primary);
+  background: var(--surface-1);
+}
+
+.cw-ritual-choice-card.is-focused {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

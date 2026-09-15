@@ -142,6 +142,9 @@ import {
 import { HomeAttention } from "../pages/HomeAttention";
 import { HomeCockpit } from "../features/home";
 import { RitualRunner, RevisionesView } from "../features/routines";
+import { DayHeader } from "../features/dayplan/DayHeader";
+import { useDayPlan } from "../features/dayplan/useDayPlan";
+import { getDayPlan } from "../lib/dayplan";
 import { OdysseusPanel, type OdysseusPanelScope } from "../features/odysseus/panel";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
 import { OdysseusMark } from "./odiseus/OdysseusMark";
@@ -1224,10 +1227,19 @@ export function DelivereeWorkspace() {
     const manifest = getManifest(session.recipeId);
     if (!manifest) return;
     if (!session.prepared || session.prepared.deferred) {
+      const plan =
+        session.recipeId === "close-day" && user?.uid
+          ? await getDayPlan(user.uid, localDateKey(new Date()))
+          : null;
       const prepared = prepareRitualData(manifest.prepare.gather, {
         userId: user?.uid || "",
         tasks,
         projects,
+        dayPlan: plan,
+        myItems:
+          session.recipeId === "close-day"
+            ? filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers)
+            : undefined,
       });
       session = { ...session, prepared };
     }
@@ -1525,6 +1537,97 @@ export function DelivereeWorkspace() {
       ),
     [lens, personalActor, tasks, workspaceMembers],
   );
+  const todayMyWorkTasks = useMemo(
+    () => filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers),
+    [personalActor, tasks, workspaceMembers],
+  );
+  const dayPlanScoreItems = useMemo(
+    () =>
+      todayMyWorkTasks.map((task) => {
+        const status = String(task.status || "").toLowerCase();
+        const mapped: "open" | "done" | "archived" =
+          status === "done" || status === "completed" || status === "closed"
+            ? "done"
+            : status === "archived"
+              ? "archived"
+              : "open";
+        return { id: String(task.id), status: mapped };
+      }),
+    [todayMyWorkTasks],
+  );
+  const dayPlan = useDayPlan({
+    userId: user?.uid,
+    workspaceId: workspace?.id,
+    items: dayPlanScoreItems,
+  });
+  const dayLocale = getLocale() === "es" ? "es" : "en";
+  const keyItemTitle = useMemo(() => {
+    if (!dayPlan.plan?.keyItemId) return null;
+    const hit = todayMyWorkTasks.find((task) => String(task.id) === dayPlan.plan?.keyItemId);
+    return hit ? String(hit.title || hit.name || "") : null;
+  }, [dayPlan.plan?.keyItemId, todayMyWorkTasks]);
+  const keyPickerItems = useMemo(() => {
+    const todayIso = localDateKey(new Date());
+    return todayMyWorkTasks
+      .filter((task) => {
+        const status = String(task.status || "").toLowerCase();
+        if (status === "done" || status === "completed" || status === "closed" || status === "archived") {
+          return false;
+        }
+        const due = String(task.dueDate || task.targetDate || "").slice(0, 10);
+        const overdue = Boolean(due && due < todayIso);
+        const isToday =
+          due === todayIso ||
+          Boolean(task.isOneThing) ||
+          String(task.timeSector || "").toLowerCase() === "today";
+        return isToday || overdue;
+      })
+      .slice(0, 12)
+      .map((task) => {
+        const project = projects.find((row) => String(row.id) === String(task.projectId || ""));
+        return {
+          id: String(task.id),
+          title: String(task.title || task.name || "Untitled"),
+          type: String(task.workItemType || task.itemType || task.type || ""),
+          projectTitle: project ? String(project.title || project.name || "") : undefined,
+        };
+      });
+  }, [todayMyWorkTasks, projects]);
+
+  const openCloseDayRitual = async () => {
+    if (!workspace?.id || !user?.uid) return;
+    const manifest = getManifest("close-day");
+    if (!manifest) return;
+    const ready = await listReadySessions(workspace.id, user.uid);
+    const existing = ready.find(
+      (row) =>
+        row.recipeId === "close-day" &&
+        (row.status === "ready" || row.status === "in_progress"),
+    );
+    if (existing) {
+      await openRitualSession(existing);
+      return;
+    }
+    const plan = await getDayPlan(user.uid, localDateKey(new Date()));
+    const prepared = prepareRitualData(manifest.prepare.gather, {
+      userId: user.uid,
+      tasks,
+      projects,
+      dayPlan: plan,
+      myItems: todayMyWorkTasks,
+    });
+    const id = await createRoutineSession({
+      workspaceId: workspace.id,
+      userId: user.uid,
+      routineId: `close-day-${localDateKey(new Date())}`,
+      recipeId: "close-day",
+      prepared,
+      estimatedMinutes: manifest.estimatedMinutes,
+    });
+    const refreshed = await listReadySessions(workspace.id, user.uid);
+    const created = refreshed.find((row) => row.id === id);
+    if (created) setActiveRitual(applySessionExpiry(created, manifest));
+  };
 
   useEffect(() => {
     if (!user || !workspace) return;
@@ -6936,7 +7039,11 @@ export function DelivereeWorkspace() {
                   accessRequests={accessRequests}
                   activityItems={odiseusActivity}
                   actor={personalActor}
+                  dayPlanItems={dayPlanScoreItems}
                   members={workspaceMembers}
+                  focusScore={dayPlan.score.value}
+                  userId={user?.uid}
+                  workspaceId={workspace?.id}
                   onApprove={(item) => {
                     if (item) void processReview(item, "approve");
                   }}
@@ -7506,11 +7613,25 @@ export function DelivereeWorkspace() {
               </div>
             )}
             {lens.kind === "my-work" && lens.section === "today" && (
-              <MyWorkTodayPanel
-                onSelectItem={setSelectedWorkItemId}
-                onUpdateTask={updateProjectTask}
-                tasks={myWorkTasks}
-              />
+              <>
+                <DayHeader
+                  keyItemTitle={keyItemTitle}
+                  locale={dayLocale}
+                  onCloseDay={() => void openCloseDayRitual()}
+                  onPickKey={(itemId) => void dayPlan.setKey(itemId)}
+                  pickerItems={keyPickerItems}
+                  plan={dayPlan.plan}
+                  score={dayPlan.score}
+                />
+                <MyWorkTodayPanel
+                  keyItemId={dayPlan.plan?.keyItemId || null}
+                  locale={dayLocale}
+                  onSelectItem={setSelectedWorkItemId}
+                  onSetKey={(itemId) => void dayPlan.setKey(itemId)}
+                  onUpdateTask={updateProjectTask}
+                  tasks={myWorkTasks}
+                />
+              </>
             )}
             <WorkItemsCenter
             activeProject={null}

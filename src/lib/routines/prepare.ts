@@ -6,6 +6,7 @@
 import { addDays, startOfWeek } from "date-fns";
 import type { PrepareSpec } from "./manifest";
 import { isClosed } from "../workspaceDisplay";
+import { localDateKey, type DayPlan } from "../dayplan";
 
 function asIsoDay(value: unknown): string | null {
   if (!value) return null;
@@ -40,7 +41,22 @@ export type PrepareContext = {
   priorGoals?: Array<{ title: string; status?: string }>;
   protectedBlocks?: Array<{ day: string; start: string; end: string; label?: string }>;
   now?: Date;
+  /** Optional day plan for close-day prepare (avoids async Firestore in prepare). */
+  dayPlan?: DayPlan | null;
+  /** Optional override for "my" items when assignee matching differs from prepare's filter. */
+  myItems?: any[];
 };
+
+function normalizeItemStatus(status: unknown): "open" | "done" | "archived" {
+  const value = String(status || "").toLowerCase();
+  if (value === "done" || value === "completed" || value === "closed") return "done";
+  if (value === "archived") return "archived";
+  return "open";
+}
+
+function asUpdatedDay(value: unknown): string | null {
+  return asIsoDay(value);
+}
 
 export function prepareRitualData(
   gather: PrepareSpec["gather"],
@@ -231,6 +247,101 @@ export function prepareRitualData(
     }
     if (key === "last_alignment") {
       out.last_alignment = ctx.lastAlignment || null;
+    }
+    if (key === "day_summary") {
+      const date = localDateKey(now);
+      const plan = ctx.dayPlan ?? null;
+      const itemPool = Array.isArray(ctx.myItems) && ctx.myItems.length ? ctx.myItems : mine;
+      const byId = new Map(itemPool.map((task) => [String(task.id), task]));
+      const plannedIds =
+        plan?.plannedItemIds?.length
+          ? plan.plannedItemIds
+          : itemPool
+              .filter((task) => {
+                const due = asIsoDay(task.dueDate || task.targetDate);
+                return (
+                  Boolean(task.isOneThing) ||
+                  due === date ||
+                  String(task.timeSector || "").toLowerCase() === "today"
+                );
+              })
+              .map((task) => String(task.id));
+
+      const items = plannedIds
+        .map((id) => {
+          const task = byId.get(id);
+          if (!task) return null;
+          const project = (ctx.projects || []).find(
+            (row) => String(row.id) === String(task.projectId || ""),
+          );
+          return {
+            id,
+            title: titleOf(task),
+            type: String(task.workItemType || task.itemType || task.type || ""),
+            projectTitle: project ? titleOf(project) : undefined,
+            status: normalizeItemStatus(task.status),
+          };
+        })
+        .filter(Boolean) as Array<{
+        id: string;
+        title: string;
+        type?: string;
+        projectTitle?: string;
+        status: "open" | "done" | "archived";
+      }>;
+
+      const keyId = plan?.keyItemId || itemPool.find((task) => task.isOneThing)?.id || null;
+      const keyTask = keyId ? byId.get(String(keyId)) : null;
+      const keyItem = keyTask
+        ? {
+            id: String(keyTask.id),
+            title: titleOf(keyTask),
+            done: normalizeItemStatus(keyTask.status) === "done",
+          }
+        : null;
+
+      const doneCount = items.filter((item) => item.status === "done").length;
+      const remainingCount = items.filter((item) => item.status === "open").length;
+
+      const openFuture = itemPool
+        .map((task) => {
+          const due = asIsoDay(task.dueDate || task.targetDate);
+          if (!due || due < date) return null;
+          if (normalizeItemStatus(task.status) !== "open") return null;
+          const updated = asUpdatedDay(task.updatedAt);
+          const daysLeft = Math.max(
+            0,
+            Math.round(
+              (new Date(`${due}T12:00:00`).getTime() - new Date(`${date}T12:00:00`).getTime()) /
+                86_400_000,
+            ),
+          );
+          return {
+            id: String(task.id),
+            title: titleOf(task),
+            dueDate: due,
+            daysLeft,
+            touchedToday: updated === date,
+          };
+        })
+        .filter(Boolean) as Array<{
+        id: string;
+        title: string;
+        dueDate: string;
+        daysLeft: number;
+        touchedToday: boolean;
+      }>;
+      openFuture.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.daysLeft - b.daysLeft);
+      const nearestDeadline = openFuture[0] || null;
+
+      out.day_summary = {
+        date,
+        keyItem,
+        items,
+        doneCount,
+        remainingCount,
+        nearestDeadline,
+      };
     }
   }
 
