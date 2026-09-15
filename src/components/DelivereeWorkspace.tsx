@@ -236,17 +236,16 @@ import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { TablePage } from "../features/tables/TablePage";
+import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import {
   TABLES,
   TABLE_RECORDS,
   canSeeTable,
-  createTable,
   createRecord,
   buildMyWorkRecords,
   type TableDoc,
   type RecordDoc,
 } from "../lib/tables";
-import { defaultKeyColumns, defaultTableColumns } from "../features/tables/defaults";
 import { NoteQuickCapture } from "../features/notes/NoteQuickCapture";
 import {
   createNote as createNotebookNote,
@@ -706,6 +705,7 @@ export function DelivereeWorkspace() {
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
+  const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
   const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
@@ -1490,26 +1490,8 @@ export function DelivereeWorkspace() {
     if (lens.kind !== "tables" || !lens.tableId) return null;
     return visibleTables.find((table) => table.id === lens.tableId) || null;
   }, [lens, visibleTables]);
-  const createBlankTable = async () => {
-    if (!user?.uid || !workspace?.id) return;
-    try {
-      const id = await createTable({
-        workspaceId: workspace.id,
-        projectId: null,
-        name: t("tables.untitled"),
-        icon: "▦",
-        color: "var(--accent)",
-        visibility: "workspace",
-        columns: defaultTableColumns(),
-        keyColumns: defaultKeyColumns(),
-        createdBy: user.uid,
-        favorite: false,
-      });
-      navigate(`/tables/${encodeURIComponent(id)}`);
-      setSidebarOpen(false);
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : t("tables.createFailed"));
-    }
+  const openCreateTableWizard = () => {
+    setCreateTableWizardOpen(true);
   };
   const openTasks = useMemo(
     () => tasks.filter((task) => !isClosed(task.status)),
@@ -6762,7 +6744,7 @@ export function DelivereeWorkspace() {
               </button>
               <button
                 aria-label={t("tables.new")}
-                onClick={() => void createBlankTable()}
+                onClick={() => openCreateTableWizard()}
                 type="button"
               >
                 + {t("tables.newShort")}
@@ -6773,7 +6755,7 @@ export function DelivereeWorkspace() {
                 {visibleTables.length === 0 ? (
                   <button
                     className="do-empty-link"
-                    onClick={() => void createBlankTable()}
+                    onClick={() => openCreateTableWizard()}
                     type="button"
                   >
                     {t("tables.empty.tables")}
@@ -8415,7 +8397,7 @@ export function DelivereeWorkspace() {
               <p>{t("tables.empty.tables")}</p>
               <button
                 className="cw-tables-btn-primary"
-                onClick={() => void createBlankTable()}
+                onClick={() => openCreateTableWizard()}
                 type="button"
               >
                 + {t("tables.new")}
@@ -9908,6 +9890,15 @@ export function DelivereeWorkspace() {
         isOpen={magicProjectOpen}
         onClose={() => setMagicProjectOpen(false)}
         onCreate={createMagicProject}
+      />
+      <CreateTableWizard
+        open={createTableWizardOpen}
+        onClose={() => setCreateTableWizardOpen(false)}
+        onCreated={(tableId) => {
+          setCreateTableWizardOpen(false);
+          navigate(`/tables/${encodeURIComponent(tableId)}`);
+          setSidebarOpen(false);
+        }}
       />
 
       {needsAlias && (
