@@ -16,6 +16,7 @@ import {
 import { db } from "../firebase";
 import { emitDomainEvent } from "../routines/events";
 import { coerceValue, validateRecord } from "./validate";
+import { ensureStatusOptionTones } from "./statusTones";
 import {
   RECORD_ACTIVITY,
   RECORD_LINK_RELATION,
@@ -82,8 +83,14 @@ export async function createTable(
 ): Promise<string> {
   const now = nowIso();
   const { userId: explicitUserId, ...rest } = input;
+  const columns = (rest.columns || []).map((col) =>
+    col.type === "status"
+      ? { ...col, options: ensureStatusOptionTones(col.options || []) }
+      : col,
+  );
   const ref = await addDoc(collection(db, TABLES), {
     ...rest,
+    columns,
     // Keep userId in sync with createdBy so workspace listeners that filter by userId still match.
     userId: explicitUserId || rest.createdBy,
     status: rest.status || "active",
@@ -249,8 +256,13 @@ export async function updateTableColumns(
   columns: Column[],
   keyColumns: KeyColumns,
 ): Promise<void> {
+  const normalized = columns.map((col) =>
+    col.type === "status"
+      ? { ...col, options: ensureStatusOptionTones(col.options || []) }
+      : col,
+  );
   await updateDoc(doc(db, TABLES, tableId), {
-    columns,
+    columns: normalized,
     keyColumns,
     updatedAt: nowIso(),
   });
