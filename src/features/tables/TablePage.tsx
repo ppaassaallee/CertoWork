@@ -9,7 +9,7 @@ import {
 import {
   Archive,
   CalendarDays,
-  Filter,
+  FileText,
   Kanban,
   LayoutGrid,
   ListChecks,
@@ -27,6 +27,8 @@ import {
   TABLE_RECORDS,
   createRecord,
   deleteRecord,
+  emptyTableFilters,
+  filterTableRecords,
   tableLifecycleStatus,
   updateRecordField,
   updateTableColumns,
@@ -37,6 +39,7 @@ import {
   type RecordLinkTarget,
   type RecordValue,
   type TableDoc,
+  type TableFilterState,
 } from "../../lib/tables";
 import { ColumnsEditor } from "./ColumnsEditor";
 import { RecordPanel } from "./RecordPanel";
@@ -44,13 +47,15 @@ import { RecordsBoard } from "./RecordsBoard";
 import { RecordsCalendar } from "./RecordsCalendar";
 import { RecordsGrid } from "./RecordsGrid";
 import { TableAutomationComposer } from "./TableAutomationComposer";
+import { TableFiltersBar } from "./TableFiltersBar";
+import { TableFormView } from "./TableFormView";
 import {
   TableItemsPanel,
   type TableItemCandidate,
 } from "./TableItemsPanel";
 import type { TableMember } from "./cells/RecordCells";
 
-export type TableViewMode = "table" | "board" | "calendar" | "items";
+export type TableViewMode = "table" | "board" | "calendar" | "items" | "form";
 
 export type TablePageProps = {
   table: TableDoc;
@@ -116,6 +121,8 @@ export function TablePage({
   const [menuOpen, setMenuOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [automationsOpen, setAutomationsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<TableFilterState>(() => emptyTableFilters());
   const [liveRecords, setLiveRecords] = useState<RecordDoc[]>([]);
   const [itemCount, setItemCount] = useState(Number(table.itemCount || 0));
   const ownsData = recordsProp === undefined;
@@ -144,6 +151,10 @@ export function TablePage({
   }, [table.itemCount, table.id]);
 
   const records = recordsProp ?? liveRecords;
+  const visibleRecords = useMemo(
+    () => filterTableRecords(table, records, filters),
+    [table, records, filters],
+  );
 
   const openRecord = useCallback(
     (id: string | null) => {
@@ -219,7 +230,7 @@ export function TablePage({
 
   const meta = useMemo(() => {
     const parts = [
-      t("tables.meta.records").replace("{n}", String(records.length)),
+      t("tables.meta.records").replace("{n}", String(visibleRecords.length)),
       t("tables.meta.items").replace("{n}", String(itemCount)),
       table.visibility === "private"
         ? t("tables.visibility.private")
@@ -230,7 +241,7 @@ export function TablePage({
     if (lifecycle === "archived") parts.push(t("tables.status.archived"));
     if (lifecycle === "deleted") parts.push(t("tables.status.deleted"));
     return parts.join(" · ");
-  }, [records.length, itemCount, table.visibility, lifecycle]);
+  }, [visibleRecords.length, itemCount, table.visibility, lifecycle]);
 
   return (
     <div className="cw-tables-page" data-testid="tables-page">
@@ -273,10 +284,14 @@ export function TablePage({
             <Zap size={14} />
             {t("tables.page.automations")}
           </button>
-          <button type="button" className="cw-tables-chip-btn is-stub" disabled title={t("tables.page.filterSoon")}>
-            <Filter size={14} />
-            {t("tables.page.filter")}
-          </button>
+          <TableFiltersBar
+            table={table}
+            members={members}
+            filters={filters}
+            onChange={setFilters}
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+          />
           <div className="cw-tables-menu-wrap">
             <button
               type="button"
@@ -351,7 +366,7 @@ export function TablePage({
               </div>
             ) : null}
           </div>
-          {view !== "items" ? (
+          {view !== "items" && view !== "form" ? (
             <button
               type="button"
               className="cw-tables-btn"
@@ -371,6 +386,7 @@ export function TablePage({
             ["board", t("tables.tabs.board"), Kanban],
             ["calendar", t("tables.tabs.calendar"), CalendarDays],
             ["items", t("tables.tabs.items"), ListChecks],
+            ["form", t("tables.tabs.form"), FileText],
           ] as const
         ).map(([id, label, Icon]) => (
           <button
@@ -391,7 +407,7 @@ export function TablePage({
           {view === "table" ? (
             <RecordsGrid
               table={table}
-              records={records}
+              records={visibleRecords}
               members={members}
               onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
               onCreateRecord={(title) => void handleCreate({ title })}
@@ -402,7 +418,7 @@ export function TablePage({
           {view === "board" ? (
             <RecordsBoard
               table={table}
-              records={records}
+              records={visibleRecords}
               members={members}
               onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
               onOpenRecord={(id) => openRecord(id)}
@@ -412,7 +428,7 @@ export function TablePage({
           {view === "calendar" ? (
             <RecordsCalendar
               table={table}
-              records={records}
+              records={visibleRecords}
               onOpenRecord={(id) => openRecord(id)}
             />
           ) : null}
@@ -428,9 +444,10 @@ export function TablePage({
               }}
             />
           ) : null}
+          {view === "form" ? <TableFormView table={table} members={members} /> : null}
         </div>
 
-        {activeRecord && view !== "items" ? (
+        {activeRecord && view !== "items" && view !== "form" ? (
           <RecordPanel
             table={table}
             record={activeRecord}

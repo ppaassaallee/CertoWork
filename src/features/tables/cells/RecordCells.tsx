@@ -371,6 +371,71 @@ export function FileCell({ value, onChange, readOnly }: CellProps) {
   );
 }
 
+export function RatingCell({ value, onChange, readOnly }: CellProps) {
+  const rating = Math.max(0, Math.min(5, Number(value) || 0));
+  if (readOnly) {
+    return <span className="cw-tables-rating">{"★".repeat(rating)}{"☆".repeat(5 - rating)}</span>;
+  }
+  return (
+    <div className="cw-tables-rating-edit" role="group" aria-label="Rating">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          className={n <= rating ? "is-on" : ""}
+          onClick={() => onChange(n === rating ? 0 : n)}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ProgressCell({ value, onChange, readOnly }: CellProps) {
+  const pct = Math.max(0, Math.min(100, Number(value) || 0));
+  if (readOnly) {
+    return (
+      <div className="cw-tables-progress" title={`${pct}%`}>
+        <span style={{ width: `${pct}%` }} />
+        <em>{pct}%</em>
+      </div>
+    );
+  }
+  return (
+    <input
+      className="cw-tables-input cw-tables-input-num"
+      type="number"
+      min={0}
+      max={100}
+      value={pct}
+      onChange={(e) => onChange(Number(e.target.value) || 0)}
+    />
+  );
+}
+
+export function EmailPhoneCell({ value, onChange, readOnly, column }: CellProps) {
+  const text = asString(value);
+  const type = column.type === "email" ? "email" : "tel";
+  if (readOnly) {
+    if (!text) return <span className="cw-tables-muted">—</span>;
+    const href = column.type === "email" ? `mailto:${text}` : `tel:${text}`;
+    return (
+      <a className="cw-tables-linkish" href={href}>
+        {text}
+      </a>
+    );
+  }
+  return (
+    <input
+      className="cw-tables-input"
+      type={type}
+      value={text}
+      onChange={(e) => onChange(e.target.value || null)}
+    />
+  );
+}
+
 export function CellRenderer({
   column,
   value,
@@ -388,6 +453,7 @@ export function CellRenderer({
     case "updated_at":
       return <DateCell {...props} />;
     case "status":
+    case "dropdown":
       return <StatusCell {...props} />;
     case "person":
     case "created_by":
@@ -397,13 +463,18 @@ export function CellRenderer({
     case "checkbox":
       return <CheckboxCell {...props} />;
     case "url":
+      return <UrlCell {...props} />;
     case "email":
     case "phone":
-      return column.type === "url" ? <UrlCell {...props} /> : <TextCell {...props} />;
+      return <EmailPhoneCell {...props} />;
     case "relation":
       return <RelationCell {...props} />;
     case "file":
       return <FileCell {...props} />;
+    case "rating":
+      return <RatingCell {...props} />;
+    case "progress":
+      return <ProgressCell {...props} />;
     case "longtext":
     case "text":
     default:

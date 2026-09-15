@@ -24,6 +24,8 @@ test("legacy and new routes resolve into one conversational lens", () => {
     projectId: "project-123",
     tab: "overview",
   });
+  assert.deepEqual(resolveDelivereeLens("/dashboard"), { kind: "dashboard" });
+  assert.deepEqual(resolveDelivereeLens("/workload"), { kind: "workload" });
 });
 
 test("delivery stage normalization keeps the portfolio coherent", () => {

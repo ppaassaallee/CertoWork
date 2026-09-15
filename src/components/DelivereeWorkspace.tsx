@@ -48,6 +48,7 @@ import {
   WandSparkles,
   X,
   LayoutGrid,
+  LayoutDashboard,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -237,6 +238,11 @@ import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
+import { ComposedDashboard } from "../features/dashboard/ComposedDashboard";
+import { WorkloadView } from "../features/workload/WorkloadView";
+import {
+  postAssignmentNotify,
+} from "../lib/itemUpdateChannels";
 import {
   TABLES,
   TABLE_RECORDS,
@@ -412,6 +418,8 @@ export type CenterView =
   | "items"
   | "notes"
   | "tables"
+  | "dashboard"
+  | "workload"
   | "strategy"
   | "portfolio"
   | "project"
@@ -642,6 +650,10 @@ export function DelivereeWorkspace() {
       ? "notes"
       : lens.kind === "tables"
       ? "tables"
+      : lens.kind === "dashboard"
+      ? "dashboard"
+      : lens.kind === "workload"
+      ? "workload"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -673,6 +685,8 @@ export function DelivereeWorkspace() {
       else navigate("/notes");
     }
     else if (next === "tables") navigate("/tables");
+    else if (next === "dashboard") navigate("/dashboard");
+    else if (next === "workload") navigate("/workload");
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -4779,6 +4793,18 @@ export function DelivereeWorkspace() {
           }),
         ),
       );
+      if (notifications.length) {
+        const token = await user.getIdToken().catch(() => null);
+        void postAssignmentNotify({
+          workspaceId: workspace.id,
+          itemId: created.id,
+          itemTitle: title,
+          message: `Assigned by ${user.displayName || user.email || "someone"}`,
+          recipientEmails: notifications.map((n) => n.email).filter(Boolean),
+          actorName: user.displayName || user.email || "",
+          token,
+        });
+      }
     }
     return created.id;
   };
@@ -5033,6 +5059,16 @@ export function DelivereeWorkspace() {
         );
         if (notifications.length) {
           setNotice(`Assigned “${taskTitle}” — they’ll see it in My Work.`);
+          const token = await user.getIdToken().catch(() => null);
+          void postAssignmentNotify({
+            workspaceId: workspace.id,
+            itemId: taskId,
+            itemTitle: taskTitle,
+            message: `Assigned by ${user.displayName || user.email || "someone"}`,
+            recipientEmails: notifications.map((n) => n.email).filter(Boolean),
+            actorName: user.displayName || user.email || "",
+            token,
+          });
         }
       }
     }
@@ -5063,6 +5099,16 @@ export function DelivereeWorkspace() {
               ? `Added a collaborator on “${taskTitle}”.`
               : `Added ${notifications.length} collaborators on “${taskTitle}”.`,
           );
+          const token = await user.getIdToken().catch(() => null);
+          void postAssignmentNotify({
+            workspaceId: workspace.id,
+            itemId: taskId,
+            itemTitle: taskTitle,
+            message: `Added as collaborator by ${user.displayName || user.email || "someone"}`,
+            recipientEmails: notifications.map((n) => n.email).filter(Boolean),
+            actorName: user.displayName || user.email || "",
+            token,
+          });
         }
       }
     }
@@ -7108,6 +7154,30 @@ export function DelivereeWorkspace() {
             {sidebarSections.management && (
               <div className="do-section-body">
                 <button
+                  className={`do-nav-item is-dashboard ${lens.kind === "dashboard" ? "is-active" : ""}`}
+                  data-testid="nav-dashboard"
+                  onClick={() => {
+                    navigate("/dashboard");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <LayoutDashboard size="sm" />
+                  <span>Dashboard</span>
+                </button>
+                <button
+                  className={`do-nav-item is-workload ${lens.kind === "workload" ? "is-active" : ""}`}
+                  data-testid="nav-workload"
+                  onClick={() => {
+                    navigate("/workload");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Users size="sm" />
+                  <span>Workload</span>
+                </button>
+                <button
                   className={`do-nav-item is-requests ${lens.kind === "requests" ? "is-active" : ""}`}
                   data-testid="nav-requests"
                   onClick={() => {
@@ -8640,6 +8710,29 @@ export function DelivereeWorkspace() {
             })}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
+          />
+        ) : centerView === "dashboard" && workspace ? (
+          <ComposedDashboard
+            approvalCount={reviewItems.length}
+            members={workspaceMembers}
+            onOpenItem={(id) => setSelectedWorkItemId(id)}
+            onOpenProject={(id) => {
+              const project = projects.find((row) => row.id === id);
+              if (project) openProjectRecord(project);
+            }}
+            onOpenWorkload={() => navigate("/workload")}
+            projects={projects}
+            records={workspaceRecords}
+            tables={visibleTables}
+            tasks={tasks}
+            workspaceId={workspace.id}
+          />
+        ) : centerView === "workload" ? (
+          <WorkloadView
+            members={workspaceMembers}
+            onOpenItem={(id) => setSelectedWorkItemId(id)}
+            projects={projects}
+            tasks={tasks}
           />
         ) : centerView === "tables" ? (
           activeTable ? (

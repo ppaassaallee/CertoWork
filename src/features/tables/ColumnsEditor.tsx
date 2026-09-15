@@ -28,6 +28,7 @@ const ADDABLE_TYPES: ColumnType[] = [
   "currency",
   "date",
   "status",
+  "dropdown",
   "person",
   "tags",
   "checkbox",
@@ -36,6 +37,8 @@ const ADDABLE_TYPES: ColumnType[] = [
   "phone",
   "file",
   "relation",
+  "rating",
+  "progress",
 ];
 
 function slugId(name: string) {
@@ -60,7 +63,7 @@ function defaultStatusSeed(): StatusOption[] {
 export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) {
   const [columns, setColumns] = useState<Column[]>(() =>
     table.columns.map((col) =>
-      col.type === "status"
+      col.type === "status" || col.type === "dropdown"
         ? { ...col, options: ensureStatusOptionTones(col.options || []) }
         : col,
     ),
@@ -71,7 +74,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
   const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({});
 
   const statusCandidates = useMemo(
-    () => columns.filter((c) => c.type === "status"),
+    () => columns.filter((c) => c.type === "status" || c.type === "dropdown"),
     [columns],
   );
   const personCandidates = useMemo(
@@ -85,7 +88,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
 
   const commit = (nextCols: Column[], nextKeys: KeyColumns) => {
     const normalized = nextCols.map((col) =>
-      col.type === "status"
+      col.type === "status" || col.type === "dropdown"
         ? { ...col, options: ensureStatusOptionTones(col.options || []) }
         : col,
     );
@@ -107,7 +110,11 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
       id: slugId(name),
       name,
       type: newType,
-      ...(newType === "status" ? { options: defaultStatusSeed() } : {}),
+      ...(newType === "status" || newType === "dropdown"
+        ? { options: defaultStatusSeed() }
+        : {}),
+      ...(newType === "rating" ? { width: 120 } : {}),
+      ...(newType === "progress" ? { width: 140 } : {}),
     };
     commit([...columns, col], keys);
     setNewName("");
@@ -116,7 +123,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
 
   const addStatusOption = (columnId: string) => {
     const col = columns.find((c) => c.id === columnId);
-    if (!col || col.type !== "status") return;
+    if (!col || (col.type !== "status" && col.type !== "dropdown")) return;
     const draft = (optionDrafts[columnId] || "").trim();
     const label = draft || t("tables.columns.optionUntitled");
     const existing = col.options || [];
@@ -209,7 +216,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
               )}
             </div>
 
-            {col.type === "status" ? (
+            {col.type === "status" || col.type === "dropdown" ? (
               <div className="cw-tables-status-options" data-testid={`tables-status-options-${col.id}`}>
                 <div className="cw-tables-status-options-label">
                   {t("tables.columns.statusOptions")}

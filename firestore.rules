@@ -1580,10 +1580,23 @@ service cloud.firestore {
     match /table_records/{id} {
       allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadTableChild(resource.data));
       allow list: if isSignedIn() && canReadTableChild(resource.data);
-      allow create: if isSignedIn() && isValidId(id)
+      allow create: if (
+        isSignedIn() && isValidId(id)
         && incoming().workspaceId is string
         && isWorkspaceMember(incoming().workspaceId)
-        && canWriteTable(tableDoc(incoming().tableId));
+        && canWriteTable(tableDoc(incoming().tableId))
+      ) || (
+        isValidId(id)
+        && incoming().formToken is string
+        && incoming().tableId is string
+        && incoming().workspaceId is string
+        && exists(/databases/$(database)/documents/table_forms/$(incoming().formToken))
+        && get(/databases/$(database)/documents/table_forms/$(incoming().formToken)).data.token == incoming().formToken
+        && get(/databases/$(database)/documents/table_forms/$(incoming().formToken)).data.active == true
+        && get(/databases/$(database)/documents/table_forms/$(incoming().formToken)).data.revoked != true
+        && get(/databases/$(database)/documents/table_forms/$(incoming().formToken)).data.tableId == incoming().tableId
+        && get(/databases/$(database)/documents/table_forms/$(incoming().formToken)).data.workspaceId == incoming().workspaceId
+      );
       allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
     }
     match /table_record_activity/{id} {
@@ -1594,6 +1607,40 @@ service cloud.firestore {
         && isWorkspaceMember(incoming().workspaceId)
         && canWriteTable(tableDoc(incoming().tableId));
       allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
+    }
+    match /table_forms/{id} {
+      allow get: if resource != null
+        && resource.data.token == id
+        && resource.data.active == true
+        && resource.data.revoked != true;
+      allow list: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isSignedIn()
+        && incoming().token == id
+        && incoming().tableId is string
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && canWriteTable(tableDoc(incoming().tableId));
+      allow update: if (
+        isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && canWriteTable(tableDoc(resource.data.tableId))
+      ) || (
+        // Anonymous form submitters can bump submission counts only.
+        resource.data.token == id
+        && resource.data.active == true
+        && resource.data.revoked != true
+        && incoming().token == resource.data.token
+        && incoming().tableId == resource.data.tableId
+        && incoming().workspaceId == resource.data.workspaceId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['submissionCount', 'updatedAt', 'lastSubmissionAt'])
+      );
+      allow delete: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId);
     }
   }
 }

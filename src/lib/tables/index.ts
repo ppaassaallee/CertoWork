@@ -5,3 +5,5 @@ export * from "./myWorkRecords";
 export * from "./templates";
 export * from "./compile";
 export * from "./statusTones";
+export * from "./filters";
+export * from "./tableForms";
