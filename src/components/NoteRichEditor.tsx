@@ -1,17 +1,37 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { htmlToMarkdown, markdownToHtml } from "../lib/noteMarkup";
 import {
   insertBlockIntoMarkdown,
   SEMANTIC_BLOCKS,
   type SemanticBlockType,
 } from "../lib/semanticBlocks";
-import { getLocale } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import "./semanticBlocks.css";
+import "../features/notes/notes.css";
+
+export type NoteMentionItem = {
+  id: string;
+  title?: string;
+  key?: string;
+  projectTitle?: string;
+  kind?: string;
+};
+
+export type NoteMentionPerson = {
+  id: string;
+  displayName?: string;
+  name?: string;
+  userId?: string;
+};
 
 type Props = {
   noteId: string;
   value: string;
   onChange: (content: string) => void;
+  items?: NoteMentionItem[];
+  people?: NoteMentionPerson[];
+  onLinkTask?: (taskId: string) => void;
+  onMentionPerson?: (person: NoteMentionPerson) => void;
 };
 
 function runCommand(command: string, argument?: string) {
@@ -37,12 +57,53 @@ function wrapCode() {
   selection.addRange(next);
 }
 
-export function NoteRichEditor({ noteId, value, onChange }: Props) {
+function insertMarkdownChip(markdown: string, field: HTMLDivElement, onChange: (v: string) => void) {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0 && field.contains(selection.anchorNode)) {
+    const range = selection.getRangeAt(0);
+    const before = range.startContainer.textContent || "";
+    const offset = range.startOffset;
+    // Remove the trigger token (#query or @query) before the caret when present.
+    const left = before.slice(0, offset);
+    const trigger = left.match(/(?:^|[\s\n])([#@][^\s]*)$/);
+    if (trigger && range.startContainer.nodeType === Node.TEXT_NODE) {
+      const start = offset - trigger[1].length;
+      const textNode = range.startContainer as Text;
+      textNode.deleteData(start, trigger[1].length);
+      range.setStart(textNode, start);
+      range.collapse(true);
+    }
+    const html = markdownToHtml(markdown).replace(/^<p>|<\/p>$/g, "");
+    const temp = document.createElement("div");
+    temp.innerHTML = html || markdown;
+    const frag = document.createDocumentFragment();
+    while (temp.firstChild) frag.appendChild(temp.firstChild);
+    range.insertNode(frag);
+    selection.removeAllRanges();
+  }
+  const next = htmlToMarkdown(field.innerHTML);
+  field.dataset.empty = next ? "false" : "true";
+  onChange(next);
+}
+
+export function NoteRichEditor({
+  noteId,
+  value,
+  onChange,
+  items = [],
+  people = [],
+  onLinkTask,
+  onMentionPerson,
+}: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const focusedRef = useRef(false);
   const locale = getLocale();
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionKind, setMentionKind] = useState<"task" | "person">("task");
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [float, setFloat] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const field = editorRef.current;
@@ -51,6 +112,25 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     field.innerHTML = html || "";
     field.dataset.empty = html.trim() ? "false" : "true";
   }, [noteId, value]);
+
+  useEffect(() => {
+    const onSel = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !editorRef.current?.contains(selection.anchorNode)) {
+        setFloat(null);
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const host = editorRef.current.getBoundingClientRect();
+      setFloat({
+        top: Math.max(0, rect.top - host.top - 36),
+        left: Math.max(0, rect.left - host.left),
+      });
+    };
+    document.addEventListener("selectionchange", onSel);
+    return () => document.removeEventListener("selectionchange", onSel);
+  }, []);
 
   const emit = () => {
     const field = editorRef.current;
@@ -65,6 +145,10 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     if (command === "formatBlock" && argument) {
       const tag = argument.replace(/[<>]/g, "");
       runCommand("formatBlock", `<${tag}>`);
+    } else if (command === "createLink") {
+      const url = window.prompt("URL");
+      if (!url) return;
+      runCommand("createLink", url);
     } else {
       runCommand(command, argument);
     }
@@ -76,7 +160,6 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     onChange(next);
     setSlashOpen(false);
     setSlashQuery("");
-    // Force DOM refresh even if focused
     requestAnimationFrame(() => {
       const field = editorRef.current;
       if (!field) return;
@@ -95,98 +178,114 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     );
   });
 
+  const mentionOptions = useMemo(() => {
+    const q = mentionQuery.trim().toLowerCase();
+    if (mentionKind === "task") {
+      return items
+        .filter((item) => {
+          const hay = `${item.key || ""} ${item.title || ""} ${item.projectTitle || ""}`.toLowerCase();
+          return !q || hay.includes(q);
+        })
+        .slice(0, 8);
+    }
+    return people
+      .filter((person) => {
+        const hay = `${person.displayName || ""} ${person.name || ""}`.toLowerCase();
+        return !q || hay.includes(q);
+      })
+      .slice(0, 8);
+  }, [items, mentionKind, mentionQuery, people]);
+
+  const pickTask = (item: NoteMentionItem) => {
+    const field = editorRef.current;
+    if (!field) return;
+    const label = `#${item.key || item.title || item.id}`;
+    insertMarkdownChip(`[${label}](item:${item.id})`, field, onChange);
+    onLinkTask?.(item.id);
+    setMentionOpen(false);
+    setMentionQuery("");
+  };
+
+  const pickPerson = (person: NoteMentionPerson) => {
+    const field = editorRef.current;
+    if (!field) return;
+    const name = person.displayName || person.name || person.id;
+    insertMarkdownChip(`[@${name}](person:${person.id})`, field, onChange);
+    onMentionPerson?.(person);
+    setMentionOpen(false);
+    setMentionQuery("");
+  };
+
+  const detectTrigger = (text: string) => {
+    const trimmed = text.replace(/\u00a0/g, " ");
+    if (trimmed.trimEnd().endsWith("/")) {
+      setSlashOpen(true);
+      setSlashQuery("");
+      setMentionOpen(false);
+      return;
+    }
+    const hash = trimmed.match(/(?:^|[\s\n])#([^\s#@]*)$/);
+    if (hash) {
+      setMentionOpen(true);
+      setMentionKind("task");
+      setMentionQuery(hash[1] || "");
+      setSlashOpen(false);
+      return;
+    }
+    const at = trimmed.match(/(?:^|[\s\n])@([^\s#@]*)$/);
+    if (at) {
+      setMentionOpen(true);
+      setMentionKind("person");
+      setMentionQuery(at[1] || "");
+      setSlashOpen(false);
+      return;
+    }
+    setMentionOpen(false);
+  };
+
   return (
-    <div className="do-notes-write">
-      <div className="do-notes-format" role="toolbar" aria-label="Note formatting">
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h1")}
-          title="Title"
-          type="button"
+    <div className="do-notes-write" style={{ position: "relative" }}>
+      {float ? (
+        <div
+          className="cw-notes-float-bar"
+          data-testid="notes-float-toolbar"
+          role="toolbar"
+          style={{ top: float.top, left: float.left }}
         >
-          Title
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h2")}
-          title="Heading"
-          type="button"
-        >
-          H2
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h3")}
-          title="Subheading"
-          type="button"
-        >
-          H3
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "p")}
-          title="Body text"
-          type="button"
-        >
-          Body
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("bold")}
-          title="Bold"
-          type="button"
-        >
-          <strong>B</strong>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("italic")}
-          title="Italic"
-          type="button"
-        >
-          <em>I</em>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            editorRef.current?.focus();
-            wrapCode();
-            emit();
-          }}
-          title="Code"
-          type="button"
-        >
-          Code
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("strikeThrough")}
-          title="Strikethrough"
-          type="button"
-        >
-          <s>S</s>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("insertUnorderedList")}
-          title="List"
-          type="button"
-        >
-          List
-        </button>
-        <button
-          data-testid="notes-slash-blocks"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            setSlashOpen((open) => !open);
-            setSlashQuery("");
-          }}
-          title={locale === "es" ? "Bloques /" : "Blocks /"}
-          type="button"
-        >
-          /
-        </button>
-      </div>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("bold")} type="button">
+            <strong>B</strong>
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("italic")} type="button">
+            <em>I</em>
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("strikeThrough")} type="button">
+            <s>S</s>
+          </button>
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              editorRef.current?.focus();
+              wrapCode();
+              emit();
+            }}
+            type="button"
+          >
+            Código
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("formatBlock", "h2")} type="button">
+            H2
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("formatBlock", "h3")} type="button">
+            H3
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("insertUnorderedList")} type="button">
+            Lista
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("createLink")} type="button">
+            Enlace
+          </button>
+        </div>
+      ) : null}
 
       {slashOpen && (
         <div className="cw-slash-menu" data-testid="semantic-slash-menu">
@@ -198,11 +297,7 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
           />
           <div className="cw-slash-list">
             {slashOptions.map((block) => (
-              <button
-                key={block.type}
-                onClick={() => insertBlock(block.type)}
-                type="button"
-              >
+              <button key={block.type} onClick={() => insertBlock(block.type)} type="button">
                 <span className="cw-semantic-chip" data-hue={block.hue}>
                   {locale === "es" ? block.labelEs : block.labelEn}
                 </span>
@@ -217,12 +312,54 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
         </div>
       )}
 
+      {mentionOpen && (
+        <div className="cw-slash-menu" data-testid="notes-mention-menu">
+          <input
+            autoFocus
+            onChange={(event) => setMentionQuery(event.target.value)}
+            placeholder={
+              mentionKind === "task"
+                ? locale === "es"
+                  ? "Buscar ítem…"
+                  : "Search item…"
+                : locale === "es"
+                  ? "Buscar persona…"
+                  : "Search person…"
+            }
+            value={mentionQuery}
+          />
+          <div className="cw-slash-list">
+            {mentionKind === "task"
+              ? (mentionOptions as NoteMentionItem[]).map((item) => (
+                  <button key={item.id} onClick={() => pickTask(item)} type="button">
+                    <span className="cw-notes-ent cw-notes-ent-task">#{item.key || item.title || item.id}</span>
+                    {item.projectTitle ? (
+                      <em style={{ color: "var(--text-muted)", marginLeft: 6 }}>{item.projectTitle}</em>
+                    ) : null}
+                  </button>
+                ))
+              : (mentionOptions as NoteMentionPerson[]).map((person) => (
+                  <button key={person.id} onClick={() => pickPerson(person)} type="button">
+                    <span className="cw-notes-ent cw-notes-ent-person">
+                      @{person.displayName || person.name || person.id}
+                    </span>
+                  </button>
+                ))}
+            {!mentionOptions.length && (
+              <span className="cw-slash-empty">
+                {locale === "es" ? "Sin resultados" : "No matches"}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div
         aria-label="Note content"
         className="do-notes-rich"
         contentEditable
         data-empty="true"
-        data-placeholder="Write the note here. Use Title, headings, bold, italic, or / for blocks."
+        data-placeholder={t("notes.bodyPlaceholder")}
         onBlur={() => {
           focusedRef.current = false;
           emit();
@@ -232,16 +369,13 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
         }}
         onInput={(event) => {
           emit();
-          const text = (event.target as HTMLDivElement).innerText || "";
-          if (text.trimEnd().endsWith("/")) {
-            setSlashOpen(true);
-            setSlashQuery("");
-          }
+          detectTrigger((event.target as HTMLDivElement).innerText || "");
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && slashOpen) {
+          if (event.key === "Escape" && (slashOpen || mentionOpen)) {
             event.preventDefault();
             setSlashOpen(false);
+            setMentionOpen(false);
           }
         }}
         ref={editorRef}

@@ -44,6 +44,7 @@ import { workCategory, productPhase, WORK_CATEGORIES, PRODUCT_PHASES } from "../
 import { getLocale } from "../../../lib/i18n";
 import { compileItemSentence } from "../../capture/compileItemSentence";
 import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
+import { ItemNotesSection } from "./ItemNotesSection";
 import "./ItemModal.css";
 
 export type WorkItemKind =
@@ -106,6 +107,8 @@ export type ItemModalProps = {
   onAddSubtask?: (title: string) => void;
   onToggleSubtask?: (id: string, done: boolean) => void;
   deleteImpact?: string[];
+  notebookEntries?: any[];
+  onOpenNote?: (noteId: string) => void;
 };
 
 const WORK_TYPES: WorkItemKind[] = [
@@ -326,6 +329,8 @@ export function ItemModal({
   onAddSubtask,
   onToggleSubtask,
   deleteImpact,
+  notebookEntries = [],
+  onOpenNote,
 }: ItemModalProps) {
   const locale = getLocale();
   const [layout, setLayout] = useState<"panel" | "expanded">(layoutProp || "expanded");
@@ -863,6 +868,12 @@ export function ItemModal({
                 />
               </form>
             </section>
+
+            <ItemNotesSection
+              item={item}
+              notebookEntries={notebookEntries}
+              onOpenNote={onOpenNote}
+            />
           </div>
 
           <aside className="cw-item-props">

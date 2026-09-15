@@ -21,7 +21,7 @@ export function NodePanel({
     setQuestion(String(node.meta?.question || node.title));
     setHint(String(node.meta?.hint || node.detail || ""));
     setSkippable(Boolean(node.meta?.skippable));
-    setIncludeInSummary(!Boolean(node.meta?.skipInSummary));
+    setIncludeInSummary(!node.meta?.skipInSummary);
   }, [node?.id]);
 
   if (!node) {
