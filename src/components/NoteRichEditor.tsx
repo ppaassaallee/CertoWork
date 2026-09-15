@@ -5,8 +5,9 @@ import {
   SEMANTIC_BLOCKS,
   type SemanticBlockType,
 } from "../lib/semanticBlocks";
-import { getLocale } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
 import "./semanticBlocks.css";
+import "../features/notes/notes.css";
 
 type Props = {
   noteId: string;
@@ -43,6 +44,7 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
   const locale = getLocale();
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashQuery, setSlashQuery] = useState("");
+  const [float, setFloat] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const field = editorRef.current;
@@ -51,6 +53,25 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     field.innerHTML = html || "";
     field.dataset.empty = html.trim() ? "false" : "true";
   }, [noteId, value]);
+
+  useEffect(() => {
+    const onSel = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !editorRef.current?.contains(selection.anchorNode)) {
+        setFloat(null);
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      const host = editorRef.current.getBoundingClientRect();
+      setFloat({
+        top: Math.max(0, rect.top - host.top - 36),
+        left: Math.max(0, rect.left - host.left),
+      });
+    };
+    document.addEventListener("selectionchange", onSel);
+    return () => document.removeEventListener("selectionchange", onSel);
+  }, []);
 
   const emit = () => {
     const field = editorRef.current;
@@ -65,6 +86,10 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     if (command === "formatBlock" && argument) {
       const tag = argument.replace(/[<>]/g, "");
       runCommand("formatBlock", `<${tag}>`);
+    } else if (command === "createLink") {
+      const url = window.prompt("URL");
+      if (!url) return;
+      runCommand("createLink", url);
     } else {
       runCommand(command, argument);
     }
@@ -76,7 +101,6 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
     onChange(next);
     setSlashOpen(false);
     setSlashQuery("");
-    // Force DOM refresh even if focused
     requestAnimationFrame(() => {
       const field = editorRef.current;
       if (!field) return;
@@ -96,97 +120,48 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
   });
 
   return (
-    <div className="do-notes-write">
-      <div className="do-notes-format" role="toolbar" aria-label="Note formatting">
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h1")}
-          title="Title"
-          type="button"
+    <div className="do-notes-write" style={{ position: "relative" }}>
+      {float ? (
+        <div
+          className="cw-notes-float-bar"
+          data-testid="notes-float-toolbar"
+          role="toolbar"
+          style={{ top: float.top, left: float.left }}
         >
-          Title
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h2")}
-          title="Heading"
-          type="button"
-        >
-          H2
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "h3")}
-          title="Subheading"
-          type="button"
-        >
-          H3
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("formatBlock", "p")}
-          title="Body text"
-          type="button"
-        >
-          Body
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("bold")}
-          title="Bold"
-          type="button"
-        >
-          <strong>B</strong>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("italic")}
-          title="Italic"
-          type="button"
-        >
-          <em>I</em>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            editorRef.current?.focus();
-            wrapCode();
-            emit();
-          }}
-          title="Code"
-          type="button"
-        >
-          Code
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("strikeThrough")}
-          title="Strikethrough"
-          type="button"
-        >
-          <s>S</s>
-        </button>
-        <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => apply("insertUnorderedList")}
-          title="List"
-          type="button"
-        >
-          List
-        </button>
-        <button
-          data-testid="notes-slash-blocks"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            setSlashOpen((open) => !open);
-            setSlashQuery("");
-          }}
-          title={locale === "es" ? "Bloques /" : "Blocks /"}
-          type="button"
-        >
-          /
-        </button>
-      </div>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("bold")} type="button">
+            <strong>B</strong>
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("italic")} type="button">
+            <em>I</em>
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("strikeThrough")} type="button">
+            <s>S</s>
+          </button>
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              editorRef.current?.focus();
+              wrapCode();
+              emit();
+            }}
+            type="button"
+          >
+            Código
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("formatBlock", "h2")} type="button">
+            H2
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("formatBlock", "h3")} type="button">
+            H3
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("insertUnorderedList")} type="button">
+            Lista
+          </button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => apply("createLink")} type="button">
+            Enlace
+          </button>
+        </div>
+      ) : null}
 
       {slashOpen && (
         <div className="cw-slash-menu" data-testid="semantic-slash-menu">
@@ -198,11 +173,7 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
           />
           <div className="cw-slash-list">
             {slashOptions.map((block) => (
-              <button
-                key={block.type}
-                onClick={() => insertBlock(block.type)}
-                type="button"
-              >
+              <button key={block.type} onClick={() => insertBlock(block.type)} type="button">
                 <span className="cw-semantic-chip" data-hue={block.hue}>
                   {locale === "es" ? block.labelEs : block.labelEn}
                 </span>
@@ -222,7 +193,7 @@ export function NoteRichEditor({ noteId, value, onChange }: Props) {
         className="do-notes-rich"
         contentEditable
         data-empty="true"
-        data-placeholder="Write the note here. Use Title, headings, bold, italic, or / for blocks."
+        data-placeholder={t("notes.bodyPlaceholder")}
         onBlur={() => {
           focusedRef.current = false;
           emit();
