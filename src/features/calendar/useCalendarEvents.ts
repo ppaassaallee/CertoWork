@@ -10,10 +10,19 @@ import { useAuth } from "../../lib/AuthContext";
 import { t } from "../../lib/i18n";
 import type { Calendar, CalendarAccount, CalendarEvent } from "../../lib/calendar";
 
+const FALLBACK_PALETTE = [
+  "#2383e2",
+  "#1c7a52",
+  "#9f6b00",
+  "#c4554d",
+  "#9065b0",
+  "#d9730d",
+] as const;
+
 function applyPrivacy(event: CalendarEvent, calendars: Calendar[]): CalendarEvent {
   const calendar = calendars.find((row) => row.id === event.calendarId);
-  const privacy = event.privacy || calendar?.privacy || "full";
-  if (privacy !== "busy") return { ...event, privacy };
+  const privacy = calendar?.privacy ?? "full";
+  if (privacy !== "busy") return { ...event, privacy: "full" };
   return {
     ...event,
     privacy: "busy",
@@ -58,6 +67,18 @@ export function useCalendarEvents(range?: { from?: string; to?: string }) {
     return () => unsubs.forEach((unsub) => unsub());
   }, [user?.uid, workspace?.id]);
 
+  const accountColor = (accountId: string) => {
+    const account = accounts.find((row) => row.id === accountId);
+    if (account && (account as { color?: string }).color) {
+      return String((account as { color?: string }).color);
+    }
+    const index = Math.max(
+      0,
+      accounts.findIndex((row) => row.id === accountId),
+    );
+    return FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
+  };
+
   const visible = useMemo(() => {
     const fromMs = range?.from ? Date.parse(range.from) : null;
     const toMs = range?.to ? Date.parse(range.to) : null;
@@ -65,6 +86,12 @@ export function useCalendarEvents(range?: { from?: string; to?: string }) {
       .filter((event) => {
         const calendar = calendars.find((row) => row.id === event.calendarId);
         if (calendar && calendar.visible === false) return false;
+        if (event.allDay) {
+          // all-day start is YYYY-MM-DD — include unless outside ISO date window
+          if (fromMs != null && Date.parse(`${event.start}T12:00:00Z`) < fromMs) return false;
+          if (toMs != null && Date.parse(`${event.start}T12:00:00Z`) > toMs) return false;
+          return true;
+        }
         const start = Date.parse(event.start);
         if (!Number.isFinite(start)) return false;
         if (fromMs != null && start < fromMs) return false;
@@ -74,5 +101,5 @@ export function useCalendarEvents(range?: { from?: string; to?: string }) {
       .map((event) => applyPrivacy(event, calendars));
   }, [events, calendars, range?.from, range?.to]);
 
-  return { events: visible, accounts, calendars };
+  return { events: visible, accounts, calendars, accountColor };
 }

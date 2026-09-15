@@ -154,7 +154,6 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useMobileCore } from "../hooks/useMobileCore";
 import { useAuth } from "../lib/AuthContext";
 import { db } from "../lib/firebase";
-import { CHART_COLORS } from "../lib/chartColors";
 import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
 import {
   CalendarEventChip,
@@ -774,11 +773,7 @@ export function WorkItemsCenter({
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
   const navigate = useNavigate();
-  const { events: calendarEvents, accounts: calendarAccounts } = useCalendarEvents();
-  const calendarAccountColor = (accountId: string) => {
-    const index = Math.max(0, calendarAccounts.findIndex((row) => row.id === accountId));
-    return CHART_COLORS[index % CHART_COLORS.length] || "var(--accent)";
-  };
+  const { events: calendarEvents, accountColor: calendarAccountColor } = useCalendarEvents();
   const viewerId = user?.uid || "";
   const workspaceId = workspace?.id || "";
   const surface = itemViewSurface(activeProject?.id);

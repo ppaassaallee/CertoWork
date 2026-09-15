@@ -6,12 +6,12 @@ import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../../lib/firestore-errors";
 import { logHabit, deleteHabitLog } from "../../lib/habits";
-import { CHART_COLORS } from "../../lib/chartColors";
 import { useCalendarEvents } from "../../features/calendar/useCalendarEvents";
 import {
   CalendarEventChip,
   CalendarEventPopover,
   eventsForDay,
+  localDayKey,
 } from "../../features/calendar/CalendarEventChip";
 
 export function UnifiedCalendar() {
@@ -25,11 +25,7 @@ export function UnifiedCalendar() {
   const [habits, setHabits] = useState<any[]>([]);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [habitLogs, setHabitLogs] = useState<Record<string, any>>({});
-  const { events, accounts } = useCalendarEvents();
-  const accountColor = (accountId: string) => {
-    const index = Math.max(0, accounts.findIndex((row) => row.id === accountId));
-    return CHART_COLORS[index % CHART_COLORS.length] || "var(--accent)";
-  };
+  const { events, accountColor } = useCalendarEvents();
   
   useEffect(() => {
     if (!user || !workspace) return;
@@ -164,7 +160,7 @@ export function UnifiedCalendar() {
           <div className="grid grid-cols-1 md:grid-cols-7 gap-4 bg-gray-50/50 p-4 rounded-[2.5rem] border border-gray-100 min-h-[500px]">
              {days.map(day => {
                   const items = getItemsForDay(day);
-                  const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                  const isToday = localDayKey(day) === localDayKey(new Date());
                   
                   return (
                       <div key={day.toISOString()} className={`flex flex-col gap-2`}>
