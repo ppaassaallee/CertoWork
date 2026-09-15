@@ -27,6 +27,7 @@ export type DelivereeLens =
   | { kind: "feedback"; section: FeedbackSection; intent?: "bug" | "feature" }
   | { kind: "requests"; section: RequestsSection }
   | { kind: "notes" }
+  | { kind: "tables"; tableId?: string }
   | { kind: "more"; section: MoreSection };
 
 const MORE_SECTIONS: MoreSection[] = [
@@ -153,6 +154,13 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "notes" };
   }
 
+  if (path === "/tables" || path.startsWith("/tables/")) {
+    const tableId = path.startsWith("/tables/")
+      ? decodeURIComponent(path.slice("/tables/".length).split("/")[0] || "")
+      : undefined;
+    return { kind: "tables", tableId: tableId || undefined };
+  }
+
   if (
     path === "/requests" ||
     path === "/requests/inbox" ||
@@ -250,6 +258,9 @@ export function lensToPath(lens: DelivereeLens) {
     return "/requests";
   }
   if (lens.kind === "notes") return "/notes";
+  if (lens.kind === "tables") {
+    return lens.tableId ? `/tables/${encodeURIComponent(lens.tableId)}` : "/tables";
+  }
   if (lens.kind === "more") {
     if (lens.section === "workspace") return "/workspace";
     return `/more/${lens.section}`;
