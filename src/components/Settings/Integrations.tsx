@@ -157,7 +157,7 @@ export function Integrations() {
                   <li className="flex items-center gap-2 text-xs" key={calendar.id}>
                     <span
                       className="w-2.5 h-2.5 rounded-full"
-                      style={{ background: calendar.color || "#5B8DEF" }}
+                      style={{ background: calendar.color || "var(--accent)" }}
                     />
                     <span className="flex-1">{calendar.name}</span>
                     <label className="flex items-center gap-1">

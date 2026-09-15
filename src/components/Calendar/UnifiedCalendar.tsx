@@ -6,6 +6,7 @@ import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../../lib/firestore-errors";
 import { logHabit, deleteHabitLog } from "../../lib/habits";
+import { CHART_COLORS } from "../../lib/chartColors";
 import { useCalendarEvents } from "../../features/calendar/useCalendarEvents";
 import {
   CalendarEventChip,
@@ -26,9 +27,8 @@ export function UnifiedCalendar() {
   const [habitLogs, setHabitLogs] = useState<Record<string, any>>({});
   const { events, accounts } = useCalendarEvents();
   const accountColor = (accountId: string) => {
-    const colors = ["#5B8DEF", "#2F9E7F", "#C46B3A"];
     const index = Math.max(0, accounts.findIndex((row) => row.id === accountId));
-    return colors[index % colors.length];
+    return CHART_COLORS[index % CHART_COLORS.length] || "var(--accent)";
   };
   
   useEffect(() => {
