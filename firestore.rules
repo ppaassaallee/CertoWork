@@ -1532,5 +1532,68 @@ service cloud.firestore {
     match /calendar_tokens/{id} {
       allow read, write: if false;
     }
+
+    function canReadTable(data) {
+      return data.workspaceId is string
+        && isWorkspaceMember(data.workspaceId)
+        && (
+          data.createdBy == request.auth.uid
+          || !('visibility' in data)
+          || data.visibility != 'private'
+        );
+    }
+    function canWriteTable(data) {
+      return data.workspaceId is string
+        && isWorkspaceMember(data.workspaceId)
+        && (
+          data.createdBy == request.auth.uid
+          || (
+            ('visibility' in data)
+            && (data.visibility == 'project' || data.visibility == 'workspace')
+          )
+        );
+    }
+    match /tables/{id} {
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadTable(resource.data));
+      allow list: if isSignedIn() && canReadTable(resource.data);
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().createdBy == request.auth.uid
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow update, delete: if isSignedIn() && isValidId(id) && canWriteTable(resource.data);
+    }
+    function tableDoc(tableId) {
+      return get(/databases/$(database)/documents/tables/$(tableId)).data;
+    }
+    function canReadTableChild(data) {
+      return data.tableId is string
+        && data.workspaceId is string
+        && isWorkspaceMember(data.workspaceId)
+        && canReadTable(tableDoc(data.tableId));
+    }
+    function canWriteTableChild(data) {
+      return data.tableId is string
+        && data.workspaceId is string
+        && isWorkspaceMember(data.workspaceId)
+        && canWriteTable(tableDoc(data.tableId));
+    }
+    match /table_records/{id} {
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadTableChild(resource.data));
+      allow list: if isSignedIn() && canReadTableChild(resource.data);
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && canWriteTable(tableDoc(incoming().tableId));
+      allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
+    }
+    match /table_record_activity/{id} {
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadTableChild(resource.data));
+      allow list: if isSignedIn() && canReadTableChild(resource.data);
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && canWriteTable(tableDoc(incoming().tableId));
+      allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
+    }
   }
 }

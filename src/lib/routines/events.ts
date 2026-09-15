@@ -15,7 +15,10 @@ export type DomainEventType =
   | "item.due_soon"
   | "note.created"
   | "request.stale"
-  | "invoice.overdue";
+  | "invoice.overdue"
+  | "table.record_created"
+  | "table.status_changed"
+  | "table.date_reached";
 
 export type DomainEventPayload = {
   workspaceId: string;
