@@ -41,11 +41,24 @@ export function coerceValue(column: Column, raw: unknown): RecordValue | undefin
       if (typeof raw === "string") return asIsoDate(raw) ?? null;
       return undefined;
     }
-    case "status": {
+    case "status":
+    case "dropdown": {
       const id = String(raw);
       const allowed = (column.options || []).map((o) => o.id);
       if (!allowed.length) return id;
       return allowed.includes(id) ? id : undefined;
+    }
+    case "rating": {
+      const n =
+        typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+      if (!Number.isFinite(n)) return undefined;
+      return Math.max(0, Math.min(5, Math.round(n)));
+    }
+    case "progress": {
+      const n =
+        typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+      if (!Number.isFinite(n)) return undefined;
+      return Math.max(0, Math.min(100, Math.round(n)));
     }
     case "person":
       return String(raw);

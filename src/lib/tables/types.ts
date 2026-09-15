@@ -14,6 +14,7 @@ export type ColumnType =
   | "currency"
   | "date"
   | "status"
+  | "dropdown"
   | "person"
   | "tags"
   | "checkbox"
@@ -22,6 +23,8 @@ export type ColumnType =
   | "phone"
   | "file"
   | "relation"
+  | "rating"
+  | "progress"
   | "created_at"
   | "created_by"
   | "updated_at";

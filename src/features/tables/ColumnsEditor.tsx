@@ -16,6 +16,7 @@ const ADDABLE_TYPES: ColumnType[] = [
   "currency",
   "date",
   "status",
+  "dropdown",
   "person",
   "tags",
   "checkbox",
@@ -24,6 +25,8 @@ const ADDABLE_TYPES: ColumnType[] = [
   "phone",
   "file",
   "relation",
+  "rating",
+  "progress",
 ];
 
 function slugId(name: string) {
@@ -44,7 +47,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
   const [newType, setNewType] = useState<ColumnType>("text");
 
   const statusCandidates = useMemo(
-    () => columns.filter((c) => c.type === "status"),
+    () => columns.filter((c) => c.type === "status" || c.type === "dropdown"),
     [columns],
   );
   const personCandidates = useMemo(
@@ -68,7 +71,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
       id: slugId(name),
       name,
       type: newType,
-      ...(newType === "status"
+      ...(newType === "status" || newType === "dropdown"
         ? {
             options: [
               { id: "todo", label: t("tables.status.todo"), tone: "neutral" as const },
@@ -77,6 +80,8 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
             ],
           }
         : {}),
+      ...(newType === "rating" ? { width: 120 } : {}),
+      ...(newType === "progress" ? { width: 140 } : {}),
     };
     commit([...columns, col], keys);
     setNewName("");

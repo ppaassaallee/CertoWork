@@ -10,10 +10,16 @@ import {
   type CalendarConnectStep,
   consumeCalendarWizardPending,
 } from "../../lib/calendar/connectWizard";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { t } from "../../lib/i18n";
 import { DestructiveDialog } from "../ui/DestructiveDialog";
+import {
+  readNotifyOnAssignmentEmail,
+  readSlackWebhookUrl,
+  writeNotifyOnAssignmentEmail,
+  writeSlackWebhookUrl,
+} from "../../lib/itemUpdateChannels";
 
 function calendarConnectErrorMessage(payload: { error?: string; code?: string }, status: number): string {
   const code = String(payload.code || "");
@@ -47,6 +53,9 @@ export function Integrations() {
   const [connectNotice, setConnectNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<CalendarConnectStep>("provider");
+  const [slackWebhook, setSlackWebhook] = useState("");
+  const [notifyAssignmentEmail, setNotifyAssignmentEmail] = useState(true);
+  const [notifySaveNotice, setNotifySaveNotice] = useState("");
   const voiceAvailable =
     typeof window !== "undefined" &&
     !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -77,6 +86,48 @@ export function Integrations() {
       window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
     }
   }, []);
+
+  useEffect(() => {
+    if (!workspace?.id) return;
+    setSlackWebhook(readSlackWebhookUrl(workspace.id));
+    setNotifyAssignmentEmail(readNotifyOnAssignmentEmail(workspace.id));
+    void getDoc(doc(db, "workspace_settings", workspace.id)).then((snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as {
+        slackWebhookUrl?: string;
+        notifyOnAssignmentEmail?: boolean;
+      };
+      if (typeof data.slackWebhookUrl === "string" && data.slackWebhookUrl) {
+        setSlackWebhook(data.slackWebhookUrl);
+        writeSlackWebhookUrl(workspace.id, data.slackWebhookUrl);
+      }
+      if (typeof data.notifyOnAssignmentEmail === "boolean") {
+        setNotifyAssignmentEmail(data.notifyOnAssignmentEmail);
+        writeNotifyOnAssignmentEmail(workspace.id, data.notifyOnAssignmentEmail);
+      }
+    });
+  }, [workspace?.id]);
+
+  const saveNotifyChannels = async () => {
+    if (!workspace?.id) return;
+    writeSlackWebhookUrl(workspace.id, slackWebhook);
+    writeNotifyOnAssignmentEmail(workspace.id, notifyAssignmentEmail);
+    try {
+      await setDoc(
+        doc(db, "workspace_settings", workspace.id),
+        {
+          workspaceId: workspace.id,
+          slackWebhookUrl: slackWebhook.trim() || null,
+          notifyOnAssignmentEmail: notifyAssignmentEmail,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      setNotifySaveNotice("Saved notification channels.");
+    } catch {
+      setNotifySaveNotice("Saved locally. Workspace settings write failed.");
+    }
+  };
 
   const integrationsList = [
     {
@@ -304,6 +355,62 @@ export function Integrations() {
             </ul>
           </div>
         ))}
+      </section>
+
+      <section
+        className="bg-white rounded-2xl border border-gray-200 overflow-hidden"
+        data-testid="item-notify-integrations"
+      >
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-50 border border-gray-100">
+              <MessageSquare className="w-5 h-5 text-gray-600" />
+            </div>
+            <div>
+              <span className="font-medium text-gray-900 block">Item notifications</span>
+              <span className="text-xs text-gray-500 block">
+                Slack webhook and email when someone is assigned.
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-gray-700">Slack webhook URL</span>
+            <input
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              data-testid="slack-webhook-input"
+              onChange={(e) => setSlackWebhook(e.target.value)}
+              placeholder="https://hooks.slack.com/services/…"
+              type="url"
+              value={slackWebhook}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-800">
+            <input
+              checked={notifyAssignmentEmail}
+              data-testid="notify-assignment-email"
+              onChange={(e) => setNotifyAssignmentEmail(e.target.checked)}
+              type="checkbox"
+            />
+            Email notify on assignment
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              className="text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50"
+              data-testid="save-notify-channels"
+              onClick={() => void saveNotifyChannels()}
+              type="button"
+            >
+              Save
+            </button>
+            {notifySaveNotice ? (
+              <span className="text-xs text-gray-500" role="status">
+                {notifySaveNotice}
+              </span>
+            ) : null}
+          </div>
+        </div>
       </section>
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden divide-y divide-gray-100">

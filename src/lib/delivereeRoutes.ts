@@ -28,6 +28,8 @@ export type DelivereeLens =
   | { kind: "requests"; section: RequestsSection }
   | { kind: "notes" }
   | { kind: "tables"; tableId?: string }
+  | { kind: "dashboard" }
+  | { kind: "workload" }
   | { kind: "more"; section: MoreSection };
 
 const MORE_SECTIONS: MoreSection[] = [
@@ -154,6 +156,14 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "notes" };
   }
 
+  if (path === "/dashboard") {
+    return { kind: "dashboard" };
+  }
+
+  if (path === "/workload") {
+    return { kind: "workload" };
+  }
+
   if (path === "/tables" || path.startsWith("/tables/")) {
     const tableId = path.startsWith("/tables/")
       ? decodeURIComponent(path.slice("/tables/".length).split("/")[0] || "")
@@ -258,6 +268,8 @@ export function lensToPath(lens: DelivereeLens) {
     return "/requests";
   }
   if (lens.kind === "notes") return "/notes";
+  if (lens.kind === "dashboard") return "/dashboard";
+  if (lens.kind === "workload") return "/workload";
   if (lens.kind === "tables") {
     return lens.tableId ? `/tables/${encodeURIComponent(lens.tableId)}` : "/tables";
   }

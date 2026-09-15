@@ -4,3 +4,5 @@ export * from "./storage";
 export * from "./myWorkRecords";
 export * from "./templates";
 export * from "./compile";
+export * from "./filters";
+export * from "./tableForms";
