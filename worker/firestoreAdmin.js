@@ -230,6 +230,35 @@ export async function firestorePatchDocument(env, collection, docId, data) {
   return { ok: true, id: docId };
 }
 
+/** Create or merge fields (PATCH creates the doc when missing). */
+export async function firestoreUpsertDocument(env, collection, docId, data) {
+  return firestorePatchDocument(env, collection, docId, data);
+}
+
+export async function firestoreDeleteDocument(env, collection, docId) {
+  const serviceAccount = parseServiceAccount(env);
+  if (!serviceAccount) {
+    return { ok: false, reason: "FIREBASE_SERVICE_ACCOUNT not configured" };
+  }
+  const token = await googleAccessToken(serviceAccount);
+  const project = projectId(env);
+  const database = databaseId(env);
+  const path = `projects/${project}/databases/${encodeURIComponent(database)}/documents/${collection}/${encodeURIComponent(docId)}`;
+  const response = await fetch(`https://firestore.googleapis.com/v1/${path}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (response.status === 404) return { ok: true, id: docId, missing: true };
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    return {
+      ok: false,
+      reason: payload?.error?.message || `Firestore delete failed (${response.status})`,
+    };
+  }
+  return { ok: true, id: docId };
+}
+
 export function firestoreAdminConfigured(env = {}) {
   return Boolean(parseServiceAccount(env));
 }
