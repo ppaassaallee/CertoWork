@@ -47,6 +47,7 @@ import {
   Users,
   WandSparkles,
   X,
+  LayoutGrid,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -181,7 +182,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels } from "../lib/myWorkItems";
+import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -234,6 +235,17 @@ import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
+import { TablePage } from "../features/tables/TablePage";
+import { CreateTableWizard } from "../features/tables/CreateTableWizard";
+import {
+  TABLES,
+  TABLE_RECORDS,
+  canSeeTable,
+  createRecord,
+  buildMyWorkRecords,
+  type TableDoc,
+  type RecordDoc,
+} from "../lib/tables";
 import { NoteQuickCapture } from "../features/notes/NoteQuickCapture";
 import {
   createNote as createNotebookNote,
@@ -393,6 +405,7 @@ export type CenterView =
   | "conversation"
   | "items"
   | "notes"
+  | "tables"
   | "strategy"
   | "portfolio"
   | "project"
@@ -463,6 +476,8 @@ export function DelivereeWorkspace() {
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
+  const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
+  const [workspaceRecords, setWorkspaceRecords] = useState<RecordDoc[]>([]);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
@@ -513,6 +528,7 @@ export function DelivereeWorkspace() {
   );
   const [sidebarSections, setSidebarSections] = useState<{
     projects: boolean;
+    tables: boolean;
     favorites: boolean;
     recent: boolean;
     conversations: boolean;
@@ -520,6 +536,7 @@ export function DelivereeWorkspace() {
   }>(() => {
     const defaults = {
       projects: true,
+      tables: true,
       favorites: true,
       recent: true,
       conversations: true,
@@ -535,7 +552,7 @@ export function DelivereeWorkspace() {
     }
   });
   const toggleSidebarSection = (
-    key: "projects" | "favorites" | "recent" | "conversations" | "management",
+    key: "projects" | "tables" | "favorites" | "recent" | "conversations" | "management",
   ) => {
     setSidebarSections((current) => {
       const next = { ...current, [key]: !current[key] };
@@ -617,6 +634,8 @@ export function DelivereeWorkspace() {
   const centerView: CenterView =
     lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
       ? "notes"
+      : lens.kind === "tables"
+      ? "tables"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -647,6 +666,7 @@ export function DelivereeWorkspace() {
       if (projectId && lens.kind === "project") navigate(`/work/projects/${projectId}/notes`);
       else navigate("/notes");
     }
+    else if (next === "tables") navigate("/tables");
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -685,6 +705,7 @@ export function DelivereeWorkspace() {
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
+  const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
   const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
@@ -991,6 +1012,30 @@ export function DelivereeWorkspace() {
       makeQuery(
         "notebook_entries",
         (items) => setNotebookEntries(items as NotebookEntry[]),
+        false,
+        true,
+      ),
+      makeQuery(
+        TABLES,
+        (items) =>
+          setWorkspaceTables(
+            (items as TableDoc[]).map((row) => ({
+              ...row,
+              id: row.id,
+            })),
+          ),
+        false,
+        true,
+      ),
+      makeQuery(
+        TABLE_RECORDS,
+        (items) =>
+          setWorkspaceRecords(
+            (items as RecordDoc[]).map((row) => ({
+              ...row,
+              id: row.id,
+            })),
+          ),
         false,
         true,
       ),
@@ -1427,6 +1472,27 @@ export function DelivereeWorkspace() {
     () => sidebarProjectGroups(projects),
     [projects],
   );
+  const viewerProjectIds = useMemo(
+    () => projects.map((project) => String(project.id)),
+    [projects],
+  );
+  const visibleTables = useMemo(() => {
+    if (!user?.uid) return [];
+    return workspaceTables
+      .filter((table) => canSeeTable(table, user.uid, viewerProjectIds))
+      .sort((a, b) => {
+        const fav = Number(Boolean(b.favorite)) - Number(Boolean(a.favorite));
+        if (fav) return fav;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+  }, [user?.uid, viewerProjectIds, workspaceTables]);
+  const activeTable = useMemo(() => {
+    if (lens.kind !== "tables" || !lens.tableId) return null;
+    return visibleTables.find((table) => table.id === lens.tableId) || null;
+  }, [lens, visibleTables]);
+  const openCreateTableWizard = () => {
+    setCreateTableWizardOpen(true);
+  };
   const openTasks = useMemo(
     () => tasks.filter((task) => !isClosed(task.status)),
     [tasks],
@@ -1537,19 +1603,67 @@ export function DelivereeWorkspace() {
     () => todayTasks.filter((task) => isPersonalWorkItem(task, personalActor)),
     [personalActor, todayTasks],
   );
-  const myWorkTasks = useMemo(
-    () =>
-      filterMyWorkTasks(
-        tasks,
-        lens.kind === "my-work" ? lens.section : "assigned",
-        personalActor,
-        workspaceMembers,
-      ),
-    [lens, personalActor, tasks, workspaceMembers],
-  );
-  const todayMyWorkTasks = useMemo(
-    () => filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers),
-    [personalActor, tasks, workspaceMembers],
+  const myWorkTasks = useMemo(() => {
+    const section = lens.kind === "my-work" ? lens.section : "assigned";
+    const tasksOnly = filterMyWorkTasks(tasks, section, personalActor, workspaceMembers);
+    const recordSection =
+      section === "today"
+        ? "today"
+        : section === "this_week" || section === "week"
+          ? "this_week"
+          : "assigned";
+    const recordItems = buildMyWorkRecords({
+      tables: visibleTables,
+      records: workspaceRecords,
+      actor: personalActor,
+      memberIds: actorEquivalentMemberIds(personalActor, workspaceMembers),
+      section: recordSection as "today" | "this_week" | "assigned",
+    });
+    return [...tasksOnly, ...recordItems] as Array<Record<string, unknown>>;
+  }, [
+    lens,
+    personalActor,
+    tasks,
+    visibleTables,
+    workspaceMembers,
+    workspaceRecords,
+  ]);
+  const todayMyWorkTasks = useMemo(() => {
+    const tasksOnly = filterMyWorkTasks(tasks, "today", personalActor, workspaceMembers);
+    const recordItems = buildMyWorkRecords({
+      tables: visibleTables,
+      records: workspaceRecords,
+      actor: personalActor,
+      memberIds: actorEquivalentMemberIds(personalActor, workspaceMembers),
+      section: "today",
+    });
+    return [...tasksOnly, ...recordItems] as Array<Record<string, unknown>>;
+  }, [personalActor, tasks, visibleTables, workspaceMembers, workspaceRecords]);
+  const openWorkOrRecord = useCallback(
+    (id: string | null) => {
+      if (!id) {
+        setSelectedWorkItemId(null);
+        return;
+      }
+      const recordHit =
+        myWorkTasks.find(
+          (row: any) => String(row.id) === id && row.entityKind === "record",
+        ) ||
+        workspaceRecords.find((row) => row.id === id);
+      if (recordHit) {
+        const tableId =
+          (recordHit as any).tableId ||
+          (recordHit as RecordDoc).tableId;
+        if (tableId) {
+          navigate(
+            `/tables/${encodeURIComponent(String(tableId))}?record=${encodeURIComponent(id)}`,
+          );
+          return;
+        }
+      }
+      setSelectedWorkItemId(id);
+    },
+    [myWorkTasks, navigate, workspaceRecords],
   );
   const dayPlanScoreItems = useMemo(
     () =>
@@ -5997,6 +6111,35 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate(`/rutinas/${routine.id}`),
       });
     }
+    for (const table of visibleTables) {
+      items.push({
+        id: `table-${table.id}`,
+        label: table.name,
+        group: "Tables",
+        mode: "docs",
+        keywords: `table tabla ${table.name}`,
+        icon: <LayoutGrid size={14} />,
+        hint: table.icon || undefined,
+        onSelect: () => navigate(`/tables/${encodeURIComponent(table.id)}`),
+      });
+      for (const record of workspaceRecords.filter((row) => row.tableId === table.id).slice(0, 40)) {
+        const title =
+          String(record.values[table.keyColumns.title] ?? "").trim() || table.name;
+        items.push({
+          id: `record-${record.id}`,
+          label: title,
+          group: "Records",
+          mode: "items",
+          keywords: `# ${title} ${table.name} record registro`,
+          icon: <LayoutGrid size={14} />,
+          hint: table.name,
+          onSelect: () =>
+            navigate(
+              `/tables/${encodeURIComponent(table.id)}?record=${encodeURIComponent(record.id)}`,
+            ),
+        });
+      }
+    }
     if (!mobileCore) return items;
     const mobileIds = new Set([
       "nav-home",
@@ -6025,10 +6168,12 @@ export function DelivereeWorkspace() {
     openChiefOfStaff,
     openProjectRecord,
     startVoiceCall,
+    visibleTables,
+    workspaceRecords,
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -6185,8 +6330,30 @@ export function DelivereeWorkspace() {
         members={workspaceMembers}
         onClose={() => setQuickCaptureOpen(false)}
         onCreate={createFromQuickCapture}
+        onCreateRecord={async ({ tableId, title }) => {
+          if (!user || !workspace) return;
+          const table = visibleTables.find((row) => row.id === tableId);
+          if (!table) return;
+          const recordId = await createRecord({
+            tableId,
+            workspaceId: workspace.id,
+            values: { [table.keyColumns.title]: title },
+            actorId: user.uid,
+          });
+          setNotice(
+            getLocale() === "es" ? "Registro creado." : "Record created.",
+          );
+          navigate(
+            `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+          );
+        }}
         open={quickCaptureOpen}
         projects={projects}
+        tables={visibleTables.map((table) => ({
+          id: table.id,
+          name: table.name,
+          icon: table.icon,
+        }))}
         tags={categories}
         tasks={tasks}
       />
@@ -6558,6 +6725,71 @@ export function DelivereeWorkspace() {
                 </button>
               )}
             </div>
+            )}
+          </div>
+
+          <div className="do-sidebar-section" data-testid="sidebar-tables">
+            <div className="do-section-head">
+              <button
+                aria-expanded={sidebarSections.tables}
+                className="do-section-toggle"
+                onClick={() => toggleSidebarSection("tables")}
+                type="button"
+              >
+                <ChevronDown
+                  className={sidebarSections.tables ? "" : "is-collapsed"}
+                  size={13}
+                />
+                <span>{t("tables.sidebar")}</span>
+              </button>
+              <button
+                aria-label={t("tables.new")}
+                onClick={() => openCreateTableWizard()}
+                type="button"
+              >
+                + {t("tables.newShort")}
+              </button>
+            </div>
+            {sidebarSections.tables && (
+              <div className="do-project-list">
+                {visibleTables.length === 0 ? (
+                  <button
+                    className="do-empty-link"
+                    onClick={() => openCreateTableWizard()}
+                    type="button"
+                  >
+                    {t("tables.empty.tables")}
+                  </button>
+                ) : (
+                  visibleTables.map((table) => (
+                    <div
+                      className={`do-project-row ${
+                        lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
+                      }`}
+                      key={table.id}
+                    >
+                      <button
+                        className="do-project-context"
+                        data-testid={`open-table-${table.id}`}
+                        onClick={() => {
+                          navigate(`/tables/${encodeURIComponent(table.id)}`);
+                          setSidebarOpen(false);
+                        }}
+                        title={table.name}
+                        type="button"
+                      >
+                        <span
+                          aria-hidden
+                          className="cw-tables-sidebar-swatch"
+                          style={{ background: table.color || "var(--accent)" }}
+                        />
+                        <span className="do-project-title">{table.name}</span>
+                        {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
 
@@ -7119,6 +7351,11 @@ export function DelivereeWorkspace() {
                       replace: true,
                     });
                   }}
+                  onOpenRecord={(tableId, recordId) => {
+                    navigate(
+                      `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                    );
+                  }}
                   onOpenOdysseus={(opts) => {
                     void openOdysseusPanel({
                       kind: "day",
@@ -7141,9 +7378,11 @@ export function DelivereeWorkspace() {
                   onReviewFriday={() => navigate("/my-work/reviews")}
                   onStartRitual={(session) => void openRitualSession(session)}
                   projects={projects}
+                  records={workspaceRecords}
                   reviewItems={reviewItems}
                   risks={risks}
                   routineSessions={ritualSessions}
+                  tables={visibleTables}
                   tasks={tasks}
                   userName={
                     user?.displayName ||
@@ -7219,9 +7458,17 @@ export function DelivereeWorkspace() {
                   tasks={tasks}
                   workspaceMembers={workspaceMembers}
                   notebookEntries={notebookEntries}
+                  workspaceTables={visibleTables}
+                  workspaceRecords={workspaceRecords}
                   onOpenNote={(noteId) => {
                     setSelectedWorkItemId(null);
                     navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                  }}
+                  onOpenRecord={(tableId, recordId) => {
+                    setSelectedWorkItemId(null);
+                    navigate(
+                      `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                    );
                   }}
                 />,
                 document.body,
@@ -7700,7 +7947,7 @@ export function DelivereeWorkspace() {
                 <MyWorkTodayPanel
                   keyItemId={dayPlan.plan?.keyItemId || null}
                   locale={dayLocale}
-                  onSelectItem={setSelectedWorkItemId}
+                  onSelectItem={openWorkOrRecord}
                   onSetKey={(itemId) => void dayPlan.setKey(itemId)}
                   onUpdateTask={updateProjectTask}
                   tasks={myWorkTasks}
@@ -7742,7 +7989,7 @@ export function DelivereeWorkspace() {
               navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
             }}
             onOpenProjectConsole={openProjectRecord}
-            onSelectItem={setSelectedWorkItemId}
+            onSelectItem={openWorkOrRecord}
             onCreateControlledOption={createControlledOption}
             onUpdateSprint={updateSprint}
             onUpdateTask={updateProjectTask}
@@ -7756,6 +8003,14 @@ export function DelivereeWorkspace() {
             onOpenNote={(noteId) => {
               setSelectedWorkItemId(null);
               navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+            }}
+            workspaceTables={visibleTables}
+            workspaceRecords={workspaceRecords}
+            onOpenRecord={(tableId, recordId) => {
+              setSelectedWorkItemId(null);
+              navigate(
+                `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+              );
             }}
             onInviteAssigneeEmail={
               canManageMembers
@@ -8052,7 +8307,7 @@ export function DelivereeWorkspace() {
               <span>Choose a project from the portfolio.</span>
             </div>
           )
-        ) : (
+        ) : centerView === "notes" ? (
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
             entries={notebookEntries}
@@ -8075,10 +8330,81 @@ export function DelivereeWorkspace() {
             }}
             onOpenProject={openProjectRecord}
             projects={projects}
+            records={workspaceRecords.map((record) => {
+              const table = visibleTables.find((row) => row.id === record.tableId);
+              return {
+                id: record.id,
+                title: table
+                  ? String(record.values[table.keyColumns.title] ?? "").trim() || table.name
+                  : record.id,
+                tableId: record.tableId,
+                tableName: table?.name || "",
+                tableIcon: table?.icon,
+              };
+            })}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
           />
-        )}
+        ) : centerView === "tables" ? (
+          activeTable ? (
+            <TablePage
+              members={workspaceMembers.map((member) => ({
+                id: String(member.userId || member.id || ""),
+                name:
+                  memberPublicLabel(member) ||
+                  String(member.displayName || member.email || member.userId || ""),
+                email: String(member.email || ""),
+              }))}
+              onOpenAutomations={() => navigate("/rutinas")}
+              onOpenOdysseus={(opts) => {
+                void openOdysseusPanel({
+                  kind: opts.kind,
+                  entityId: opts.entityId,
+                  label: opts.label,
+                  ...(opts.kind === "record"
+                    ? { tableId: activeTable.id }
+                    : {}),
+                });
+                if (opts.prompt) {
+                  window.dispatchEvent(
+                    new CustomEvent("certo:odysseus-seed-prompt", {
+                      detail: { prompt: opts.prompt },
+                    }),
+                  );
+                }
+              }}
+              onOpenRecord={(id) => {
+                const params = new URLSearchParams(location.search);
+                if (id) params.set("record", id);
+                else params.delete("record");
+                const qs = params.toString();
+                navigate(
+                  `/tables/${encodeURIComponent(activeTable.id)}${qs ? `?${qs}` : ""}`,
+                  { replace: true },
+                );
+              }}
+              onTableChange={(next) => {
+                setWorkspaceTables((current) =>
+                  current.map((row) => (row.id === next.id ? next : row)),
+                );
+              }}
+              recordId={new URLSearchParams(location.search).get("record")}
+              table={activeTable}
+            />
+          ) : (
+            <div className="cw-tables-empty-page" data-testid="tables-empty">
+              <strong>{t("tables.sidebar")}</strong>
+              <p>{t("tables.empty.tables")}</p>
+              <button
+                className="cw-tables-btn-primary"
+                onClick={() => openCreateTableWizard()}
+                type="button"
+              >
+                + {t("tables.new")}
+              </button>
+            </div>
+          )
+        ) : null}
       </main>
 
       <nav aria-label="Mobile core" className="do-mobile-dock">
@@ -9564,6 +9890,15 @@ export function DelivereeWorkspace() {
         isOpen={magicProjectOpen}
         onClose={() => setMagicProjectOpen(false)}
         onCreate={createMagicProject}
+      />
+      <CreateTableWizard
+        open={createTableWizardOpen}
+        onClose={() => setCreateTableWizardOpen(false)}
+        onCreated={(tableId) => {
+          setCreateTableWizardOpen(false);
+          navigate(`/tables/${encodeURIComponent(tableId)}`);
+          setSidebarOpen(false);
+        }}
       />
 
       {needsAlias && (

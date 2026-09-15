@@ -61,6 +61,13 @@ type NotesWorkspaceProps = {
     userId?: string;
   }>;
   initialNoteId?: string | null;
+  records?: Array<{
+    id: string;
+    title?: string;
+    tableId: string;
+    tableName: string;
+    tableIcon?: string;
+  }>;
 };
 
 function timestamp(value: any) {
@@ -84,6 +91,7 @@ export function NotesWorkspace({
   tasks,
   workspaceMembers = [],
   initialNoteId,
+  records = [],
 }: NotesWorkspaceProps) {
   const { user, workspace } = useAuth();
   const locale = getLocale() === "es" ? "es" : "en";
@@ -103,12 +111,15 @@ export function NotesWorkspace({
   const [proposedItems, setProposedItems] = useState<ProposedNoteItem[]>([]);
   const [peekEntity, setPeekEntity] = useState<{
     id: string;
-    kind: "task" | "project" | "note" | "person" | "doc";
+    kind: "task" | "project" | "note" | "person" | "doc" | "record";
     title: string;
     status?: string | null;
     owner?: string | null;
     dueDate?: string | null;
     excerpt?: string | null;
+    tableName?: string | null;
+    tableIcon?: string | null;
+    previewFields?: Array<{ label: string; value: string }>;
   } | null>(null);
 
   const visibleEntries = useMemo(() => activeEntries(entries).map(withDefaults), [entries]);
@@ -490,6 +501,7 @@ export function NotesWorkspace({
                   projectTitle: projects.find((p) => p.id === task.projectId)?.title,
                   kind: String(task.workItemType || task.itemType || "task"),
                 }))}
+                records={records}
                 noteId={selectedNote.id}
                 onChange={(content) => setEditor((cur) => ({ ...cur, content }))}
                 onLinkTask={(taskId) => {
@@ -499,6 +511,15 @@ export function NotesWorkspace({
                     userId: user.uid,
                     noteId: selectedNote.id,
                     target: { type: "task", id: taskId },
+                  });
+                }}
+                onLinkRecord={(recordId) => {
+                  if (!user || !workspace) return;
+                  void linkNote({
+                    workspaceId: workspace.id,
+                    userId: user.uid,
+                    noteId: selectedNote.id,
+                    target: { type: "record", id: recordId },
                   });
                 }}
                 onMentionPerson={(person) => {

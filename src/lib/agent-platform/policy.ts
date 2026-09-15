@@ -14,6 +14,13 @@ const DEFAULTS: Record<string, PolicyDecision> = {
   update_task: "ask",
   update_project: "ask",
   create_project: "ask",
+  /** Table automations — low risk (maps to draft in riskForActionType). */
+  create_record: "ask",
+  update_record_field: "ask",
+  create_note_from_template: "ask",
+  link_entities: "ask",
+  /** Medium risk. */
+  create_ticket: "ask",
   outbox_communication: "ask",
   delete: "ask",
   kill_or_archive: "ask",
@@ -38,6 +45,16 @@ export function decideActionPolicy(
 }
 
 export function riskForActionType(actionType: string): AgentActionRisk {
+  // Explicit table action risk levels: low → draft, medium → internal_reversible.
+  if (
+    ["create_record", "update_record_field", "create_note_from_template", "link_entities"].includes(
+      actionType,
+    )
+  ) {
+    return "draft"; // low
+  }
+  if (actionType === "create_ticket") return "internal_reversible"; // medium
+
   const decision = decideActionPolicy(actionType);
   if (decision === "deny") return "privileged";
   if (

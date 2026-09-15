@@ -15,6 +15,7 @@ const GATHER_LABELS: Record<PrepareSpec["gather"][number], string> = {
   calendar_load: "carga de calendario",
   last_alignment: "última alineación",
   day_summary: "resumen del día",
+  record_context: "registro de tabla",
 };
 
 function prepareDetail(gather: PrepareSpec["gather"]) {

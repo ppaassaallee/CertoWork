@@ -50,6 +50,7 @@ export const ITEM_MODAL_COPY = {
   subtasks: { en: "Sub Task", es: "Sub Task" },
   attachments: { en: "Attachments", es: "Adjuntos" },
   notes: { en: "Notes", es: "Notas" },
+  records: { en: "Records", es: "Registros" },
   comments: { en: "Comments", es: "Comentarios" },
   openCollab: { en: "Open Collab", es: "Abrir Collab" },
   commentPlaceholder: {

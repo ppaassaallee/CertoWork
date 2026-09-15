@@ -14,6 +14,11 @@ import {
   type MyWorkActor,
 } from "../../lib/myWorkItems";
 import {
+  buildMyWorkRecords,
+  type RecordDoc,
+  type TableDoc,
+} from "../../lib/tables";
+import {
   projectHealth,
   taskWorkLane,
   type ProjectHealth,
@@ -31,6 +36,9 @@ export type HomeItemRow = {
   workItemType: string;
   priority: string | null;
   ageLabel?: string;
+  entityKind?: "task" | "record";
+  tableId?: string | null;
+  tableIcon?: string | null;
 };
 
 export type HomeActionRow = {
@@ -530,6 +538,8 @@ export function buildHomeCockpitData(input: {
     privacy?: string;
     accountId?: string;
   }>;
+  tables?: TableDoc[];
+  records?: RecordDoc[];
 }): HomeCockpitModel {
   const locale = input.locale || getLocale();
   const now = input.now || new Date();
@@ -550,38 +560,63 @@ export function buildHomeCockpitData(input: {
 
   const toRow = (task: any): HomeItemRow => {
     const dueIso = asIsoDay(task.dueDate || task.targetDate);
+    const isRecord = task.entityKind === "record";
     return {
       id: String(task.id),
       title: titleOf(task),
       projectId: task.projectId ? String(task.projectId) : null,
-      projectTitle: titleOf(projectById.get(String(task.projectId || "")) || {}),
+      projectTitle: isRecord
+        ? String(task.tableName || task.projectTitle || "")
+        : titleOf(projectById.get(String(task.projectId || "")) || {}),
       status: String(task.status || "open"),
       dueIso,
       workItemType: String(task.workItemType || task.itemType || task.type || "task"),
       priority: task.priority != null ? String(task.priority) : null,
       ageLabel: dueAgeLabel(dueIso, todayIso, locale),
+      entityKind: isRecord ? "record" : "task",
+      tableId: isRecord ? String(task.tableId || "") : null,
+      tableIcon: isRecord ? String(task.tableIcon || "▦") : null,
     };
   };
 
-  const todayItems = openMine
-    .filter((task) => asIsoDay(task.dueDate || task.targetDate) === todayIso)
-    .map(toRow);
-  const overdueItems = openMine
-    .filter((task) => {
+  const ownedRecords = buildMyWorkRecords({
+    tables: input.tables || [],
+    records: input.records || [],
+    actor: input.actor,
+    section: "all",
+    now,
+  });
+
+  const todayItems = [
+    ...openMine.filter((task) => asIsoDay(task.dueDate || task.targetDate) === todayIso),
+    ...ownedRecords.filter((row) => asIsoDay(row.dueDate) === todayIso),
+  ].map(toRow);
+  const overdueItems = [
+    ...openMine.filter((task) => {
       const due = asIsoDay(task.dueDate || task.targetDate);
       return due && due < todayIso;
-    })
+    }),
+    ...ownedRecords.filter((row) => {
+      const due = asIsoDay(row.dueDate);
+      return due && due < todayIso;
+    }),
+  ]
     .map(toRow)
     .sort((a, b) => String(a.dueIso).localeCompare(String(b.dueIso)));
-  const weekItems = openMine
-    .filter((task) => {
+  const weekItems = [
+    ...openMine.filter((task) => {
       const due = asIsoDay(task.dueDate || task.targetDate);
       return due && due >= todayIso && due < weekEndIso;
-    })
-    .map(toRow);
-  const tomorrowItems = openMine
-    .filter((task) => asIsoDay(task.dueDate || task.targetDate) === tomorrowIso)
-    .map(toRow);
+    }),
+    ...ownedRecords.filter((row) => {
+      const due = asIsoDay(row.dueDate);
+      return due && due >= todayIso && due < weekEndIso;
+    }),
+  ].map(toRow);
+  const tomorrowItems = [
+    ...openMine.filter((task) => asIsoDay(task.dueDate || task.targetDate) === tomorrowIso),
+    ...ownedRecords.filter((row) => asIsoDay(row.dueDate) === tomorrowIso),
+  ].map(toRow);
 
   const blockedMine = openMine
     .filter((task) => String(task.status || "").toLowerCase() === "blocked")
@@ -823,9 +858,10 @@ export function buildHomeCockpitData(input: {
   const next7Days: HomeWeekDay[] = Array.from({ length: 7 }, (_, index) => {
     const day = addDays(startOfDay(now), index);
     const iso = day.toISOString().slice(0, 10);
-    const items = openMine
-      .filter((task) => asIsoDay(task.dueDate || task.targetDate) === iso)
-      .map(toRow);
+    const items = [
+      ...openMine.filter((task) => asIsoDay(task.dueDate || task.targetDate) === iso),
+      ...ownedRecords.filter((row) => asIsoDay(row.dueDate) === iso),
+    ].map(toRow);
     const dayRoutines = routines
       .filter((routine) => {
         const runDay = asIsoDay(routine.nextRunAt);

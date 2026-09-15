@@ -382,6 +382,22 @@ test("magic project extraction rejects anonymous requests and asks for JSON stru
   assert.equal(response.status, 401);
 });
 
+test("tables compile rejects anonymous requests", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/tables/compile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userId: "user-1",
+        workspaceId: "workspace-1",
+        phrase: "proveedores con nombre, estado, responsable, renovación y monto",
+      }),
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
 test("project conversations use delivery-team behavior instead of Odysseus lecturing", () => {
   const instructions = assistantInstructions(
     {
