@@ -15,6 +15,7 @@ export interface PlatformCapabilities {
   firebase: CapabilityInfo;
   hubspot: CapabilityInfo;
   googleDrive: CapabilityInfo;
+  googleCalendar?: CapabilityInfo & { tokenKey?: boolean };
   oneDrive?: CapabilityInfo;
   email?: CapabilityInfo & { provider?: string };
 }
