@@ -228,6 +228,12 @@ import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
 import { ProjectWizardSkill } from "./ProjectWizardSkill";
 import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
+import { NoteQuickCapture } from "../features/notes/NoteQuickCapture";
+import {
+  createNote as createNotebookNote,
+  ensurePersonalNotebook,
+  linkNote,
+} from "../lib/notes";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
 import { useControlledListsActions } from "../hooks/useControlledListsActions";
@@ -533,6 +539,7 @@ export function DelivereeWorkspace() {
   };
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [noteQuickCaptureOpen, setNoteQuickCaptureOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1825,6 +1832,10 @@ export function DelivereeWorkspace() {
         event.preventDefault();
         setCommandPaletteOpen(true);
       }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setNoteQuickCaptureOpen(true);
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "j") {
         event.preventDefault();
         void toggleOdysseusPanel();
@@ -1850,6 +1861,11 @@ export function DelivereeWorkspace() {
         if (quickCaptureOpen) {
           event.preventDefault();
           setQuickCaptureOpen(false);
+          return;
+        }
+        if (noteQuickCaptureOpen) {
+          event.preventDefault();
+          setNoteQuickCaptureOpen(false);
           return;
         }
         if (odysseusPanelOpen) {
@@ -1888,6 +1904,7 @@ export function DelivereeWorkspace() {
     odysseusPanelOpen,
     panel,
     quickCaptureOpen,
+    noteQuickCaptureOpen,
     sidebarOpen,
     toggleOdysseusPanel,
   ]);
@@ -6064,6 +6081,48 @@ export function DelivereeWorkspace() {
         tags={categories}
         tasks={tasks}
       />
+      <NoteQuickCapture
+        linkLabel={
+          selectedWorkItem
+            ? entityTitle(selectedWorkItem)
+            : activeProject
+              ? entityTitle(activeProject)
+              : null
+        }
+        locale={getLocale() === "es" ? "es" : "en"}
+        onClose={() => setNoteQuickCaptureOpen(false)}
+        onSave={async ({ title, body, link }) => {
+          if (!user || !workspace) return;
+          const personal = await ensurePersonalNotebook(user.uid, workspace.id);
+          const noteId = await createNotebookNote({
+            userId: user.uid,
+            workspaceId: workspace.id,
+            notebookId: personal.notebookId,
+            sectionId: personal.inboxId,
+            title: title || undefined,
+            contentMarkdown: body,
+            noteType: "note",
+            projectId: activeProject?.id || null,
+          });
+          if (link && selectedWorkItem) {
+            await linkNote({
+              workspaceId: workspace.id,
+              userId: user.uid,
+              noteId,
+              target: { type: "task", id: String(selectedWorkItem.id) },
+            });
+          } else if (link && activeProject) {
+            await linkNote({
+              workspaceId: workspace.id,
+              userId: user.uid,
+              noteId,
+              target: { type: "project", id: String(activeProject.id) },
+            });
+          }
+          setNotice(getLocale() === "es" ? "Nota guardada en Inbox" : "Note saved to Inbox");
+        }}
+        open={noteQuickCaptureOpen}
+      />
       <button
         aria-label="Close navigation"
         className={`do-scrim ${sidebarOpen || panel ? "is-open" : ""}`}
@@ -7852,6 +7911,17 @@ export function DelivereeWorkspace() {
             onAsk={(prompt) => {
               setComposer(prompt);
               goCenterView("conversation");
+            }}
+            onCreateTask={async ({ title, workItemType, projectId }) => {
+              const id = await addProjectTask(projectId || "", title, "backlog", {
+                workItemType,
+                itemType: workItemType,
+                type: workItemType,
+              });
+              return id;
+            }}
+            onOpenOdysseus={(scope) => {
+              void openOdysseusPanel(scope);
             }}
             onOpenProject={openProjectRecord}
             projects={projects}
