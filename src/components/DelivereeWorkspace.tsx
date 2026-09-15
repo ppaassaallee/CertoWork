@@ -1025,7 +1025,7 @@ export function DelivereeWorkspace() {
             })),
           ),
         false,
-        true,
+        false,
       ),
       makeQuery(
         TABLE_RECORDS,
@@ -9894,9 +9894,14 @@ export function DelivereeWorkspace() {
       <CreateTableWizard
         open={createTableWizardOpen}
         onClose={() => setCreateTableWizardOpen(false)}
-        onCreated={(tableId) => {
+        onCreated={(table) => {
+          setWorkspaceTables((current) =>
+            current.some((row) => row.id === table.id)
+              ? current
+              : [table, ...current],
+          );
           setCreateTableWizardOpen(false);
-          navigate(`/tables/${encodeURIComponent(tableId)}`);
+          navigate(`/tables/${encodeURIComponent(table.id)}`);
           setSidebarOpen(false);
         }}
       />

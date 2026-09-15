@@ -46,6 +46,9 @@ test("each template has columns, keyColumns, status tones, and one automation", 
     assert.ok(tpl.suggestedAutomation.sentenceEs);
     assert.ok(tpl.suggestedAutomation.sentenceEn);
     assert.ok(tpl.suggestedAutomation.trigger.kind);
+    assert.ok(tpl.sampleRows?.length >= 2, `${tpl.id} needs sampleRows`);
+    assert.ok(tpl.iconName, `${tpl.id} needs iconName`);
+    assert.ok(tpl.autoHintEs && tpl.autoHintEn, `${tpl.id} needs auto hints`);
   }
 });
 
