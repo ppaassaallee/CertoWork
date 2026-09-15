@@ -1092,12 +1092,36 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
       allow update: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid && incoming().userId == request.auth.uid;
     }
+    function canReadNotebookEntry(data) {
+      return data.userId == request.auth.uid
+        || (
+          data.workspaceId is string
+          && isWorkspaceMember(data.workspaceId)
+          && ('visibility' in data)
+          && data.visibility != 'private'
+        );
+    }
+    function canWriteNotebookEntry(data) {
+      return data.userId == request.auth.uid
+        || (
+          data.workspaceId is string
+          && isWorkspaceMember(data.workspaceId)
+          && ('visibility' in data)
+          && (data.visibility == 'project' || data.visibility == 'workspace')
+        );
+    }
     match /notebook_entries/{id} {
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid);
-      allow delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid && incoming().userId == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadNotebookEntry(resource.data));
+      allow list: if isSignedIn() && canReadNotebookEntry(resource.data);
+      allow delete: if isSignedIn() && isValidId(id) && canWriteNotebookEntry(resource.data);
+      allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid
+        && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow update: if isSignedIn() && isValidId(id) && canWriteNotebookEntry(resource.data)
+        && (
+          resource.data.userId == request.auth.uid
+            ? incoming().userId == request.auth.uid
+            : incoming().workspaceId == resource.data.workspaceId
+        );
     }
     match /notebook_handwriting_assets/{id} {
       allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || id.split('_')[0] == request.auth.uid);

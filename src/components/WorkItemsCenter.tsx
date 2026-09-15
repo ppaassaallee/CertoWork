@@ -21,6 +21,7 @@ import {
   Compass,
   CornerDownRight,
   Eye,
+  FileText,
   Flag,
   Folder,
   Gem,
@@ -224,6 +225,8 @@ type Props = {
   onTimelineModeChange?: (active: boolean) => void;
   /** Fired when the user enters/exits Gantt focus (fullscreen) mode. */
   onGanttFocusChange?: (focused: boolean) => void;
+  notebookEntries?: any[];
+  onOpenNote?: (noteId: string) => void;
 };
 
 const workTypes: WorkItemKind[] = [
@@ -765,6 +768,8 @@ export function WorkItemsCenter({
   onNotionSortOpenChange,
   onTimelineModeChange,
   onGanttFocusChange,
+  notebookEntries = [],
+  onOpenNote,
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
@@ -2019,6 +2024,18 @@ export function WorkItemsCenter({
 
   const renderAttributeIcons = (item: any) => (
     <div className="do-item-attrs" data-testid="item-attr-icons">
+      {Array.isArray(item?.linkedDocumentIds) && item.linkedDocumentIds.length > 0 ? (
+        <div className="do-item-attr is-on" key="notes" title="Linked notes">
+          <span
+            aria-hidden
+            className="do-item-attr-btn"
+            data-testid="item-attr-notes"
+            style={{ color: "var(--text-muted)", pointerEvents: "none" }}
+          >
+            <FileText size={12} />
+          </span>
+        </div>
+      ) : null}
       {(() => {
         const comments = Array.isArray(item?.comments) ? item.comments : [];
         const mentioned = itemMentionsViewer(item, viewerAliases);
@@ -4449,6 +4466,8 @@ export function WorkItemsCenter({
             tags={tags}
             tasks={tasks}
             workspaceMembers={workspaceMembers}
+            notebookEntries={notebookEntries}
+            onOpenNote={onOpenNote}
           />,
           document.body,
         )}
