@@ -50,6 +50,7 @@ export type PrepareSpec = {
     | "calendar_load"
     | "last_alignment"
     | "day_summary"
+    | "record_context"
   >;
 };
 

@@ -25,7 +25,8 @@ export type NoteLinkTarget =
   | { type: "task"; id: string }
   | { type: "project"; id: string }
   | { type: "person"; id: string }
-  | { type: "note"; id: string };
+  | { type: "note"; id: string }
+  | { type: "record"; id: string };
 
 export const NOTE_LINK_RELATION = "note_reference";
 

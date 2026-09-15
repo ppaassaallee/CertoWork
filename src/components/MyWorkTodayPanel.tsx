@@ -1,4 +1,4 @@
-import { Calendar, Check, Circle, FileText, Star, Zap } from "./ui/Icon";
+import { Calendar, Check, Circle, FileText, LayoutGrid, Star, Zap } from "./ui/Icon";
 import { todayPlanGroups } from "../lib/myWorkItems";
 import "../features/dayplan/dayplan.css";
 
@@ -8,6 +8,10 @@ function titleOf(item: Record<string, unknown>) {
 
 function isDone(item: Record<string, unknown>) {
   return ["done", "completed", "closed"].includes(String(item?.status || "").toLowerCase());
+}
+
+function isRecord(item: Record<string, unknown>) {
+  return item?.entityKind === "record" || item?.workItemType === "record";
 }
 
 export function MyWorkTodayPanel({
@@ -66,20 +70,45 @@ export function MyWorkTodayPanel({
                   const linked = Array.isArray(item.linkedDocumentIds)
                     ? item.linkedDocumentIds.length
                     : 0;
+                  const record = isRecord(item);
                   return (
                     <li className={done ? "is-done" : ""} key={id}>
-                      <button
-                        aria-label={`${done ? "Reopen" : "Mark done"} ${titleOf(item)}`}
-                        className={`do-items-check ${done ? "is-done" : ""}`}
-                        onClick={() =>
-                          onUpdateTask(id, { status: done ? "backlog" : "done" })
-                        }
-                        type="button"
-                      >
-                        {done ? <Check size={12} /> : <Circle size={12} />}
-                      </button>
+                      {record ? (
+                        <span className="do-items-check" aria-hidden>
+                          <LayoutGrid size={12} />
+                        </span>
+                      ) : (
+                        <button
+                          aria-label={`${done ? "Reopen" : "Mark done"} ${titleOf(item)}`}
+                          className={`do-items-check ${done ? "is-done" : ""}`}
+                          onClick={() =>
+                            onUpdateTask(id, { status: done ? "backlog" : "done" })
+                          }
+                          type="button"
+                        >
+                          {done ? <Check size={12} /> : <Circle size={12} />}
+                        </button>
+                      )}
                       <button onClick={() => onSelectItem(id)} type="button">
-                        {titleOf(item)}
+                        {record ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <LayoutGrid size={11} />
+                            {titleOf(item)}
+                            {item.tableName ? (
+                              <em
+                                style={{
+                                  color: "var(--text-muted)",
+                                  fontStyle: "normal",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {String(item.tableName)}
+                              </em>
+                            ) : null}
+                          </span>
+                        ) : (
+                          titleOf(item)
+                        )}
                       </button>
                       {linked > 0 ? (
                         <FileText
@@ -88,7 +117,7 @@ export function MyWorkTodayPanel({
                           style={{ color: "var(--text-muted)", marginLeft: 4 }}
                         />
                       ) : null}
-                      {onSetKey ? (
+                      {onSetKey && !record ? (
                         <button
                           aria-label={
                             isKey

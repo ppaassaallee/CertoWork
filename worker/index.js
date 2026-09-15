@@ -37,6 +37,11 @@ import {
   firestoreRunQuery,
   firestoreUpsertDocument,
 } from "./firestoreAdmin.js";
+import {
+  compileTablePhrase,
+  tableCompileInstructions,
+  validateCompiledTableSchema,
+} from "./tablesCompile.js";
 
 /**
  * Certo Work production edge entry point for Cloudflare-compatible Workers.
@@ -1360,6 +1365,99 @@ Rules:
 - Return JSON only.`;
 }
 
+export { compileTablePhrase, validateCompiledTableSchema, tableCompileInstructions };
+
+async function compileTable(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  if (!body.userId || !body.workspaceId) {
+    return json({ error: "userId and workspaceId are required" }, 400);
+  }
+  const phrase = String(body.phrase || body.text || "").trim();
+  if (!phrase) return json({ error: "phrase is required" }, 400);
+  if (phrase.length > 2_000) return json({ error: "phrase is too long" }, 400);
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+
+  const locale = body.locale === "en" ? "en" : "es";
+  const localResult = compileTablePhrase({ phrase, locale });
+
+  if (!openaiIsConfigured(env)) {
+    return json({
+      ...localResult,
+      provider: { provider: "local" },
+    });
+  }
+
+  const model = aiModelFor(env, body, "rewrite");
+  try {
+    const response = await fetch(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${openaiApiKey(env)}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        instructions: tableCompileInstructions(),
+        input: [{ role: "user", content: phrase }],
+        text: { format: { type: "json_object" } },
+        max_output_tokens: 900,
+        store: false,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      return json({
+        ...localResult,
+        provider: { provider: "local", error: payload?.error?.message },
+      });
+    }
+    const parsed = parseJsonObject(extractOpenAIText(payload));
+    const question =
+      typeof parsed?.question === "string" && parsed.question.trim()
+        ? parsed.question.trim()
+        : undefined;
+
+    if (question && (!Array.isArray(parsed?.columns) || parsed.columns.length === 0)) {
+      const usage = openAIUsage(payload);
+      logAIUsage({ env, body, feature: "tables_compile", model, usage });
+      return json({
+        question,
+        provider: { provider: "openai", model, usage, costMode: "efficient" },
+      });
+    }
+
+    const validated = validateCompiledTableSchema(parsed);
+    if (!validated.ok) {
+      return json({
+        ...localResult,
+        provider: { provider: "local", error: validated.error },
+      });
+    }
+
+    const usage = openAIUsage(payload);
+    logAIUsage({ env, body, feature: "tables_compile", model, usage });
+    return json({
+      schema: validated.schema,
+      ...(question ? { question } : {}),
+      provider: { provider: "openai", model, usage, costMode: "efficient" },
+    });
+  } catch {
+    return json({
+      ...localResult,
+      provider: { provider: "local" },
+    });
+  }
+}
+
 async function extractMagicProject(request, env) {
   let body;
   try {
@@ -2030,6 +2128,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/certo/magic-project") {
       return extractMagicProject(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/tables/compile") {
+      return compileTable(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);

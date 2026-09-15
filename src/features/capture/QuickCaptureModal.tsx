@@ -49,11 +49,17 @@ export type QuickCaptureModalProps = {
   open: boolean;
   onClose: () => void;
   onCreate: (payload: QuickCaptureCreatePayload, options?: { createAnother?: boolean }) => Promise<void> | void;
+  /** Create a table record instead of a work item. */
+  onCreateRecord?: (payload: {
+    tableId: string;
+    title: string;
+  }) => Promise<void> | void;
   projects: any[];
   tasks?: any[];
   members: WorkspaceMember[];
   tags?: Array<{ id: string; name?: string; label?: string }>;
   defaults?: QuickCaptureDefaults;
+  tables?: Array<{ id: string; name: string; icon?: string }>;
 };
 
 const TYPES: CaptureWorkType[] = ["epic", "feature", "pbi", "subtask", "bug"];
@@ -66,16 +72,19 @@ export function QuickCaptureModal({
   open,
   onClose,
   onCreate,
+  onCreateRecord,
   projects,
   tasks = [],
   members,
   tags = [],
   defaults = {},
+  tables = [],
 }: QuickCaptureModalProps) {
   const locale = getLocale();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [workItemType, setWorkItemType] = useState<CaptureWorkType>(defaults.workItemType || "pbi");
+  const [recordTableId, setRecordTableId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState(String(defaults.projectId || ""));
   const [priority, setPriority] = useState<CapturePriority>(null);
   const [assigneeId, setAssigneeId] = useState("");
@@ -114,6 +123,7 @@ export function QuickCaptureModal({
     }
     setBody("");
     setWorkItemType(defaults.workItemType || (defaults.projectId ? "pbi" : "task"));
+    setRecordTableId(null);
     setProjectId(String(defaults.projectId || ""));
     setPriority(null);
     setAssigneeId("");
@@ -152,12 +162,20 @@ export function QuickCaptureModal({
         ? "Descripción, criterios… usá líneas como Objetivo: …"
         : "Description, criteria… use lines like Goal: …",
     create: locale === "es" ? "Crear ítem" : "Create item",
+    createRecord: locale === "es" ? "Crear registro" : "Create record",
     createAnother: locale === "es" ? "crear y otro" : "create & another",
     structure: locale === "es" ? "Estructurar" : "Structure",
     apply: locale === "es" ? "Aplicar" : "Apply",
     undo: locale === "es" ? "Deshacer" : "Undo",
     clipboard: locale === "es" ? "Portapapeles" : "Clipboard",
   };
+
+  const selectedTable = tables.find((table) => table.id === recordTableId) || null;
+  const typeChipLabel = selectedTable
+    ? locale === "es"
+      ? `Registro en ${selectedTable.name}`
+      : `Record in ${selectedTable.name}`
+    : typeLabel(workItemType, locale);
 
   const buildPayload = (): QuickCaptureCreatePayload => {
     const cleanTitle = (structurePreview?.title || parsed.cleanTitle || title).trim();
@@ -194,14 +212,25 @@ export function QuickCaptureModal({
   };
 
   const submit = async (createAnother = false) => {
-    const payload = buildPayload();
-    if (!payload.title && !(payload.bulkNodes && payload.bulkNodes.length)) {
+    const cleanTitle = (structurePreview?.title || parsed.cleanTitle || title).trim();
+    if (!cleanTitle && !(listPreview?.mode === "list" && listPreview.nodes.length)) {
       setError(locale === "es" ? "Escribí un título." : "Enter a title.");
       return;
     }
     setBusy(true);
     setError("");
     try {
+      if (recordTableId && onCreateRecord) {
+        await onCreateRecord({ tableId: recordTableId, title: cleanTitle });
+        if (createAnother) {
+          setTitle("");
+          setBody("");
+        } else {
+          onClose();
+        }
+        return;
+      }
+      const payload = buildPayload();
       await onCreate(payload, { createAnother });
       if (createAnother) {
         setTitle("");
@@ -265,7 +294,7 @@ export function QuickCaptureModal({
           <div className="cw-qc-head-left">
             <strong>{copy.title}</strong>
             <button className="cw-qc-chip is-set" onClick={() => setPicker(picker === "type" ? null : "type")} type="button">
-              {typeLabel(workItemType, locale)} ▾
+              {typeChipLabel} ▾
             </button>
             <button
               className={`cw-qc-chip ${projectId ? "is-set" : ""}`}
@@ -296,11 +325,24 @@ export function QuickCaptureModal({
                 key={type}
                 onClick={() => {
                   setWorkItemType(type);
+                  setRecordTableId(null);
                   setPicker(null);
                 }}
                 type="button"
               >
                 {typeLabel(type, locale)}
+              </button>
+            ))}
+            {tables.map((table) => (
+              <button
+                key={`table-${table.id}`}
+                onClick={() => {
+                  setRecordTableId(table.id);
+                  setPicker(null);
+                }}
+                type="button"
+              >
+                {locale === "es" ? `Registro en ${table.name}` : `Record in ${table.name}`}
               </button>
             ))}
           </div>
@@ -627,7 +669,7 @@ export function QuickCaptureModal({
             onClick={() => void submit(false)}
             type="button"
           >
-            {copy.create} <Kbd>⌘↵</Kbd>
+            {recordTableId ? copy.createRecord : copy.create} <Kbd>⌘↵</Kbd>
           </button>
           <button
             className="cw-qc-secondary"

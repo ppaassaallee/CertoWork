@@ -10,7 +10,9 @@ export type RoutineEntityType =
   | "request"
   | "invoice"
   | "portfolio"
-  | "person";
+  | "person"
+  | "table"
+  | "record";
 
 export type RoutinePermissionMode = "always" | "ask" | "never";
 
@@ -45,7 +47,14 @@ export type RoutineTrigger =
         | "item.due_soon"
         | "note.created"
         | "request.stale"
-        | "invoice.overdue";
+        | "invoice.overdue"
+        | "table.record_created"
+        | "table.status_changed"
+        | "table.date_reached";
+      /**
+       * Optional match criteria. For table.* events use
+       * `{ tableId, columnId?, to?, offsetDays? }`.
+       */
       filter?: Record<string, unknown>;
       cooldownSeconds: number;
       human: string;
