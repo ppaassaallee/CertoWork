@@ -138,10 +138,50 @@ export function AgentsMapView({
               <span>tamaño = corridas · grosor = handoffs</span>
             </div>
             {model.nodes.filter((node) => node.kind === "routine").length === 0 ? (
-              <p className="cw-agents-map-empty">
-                Todavía no hay corridas que observar. Activá una rutina y el mapa se
-                llena solo.
-              </p>
+              <div className="cw-agents-map-empty-flow" data-testid="agents-map-empty">
+                <p className="cw-agents-map-empty">
+                  Todavía no hay rutinas en este workspace. Creá o activá una y el mapa
+                  muestra el flujo completo — igual que un deployment diagram: trigger →
+                  rutina → agente → salida.
+                </p>
+                <svg
+                  aria-hidden="true"
+                  className="cw-agents-map-skeleton"
+                  viewBox="0 0 440 120"
+                  width="100%"
+                >
+                  <g fill="none" stroke="var(--border-strong)" strokeDasharray="4 3">
+                    <path d="M96 60 C140 60 160 40 204 40" />
+                    <path d="M96 60 C140 60 160 80 204 80" />
+                    <path d="M308 40 C340 40 350 60 370 60" />
+                    <path d="M308 80 C340 80 350 60 370 60" />
+                    <path d="M204 40 C240 40 250 60 308 60" />
+                    <path d="M204 80 C240 80 250 60 308 60" />
+                  </g>
+                  <g fontSize="9" fill="var(--text-muted)">
+                    <rect fill="var(--surface-0)" height="28" rx="8" stroke="var(--border-strong)" width="88" x="8" y="46" />
+                    <text x="20" y="64">
+                      Disparador
+                    </text>
+                    <rect fill="var(--status-success-soft)" height="28" rx="8" stroke="var(--status-success)" width="104" x="204" y="26" />
+                    <text x="228" y="44">
+                      Rutina
+                    </text>
+                    <rect fill="var(--status-warning-soft)" height="28" rx="8" stroke="var(--status-warning)" width="104" x="204" y="66" />
+                    <text x="226" y="84">
+                      Rutina
+                    </text>
+                    <rect fill="var(--status-success-soft)" height="36" rx="8" stroke="var(--status-success)" width="96" x="308" y="42" />
+                    <text x="328" y="64">
+                      Agente
+                    </text>
+                    <rect fill="var(--surface-0)" height="28" rx="8" stroke="var(--border-strong)" width="64" x="370" y="46" />
+                    <text x="382" y="64">
+                      Salida
+                    </text>
+                  </g>
+                </svg>
+              </div>
             ) : (
               <svg
                 aria-label="Grafo de disparadores, rutinas, agentes y salidas"

@@ -5714,16 +5714,17 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-routines",
-        label: "Go to Rutinas",
+        label: "Go to Rutinas · Mapa de flujos",
         group: "Navigate",
-        keywords: "routines automation schedule recipe brief",
+        keywords:
+          "routines automation schedule recipe brief mapa flujo workflow agents map diagram disparadores salidas retell",
         onSelect: () => navigate("/rutinas"),
       },
       {
         id: "nav-agents",
-        label: "Go to Agents",
+        label: "Go to Agents · Live map",
         group: "Navigate",
-        keywords: "odysseus ai automations",
+        keywords: "odysseus ai automations mapa agentes handoffs live map",
         onSelect: () => navigate("/agents"),
       },
       {
