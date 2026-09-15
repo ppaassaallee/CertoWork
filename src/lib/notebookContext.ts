@@ -1,3 +1,5 @@
+import type { NoteExtension } from "./notes/types";
+
 export type NotebookEntryKind = "notebook" | "section" | "note";
 
 export type NotebookEntry = {
@@ -12,7 +14,7 @@ export type NotebookEntry = {
   status?: string;
   updatedAt?: any;
   createdAt?: any;
-};
+} & NoteExtension;
 
 function timestamp(value: any) {
   if (value?.seconds) return value.seconds * 1000 + (value.nanoseconds || 0) / 1e6;

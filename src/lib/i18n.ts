@@ -67,6 +67,9 @@ const dictionaries = {
     odiseusSidebarBlurb: "Does the work you can't get to",
     odiseusWelcomePrompt: "What should I take off your plate?",
     odiseusFocusedPrompt: "What should move next on this work?",
+    "notes.personal": "Personal",
+    "notes.journal": "Journal",
+    "notes.reviews": "Reviews",
   },
   es: {
     navHome: "Inicio",
@@ -134,6 +137,9 @@ const dictionaries = {
     odiseusSidebarBlurb: "Hace el trabajo al que no llegas",
     odiseusWelcomePrompt: "¿Qué te quito de encima?",
     odiseusFocusedPrompt: "¿Qué debe avanzar en este trabajo?",
+    "notes.personal": "Personal",
+    "notes.journal": "Diario",
+    "notes.reviews": "Revisiones",
   },
 } as const;
 
