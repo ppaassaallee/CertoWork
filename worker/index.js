@@ -2122,7 +2122,7 @@ const worker = {
               userId: state.uid,
               externalId: calendar.id,
               name: calendar.summary || calendar.id,
-              color: calendar.backgroundColor || "#5B8DEF",
+              color: calendar.backgroundColor || "var(--accent)",
               visible: true,
               writable: calendar.accessRole === "owner" || calendar.accessRole === "writer",
               privacy: "full",
