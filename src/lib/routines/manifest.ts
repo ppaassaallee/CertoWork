@@ -13,7 +13,9 @@ export type RitualCardType =
   | "GoalComposer"
   | "TimeBlocks"
   | "Capacity"
-  | "Summary";
+  | "Summary"
+  | "Choice"
+  | "EnergyTag";
 
 export type CardSpec = {
   type: RitualCardType;
@@ -47,6 +49,7 @@ export type PrepareSpec = {
     | "epic_candidates"
     | "calendar_load"
     | "last_alignment"
+    | "day_summary"
   >;
 };
 

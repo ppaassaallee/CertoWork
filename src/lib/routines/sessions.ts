@@ -190,6 +190,23 @@ export function applySessionExpiry(
   manifest: RecipeManifest | null,
   now = new Date(),
 ): RoutineSession {
+  if (manifest?.id === "close-day") {
+    if (!["ready", "in_progress", "paused"].includes(session.status)) return session;
+    const created =
+      typeof (session.createdAt as { toDate?: () => Date })?.toDate === "function"
+        ? (session.createdAt as { toDate: () => Date }).toDate()
+        : typeof session.createdAt === "string"
+          ? new Date(session.createdAt)
+          : now;
+    const deadline = new Date(created);
+    deadline.setDate(deadline.getDate() + 1);
+    deadline.setHours(0, 0, 0, 0);
+    if (now.getTime() >= deadline.getTime()) {
+      return { ...session, status: "missed", condensed: true };
+    }
+    return session;
+  }
+
   if (!manifest?.expiresWeekday && !session.expiresAt) return session;
   if (!["ready", "in_progress", "paused"].includes(session.status)) return session;
 

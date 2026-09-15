@@ -32,6 +32,8 @@ test("builds notebook context from notebook section note hierarchy", () => {
       projectId: "project1",
       tags: ["pilot", "prd"],
       status: "active",
+      aiVisible: true,
+      visibility: "workspace",
       updatedAt: 2_000,
     },
     {
@@ -40,9 +42,14 @@ test("builds notebook context from notebook section note hierarchy", () => {
       title: "Personal scratch",
       content: "Buy coffee.",
       status: "active",
+      aiVisible: false,
       updatedAt: 1_000,
     },
-  ], "assignment pilot evidence", { activeProjectId: "project1" });
+  ], "assignment pilot evidence", {
+    activeProjectId: "project1",
+    viewerUid: "u1",
+    viewerProjectIds: ["project1"],
+  });
 
   assert.equal(context[0].id, "note1");
   assert.equal(context[0].notebook, "KruOps Notebook");
@@ -58,8 +65,24 @@ test("archived notes are not sent into assistant context", () => {
       title: "Archived",
       content: "Important old content",
       status: "archived",
+      aiVisible: true,
     },
   ], "important");
 
+  assert.equal(context.length, 0);
+});
+
+test("notes without aiVisible stay out of Odysseus context", () => {
+  const context = buildNotebookContext([
+    {
+      id: "note1",
+      kind: "note",
+      title: "Hidden",
+      content: "Secret pilot details",
+      status: "active",
+      aiVisible: false,
+      visibility: "workspace",
+    },
+  ], "pilot", { viewerUid: "u1", viewerProjectIds: [] });
   assert.equal(context.length, 0);
 });

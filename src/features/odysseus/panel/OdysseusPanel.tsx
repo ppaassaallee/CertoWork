@@ -80,7 +80,16 @@ function extractBlocks(result: any, fallbackItems?: OdysseusNativeItem[]): Odyss
   return blocks;
 }
 
-function ensureRoutineSuggestion(chips: string[], locale: string, lastAsk: string) {
+function noteScopeChips(locale: string) {
+  return locale === "es"
+    ? ["Resumir", "Estructurar en bloques", "Crear ítems"]
+    : ["Summarize", "Structure into blocks", "Create items"];
+}
+
+function ensureRoutineSuggestion(chips: string[], locale: string, lastAsk: string, scopeKind?: string) {
+  if (scopeKind === "note") {
+    return noteScopeChips(locale).slice(0, 3);
+  }
   const routine =
     locale === "es" ? "↻ Cada mañana" : "↻ Every morning";
   const next = chips.filter(Boolean).slice(0, 2);
@@ -248,6 +257,7 @@ export function OdysseusPanel({
         Array.isArray(result.suggestedChips) ? result.suggestedChips.map(String) : [],
         locale,
         text,
+        scope.kind,
       );
       const blocks = extractBlocks(result, fallbackItems);
       const assistant: OdysseusPanelMessage = {
@@ -273,7 +283,7 @@ export function OdysseusPanel({
             : locale === "es"
               ? "No pude completar eso."
               : "I could not complete that.",
-        suggestions: ensureRoutineSuggestion([], locale, text),
+        suggestions: ensureRoutineSuggestion([], locale, text, scope.kind),
         createdAt: Date.now(),
       };
       updateActiveThread((thread) => ({
@@ -309,6 +319,7 @@ export function OdysseusPanel({
   const scopeLabel = useMemo(() => {
     if (scope.kind === "item") return scope.label;
     if (scope.kind === "project") return scope.label;
+    if (scope.kind === "note") return scope.label;
     if (scope.kind === "day") return locale === "es" ? "Mi día" : "My day";
     return locale === "es" ? "Todo el workspace" : "Whole workspace";
   }, [scope, locale]);
@@ -420,6 +431,20 @@ export function OdysseusPanel({
       </div>
 
       <div className="cw-odysseus-panel-body">
+        {scope.kind === "note" && !(activeThread?.messages || []).length ? (
+          <div className="cw-odysseus-suggestions" data-testid="odysseus-note-chips">
+            {noteScopeChips(locale).map((chip) => (
+              <button
+                className="cw-odysseus-chip"
+                key={chip}
+                onClick={() => void send(chip)}
+                type="button"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {(activeThread?.messages || []).map((message) => (
           <div className={`cw-odysseus-msg is-${message.role}`} key={message.id}>
             {message.role === "assistant" && (

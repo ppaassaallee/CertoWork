@@ -23,16 +23,20 @@ import {
   ensureProjectNotebook,
   linkNote,
   noteTemplate,
+  proposeItemsFromNote,
   setNoteAiVisible,
   setNoteVisibility,
+  upsertProximosPasosBlock,
   withDefaults,
   type NoteType,
   type NoteVisibility,
+  type ProposedNoteItem,
 } from "../lib/notes";
 import { NotebookSidebar } from "../features/notes/NotebookSidebar";
 import { NotesList } from "../features/notes/NotesList";
 import { NoteMetaChips } from "../features/notes/NoteMetaChips";
 import { NoteLinksPopover } from "../features/notes/NoteLinksPopover";
+import { CreateItemsFromNoteModal } from "../features/notes/CreateItemsFromNoteModal";
 import "../features/notes/notes.css";
 
 type NotesWorkspaceProps = {
@@ -40,6 +44,12 @@ type NotesWorkspaceProps = {
   entries: NotebookEntry[];
   knowledgeItems: any[];
   onAsk: (prompt: string) => void;
+  onOpenOdysseus?: (scope: { kind: "note"; entityId: string; label: string }) => void;
+  onCreateTask?: (input: {
+    title: string;
+    workItemType: string;
+    projectId?: string | null;
+  }) => Promise<string | void> | string | void;
   onOpenProject?: (project: any) => void;
   onQuickCaptureItem?: () => void;
   projects: any[];
@@ -66,6 +76,8 @@ export function NotesWorkspace({
   activeProject,
   entries,
   onAsk,
+  onOpenOdysseus,
+  onCreateTask,
   onOpenProject,
   onQuickCaptureItem,
   projects,
@@ -87,6 +99,8 @@ export function NotesWorkspace({
   const [listTab, setListTab] = useState<"all" | "meetings" | "mine" | "linked">("all");
   const [focusMode, setFocusMode] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [createItemsOpen, setCreateItemsOpen] = useState(false);
+  const [proposedItems, setProposedItems] = useState<ProposedNoteItem[]>([]);
   const [peekEntity, setPeekEntity] = useState<{
     id: string;
     kind: "task" | "project" | "note" | "person" | "doc";
@@ -349,11 +363,17 @@ export function NotesWorkspace({
                 <button
                   className="cw-notes-icon-btn"
                   onClick={() =>
-                    onAsk(
-                      locale === "es"
-                        ? `Ayudame con esta nota: ${editor.title}`
-                        : `Help with this note: ${editor.title}`,
-                    )
+                    onOpenOdysseus
+                      ? onOpenOdysseus({
+                          kind: "note",
+                          entityId: selectedNote.id,
+                          label: editor.title || t("notes.untitled"),
+                        })
+                      : onAsk(
+                          locale === "es"
+                            ? `Ayudame con esta nota: ${editor.title}`
+                            : `Help with this note: ${editor.title}`,
+                        )
                   }
                   type="button"
                 >
@@ -508,7 +528,13 @@ export function NotesWorkspace({
             </div>
             <div className="cw-notes-foot">
               <span>/ bloque · # ítem · @ persona</span>
-              <button onClick={() => onAsk(editor.content.slice(0, 400))} type="button">
+              <button
+                onClick={() => {
+                  setProposedItems(proposeItemsFromNote(editor.content));
+                  setCreateItemsOpen(true);
+                }}
+                type="button"
+              >
                 ✦ {t("notes.createItems")}
               </button>
             </div>
@@ -524,6 +550,44 @@ export function NotesWorkspace({
           </div>
         )}
       </div>
+      <CreateItemsFromNoteModal
+        items={proposedItems}
+        locale={locale}
+        onClose={() => setCreateItemsOpen(false)}
+        onConfirm={async (items) => {
+          if (!user || !workspace || !selectedNote) return;
+          const chipLines: string[] = [];
+          for (const row of items) {
+            const createdId = await onCreateTask?.({
+              title: row.title,
+              workItemType: row.type,
+              projectId: selectedNote.projectId || activeProject?.id || null,
+            });
+            if (createdId) {
+              await linkNote({
+                workspaceId: workspace.id,
+                userId: user.uid,
+                noteId: selectedNote.id,
+                target: { type: "task", id: String(createdId) },
+              });
+              const task = tasks.find((t) => t.id === createdId);
+              const key = String(task?.key || task?.projectKey || row.title.slice(0, 12));
+              chipLines.push(`[#${key}](item:${createdId})`);
+            } else {
+              chipLines.push(`- ${row.title}`);
+            }
+          }
+          const nextContent = upsertProximosPasosBlock(editor.content, chipLines);
+          setEditor((cur) => ({ ...cur, content: nextContent }));
+          await updateDoc(doc(db, "notebook_entries", selectedNote.id), {
+            content: nextContent,
+            lastEditedBy: user.uid,
+            lastEditedAt: new Date().toISOString(),
+            updatedAt: serverTimestamp(),
+          });
+        }}
+        open={createItemsOpen}
+      />
       {peekEntity ? (
         <EntityPeek
           entity={peekEntity}

@@ -363,6 +363,23 @@
   background: var(--surface-1);
 }
 
+.cw-notes-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--text-primary) 28%, transparent);
+  z-index: 80;
+  display: grid;
+  place-items: center;
+}
+
+.cw-notes-modal {
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow-2, 0 12px 40px rgba(0, 0, 0, 0.18));
+}
+
 @media (max-width: 1279px) {
   .cw-notes-sidebar:not(.is-forced-open) {
     width: 0;

@@ -1,0 +1,175 @@
+.cw-dayplan-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 12px;
+  position: relative;
+}
+
+.cw-dayplan-header-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cw-dayplan-header-score {
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.cw-dayplan-sep {
+  color: var(--text-muted, var(--text-secondary, #787774));
+}
+
+.cw-dayplan-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 40ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cw-dayplan-key.is-empty {
+  color: var(--text-muted, var(--text-secondary, #787774));
+}
+
+.cw-dayplan-key svg {
+  flex-shrink: 0;
+  color: var(--accent);
+  fill: var(--accent);
+}
+
+.cw-dayplan-remaining {
+  color: var(--text-muted, var(--text-secondary, #787774));
+  white-space: nowrap;
+}
+
+.cw-dayplan-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cw-dayplan-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cw-dayplan-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.cw-dayplan-ring--lg text {
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-dayplan-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 28px;
+  z-index: 40;
+  width: 320px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface-0, #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.08));
+  padding: 4px;
+}
+
+.cw-dayplan-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.cw-dayplan-picker-row:hover,
+.cw-dayplan-picker-row.is-active {
+  background: var(--surface-1);
+}
+
+.cw-dayplan-picker-row strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cw-dayplan-picker-row em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted, var(--text-secondary, #787774));
+}
+
+.cw-dayplan-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted, var(--text-secondary, #787774));
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.cw-dayplan-star.is-key,
+li:hover > .cw-dayplan-star,
+.do-today-section li:hover .cw-dayplan-star {
+  opacity: 1;
+}
+
+.cw-dayplan-star.is-key {
+  color: var(--accent);
+}
+
+.cw-dayplan-star.is-key svg {
+  fill: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-dayplan-ring circle {
+    transition: none !important;
+  }
+}
