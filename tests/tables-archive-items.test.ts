@@ -98,6 +98,27 @@ test("sidebar wires archive and delete table actions", () => {
   assert.match(shell, /deletedTables/);
   assert.match(shell, /itemCandidates=/);
   assert.match(shell, /tables\.items\.general/);
+  assert.match(shell, /flashNotice/);
+  assert.match(shell, /tableActionError/);
+  assert.match(shell, /event\.stopPropagation\(\)/);
+  assert.doesNotMatch(
+    shell,
+    /archive-table-[\s\S]{0,200}do-mobile-advanced/,
+  );
+});
+
+test("table page menu stacks above body so archive/delete are clickable", () => {
+  const css = readFileSync(resolve(root, "src/styles/certo-tokens.css"), "utf8");
+  assert.match(css, /\.cw-tables-page-header\s*\{[^}]*z-index:\s*50/s);
+  assert.match(css, /\.cw-tables-menu-wrap \.cw-tables-popover\s*\{[^}]*z-index:\s*60/s);
+});
+
+test("firestore rules let workspace members write non-private tables", () => {
+  const rules = readFileSync(resolve(root, "firestore.rules"), "utf8");
+  const writeFn = rules.match(/function canWriteTable\(data\)\s*\{[\s\S]*?\n    \}/)?.[0] || "";
+  assert.match(writeFn, /visibility != 'private'/);
+  assert.match(writeFn, /!\('visibility' in data\)/);
+  assert.doesNotMatch(writeFn, /data\.visibility == 'project'/);
 });
 
 test("TableItemsPanel supports associated vs general filters", () => {

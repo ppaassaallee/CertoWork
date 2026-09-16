@@ -714,6 +714,16 @@ export function DelivereeWorkspace() {
     if (fromUrl) setHighlightFinanceLineId(fromUrl);
   }, [location.search]);
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error" | "info">(
+    "success",
+  );
+  const flashNotice = (
+    text: string,
+    kind: "success" | "warning" | "error" | "info" = "success",
+  ) => {
+    setNoticeKind(kind);
+    setNotice(text);
+  };
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 4500);
@@ -4551,26 +4561,39 @@ export function DelivereeWorkspace() {
     }
   };
 
+  const tableActionError = (error: unknown) => {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : t("tables.actionFailed");
+    console.error("Table lifecycle action failed", error);
+    flashNotice(message, "error");
+  };
+
   const archiveWorkspaceTable = async (table: TableDoc) => {
-    await archiveTable(table.id, tableLifecycleStatus(table));
-    setWorkspaceTables((current) =>
-      current.map((row) =>
-        row.id === table.id
-          ? {
-              ...row,
-              status: "archived",
-              previousStatus: tableLifecycleStatus(table),
-              archivedAt: new Date().toISOString(),
-              deletedAt: null,
-              purgeAfter: null,
-            }
-          : row,
-      ),
-    );
-    leaveTableSurface(table.id);
-    setNotice(
-      t("tables.archive.notice").replace("{name}", table.name || t("tables.untitled")),
-    );
+    try {
+      await archiveTable(table.id, tableLifecycleStatus(table));
+      setWorkspaceTables((current) =>
+        current.map((row) =>
+          row.id === table.id
+            ? {
+                ...row,
+                status: "archived",
+                previousStatus: tableLifecycleStatus(table),
+                archivedAt: new Date().toISOString(),
+                deletedAt: null,
+                purgeAfter: null,
+              }
+            : row,
+        ),
+      );
+      leaveTableSurface(table.id);
+      flashNotice(
+        t("tables.archive.notice").replace("{name}", table.name || t("tables.untitled")),
+      );
+    } catch (error) {
+      tableActionError(error);
+    }
   };
 
   const deleteWorkspaceTable = (table: TableDoc) => {
@@ -4610,12 +4633,14 @@ export function DelivereeWorkspace() {
             ),
           );
           leaveTableSurface(table.id);
-          setNotice(
+          flashNotice(
             t("tables.delete.notice")
               .replace("{name}", table.name || t("tables.untitled"))
               .replace("{date}", purgeAfter.toLocaleDateString()),
           );
           setDestructiveDialog(null);
+        } catch (error) {
+          tableActionError(error);
         } finally {
           setDestructiveBusy(false);
         }
@@ -4626,35 +4651,43 @@ export function DelivereeWorkspace() {
   const restoreWorkspaceTable = async (table: TableDoc) => {
     const purgeDate = table.purgeAfter ? new Date(table.purgeAfter) : null;
     if (purgeDate && !Number.isNaN(purgeDate.getTime()) && purgeDate.getTime() < Date.now()) {
-      setNotice(
+      flashNotice(
         "The 30-day restoration period has expired. You can still Delete forever to remove this table.",
+        "warning",
       );
       return;
     }
-    await restoreTable(table.id, table.previousStatus || "active");
-    setWorkspaceTables((current) =>
-      current.map((row) =>
-        row.id === table.id
-          ? {
-              ...row,
-              status: "active",
-              deletedAt: null,
-              purgeAfter: null,
-              archivedAt: null,
-              restoredAt: new Date().toISOString(),
-            }
-          : row,
-      ),
-    );
-    setNotice(
-      t("tables.restore.notice").replace("{name}", table.name || t("tables.untitled")),
-    );
-    navigate(`/tables/${encodeURIComponent(table.id)}`);
+    try {
+      await restoreTable(table.id, table.previousStatus || "active");
+      setWorkspaceTables((current) =>
+        current.map((row) =>
+          row.id === table.id
+            ? {
+                ...row,
+                status: "active",
+                deletedAt: null,
+                purgeAfter: null,
+                archivedAt: null,
+                restoredAt: new Date().toISOString(),
+              }
+            : row,
+        ),
+      );
+      flashNotice(
+        t("tables.restore.notice").replace("{name}", table.name || t("tables.untitled")),
+      );
+      navigate(`/tables/${encodeURIComponent(table.id)}`);
+    } catch (error) {
+      tableActionError(error);
+    }
   };
 
   const permanentlyDeleteWorkspaceTable = (table: TableDoc) => {
     if (tableLifecycleStatus(table) !== "deleted") {
-      setNotice("Move the table to Deleted first, or use Delete forever from a deleted row.");
+      flashNotice(
+        "Move the table to Deleted first, or use Delete forever from a deleted row.",
+        "warning",
+      );
       return;
     }
     const recordCount = workspaceRecords.filter((row) => row.tableId === table.id).length;
@@ -4677,13 +4710,15 @@ export function DelivereeWorkspace() {
             current.filter((row) => row.tableId !== table.id),
           );
           leaveTableSurface(table.id);
-          setNotice(
+          flashNotice(
             t("tables.deleteForever.notice").replace(
               "{name}",
               table.name || t("tables.untitled"),
             ),
           );
           setDestructiveDialog(null);
+        } catch (error) {
+          tableActionError(error);
         } finally {
           setDestructiveBusy(false);
         }
@@ -7011,12 +7046,16 @@ export function DelivereeWorkspace() {
                           <span className="do-project-title">{table.name}</span>
                           {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
                         </button>
-                        <span className="do-project-actions do-mobile-advanced">
+                        <span className="do-project-actions">
                           <button
                             aria-label={`${t("tables.page.archive")} ${table.name}`}
                             className="do-project-icon"
                             data-testid={`archive-table-${table.id}`}
-                            onClick={() => void archiveWorkspaceTable(table)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void archiveWorkspaceTable(table);
+                            }}
                             title={t("tables.page.archive")}
                             type="button"
                           >
@@ -7026,7 +7065,11 @@ export function DelivereeWorkspace() {
                             aria-label={`${t("tables.page.delete")} ${table.name}`}
                             className="do-project-icon is-danger"
                             data-testid={`delete-table-${table.id}`}
-                            onClick={() => deleteWorkspaceTable(table)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              deleteWorkspaceTable(table);
+                            }}
                             title={t("tables.page.delete")}
                             type="button"
                           >
@@ -7057,12 +7100,16 @@ export function DelivereeWorkspace() {
                               />
                               <span className="do-project-title">{table.name}</span>
                             </button>
-                            <span className="do-project-actions do-mobile-advanced">
+                            <span className="do-project-actions">
                               <button
                                 aria-label={`${t("tables.page.restore")} ${table.name}`}
                                 className="do-project-icon"
                                 data-testid={`restore-table-${table.id}`}
-                                onClick={() => void restoreWorkspaceTable(table)}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void restoreWorkspaceTable(table);
+                                }}
                                 title={t("tables.page.restore")}
                                 type="button"
                               >
@@ -7071,7 +7118,12 @@ export function DelivereeWorkspace() {
                               <button
                                 aria-label={`${t("tables.page.delete")} ${table.name}`}
                                 className="do-project-icon is-danger"
-                                onClick={() => deleteWorkspaceTable(table)}
+                                data-testid={`delete-archived-table-${table.id}`}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  deleteWorkspaceTable(table);
+                                }}
                                 title={t("tables.page.delete")}
                                 type="button"
                               >
@@ -7104,11 +7156,16 @@ export function DelivereeWorkspace() {
                               />
                               <span className="do-project-title">{table.name}</span>
                             </button>
-                            <span className="do-project-actions do-mobile-advanced">
+                            <span className="do-project-actions">
                               <button
                                 aria-label={`${t("tables.page.restore")} ${table.name}`}
                                 className="do-project-icon"
-                                onClick={() => void restoreWorkspaceTable(table)}
+                                data-testid={`restore-deleted-table-${table.id}`}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void restoreWorkspaceTable(table);
+                                }}
                                 title={t("tables.page.restore")}
                                 type="button"
                               >
@@ -7118,7 +7175,11 @@ export function DelivereeWorkspace() {
                                 aria-label={`${t("tables.page.deleteForever")} ${table.name}`}
                                 className="do-project-icon is-danger"
                                 data-testid={`purge-table-${table.id}`}
-                                onClick={() => permanentlyDeleteWorkspaceTable(table)}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  permanentlyDeleteWorkspaceTable(table);
+                                }}
                                 title={t("tables.page.deleteForever")}
                                 type="button"
                               >
@@ -7689,7 +7750,7 @@ export function DelivereeWorkspace() {
         </header>
 
         {notice && (
-          <Toast kind="success" onDismiss={() => setNotice("")}>
+          <Toast kind={noticeKind} onDismiss={() => setNotice("")}>
             {notice}
           </Toast>
         )}
