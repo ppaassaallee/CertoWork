@@ -18,6 +18,7 @@ import {
   ListChecks,
   MoreHorizontal,
   Plus,
+  Receipt,
   Sparkles,
   Star,
   Zap,
@@ -33,7 +34,7 @@ import { checklistItems, checklistProgress } from "../../../lib/kanbanFeatures";
 import { notionEstimateHours } from "../../../lib/notionProjectTable";
 import { isOverviewEnabled } from "../../overview/overviewFlag";
 
-export type ProjectViewId = WorkItemsViewMode | "docs" | "overview";
+export type ProjectViewId = WorkItemsViewMode | "docs" | "overview" | "costs";
 
 type IconType = ComponentType<{ size?: number }>;
 
@@ -45,14 +46,24 @@ const BASE_VIEW_TABS: Array<{ id: ProjectViewId; label: string; Icon: IconType }
   { id: "docs", label: "Docs", Icon: FileText },
 ];
 
+const COSTS_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
+  id: "costs",
+  label: "Costos",
+  Icon: Receipt,
+};
+
 const OVERVIEW_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
   id: "overview",
   label: "Resumen",
   Icon: LayoutDashboard,
 };
 
-function viewTabs() {
-  return isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : BASE_VIEW_TABS;
+function viewTabs(includeCosts = false) {
+  const base = isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : BASE_VIEW_TABS;
+  if (!includeCosts) return base;
+  const docsIndex = base.findIndex((tab) => tab.id === "docs");
+  if (docsIndex < 0) return [...base, COSTS_TAB];
+  return [...base.slice(0, docsIndex), COSTS_TAB, ...base.slice(docsIndex)];
 }
 
 function shortDate(value: unknown) {
@@ -361,6 +372,7 @@ type ProjectViewTabsProps = {
   onToggleSort: () => void;
   onAddTask: () => void;
   showActions?: boolean;
+  showCosts?: boolean;
 };
 
 export function ProjectViewTabs({
@@ -372,8 +384,9 @@ export function ProjectViewTabs({
   onToggleSort,
   onAddTask,
   showActions = true,
+  showCosts = false,
 }: ProjectViewTabsProps) {
-  const tabs = viewTabs();
+  const tabs = viewTabs(showCosts);
   return (
     <div className="do-project-page-tabs" data-testid="project-page-tabs" aria-label="Project views">
       <div className="do-project-page-tablist" role="tablist">
@@ -381,6 +394,7 @@ export function ProjectViewTabs({
           <button
             aria-selected={activeView === id}
             className={`do-project-page-tab${activeView === id ? " is-active" : ""}`}
+            data-testid={id === "costs" ? "project-costs-tab" : undefined}
             key={id}
             onClick={() => onChangeView(id)}
             role="tab"
@@ -391,7 +405,7 @@ export function ProjectViewTabs({
           </button>
         ))}
       </div>
-      {showActions ? (
+      {showActions && activeView !== "costs" ? (
       <div className="do-project-page-tab-actions">
         <span className="do-project-group-label">Agrupar: Épica</span>
         <button

@@ -703,6 +703,24 @@ export function DelivereeWorkspace() {
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
     null,
   );
+  const portfolioViewFromUrl = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("view") === "economics" || params.has("financeLine")) {
+      return "economics" as const;
+    }
+    if (
+      location.pathname.replace(/\/+$/, "") === "/finance" ||
+      location.pathname.replace(/\/+$/, "") === "/costs" ||
+      location.pathname.replace(/\/+$/, "") === "/financials"
+    ) {
+      return "economics" as const;
+    }
+    return undefined;
+  }, [location.pathname, location.search]);
+  const highlightFinanceLineIdFromUrl = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(location.search).get("financeLine");
+  }, [location.search]);
   const [highlightFinanceLineId, setHighlightFinanceLineId] = useState<string | null>(
     () => {
       if (typeof window === "undefined") return null;
@@ -710,9 +728,10 @@ export function DelivereeWorkspace() {
     },
   );
   useEffect(() => {
-    const fromUrl = new URLSearchParams(location.search).get("financeLine");
-    if (fromUrl) setHighlightFinanceLineId(fromUrl);
-  }, [location.search]);
+    if (highlightFinanceLineIdFromUrl) {
+      setHighlightFinanceLineId(highlightFinanceLineIdFromUrl);
+    }
+  }, [highlightFinanceLineIdFromUrl]);
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error" | "info">(
     "success",
@@ -1903,6 +1922,13 @@ export function DelivereeWorkspace() {
     workspace?.ownerId === user?.uid,
     currentWorkspaceMember?.financeAccess,
   );
+  const canViewFinance = canOperateInvoiceQueue;
+  useEffect(() => {
+    if (!canViewFinance) return;
+    setSidebarSections((current) =>
+      current.management ? current : { ...current, management: true },
+    );
+  }, [canViewFinance]);
   const canGrantPureAiFollowers = Boolean(
     isPureAiWorkspace(workspace) &&
       (workspace?.ownerId === user?.uid ||
@@ -6237,6 +6263,17 @@ export function DelivereeWorkspace() {
         keywords: "finance billing ap ariba paid invoice portal",
         onSelect: () => navigate("/invoices"),
       },
+      ...(canViewFinance
+        ? [
+            {
+              id: "nav-costs",
+              label: "Open costs & billing",
+              group: "Navigate",
+              keywords: "finance costs billing ledger sheet excel financials",
+              onSelect: () => navigate("/projects?view=economics"),
+            } as const,
+          ]
+        : []),
       {
         id: "nav-feedback",
         label: "Open SupportOps",
@@ -6419,6 +6456,7 @@ export function DelivereeWorkspace() {
     activeProject,
     activeProjects,
     agentRoutines,
+    canViewFinance,
     createConversation,
     mobileCore,
     navigate,
@@ -7273,6 +7311,26 @@ export function DelivereeWorkspace() {
                     </em>
                   )}
                 </button>
+                {canViewFinance ? (
+                  <button
+                    className={`do-nav-item is-costs ${
+                      lens.kind === "work" &&
+                      lens.section === "portfolio" &&
+                      new URLSearchParams(location.search).get("view") === "economics"
+                        ? "is-active"
+                        : ""
+                    }`}
+                    data-testid="nav-costs"
+                    onClick={() => {
+                      navigate("/projects?view=economics");
+                      setSidebarOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <LayoutGrid size="sm" />
+                    <span>{t("navCosts")}</span>
+                  </button>
+                ) : null}
                 <button
                   className={`do-nav-item is-invoices ${lens.kind === "invoices" ? "is-active" : ""}`}
                   data-testid="nav-invoices"
@@ -8584,8 +8642,12 @@ export function DelivereeWorkspace() {
           />
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
+            canViewFinance={canViewFinance}
             highlightFinanceLineId={highlightFinanceLineId}
-            initialPortfolioView={highlightFinanceLineId ? "economics" : undefined}
+            initialPortfolioView={
+              portfolioViewFromUrl ||
+              (highlightFinanceLineId ? "economics" : undefined)
+            }
             onArchiveProject={archiveProject}
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
@@ -8610,6 +8672,24 @@ export function DelivereeWorkspace() {
                   { replace: true },
                 );
               }
+            }}
+            onPortfolioViewChange={(next) => {
+              const params = new URLSearchParams(location.search);
+              if (next === "economics") {
+                params.set("view", "economics");
+              } else {
+                params.delete("view");
+                params.delete("financeLine");
+              }
+              const path =
+                location.pathname.replace(/\/+$/, "") === "/finance" ||
+                location.pathname.replace(/\/+$/, "") === "/costs" ||
+                location.pathname.replace(/\/+$/, "") === "/financials"
+                  ? "/projects"
+                  : location.pathname;
+              navigate(`${path}${params.toString() ? `?${params}` : ""}`, {
+                replace: true,
+              });
             }}
             onOpenProject={openProjectRecord}
             onOpenWorkItem={(taskId) => {
@@ -8637,6 +8717,7 @@ export function DelivereeWorkspace() {
               conversationId={conversationId}
               costTemplates={costTemplates}
               currentUser={user}
+              canViewFinance={canViewFinance}
               documents={knowledgeItems.filter(
                 (item) =>
                   item.projectId === consoleProject.id &&

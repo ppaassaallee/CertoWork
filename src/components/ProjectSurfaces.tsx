@@ -1521,6 +1521,7 @@ export function ProjectConsolePanel({
   currentUser = null,
   workspace = null,
   initialTab = "items",
+  canViewFinance = false,
   onAsk,
   onAskOdysseus,
   onUpdateProject,
@@ -1568,6 +1569,8 @@ export function ProjectConsolePanel({
   workspace?: { ownerId?: string; name?: string | null } | null;
   /** Deep-link into Items (same work as tasks / backlog). */
   initialTab?: ProjectConsoleTab;
+  /** Owner/admin or financeAccess — shows Costs as a primary project tab. */
+  canViewFinance?: boolean;
   onAsk: (prompt: string) => void;
   onAskOdysseus?: (item: any) => void;
   onUpdateProject: SharedProjectActions["onUpdateProject"];
@@ -1963,6 +1966,7 @@ export function ProjectConsolePanel({
                 }}
                 role="menuitem"
                 type="button"
+                hidden={!canViewFinance}
               >
                 Costs
               </button>
@@ -2115,11 +2119,16 @@ export function ProjectConsolePanel({
         />
       ) : null}
 
-      {(tab === "items" || tab === "docs" || (isOverviewEnabled() && chromeView === "overview")) && (
+      {(tab === "items" ||
+        tab === "docs" ||
+        tab === "costs" ||
+        (isOverviewEnabled() && chromeView === "overview")) && (
         <ProjectViewTabs
           activeView={
             (tab === "docs"
               ? "docs"
+              : tab === "costs"
+                ? "costs"
               : isOverviewEnabled() && chromeView === "overview"
                 ? "overview"
                 : notionMode) as ProjectViewId
@@ -2138,6 +2147,11 @@ export function ProjectConsolePanel({
             }, 0);
           }}
           onChangeView={(view) => {
+            if (view === "costs") {
+              if (!canViewFinance) return;
+              setTab("costs");
+              return;
+            }
             writeProjectSurfaceView(String(project.id), view);
             setChromeView(view);
             if (view === "docs") {
@@ -2165,12 +2179,13 @@ export function ProjectConsolePanel({
             setNotionFilterOpen(false);
             setNotionSearchOpen(false);
           }}
-          showActions={chromeView !== "overview"}
+          showActions={chromeView !== "overview" && tab !== "costs"}
+          showCosts={canViewFinance}
           sortOpen={notionSortOpen}
         />
       )}
 
-      {tab !== "items" && tab !== "docs" && (
+      {tab !== "items" && tab !== "docs" && tab !== "costs" && (
         <button
           className="do-notion-page-back"
           onClick={() => {
@@ -5331,6 +5346,8 @@ export function ProjectCommandCenter({
   highlightFinanceLineId = null,
   onFinanceHighlightConsumed,
   initialPortfolioView,
+  onPortfolioViewChange,
+  canViewFinance = false,
   onNotice,
 }: {
   projects: any[];
@@ -5373,6 +5390,8 @@ export function ProjectCommandCenter({
   highlightFinanceLineId?: string | null;
   onFinanceHighlightConsumed?: () => void;
   initialPortfolioView?: PortfolioView;
+  onPortfolioViewChange?: (view: PortfolioView) => void;
+  canViewFinance?: boolean;
 } & SharedProjectActions) {
   const [filter, setFilter] = useState("active");
   const [statusFilters, setStatusFilters] = useState<string[]>(() => {
@@ -5411,12 +5430,23 @@ export function ProjectCommandCenter({
   const [view, setView] = useState<PortfolioView>(
     initialPortfolioView || "dashboard",
   );
+  const selectPortfolioView = (next: PortfolioView) => {
+    if (next === "economics" && !canViewFinance) return;
+    setView(next);
+    onPortfolioViewChange?.(next);
+  };
   useEffect(() => {
-    if (initialPortfolioView) setView(initialPortfolioView);
-  }, [initialPortfolioView]);
+    if (initialPortfolioView) {
+      if (initialPortfolioView === "economics" && !canViewFinance) {
+        setView("dashboard");
+        return;
+      }
+      setView(initialPortfolioView);
+    }
+  }, [initialPortfolioView, canViewFinance]);
   useEffect(() => {
-    if (highlightFinanceLineId) setView("economics");
-  }, [highlightFinanceLineId]);
+    if (highlightFinanceLineId && canViewFinance) setView("economics");
+  }, [highlightFinanceLineId, canViewFinance]);
   const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
@@ -6058,25 +6088,28 @@ export function ProjectCommandCenter({
           <nav aria-label="Projects views" className="do-command-view-tabs">
             <button
               className={view === "dashboard" ? "is-active" : ""}
-              onClick={() => setView("dashboard")}
+              onClick={() => selectPortfolioView("dashboard")}
               type="button"
             >
               Overview
             </button>
             <button
               className={view === "overview" ? "is-active" : ""}
-              onClick={() => setView("overview")}
+              onClick={() => selectPortfolioView("overview")}
               type="button"
             >
               List
             </button>
-            <button
-              className={view === "economics" ? "is-active" : ""}
-              onClick={() => setView("economics")}
-              type="button"
-            >
-              Costs
-            </button>
+            {canViewFinance ? (
+              <button
+                className={view === "economics" ? "is-active" : ""}
+                data-testid="projects-costs-tab"
+                onClick={() => selectPortfolioView("economics")}
+                type="button"
+              >
+                Costs
+              </button>
+            ) : null}
           </nav>
           {onNewProject && (
             <button
@@ -6150,14 +6183,14 @@ export function ProjectCommandCenter({
             </span>
           </button>
         )}
-        {totals.recurring > 0 && (
-          <button onClick={() => setView("economics")} type="button">
+        {totals.recurring > 0 && canViewFinance && (
+          <button onClick={() => selectPortfolioView("economics")} type="button">
             <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
             <span>monthly recurring</span>
           </button>
         )}
-        {totals.initial > 0 && (
-          <button onClick={() => setView("economics")} type="button">
+        {totals.initial > 0 && canViewFinance && (
+          <button onClick={() => selectPortfolioView("economics")} type="button">
             <strong>${Math.round(totals.initial).toLocaleString()}</strong>
             <span>initial investment</span>
           </button>
@@ -6447,6 +6480,8 @@ export function ProjectCommandCenter({
           </section>
         )}
         <section className="do-command-portfolio">
+          {view !== "dashboard" ? (
+          <>
           {activeFilterChips.length > 0 && (
             <div className="do-filter-chips" data-testid="projects-filter-chips">
               {activeFilterChips.map((chip) => (
@@ -6525,7 +6560,9 @@ export function ProjectCommandCenter({
                 onChange={(event) => {
                   const next = event.target.value;
                   setSearch(next);
-                  if (next.trim() && view === "dashboard") setView("overview");
+                  if (next.trim() && view === "economics") {
+                    selectPortfolioView("overview");
+                  }
                 }}
                 placeholder="Search project, client or service"
                 value={search}
@@ -7719,7 +7756,7 @@ export function ProjectCommandCenter({
               )}
             </div>
             </div>
-          ) : (
+          ) : view === "economics" && canViewFinance ? (
             <PortfolioFinanceAnalyst
               highlightFinanceLineId={highlightFinanceLineId}
               onAddTask={onAddFinanceTask}
@@ -7730,7 +7767,9 @@ export function ProjectCommandCenter({
               tasks={tasks}
               workspaceMembers={workspaceMembers}
             />
-          )}
+          ) : null}
+          </>
+          ) : null}
         </section>
       </div>
       {askPanel && (

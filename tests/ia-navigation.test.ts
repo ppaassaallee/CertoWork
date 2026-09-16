@@ -31,6 +31,14 @@ test("canonical IA routes resolve to mental-model lenses", () => {
     kind: "work",
     section: "portfolio",
   });
+  assert.deepEqual(resolveDelivereeLens("/finance"), {
+    kind: "work",
+    section: "portfolio",
+  });
+  assert.deepEqual(resolveDelivereeLens("/costs"), {
+    kind: "work",
+    section: "portfolio",
+  });
   assert.deepEqual(resolveDelivereeLens("/agents"), {
     kind: "agents",
     section: "home",
@@ -132,6 +140,7 @@ test("primary sidebar keeps essentials short; management is secondary", () => {
   assert.match(source, /data-testid="nav-rutinas"/);
   assert.match(source, /data-testid="nav-approvals"/);
   assert.match(source, /data-testid="nav-management-toggle"/);
+  assert.match(source, /data-testid="nav-costs"/);
   assert.match(source, /data-testid="nav-invoices"/);
   assert.match(source, /data-testid="nav-feedback"/);
   assert.match(source, /data-testid="nav-requests"/);
