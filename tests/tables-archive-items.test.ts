@@ -88,7 +88,7 @@ test("TablePage exposes archive/delete and Items tab", () => {
   assert.match(page, /onDeleteTable/);
 });
 
-test("sidebar wires archive and delete table actions", () => {
+test("sidebar lists active tables only; trash lives on Tables hub", () => {
   const shell = readFileSync(
     resolve(root, "src/components/DelivereeWorkspace.tsx"),
     "utf8",
@@ -97,17 +97,16 @@ test("sidebar wires archive and delete table actions", () => {
   assert.match(shell, /deleteWorkspaceTable/);
   assert.match(shell, /permanentlyDeleteWorkspaceTable/);
   assert.match(shell, /permanentlyDeleteTable\(table\.id, table\.workspaceId\)/);
+  assert.match(shell, /TablesHub/);
+  assert.match(shell, /tablesTrashOpen/);
   assert.match(shell, /archivedTables/);
   assert.match(shell, /deletedTables/);
+  assert.doesNotMatch(shell, /tables\.sidebar\.deleted/);
+  assert.doesNotMatch(shell, /data-testid=\{`purge-table-/);
   assert.match(shell, /itemCandidates=/);
   assert.match(shell, /tables\.items\.general/);
   assert.match(shell, /flashNotice/);
   assert.match(shell, /tableActionError/);
-  assert.match(shell, /event\.stopPropagation\(\)/);
-  assert.doesNotMatch(
-    shell,
-    /archive-table-[\s\S]{0,200}do-mobile-advanced/,
-  );
 });
 
 test("table page menu stacks above body so archive/delete are clickable", () => {

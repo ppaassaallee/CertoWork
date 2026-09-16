@@ -6,10 +6,10 @@ import { resolve } from "node:path";
 import { emptyTableFilters, filterTableRecords, tableFiltersActive } from "../src/lib/tables/filters";
 import { buildWorkloadRows } from "../src/lib/workload";
 import {
-  addDashboardWidget,
-  defaultDashboardLayout,
-  removeDashboardWidget,
-} from "../src/lib/dashboardLayout";
+  defaultDirectionLayout,
+  normalizeDirectionLayout,
+  visibleDirectionWidgets,
+} from "../src/lib/directionLayout";
 import { parseInboundItemUpdate } from "../src/lib/itemUpdateChannels";
 import { resolveDelivereeLens, lensToPath } from "../src/lib/delivereeRoutes";
 
@@ -73,14 +73,18 @@ test("workload groups assignees for this week and overdue", () => {
   assert.equal(rows[0].overdueCount, 1);
 });
 
-test("dashboard layout add/remove widgets", () => {
-  let layout = defaultDashboardLayout();
-  const before = layout.widgets.length;
-  layout = addDashboardWidget(layout, "approvals");
-  assert.ok(layout.widgets.some((w) => w.kind === "approvals"));
-  const id = layout.widgets[0].id;
-  layout = removeDashboardWidget(layout, id);
-  assert.equal(layout.widgets.length, before);
+test("direction layout hide and reorder widgets", () => {
+  let layout = defaultDirectionLayout();
+  assert.equal(visibleDirectionWidgets(layout).length, 6);
+  layout = normalizeDirectionLayout({
+    ...layout,
+    hidden: ["money"],
+    order: ["requests", "workload", "overdue", "projects", "money", "controls"],
+  });
+  const visible = visibleDirectionWidgets(layout);
+  assert.equal(visible[0], "requests");
+  assert.ok(!visible.includes("money"));
+  assert.equal(visible.length, 5);
 });
 
 test("inbound item update parses item id", () => {
@@ -91,11 +95,15 @@ test("inbound item update parses item id", () => {
   assert.equal(parseInboundItemUpdate("[certo-item:xyz] done").itemId, "xyz");
 });
 
-test("dashboard and workload routes resolve", () => {
+test("dashboard route stays as Leadership / Direction page", () => {
   assert.deepEqual(resolveDelivereeLens("/dashboard"), { kind: "dashboard" });
   assert.deepEqual(resolveDelivereeLens("/workload"), { kind: "workload" });
   assert.equal(lensToPath({ kind: "dashboard" }), "/dashboard");
   assert.equal(lensToPath({ kind: "workload" }), "/workload");
+  const shell = readFileSync(resolve(root, "src/components/DelivereeWorkspace.tsx"), "utf8");
+  assert.match(shell, /DirectionPage/);
+  assert.doesNotMatch(shell, /ComposedDashboard/);
+  assert.match(shell, /nav\.direction/);
 });
 
 test("worker exposes item notify and inbound endpoints", () => {
