@@ -1542,15 +1542,16 @@ service cloud.firestore {
           || data.visibility != 'private'
         );
     }
+    // Match canRead for non-private tables so any workspace member can archive,
+    // soft-delete, restore, or edit shared tables (including legacy docs that
+    // omit visibility). Private tables stay creator-only.
     function canWriteTable(data) {
       return data.workspaceId is string
         && isWorkspaceMember(data.workspaceId)
         && (
           data.createdBy == request.auth.uid
-          || (
-            ('visibility' in data)
-            && (data.visibility == 'project' || data.visibility == 'workspace')
-          )
+          || !('visibility' in data)
+          || data.visibility != 'private'
         );
     }
     match /tables/{id} {

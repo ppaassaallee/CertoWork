@@ -975,6 +975,12 @@ a {
   pointer-events: none;
   transition: opacity 0.15s ease-out;
 }
+/* Tables archive/delete must stay reachable without relying on hover alone
+   (trackpads / dense sidebars often miss the hover target). */
+[data-testid="sidebar-tables"] .do-project-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
 .do-project-row:hover .do-project-actions,
 .do-project-row:focus-within .do-project-actions {
   opacity: 1;

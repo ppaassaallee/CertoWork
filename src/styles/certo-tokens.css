@@ -1159,6 +1159,10 @@
   color: var(--text-primary);
 }
 .cw-tables-page-header {
+  /* Keep ⋯ menu above tabs/body — otherwise Archive/Delete sit under the next
+     sibling stacking context and clicks never reach the buttons. */
+  position: relative;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1169,6 +1173,19 @@
   background: color-mix(in srgb, var(--surface-0) 92%, transparent);
   backdrop-filter: blur(8px);
   flex: none;
+}
+.cw-tables-page-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+.cw-tables-menu-wrap .cw-tables-popover {
+  z-index: 60;
+  right: 0;
+  left: auto;
 }
 .cw-tables-page-brand {
   display: flex;
@@ -1197,12 +1214,6 @@
 .cw-tables-page-brand p {
   margin: 0;
   font-size: 11px;
-}
-.cw-tables-page-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
 }
 .cw-tables-muted {
   color: var(--text-muted);
