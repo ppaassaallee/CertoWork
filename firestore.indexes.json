@@ -247,6 +247,30 @@
         { "fieldPath": "recipeId", "order": "ASCENDING" },
         { "fieldPath": "weekOf", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "table_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "tableId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "table_record_activity",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "recordId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "table_forms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "workspaceId", "order": "ASCENDING" },
+        { "fieldPath": "tableId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

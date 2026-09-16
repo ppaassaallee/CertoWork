@@ -208,7 +208,7 @@ export function TablePage({
         await onDeleteRecords(ids);
         return;
       }
-      for (const id of ids) await deleteRecord(table.id, id);
+      for (const id of ids) await deleteRecord(table.id, id, table.workspaceId);
       if (recordId && ids.includes(recordId)) openRecord(null);
     },
     [onDeleteRecords, table.id, recordId, openRecord],
