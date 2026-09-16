@@ -6480,8 +6480,6 @@ export function ProjectCommandCenter({
           </section>
         )}
         <section className="do-command-portfolio">
-          {view !== "dashboard" ? (
-          <>
           {activeFilterChips.length > 0 && (
             <div className="do-filter-chips" data-testid="projects-filter-chips">
               {activeFilterChips.map((chip) => (
@@ -6560,6 +6558,7 @@ export function ProjectCommandCenter({
                 onChange={(event) => {
                   const next = event.target.value;
                   setSearch(next);
+                  if (next.trim() && view === "dashboard") setView("overview");
                   if (next.trim() && view === "economics") {
                     selectPortfolioView("overview");
                   }
@@ -7767,8 +7766,6 @@ export function ProjectCommandCenter({
               tasks={tasks}
               workspaceMembers={workspaceMembers}
             />
-          ) : null}
-          </>
           ) : null}
         </section>
       </div>
