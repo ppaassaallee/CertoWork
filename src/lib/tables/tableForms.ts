@@ -101,7 +101,36 @@ export async function createTableForm(input: {
   return { id: token, ...payload };
 }
 
-export async function listTableForms(tableId: string): Promise<TableFormDoc[]> {
+export async function listTableForms(
+  tableId: string,
+  workspaceId?: string,
+): Promise<TableFormDoc[]> {
+  // List rules require workspace membership on workspaceId; tableId-only
+  // queries are rejected with permission-denied.
+  if (workspaceId) {
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, TABLE_FORMS),
+          where("workspaceId", "==", workspaceId),
+          where("tableId", "==", tableId),
+        ),
+      );
+      return snap.docs.map((row) => ({
+        id: row.id,
+        ...(row.data() as Omit<TableFormDoc, "id">),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "");
+      if (!/failed-precondition|requires an index/i.test(message)) throw error;
+      const snap = await getDocs(
+        query(collection(db, TABLE_FORMS), where("workspaceId", "==", workspaceId)),
+      );
+      return snap.docs
+        .filter((row) => String(row.data().tableId || "") === tableId)
+        .map((row) => ({ id: row.id, ...(row.data() as Omit<TableFormDoc, "id">) }));
+    }
+  }
   const snap = await getDocs(
     query(collection(db, TABLE_FORMS), where("tableId", "==", tableId)),
   );

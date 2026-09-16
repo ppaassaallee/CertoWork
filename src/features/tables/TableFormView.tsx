@@ -32,12 +32,12 @@ export function TableFormView({
   );
 
   const refresh = async () => {
-    setForms(await listTableForms(table.id));
+    setForms(await listTableForms(table.id, table.workspaceId));
   };
 
   useEffect(() => {
     void refresh();
-  }, [table.id]);
+  }, [table.id, table.workspaceId]);
 
   const submit = async () => {
     if (!user) return;

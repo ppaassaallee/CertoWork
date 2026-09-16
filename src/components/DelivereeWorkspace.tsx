@@ -4730,7 +4730,7 @@ export function DelivereeWorkspace() {
       onConfirm: async () => {
         setDestructiveBusy(true);
         try {
-          await permanentlyDeleteTable(table.id);
+          await permanentlyDeleteTable(table.id, table.workspaceId);
           setWorkspaceTables((current) => current.filter((row) => row.id !== table.id));
           setWorkspaceRecords((current) =>
             current.filter((row) => row.tableId !== table.id),

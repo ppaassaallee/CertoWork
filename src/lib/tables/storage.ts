@@ -152,9 +152,38 @@ async function commitInChunks(
   }
 }
 
-export async function permanentlyDeleteTable(tableId: string): Promise<void> {
-  const recordsSnap = await getDocs(
-    query(collection(db, TABLE_RECORDS), where("tableId", "==", tableId)),
+/**
+ * Cascade-purge a table. Child list rules require workspace membership on
+ * `workspaceId`, so every query must include that field — a tableId-only
+ * query fails with permission-denied even when the result set is empty.
+ */
+export async function permanentlyDeleteTable(
+  tableId: string,
+  workspaceId?: string,
+): Promise<void> {
+  let resolvedWorkspaceId = String(workspaceId || "").trim();
+  if (!resolvedWorkspaceId) {
+    const tableSnap = await getDoc(doc(db, TABLES, tableId));
+    if (!tableSnap.exists()) return;
+    resolvedWorkspaceId = String(tableSnap.data()?.workspaceId || "").trim();
+  }
+  if (!resolvedWorkspaceId) {
+    throw new Error("Missing workspace for permanent table delete.");
+  }
+
+  // Prefer compound queries; fall back to a workspace scan if the composite
+  // index is still building (failed-precondition).
+  const recordsSnap = await queryWorkspaceChildren(
+    TABLE_RECORDS,
+    resolvedWorkspaceId,
+    "tableId",
+    tableId,
+  );
+  const formsSnap = await queryWorkspaceChildren(
+    "table_forms",
+    resolvedWorkspaceId,
+    "tableId",
+    tableId,
   );
   const tableLinksSnap = await getDocs(
     query(
@@ -166,10 +195,13 @@ export async function permanentlyDeleteTable(tableId: string): Promise<void> {
 
   const ops: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
 
-  for (const recordDoc of recordsSnap.docs) {
+  for (const recordDoc of recordsSnap) {
     const recordId = recordDoc.id;
-    const activitySnap = await getDocs(
-      query(collection(db, RECORD_ACTIVITY), where("recordId", "==", recordId)),
+    const activitySnap = await queryWorkspaceChildren(
+      RECORD_ACTIVITY,
+      resolvedWorkspaceId,
+      "recordId",
+      recordId,
     );
     const linksSnap = await getDocs(
       query(
@@ -178,7 +210,7 @@ export async function permanentlyDeleteTable(tableId: string): Promise<void> {
         where("fromEntityId", "==", recordId),
       ),
     );
-    for (const row of activitySnap.docs) {
+    for (const row of activitySnap) {
       ops.push((batch) => batch.delete(row.ref));
     }
     for (const row of linksSnap.docs) {
@@ -187,12 +219,42 @@ export async function permanentlyDeleteTable(tableId: string): Promise<void> {
     ops.push((batch) => batch.delete(recordDoc.ref));
   }
 
+  for (const row of formsSnap) {
+    ops.push((batch) => batch.delete(row.ref));
+  }
   for (const row of tableLinksSnap.docs) {
     ops.push((batch) => batch.delete(row.ref));
   }
 
   ops.push((batch) => batch.delete(doc(db, TABLES, tableId)));
   await commitInChunks(ops);
+}
+
+async function queryWorkspaceChildren(
+  collectionName: string,
+  workspaceId: string,
+  field: string,
+  value: string,
+) {
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, collectionName),
+        where("workspaceId", "==", workspaceId),
+        where(field, "==", value),
+      ),
+    );
+    return snap.docs;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error || "");
+    if (!/failed-precondition|requires an index/i.test(message)) throw error;
+    const snap = await getDocs(
+      query(collection(db, collectionName), where("workspaceId", "==", workspaceId)),
+    );
+    return snap.docs.filter(
+      (row) => String((row.data() as Record<string, unknown>)[field] || "") === value,
+    );
+  }
 }
 
 export async function linkTableItem(input: {
@@ -424,10 +486,31 @@ export async function updateRecordField(input: {
   }
 }
 
-export async function deleteRecord(tableId: string, recordId: string): Promise<void> {
-  const activitySnap = await getDocs(
-    query(collection(db, RECORD_ACTIVITY), where("recordId", "==", recordId)),
-  );
+export async function deleteRecord(
+  tableId: string,
+  recordId: string,
+  workspaceId?: string,
+): Promise<void> {
+  let resolvedWorkspaceId = String(workspaceId || "").trim();
+  if (!resolvedWorkspaceId) {
+    const recordSnap = await getDoc(doc(db, TABLE_RECORDS, recordId));
+    if (recordSnap.exists()) {
+      resolvedWorkspaceId = String(recordSnap.data()?.workspaceId || "").trim();
+    }
+  }
+  if (!resolvedWorkspaceId) {
+    const tableSnap = await getDoc(doc(db, TABLES, tableId));
+    resolvedWorkspaceId = String(tableSnap.data()?.workspaceId || "").trim();
+  }
+
+  const activityDocs = resolvedWorkspaceId
+    ? await queryWorkspaceChildren(
+        RECORD_ACTIVITY,
+        resolvedWorkspaceId,
+        "recordId",
+        recordId,
+      )
+    : [];
   const linksSnap = await getDocs(
     query(
       collection(db, "entity_links"),
@@ -437,7 +520,7 @@ export async function deleteRecord(tableId: string, recordId: string): Promise<v
   );
 
   const batch = writeBatch(db);
-  for (const row of activitySnap.docs) batch.delete(row.ref);
+  for (const row of activityDocs) batch.delete(row.ref);
   for (const row of linksSnap.docs) batch.delete(row.ref);
   batch.delete(doc(db, TABLE_RECORDS, recordId));
   batch.update(doc(db, TABLES, tableId), {
