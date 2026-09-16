@@ -32,6 +32,7 @@ import {
   type TableStatus,
   type TableVisibility,
 } from "./types";
+import { TABLE_FORMS } from "./tableForms";
 
 const BATCH_LIMIT = 400;
 const PURGE_DAYS = 30;
@@ -180,7 +181,7 @@ export async function permanentlyDeleteTable(
     tableId,
   );
   const formsSnap = await queryWorkspaceChildren(
-    "table_forms",
+    TABLE_FORMS,
     resolvedWorkspaceId,
     "tableId",
     tableId,
