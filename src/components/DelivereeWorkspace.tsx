@@ -8384,6 +8384,7 @@ export function DelivereeWorkspace() {
                   role="tab"
                   type="button"
                 >
+                  <CalendarDays size={13} aria-hidden />
                   {getLocale() === "es" ? "Semana" : "Week"}
                 </button>
                 <button
@@ -8432,6 +8433,14 @@ export function DelivereeWorkspace() {
                 <MyWorkTodayPanel
                   keyItemId={dayPlan.plan?.keyItemId || null}
                   locale={dayLocale}
+                  onOpenWeek={() => navigate("/my-work/week")}
+                  onPrepareEvent={(event) => {
+                    void openOdysseusPanel({
+                      kind: "event",
+                      entityId: event.id,
+                      label: event.title,
+                    });
+                  }}
                   onSelectItem={openWorkOrRecord}
                   onSetKey={(itemId) => void dayPlan.setKey(itemId)}
                   onUpdateTask={updateProjectTask}
