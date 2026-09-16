@@ -636,11 +636,11 @@ export function PortfolioFinanceAnalyst({
     <div className="do-portfolio-finance-analyst" data-testid="portfolio-finance-analyst">
       <header className="do-portfolio-finance-analyst-head">
         <div>
-          <span className="do-project-card-kicker">TRANSACTIONS BY PROJECT</span>
-          <strong>Portfolio financials</strong>
+          <span className="do-project-card-kicker">COSTS & BILLING</span>
+          <strong>Costs by month → project</strong>
           <small>
-            Scroll horizontally for billing fields · <strong>Assign PBI</strong> stays
-            pinned on the right · linked tasks open My Work comments ·{" "}
+            Filter like a board, edit cells like a sheet · billing and vendor status stay on the
+            right · <strong>Assign PBI</strong> opens a follow-up without leaving ·{" "}
             {portfolioFinanceTotals.lines.toLocaleString()} lines
           </small>
         </div>

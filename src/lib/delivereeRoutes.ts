@@ -75,8 +75,13 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "collab" };
   }
 
-  if (path === "/invoices" || path === "/finance" || path === "/workspace/invoices") {
+  if (path === "/invoices" || path === "/workspace/invoices") {
     return { kind: "invoices" };
+  }
+
+  // /finance opens the portfolio Costs sheet (query handled in the shell).
+  if (path === "/finance" || path === "/costs" || path === "/financials") {
+    return { kind: "work", section: "portfolio" };
   }
 
   if (

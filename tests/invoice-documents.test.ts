@@ -125,7 +125,11 @@ test("invoice numbers increment inside the calendar month", () => {
 
 test("invoice routes split finance queue from the client portal", () => {
   assert.deepEqual(resolveDelivereeLens("/invoices"), { kind: "invoices" });
-  assert.deepEqual(resolveDelivereeLens("/finance"), { kind: "invoices" });
+  // /finance is the Costs sheet (portfolio); the AP queue stays on /invoices.
+  assert.deepEqual(resolveDelivereeLens("/finance"), {
+    kind: "work",
+    section: "portfolio",
+  });
   assert.equal(invoicePortalPath("abc123"), "/invoice/abc123");
 });
 
