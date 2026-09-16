@@ -72,6 +72,8 @@ test("storage exports archive/delete/item membership helpers", () => {
   assert.match(storage, /export async function unlinkTableItem/);
   assert.match(storage, /export async function listTableItems/);
   assert.match(storage, /BATCH_LIMIT = 400/);
+  assert.match(storage, /queryWorkspaceChildren/);
+  assert.match(storage, /where\("workspaceId", "==",/);
   assert.equal(TABLE_ITEM_RELATION, "table_item");
 });
 
@@ -94,6 +96,7 @@ test("sidebar wires archive and delete table actions", () => {
   assert.match(shell, /archiveWorkspaceTable/);
   assert.match(shell, /deleteWorkspaceTable/);
   assert.match(shell, /permanentlyDeleteWorkspaceTable/);
+  assert.match(shell, /permanentlyDeleteTable\(table\.id, table\.workspaceId\)/);
   assert.match(shell, /archivedTables/);
   assert.match(shell, /deletedTables/);
   assert.match(shell, /itemCandidates=/);
@@ -119,6 +122,22 @@ test("firestore rules let workspace members write non-private tables", () => {
   assert.match(writeFn, /visibility != 'private'/);
   assert.match(writeFn, /!\('visibility' in data\)/);
   assert.doesNotMatch(writeFn, /data\.visibility == 'project'/);
+});
+
+test("firestore indexes cover table cascade delete queries", () => {
+  const indexes = readFileSync(resolve(root, "firestore.indexes.json"), "utf8");
+  assert.match(indexes, /"collectionGroup": "table_records"/);
+  assert.match(indexes, /"collectionGroup": "table_record_activity"/);
+  assert.match(indexes, /"collectionGroup": "table_forms"/);
+  assert.match(indexes, /"fieldPath": "tableId"/);
+  assert.match(indexes, /"fieldPath": "recordId"/);
+});
+
+test("table forms list scopes by workspaceId", () => {
+  const forms = readFileSync(resolve(root, "src/lib/tables/tableForms.ts"), "utf8");
+  assert.match(forms, /export async function listTableForms/);
+  assert.match(forms, /where\("workspaceId", "==", workspaceId\)/);
+  assert.match(forms, /where\("tableId", "==", tableId\)/);
 });
 
 test("TableItemsPanel supports associated vs general filters", () => {
