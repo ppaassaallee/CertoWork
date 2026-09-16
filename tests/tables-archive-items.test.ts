@@ -115,7 +115,7 @@ test("table page menu stacks above body so archive/delete are clickable", () => 
 
 test("firestore rules let workspace members write non-private tables", () => {
   const rules = readFileSync(resolve(root, "firestore.rules"), "utf8");
-  const writeFn = rules.match(/function canWriteTable\(data\)\s*\{[\s\S]*?\n    \}/)?.[0] || "";
+  const writeFn = rules.match(/function canWriteTable\(data\)\s*\{[\s\S]*?\n {4}\}/)?.[0] || "";
   assert.match(writeFn, /visibility != 'private'/);
   assert.match(writeFn, /!\('visibility' in data\)/);
   assert.doesNotMatch(writeFn, /data\.visibility == 'project'/);
