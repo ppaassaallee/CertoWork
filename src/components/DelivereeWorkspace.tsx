@@ -48,7 +48,7 @@ import {
   WandSparkles,
   X,
   LayoutGrid,
-  LayoutDashboard,
+  Gauge,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -238,7 +238,8 @@ import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
-import { ComposedDashboard } from "../features/dashboard/ComposedDashboard";
+import { DirectionPage } from "../features/direction/DirectionPage";
+import { TablesHub } from "../features/tables/TablesHub";
 import { WorkloadView } from "../features/workload/WorkloadView";
 import {
   postAssignmentNotify,
@@ -492,6 +493,8 @@ export function DelivereeWorkspace() {
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
   const [workspaceRecords, setWorkspaceRecords] = useState<RecordDoc[]>([]);
+  const [supportCases, setSupportCases] = useState<any[]>([]);
+  const [tablesTrashOpen, setTablesTrashOpen] = useState(false);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
@@ -1038,6 +1041,7 @@ export function DelivereeWorkspace() {
       makeQuery("invoice_documents", (items) =>
         setInvoiceDocuments(items as InvoiceDocument[]),
       ),
+      makeQuery("support_cases", setSupportCases),
       makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
       makeQuery("boldr_risks", setRisks),
       makeQuery("categories", setCategories, false, true),
@@ -7047,9 +7051,7 @@ export function DelivereeWorkspace() {
             </div>
             {sidebarSections.tables && (
               <div className="do-project-list">
-                {visibleTables.length === 0 &&
-                archivedTables.length === 0 &&
-                deletedTables.length === 0 ? (
+                {visibleTables.length === 0 ? (
                   <button
                     className="do-empty-link"
                     onClick={() => openCreateTableWizard()}
@@ -7058,177 +7060,33 @@ export function DelivereeWorkspace() {
                     {t("tables.empty.tables")}
                   </button>
                 ) : (
-                  <>
-                    {visibleTables.map((table) => (
-                      <div
-                        className={`do-project-row ${
-                          lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
-                        }`}
-                        key={table.id}
+                  visibleTables.map((table) => (
+                    <div
+                      className={`do-project-row ${
+                        lens.kind === "tables" && lens.tableId === table.id ? "is-active" : ""
+                      }`}
+                      key={table.id}
+                    >
+                      <button
+                        className="do-project-context"
+                        data-testid={`open-table-${table.id}`}
+                        onClick={() => {
+                          navigate(`/tables/${encodeURIComponent(table.id)}`);
+                          setSidebarOpen(false);
+                        }}
+                        title={table.name}
+                        type="button"
                       >
-                        <button
-                          className="do-project-context"
-                          data-testid={`open-table-${table.id}`}
-                          onClick={() => {
-                            navigate(`/tables/${encodeURIComponent(table.id)}`);
-                            setSidebarOpen(false);
-                          }}
-                          title={table.name}
-                          type="button"
-                        >
-                          <span
-                            aria-hidden
-                            className="cw-tables-sidebar-swatch"
-                            style={{ background: table.color || "var(--accent)" }}
-                          />
-                          <span className="do-project-title">{table.name}</span>
-                          {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
-                        </button>
-                        <span className="do-project-actions">
-                          <button
-                            aria-label={`${t("tables.page.archive")} ${table.name}`}
-                            className="do-project-icon"
-                            data-testid={`archive-table-${table.id}`}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              void archiveWorkspaceTable(table);
-                            }}
-                            title={t("tables.page.archive")}
-                            type="button"
-                          >
-                            <Archive size={11} />
-                          </button>
-                          <button
-                            aria-label={`${t("tables.page.delete")} ${table.name}`}
-                            className="do-project-icon is-danger"
-                            data-testid={`delete-table-${table.id}`}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              deleteWorkspaceTable(table);
-                            }}
-                            title={t("tables.page.delete")}
-                            type="button"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </span>
-                      </div>
-                    ))}
-                    {archivedTables.length > 0 ? (
-                      <>
-                        <div className="do-project-group-label">{t("tables.sidebar.archived")}</div>
-                        {archivedTables.map((table) => (
-                          <div className="do-project-row" key={`archived-${table.id}`}>
-                            <button
-                              className="do-project-context"
-                              data-testid={`open-archived-table-${table.id}`}
-                              onClick={() => {
-                                navigate(`/tables/${encodeURIComponent(table.id)}`);
-                                setSidebarOpen(false);
-                              }}
-                              title={table.name}
-                              type="button"
-                            >
-                              <span
-                                aria-hidden
-                                className="cw-tables-sidebar-swatch"
-                                style={{ background: table.color || "var(--accent)" }}
-                              />
-                              <span className="do-project-title">{table.name}</span>
-                            </button>
-                            <span className="do-project-actions">
-                              <button
-                                aria-label={`${t("tables.page.restore")} ${table.name}`}
-                                className="do-project-icon"
-                                data-testid={`restore-table-${table.id}`}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  void restoreWorkspaceTable(table);
-                                }}
-                                title={t("tables.page.restore")}
-                                type="button"
-                              >
-                                <Archive size={11} />
-                              </button>
-                              <button
-                                aria-label={`${t("tables.page.delete")} ${table.name}`}
-                                className="do-project-icon is-danger"
-                                data-testid={`delete-archived-table-${table.id}`}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  deleteWorkspaceTable(table);
-                                }}
-                                title={t("tables.page.delete")}
-                                type="button"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </span>
-                          </div>
-                        ))}
-                      </>
-                    ) : null}
-                    {deletedTables.length > 0 ? (
-                      <>
-                        <div className="do-project-group-label">{t("tables.sidebar.deleted")}</div>
-                        {deletedTables.map((table) => (
-                          <div className="do-project-row" key={`deleted-${table.id}`}>
-                            <button
-                              className="do-project-context"
-                              data-testid={`open-deleted-table-${table.id}`}
-                              onClick={() => {
-                                navigate(`/tables/${encodeURIComponent(table.id)}`);
-                                setSidebarOpen(false);
-                              }}
-                              title={table.name}
-                              type="button"
-                            >
-                              <span
-                                aria-hidden
-                                className="cw-tables-sidebar-swatch"
-                                style={{ background: table.color || "var(--accent)" }}
-                              />
-                              <span className="do-project-title">{table.name}</span>
-                            </button>
-                            <span className="do-project-actions">
-                              <button
-                                aria-label={`${t("tables.page.restore")} ${table.name}`}
-                                className="do-project-icon"
-                                data-testid={`restore-deleted-table-${table.id}`}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  void restoreWorkspaceTable(table);
-                                }}
-                                title={t("tables.page.restore")}
-                                type="button"
-                              >
-                                <Archive size={11} />
-                              </button>
-                              <button
-                                aria-label={`${t("tables.page.deleteForever")} ${table.name}`}
-                                className="do-project-icon is-danger"
-                                data-testid={`purge-table-${table.id}`}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  permanentlyDeleteWorkspaceTable(table);
-                                }}
-                                title={t("tables.page.deleteForever")}
-                                type="button"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </span>
-                          </div>
-                        ))}
-                      </>
-                    ) : null}
-                  </>
+                        <span
+                          aria-hidden
+                          className="cw-tables-sidebar-swatch"
+                          style={{ background: table.color || "var(--accent)" }}
+                        />
+                        <span className="do-project-title">{table.name}</span>
+                        {table.recordCount > 0 ? <small>{table.recordCount}</small> : null}
+                      </button>
+                    </div>
+                  ))
                 )}
               </div>
             )}
@@ -7261,8 +7119,8 @@ export function DelivereeWorkspace() {
                   }}
                   type="button"
                 >
-                  <LayoutDashboard size="sm" />
-                  <span>Dashboard</span>
+                  <Gauge size="sm" />
+                  <span>{t("nav.direction")}</span>
                 </button>
                 <button
                   className={`do-nav-item is-workload ${lens.kind === "workload" ? "is-active" : ""}`}
@@ -8863,20 +8721,34 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
         ) : centerView === "dashboard" && workspace ? (
-          <ComposedDashboard
-            approvalCount={reviewItems.length}
+          <DirectionPage
+            invoices={invoiceDocuments}
+            locale={getLocale() === "es" ? "es" : "en"}
             members={workspaceMembers}
+            onOpenCosts={() => navigate("/costs")}
+            onOpenInvoices={() => navigate("/invoices")}
             onOpenItem={(id) => setSelectedWorkItemId(id)}
+            onOpenMyWork={() => navigate("/my-work?filter=overdue")}
+            onOpenPerson={() => navigate("/workload")}
             onOpenProject={(id) => {
               const project = projects.find((row) => row.id === id);
               if (project) openProjectRecord(project);
             }}
+            onOpenRequests={() => navigate("/requests")}
+            onOpenTable={(tableId) =>
+              navigate(`/tables/${encodeURIComponent(tableId)}`)
+            }
+            onOpenTables={() => navigate("/tables")}
             onOpenWorkload={() => navigate("/workload")}
+            onOpenProjects={() => navigate("/projects")}
             projects={projects}
             records={workspaceRecords}
-            tables={visibleTables}
+            requests={requestTickets}
+            risks={risks}
+            supportCases={supportCases}
+            tables={workspaceTables}
             tasks={tasks}
-            workspaceId={workspace.id}
+            userId={user?.uid || ""}
           />
         ) : centerView === "workload" ? (
           <WorkloadView
@@ -8987,17 +8859,19 @@ export function DelivereeWorkspace() {
               table={activeTable}
             />
           ) : (
-            <div className="cw-tables-empty-page" data-testid="tables-empty">
-              <strong>{t("tables.sidebar")}</strong>
-              <p>{t("tables.empty.tables")}</p>
-              <button
-                className="cw-tables-btn-primary"
-                onClick={() => openCreateTableWizard()}
-                type="button"
-              >
-                + {t("tables.new")}
-              </button>
-            </div>
+            <TablesHub
+              archivedTables={archivedTables}
+              deletedTables={deletedTables}
+              onCreate={() => openCreateTableWizard()}
+              onDeleteForever={(table) => permanentlyDeleteWorkspaceTable(table)}
+              onOpenTable={(tableId) =>
+                navigate(`/tables/${encodeURIComponent(tableId)}`)
+              }
+              onRestore={(table) => void restoreWorkspaceTable(table)}
+              onToggleTrash={() => setTablesTrashOpen((open) => !open)}
+              showTrash={tablesTrashOpen}
+              tables={visibleTables}
+            />
           )
         ) : null}
       </main>
