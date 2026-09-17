@@ -20,6 +20,7 @@ import { isViewsEngineEnabled } from "../features/views/viewsEngineFlag";
 import { applyView } from "../lib/views/apply";
 import { buildTaskAdapter, type TaskRow } from "../features/views/adapters/taskAdapter";
 import type { SavedView } from "../lib/views/types";
+import { actorEquivalentMemberIds } from "../lib/myWorkItems";
 import {
   AlertTriangle,
   Archive,
@@ -112,6 +113,7 @@ import {
   memberAvatar,
   effectiveMemberAlias,
   normalizeInviteEmail,
+  type WorkspaceMember,
 } from "../lib/workspaceCollaboration";
 import {
   buildProjectCollaboratorAccessPatch,
@@ -1652,10 +1654,26 @@ export function ProjectConsolePanel({
   );
   const engineQueriedTasks = useMemo(() => {
     if (!viewsEngineOn || !engineItemsView) return tasks;
+    const uid = String(currentUser?.uid || "");
+    const memberIds = actorEquivalentMemberIds(
+      {
+        userId: uid,
+        memberId: workspaceMembers.find((member) => member.userId === uid)?.id,
+      },
+      workspaceMembers as WorkspaceMember[],
+    );
     return applyView(tasks as TaskRow[], projectTaskAdapter, engineItemsView, {
-      userId: String(currentUser?.uid || ""),
+      userId: uid,
+      memberIds,
     }).rows;
-  }, [viewsEngineOn, engineItemsView, tasks, projectTaskAdapter, currentUser?.uid]);
+  }, [
+    viewsEngineOn,
+    engineItemsView,
+    tasks,
+    projectTaskAdapter,
+    currentUser?.uid,
+    workspaceMembers,
+  ]);
   const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
     if (!isOverviewEnabled()) return "list";
     const saved = readProjectSurfaceView(String(project?.id || ""));

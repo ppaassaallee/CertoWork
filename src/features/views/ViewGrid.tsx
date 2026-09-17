@@ -68,6 +68,8 @@ export type ViewGridProps<Row> = {
   rows: Row[];
   ctx: ActionContext;
   members?: TableMember[];
+  /** Extra ids that count as "me" for assignee filters (workspace member ids). */
+  memberIds?: string[];
   /** When set, title/status columns use table Column defs for CellRenderer. */
   cellColumnLookup?: (columnId: string) => Column | undefined;
   onViewChange?(next: SavedView): void;
@@ -87,6 +89,7 @@ export function ViewGrid<Row>({
   rows,
   ctx,
   members = [],
+  memberIds = [],
   cellColumnLookup,
   onOpenRow,
   onCreateRow,
@@ -98,8 +101,12 @@ export function ViewGrid<Row>({
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
 
   const applied = useMemo(
-    () => applyView(rows, adapter, view, { userId: ctx.userId }),
-    [rows, adapter, view, ctx.userId],
+    () =>
+      applyView(rows, adapter, view, {
+        userId: ctx.userId,
+        memberIds,
+      }),
+    [rows, adapter, view, ctx.userId, memberIds],
   );
 
   const visibleColumnDefs = useMemo(() => {

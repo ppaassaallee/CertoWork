@@ -122,6 +122,136 @@ const ROWS: Row[] = [
   },
 ];
 
+test("filter me matches workspace member ids, not only Firebase uid", () => {
+  const rows: Row[] = [
+    {
+      id: "member-assigned",
+      title: "Assigned via member id",
+      status: "open",
+      assigneeId: "ws_u1",
+      dueDate: "2026-09-17",
+      parentId: null,
+      order: 1,
+    },
+    {
+      id: "other",
+      title: "Someone else",
+      status: "open",
+      assigneeId: "ws_u2",
+      dueDate: "2026-09-17",
+      parentId: null,
+      order: 2,
+    },
+  ];
+  const withoutAliases = applyView(
+    rows,
+    adapter,
+    baseView({ filters: [{ columnId: "assignee", op: "me" }] }),
+    { userId: "u1", now: NOW },
+  );
+  assert.deepEqual(
+    withoutAliases.rows.map((row) => row.id),
+    [],
+  );
+
+  const withAliases = applyView(
+    rows,
+    adapter,
+    baseView({ filters: [{ columnId: "assignee", op: "me" }] }),
+    { userId: "u1", memberIds: ["ws_u1"], now: NOW },
+  );
+  assert.deepEqual(
+    withAliases.rows.map((row) => row.id),
+    ["member-assigned"],
+  );
+});
+
+test("filter me matches assigneeIds arrays from taskAdapter", () => {
+  type Taskish = Row & { assigneeIds?: string[] };
+  const taskAdapter: EntityAdapter<Taskish> = {
+    ...adapter,
+    columns: adapter.columns.map((col) =>
+      col.id === "assignee"
+        ? {
+            ...col,
+            read: (row) =>
+              Array.isArray(row.assigneeIds) && row.assigneeIds.length
+                ? row.assigneeIds
+                : row.assigneeId,
+          }
+        : col,
+    ) as EntityAdapter<Taskish>["columns"],
+  };
+  const rows: Taskish[] = [
+    {
+      id: "arr",
+      title: "Array assignees",
+      status: "open",
+      assigneeId: "ws_u1",
+      assigneeIds: ["ws_u1"],
+      dueDate: "2026-09-17",
+      parentId: null,
+      order: 1,
+    },
+  ];
+  const result = applyView(
+    rows,
+    taskAdapter,
+    baseView({
+      filters: [
+        { columnId: "assignee", op: "me" },
+        { columnId: "due", op: "today" },
+      ],
+    }),
+    { userId: "u1", memberIds: ["ws_u1"], now: NOW },
+  );
+  assert.deepEqual(
+    result.rows.map((row) => row.id),
+    ["arr"],
+  );
+});
+
+test("filter today includes timeSector / One Thing without dueDate", () => {
+  type SectorRow = Row & { timeSector?: string; timeSectorDate?: string; isOneThing?: boolean };
+  const sectorAdapter: EntityAdapter<SectorRow> = {
+    ...adapter,
+    columns: adapter.columns as EntityAdapter<SectorRow>["columns"],
+  };
+  const rows: SectorRow[] = [
+    {
+      id: "sector-today",
+      title: "Pinned today",
+      status: "open",
+      assigneeId: "u1",
+      dueDate: null,
+      parentId: null,
+      order: 1,
+      timeSector: "today",
+      timeSectorDate: "2026-09-17",
+    },
+    {
+      id: "one-thing",
+      title: "One thing",
+      status: "open",
+      assigneeId: "u1",
+      dueDate: null,
+      parentId: null,
+      order: 2,
+      isOneThing: true,
+    },
+  ];
+  const result = applyView(
+    rows,
+    sectorAdapter,
+    baseView({ filters: [{ columnId: "due", op: "today" }] }),
+    { userId: "u1", now: NOW },
+  );
+  assert.deepEqual(
+    result.rows.map((row) => row.id).sort(),
+    ["one-thing", "sector-today"],
+  );
+});
+
 test("filter me keeps only current user rows", () => {
   const result = applyView(
     ROWS,

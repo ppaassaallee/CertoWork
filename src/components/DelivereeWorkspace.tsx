@@ -8321,7 +8321,9 @@ export function DelivereeWorkspace() {
             ) : lens.kind === "my-work" &&
               (lens.section === "reviews" || lens.section === "captured") ? null : (
             <MyWorkViewsSurface
+              actorEmail={user?.email || ""}
               actorId={user?.uid || ""}
+              actorMemberId={personalActor.memberId || null}
               ctxExtras={{
                 navigate: (to) => navigate(to),
                 openOdysseus: (scope) => {

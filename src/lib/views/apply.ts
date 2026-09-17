@@ -8,6 +8,8 @@ import type {
   SavedView,
 } from "./types";
 import type { RecordValue } from "../tables/types";
+import { isTodayTask } from "../appleWidget";
+import { isThisWeekTask } from "../myWorkItems";
 
 function todayKey(now: Date): string {
   const y = now.getFullYear();
@@ -39,6 +41,28 @@ function columnById<Row>(adapter: EntityAdapter<Row>, id: string): ColumnDef<Row
 function isDoneValue(value: RecordValue): boolean {
   const raw = asString(value).toLowerCase();
   return ["done", "completed", "closed", "cancelled"].includes(raw);
+}
+
+function meTokens(ctx: ApplyContext): Set<string> {
+  const tokens = new Set<string>();
+  if (ctx.userId) tokens.add(String(ctx.userId));
+  for (const id of ctx.memberIds || []) {
+    if (id) tokens.add(String(id));
+  }
+  return tokens;
+}
+
+function valueMatchesMe(value: RecordValue, ctx: ApplyContext): boolean {
+  const tokens = meTokens(ctx);
+  if (!tokens.size) return false;
+  if (Array.isArray(value)) {
+    return value.some((entry) => tokens.has(String(entry)));
+  }
+  const text = asString(value);
+  if (!text) return false;
+  // Person columns may join ids with commas via asString — also check raw text.
+  if (tokens.has(text)) return true;
+  return text.split(",").some((part) => tokens.has(part.trim()));
 }
 
 function matchesFilter<Row>(
@@ -75,8 +99,7 @@ function matchesFilter<Row>(
     case "after":
       return Boolean(dateKey && dateKey > String(rule.value ?? ""));
     case "me":
-      if (Array.isArray(value)) return value.map(String).includes(ctx.userId);
-      return text === ctx.userId;
+      return valueMatchesMe(value, ctx);
     case "overdue": {
       if (!dateKey || dateKey >= todayKey(now)) return false;
       const statusCol =
@@ -86,14 +109,23 @@ function matchesFilter<Row>(
       return true;
     }
     case "today": {
-      return dateKey === todayKey(now);
+      if (dateKey === todayKey(now)) return true;
+      // Align with My Work: One Thing / timeSector today without dueDate.
+      if (row && typeof row === "object") {
+        return isTodayTask(row, todayKey(now));
+      }
+      return false;
     }
     case "week": {
-      if (!dateKey) return false;
-      const start = todayKey(now);
-      // Inclusive through Saturday noon week end (same window as itemTiming).
-      const end = weekEndKey(now);
-      return dateKey >= start && dateKey <= end;
+      if (dateKey) {
+        const start = todayKey(now);
+        const end = weekEndKey(now);
+        if (dateKey >= start && dateKey <= end) return true;
+      }
+      if (row && typeof row === "object") {
+        return isThisWeekTask(row as Record<string, unknown>, now);
+      }
+      return false;
     }
     default:
       return true;
