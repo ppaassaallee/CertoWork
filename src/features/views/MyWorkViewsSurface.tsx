@@ -17,6 +17,8 @@ import {
   type TaskRow,
 } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
+import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
+import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 
 export function MyWorkViewsSurface({
   tasks,
@@ -24,6 +26,8 @@ export function MyWorkViewsSurface({
   workspaceId,
   projects = [],
   members = [],
+  actorEmail = "",
+  actorMemberId = null,
   onUpdateTask,
   onOpenItem,
   onOpenCollab,
@@ -35,7 +39,9 @@ export function MyWorkViewsSurface({
   actorId: string;
   workspaceId: string;
   projects?: Array<{ id: string; title?: string; name?: string }>;
-  members?: Array<{ id: string; displayName?: string; email?: string; publicAlias?: string }>;
+  members?: WorkspaceMember[];
+  actorEmail?: string;
+  actorMemberId?: string | null;
   onUpdateTask(taskId: string, patch: Record<string, unknown>): Promise<void> | void;
   onOpenItem(id: string): void;
   onOpenCollab?(projectId: string): void;
@@ -45,6 +51,14 @@ export function MyWorkViewsSurface({
   preferredSystemViewId?: string | null;
 }) {
   const surface: Surface = "my-work";
+  const meMemberIds = useMemo(
+    () =>
+      actorEquivalentMemberIds(
+        { userId: actorId, memberId: actorMemberId, email: actorEmail },
+        members,
+      ),
+    [actorId, actorMemberId, actorEmail, members],
+  );
   const adapter = useMemo(
     () =>
       buildTaskAdapter({
@@ -202,9 +216,10 @@ export function MyWorkViewsSurface({
         <ViewGrid
           adapter={adapter}
           ctx={ctx}
+          memberIds={meMemberIds}
           members={members.map((member) => ({
             id: member.id,
-            name: member.displayName || member.publicAlias || member.email || member.id,
+            name: member.displayName || member.alias || member.email || member.id,
             email: member.email || "",
           }))}
           onOpenRow={(row) => onOpenItem(String(row.id))}

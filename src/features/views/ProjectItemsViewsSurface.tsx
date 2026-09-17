@@ -14,6 +14,8 @@ import { ViewsBar } from "./ViewsBar";
 import { ViewCustomizer } from "./ViewCustomizer";
 import { buildTaskAdapter, type TaskRow } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
+import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
+import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 
 export function ProjectItemsViewsSurface({
   projectId,
@@ -33,7 +35,7 @@ export function ProjectItemsViewsSurface({
   actorId: string;
   workspaceId: string;
   projects?: Array<{ id: string; title?: string; name?: string }>;
-  members?: Array<{ id: string; displayName?: string; email?: string; publicAlias?: string }>;
+  members?: WorkspaceMember[];
   onUpdateTask(taskId: string, patch: Record<string, unknown>): Promise<void> | void;
   onOpenItem(id: string): void;
   onOpenCollab?(projectId: string): void;
@@ -41,6 +43,17 @@ export function ProjectItemsViewsSurface({
   ctxExtras?: Partial<ActionContext>;
 }) {
   const surface = `project:${projectId}` as Surface;
+  const meMemberIds = useMemo(
+    () =>
+      actorEquivalentMemberIds(
+        {
+          userId: actorId,
+          memberId: members.find((member) => member.userId === actorId)?.id,
+        },
+        members,
+      ),
+    [actorId, members],
+  );
   const adapter = useMemo(
     () =>
       buildTaskAdapter({
@@ -148,9 +161,10 @@ export function ProjectItemsViewsSurface({
         <ViewGrid
           adapter={adapter}
           ctx={ctx}
+          memberIds={meMemberIds}
           members={members.map((member) => ({
             id: member.id,
-            name: member.displayName || member.publicAlias || member.email || member.id,
+            name: member.displayName || member.alias || member.email || member.id,
             email: member.email || "",
           }))}
           onOpenRow={(row) => onOpenItem(String(row.id))}

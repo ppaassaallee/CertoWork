@@ -95,7 +95,13 @@ export type SavedView = {
 };
 
 export type ApplyContext = {
+  /** Firebase auth uid (or equivalent actor id). */
   userId: string;
+  /**
+   * Workspace member ids / aliases that also mean "me"
+   * (e.g. `${workspaceId}_${uid}`, pending invite seats).
+   */
+  memberIds?: string[];
   now?: Date;
 };
 

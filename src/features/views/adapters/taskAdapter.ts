@@ -161,10 +161,11 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       width: 140,
       read: (row) => {
         const ids = assigneeIdsOf(row);
-        return ids[0] || null;
+        // Return all ids so filter op "me" / "in" can match any assignee.
+        return ids.length ? ids : null;
       },
       write: async (row, value) => {
-        const id = value == null || value === "" ? null : String(value);
+        const id = value == null || value === "" ? null : String(Array.isArray(value) ? value[0] : value);
         await deps.onUpdateTask(row.id, {
           assigneeIds: id ? [id] : [],
           assigneeId: id,
@@ -444,13 +445,26 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       group: "assign",
       canRun: (rows, ctx) => rows.length > 0 && Boolean(ctx.userId),
       run: async (rows, ctx) => {
+        const member =
+          (deps.members || []).find(
+            (entry) =>
+              String((entry as { userId?: string }).userId || "") === ctx.userId ||
+              entry.id === ctx.userId,
+          ) || null;
+        const assigneeId = member?.id || ctx.userId;
+        const label =
+          (member as { displayName?: string; alias?: string; email?: string } | null)
+            ?.displayName ||
+          (member as { alias?: string } | null)?.alias ||
+          (member as { email?: string } | null)?.email ||
+          assigneeId;
         for (const row of rows) {
           await deps.onUpdateTask(row.id, {
-            assigneeIds: [ctx.userId],
-            assigneeId: ctx.userId,
-            owner: ctx.userId,
-            assignee: ctx.userId,
-            assignees: [ctx.userId],
+            assigneeIds: [assigneeId],
+            assigneeId,
+            owner: label,
+            assignee: label,
+            assignees: [label],
           });
         }
       },
