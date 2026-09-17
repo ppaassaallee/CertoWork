@@ -15,6 +15,11 @@ import {
   writeProjectSurfaceView,
 } from "../features/overview";
 import { ProjectsViewsSurface } from "../features/views/ProjectsViewsSurface";
+import { ProjectItemsViewsSurface } from "../features/views/ProjectItemsViewsSurface";
+import { isViewsEngineEnabled } from "../features/views/viewsEngineFlag";
+import { applyView } from "../lib/views/apply";
+import { buildTaskAdapter, type TaskRow } from "../features/views/adapters/taskAdapter";
+import type { SavedView } from "../lib/views/types";
 import {
   AlertTriangle,
   Archive,
@@ -1621,6 +1626,36 @@ export function ProjectConsolePanel({
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
+  const [engineItemsView, setEngineItemsView] = useState<SavedView | null>(null);
+  const viewsEngineOn = isViewsEngineEnabled();
+  const workspaceIdForViews = String(
+    (workspace as { id?: string } | null | undefined)?.id ||
+      project.workspaceId ||
+      "",
+  );
+  const projectTaskAdapter = useMemo(
+    () =>
+      buildTaskAdapter({
+        actorId: String(currentUser?.uid || ""),
+        workspaceId: workspaceIdForViews,
+        projects: workspaceProjects?.length ? workspaceProjects : [project],
+        onUpdateTask,
+        onOpenCollab: openCollabProject,
+      }),
+    [
+      currentUser?.uid,
+      workspaceIdForViews,
+      project,
+      workspaceProjects,
+      onUpdateTask,
+    ],
+  );
+  const engineQueriedTasks = useMemo(() => {
+    if (!viewsEngineOn || !engineItemsView) return tasks;
+    return applyView(tasks as TaskRow[], projectTaskAdapter, engineItemsView, {
+      userId: String(currentUser?.uid || ""),
+    }).rows;
+  }, [viewsEngineOn, engineItemsView, tasks, projectTaskAdapter, currentUser?.uid]);
   const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
     if (!isOverviewEnabled()) return "list";
     const saved = readProjectSurfaceView(String(project?.id || ""));
@@ -2325,6 +2360,20 @@ export function ProjectConsolePanel({
 
       {tab === "items" && !(isOverviewEnabled() && chromeView === "overview") && (
         <div className="do-notion-body do-console-section" data-testid="project-items">
+          {viewsEngineOn && notionMode === "list" ? (
+            <ProjectItemsViewsSurface
+              actorId={String(currentUser?.uid || "")}
+              members={workspaceMembers}
+              onOpenCollab={openCollabProject}
+              onOpenItem={(id) => setSelectedWorkItemId(id)}
+              onUpdateTask={onUpdateTask}
+              onViewChange={setEngineItemsView}
+              projectId={String(project.id)}
+              projects={workspaceProjects?.length ? workspaceProjects : [project]}
+              tasks={tasks as TaskRow[]}
+              workspaceId={workspaceIdForViews}
+            />
+          ) : (
           <WorkItemsCenter
             activeProject={project}
             compact
@@ -2360,9 +2409,10 @@ export function ProjectConsolePanel({
             selectedItemId={selectedWorkItemId}
             sprints={sprints}
             tags={tags}
-            tasks={tasks}
+            tasks={viewsEngineOn ? engineQueriedTasks : tasks}
             workspaceMembers={workspaceMembers}
           />
+          )}
         </div>
       )}
 
