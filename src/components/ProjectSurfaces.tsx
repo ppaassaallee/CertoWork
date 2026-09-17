@@ -16,11 +16,7 @@ import {
 } from "../features/overview";
 import { ProjectsViewsSurface } from "../features/views/ProjectsViewsSurface";
 import { ProjectItemsViewsSurface } from "../features/views/ProjectItemsViewsSurface";
-import { isViewsEngineEnabled } from "../features/views/viewsEngineFlag";
-import { applyView } from "../lib/views/apply";
-import { buildTaskAdapter, type TaskRow } from "../features/views/adapters/taskAdapter";
-import type { SavedView } from "../lib/views/types";
-import { actorEquivalentMemberIds } from "../lib/myWorkItems";
+import { type TaskRow } from "../features/views/adapters/taskAdapter";
 import {
   AlertTriangle,
   Archive,
@@ -1628,52 +1624,11 @@ export function ProjectConsolePanel({
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
-  const [engineItemsView, setEngineItemsView] = useState<SavedView | null>(null);
-  const viewsEngineOn = isViewsEngineEnabled();
   const workspaceIdForViews = String(
     (workspace as { id?: string } | null | undefined)?.id ||
       project.workspaceId ||
       "",
   );
-  const projectTaskAdapter = useMemo(
-    () =>
-      buildTaskAdapter({
-        actorId: String(currentUser?.uid || ""),
-        workspaceId: workspaceIdForViews,
-        projects: workspaceProjects?.length ? workspaceProjects : [project],
-        onUpdateTask,
-        onOpenCollab: openCollabProject,
-      }),
-    [
-      currentUser?.uid,
-      workspaceIdForViews,
-      project,
-      workspaceProjects,
-      onUpdateTask,
-    ],
-  );
-  const engineQueriedTasks = useMemo(() => {
-    if (!viewsEngineOn || !engineItemsView) return tasks;
-    const uid = String(currentUser?.uid || "");
-    const memberIds = actorEquivalentMemberIds(
-      {
-        userId: uid,
-        memberId: workspaceMembers.find((member) => member.userId === uid)?.id,
-      },
-      workspaceMembers as WorkspaceMember[],
-    );
-    return applyView(tasks as TaskRow[], projectTaskAdapter, engineItemsView, {
-      userId: uid,
-      memberIds,
-    }).rows;
-  }, [
-    viewsEngineOn,
-    engineItemsView,
-    tasks,
-    projectTaskAdapter,
-    currentUser?.uid,
-    workspaceMembers,
-  ]);
   const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
     if (!isOverviewEnabled()) return "list";
     const saved = readProjectSurfaceView(String(project?.id || ""));
@@ -1704,7 +1659,6 @@ export function ProjectConsolePanel({
     }
   }, [project?.id]);
 
-  const [notionSearchOpen, setNotionSearchOpen] = useState(false);
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [notionSortOpen, setNotionSortOpen] = useState(false);
   const { openRoutine } = useRoutineHost();
@@ -2220,7 +2174,6 @@ export function ProjectConsolePanel({
             writeProjectSurfaceView(String(project.id), notionMode);
             setNotionFilterOpen((open) => !open);
             setNotionSortOpen(false);
-            setNotionSearchOpen(false);
           }}
           onToggleSort={() => {
             setTab("items");
@@ -2228,7 +2181,6 @@ export function ProjectConsolePanel({
             writeProjectSurfaceView(String(project.id), notionMode);
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
-            setNotionSearchOpen(false);
           }}
           showActions={chromeView !== "overview" && tab !== "costs"}
           showCosts={canViewFinance}
@@ -2378,59 +2330,41 @@ export function ProjectConsolePanel({
 
       {tab === "items" && !(isOverviewEnabled() && chromeView === "overview") && (
         <div className="do-notion-body do-console-section" data-testid="project-items">
-          {viewsEngineOn && notionMode === "list" ? (
-            <ProjectItemsViewsSurface
-              actorId={String(currentUser?.uid || "")}
-              members={workspaceMembers}
-              onOpenCollab={openCollabProject}
-              onOpenItem={(id) => setSelectedWorkItemId(id)}
-              onUpdateTask={onUpdateTask}
-              onViewChange={setEngineItemsView}
-              projectId={String(project.id)}
-              projects={workspaceProjects?.length ? workspaceProjects : [project]}
-              tasks={tasks as TaskRow[]}
-              workspaceId={workspaceIdForViews}
-            />
-          ) : (
-          <WorkItemsCenter
-            activeProject={project}
-            compact
-            notionFilterOpen={notionFilterOpen}
-            notionMode={notionMode}
-            notionSearchOpen={notionSearchOpen}
-            notionSortOpen={notionSortOpen}
-            notionSurface
-            onAddTask={(projectId, title, status, patch) =>
-              onAddTask(title, status, { ...patch, projectId })
-            }
-            onAsk={onAsk}
-            onAskOdysseus={onAskOdysseus}
-            onCreateControlledOption={onCreateControlledOption}
-            onCreateSprint={onCreateSprint}
-            onGanttFocusChange={setGanttFocus}
-            onInviteAssigneeEmail={onInviteAssigneeEmail}
-            onNotionFilterOpenChange={setNotionFilterOpen}
-            onNotionModeChange={(mode) => {
-              setNotionMode(mode);
-              setChromeView(mode);
-              writeProjectSurfaceView(String(project.id), mode);
+          <ProjectItemsViewsSurface
+            actorId={String(currentUser?.uid || "")}
+            listBody={{
+              hierarchyTasks: tasks,
+              mode: notionMode,
+              onAddTask: (title, status, patch) => onAddTask(title, status, patch),
+              onAsk,
+              onAskOdysseus,
+              onCreateControlledOption,
+              onCreateSprint,
+              onGanttFocusChange: setGanttFocus,
+              onInviteAssigneeEmail,
+              onModeChange: (mode) => {
+                setNotionMode(mode);
+                setChromeView(mode);
+                writeProjectSurfaceView(String(project.id), mode);
+              },
+              onOpenFinanceLine: openFinanceLine,
+              onSelectItem: setSelectedWorkItemId,
+              onTimelineModeChange: setTimelineMode,
+              onUpdateSprint,
+              project: project as Record<string, unknown> & { id: string },
+              selectedItemId: selectedWorkItemId,
+              sprints,
+              tags,
             }}
-            onNotionSortOpenChange={setNotionSortOpen}
-            onOpenCollabProject={openCollabProject}
-            onOpenFinanceLine={openFinanceLine}
-            onOpenProjectConsole={() => undefined}
-            onSelectItem={setSelectedWorkItemId}
-            onTimelineModeChange={setTimelineMode}
-            onUpdateSprint={onUpdateSprint}
+            members={workspaceMembers as WorkspaceMember[]}
+            onOpenCollab={openCollabProject}
+            onOpenItem={(id) => setSelectedWorkItemId(id)}
             onUpdateTask={onUpdateTask}
+            projectId={String(project.id)}
             projects={workspaceProjects?.length ? workspaceProjects : [project]}
-            selectedItemId={selectedWorkItemId}
-            sprints={sprints}
-            tags={tags}
-            tasks={viewsEngineOn ? engineQueriedTasks : tasks}
-            workspaceMembers={workspaceMembers}
+            tasks={tasks as TaskRow[]}
+            workspaceId={workspaceIdForViews}
           />
-          )}
         </div>
       )}
 

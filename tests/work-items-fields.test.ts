@@ -60,12 +60,17 @@ test("My Work uses the same unscoped item center as project backlog", () => {
   );
 
   const projectItems = projectSurfaces.match(
-    /data-testid="project-items"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
+    /data-testid="project-items"[\s\S]*?<ProjectItemsViewsSurface[\s\S]*?\/>/,
   );
-  assert.ok(projectItems, "project Items tab is missing WorkItemsCenter");
-  assert.match(projectItems[0], /tags=\{tags\}/);
-  assert.match(projectItems[0], /onCreateControlledOption=\{onCreateControlledOption\}/);
+  assert.ok(projectItems, "project Items tab is missing ProjectItemsViewsSurface");
+  assert.match(projectItems[0], /listBody=\{/);
+  assert.match(projectItems[0], /tags,/);
+  assert.match(projectItems[0], /onCreateControlledOption/);
   assert.match(projectItems[0], /projects=\{workspaceProjects/);
+  assert.match(
+    readFileSync(resolve("src/features/views/ProjectItemsViewsSurface.tsx"), "utf8"),
+    /WorkItemsCenter/,
+  );
 });
 
 test("project Work tab uses the same Kanban center as Items", () => {
