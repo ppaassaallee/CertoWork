@@ -6,6 +6,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
+  AlertTriangle,
   Archive,
   Calendar,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   CircleDot,
   Copy,
   FileText,
+  FolderKanban,
   Inbox,
   ListTodo,
   MessageSquare,
@@ -56,6 +58,8 @@ const ICON_MAP = {
   Copy,
   Repeat,
   MessageSquare,
+  FolderKanban,
+  AlertTriangle,
 } as const;
 
 export type ViewGridProps<Row> = {
