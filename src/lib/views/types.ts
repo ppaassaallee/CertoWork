@@ -67,7 +67,9 @@ export type FilterRule = {
     | "before"
     | "after"
     | "me"
-    | "overdue";
+    | "overdue"
+    | "today"
+    | "week";
   value?: unknown;
 };
 

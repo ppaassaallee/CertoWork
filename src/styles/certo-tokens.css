@@ -3372,3 +3372,30 @@
     right: 0;
   }
 }
+
+.cw-views-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 0;
+}
+.cw-views-filter-chips > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.cw-views-filter-chips > button:hover {
+  color: var(--text-primary);
+  background: var(--hover-overlay);
+}
+.cw-views-cell.is-hierarchy {
+  font-weight: 600;
+}
