@@ -621,7 +621,7 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
         quickActions: isProject
           ? ["complete", "assign_me", "odysseus", "archive"]
           : ["complete", "key_today", "odysseus", "assign_me"],
-        filters: isProject ? [] : [{ columnId: "assignee", op: "me" }],
+        filters: [],
         sort: [{ columnId: "due", dir: "asc" }],
         groupBy: isProject ? "epic" : null,
         density: "comfortable",

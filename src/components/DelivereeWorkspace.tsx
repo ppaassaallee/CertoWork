@@ -8335,6 +8335,54 @@ export function DelivereeWorkspace() {
                 },
                 toast: (msg) => setNotice(msg),
               }}
+              listBody={{
+                hierarchyTasks: tasks,
+                notebookEntries,
+                onAddTask: async (...args) => addProjectTask(...args),
+                onAsk: (prompt) => {
+                  setComposer(prompt);
+                  goCenterView("conversation");
+                },
+                onAskOdysseus: (item) => {
+                  void openOdysseusPanel({
+                    kind: "item",
+                    entityId: String((item as { id?: string }).id || ""),
+                    label: entityTitle(item),
+                  });
+                },
+                onCreateControlledOption: createControlledOption,
+                onCreateSprint: createSprint,
+                onInviteAssigneeEmail: canManageMembers
+                  ? async (email) => {
+                      await inviteWorkspaceMember(email);
+                    }
+                  : undefined,
+                onOpenFinanceLine: (financeLineId) => {
+                  setHighlightFinanceLineId(financeLineId);
+                  navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+                },
+                onOpenNote: (noteId) => {
+                  setSelectedWorkItemId(null);
+                  navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                },
+                onOpenProjectConsole: openProjectRecord,
+                onOpenRecord: (tableId, recordId) => {
+                  setSelectedWorkItemId(null);
+                  navigate(
+                    `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                  );
+                },
+                onSelectItem: (id) => {
+                  if (id) openWorkOrRecord(id);
+                  else setSelectedWorkItemId(null);
+                },
+                onUpdateSprint: updateSprint,
+                selectedItemId: selectedWorkItemId,
+                sprints,
+                tags: categories,
+                workspaceRecords,
+                workspaceTables: visibleTables,
+              }}
               members={workspaceMembers}
               onOpenCollab={(projectId) => navigate(collabProjectPath(projectId))}
               onOpenItem={(id) => openWorkOrRecord(id)}
