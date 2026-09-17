@@ -2959,6 +2959,24 @@
   min-height: 0;
   display: flex;
 }
+.cw-views-surface.is-asana-list .cw-views-body.is-asana-list {
+  flex-direction: column;
+  overflow: auto;
+}
+.cw-views-surface.is-asana-list .do-items-center {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+}
+.cw-views-surface.is-asana-list .cw-views-bar {
+  background: transparent;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  padding: 4px 8px 8px;
+}
+.cw-views-surface.is-asana-list .cw-views-filter-chips {
+  padding: 0 8px 8px;
+}
 .cw-views-bar {
   display: flex;
   align-items: center;

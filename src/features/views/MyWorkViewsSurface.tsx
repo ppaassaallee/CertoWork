@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   createView,
   getLastUsedViewId,
@@ -7,8 +7,8 @@ import {
   setLastUsedView,
   updateView,
 } from "../../lib/views/storage";
+import { applyView } from "../../lib/views/apply";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
-import { ViewGrid } from "./ViewGrid";
 import { ViewsBar } from "./ViewsBar";
 import { ViewCustomizer } from "./ViewCustomizer";
 import {
@@ -19,7 +19,45 @@ import {
 import { t } from "../../lib/i18n";
 import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
+import { WorkItemsCenter } from "../../components/WorkItemsCenter";
+import type { WorkLane } from "../../lib/projectPortfolio";
 
+/** Props forwarded into the Asana-style list body (WorkItemsCenter). */
+export type MyWorkListBodyProps = {
+  hierarchyTasks?: unknown[];
+  tags?: unknown[];
+  sprints?: unknown[];
+  selectedItemId: string | null;
+  onSelectItem: (id: string | null) => void;
+  onAsk: (prompt: string) => void;
+  onAskOdysseus?: (item: unknown) => void;
+  onAddTask: (
+    projectId: string,
+    title: string,
+    status: WorkLane,
+    patch?: Record<string, unknown>,
+  ) => Promise<string | void> | void;
+  onCreateControlledOption?: (
+    group: "delivery_entity" | "client_entity" | "tag",
+    name: string,
+  ) => Promise<string | void> | string | void;
+  onOpenProjectConsole: (project: unknown) => void;
+  onOpenFinanceLine?: (financeLineId: string) => void;
+  onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
+  onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
+  onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
+  notebookEntries?: unknown[];
+  onOpenNote?: (noteId: string) => void;
+  workspaceTables?: unknown[];
+  workspaceRecords?: unknown[];
+  onOpenRecord?: (tableId: string, recordId: string) => void;
+};
+
+/**
+ * My Work hybrid:
+ * - Views engine chrome (saved views, filters, customizer, applyView)
+ * - Asana-like list body via WorkItemsCenter (action buttons, attr icons, hierarchy)
+ */
 export function MyWorkViewsSurface({
   tasks,
   actorId,
@@ -29,11 +67,12 @@ export function MyWorkViewsSurface({
   actorEmail = "",
   actorMemberId = null,
   onUpdateTask,
-  onOpenItem,
   onOpenCollab,
   onDuplicate,
-  ctxExtras,
   preferredSystemViewId,
+  listBody,
+  /** Optional escape hatch: spreadsheet ViewGrid instead of Asana list. */
+  listRenderer,
 }: {
   tasks: TaskRow[];
   actorId: string;
@@ -43,12 +82,17 @@ export function MyWorkViewsSurface({
   actorEmail?: string;
   actorMemberId?: string | null;
   onUpdateTask(taskId: string, patch: Record<string, unknown>): Promise<void> | void;
-  onOpenItem(id: string): void;
+  onOpenItem?(id: string): void;
   onOpenCollab?(projectId: string): void;
   onDuplicate?(row: TaskRow): Promise<void> | void;
   ctxExtras?: Partial<ActionContext>;
-  /** Sync from route: today / overdue / week */
   preferredSystemViewId?: string | null;
+  listBody: MyWorkListBodyProps;
+  listRenderer?: (args: {
+    rows: TaskRow[];
+    view: SavedView;
+    memberIds: string[];
+  }) => ReactNode;
 }) {
   const surface: Surface = "my-work";
   const meMemberIds = useMemo(
@@ -72,10 +116,7 @@ export function MyWorkViewsSurface({
       }),
     [actorId, workspaceId, projects, members, onUpdateTask, onOpenCollab, onDuplicate],
   );
-  const defaultView = useMemo(
-    () => adapter.defaultView(surface),
-    [adapter],
-  );
+  const defaultView = useMemo(() => adapter.defaultView(surface), [adapter]);
   const systemViews = useMemo(
     () => buildMyWorkSystemViews(workspaceId, actorId, defaultView),
     [workspaceId, actorId, defaultView],
@@ -124,14 +165,14 @@ export function MyWorkViewsSurface({
 
   const active = views.find((view) => view.id === activeId) || defaultView;
 
-  const ctx: ActionContext = {
-    userId: actorId,
-    workspaceId,
-    navigate: ctxExtras?.navigate || (() => undefined),
-    openItem: (id) => onOpenItem(id),
-    openOdysseus: ctxExtras?.openOdysseus || (() => undefined),
-    toast: ctxExtras?.toast || (() => undefined),
-  };
+  const appliedRows = useMemo(
+    () =>
+      applyView(tasks, adapter, active, {
+        userId: actorId,
+        memberIds: meMemberIds,
+      }).rows,
+    [tasks, adapter, active, actorId, meMemberIds],
+  );
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
@@ -159,7 +200,7 @@ export function MyWorkViewsSurface({
   };
 
   return (
-    <div className="cw-views-surface" data-testid="my-work-views-surface">
+    <div className="cw-views-surface is-asana-list" data-testid="my-work-views-surface">
       <ViewsBar
         activeViewId={active.id}
         filterCount={active.filters.length}
@@ -212,21 +253,39 @@ export function MyWorkViewsSurface({
           })}
         </div>
       ) : null}
-      <div className="cw-views-body">
-        <ViewGrid
-          adapter={adapter}
-          ctx={ctx}
-          memberIds={meMemberIds}
-          members={members.map((member) => ({
-            id: member.id,
-            name: member.displayName || member.alias || member.email || member.id,
-            email: member.email || "",
-          }))}
-          onOpenRow={(row) => onOpenItem(String(row.id))}
-          rows={tasks}
-          testId="my-work-grid"
-          view={active}
-        />
+      <div className="cw-views-body is-asana-list" data-testid="my-work-asana-list">
+        {listRenderer ? (
+          listRenderer({ rows: appliedRows, view: active, memberIds: meMemberIds })
+        ) : (
+          <WorkItemsCenter
+            activeProject={null}
+            forceMode="list"
+            hierarchyTasks={listBody.hierarchyTasks}
+            notebookEntries={listBody.notebookEntries as any[]}
+            onAddTask={listBody.onAddTask as any}
+            onAsk={listBody.onAsk}
+            onAskOdysseus={listBody.onAskOdysseus as any}
+            onCreateControlledOption={listBody.onCreateControlledOption}
+            onCreateSprint={listBody.onCreateSprint}
+            onInviteAssigneeEmail={listBody.onInviteAssigneeEmail}
+            onOpenCollabProject={onOpenCollab}
+            onOpenFinanceLine={listBody.onOpenFinanceLine}
+            onOpenNote={listBody.onOpenNote}
+            onOpenProjectConsole={listBody.onOpenProjectConsole as any}
+            onOpenRecord={listBody.onOpenRecord}
+            onSelectItem={listBody.onSelectItem}
+            onUpdateSprint={listBody.onUpdateSprint}
+            onUpdateTask={onUpdateTask}
+            projects={projects}
+            selectedItemId={listBody.selectedItemId}
+            sprints={listBody.sprints as any[]}
+            tags={listBody.tags as any[]}
+            tasks={appliedRows}
+            workspaceMembers={members}
+            workspaceRecords={listBody.workspaceRecords as any[]}
+            workspaceTables={listBody.workspaceTables as any[]}
+          />
+        )}
         <ViewCustomizer
           adapter={adapter}
           onChange={(next) => {

@@ -42,8 +42,22 @@ test("My Work uses the same unscoped item center as project backlog", () => {
   );
   assert.ok(myWork, "My Work shell is missing MyWorkViewsSurface");
   assert.match(myWork[0], /tasks=\{myWorkTasks/);
-  assert.match(myWork[0], /surface|workspaceId=\{workspace/);
+  assert.match(myWork[0], /listBody=\{/);
+  assert.match(myWork[0], /hierarchyTasks: tasks/);
+  assert.match(myWork[0], /workspaceId=\{workspace/);
   assert.match(workspace, /MyWorkViewsSurface/);
+  assert.match(
+    readFileSync(resolve("src/features/views/MyWorkViewsSurface.tsx"), "utf8"),
+    /WorkItemsCenter/,
+  );
+  assert.match(
+    readFileSync(resolve("src/features/views/MyWorkViewsSurface.tsx"), "utf8"),
+    /applyView/,
+  );
+  assert.match(
+    readFileSync(resolve("src/features/views/MyWorkViewsSurface.tsx"), "utf8"),
+    /my-work-asana-list/,
+  );
 
   const projectItems = projectSurfaces.match(
     /data-testid="project-items"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
