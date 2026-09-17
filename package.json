@@ -11,6 +11,8 @@
     "deploy:cloudflare:dry": "npm run build && npx wrangler deploy --dry-run",
     "test": "tsx --test tests/*.test.ts",
     "lint": "eslint .",
+    "lint:budget": "node scripts/lint-budget.mjs",
+    "lint:budget:write": "node scripts/lint-budget.mjs --write",
     "preview": "vite preview"
   },
   "dependencies": {
