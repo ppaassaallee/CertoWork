@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-09-17T13:49:14.908Z",
+  "any": 1374,
+  "select": 299,
+  "gray": 4229,
+  "localeTernaries": 366,
+  "confirm": 15,
+  "notes": {
+    "any": "`: any`, `as any`, `<any>`, `any[` in src",
+    "select": "`<select` JSX openings in src",
+    "gray": "Tailwind gray/slate/zinc color utilities in src",
+    "localeTernaries": "`locale === \"es|en\"` / getLocale() ternaries",
+    "confirm": "`window.confirm|alert(` calls"
+  },
+  "source": "paso-0-baseline",
+  "runbookTargets": {
+    "any": 1158,
+    "select": 297,
+    "gray": 4222,
+    "localeTernaries": 187,
+    "confirm": 14
+  }
+}
