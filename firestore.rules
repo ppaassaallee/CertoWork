@@ -332,18 +332,28 @@ service cloud.firestore {
 
     // Users
     function isValidUser(data) {
-      return data.keys().hasAll(['email', 'createdAt']) && data.keys().size() == 2
+      return data.keys().hasAll(['email', 'createdAt'])
         && data.email is string && data.email.size() > 0 && data.email.size() <= 200
-        && data.createdAt is timestamp;
+        && data.createdAt is timestamp
+        && (!('lastViews' in data) || data.lastViews is map)
+        && (!('directionLayout' in data) || data.directionLayout is map)
+        && data.keys().hasOnly(['email', 'createdAt', 'lastViews', 'directionLayout']);
     }
     match /users/{userId} {
       allow get: if isSignedIn() && isOwner(userId) && isValidId(userId);
       allow create: if isSignedIn() && isOwner(userId) && isValidId(userId)
                     && isValidUser(incoming());
       allow update: if isSignedIn() && isOwner(userId) && isValidId(userId)
-                    && isValidUser(incoming())
-                    && incoming().email == resource.data.email
-                    && incoming().createdAt == resource.data.createdAt;
+                    && (
+                      (
+                        isValidUser(incoming())
+                        && incoming().email == resource.data.email
+                        && incoming().createdAt == resource.data.createdAt
+                      )
+                      || incoming().diff(resource.data).affectedKeys().hasOnly(['lastViews'])
+                      || incoming().diff(resource.data).affectedKeys().hasOnly(['directionLayout'])
+                      || incoming().diff(resource.data).affectedKeys().hasOnly(['lastViews', 'directionLayout'])
+                    );
     }
 
     // Inbox Items
@@ -1642,6 +1652,53 @@ service cloud.firestore {
       allow delete: if isSignedIn()
         && resource.data.workspaceId is string
         && isWorkspaceMember(resource.data.workspaceId);
+    }
+
+    // Saved views engine (personal + team layouts per surface)
+    match /saved_views/{id} {
+      allow get: if isSignedIn() && isValidId(id)
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.scope == "team"
+          || resource.data.ownerId == request.auth.uid
+        );
+      allow list: if isSignedIn()
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.scope == "team"
+          || resource.data.ownerId == request.auth.uid
+        );
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().ownerId == request.auth.uid
+        && incoming().scope in ["personal", "team"]
+        && incoming().surface is string
+        && incoming().name is string;
+      allow update: if isSignedIn() && isValidId(id)
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.ownerId == request.auth.uid
+          || (
+            resource.data.scope == "team"
+            && get(memberDoc(resource.data.workspaceId)).data.role in ["owner", "admin"]
+          )
+        )
+        && incoming().ownerId == resource.data.ownerId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if isSignedIn() && isValidId(id)
+        && resource.data.workspaceId is string
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.ownerId == request.auth.uid
+          || (
+            resource.data.scope == "team"
+            && get(memberDoc(resource.data.workspaceId)).data.role in ["owner", "admin"]
+          )
+        );
     }
   }
 }
