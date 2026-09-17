@@ -594,19 +594,22 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
     },
     defaultView: (surface: Surface): SavedView => {
       const now = new Date().toISOString();
+      const isProject = surface.startsWith("project:");
       return {
         id: `default:${surface}`,
         workspaceId: deps.workspaceId,
         surface,
-        name: t("views.myView"),
+        name: isProject ? t("views.default") : t("views.myView"),
         scope: "personal",
         ownerId: deps.actorId,
         layout: "table",
         columns: defaultColumns.map((id) => ({ id })),
-        quickActions: ["complete", "key_today", "odysseus", "assign_me"],
-        filters: [{ columnId: "assignee", op: "me" }],
+        quickActions: isProject
+          ? ["complete", "assign_me", "odysseus", "archive"]
+          : ["complete", "key_today", "odysseus", "assign_me"],
+        filters: isProject ? [] : [{ columnId: "assignee", op: "me" }],
         sort: [{ columnId: "due", dir: "asc" }],
-        groupBy: null,
+        groupBy: isProject ? "epic" : null,
         density: "comfortable",
         showSubtasks: true,
         isDefault: true,
