@@ -85,9 +85,28 @@ function matchesFilter<Row>(
       if (statusCol && isDoneValue(statusCol.read(row))) return false;
       return true;
     }
+    case "today": {
+      return dateKey === todayKey(now);
+    }
+    case "week": {
+      if (!dateKey) return false;
+      const start = todayKey(now);
+      // Inclusive through Saturday noon week end (same window as itemTiming).
+      const end = weekEndKey(now);
+      return dateKey >= start && dateKey <= end;
+    }
     default:
       return true;
   }
+}
+
+function weekEndKey(now: Date): string {
+  const day = now.getDay(); // 0 Sun … 6 Sat
+  const daysUntilSat = (6 - day + 7) % 7;
+  const end = new Date(now);
+  end.setHours(0, 0, 0, 0);
+  end.setDate(end.getDate() + daysUntilSat);
+  return todayKey(end);
 }
 
 function compareValues(left: RecordValue, right: RecordValue): number {

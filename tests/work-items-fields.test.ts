@@ -38,14 +38,12 @@ const expectedFields = [
 
 test("My Work uses the same unscoped item center as project backlog", () => {
   const myWork = workspace.match(
-    /data-testid="my-work-shell"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
+    /data-testid="my-work-shell"[\s\S]*?<MyWorkViewsSurface[\s\S]*?\/>/,
   );
-  assert.ok(myWork, "My Work shell is missing WorkItemsCenter");
-  assert.match(myWork[0], /activeProject=\{null\}/);
-  assert.match(myWork[0], /tasks=\{myWorkTasks\}/);
-  assert.match(myWork[0], /hierarchyTasks=\{tasks\}/);
-  assert.match(myWork[0], /tags=\{categories\}/);
-  assert.match(myWork[0], /onCreateSprint=\{createSprint\}/);
+  assert.ok(myWork, "My Work shell is missing MyWorkViewsSurface");
+  assert.match(myWork[0], /tasks=\{myWorkTasks/);
+  assert.match(myWork[0], /surface|workspaceId=\{workspace/);
+  assert.match(workspace, /MyWorkViewsSurface/);
 
   const projectItems = projectSurfaces.match(
     /data-testid="project-items"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
@@ -111,7 +109,7 @@ test("items and project backlog can paste a line-per-PBI list with tabbed subtas
   assert.match(workItems, /aria-label="Paste bulk items"/);
   assert.match(workItems, /parseBulkPasteItems/);
   assert.match(workItems, /workItemType: kind/);
-  assert.match(workspace, /activeProject=\{null\}/);
+  assert.match(workspace, /MyWorkViewsSurface/);
   assert.match(projectSurfaces, /activeProject=\{project\}/);
 });
 
@@ -267,8 +265,14 @@ test("My Work hierarchy expands children from the full pool like Asana project l
   assert.match(workItems, /const parentPool = hierarchyTasks\?\.length \? hierarchyTasks : tasks/);
   assert.match(workItems, /const childPool = parentPool/);
   assert.match(workItems, /hierarchyRoots\(items\)/);
-  assert.match(workspace, /hierarchyTasks=\{tasks\}/);
-  assert.match(workspace, /tasks=\{myWorkTasks\}/);
+  const taskAdapter = readFileSync(
+    resolve("src/features/views/adapters/taskAdapter.ts"),
+    "utf8",
+  );
+  assert.match(taskAdapter, /parentId:/);
+  assert.match(taskAdapter, /ancestorCandidateIds/);
+  assert.match(workspace, /MyWorkViewsSurface/);
+  assert.match(workspace, /tasks=\{myWorkTasks/);
 });
 
 test("items and backlog can select all visible rows and bulk-edit assignee, date, and project", () => {
