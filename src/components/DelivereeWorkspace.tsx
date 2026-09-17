@@ -223,7 +223,7 @@ import {
   type FeedbackStatus,
 } from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
-import { WorkItemsCenter } from "./WorkItemsCenter";
+import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
 import {
   QuickCaptureModal,
   parentLinkPatch,
@@ -8318,60 +8318,36 @@ export function DelivereeWorkspace() {
                 projects={projects}
                 tasks={tasks}
               />
-            ) : (
-            <WorkItemsCenter
-            activeProject={null}
-            hierarchyTasks={tasks}
-            onAddTask={async (...args) => addProjectTask(...args)}
-            onAsk={(prompt) => {
-              setComposer(prompt);
-              goCenterView("conversation");
-            }}
-            onAskOdysseus={(item) => {
-              void openOdysseusPanel({
-                kind: "item",
-                entityId: String(item.id),
-                label: entityTitle(item),
-              });
-            }}
-            onCreateSprint={createSprint}
-            onOpenCollabProject={(projectId) => navigate(collabProjectPath(projectId))}
-            onOpenFinanceLine={(financeLineId) => {
-              setHighlightFinanceLineId(financeLineId);
-              navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
-            }}
-            onOpenProjectConsole={openProjectRecord}
-            onSelectItem={openWorkOrRecord}
-            onCreateControlledOption={createControlledOption}
-            onUpdateSprint={updateSprint}
-            onUpdateTask={updateProjectTask}
-            projects={projects}
-            selectedItemId={selectedWorkItemId}
-            sprints={sprints}
-            tags={categories}
-            tasks={myWorkTasks}
-            workspaceMembers={workspaceMembers}
-            notebookEntries={notebookEntries}
-            onOpenNote={(noteId) => {
-              setSelectedWorkItemId(null);
-              navigate(`/notes?note=${encodeURIComponent(noteId)}`);
-            }}
-            workspaceTables={visibleTables}
-            workspaceRecords={workspaceRecords}
-            onOpenRecord={(tableId, recordId) => {
-              setSelectedWorkItemId(null);
-              navigate(
-                `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
-              );
-            }}
-            onInviteAssigneeEmail={
-              canManageMembers
-                ? async (email) => {
-                    await inviteWorkspaceMember(email);
-                  }
-                : undefined
-            }
-          />
+            ) : lens.kind === "my-work" &&
+              (lens.section === "reviews" || lens.section === "captured") ? null : (
+            <MyWorkViewsSurface
+              actorId={user?.uid || ""}
+              ctxExtras={{
+                navigate: (to) => navigate(to),
+                openOdysseus: (scope) => {
+                  void openOdysseusPanel({
+                    kind: scope.entityType === "task" ? "item" : "item",
+                    entityId: scope.entityId,
+                    label: scope.entityId,
+                  });
+                },
+                toast: (msg) => setNotice(msg),
+              }}
+              members={workspaceMembers}
+              onOpenCollab={(projectId) => navigate(collabProjectPath(projectId))}
+              onOpenItem={(id) => openWorkOrRecord(id)}
+              onUpdateTask={updateProjectTask}
+              preferredSystemViewId={
+                lens.kind === "my-work" && lens.section === "today"
+                  ? "system:my-work:today"
+                  : lens.kind === "my-work" && lens.section === "this_week"
+                    ? "system:my-work:week"
+                    : null
+              }
+              projects={projects}
+              tasks={myWorkTasks as Array<Record<string, unknown> & { id: string }>}
+              workspaceId={workspace?.id || ""}
+            />
             )}
           </div>
         ) : centerView === "invoices" ? (
@@ -8509,6 +8485,7 @@ export function DelivereeWorkspace() {
           />
         ) : centerView === "portfolio" ? (
           <ProjectCommandCenter
+            actorId={user?.uid || ""}
             canViewFinance={canViewFinance}
             highlightFinanceLineId={highlightFinanceLineId}
             initialPortfolioView={
@@ -8576,6 +8553,7 @@ export function DelivereeWorkspace() {
             risks={risks}
             tags={categories}
             tasks={tasks}
+            workspaceId={workspace?.id || ""}
             workspaceMembers={workspaceMembers}
           />
         ) : centerView === "project" ? (

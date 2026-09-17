@@ -38,14 +38,12 @@ const expectedFields = [
 
 test("My Work uses the same unscoped item center as project backlog", () => {
   const myWork = workspace.match(
-    /data-testid="my-work-shell"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
+    /data-testid="my-work-shell"[\s\S]*?<MyWorkViewsSurface[\s\S]*?\/>/,
   );
-  assert.ok(myWork, "My Work shell is missing WorkItemsCenter");
-  assert.match(myWork[0], /activeProject=\{null\}/);
-  assert.match(myWork[0], /tasks=\{myWorkTasks\}/);
-  assert.match(myWork[0], /hierarchyTasks=\{tasks\}/);
-  assert.match(myWork[0], /tags=\{categories\}/);
-  assert.match(myWork[0], /onCreateSprint=\{createSprint\}/);
+  assert.ok(myWork, "My Work shell is missing MyWorkViewsSurface");
+  assert.match(myWork[0], /tasks=\{myWorkTasks/);
+  assert.match(myWork[0], /surface|workspaceId=\{workspace/);
+  assert.match(workspace, /MyWorkViewsSurface/);
 
   const projectItems = projectSurfaces.match(
     /data-testid="project-items"[\s\S]*?<WorkItemsCenter[\s\S]*?\/>/,
@@ -111,7 +109,7 @@ test("items and project backlog can paste a line-per-PBI list with tabbed subtas
   assert.match(workItems, /aria-label="Paste bulk items"/);
   assert.match(workItems, /parseBulkPasteItems/);
   assert.match(workItems, /workItemType: kind/);
-  assert.match(workspace, /activeProject=\{null\}/);
+  assert.match(workspace, /MyWorkViewsSurface/);
   assert.match(projectSurfaces, /activeProject=\{project\}/);
 });
 
@@ -267,8 +265,14 @@ test("My Work hierarchy expands children from the full pool like Asana project l
   assert.match(workItems, /const parentPool = hierarchyTasks\?\.length \? hierarchyTasks : tasks/);
   assert.match(workItems, /const childPool = parentPool/);
   assert.match(workItems, /hierarchyRoots\(items\)/);
-  assert.match(workspace, /hierarchyTasks=\{tasks\}/);
-  assert.match(workspace, /tasks=\{myWorkTasks\}/);
+  const taskAdapter = readFileSync(
+    resolve("src/features/views/adapters/taskAdapter.ts"),
+    "utf8",
+  );
+  assert.match(taskAdapter, /parentId:/);
+  assert.match(taskAdapter, /ancestorCandidateIds/);
+  assert.match(workspace, /MyWorkViewsSurface/);
+  assert.match(workspace, /tasks=\{myWorkTasks/);
 });
 
 test("items and backlog can select all visible rows and bulk-edit assignee, date, and project", () => {
@@ -290,20 +294,19 @@ test("items and backlog can select all visible rows and bulk-edit assignee, date
 
 test("portfolio list opens a project from the title and renames on double-click", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
-  assert.match(projectSurfaces, /function ProjectTitleCell/);
-  assert.match(projectSurfaces, /data-testid="project-title-open"/);
-  assert.match(projectSurfaces, /data-testid="project-title-rename"/);
-  assert.match(projectSurfaces, /onDoubleClick/);
-  assert.match(projectSurfaces, /event.stopPropagation\(\)/);
-  assert.match(projectSurfaces, /isTypingTarget/);
-  assert.match(projectSurfaces, /onOpen=\{\(\) => onOpenProject\(project\)\}/);
-  assert.match(projectSurfaces, /data-testid="projects-select-all-header"/);
-  assert.match(projectSurfaces, /toggleSelectAllProjects/);
-  assert.match(projectSurfaces, /<option value="none">Unassigned<\/option>/);
-  assert.match(projectSurfaces, /Unassign PM/);
-  assert.match(projectSurfaces, /Bulk project due date/);
-  assert.match(projectSurfaces, /Click the name to open the project/);
-  assert.doesNotMatch(projectSurfaces, /Edit the name directly/);
+  const projectsSurface = readFileSync(
+    resolve("src/features/views/ProjectsViewsSurface.tsx"),
+    "utf8",
+  );
+  const projectAdapter = readFileSync(
+    resolve("src/features/views/adapters/projectAdapter.ts"),
+    "utf8",
+  );
+  assert.match(projectSurfaces, /ProjectsViewsSurface/);
+  assert.match(projectsSurface, /data-testid="projects-views-surface"/);
+  assert.match(projectAdapter, /id: "title"/);
+  assert.match(projectAdapter, /id: "open"/);
+  assert.match(projectSurfaces, /onOpenProject=\{\(project\) => onOpenProject\(project\)\}/);
   assert.match(css, /\.do-command-project-title-open/);
 });
 

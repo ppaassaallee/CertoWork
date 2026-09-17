@@ -6,15 +6,26 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
+  AlertTriangle,
+  Archive,
+  Calendar,
+  CalendarDays,
+  Check,
   CircleDot,
+  Copy,
   FileText,
+  FolderKanban,
   Inbox,
   ListTodo,
+  MessageSquare,
   MoreHorizontal,
   Plus,
+  Repeat,
   Sparkles,
+  Star,
   Trash2,
   User,
+  UserPlus,
 } from "../../components/ui/Icon";
 import { applyView } from "../../lib/views/apply";
 import type {
@@ -31,6 +42,7 @@ import type { Column } from "../../lib/tables/types";
 const ICON_MAP = {
   CircleDot,
   User,
+  UserPlus,
   ListTodo,
   Inbox,
   FileText,
@@ -38,6 +50,16 @@ const ICON_MAP = {
   Trash2,
   MoreHorizontal,
   Plus,
+  Check,
+  Star,
+  Calendar,
+  CalendarDays,
+  Archive,
+  Copy,
+  Repeat,
+  MessageSquare,
+  FolderKanban,
+  AlertTriangle,
 } as const;
 
 export type ViewGridProps<Row> = {
@@ -155,11 +177,18 @@ export function ViewGrid<Row>({
                 tone: (opt.tone as "neutral") || "neutral",
               })),
             } as Column);
-          const isTitle = column.render === "title" || column.fixed;
+          const isTitle = column.render === "title" || column.render === "hierarchy" || column.fixed;
+          const depth =
+            column.render === "hierarchy" && adapter.parentId?.(row.original)
+              ? 1
+              : 0;
           return (
             <div
-              className={`cw-views-cell${isTitle ? " is-title" : ""}`}
+              className={`cw-views-cell${isTitle ? " is-title" : ""}${
+                column.render === "hierarchy" ? " is-hierarchy" : ""
+              }`}
               onDoubleClick={() => isTitle && onOpenRow?.(row.original)}
+              style={depth ? { paddingLeft: depth * 16 } : undefined}
             >
               <CellRenderer
                 column={tableCol}

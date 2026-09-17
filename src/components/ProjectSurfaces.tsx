@@ -14,6 +14,12 @@ import {
   readProjectSurfaceView,
   writeProjectSurfaceView,
 } from "../features/overview";
+import { ProjectsViewsSurface } from "../features/views/ProjectsViewsSurface";
+import { ProjectItemsViewsSurface } from "../features/views/ProjectItemsViewsSurface";
+import { isViewsEngineEnabled } from "../features/views/viewsEngineFlag";
+import { applyView } from "../lib/views/apply";
+import { buildTaskAdapter, type TaskRow } from "../features/views/adapters/taskAdapter";
+import type { SavedView } from "../lib/views/types";
 import {
   AlertTriangle,
   Archive,
@@ -25,7 +31,6 @@ import {
   FileText,
   Flag,
   FolderKanban,
-  LayoutGrid,
   Link as LinkIcon,
   ListChecks,
   MessageSquare,
@@ -122,7 +127,6 @@ import {
 import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
-import { ControlledSelect } from "./ControlledSelect";
 import { WorkItemsCenter } from "./WorkItemsCenter";
 import { useRoutineHost } from "./routines/RoutineHost";
 import { RoutinesStrip } from "./routines/RoutinesStrip";
@@ -138,7 +142,6 @@ import {
 } from "../lib/projectResources";
 import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
 import type { SprintRecord } from "../lib/sprints";
-import { CompactTagPicker } from "./CompactTagPicker";
 
 type ProjectPatch = Record<string, unknown>;
 type AssignmentMember = {
@@ -609,7 +612,7 @@ function projectMetaLine(project: any) {
   }`;
 }
 
-function ProjectTitleCell({
+function _ProjectTitleCell({
   project,
   onOpen,
   onRename,
@@ -1623,6 +1626,36 @@ export function ProjectConsolePanel({
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
   const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
+  const [engineItemsView, setEngineItemsView] = useState<SavedView | null>(null);
+  const viewsEngineOn = isViewsEngineEnabled();
+  const workspaceIdForViews = String(
+    (workspace as { id?: string } | null | undefined)?.id ||
+      project.workspaceId ||
+      "",
+  );
+  const projectTaskAdapter = useMemo(
+    () =>
+      buildTaskAdapter({
+        actorId: String(currentUser?.uid || ""),
+        workspaceId: workspaceIdForViews,
+        projects: workspaceProjects?.length ? workspaceProjects : [project],
+        onUpdateTask,
+        onOpenCollab: openCollabProject,
+      }),
+    [
+      currentUser?.uid,
+      workspaceIdForViews,
+      project,
+      workspaceProjects,
+      onUpdateTask,
+    ],
+  );
+  const engineQueriedTasks = useMemo(() => {
+    if (!viewsEngineOn || !engineItemsView) return tasks;
+    return applyView(tasks as TaskRow[], projectTaskAdapter, engineItemsView, {
+      userId: String(currentUser?.uid || ""),
+    }).rows;
+  }, [viewsEngineOn, engineItemsView, tasks, projectTaskAdapter, currentUser?.uid]);
   const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
     if (!isOverviewEnabled()) return "list";
     const saved = readProjectSurfaceView(String(project?.id || ""));
@@ -2327,6 +2360,20 @@ export function ProjectConsolePanel({
 
       {tab === "items" && !(isOverviewEnabled() && chromeView === "overview") && (
         <div className="do-notion-body do-console-section" data-testid="project-items">
+          {viewsEngineOn && notionMode === "list" ? (
+            <ProjectItemsViewsSurface
+              actorId={String(currentUser?.uid || "")}
+              members={workspaceMembers}
+              onOpenCollab={openCollabProject}
+              onOpenItem={(id) => setSelectedWorkItemId(id)}
+              onUpdateTask={onUpdateTask}
+              onViewChange={setEngineItemsView}
+              projectId={String(project.id)}
+              projects={workspaceProjects?.length ? workspaceProjects : [project]}
+              tasks={tasks as TaskRow[]}
+              workspaceId={workspaceIdForViews}
+            />
+          ) : (
           <WorkItemsCenter
             activeProject={project}
             compact
@@ -2362,9 +2409,10 @@ export function ProjectConsolePanel({
             selectedItemId={selectedWorkItemId}
             sprints={sprints}
             tags={tags}
-            tasks={tasks}
+            tasks={viewsEngineOn ? engineQueriedTasks : tasks}
             workspaceMembers={workspaceMembers}
           />
+          )}
         </div>
       )}
 
@@ -5193,7 +5241,7 @@ function projectDueDate(project: any) {
   );
 }
 
-function projectMoney(value: unknown) {
+function _projectMoney(value: unknown) {
   if (value == null || value === "") return "—";
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "—";
@@ -5326,21 +5374,23 @@ export function ProjectCommandCenter({
   tags = [],
   costTemplates = [],
   projectTemplates = [],
+  actorId = "",
+  workspaceId = "",
   onClose: _onClose,
   onAsk,
   onNewProject,
   onUpdateProject,
   onArchiveProject,
-  onDeleteProject,
-  onRestoreProject,
-  onPermanentlyDeleteProject,
+  onDeleteProject: _onDeleteProject,
+  onRestoreProject: _onRestoreProject,
+  onPermanentlyDeleteProject: _onPermanentlyDeleteProject,
   onOpenProject,
   onCreateCostTemplate,
   onUpdateCostTemplate,
   onCreateProjectTemplate,
   onDeleteProjectTemplate,
   onApplyProjectTemplate,
-  onCreateControlledOption,
+  onCreateControlledOption: _onCreateControlledOption,
   onAddFinanceTask,
   onOpenWorkItem,
   highlightFinanceLineId = null,
@@ -5357,6 +5407,8 @@ export function ProjectCommandCenter({
   tags?: TagLike[];
   costTemplates?: any[];
   projectTemplates?: any[];
+  actorId?: string;
+  workspaceId?: string;
   onClose: () => void;
   onAsk?: (prompt: string) => void;
   onNotice?: (message: string) => void;
@@ -5449,8 +5501,8 @@ export function ProjectCommandCenter({
   }, [highlightFinanceLineId, canViewFinance]);
   const [primarySort, setPrimarySort] = useState<ProjectSortKey>("stage");
   const [secondarySort, setSecondarySort] = useState<ProjectSortKey>("due");
-  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [_archiveConfirmId, _setArchiveConfirmId] = useState<string | null>(null);
+  const [_expandedId, _setExpandedId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [viewName, setViewName] = useState("");
   const [savedViews, setSavedViews] = useState<PortfolioSavedView[]>(() => {
@@ -5554,7 +5606,8 @@ export function ProjectCommandCenter({
       ? Object.values(DELIVERY_PHASES_BY_STAGE).flat()
       : phasesForStage(stageFilter)
   ) as DeliveryPhase[];
-  const columnSet = new Set(visibleColumns);
+  const _columnSet = new Set(visibleColumns);
+  void _columnSet;
   const currentPortfolioViewFilters: PortfolioViewFilters = {
     filter,
     stageFilter,
@@ -5570,11 +5623,12 @@ export function ProjectCommandCenter({
     primarySort,
     secondarySort,
   };
-  const portfolioGridStyle = {
+  const _portfolioGridStyle = {
     gridTemplateColumns: visibleColumns
       .map((column) => `${columnWidths[column] || defaultPortfolioColumnPixels[column]}px`)
       .join(" "),
   };
+  void _portfolioGridStyle;
   const updateColumnWidth = (
     column: PortfolioColumnKey,
     value: number,
@@ -5964,7 +6018,7 @@ export function ProjectCommandCenter({
     (project) => deliveryStage(project) === "operations",
   ).length;
 
-  const renderEconomics = (project: any, projectTasks: any[]) => {
+  const _renderEconomics = (project: any, projectTasks: any[]) => {
     const summary = projectSummary(project, projectTasks);
     const periods = normalizedFinancePeriods(project);
     const ledgerSummary = financeSummary(periods);
@@ -6062,7 +6116,8 @@ export function ProjectCommandCenter({
       `<!doctype html><html><head><meta charset="utf-8"><title>Certo Work · ${escapeHtml(filter === "all" ? "Portfolio" : projectStatusLabel(filter))}</title><style>${PRINT_THEME_CSS}@page{size:A3 landscape;margin:14mm}*{box-sizing:border-box}body{margin:0;color:var(--text-primary);font:12px Inter,Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid var(--accent)}h1{margin:4px 0;font-size:28px;letter-spacing:-1px}.kicker{color:var(--text-muted);font-size:12px;font-weight:600}.meta{text-align:right;color:var(--text-secondary)}table{width:100%;border-collapse:collapse;table-layout:fixed}th{padding:9px 7px;border-bottom:1px solid var(--border);color:var(--text-secondary);font-size:12px;text-align:left}td{padding:10px 7px;border-bottom:1px solid var(--border);vertical-align:top;word-wrap:break-word}td:first-child{width:16%}td:nth-child(8){width:17%}strong,small{display:block}small{margin-top:3px;color:var(--text-muted);font-size:12px}.health{display:inline-block;border-radius:999px;background:var(--status-success-soft);padding:4px 7px;color:var(--status-success);font-weight:600}.health.at_risk{background:var(--status-warning-soft);color:var(--status-warning)}.health.blocked{background:var(--status-danger-soft);color:var(--status-danger)}footer{margin-top:15px;color:var(--text-muted);font-size:12px}</style></head><body><header><div><div class="kicker">Certo Work · Project portfolio</div><h1>${escapeHtml(filter === "all" ? "All projects" : projectStatusLabel(filter))}</h1><div>${sortedFiltered.length} projects · sorted by ${escapeHtml(projectSortOptions.find((option) => option.value === primarySort)?.label)} then ${escapeHtml(projectSortOptions.find((option) => option.value === secondarySort)?.label)}</div></div><div class="meta">Generated ${escapeHtml(new Date().toLocaleString())}<br/>Current filtered view</div></header><table><thead><tr><th>Project</th><th>BPO / Client</th><th>Stage</th><th>Phase / Status</th><th>Health</th><th>Progress</th><th>Due</th><th>Next step</th><th>Hours</th><th>Economics</th></tr></thead><tbody>${rows}</tbody></table><footer>Health reflects the current Certo Work signals and any manual override. Use the browser print dialog to save this report as PDF.</footer><script>window.onload=()=>setTimeout(()=>window.print(),250);</script></body></html>`,
     );
     printable.document.close();
-  };
+  }
+  void _renderEconomics;;
 
   return (
     <section
@@ -7131,630 +7186,19 @@ export function ProjectCommandCenter({
             </details>
           )}
           {view === "overview" ? (
-            <div className="do-command-table-scroll" ref={tableScrollRef}>
-            <div className="do-command-table">
-              <div className="do-command-table-head" style={portfolioGridStyle}>
-                {columnSet.has("project") && <span>
-                  <button
-                    aria-label={allVisibleProjectsSelected ? "Deselect all visible projects" : "Select all visible projects"}
-                    className={`do-command-select-all ${allVisibleProjectsSelected ? "is-selected" : ""} ${someVisibleProjectsSelected && !allVisibleProjectsSelected ? "is-partial" : ""}`}
-                    data-testid="projects-select-all-header"
-                    disabled={visibleProjectIds.length === 0}
-                    onClick={toggleSelectAllProjects}
-                    title={allVisibleProjectsSelected ? "Deselect all" : "Select all visible projects"}
-                    type="button"
-                  >
-                    {allVisibleProjectsSelected ? <CheckCircle2 size={14} /> : someVisibleProjectsSelected ? <Minus size={14} /> : <Circle size={14} />}
-                  </button>
-                  Project{" "}
-                  <InfoTip
-                    label="Project"
-                    text="Click the name to open the project. Double-click to rename. The stable project key remains underneath."
-                  />
-                </span>}
-                {columnSet.has("delivery_entity") && <span>
-                  Delivery Entity{" "}
-                  <InfoTip
-                    label="Delivery Entity"
-                    text="Who delivers the work: BPO, internal team, vendor, or operating unit."
-                  />
-                </span>}
-                {columnSet.has("client_entity") && <span>
-                  Client Entity{" "}
-                  <InfoTip
-                    label="Client Entity"
-                    text="Who receives or pays for the work. Choose from existing clients or type a new one."
-                  />
-                </span>}
-                {columnSet.has("tags") && <span>Tags</span>}
-                {columnSet.has("work_category") && <span>
-                  Work Category{" "}
-                  <InfoTip
-                    label="Work Category"
-                    text="Classifies the work without changing the delivery lifecycle. Use Product Development for products, platforms, apps or internal software you are building."
-                  />
-                </span>}
-                {columnSet.has("product_phase") && <span>
-                  Product Phase{" "}
-                  <InfoTip
-                    label="Product Phase"
-                    text="Product-specific maturity: Explore, Shape, Build, Beta, Launch or Grow. It stays separate from delivery Stage and Phase."
-                  />
-                </span>}
-                {columnSet.has("stage") && <span>
-                  Stage{" "}
-                  <InfoTip
-                    label="Stage"
-                    text="Fixed Certo lifecycle: Define, Onboarding, Build, Deploy or Operations."
-                  />
-                </span>}
-                {columnSet.has("phase") && <span>
-                  Phase{" "}
-                  <InfoTip
-                    label="Phase"
-                    text="Standard checkpoint inside the selected Stage. The options change automatically when Stage changes."
-                  />
-                </span>}
-                {columnSet.has("status") && <span>
-                  Status{" "}
-                  <InfoTip
-                    label="Status"
-                    text="Administrative record state: Planning, Active, Paused, Completed or Archived."
-                  />
-                </span>}
-                {columnSet.has("source_status") && <span>
-                  ESTADO{" "}
-                  <InfoTip
-                    label="ESTADO"
-                    text="Executive workbook status from the August 2026 master."
-                  />
-                </span>}
-                {columnSet.has("contact") && <span>OWNER / POC</span>}
-                {columnSet.has("qa_plan") && <span>QA PLAN</span>}
-                {columnSet.has("days_to_prod") && <span>DÍAS A PROD</span>}
-                {columnSet.has("health") && <span>
-                  Health{" "}
-                  <InfoTip
-                    label="Health"
-                    text="Auto checks blocked work, critical or open risks and overdue dates. Select a value to override it."
-                  />
-                </span>}
-                {columnSet.has("progress") && <span>
-                  Progress{" "}
-                  <InfoTip
-                    label="Progress"
-                    text="Auto equals completed executable items divided by all executable items. Enter a percentage to override it."
-                  />
-                </span>}
-                {columnSet.has("due") && <span>
-                  PROD PLAN{" "}
-                  <InfoTip
-                    label="PROD PLAN"
-                    text="Committed production date from the executive workbook."
-                  />
-                </span>}
-                {columnSet.has("june_usd") && <span>JUN USD</span>}
-                {columnSet.has("july_usd") && <span>JUL USD</span>}
-                {columnSet.has("total_usd") && <span>TOTAL USD</span>}
-                {columnSet.has("solution_architect") && <span>
-                  Solution Architect{" "}
-                  <InfoTip
-                    label="Solution Architect"
-                    text="Accountable for solution design and technical coherence."
-                  />
-                </span>}
-                {columnSet.has("project_manager") && <span>
-                  Project Manager{" "}
-                  <InfoTip
-                    label="Project Manager"
-                    text="Accountable for delivery planning, coordination, status and escalation."
-                  />
-                </span>}
-                {columnSet.has("economics") && <span>
-                  Economics{" "}
-                  <InfoTip
-                    label="Economics"
-                    text="Build cost and the latest calendar-month operating cost."
-                  />
-                </span>}
-                {columnSet.has("actions") && <span />}
-              </div>
-              {sortedFiltered.map((project) => {
-                const projectTasks = tasks.filter(
-                  (task) => task.projectId === project.id,
-                );
-                const projectRisks = risks.filter(
-                  (risk) => risk.projectId === project.id,
-                );
-                const health = projectHealth(
-                  project,
-                  projectTasks,
-                  projectRisks,
-                );
-                const summary = projectSummary(project, projectTasks);
-                const favorite = isProjectFavorite(project);
-                return (
-                  <div
-                    className={`do-command-project-block ${project.demo ? "is-demo" : ""}`}
-                    key={project.id}
-                  >
-                    <article style={portfolioGridStyle}>
-                      {columnSet.has("project") && <div className="do-command-project-name">
-                        <button
-                          aria-label={`Select ${projectTitle(project)}`}
-                          className={selectedProjectIds.includes(project.id) ? "is-selected" : ""}
-                          onClick={() =>
-                            setSelectedProjectIds((current) =>
-                              current.includes(project.id)
-                                ? current.filter((id) => id !== project.id)
-                                : [...current, project.id],
-                            )
-                          }
-                          title="Select for bulk actions"
-                          type="button"
-                        >
-                          {selectedProjectIds.includes(project.id) ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                        </button>
-                        <button
-                          aria-label={
-                            favorite ? "Remove favorite" : "Favorite project"
-                          }
-                          className={favorite ? "is-favorite" : ""}
-                          disabled={Boolean(project.demo)}
-                          onClick={() =>
-                            onUpdateProject(project.id, { favorite: !favorite })
-                          }
-                          type="button"
-                        >
-                          <Star
-                            fill={favorite ? "currentColor" : "none"}
-                            size={14}
-                          />
-                        </button>
-                        <span>
-                          <ProjectTitleCell
-                            onOpen={() => onOpenProject(project)}
-                            onRename={(title) =>
-                              onUpdateProject(project.id, {
-                                title,
-                                name: title,
-                              })
-                            }
-                            project={project}
-                          />
-                        </span>
-                      </div>}
-                      {columnSet.has("delivery_entity") && <div className="do-master-data-cell">
-                        <ControlledSelect
-                          ariaLabel={`Delivery Entity for ${projectTitle(project)}`}
-                          value={
-                            project.deliveryEntity || project.bpo || "Internal"
-                          }
-                          options={bpoOptions}
-                          onAddOption={(name) =>
-                            onCreateControlledOption?.("delivery_entity", name)
-                          }
-                          onChange={(value) =>
-                            onUpdateProject(project.id, {
-                              deliveryEntity:
-                                value.trim() || "Internal",
-                              bpo: value.trim() || "Internal",
-                            })
-                          }
-                        />
-                      </div>}
-                      {columnSet.has("client_entity") && <div className="do-master-data-cell">
-                        <ControlledSelect
-                          ariaLabel={`Client Entity for ${projectTitle(project)}`}
-                          value={
-                            project.clientEntity ||
-                            project.client ||
-                            "Internal"
-                          }
-                          options={clientOptions}
-                          onAddOption={(name) =>
-                            onCreateControlledOption?.("client_entity", name)
-                          }
-                          onChange={(value) =>
-                            onUpdateProject(project.id, {
-                              clientEntity:
-                                value.trim() || "Internal",
-                              client: value.trim() || "Internal",
-                            })
-                          }
-                        />
-                      </div>}
-                      {columnSet.has("tags") && (
-                        <CompactTagPicker
-                          label={`Tags for ${projectTitle(project)}`}
-                          onCreateTag={(name) =>
-                            onCreateControlledOption?.("tag", name)
-                          }
-                          onChange={(patch) => onUpdateProject(project.id, patch)}
-                          record={project}
-                          tags={tags}
-                        />
-                      )}
-                      {columnSet.has("work_category") && (
-                      <select
-                        aria-label={`Work Category for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            workCategory: event.target.value,
-                            portfolioCategory: event.target.value,
-                            projectType:
-                              event.target.value === "Product Development"
-                                ? "product"
-                                : project.projectType,
-                          })
-                        }
-                        value={workCategory(project)}
-                      >
-                        {WORK_CATEGORIES.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("product_phase") && (
-                      <select
-                        aria-label={`Product Phase for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            productPhase: event.target.value,
-                            roadmapPhase: event.target.value,
-                          })
-                        }
-                        value={productPhase(project)}
-                      >
-                        {PRODUCT_PHASES.map((phase) => (
-                          <option key={phase} value={phase}>
-                            {phase}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("stage") && (
-                      <select
-                        aria-label={`Stage for ${projectTitle(project)}`}
-                        className="do-stage-select"
-                        disabled={Boolean(project.demo)}
-                        onChange={(event) =>
-                          (() => {
-                            const nextStage = event.target
-                              .value as DeliveryStage;
-                            const currentPhase = deliveryPhase(project);
-                            const nextPhase = phasesForStage(nextStage).includes(
-                              currentPhase,
-                            )
-                              ? currentPhase
-                              : phasesForStage(nextStage)[0];
-                            onUpdateProject(project.id, {
-                              deliveryStage: nextStage,
-                              deliveryPhase: nextPhase,
-                            });
-                          })()
-                        }
-                        value={deliveryStage(project)}
-                      >
-                        {DELIVERY_STAGES.map((stage) => (
-                          <option key={stage} value={stage}>
-                            {deliveryStageLabels[stage]}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("phase") && (
-                      <select
-                        aria-label={`Phase for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            phase: event.target.value,
-                          })
-                        }
-                        value={deliveryPhase(project)}
-                      >
-                        {phasesForStage(deliveryStage(project)).map((phase) => (
-                          <option key={phase} value={phase}>
-                            {deliveryPhaseLabels[phase]}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("status") && (
-                      <select
-                        aria-label={`Status for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            status: event.target.value,
-                          })
-                        }
-                        value={String(
-                          project.status || "planning",
-                        ).toLowerCase()}
-                      >
-                        {!PROJECT_STATUSES.includes(
-                          String(
-                            project.status || "planning",
-                          ).toLowerCase() as (typeof PROJECT_STATUSES)[number],
-                        ) && (
-                          <option
-                            value={String(
-                              project.status || "planning",
-                            ).toLowerCase()}
-                          >
-                            {projectStatusLabel(project.status)}
-                          </option>
-                        )}
-                        {PROJECT_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {projectStatusLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("source_status") && (
-                        <span>{project.sourceStatus || project.excel?.estado || "—"}</span>
-                      )}
-                      {columnSet.has("contact") && (
-                        <span>{project.contact || project.projectManager || "—"}</span>
-                      )}
-                      {columnSet.has("qa_plan") && (
-                        <span>{String(project.qaPlanDate || project.excel?.qaPlan || "").slice(0, 10) || "—"}</span>
-                      )}
-                      {columnSet.has("days_to_prod") && (
-                        <span>
-                          {project.daysToProd == null && project.excel?.diasAProd == null
-                            ? "—"
-                            : String(project.daysToProd ?? project.excel?.diasAProd)}
-                        </span>
-                      )}
-                      {columnSet.has("health") && (
-                      <select
-                        aria-label={`Health for ${projectTitle(project)}`}
-                        className={`do-status-select ${healthClass(health)}`}
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            healthOverride:
-                              event.target.value === "auto"
-                                ? null
-                                : event.target.value,
-                          })
-                        }
-                        value={project.healthOverride || "auto"}
-                      >
-                        <option value="auto">
-                          Auto · {projectHealthLabel(health)}
-                        </option>
-                        <option value="on_track">On track</option>
-                        <option value="at_risk">At risk</option>
-                        <option value="blocked">Blocked</option>
-                      </select>
-                      )}
-                      {columnSet.has("progress") && <div className="do-progress-edit">
-                        <input
-                          aria-label={`Progress for ${projectTitle(project)}`}
-                          defaultValue={summary.progress}
-                          key={`${project.id}-${project.progress == null ? "auto" : "manual"}`}
-                          max={100}
-                          min={0}
-                          onBlur={(event) =>
-                            onUpdateProject(project.id, {
-                              progress: Math.max(
-                                0,
-                                Math.min(100, Number(event.target.value || 0)),
-                              ),
-                            })
-                          }
-                          type="number"
-                        />
-                        {project.progress == null ? (
-                          <small>Auto</small>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              onUpdateProject(project.id, { progress: null })
-                            }
-                            type="button"
-                          >
-                            Auto
-                          </button>
-                        )}
-                      </div>}
-                      {columnSet.has("due") && (
-                      <input
-                        aria-label={`Due date for ${projectTitle(project)}`}
-                        className="do-table-input"
-                        defaultValue={
-                          projectDueDate(project) === "No date"
-                            ? ""
-                            : projectDueDate(project)
-                        }
-                        onBlur={(event) =>
-                          onUpdateProject(project.id, {
-                            revisedDueDate: event.target.value || null,
-                          })
-                        }
-                        type="date"
-                      />
-                      )}
-                      {columnSet.has("june_usd") && (
-                        <span>{projectMoney(project.juneUsd ?? project.excel?.junUsd)}</span>
-                      )}
-                      {columnSet.has("july_usd") && (
-                        <span>{projectMoney(project.julyUsd ?? project.excel?.julUsd)}</span>
-                      )}
-                      {columnSet.has("total_usd") && (
-                        <span>{projectMoney(project.totalUsd ?? project.excel?.totalUsd)}</span>
-                      )}
-                      {columnSet.has("solution_architect") && (
-                      <select
-                        aria-label={`Solution Architect for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            solutionArchitectId: event.target.value || null,
-                            solutionArchitect:
-                              readyMemberOptions.find(
-                                (member) => member.id === event.target.value,
-                              )?.name || "",
-                          })
-                        }
-                        value={project.solutionArchitectId || ""}
-                      >
-                        <option value="">
-                          {project.solutionArchitect || "Unassigned"}
-                        </option>
-                        {readyMemberOptions.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.label}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("project_manager") && (
-                      <select
-                        aria-label={`Project Manager for ${projectTitle(project)}`}
-                        className="do-table-select"
-                        onChange={(event) =>
-                          onUpdateProject(project.id, {
-                            projectManagerId: event.target.value || null,
-                            projectManager:
-                              readyMemberOptions.find(
-                                (member) => member.id === event.target.value,
-                              )?.name || "",
-                          })
-                        }
-                        value={project.projectManagerId || ""}
-                      >
-                        <option value="">
-                          {project.projectManager ||
-                            project.owner ||
-                            "Unassigned"}
-                        </option>
-                        {readyMemberOptions.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.label}
-                          </option>
-                        ))}
-                      </select>
-                      )}
-                      {columnSet.has("economics") && (
-                      <span>
-                        ${summary.initial.toLocaleString()}
-                        <small>
-                          ${summary.recurring.toLocaleString()} / mo
-                        </small>
-                      </span>
-                      )}
-                      {columnSet.has("actions") && (
-                      <div className="do-command-row-actions">
-                        {project.demo ? (
-                          <button
-                            onClick={() =>
-                              setExpandedId(
-                                expandedId === project.id ? null : project.id,
-                              )
-                            }
-                            type="button"
-                          >
-                            {expandedId === project.id ? "Hide" : "Preview"}
-                          </button>
-                        ) : ["deleted", "archived"].includes(
-                            String(project.status || "").toLowerCase(),
-                          ) ? (
-                          <>
-                            <button
-                              disabled={!onRestoreProject}
-                              onClick={() => onRestoreProject?.(project)}
-                              type="button"
-                            >
-                              Restore
-                            </button>
-                            {String(project.status || "").toLowerCase() === "deleted" &&
-                              onPermanentlyDeleteProject && (
-                              <button
-                                aria-label={`Delete forever ${projectTitle(project)}`}
-                                className="is-danger"
-                                onClick={() => onPermanentlyDeleteProject(project)}
-                                type="button"
-                              >
-                                <X size={13} />
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => onOpenProject(project)}
-                            type="button"
-                          >
-                            Open
-                          </button>
-                        )}
-                        {!project.demo &&
-                          !["deleted", "archived"].includes(
-                            String(project.status || "").toLowerCase(),
-                          ) &&
-                          (archiveConfirmId === project.id ? (
-                            <>
-                              <button
-                                onClick={() => setArchiveConfirmId(null)}
-                                type="button"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                className="is-danger"
-                                onClick={() => onArchiveProject(project)}
-                                type="button"
-                              >
-                                Confirm
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              aria-label={`Archive ${projectTitle(project)}`}
-                              onClick={() => setArchiveConfirmId(project.id)}
-                              type="button"
-                            >
-                              <Archive size={13} />
-                            </button>
-                          ))}
-                        {!project.demo &&
-                          !["deleted", "archived"].includes(
-                            String(project.status || "").toLowerCase(),
-                          ) &&
-                          onDeleteProject && (
-                            <button
-                              aria-label={`Delete ${projectTitle(project)}`}
-                              onClick={() => onDeleteProject(project)}
-                              type="button"
-                            >
-                              <X size={13} />
-                          </button>
-                        )}
-                      </div>
-                      )}
-                    </article>
-                    {expandedId === project.id &&
-                      renderEconomics(project, projectTasks)}
-                  </div>
-                );
-              })}
-              {sortedFiltered.length === 0 && (
-                <EmptyState
-                  icon={<LayoutGrid size={20} />}
-                  title="No projects in this view"
-                  text="Change the filter or create a project through the conversation."
-                />
-              )}
-            </div>
-            </div>
+            <ProjectsViewsSurface
+              actorId={actorId}
+              members={workspaceMembers}
+              onArchiveProject={(project) => onArchiveProject(project)}
+              onOpenBrief={(project) => onOpenProject(project)}
+              onOpenProject={(project) => onOpenProject(project)}
+              onOpenSummary={(project) => onOpenProject(project)}
+              onUpdateProject={onUpdateProject}
+              projects={sortedFiltered as Array<Record<string, unknown> & { id: string }>}
+              risks={risks}
+              tasks={tasks}
+              workspaceId={workspaceId || String(projects[0]?.workspaceId || "")}
+            />
           ) : view === "economics" && canViewFinance ? (
             <PortfolioFinanceAnalyst
               highlightFinanceLineId={highlightFinanceLineId}
@@ -7819,3 +7263,6 @@ export function ProjectCommandCenter({
     </section>
   );
 }
+
+void _ProjectTitleCell;
+void _projectMoney;
