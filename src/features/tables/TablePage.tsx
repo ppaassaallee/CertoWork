@@ -45,7 +45,7 @@ import { ColumnsEditor } from "./ColumnsEditor";
 import { RecordPanel } from "./RecordPanel";
 import { RecordsBoard } from "./RecordsBoard";
 import { RecordsCalendar } from "./RecordsCalendar";
-import { RecordsGrid } from "./RecordsGrid";
+import { RecordsViewSurface } from "../views/RecordsViewSurface";
 import { TableAutomationComposer } from "./TableAutomationComposer";
 import { TableFiltersBar } from "./TableFiltersBar";
 import { TableFormView } from "./TableFormView";
@@ -405,14 +405,16 @@ export function TablePage({
       <div className="cw-tables-page-body">
         <div className="cw-tables-page-main">
           {view === "table" ? (
-            <RecordsGrid
-              table={table}
-              records={visibleRecords}
+            <RecordsViewSurface
+              actorId={actorId || ""}
               members={members}
-              onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
               onCreateRecord={(title) => void handleCreate({ title })}
               onDeleteRecords={(ids) => void handleDelete(ids)}
+              onFieldChange={(id, col, val) => void handleFieldChange(id, col, val as never)}
               onOpenRecord={(id) => openRecord(id)}
+              records={visibleRecords}
+              table={table}
+              workspaceId={table.workspaceId}
             />
           ) : null}
           {view === "board" ? (
