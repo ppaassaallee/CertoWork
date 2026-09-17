@@ -98,6 +98,11 @@ Configured as `vars` in `wrangler.jsonc`:
 Configured as secrets:
 
 - `OPENAI_API_KEY`
+- `PLATFORM_IDENTITY_SECRET` (optional; required only if Codex Sites / signed
+  `oai-authenticated-user-*` identity is still used. Without it, those headers
+  are ignored and Firebase Bearer is required.)
+- Optional: bind a `RATE_LIMIT` KV namespace for durable AI rate limits; without
+  it the Worker uses an in-memory per-isolate fallback (40 req/min default).
 
 ## Rollback
 
