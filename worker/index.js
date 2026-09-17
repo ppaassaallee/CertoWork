@@ -355,8 +355,11 @@ export async function transcribeVoice(request, env = {}) {
       503,
     );
   }
-  const identity = platformIdentity(request);
-  if (!identity) {
+  const identity = await platformIdentity(request, env);
+  let auth = identity
+    ? { provider: "codex-sites", subject: identity.id, email: identity.email }
+    : null;
+  if (!auth) {
     const authorization = request.headers.get("authorization") || "";
     if (!authorization.startsWith("Bearer ")) {
       return json({ error: "Authentication required" }, 401);
@@ -370,14 +373,15 @@ export async function transcribeVoice(request, env = {}) {
   }
   const userId = String(form.get("userId") || "");
   const file = form.get("file");
-  if (!identity) {
+  if (!auth) {
     const authorization = request.headers.get("authorization") || "";
     try {
-      await verifyFirebaseToken(
+      const payload = await verifyFirebaseToken(
         authorization.slice("Bearer ".length),
         userId,
         env.FIREBASE_PROJECT_ID || FIREBASE_PROJECT_ID,
       );
+      auth = { provider: "firebase", subject: payload.sub };
     } catch (error) {
       return json(
         { error: error instanceof Error ? error.message : "Authentication failed" },
@@ -385,6 +389,8 @@ export async function transcribeVoice(request, env = {}) {
       );
     }
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "voice-transcribe" });
+  if (limited) return limited;
   if (!file || typeof file === "string") return json({ error: "Audio is required" }, 400);
   const size = Number(file.size || 0);
   if (size < 80) return json({ text: "" });
@@ -512,9 +518,47 @@ async function verifyFirebaseToken(token, expectedUserId, projectId) {
   return payload;
 }
 
-function platformIdentity(request) {
-  const id = request.headers.get("oai-authenticated-user-id");
-  const email = request.headers.get("oai-authenticated-user-email");
+const PLATFORM_IDENTITY_MAX_SKEW_MS = 5 * 60_000;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_DEFAULT = 40;
+/** In-memory fallback when RATE_LIMIT KV is not bound. */
+const rateLimitMemory = new Map();
+
+function timingSafeEqualHex(a, b) {
+  const left = String(a || "").toLowerCase();
+  const right = String(b || "").toLowerCase();
+  if (left.length !== right.length || left.length === 0) return false;
+  let mismatch = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+function bytesToHex(bytes) {
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function signPlatformIdentityPayload(secret, { id = "", email = "", timestamp }) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(String(secret)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const payload = `${id}\n${email}\n${timestamp}`;
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return bytesToHex(signature);
+}
+
+/**
+ * Trust oai-* platform headers only when PLATFORM_IDENTITY_SECRET is set and the
+ * request carries a valid HMAC + fresh timestamp. Unsigned headers never authenticate.
+ */
+export async function platformIdentity(request, env = {}) {
+  const id = request.headers.get("oai-authenticated-user-id") || "";
+  const email = request.headers.get("oai-authenticated-user-email") || "";
   const encodedName = request.headers.get("oai-authenticated-user-full-name");
   const nameEncoding = request.headers.get("oai-authenticated-user-full-name-encoding");
   let name = "";
@@ -526,11 +570,34 @@ function platformIdentity(request) {
     }
   }
   if (!id && !email) return null;
+
+  const secret = String(env.PLATFORM_IDENTITY_SECRET || "").trim();
+  if (!secret) return null;
+
+  const signature =
+    request.headers.get("oai-authenticated-user-signature") ||
+    request.headers.get("x-platform-identity-signature") ||
+    "";
+  const timestampRaw =
+    request.headers.get("oai-authenticated-user-timestamp") ||
+    request.headers.get("x-platform-identity-timestamp") ||
+    "";
+  const timestamp = Number(timestampRaw);
+  if (!signature || !Number.isFinite(timestamp)) return null;
+  if (Math.abs(Date.now() - timestamp) > PLATFORM_IDENTITY_MAX_SKEW_MS) return null;
+
+  const expected = await signPlatformIdentityPayload(secret, {
+    id,
+    email,
+    timestamp,
+  });
+  if (!timingSafeEqualHex(expected, signature)) return null;
+
   return { id: id || email, email: email || "", name };
 }
 
-async function authorize(request, body, env) {
-  const identity = platformIdentity(request);
+export async function authorize(request, body, env) {
+  const identity = await platformIdentity(request, env);
   if (identity) {
     return { provider: "codex-sites", subject: identity.id, email: identity.email };
   }
@@ -542,10 +609,59 @@ async function authorize(request, body, env) {
   const projectId = env.FIREBASE_PROJECT_ID || FIREBASE_PROJECT_ID;
   const payload = await verifyFirebaseToken(
     authorization.slice("Bearer ".length),
-    body.userId || body.workspaceContext?.userId,
+    body?.userId || body?.workspaceContext?.userId,
     projectId,
   );
   return { provider: "firebase", subject: payload.sub };
+}
+
+function rateLimitSubject(request, auth) {
+  if (auth?.subject) return String(auth.subject);
+  return (
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "anonymous"
+  );
+}
+
+/**
+ * Sliding fixed-window limiter. Prefer RATE_LIMIT KV; fall back to process memory.
+ * Returns a 429 Response when exceeded, otherwise null.
+ */
+export async function enforceRateLimit(request, env, auth, options = {}) {
+  const limit = Number(options.limit || env.AI_RATE_LIMIT || RATE_LIMIT_DEFAULT);
+  const windowMs = Number(options.windowMs || RATE_LIMIT_WINDOW_MS);
+  const route = String(options.route || "ai");
+  const subject = rateLimitSubject(request, auth);
+  const windowId = Math.floor(Date.now() / windowMs);
+  const bucketKey = `${route}:${subject}:${windowId}`;
+
+  if (env.RATE_LIMIT?.get && env.RATE_LIMIT?.put) {
+    const current = Number((await env.RATE_LIMIT.get(bucketKey)) || 0);
+    if (current >= limit) {
+      return json({ error: "Too many AI requests", code: "rate_limited" }, 429);
+    }
+    await env.RATE_LIMIT.put(bucketKey, String(current + 1), {
+      expirationTtl: Math.ceil(windowMs / 1000) + 5,
+    });
+    return null;
+  }
+
+  const current = Number(rateLimitMemory.get(bucketKey) || 0);
+  if (current >= limit) {
+    return json({ error: "Too many AI requests", code: "rate_limited" }, 429);
+  }
+  rateLimitMemory.set(bucketKey, current + 1);
+  if (rateLimitMemory.size > 5_000) {
+    const stalePrefix = `${route}:`;
+    for (const key of rateLimitMemory.keys()) {
+      if (!key.startsWith(stalePrefix)) continue;
+      const parts = key.split(":");
+      const keyWindow = Number(parts[parts.length - 1]);
+      if (keyWindow < windowId - 1) rateLimitMemory.delete(key);
+    }
+  }
+  return null;
 }
 
 async function readJson(request) {
@@ -1166,11 +1282,14 @@ async function rewriteField(request, env) {
   const source = String(body.text || "").trim();
   if (!source) return json({ error: "Text is required" }, 400);
   if (source.length > 12_000) return json({ error: "Text is too long to rewrite inline" }, 400);
+  let auth;
   try {
-    await authorize(request, body, env);
+    auth = await authorize(request, body, env);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "rewrite" });
+  if (limited) return limited;
   if (!openaiIsConfigured(env)) {
     return json({ error: "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.", code: "OPENAI_NOT_CONFIGURED", safeMode: true }, 503);
   }
@@ -1222,8 +1341,14 @@ async function previewRoutine(request, env) {
   if (!body.userId || !body.workspaceId) {
     return json({ error: "userId and workspaceId are required" }, 400);
   }
-  const authError = await authorize(request, body, env);
-  if (authError) return authError;
+  let auth;
+  try {
+    auth = await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  const limited = await enforceRateLimit(request, env, auth, { route: "routines-preview" });
+  if (limited) return limited;
 
   const goal = String(body.goal || body.sentence || "").trim();
   if (!goal) return json({ error: "goal is required" }, 400);
@@ -1382,11 +1507,14 @@ async function compileTable(request, env) {
   const phrase = String(body.phrase || body.text || "").trim();
   if (!phrase) return json({ error: "phrase is required" }, 400);
   if (phrase.length > 2_000) return json({ error: "phrase is too long" }, 400);
+  let auth;
   try {
-    await authorize(request, body, env);
+    auth = await authorize(request, body, env);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "tables-compile" });
+  if (limited) return limited;
 
   const locale = body.locale === "en" ? "en" : "es";
   const localResult = compileTablePhrase({ phrase, locale });
@@ -1473,11 +1601,14 @@ async function extractMagicProject(request, env) {
   const source = String(body.text || "").trim();
   if (!source) return json({ error: "Project definition is required" }, 400);
   if (source.length > 80_000) return json({ error: "Project definition is too long" }, 400);
+  let auth;
   try {
-    await authorize(request, body, env);
+    auth = await authorize(request, body, env);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "magic-project" });
+  if (limited) return limited;
   if (!openaiIsConfigured(env)) {
     return json({
       error: "Certo Work SAFE MODE. OpenAI is not configured for this Certo Work deployment yet.",
@@ -1543,14 +1674,17 @@ async function chat(request, env) {
   }
   body.messages = normalizeConversationMessages(body.messages);
 
+  let auth;
   try {
-    await authorize(request, body, env);
+    auth = await authorize(request, body, env);
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : "Authentication failed" },
       401,
     );
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "boldi-chat" });
+  if (limited) return limited;
 
   if (!openaiIsConfigured(env)) {
     return json(
@@ -2003,11 +2137,14 @@ async function sendInviteEmail(request, env) {
   if (!body.userId || !body.workspaceId || !body.toEmail) {
     return json({ error: "userId, workspaceId and toEmail are required" }, 400);
   }
+  let auth;
   try {
-    await authorize(request, body, env);
+    auth = await authorize(request, body, env);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
   }
+  const limited = await enforceRateLimit(request, env, auth, { route: "email-invite", limit: 20 });
+  if (limited) return limited;
   const toEmail = String(body.toEmail || "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(toEmail)) {
     return json({ error: "A valid recipient email is required" }, 400);
@@ -2206,7 +2343,7 @@ const worker = {
       return json(capabilities(env));
     }
     if (request.method === "GET" && url.pathname === "/api/session") {
-      const identity = platformIdentity(request);
+      const identity = await platformIdentity(request, env);
       if (!identity) return json({ authenticated: false }, 401);
       return json({ authenticated: true, provider: "codex-sites", user: identity });
     }

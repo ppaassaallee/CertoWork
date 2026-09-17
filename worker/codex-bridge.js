@@ -278,7 +278,7 @@ async function browserIdentity(request, body, env, helpers) {
     userId,
     env.FIREBASE_PROJECT_ID || helpers.firebaseProjectId,
   );
-  return { firebaseUserId: userId, platform: helpers.platformIdentity(request) };
+  return { firebaseUserId: userId, platform: await helpers.platformIdentity(request, env) };
 }
 
 async function connectionForPlatform(env, platformUserId, args = {}) {
@@ -472,7 +472,7 @@ async function callBridgeTool(env, platform, name, args) {
 }
 
 async function handleMcp(request, env, helpers) {
-  const platform = helpers.platformIdentity(request);
+  const platform = await helpers.platformIdentity(request, env);
   if (!platform) return helpers.json({ error: "Sign in to Codex with the account allowed to access this Certo Work site." }, 401);
   await ensureSchema(env);
   let message;

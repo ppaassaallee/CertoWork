@@ -11,8 +11,34 @@ import worker, {
   normalizeConversationMessages,
   rewriteFirebaseAuthLocation,
   rewriteInstructions,
+  signPlatformIdentityPayload,
 } from "../worker/index.js";
 import { collabStatusPayload } from "../worker/collab.js";
+
+const PLATFORM_SECRET = "test-platform-identity-secret";
+
+async function signedPlatformHeaders(
+  identity: { id: string; email: string; name?: string },
+  secret = PLATFORM_SECRET,
+) {
+  const timestamp = Date.now();
+  const signature = await signPlatformIdentityPayload(secret, {
+    id: identity.id,
+    email: identity.email,
+    timestamp,
+  });
+  const headers: Record<string, string> = {
+    "oai-authenticated-user-id": identity.id,
+    "oai-authenticated-user-email": identity.email,
+    "oai-authenticated-user-timestamp": String(timestamp),
+    "oai-authenticated-user-signature": signature,
+  };
+  if (identity.name) {
+    headers["oai-authenticated-user-full-name"] = encodeURIComponent(identity.name);
+    headers["oai-authenticated-user-full-name-encoding"] = "percent-encoded-utf-8";
+  }
+  return headers;
+}
 
 function environment(overrides: Record<string, unknown> = {}) {
   return {
@@ -237,16 +263,14 @@ test("workspace invite delivery route requires authentication", async () => {
 });
 
 test("Sites worker exposes the signed-in platform identity for the migration path", async () => {
+  const headers = await signedPlatformHeaders({
+    id: "sites-user-1",
+    email: "alejandro@getboldr.ai",
+    name: "Alejandro Pascual",
+  });
   const response = await worker.fetch(
-    new Request("https://gazelle.test/api/session", {
-      headers: {
-        "oai-authenticated-user-id": "sites-user-1",
-        "oai-authenticated-user-email": "alejandro@getboldr.ai",
-        "oai-authenticated-user-full-name": "Alejandro%20Pascual",
-        "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
-      },
-    }),
-    environment(),
+    new Request("https://gazelle.test/api/session", { headers }),
+    environment({ PLATFORM_IDENTITY_SECRET: PLATFORM_SECRET }),
   );
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
@@ -260,6 +284,32 @@ test("Sites worker exposes the signed-in platform identity for the migration pat
   });
 });
 
+test("Sites session rejects unsigned oai-* header spoofing", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/session", {
+      headers: {
+        "oai-authenticated-user-id": "spoofed-user",
+        "oai-authenticated-user-email": "attacker@example.com",
+      },
+    }),
+    environment({ PLATFORM_IDENTITY_SECRET: PLATFORM_SECRET }),
+  );
+  assert.equal(response.status, 401);
+});
+
+test("Sites session rejects oai-* headers when PLATFORM_IDENTITY_SECRET is unset", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/api/session", {
+      headers: {
+        "oai-authenticated-user-id": "sites-user-1",
+        "oai-authenticated-user-email": "alejandro@getboldr.ai",
+      },
+    }),
+    environment(),
+  );
+  assert.equal(response.status, 401);
+});
+
 test("Sites session endpoint rejects anonymous requests", async () => {
   const response = await worker.fetch(
     new Request("https://gazelle.test/api/session"),
@@ -269,22 +319,41 @@ test("Sites session endpoint rejects anonymous requests", async () => {
 });
 
 test("Codex bridge exposes its scoped MCP tools only to the signed-in platform user", async () => {
+  const headers = await signedPlatformHeaders({
+    id: "sites-user-1",
+    email: "alejandro@getboldr.ai",
+  });
   const response = await worker.fetch(
     new Request("https://gazelle.test/mcp/delivereeos", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "oai-authenticated-user-id": "sites-user-1",
-        "oai-authenticated-user-email": "alejandro@getboldr.ai",
+        ...headers,
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
     }),
-    environment({ DB: bridgeDatabase() }),
+    environment({ DB: bridgeDatabase(), PLATFORM_IDENTITY_SECRET: PLATFORM_SECRET }),
   );
   assert.equal(response.status, 200);
   const body = (await response.json()) as any;
   assert.equal(body.result.tools[0].name, "list_delivery_links");
   assert.equal(body.result.tools.at(-1).name, "report_project_gap");
+});
+
+test("Codex bridge rejects unsigned platform identity spoofing", async () => {
+  const response = await worker.fetch(
+    new Request("https://gazelle.test/mcp/delivereeos", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "oai-authenticated-user-id": "spoofed-user",
+        "oai-authenticated-user-email": "attacker@example.com",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    }),
+    environment({ DB: bridgeDatabase(), PLATFORM_IDENTITY_SECRET: PLATFORM_SECRET }),
+  );
+  assert.equal(response.status, 401);
 });
 
 test("Codex bridge rejects anonymous MCP calls", async () => {
