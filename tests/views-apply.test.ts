@@ -194,3 +194,49 @@ test("hierarchy keeps child under parent after sort", () => {
   assert.ok(parentIndex >= 0);
   assert.equal(childIndex, parentIndex + 1);
 });
+
+test("filters today and week date windows", () => {
+  const withToday: typeof ROWS = [
+    ...ROWS,
+    {
+      id: "due-today",
+      title: "Due today",
+      status: "open",
+      assigneeId: "u1",
+      dueDate: "2026-09-17",
+      parentId: null,
+      order: 9,
+    },
+    {
+      id: "due-sat",
+      title: "Due Saturday",
+      status: "open",
+      assigneeId: "u1",
+      dueDate: "2026-09-19",
+      parentId: null,
+      order: 8,
+    },
+  ];
+  const todayRows = applyView(
+    withToday,
+    adapter,
+    baseView({ filters: [{ columnId: "due", op: "today" }] }),
+    { userId: "u1", now: NOW },
+  );
+  assert.deepEqual(
+    todayRows.rows.map((row) => row.id),
+    ["due-today"],
+  );
+
+  const weekRows = applyView(
+    withToday,
+    adapter,
+    baseView({ filters: [{ columnId: "due", op: "week" }] }),
+    { userId: "u1", now: NOW },
+  );
+  // Thu 2026-09-17 → Sat 2026-09-19 inclusive.
+  assert.deepEqual(
+    weekRows.rows.map((row) => row.id).sort(),
+    ["due-sat", "due-today"],
+  );
+});
