@@ -13,9 +13,13 @@ test("project /tasks route stays a project lens (items live in the console)", ()
   });
 });
 
-test("project console uses a Notion-style table surface, not Tasks + Backlog tabs", () => {
+test("project console uses an Asana-style Items list, not Tasks + Backlog tabs", () => {
   const consoleSource = readFileSync(
     resolve("src/components/ProjectSurfaces.tsx"),
+    "utf8",
+  );
+  const projectItemsSurface = readFileSync(
+    resolve("src/features/views/ProjectItemsViewsSurface.tsx"),
     "utf8",
   );
   const chromeSource = readFileSync(
@@ -28,7 +32,11 @@ test("project console uses a Notion-style table surface, not Tasks + Backlog tab
   );
 
   assert.match(consoleSource, /data-testid="project-items"/);
-  assert.match(consoleSource, /notionSurface/);
+  assert.match(consoleSource, /ProjectItemsViewsSurface/);
+  assert.match(consoleSource, /listBody=\{/);
+  assert.match(projectItemsSurface, /WorkItemsCenter/);
+  assert.match(projectItemsSurface, /project-items-asana-list/);
+  assert.doesNotMatch(projectItemsSurface, /notionSurface/);
   assert.match(consoleSource, /<ProjectPageHeader/);
   assert.match(consoleSource, /<ProjectViewTabs/);
   assert.match(chromeSource, /aria-label="Project views"/);
