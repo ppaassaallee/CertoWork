@@ -4,6 +4,10 @@ import test from "node:test";
 
 const workItems = readFileSync(new URL("../src/components/WorkItemsCenter.tsx", import.meta.url), "utf8");
 const surfaces = readFileSync(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8");
+const projectItemsSurface = readFileSync(
+  new URL("../src/features/views/ProjectItemsViewsSurface.tsx", import.meta.url),
+  "utf8",
+);
 const chrome = readFileSync(
   new URL("../src/features/projects/chrome/ProjectPageChrome.tsx", import.meta.url),
   "utf8",
@@ -20,15 +24,16 @@ test("My Work forces project sections and No Project label", () => {
   assert.match(memory, /groupBy: projectId \? asGroup\(value\.groupBy, fallback\.groupBy\) : "project"/);
 });
 
-test("Notion Filter and Sort open real panels in WorkItemsCenter", () => {
-  // Buttons live in the Phase 1 project chrome; wiring still passes through ProjectSurfaces.
+test("Project Items Asana hybrid keeps Filter/Sort in WorkItemsCenter toolbar", () => {
+  // Project Items use ViewsBar + Asana WorkItemsCenter (not NotionProjectTable).
+  assert.match(surfaces, /ProjectItemsViewsSurface/);
+  assert.match(surfaces, /listBody=\{/);
+  assert.match(projectItemsSurface, /WorkItemsCenter/);
+  assert.match(projectItemsSurface, /project-items-asana-list/);
+  assert.doesNotMatch(projectItemsSurface, /notionSurface/);
+  // Chrome still exposes Filter/Sort affordances; list body uses WIC's own panels.
   assert.match(chrome, /data-testid="notion-filter-button"/);
   assert.match(chrome, /data-testid="notion-sort-button"/);
-  assert.match(surfaces, /notionFilterOpen=\{notionFilterOpen\}/);
-  assert.match(surfaces, /notionSortOpen=\{notionSortOpen\}/);
-  assert.match(surfaces, /onNotionFilterOpenChange=\{setNotionFilterOpen\}/);
-  assert.match(surfaces, /onNotionSortOpenChange=\{setNotionSortOpen\}/);
-  assert.match(workItems, /data-testid="notion-tools-panel"/);
   assert.match(workItems, /data-testid="items-filter-popover"/);
   assert.match(workItems, /data-testid="items-sort-popover"/);
 });
