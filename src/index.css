@@ -7469,6 +7469,66 @@ a {
 .do-items-column-head.is-icon-list > * {
   overflow: visible;
 }
+
+/* My Work — subtle overdue neon edge (degradado) */
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge {
+  position: relative;
+  border-bottom-color: transparent;
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  pointer-events: none;
+  opacity: 0.72;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--due-edge) 18%, transparent) 12%,
+    var(--due-edge) 50%,
+    color-mix(in srgb, var(--due-edge) 18%, transparent) 88%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 6px color-mix(in srgb, var(--due-edge) 45%, transparent),
+    0 1px 10px color-mix(in srgb, var(--due-edge) 22%, transparent);
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 10px;
+  pointer-events: none;
+  opacity: 0.22;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--due-edge) 35%, transparent) 100%
+  );
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge-ontrack {
+  --due-edge: #34d399;
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge-week1 {
+  --due-edge: #f472b6;
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge-week2to3 {
+  --due-edge: #a78bfa;
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge-week4plus {
+  --due-edge: #f87171;
+}
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge.is-done::before,
+.do-items-center.is-my-work .do-items-row.is-icon-list.is-due-edge.is-done::after {
+  opacity: 0.2;
+  filter: grayscale(0.35);
+}
 .do-items-attr-head {
   color: var(--text-muted);
   font-size: 11px;
