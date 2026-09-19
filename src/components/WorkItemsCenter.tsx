@@ -149,6 +149,7 @@ import {
   todayTimingPatch,
   weekTimingPatch,
 } from "../lib/itemTiming";
+import { dueEdgeTone } from "../lib/dueEdgeTone";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -2195,9 +2196,12 @@ export function WorkItemsCenter({
     const kind = workItemKind(item);
     const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
     const isDone = canonicalStatus(item) === "done";
+    const edgeTone = isMyWork ? dueEdgeTone(item) : null;
+    const edgeClass = edgeTone ? `is-due-edge is-due-edge-${edgeTone}` : "";
     return (
       <article
-        className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""} ${edgeClass}`.trim()}
+        data-due-edge={edgeTone || undefined}
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
         onDragOver={(event) => {
@@ -3340,7 +3344,7 @@ export function WorkItemsCenter({
   const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
-    <div className={`do-items-center ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+    <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
       {!notionSurface && (
       <section className={`do-items-toolbar ${chromeCollapsed || timelineMode ? "is-compact" : ""}`}>
         {!chromeCollapsed && !timelineMode && (
