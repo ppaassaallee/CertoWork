@@ -331,13 +331,19 @@ service cloud.firestore {
     }
 
     // Users
+    function isValidUserFlags(flags) {
+      return flags is map
+        && flags.keys().hasOnly(['dailyPlan'])
+        && flags.dailyPlan is bool;
+    }
     function isValidUser(data) {
       return data.keys().hasAll(['email', 'createdAt'])
         && data.email is string && data.email.size() > 0 && data.email.size() <= 200
         && data.createdAt is timestamp
         && (!('lastViews' in data) || data.lastViews is map)
         && (!('directionLayout' in data) || data.directionLayout is map)
-        && data.keys().hasOnly(['email', 'createdAt', 'lastViews', 'directionLayout']);
+        && (!('flags' in data) || isValidUserFlags(data.flags))
+        && data.keys().hasOnly(['email', 'createdAt', 'lastViews', 'directionLayout', 'flags']);
     }
     match /users/{userId} {
       allow get: if isSignedIn() && isOwner(userId) && isValidId(userId);
@@ -353,6 +359,10 @@ service cloud.firestore {
                       || incoming().diff(resource.data).affectedKeys().hasOnly(['lastViews'])
                       || incoming().diff(resource.data).affectedKeys().hasOnly(['directionLayout'])
                       || incoming().diff(resource.data).affectedKeys().hasOnly(['lastViews', 'directionLayout'])
+                      || (
+                        incoming().diff(resource.data).affectedKeys().hasOnly(['flags'])
+                        && isValidUserFlags(incoming().flags)
+                      )
                     );
     }
 

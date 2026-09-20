@@ -19359,6 +19359,81 @@ a {
   background: var(--accent-soft);
   color: var(--accent);
 }
+
+/* My Work mobile — less chrome, bigger targets */
+.do-shell.is-mobile-core .do-my-work-shell.is-daily-plan {
+  overflow: hidden;
+}
+.do-shell.is-mobile-core .do-my-work-shell.is-daily-plan .do-my-work-tabs {
+  display: none;
+}
+.do-shell.is-mobile-core .do-my-work-tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 12px 0;
+  gap: 2px;
+  scrollbar-width: none;
+}
+.do-shell.is-mobile-core .do-my-work-tabs::-webkit-scrollbar {
+  display: none;
+}
+.do-shell.is-mobile-core .do-my-work-tabs button {
+  flex: none;
+  padding: 10px 12px;
+  min-height: 40px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.do-shell.is-mobile-core .cw-views-surface.is-compact .cw-views-bar.is-compact {
+  display: flex;
+  align-items: center;
+  padding: 4px 0 8px;
+  border: 0;
+  background: transparent;
+}
+.do-shell.is-mobile-core .cw-views-compact-tool {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  padding: 8px 12px;
+  min-height: 36px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-toolbar,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-helpbar,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-mode,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-create,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-bulk,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-sort-presets {
+  display: none !important;
+}
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list {
+  grid-template-columns: 22px 28px minmax(0, 1fr) auto;
+  min-height: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  column-gap: 8px;
+}
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list .do-item-expand,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list .do-items-drag-handle,
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-item-timing-actions {
+  display: none !important;
+}
+.do-shell.is-mobile-core .do-items-row.is-icon-list {
+  min-height: 44px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.do-shell.is-mobile-core .do-topbar .do-create,
+.do-shell.is-mobile-core .do-top-create {
+  min-height: 36px;
+}
+.do-shell.is-mobile-core .do-items-center.is-my-work .do-items-search {
+  min-height: 40px;
+}
 .do-shell.is-mobile-core {
   padding-bottom: calc(58px + env(safe-area-inset-bottom));
 }

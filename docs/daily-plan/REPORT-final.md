@@ -4,10 +4,12 @@
 See [`MOCKUPS.md`](./MOCKUPS.md) — desktop + mobile HTML mockups (bucket tokens fire/growth/extra; semáforo stays R/Y/G).
 
 ## How to enable
-Firebase console: `users/{yourUid}.flags.dailyPlan = true`
+- In-app: tap **Try Daily Plan** on My Work
+- Firestore: `users/{yourUid}.flags.dailyPlan = true`
+- Instant local: `localStorage.setItem('certoDailyPlan','1')` then refresh
 
 ## Deploy (pending auth)
-See `docs/daily-plan/DEPLOY.md`.
+See `docs/daily-plan/DEPLOY.md`. Rules must allow `users/{uid}.flags` (shipped with mobile follow-up).
 
 ## Assumptions
 See `docs/daily-plan/ASSUMPTIONS.md` (full list).
@@ -28,3 +30,4 @@ Yes — Firebase Google sign-in + worker `/api/calendar/oauth/google/*`. Daily P
 
 ## Stop
 Phase 3 Step 33 complete. UI aligned to handed mockups for steps 6, 7, 9, 13, 17, 24.
+Mobile follow-up: opt-in banner + compact My Work chrome when Daily Plan is on.
