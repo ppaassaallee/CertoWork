@@ -114,6 +114,8 @@ export type RoutineSpec = {
   /** automatic (default) | guided ritual | manual */
   class?: RoutineClass;
   recipeId?: string;
+  /** Deterministic table automations — same executor, no LLM unless action is odysseus. */
+  structured?: import("./structured").StructuredRoutine | null;
   /**
    * Persisted flow plan for automatic routines (and optional overrides).
    * Guided rituals usually rebuild from their manifest; plan is the drawn sentence.
