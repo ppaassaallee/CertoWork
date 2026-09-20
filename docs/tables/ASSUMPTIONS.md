@@ -15,3 +15,4 @@ Step 26 — property-management template is the acceptance fixture; sample rents
 Step 2 — assumed collection `table_records` (existing) instead of nested `tables/{id}/records`; same fields, existing storage keeps working.
 Step 2 — filtering client-side under 5,000 records; callable `queryRecords` above that (scaffold in Step 3 computeFns).
 Step 2 — `entity_links` already exists; Step 4 extends record link targets.
+Step 3 — assumed tableService lives alongside storage; consumers import tableServices.* for event-emitting writes; legacy storage paths remain.

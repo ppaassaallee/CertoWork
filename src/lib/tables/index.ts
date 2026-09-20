@@ -8,4 +8,14 @@ export * from "./compile";
 export * from "./statusTones";
 export * from "./filters";
 export * from "./tableForms";
-export * from "./services";
+/** Extended services (groups, events, import, compute) — namespaced to avoid clashing with storage. */
+export * as tableServices from "./services";
+export { footerSummary, recomputeRecordLocal } from "./services/compute";
+export {
+  parseCsv,
+  parseWorkbook,
+  exportCsv,
+  inferColumnType,
+  previewToColumns,
+  rowsToValues,
+} from "./services/importService";
