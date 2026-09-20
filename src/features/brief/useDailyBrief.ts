@@ -61,8 +61,7 @@ export function useDailyBrief(opts: {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on open / date
-  }, [opts.enabled, opts.uid, opts.gather.dateKey]);
+  }, [opts.enabled, opts.uid, opts.gather.dateKey, refresh]);
 
   return { brief, loading, error, refresh };
 }

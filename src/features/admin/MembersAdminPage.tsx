@@ -164,15 +164,18 @@ export function MembersAdminPage({
             <p>{manage.email}</p>
             <label style={{ display: "block", marginTop: 12, fontSize: 12, color: "var(--c-ink-2)" }}>
               Role
-              <select
-                defaultValue={manage.role}
-                onChange={(e) => void onChangeRole?.(manage.id, e.target.value)}
-                style={{ display: "block", width: "100%", marginTop: 6, padding: 8, borderRadius: 10 }}
-              >
-                <option value="admin">Admin</option>
-                <option value="member">Member</option>
-                <option value="viewer">Viewer</option>
-              </select>
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                {["admin", "member", "viewer"].map((role) => (
+                  <DButton
+                    key={role}
+                    onClick={() => void onChangeRole?.(manage.id, role)}
+                    size="sm"
+                    variant={manage.role === role ? "primary" : "secondary"}
+                  >
+                    {role}
+                  </DButton>
+                ))}
+              </div>
             </label>
           </div>
         ) : null}

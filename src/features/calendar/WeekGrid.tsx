@@ -14,6 +14,7 @@ import { createNote, ensurePersonalNotebook, linkNote } from "../../lib/notes";
 import { getLocale, t } from "../../lib/i18n";
 import { useCalendarEvents } from "./useCalendarEvents";
 import { CalendarEventChip, CalendarEventPopover } from "./CalendarEventChip";
+import { CalendarMonthView } from "./CalendarMonthView";
 import "./calendarOverlay.css";
 
 const HOUR_PX = 48;
@@ -52,6 +53,7 @@ export function WeekGrid({ onPrepareEvent, tasks = [], projects = [] }: Props) {
   const [linkFor, setLinkFor] = useState<CalendarEvent | null>(null);
   const [linkQuery, setLinkQuery] = useState("");
   const [freeHint, setFreeHint] = useState<string | null>(null);
+  const [calMode, setCalMode] = useState<"week" | "month">("week");
   const { events, accounts, accountColor } = useCalendarEvents();
 
   const days = useMemo(() => {
@@ -134,11 +136,27 @@ export function WeekGrid({ onPrepareEvent, tasks = [], projects = [] }: Props) {
       <header className="cw-cal-week-head">
         <div>
           <strong>
-            {locale === "es" ? "Mi trabajo · Semana" : "My Work · Week"}
+            {locale === "es" ? "Mi trabajo · Eventos" : "My Work · Events"}
           </strong>
-          <span>{weekLabel}</span>
+          <span>{calMode === "month" ? "Month" : weekLabel}</span>
         </div>
         <div className="cw-cal-week-nav">
+          <button
+            className={calMode === "week" ? "is-active" : ""}
+            onClick={() => setCalMode("week")}
+            type="button"
+          >
+            Week
+          </button>
+          <button
+            className={calMode === "month" ? "is-active" : ""}
+            onClick={() => setCalMode("month")}
+            type="button"
+          >
+            Month
+          </button>
+          {calMode === "week" ? (
+            <>
           <button onClick={() => setAnchor((a) => addDays(a, -7))} type="button">
             ‹
           </button>
@@ -155,6 +173,8 @@ export function WeekGrid({ onPrepareEvent, tasks = [], projects = [] }: Props) {
           >
             {workdaysOnly ? "Lun–Vie" : "Lun–Dom"}
           </button>
+            </>
+          ) : null}
         </div>
         <ul className="cw-cal-week-legend">
           {accounts
@@ -168,6 +188,23 @@ export function WeekGrid({ onPrepareEvent, tasks = [], projects = [] }: Props) {
         </ul>
       </header>
 
+      {calMode === "month" ? (
+        <div style={{ padding: 12 }}>
+          <CalendarMonthView
+            events={events.map((e) => ({
+              id: e.id,
+              title: e.title,
+              start: e.start,
+              end: e.end,
+              bucket: e.certo?.blockOf === "plan" ? "fire" : "growth",
+              allDay: e.allDay,
+            }))}
+            initialMode="month"
+            onAdd={() => undefined}
+          />
+        </div>
+      ) : (
+      <>
       <div className="cw-cal-week-allday">
         <div className="cw-cal-week-gutter" />
         {days.map((day) => {
@@ -322,6 +359,9 @@ export function WeekGrid({ onPrepareEvent, tasks = [], projects = [] }: Props) {
           </button>
         </p>
       ) : null}
+
+      </>
+      )}
 
       {linkFor ? (
         <div className="cw-cal-link-popover">

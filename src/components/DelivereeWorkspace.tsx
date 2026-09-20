@@ -147,9 +147,10 @@ import {
 import { HomeAttention } from "../pages/HomeAttention";
 import { HomeCockpit } from "../features/home";
 import { BillingScreen } from "../features/billing";
-import { useBillingEnabled } from "../features/flags/featureUserFlags";
+import { useBillingEnabled, useDailyBriefEnabled } from "../features/flags/featureUserFlags";
 import { RoutineBuilder } from "../features/routines/RoutineBuilder";
 import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
+import { DesktopIconRail } from "../features/shell/DesktopRail";
 import { RitualRunner, RevisionesView } from "../features/routines";
 import { DayHeader } from "../features/dayplan/DayHeader";
 import { useDayPlan } from "../features/dayplan/useDayPlan";
@@ -449,6 +450,7 @@ export function DelivereeWorkspace() {
   } = useAuth();
   const dailyPlanEnabled = useDailyPlanEnabled();
   const billingEnabled = useBillingEnabled();
+  const dailyBriefEnabled = useDailyBriefEnabled();
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -6722,6 +6724,47 @@ export function DelivereeWorkspace() {
         className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`}
         data-testid="primary-sidebar"
       >
+        {(billingEnabled || dailyBriefEnabled) && !isPhone ? (
+          <DesktopIconRail
+            items={[
+              {
+                id: "home",
+                label: "Home",
+                active: lens.kind === "home" || centerView === "conversation",
+                icon: <Home size={18} />,
+                onClick: () => navigate("/home"),
+              },
+              {
+                id: "my-work",
+                label: "My Work",
+                active: lens.kind === "my-work",
+                icon: <ListTodo size={18} />,
+                onClick: () => navigate("/my-work"),
+              },
+              {
+                id: "projects",
+                label: "Projects",
+                active: lens.kind === "work" || lens.kind === "project",
+                icon: <Folder size={18} />,
+                onClick: () => navigate("/projects"),
+              },
+              {
+                id: "billing",
+                label: "Billing",
+                active: lens.kind === "invoices",
+                icon: <Receipt size={18} />,
+                onClick: () => navigate(billingEnabled ? "/billing" : "/invoices"),
+              },
+              {
+                id: "routines",
+                label: "Routines",
+                active: lens.kind === "routines",
+                icon: <Sparkles size={18} />,
+                onClick: () => navigate("/rutinas"),
+              },
+            ]}
+          />
+        ) : null}
         <ProductSwitcher product="work" />
         <div className="do-brand-row">
           <button

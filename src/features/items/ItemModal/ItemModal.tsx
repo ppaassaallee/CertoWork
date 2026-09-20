@@ -48,6 +48,7 @@ import { ItemNotesSection } from "./ItemNotesSection";
 import { ItemRecordsSection } from "./ItemRecordsSection";
 import type { RecordDoc, TableDoc } from "../../../lib/tables";
 import "./ItemModal.css";
+import "../../../desktop/ui/desktop-ui.css";
 
 export type WorkItemKind =
   | "epic"
@@ -710,6 +711,15 @@ export function ItemModal({
                 </select>
               </div>
             )}
+
+            <button
+              className="d-ask-ody"
+              onClick={onAskOdysseus}
+              style={{ margin: "8px 0 12px" }}
+              type="button"
+            >
+              Ask Odysseus to summarize
+            </button>
 
             <div
               className={`cw-item-body-wrap ${bodyFocused ? "is-focused" : ""}`}

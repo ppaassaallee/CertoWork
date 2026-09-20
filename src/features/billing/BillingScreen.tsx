@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -52,7 +53,7 @@ function pillTone(status: Invoice["status"]) {
 export function BillingScreen({
   workspaceId,
   workspaceName,
-  projectFilter,
+  projectFilter: projectFilterProp,
   uid,
 }: {
   workspaceId: string;
@@ -61,6 +62,8 @@ export function BillingScreen({
   uid?: string;
 }) {
   const enabled = useBillingEnabled();
+  const [params] = useSearchParams();
+  const projectFilter = projectFilterProp || params.get("project") || undefined;
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tab, setTab] = useState("all");
   const [view, setView] = useState("list");
@@ -70,16 +73,23 @@ export function BillingScreen({
   const [showAddView, setShowAddView] = useState(false);
   const [extraViews, setExtraViews] = useState<Array<{ id: string; type: ViewType; name: string }>>([]);
 
+  useEffect(() => {
+    if (!enabled || !workspaceId) return;
+    let cancelled = false;
+    (async () => {
+      const rows = await listInvoices(workspaceId);
+      if (cancelled) return;
+      setInvoices(projectFilter ? rows.filter((r) => r.projectId === projectFilter) : rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, workspaceId, projectFilter]);
+
   const reload = async () => {
     const rows = await listInvoices(workspaceId);
     setInvoices(projectFilter ? rows.filter((r) => r.projectId === projectFilter) : rows);
   };
-
-  useEffect(() => {
-    if (!enabled || !workspaceId) return;
-    void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, workspaceId, projectFilter]);
 
   const filtered = useMemo(() => {
     let rows = filterByTab(invoices, tab);
