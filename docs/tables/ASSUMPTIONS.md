@@ -18,3 +18,8 @@ Step 2 — `entity_links` already exists; Step 4 extends record link targets.
 Step 3 — assumed tableService lives alongside storage; consumers import tableServices.* for event-emitting writes; legacy storage paths remain.
 Step 4 — assumed existing entity_links + linkRecord; added bidirectional linkService with invoice/item types and LinkedRecordsSection for reverse UI.
 Step 5 — TableGroupedGrid used when table.groups present; else existing RecordsViewSurface. Virtualized rows + footer summaries (sum/distribution).
+Step 5–11 — extended existing TablePage/RecordPanel/views rather than replacing; grouped grid when groups present.
+Step 12 — structured routines stored on RoutineSpec.structured; same activate/pause/run log; CF onTableEventCreated enqueues routine_run_queue.
+Step 17 — Odysseus builder uses heuristic template match + local provision when LLM JSON mode unavailable.
+Step 26 — vacant sample rent set to $0 so five-row sum equals $7,600 (occupied four sum to $7,600).
+Step 23 — import interactive UI caps 500 rows; CF chunk path for up to 50k documented.
