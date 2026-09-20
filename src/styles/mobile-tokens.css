@@ -1,0 +1,50 @@
+/* Mobile-only tokens — consumed by src/mobile/ui/* under .m-root */
+.m-root {
+  --c-blue: #2547c4;
+  --c-orange: #f2620f;
+  --c-ink: #424242;
+  --c-ink-2: #6b6f7a;
+  --c-ink-3: #9a9ea8;
+  --c-line: #e4e6ee;
+  --c-line-2: #eef0f5;
+  --c-bg: #f5f6fa;
+  --c-panel: #fff;
+  --c-danger: #e0433a;
+  --c-ok: #3aae6c;
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 14px;
+  --tap: 44px;
+  --tabbar-h: 49px;
+  --m-shadow: 0 12px 40px rgba(20, 28, 60, 0.14);
+  color: var(--c-ink);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.m-root *,
+.m-root *::before,
+.m-root *::after {
+  box-sizing: border-box;
+}
+
+.m-root button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.m-root :focus-visible {
+  outline: 2px solid var(--c-blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-root *,
+  .m-root *::before,
+  .m-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
