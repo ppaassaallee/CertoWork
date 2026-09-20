@@ -1,7 +1,10 @@
 # REPORT — Final (Daily Plan Phases 1–3)
 
+## Visual reference
+See [`MOCKUPS.md`](./MOCKUPS.md) — desktop + mobile HTML mockups (bucket tokens fire/growth/extra; semáforo stays R/Y/G).
+
 ## How to enable
-Firestore console: `users/{yourUid}.flags.dailyPlan = true`
+Firebase console: `users/{yourUid}.flags.dailyPlan = true`
 
 ## Deploy (pending auth)
 See `docs/daily-plan/DEPLOY.md`.
@@ -18,9 +21,10 @@ See `docs/daily-plan/ASSUMPTIONS.md` (full list).
 - Feature: `src/features/dailyPlan/`
 - Functions: `functions/`
 - My Work touch: `DelivereeWorkspace` (flag gate), `WorkItemsCenter.renderRowExtra` only
+- Mockups: `docs/daily-plan/mockup-desktop.html`, `mockup-mobile.html`
 
 ## Google OAuth already in product
 Yes — Firebase Google sign-in + worker `/api/calendar/oauth/google/*`. Daily Plan calendar uses GIS code client + Firebase callables (separate from existing Integrations calendar).
 
 ## Stop
-Phase 3 Step 33 complete.
+Phase 3 Step 33 complete. UI aligned to handed mockups for steps 6, 7, 9, 13, 17, 24.
