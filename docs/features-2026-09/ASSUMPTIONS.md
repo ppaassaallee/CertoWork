@@ -14,3 +14,6 @@ Step 14 — view system extends `lib/views` with invoice scope types; popover ad
 Step 19 — icon rail wraps existing sidebar content rather than deleting routes.
 Step 23 — routine builder scaffolds canvas; non-prompt nodes Coming soon if engine is prompt-only.
 Step 25 — project gallery skipped if overview view type not ready — logged.
+Step 19 — DesktopIconRail + panel scaffolded; full sidebar replace deferred to avoid breaking existing nav — mapping documented.
+Step 21 — MembersAdminPage component ready; route `/admin/members` resolves to settings lens for shell host.
+
