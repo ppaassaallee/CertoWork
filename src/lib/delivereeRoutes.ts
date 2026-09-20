@@ -30,7 +30,8 @@ export type DelivereeLens =
   | { kind: "tables"; tableId?: string }
   | { kind: "dashboard" }
   | { kind: "workload" }
-  | { kind: "more"; section: MoreSection };
+  | { kind: "more"; section: MoreSection }
+  | { kind: "inbox" };
 
 const MORE_SECTIONS: MoreSection[] = [
   "automations",
@@ -197,9 +198,12 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     }
   }
 
+  if (path === "/inbox" || path.startsWith("/inbox/")) {
+    return { kind: "inbox" };
+  }
+
   if (
     path.startsWith("/capture") ||
-    path === "/inbox" ||
     path === "/rich-capture"
   ) {
     return { kind: "my-work", section: "inbox" };
@@ -229,6 +233,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 }
 
 export function lensToPath(lens: DelivereeLens) {
+  if (lens.kind === "inbox") return "/inbox";
   if (lens.kind === "my-work") {
     if (lens.section === "inbox") return "/my-work/inbox";
     if (lens.section === "waiting") return "/my-work/waiting";
