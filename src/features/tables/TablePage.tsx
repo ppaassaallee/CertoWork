@@ -47,6 +47,7 @@ import { RecordsBoard } from "./RecordsBoard";
 import { RecordsCalendar } from "./RecordsCalendar";
 import { RecordsViewSurface } from "../views/RecordsViewSurface";
 import { TableAutomationComposer } from "./TableAutomationComposer";
+import { AutomationCenter } from "./AutomationCenter";
 import { TableFiltersBar } from "./TableFiltersBar";
 import { TableFormView } from "./TableFormView";
 import { TableGroupedGrid } from "./TableGroupedGrid";
@@ -484,7 +485,20 @@ export function TablePage({
             record={activeRecord}
             members={members}
             activity={activity.filter((a) => a.recordId === activeRecord.id)}
+            recordOrder={visibleRecords.map((r) => r.id)}
             onClose={() => openRecord(null)}
+            onOpenRecord={(id) => openRecord(id)}
+            onAskOdysseus={
+              onOpenOdysseus
+                ? () =>
+                    onOpenOdysseus({
+                      kind: "record",
+                      entityId: activeRecord.id,
+                      label: String(activeRecord.values[table.keyColumns.title] ?? ""),
+                      prompt: "Summarize this record",
+                    })
+                : undefined
+            }
             onFieldChange={(col, val) => void handleFieldChange(activeRecord.id, col, val)}
             onComment={onComment ? (text) => onComment(activeRecord.id, text) : undefined}
             onLinkTask={onLinkTask ? () => onLinkTask(activeRecord.id) : undefined}
@@ -504,8 +518,14 @@ export function TablePage({
         ) : null}
 
         <TableAutomationComposer
+          open={false}
+          table={table}
+          onClose={() => setAutomationsOpen(false)}
+        />
+        <AutomationCenter
           open={automationsOpen}
           table={table}
+          selectedRecord={activeRecord}
           onClose={() => setAutomationsOpen(false)}
         />
       </div>
