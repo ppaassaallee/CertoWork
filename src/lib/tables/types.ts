@@ -249,6 +249,7 @@ export type TableEvent =
     };
 
 export type RecordLinkTarget = {
-  type: "task" | "project" | "note" | "ticket" | "record";
+  type: "task" | "project" | "note" | "ticket" | "record" | "invoice" | "item";
   id: string;
+  tableId?: string;
 };

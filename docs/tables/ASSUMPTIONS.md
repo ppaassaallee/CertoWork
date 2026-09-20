@@ -16,3 +16,4 @@ Step 2 — assumed collection `table_records` (existing) instead of nested `tabl
 Step 2 — filtering client-side under 5,000 records; callable `queryRecords` above that (scaffold in Step 3 computeFns).
 Step 2 — `entity_links` already exists; Step 4 extends record link targets.
 Step 3 — assumed tableService lives alongside storage; consumers import tableServices.* for event-emitting writes; legacy storage paths remain.
+Step 4 — assumed existing entity_links + linkRecord; added bidirectional linkService with invoice/item types and LinkedRecordsSection for reverse UI.

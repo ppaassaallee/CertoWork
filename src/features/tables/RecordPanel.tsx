@@ -48,6 +48,9 @@ function linkLabel(target: RecordLinkTarget) {
   if (target.type === "note") return t("tables.panel.linkNote");
   if (target.type === "ticket") return t("tables.panel.linkTicket");
   if (target.type === "record") return t("tables.panel.linkRecord");
+  if (target.type === "invoice") return "Invoice";
+  if (target.type === "item") return "Item";
+  if (target.type === "project") return "Project";
   return target.type;
 }
 
