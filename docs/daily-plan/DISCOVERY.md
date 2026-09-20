@@ -183,4 +183,12 @@ Step 10: can set scope to `kind: "day"` when Daily Plan Today view is active; **
 
 ## Rules deployed
 
-*(Filled in Step 4 after deploy attempt.)*
+Attempted `npx firebase-tools@13 deploy --only firestore:rules,firestore:indexes --project gen-lang-client-0277783597`.
+
+**Result:** failed — `Error: Failed to authenticate, have you run firebase login?`
+
+Rules + composite index for `dayPlans` (`uid` ASC, `date` ASC) are committed in-repo. **Alejandro must deploy** from an authenticated machine:
+
+```bash
+npx firebase deploy --only firestore:rules,firestore:indexes --project gen-lang-client-0277783597
+```
