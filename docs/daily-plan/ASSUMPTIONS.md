@@ -9,3 +9,8 @@ Step 1 — assumed toast is `setNotice` in DelivereeWorkspace; confirm is `windo
 Step 1 — assumed Cloud Functions live under `worker/` (Cloudflare) not `functions/`; Phase 2 calendar callables will add `functions/` per Step 14 fallback if worker cannot host Firebase callables.
 Step 4 — Firestore rules/indexes deploy requires `firebase login`; commands recorded in DEPLOY.md.
 Step 13 — Close the day button always visible in board header (not only after 15:00) for easier testing; menu still available.
+Step 14 — Created `functions/` Firebase callables (repo used Cloudflare worker for calendar OAuth; Daily Plan uses Firebase callables per prompt).
+Step 23 — No shared `<llmCall>` → heuristic-only proposals (`source:'heuristic'`).
+Step 27 — Routines engine not used for Daily Plan recipes → scheduled `dailyPlanRoutinesTick` + `dayPlanSettings/{uid}`.
+Step 29 — Outlook provider stubbed until MS_* secrets exist.
+Step 30 — Odysseus actions skipped (no context provider API).

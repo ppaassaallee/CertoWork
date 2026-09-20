@@ -8,11 +8,15 @@ import { addDays, getTodayKey, labelForKey } from "../dateKeys";
 import { addEntries, addEntry, removeEntry, updatePlanFields } from "../dayPlanService";
 import { computeFocusScore } from "../focusScore";
 import "../dailyPlan.css";
+import { ProposalSheet, runPlanMyDayProposal } from "./ProposalSheet";
 import { CloseDaySheet } from "./CloseDaySheet";
 import { DailyPlanCTA } from "./DailyPlanCTA";
+import { EventsColumn } from "./EventsColumn";
 import { PlanningTray, RowTodayAffordance } from "./PlanningTray";
 import { TodayBoard } from "./TodayBoard";
 import { WeekStrip } from "./WeekStrip";
+import { useCalendarConnections } from "../calendar/useCalendarConnections";
+import { useDayEvents } from "../calendar/useDayEvents";
 import type { JoinedEntry } from "../useDayPlan";
 import { useDayPlan } from "../useDayPlan";
 import { useIsDesktop } from "../useIsDesktop";
@@ -60,6 +64,7 @@ export function DailyPlanOverlay({
   const [boardDateKey, setBoardDateKey] = useState(todayKey);
   const [view, setViewState] = useState<DailyPlanView>(() => readViewParam() || "items");
   const [closeOpen, setCloseOpen] = useState(false);
+  const [proposalOpen, setProposalOpen] = useState(false);
 
   const setView = useCallback((next: DailyPlanView) => {
     setViewState(next);
@@ -105,6 +110,8 @@ export function DailyPlanOverlay({
     boardDateKey < todayKey || Boolean(day.plan?.closedAt);
 
   const keyItemId = legacyKey.plan?.keyItemId ?? null;
+  const { connections, setCalendarSelected } = useCalendarConnections(user?.uid);
+  const dayEvents = useDayEvents(boardDateKey, connections);
 
   const onToggleDone = async (entry: JoinedEntry, next: boolean) => {
     const item = entry.item;
@@ -237,7 +244,52 @@ export function DailyPlanOverlay({
             Close the day
           </button>
         ) : null}
+        {boardDateKey >= todayKey && !day.plan?.closedAt ? (
+          <button
+            className="dp-link"
+            onClick={() => {
+              if (!user?.uid) return;
+              void (async () => {
+                await runPlanMyDayProposal({
+                  uid: user.uid,
+                  dateKey: boardDateKey,
+                  items,
+                  leftovers: day.leftovers,
+                  events: dayEvents.events,
+                  plannedIds,
+                });
+                setProposalOpen(true);
+              })();
+            }}
+            type="button"
+          >
+            Plan my day
+          </button>
+        ) : null}
       </div>
+      {day.plan?.pendingProposal && !proposalOpen ? (
+        <button
+          className="dp-cta"
+          onClick={() => setProposalOpen(true)}
+          type="button"
+        >
+          Odysseus proposed a plan · Review
+        </button>
+      ) : null}
+      {proposalOpen && user?.uid ? (
+        <ProposalSheet
+          dateKey={boardDateKey}
+          events={dayEvents.events}
+          items={items}
+          leftovers={day.leftovers}
+          onAccepted={() => undefined}
+          onClose={() => setProposalOpen(false)}
+          plan={day.plan}
+          plannedIds={plannedIds}
+          uid={user.uid}
+          workspaceId={workspaceId}
+        />
+      ) : null}
       {closeOpen && day.plan && user?.uid ? (
         <CloseDaySheet
           dateKey={boardDateKey}
@@ -294,11 +346,29 @@ export function DailyPlanOverlay({
     </PlanningTray>
   );
 
+  const eventsCol =
+    user?.uid ? (
+      <EventsColumn
+        connections={connections}
+        dateKey={boardDateKey}
+        events={dayEvents.events}
+        items={items}
+        loading={dayEvents.loading}
+        notConfigured={dayEvents.notConfigured}
+        onNotice={onNotice}
+        onRefresh={() => void dayEvents.refresh()}
+        plan={day.plan}
+        setCalendarSelected={setCalendarSelected}
+        uid={user.uid}
+      />
+    ) : null;
+
   if (desktop) {
     return (
-      <div className="dp-shell dp-shell-desktop" data-testid="daily-plan-shell">
+      <div className="dp-shell dp-shell-desktop is-three" data-testid="daily-plan-shell">
         <div className="dp-shell-left">{tray}</div>
         <div className="dp-shell-right">{board}</div>
+        {eventsCol}
       </div>
     );
   }
@@ -320,8 +390,15 @@ export function DailyPlanOverlay({
         >
           Today
         </button>
+        <button
+          className={view === "events" ? "is-active" : ""}
+          onClick={() => setView("events")}
+          type="button"
+        >
+          Events
+        </button>
       </div>
-      {view === "today" ? board : tray}
+      {view === "today" ? board : view === "events" ? eventsCol : tray}
     </div>
   );
 }

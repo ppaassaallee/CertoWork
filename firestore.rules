@@ -1714,5 +1714,22 @@ service cloud.firestore {
         && request.resource.data.date == resource.data.date;
       allow delete: if false;
     }
+
+    // Daily Plan calendar connections (client may toggle selected calendars only)
+    match /calendarConnections/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if false;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['accounts', 'defaultWriteAccountId', 'autoSyncBlocks', 'updatedAt']);
+      allow delete: if false;
+    }
+    match /calendarTokens/{id} {
+      allow read, write: if false;
+    }
+
+    match /dayPlanSettings/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

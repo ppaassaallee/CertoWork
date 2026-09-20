@@ -39,3 +39,4 @@ try {
 }
 
 export const auth = configuredAuth;
+export { app };
