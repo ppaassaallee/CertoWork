@@ -224,7 +224,7 @@ import {
 } from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
-import { DailyPlanOverlay, useDailyPlanEnabled } from "../features/dailyPlan";
+import { DailyPlanOverlay, DailyPlanOptIn, useDailyPlanEnabled } from "../features/dailyPlan";
 import {
   QuickCaptureModal,
   parentLinkPatch,
@@ -8183,7 +8183,7 @@ export function DelivereeWorkspace() {
           </>
           )
         ) : centerView === "items" ? (
-          <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""}`} data-testid="my-work-shell">
+          <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""} ${dailyPlanEnabled ? "is-daily-plan" : ""}`} data-testid="my-work-shell">
             {lens.kind === "my-work" && isOverviewEnabled() && user?.uid ? (
               <MyWorkOverview
                 actor={personalActor}
@@ -8193,7 +8193,10 @@ export function DelivereeWorkspace() {
                 userId={user.uid}
               />
             ) : null}
-            {lens.kind === "my-work" && (
+            {lens.kind === "my-work" && !dailyPlanEnabled ? (
+              <DailyPlanOptIn compact={Boolean(mobileCore)} />
+            ) : null}
+            {lens.kind === "my-work" && !dailyPlanEnabled && (
               <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
                 <button
                   className={lens.section === "assigned" ? "is-active" : ""}
@@ -8279,7 +8282,7 @@ export function DelivereeWorkspace() {
                 <CaptureIngestForm onCapture={(subject, body) => void ingestCapturedEmail(subject, body)} />
               </div>
             )}
-            {lens.kind === "my-work" && lens.section === "today" && (
+            {lens.kind === "my-work" && lens.section === "today" && !dailyPlanEnabled && (
               <>
                 <DayHeader
                   keyItemTitle={keyItemTitle}
@@ -8308,7 +8311,7 @@ export function DelivereeWorkspace() {
                 />
               </>
             )}
-            {lens.kind === "my-work" && lens.section === "week" ? (
+            {lens.kind === "my-work" && lens.section === "week" && !dailyPlanEnabled ? (
               <WeekGrid
                 onPrepareEvent={(event) => {
                   void openOdysseusPanel({
@@ -8329,6 +8332,7 @@ export function DelivereeWorkspace() {
                   actorEmail={user?.email || ""}
                   actorId={user?.uid || ""}
                   actorMemberId={personalActor.memberId || null}
+                  compact
                   ctxExtras={{
                     navigate: (to) => navigate(to),
                     openOdysseus: (scope) => {

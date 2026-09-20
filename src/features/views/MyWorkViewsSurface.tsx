@@ -74,6 +74,8 @@ export function MyWorkViewsSurface({
   listBody,
   /** Optional escape hatch: spreadsheet ViewGrid instead of Asana list. */
   listRenderer,
+  /** Hide heavy views chrome (for Daily Plan tray / mobile). */
+  compact = false,
 }: {
   tasks: TaskRow[];
   actorId: string;
@@ -94,6 +96,7 @@ export function MyWorkViewsSurface({
     view: SavedView;
     memberIds: string[];
   }) => ReactNode;
+  compact?: boolean;
 }) {
   const surface: Surface = "my-work";
   const meMemberIds = useMemo(
@@ -201,7 +204,23 @@ export function MyWorkViewsSurface({
   };
 
   return (
-    <div className="cw-views-surface is-asana-list" data-testid="my-work-views-surface">
+    <div
+      className={`cw-views-surface is-asana-list${compact ? " is-compact" : ""}`}
+      data-testid="my-work-views-surface"
+    >
+      {compact ? (
+        <div className="cw-views-bar is-compact" data-testid="views-bar">
+          <button
+            className="cw-views-compact-tool"
+            data-testid="views-customize"
+            onClick={() => setCustomizerOpen(true)}
+            type="button"
+          >
+            Filter · Sort
+            {active.filters.length ? ` · ${active.filters.length}` : ""}
+          </button>
+        </div>
+      ) : (
       <ViewsBar
         activeViewId={active.id}
         filterCount={active.filters.length}
@@ -237,6 +256,7 @@ export function MyWorkViewsSurface({
         }
         views={views}
       />
+      )}
       {active.filters.length ? (
         <div className="cw-views-filter-chips" data-testid="views-filter-chips">
           {active.filters.map((rule, index) => {

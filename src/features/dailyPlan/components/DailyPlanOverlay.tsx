@@ -378,7 +378,7 @@ export function DailyPlanOverlay({
   }
 
   return (
-    <div className="dp-shell" data-testid="daily-plan-shell">
+    <div className="dp-shell is-mobile" data-testid="daily-plan-shell">
       <div className="dp-segments" role="tablist">
         <button
           className={view === "items" ? "is-active" : ""}
@@ -402,7 +402,9 @@ export function DailyPlanOverlay({
           Events
         </button>
       </div>
-      {view === "today" ? board : view === "events" ? eventsCol : tray}
+      <div className="dp-mobile-body">
+        {view === "today" ? board : view === "events" ? eventsCol : tray}
+      </div>
     </div>
   );
 }
