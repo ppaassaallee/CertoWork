@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certo Work — Daily Brief and Billing (desktop mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--blue:#2547C4;--ink:#1F2430;--ink-2:#6B7280;--ink-3:#9CA3AF;--line:#ECEEF3;--line-2:#F4F5F8;--wash:#F7F8FA;--ok:#3AAE6C;--warn:#E8B23A;--bad:#E0433A;--orange:#F2620F;box-sizing:border-box}
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{height:100%}
+  body{margin:0;background:#E9EBF0;color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  .app{display:grid;grid-template-columns:56px 340px 1fr;height:100vh;min-height:820px;background:#fff}
+
+  /* rail */
+  .rail{border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px}
+  .rail .logo{width:30px;height:30px;border-radius:9px;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:600;font-size:14px;margin-bottom:10px}
+  .rail button{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:var(--ink-2);position:relative}
+  .rail button.on{background:rgba(37,71,196,.08);color:var(--blue)}
+  .rail button:hover{background:var(--line-2)}
+  .rail .b{position:absolute;top:6px;right:6px;min-width:14px;height:14px;border-radius:7px;background:var(--bad);color:#fff;font-size:9.5px;font-weight:600;display:grid;place-items:center;padding:0 3px}
+  .rail .sp{flex:1}
+  .rail .av{width:30px;height:30px;border-radius:50%;background:#0EA5A5;color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center}
+
+  /* odysseus panel */
+  .ody{border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--wash)}
+  .ody .h{display:flex;align-items:center;gap:8px;padding:16px 18px 10px;font-weight:600}
+  .ody .h > svg{color:var(--blue);fill:var(--blue);stroke:none}
+  .ody .h .sp{flex:1}
+  .ody .h button{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--ink-2)}
+  .ody .h button svg{width:16px;height:16px}
+  .ody .feed{flex:1;overflow:auto;padding:6px 18px 12px;display:flex;flex-direction:column;gap:12px}
+  .lbl{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+  .sig{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .sig .top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(242,98,15,.08);color:var(--orange);font-size:12px;font-weight:500}
+  .sig .top svg{width:14px;height:14px}
+  .sig .top .sp{flex:1}
+  .sig .top time{color:var(--ink-3);font-weight:400}
+  .sig .bd{padding:12px 14px 14px}
+  .sig .bd b{display:block;font-weight:600;margin-bottom:3px}
+  .sig .bd p{margin:0 0 12px;color:var(--ink-2);font-size:13px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px;border-radius:10px;font-weight:500;font-size:13.5px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+  .btn.p{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .btn.g{border-color:transparent;color:var(--ink-2);background:transparent}
+  .btn.sm{height:30px;font-size:12.5px;padding:0 10px;border-radius:8px}
+  .btn svg{width:15px;height:15px}
+  .me{align-self:flex-end;max-width:85%;background:#fff;border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13.5px}
+  .ai{display:flex;gap:10px;font-size:13.5px}
+  .ai .dot{width:22px;height:22px;border-radius:50%;background:var(--blue);flex:none;display:grid;place-items:center}
+  .ai .dot svg{width:12px;height:12px;fill:#fff;stroke:none}
+  .ai ul{margin:6px 0 8px;padding-left:16px;color:var(--ink-2)}
+  .ai ul b{color:var(--ink);font-weight:500}
+  .src{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink-3)}
+  .src span{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink-2)}
+  .src i{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .ask{margin:0 18px 16px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .ask input{width:100%;border:0;outline:0;font:inherit;font-size:14px;color:var(--ink);padding:4px 2px 10px}
+  .ask input::placeholder{color:var(--ink-3)}
+  .ask .r{display:flex;align-items:center;gap:8px}
+  .ask .r .sp{flex:1}
+  .ask .send{width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center}
+  .ask .send svg{width:14px;height:14px;stroke:#fff}
+
+  /* main */
+  .main{overflow:auto;display:flex;flex-direction:column}
+  .top{display:flex;align-items:center;gap:10px;padding:14px 28px;border-bottom:1px solid var(--line)}
+  .top .crumb{display:flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13.5px}
+  .top .crumb b{color:var(--ink);font-weight:600}
+  .top .sp{flex:1}
+  .top .avs{display:flex}
+  .top .avs span{width:26px;height:26px;border-radius:50%;border:2px solid #fff;margin-left:-6px;display:grid;place-items:center;font-size:10px;color:#fff;font-weight:600}
+  .ib{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--ink-2)}
+  .ib:hover{background:var(--line-2)}
+
+  /* daily brief */
+  .brief{margin:22px 28px 0;border-radius:18px;background:linear-gradient(120deg,#F5F7FF 0%,#FFFFFF 45%,#FFF4EE 100%);border:1px solid var(--line);padding:26px 30px 24px;position:relative}
+  .brief .d{font-size:13px;color:var(--ink-2);margin-bottom:8px}
+  .brief h1{margin:0;font-size:34px;font-weight:600;letter-spacing:-.025em;line-height:1.22;max-width:720px}
+  .brief h1 .k{display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin:0 2px}
+  .brief h1 .k i{width:34px;height:34px;border-radius:10px;background:#fff;border:1px solid var(--line);display:inline-grid;place-items:center;color:var(--ink-2)}
+  .brief h1 .k i svg{width:17px;height:17px}
+  .brief h1 .m{color:var(--ink-3);font-weight:500}
+  .brief p{margin:12px 0 0;color:var(--ink-2);font-size:14px;max-width:640px}
+  .brief .listen{position:absolute;right:22px;top:20px;display:flex;align-items:center;gap:10px;font-size:13px}
+  .brief .listen .pl{width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid var(--line);display:grid;place-items:center;color:var(--ink)}
+  .brief .listen .pl svg{width:16px;height:16px;fill:var(--ink);stroke:none}
+  .brief .listen small{display:block;color:var(--ink-3)}
+  .next{margin:14px 28px 0;border:1px solid var(--line);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px}
+  .next b{display:block;font-size:17px;font-weight:600}
+  .next small{color:var(--ink-2);font-size:13px}
+  .next .sp{flex:1}
+  .next .in{color:var(--bad);font-size:13px;font-weight:500;margin-right:6px}
+  .sec{display:flex;align-items:center;gap:10px;padding:26px 28px 6px;font-size:13px;font-weight:600;color:var(--ink-2)}
+  .sec .n{color:var(--ink-3);font-weight:400}
+  .sec .sp{flex:1}
+  .sec a{color:var(--blue);font-weight:500;font-size:13px}
+  .row{display:grid;grid-template-columns:1fr 240px 150px 24px;align-items:center;gap:14px;padding:12px 28px;border-bottom:1px solid var(--line)}
+  .row:hover{background:var(--wash)}
+  .row b{font-weight:500}
+  .row .t{color:var(--ink-2);font-size:13px}
+  .row .s{font-size:13px;font-weight:500}
+  .row .chev{color:var(--ink-3)}
+  .note{display:flex;align-items:center;gap:8px;padding:9px 28px;font-size:14px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:13px;background:var(--line-2);color:var(--ink);font-weight:500}
+  .pill i{width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;font-size:9px;color:#fff;font-weight:600}
+  .pill.link{color:var(--blue);background:rgba(37,71,196,.08)}
+  .pill .dot{width:8px;height:8px;border-radius:50%}
+  .sched{padding:8px 28px 40px;display:flex;flex-direction:column;gap:10px;font-size:14px}
+  .sched div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .sched .pill svg{width:13px;height:13px}
+  .st{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:6px 28px 0}
+  .st div{border:1px solid var(--line);border-radius:12px;padding:12px 14px;position:relative}
+  .st div small{display:block;font-size:12.5px;color:var(--ink-2)}
+  .st div b{display:block;font-size:22px;font-weight:600;letter-spacing:-.01em;margin-top:4px}
+  .st div b.bad{color:var(--bad)}
+  .st div svg{position:absolute;right:10px;top:10px;width:14px;height:14px;color:var(--ink-3)}
+
+  /* billing */
+  .bh{padding:22px 28px 0;display:flex;align-items:flex-end;gap:24px}
+  .bh h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.25;max-width:560px}
+  .bh h1 .m{color:var(--ink-3);font-weight:500}
+  .bh .sub{color:var(--ink-2);font-size:13.5px;margin-top:6px}
+  .bh .sp{flex:1}
+  .spark{width:300px;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  .spark .k{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:var(--ink-2)}
+  .spark .k b{font-size:18px;font-weight:600;color:var(--ink)}
+  .spark .k em{color:var(--ok);font-style:normal;font-weight:500}
+  .spark svg{width:100%;height:46px;stroke:none;margin-top:4px}
+  .views{display:flex;align-items:center;gap:4px;padding:18px 28px 0;border-bottom:1px solid var(--line)}
+  .views button{display:inline-flex;align-items:center;gap:7px;padding:8px 12px 12px;font-size:13.5px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .views button.on{color:var(--ink);font-weight:500;border-bottom-color:var(--ink)}
+  .views button svg{width:15px;height:15px}
+  .views .sp{flex:1}
+  .tools{display:flex;align-items:center;gap:8px;padding:12px 28px}
+  .tabs{display:flex;gap:2px;background:var(--line-2);border-radius:10px;padding:3px}
+  .tabs button{padding:6px 12px;border-radius:8px;font-size:13px;color:var(--ink-2);display:inline-flex;gap:6px;align-items:center}
+  .tabs button.on{background:#fff;color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(20,24,40,.08)}
+  .tabs button .c{font-size:11.5px;color:var(--ink-3)}
+  .tabs button.on .c{color:var(--ink-2)}
+  .tools .sp{flex:1}
+  .search{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:10px;color:var(--ink-3);font-size:13.5px;width:240px}
+  .search svg{width:15px;height:15px}
+  .bulk{display:flex;align-items:center;gap:8px;margin:0 28px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--wash);font-size:13px}
+  .bulk .sp{flex:1}
+  table{width:100%;border-collapse:collapse}
+  th{font-weight:500;color:var(--ink-3);font-size:12.5px;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{padding-left:28px;width:44px}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+  td .sub{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+  .cl{align-items:flex-start}
+  .cl i{margin-top:1px}
+  tr:hover td{background:var(--wash)}
+  tr.sel td{background:rgba(37,71,196,.04)}
+  .cb{width:16px;height:16px;border:1.5px solid #C7CBD4;border-radius:5px;display:inline-grid;place-items:center;background:#fff;vertical-align:middle}
+  .cb.on{background:var(--blue);border-color:var(--blue)}
+  .cb.on::after{content:"";width:8px;height:4px;border:2px solid #fff;border-top:0;border-right:0;transform:translateY(-1px) rotate(-45deg)}
+  .st-pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500}
+  .st-pill.paid{background:rgba(58,174,108,.12);color:#1F7A47}
+  .st-pill.pending{background:rgba(232,178,58,.16);color:#8A6412}
+  .st-pill.overdue{background:rgba(224,67,58,.10);color:#B3281F}
+  .st-pill.draft{background:var(--line-2);color:var(--ink-2)}
+  .st-pill.cancel{background:var(--line-2);color:var(--ink-3);text-decoration:line-through}
+  .cl{display:inline-flex;align-items:center;gap:8px}
+  .cl i{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:9.5px;font-weight:600;color:#fff}
+  td.amt{text-align:right;font-weight:500}
+  th.amt{text-align:right}
+  td .due{color:var(--ink-2)}
+  td .due.late{color:var(--bad)}
+  .view-panel{display:none}
+  .view-panel.on{display:block}
+  .switch{position:fixed;right:20px;bottom:14px;display:flex;gap:4px;background:var(--ink);padding:4px;border-radius:999px;z-index:9}
+  .switch button{color:#fff;opacity:.6;padding:6px 14px;border-radius:999px;font-size:13px}
+  .switch button.on{opacity:1;background:rgba(255,255,255,.14)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="work" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.2 2.4 2.4 4.6-4.8"/></symbol>
+  <symbol id="proj" viewBox="0 0 24 24"><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8A1.5 1.5 0 0 1 20.5 9v9A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/></symbol>
+  <symbol id="inbox" viewBox="0 0 24 24"><path d="M3.5 13.5 6 5.5h12l2.5 8v5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5"/></symbol>
+  <symbol id="bill" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-3-2-3 2-3-2-3 2z"/><path d="M9 8.5h6M9 12h6M9 15.5h4"/></symbol>
+  <symbol id="loop" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.7L20 8M20 4v4h-4M20 12a8 8 0 0 1-13.7 5.7L4 16M4 20v-4h4"/></symbol>
+  <symbol id="note" viewBox="0 0 24 24"><path d="M6 3.5h8l4.5 4.5v12.5H6z"/><path d="M14 3.5V8h4.5M9 12.5h6M9 16h6"/></symbol>
+  <symbol id="ody" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10.5 13.9 12.4 12 18l-1.9-5.6L4.5 10.5l5.6-1.9zM5 17l.8 2.2L8 20l-2.2.8L5 23l-.8-2.2L2 20l2.2-.8z"/></symbol>
+  <symbol id="signal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></symbol>
+  <symbol id="board" viewBox="0 0 24 24"><rect x="3.5" y="4" width="7" height="16" rx="1.5"/><rect x="13.5" y="4" width="7" height="10" rx="1.5"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M4 19h16M7 16v-5M12 16V6M17 16v-8"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+  <symbol id="cols" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M9.5 4v16M14.5 4v16"/></symbol>
+  <symbol id="arrow-out" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+</svg>
+
+<div class="app">
+  <aside class="rail">
+    <div class="logo">c</div>
+    <button class="on" id="r-home" onclick="show('home')" title="Home"><svg><use href="#home"/></svg></button>
+    <button title="My Work"><svg><use href="#work"/></svg></button>
+    <button title="Projects"><svg><use href="#proj"/></svg></button>
+    <button title="Inbox"><svg><use href="#inbox"/></svg><span class="b">3</span></button>
+    <button id="r-bill" onclick="show('bill')" title="Billing"><svg><use href="#bill"/></svg></button>
+    <button title="Routines"><svg><use href="#loop"/></svg></button>
+    <button title="Notes"><svg><use href="#note"/></svg></button>
+    <div class="sp"></div>
+    <div class="av">AP</div>
+  </aside>
+
+  <!-- ================= Odysseus panel ================= -->
+  <aside class="ody">
+    <div class="h"><svg><use href="#ody"/></svg>Odysseus<span class="sp"></span><button><svg><use href="#clock"/></svg></button><button><svg><use href="#plus"/></svg></button></div>
+    <div class="feed" id="feed-home">
+      <div class="lbl">Suggestion · 8:40</div>
+      <div class="sig">
+        <div class="top"><svg><use href="#signal"/></svg>Signal detected<span class="sp"></span><time>Today 7:30</time></div>
+        <div class="bd"><b>Send the addendum to Rudi before the 11:00 committee</b><p>Legal returned the last two clauses on Friday. Sending before the meeting keeps the Honduras go-live on Oct 1.</p><div style="display:flex;gap:8px"><button class="btn p sm">Draft email</button><button class="btn g sm">Dismiss</button></div></div>
+      </div>
+      <div class="me">What should I prep for the 9:00 with Agustín?</div>
+      <div class="ai"><span class="dot"><svg><use href="#ody"/></svg></span><div>Three things before 9:00:<ul><li><b>The new Banrural proposal</b> — pricing draft is at 80%, margin still 31%</li><li><b>Speech analytics status</b> — stuck 5 days, no owner on the QA project</li><li><b>Honduras staffing</b> — 4 agents short for Oct 1</li></ul><div class="src">From <span><i style="background:#2547C4"></i>Banrural</span><span>Today's brief</span><span>Daily Plan</span></div></div></div>
+    </div>
+    <div class="feed" id="feed-bill" style="display:none">
+      <div class="lbl">Suggestion · 9:05</div>
+      <div class="sig">
+        <div class="top"><svg><use href="#signal"/></svg>Signal detected<span class="sp"></span><time>Today 9:05</time></div>
+        <div class="bd"><b>Two Apex invoices are 30+ days overdue</b><p>$9,800 across INV-0231 and INV-0238. Apex paid the last three within 7 days of a reminder.</p><div style="display:flex;gap:8px"><button class="btn p sm">Send reminders</button><button class="btn g sm">Snooze</button></div></div>
+      </div>
+      <div class="me">How does September compare to August?</div>
+      <div class="ai"><span class="dot"><svg><use href="#ody"/></svg></span><div>Recurring is flat at <b>$30,292</b>; one-time billing is up <b>$12,400</b> from the Servinform diagnostic. Collections are slower: 6 invoices overdue vs 2 in August, all Apex and PTC.<div class="src" style="margin-top:8px">From <span>Billing · September</span><span>Billing · August</span></div></div></div>
+    </div>
+    <div class="ask"><input placeholder="Ask anything about your day…"><div class="r"><button class="btn g sm"><svg><use href="#plus"/></svg></button><button class="btn sm"><svg style="fill:currentColor;stroke:none"><use href="#ody"/></svg>Today's brief</button><span class="sp"></span><button class="send"><svg><use href="#send"/></svg></button></div></div>
+  </aside>
+
+  <!-- ================= HOME · Daily Brief ================= -->
+  <main class="main view-panel on" id="v-home">
+    <div class="top"><div class="crumb"><b>Home</b><span>·</span><span>Pure AI Workspace</span></div><span class="sp"></span><div class="avs"><span style="background:#0EA5A5">CA</span><span style="background:#8B5CF6">ES</span><span style="background:#E0433A">KC</span><span style="background:#2547C4">+6</span></div><button class="ib"><svg><use href="#search"/></svg></button><button class="btn p"><svg><use href="#plus"/></svg>Create</button></div>
+
+    <div class="brief">
+      <div class="d">Good morning, Alejandro · Tuesday 22 September</div>
+      <h1>You <span class="m">have</span> <span class="k"><i><svg><use href="#cal"/></svg></i>3 meetings</span> <span class="m">and</span> <span class="k"><i><svg><use href="#inbox"/></svg></i>5 approvals</span> <span class="m">waiting, but a</span> <span class="k"><i><svg><use href="#sun"/></svg></i>free afternoon.</span></h1>
+      <p>Banrural takes the morning: the addendum is due today and the committee is at 11:00. Two Apex invoices passed 30 days. Nothing is due tomorrow, so the afternoon is yours for the TPG screener.</p>
+      <div class="listen"><span class="pl"><svg><use href="#play"/></svg></span><span>Listen to your brief<small>1:24 · generated 7:30</small></span></div>
+    </div>
+
+    <div class="next"><div><b>Weekly with Agustín</b><small>9:00 – 10:00 · Google Meet · New Banrural proposal</small></div><span class="sp"></span><span class="in">Starts in 30 min</span><button class="btn p">Prepare</button></div>
+
+    <div class="sec">Upcoming meetings<span class="n">3</span><span class="sp"></span><a>Events</a></div>
+    <div class="row"><b>Weekly with Agustín</b><span class="t">9:00 – 10:00 · Google Meet</span><span class="s">Starts in 30 min</span><span class="chev"><svg><use href="#chev"/></svg></span></div>
+    <div class="row"><b>Banrural committee</b><span class="t">11:00 – 11:30 · On site</span><span class="s">Starts in 2h 30m</span><span class="chev"><svg><use href="#chev"/></svg></span></div>
+    <div class="row"><b>Apex / Pure AI sync</b><span class="t">14:00 – 15:00 · Teams</span><span class="s">Starts in 5h 30m</span><span class="chev"><svg><use href="#chev"/></svg></span></div>
+
+    <div class="sec">Worth noting<span class="sp"></span><a>Inbox</a></div>
+    <div class="note"><span class="pill"><i style="background:#0EA5A5">IS</i>Isaac</span> requested approval of the <span class="pill link">addendum v2</span>, waiting 2h</div>
+    <div class="note"><span class="pill"><span class="dot" style="background:var(--bad)"></span>Speech Analytics QA</span> has been blocked 5 days with no owner</div>
+    <div class="note">Two Apex invoices are 30+ days overdue, <span class="pill link">$9,800</span></div>
+    <div class="note"><span class="pill"><i style="background:#E0433A">KC</i>Kelly</span> mentioned you on <span class="pill link">AI Sparring Unio</span>, checkpoint slipped to Oct 1</div>
+
+    <div class="sec">This week<span class="sp"></span><a>My Work</a></div>
+    <div class="st">
+      <div><small>Planned today</small><b>8</b><svg><use href="#arrow-out"/></svg></div>
+      <div><small>Overdue</small><b class="bad">33</b><svg><use href="#arrow-out"/></svg></div>
+      <div><small>Focus score, Mon</small><b>72</b><svg><use href="#arrow-out"/></svg></div>
+      <div><small>Blocked projects</small><b class="bad">2</b><svg><use href="#arrow-out"/></svg></div>
+    </div>
+
+    <div class="sec">Your schedule</div>
+    <div class="sched">
+      <div><span class="pill link"><svg><use href="#cal"/></svg>Weekly with Agustín</span> until 10:00, then <span class="pill"><span class="dot" style="background:var(--orange)"></span>Tech addendum</span> before the committee.</div>
+      <div><span class="pill link"><svg><use href="#cal"/></svg>Banrural committee</span> at 11:00, 30 minutes.</div>
+      <div><span class="pill link"><svg><use href="#cal"/></svg>Apex / Pure AI sync</span> at 14:00, then a free block: <span class="pill"><span class="dot" style="background:var(--blue)"></span>AI screener for TPG</span> 15:30–16:30.</div>
+    </div>
+  </main>
+
+  <!-- ================= BILLING ================= -->
+  <main class="main view-panel" id="v-bill">
+    <div class="top"><div class="crumb"><b>Billing</b><span>·</span><span>Pure AI Workspace</span></div><span class="sp"></span><button class="ib"><svg><use href="#search"/></svg></button><button class="btn p"><svg><use href="#plus"/></svg>Invoice</button></div>
+
+    <div class="bh">
+      <div><h1><span class="m">$</span>18,400 <span class="m">outstanding across</span> 7 invoices.</h1><div class="sub">$30,292 recurring this month · 49 projects · 6 overdue, all Apex and PTC</div></div>
+      <span class="sp"></span>
+      <div class="spark"><div class="k">Recurring<b>$30,292</b><em>+4% vs Aug</em></div><svg viewBox="0 0 300 46" preserveAspectRatio="none"><path d="M0 34 C30 32 40 30 60 28 S100 24 130 26 S170 20 200 18 S250 16 300 10 V46 H0z" fill="rgba(37,71,196,.08)"/><path d="M0 34 C30 32 40 30 60 28 S100 24 130 26 S170 20 200 18 S250 16 300 10" stroke="#2547C4" stroke-width="1.75" fill="none"/></svg></div>
+    </div>
+
+    <div class="views">
+      <button class="on"><svg><use href="#list"/></svg>List</button>
+      <button><svg><use href="#board"/></svg>Board</button>
+      <button><svg><use href="#cal"/></svg>Calendar</button>
+      <button><svg><use href="#chart"/></svg>Chart</button>
+      <button><svg><use href="#plus"/></svg>View</button>
+      <span class="sp"></span>
+    </div>
+    <div class="tools">
+      <div class="tabs"><button class="on">All <span class="c">49</span></button><button>Upcoming <span class="c">12</span></button><button>Pending <span class="c">9</span></button><button>Overdue <span class="c">6</span></button><button>Paid <span class="c">22</span></button></div>
+      <span class="sp"></span>
+      <div class="search"><svg><use href="#search"/></svg>Search invoices, clients…</div>
+      <button class="btn"><svg><use href="#cols"/></svg>View</button>
+      <button class="btn"><svg><use href="#filter"/></svg>Filter</button>
+    </div>
+    <div class="bulk"><span class="cb on"></span><b>2 selected</b><span style="color:var(--ink-2)">· $9,800</span><span class="sp"></span><button class="btn sm">Send reminder</button><button class="btn sm">Mark as paid</button><button class="btn sm">Export</button></div>
+
+    <table style="margin-top:10px">
+      <thead><tr><th></th><th>Due</th><th>Invoice</th><th>Status</th><th>Description</th><th>Client</th><th class="amt">Amount</th><th></th></tr></thead>
+      <tbody>
+        <tr class="sel"><td><span class="cb on"></span></td><td><span class="due late">Aug 20</span></td><td class="mono">INV-0231</td><td><span class="st-pill overdue">Overdue · 33d</span></td><td>Monthly recurring · Pure AI agents<span class="sub">AI Agent Apex WOM Chile</span></td><td><span class="cl"><i style="background:#F2620F">AX</i><span>Apex America<span class="sub">Apex</span></span></span></td><td class="amt">$6,300</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr class="sel"><td><span class="cb on"></span></td><td><span class="due late">Aug 20</span></td><td class="mono">INV-0238</td><td><span class="st-pill overdue">Overdue · 33d</span></td><td>Monthly recurring · Speech analytics<span class="sub">Speech Analytics Apex Colombia</span></td><td><span class="cl"><i style="background:#F2620F">AX</i><span>Apex America<span class="sub">Apex</span></span></span></td><td class="amt">$3,500</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due late">Sep 15</span></td><td class="mono">INV-0244</td><td><span class="st-pill overdue">Overdue · 7d</span></td><td>Monthly recurring · Collections agent<span class="sub">AI Agent PTC Collections</span></td><td><span class="cl"><i style="background:#E0433A">PT</i><span>PTC<span class="sub">Allied Global</span></span></span></td><td class="amt">$4,200</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Sep 30</span></td><td class="mono">INV-0251</td><td><span class="st-pill pending">Pending</span></td><td>Monthly recurring · Virtual agents<span class="sub">AI Agent Banrural HN</span></td><td><span class="cl"><i style="background:#2547C4">BR</i><span>Banrural<span class="sub">Allied Global</span></span></span></td><td class="amt">$8,900</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Sep 30</span></td><td class="mono">INV-0252</td><td><span class="st-pill pending">Pending</span></td><td>One-time · Transformation diagnostic<span class="sub">Servinform diagnostic</span></td><td><span class="cl"><i style="background:#64748B">SV</i><span>Servinform<span class="sub">Boldr AI</span></span></span></td><td class="amt">$12,400</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Oct 5</span></td><td class="mono">INV-0253</td><td><span class="st-pill draft">Draft</span></td><td>Monthly recurring · AI trainer<span class="sub">AI Sparring Verizon 2025</span></td><td><span class="cl"><i style="background:#0EA5A5">VZ</i><span>Verizon<span class="sub">Allied Global</span></span></span></td><td class="amt">$6,000</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Oct 10</span></td><td class="mono">INV-0254</td><td><span class="st-pill draft">Draft</span></td><td>One-time · CXP gap analysis<span class="sub">Cementos Progreso CXP</span></td><td><span class="cl"><i style="background:#0B2D4A">CP</i><span>Cementos Progreso<span class="sub">OneSource</span></span></span></td><td class="amt">$9,500</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Sep 5</span></td><td class="mono">INV-0240</td><td><span class="st-pill paid">Paid · Sep 3</span></td><td>Monthly recurring · Voicebot<span class="sub">AI Agent Voicebot Solvo</span></td><td><span class="cl"><i style="background:#8B5CF6">SO</i><span>Solvo Global<span class="sub">Allied Global</span></span></span></td><td class="amt">$3,100</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Sep 5</span></td><td class="mono">INV-0241</td><td><span class="st-pill paid">Paid · Sep 4</span></td><td>Monthly recurring · Tech support agent<span class="sub">AI Agent IA Tech Support Arca</span></td><td><span class="cl"><i style="background:#3AAE6C">AR</i><span>Arca<span class="sub">Allied Global</span></span></span></td><td class="amt">$2,800</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+        <tr><td><span class="cb"></span></td><td><span class="due">Aug 30</span></td><td class="mono">INV-0236</td><td><span class="st-pill cancel">Cancelled</span></td><td>One-time · Pilot setup<span class="sub">WOM Chile voice agent</span></td><td><span class="cl"><i style="background:#9CA3AF">WO</i><span>WOM<span class="sub">Boldr AI</span></span></span></td><td class="amt" style="color:var(--ink-3)">$1,900</td><td><button class="ib"><svg><use href="#more"/></svg></button></td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<div class="switch"><button class="on" id="s-home" onclick="show('home')">Home · Daily Brief</button><button id="s-bill" onclick="show('bill')">Billing</button></div>
+
+<script>
+  function show(k){
+    document.getElementById('v-home').classList.toggle('on',k==='home');
+    document.getElementById('v-bill').classList.toggle('on',k==='bill');
+    document.getElementById('feed-home').style.display=k==='home'?'':'none';
+    document.getElementById('feed-bill').style.display=k==='bill'?'':'none';
+    document.getElementById('r-home').classList.toggle('on',k==='home');
+    document.getElementById('r-bill').classList.toggle('on',k==='bill');
+    document.getElementById('s-home').classList.toggle('on',k==='home');
+    document.getElementById('s-bill').classList.toggle('on',k==='bill');
+  }
+</script>
+</body>
+</html>

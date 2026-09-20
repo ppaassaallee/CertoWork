@@ -24,6 +24,12 @@ import { eventDayKeys } from "../../lib/calendar/dates";
 import "../calendar/calendarOverlay.css";
 import { FocusRing } from "../dayplan/FocusRing";
 import { useDayPlan } from "../dayplan/useDayPlan";
+import { useDailyBriefEnabled } from "../flags/featureUserFlags";
+import {
+  DailyBriefHome,
+  PrepareSheet,
+  useDailyBrief,
+} from "../brief";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -315,6 +321,87 @@ export function HomeCockpit({
     locale === "es"
       ? `Ayudame a triar mis ${model.overdueItems.length} vencidos`
       : `Help me triage my ${model.overdueItems.length} overdue items`;
+
+  const dailyBriefOn = useDailyBriefEnabled();
+  const dateKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const gather = useMemo(
+    () => ({
+      dateKey,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      meetings: (calendarEvents || []).slice(0, 8).map((e: any, i: number) => ({
+        eventKey: String(e.id || e.eventKey || `ev-${i}`),
+        title: String(e.title || e.summary || "Meeting"),
+        start: String(e.start || e.startAt || dateKey),
+        end: String(e.end || e.endAt || dateKey),
+        provider: e.provider ? String(e.provider) : undefined,
+      })),
+      approvalCount: reviewItems.length + accessRequests.length,
+      overdueCount: model.overdueItems.length,
+      plannedToday: model.todayItems.length || dayPlanItems.length,
+      focusScore: scoreValue || "—",
+      blockedProjects: (projects || []).filter((p: any) =>
+        String(p.status || p.health || "").toLowerCase().includes("block"),
+      ).length,
+      freeAfternoon: (calendarEvents || []).length <= 2,
+      keyThread: model.todayItems[0]?.title,
+      worthNoting: model.overdueItems.slice(0, 3).map((it) => ({
+        text: `Overdue: ${it.title}`,
+        entities: [{ type: "item" as const, id: it.id, label: it.title }],
+        severity: "bad" as const,
+      })),
+      schedule: [],
+    }),
+    [
+      dateKey,
+      calendarEvents,
+      reviewItems.length,
+      accessRequests.length,
+      model.overdueItems,
+      model.todayItems,
+      dayPlanItems.length,
+      scoreValue,
+      projects,
+    ],
+  );
+  const { brief, loading: briefLoading, refresh: refreshBrief } = useDailyBrief({
+    enabled: dailyBriefOn,
+    uid: userId,
+    gather,
+  });
+  const [prepareOpen, setPrepareOpen] = useState(false);
+  const [prepareTitle, setPrepareTitle] = useState("");
+
+  if (dailyBriefOn) {
+    return (
+      <div className="cw-home" data-testid="home-cockpit-brief">
+        <DailyBriefHome
+          brief={brief}
+          loading={briefLoading}
+          memberLabels={(members || []).slice(0, 4).map((m) => m.displayName || m.email || m.id)}
+          onCreate={() => onOpenOdysseus()}
+          onOpenEvents={() => onOpenOdysseus({ prompt: "Show my events today" })}
+          onOpenInbox={onOpenApprovals}
+          onPrepare={(key) => {
+            const m = brief?.meetings.find((x) => x.eventKey === key) || brief?.nextEvent;
+            setPrepareTitle(m?.title || "Meeting");
+            setPrepareOpen(true);
+          }}
+          onRefresh={() => void refreshBrief(true)}
+          onStatClick={() => undefined}
+          workspaceName={workspaceId || "Workspace"}
+        />
+        <PrepareSheet
+          linkedItems={model.todayItems.slice(0, 5).map((i) => ({ id: i.id, title: i.title }))}
+          meetingTitle={prepareTitle}
+          onAskOdysseus={() => onOpenOdysseus({ prompt: `Prepare me for ${prepareTitle}` })}
+          onClose={() => setPrepareOpen(false)}
+          onOpenProject={() => projects[0] && onOpenProject(projects[0].id)}
+          open={prepareOpen}
+          openItems={model.weekItems.slice(0, 5).map((i) => ({ id: i.id, title: i.title }))}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="cw-home" data-testid="home-cockpit">
