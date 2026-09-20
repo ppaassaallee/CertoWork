@@ -1754,5 +1754,30 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid;
       allow delete: if false;
     }
+
+    // Odysseus signals (ref-2026-09)
+    match /signals/{workspaceId}/items/{itemId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // Billing (ref-2026-09)
+    match /invoices/{id} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+    match /projectBilling/{projectId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+    match /counters/{workspaceId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    match /views/{workspaceId}/definitions/{id} {
+      allow read, create, update, delete: if request.auth != null;
+    }
   }
 }
