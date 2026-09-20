@@ -1741,5 +1741,18 @@ service cloud.firestore {
     match /dayPlanSettings/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+
+    // Daily Brief (ref-2026-09). Prefer Cloud Function writes; own-uid client write allowed until CF deploy.
+    match /briefs/{briefId} {
+      allow read: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && briefId == request.auth.uid + '_' + request.resource.data.date;
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if false;
+    }
   }
 }

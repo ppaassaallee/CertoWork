@@ -7,6 +7,7 @@ Step 1 — TTS = browser `speechSynthesis` behind Listen control; no cloud TTS u
 Step 1 — email reminders use mailto draft + `reminderSentAt` when Brevo not configured for client mail.
 Step 2 — desktop kit in `src/desktop/ui/` additive; does not replace mobile kit.
 Step 3 — brief generation runs client-callable with template-first; Cloud Function `generateBrief` scaffolds same logic when functions deploy.
+Step 3 — `briefs/{uid}_{date}` allows own-uid client write until CF-only writes are enforced in production; ASSUMPTION logged.
 Step 4 — brief routine uses `onSchedule` stub + regenerate-on-Home-open (>3h).
 Step 11 — invoice `overdue` derived on read + daily flip function scaffold.
 Step 14 — view system extends `lib/views` with invoice scope types; popover additive.

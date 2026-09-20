@@ -167,3 +167,4 @@ export const calendarDeleteEvent = onCall({ region: "us-central1" }, async () =>
 });
 
 export { dailyPlanRoutinesTick } from "./calendar/routines";
+export { generateBrief } from "./brief/generateBrief";
