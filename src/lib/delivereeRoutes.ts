@@ -18,7 +18,7 @@ export type DelivereeLens =
   | { kind: "my-work"; section: MyWorkSection }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
   | { kind: "agents"; section: AgentsSection }
-  | { kind: "routines"; routineId?: string }
+  | { kind: "routines"; routineId?: string; build?: boolean }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
   | { kind: "invoices" }
@@ -68,6 +68,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "approvals" };
   }
 
+  if (path === "/admin/members" || path === "/workspace/members") {
+    return { kind: "settings" };
+  }
+
   if (path.startsWith("/settings") || path.startsWith("/me")) {
     return { kind: "settings" };
   }
@@ -76,7 +80,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "collab" };
   }
 
-  if (path === "/invoices" || path === "/workspace/invoices") {
+  if (path === "/invoices" || path === "/workspace/invoices" || path === "/billing") {
     return { kind: "invoices" };
   }
 
@@ -111,9 +115,13 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "more", section: "workspace" };
   }
 
-  const routinesMatch = path.match(/^\/(?:rutinas|routines)\/([^/]+)$/);
+  const routinesMatch = path.match(/^\/(?:rutinas|routines)\/([^/]+)(?:\/(build))?$/);
   if (routinesMatch) {
-    return { kind: "routines", routineId: decodeURIComponent(routinesMatch[1]) };
+    return {
+      kind: "routines",
+      routineId: decodeURIComponent(routinesMatch[1]),
+      build: routinesMatch[2] === "build",
+    };
   }
 
   if (

@@ -146,6 +146,10 @@ import {
 } from "../lib/routines";
 import { HomeAttention } from "../pages/HomeAttention";
 import { HomeCockpit } from "../features/home";
+import { BillingScreen } from "../features/billing";
+import { useBillingEnabled } from "../features/flags/featureUserFlags";
+import { RoutineBuilder } from "../features/routines/RoutineBuilder";
+import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
 import { RitualRunner, RevisionesView } from "../features/routines";
 import { DayHeader } from "../features/dayplan/DayHeader";
 import { useDayPlan } from "../features/dayplan/useDayPlan";
@@ -444,6 +448,7 @@ export function DelivereeWorkspace() {
     logOut,
   } = useAuth();
   const dailyPlanEnabled = useDailyPlanEnabled();
+  const billingEnabled = useBillingEnabled();
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -702,7 +707,7 @@ export function DelivereeWorkspace() {
     else if (next === "strategy" && projectId) navigate(`/work/projects/${projectId}/strategy`);
     else if (next === "agents") navigate("/agents");
     else if (next === "routines") navigate("/rutinas");
-    else if (next === "invoices") navigate("/invoices");
+    else if (next === "invoices") navigate("/billing");
     else if (next === "feedback") navigate("/supportops");
     else if (next === "requests") navigate("/requests");
     else navigate("/home");
@@ -7198,13 +7203,13 @@ export function DelivereeWorkspace() {
                   className={`do-nav-item is-invoices ${lens.kind === "invoices" ? "is-active" : ""}`}
                   data-testid="nav-invoices"
                   onClick={() => {
-                    navigate("/invoices");
+                    navigate(billingEnabled ? "/billing" : "/invoices");
                     setSidebarOpen(false);
                   }}
                   type="button"
                 >
                   <Receipt size="sm" />
-                  <span>{t("navInvoices")}</span>
+                  <span>{billingEnabled ? "Billing" : t("navInvoices")}</span>
                   {(pendingInvoiceQueue.length > 0 ||
                     invoiceDocuments.some((item) => isInvoiceOverdue(item))) && (
                     <em className="do-nav-badge">
@@ -7676,7 +7681,10 @@ export function DelivereeWorkspace() {
           </Toast>
         )}
 
-        {centerView === "conversation" ? (
+        {location.pathname.replace(/\/+$/, "") === "/admin/members" ||
+        location.pathname.replace(/\/+$/, "") === "/workspace/members" ? (
+          <MembersAdminRoute members={workspaceMembers || []} />
+        ) : centerView === "conversation" ? (
           lens.kind === "home" && !isFocusedConversation ? (
             <>
               <div className="do-thread-viewport">
@@ -8500,6 +8508,13 @@ export function DelivereeWorkspace() {
             )}
           </div>
         ) : centerView === "invoices" ? (
+          billingEnabled ? (
+            <BillingScreen
+              uid={user?.uid}
+              workspaceId={workspace?.id || ""}
+              workspaceName={workspace?.name || "Workspace"}
+            />
+          ) : (
           <InvoiceCenter
             busyId={invoiceBusyId}
             canOperate={canOperateInvoiceQueue}
@@ -8512,6 +8527,7 @@ export function DelivereeWorkspace() {
             onUpdateStatus={updateInvoiceStatus}
             pending={pendingInvoiceQueue}
           />
+          )
         ) : centerView === "feedback" ? (
           <FeedbackCenter
             canManage={canManageMembers}
@@ -8578,11 +8594,15 @@ export function DelivereeWorkspace() {
             }
           />
         ) : centerView === "routines" ? (
+          lens.kind === "routines" && lens.build && lens.routineId ? (
+            <RoutineBuilder routineId={lens.routineId} />
+          ) : (
           <RoutinesHome
             selectedRoutineId={
               lens.kind === "routines" ? lens.routineId || null : null
             }
           />
+          )
         ) : centerView === "agents" ? (
           agentBuilderOpen ? (
             <AgentBuilderDraft
