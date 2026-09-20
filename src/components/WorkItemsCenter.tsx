@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -230,6 +230,8 @@ type Props = {
   workspaceTables?: any[];
   workspaceRecords?: any[];
   onOpenRecord?: (tableId: string, recordId: string) => void;
+  /** Optional trailing control per row (Daily Plan + Today). Undefined = no layout change. */
+  renderRowExtra?: (item: any) => ReactNode;
 };
 
 const workTypes: WorkItemKind[] = [
@@ -776,6 +778,7 @@ export function WorkItemsCenter({
   workspaceTables = [],
   workspaceRecords = [],
   onOpenRecord,
+  renderRowExtra,
 }: Props) {
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
@@ -2259,6 +2262,7 @@ export function WorkItemsCenter({
         {renderTitleCell(item, kind, childCount, tree)}
         {renderAttributeIcons(item)}
         {renderTimingButtons(item)}
+        {renderRowExtra ? renderRowExtra(item) : null}
         {renderDeleteButton(item)}
       </article>
     );

@@ -42,3 +42,10 @@ export const BUCKETS: Record<
 };
 
 export const BUCKET_ORDER: PlanBucket[] = ["fire", "growth", "extra"];
+
+/** Phase 2 focus score weights — Growth > Fires > Extras. */
+export const BUCKET_WEIGHT: Record<PlanBucket, number> = {
+  growth: 3,
+  fire: 2,
+  extra: 1,
+};

@@ -6,6 +6,13 @@ import type { Timestamp } from "firebase/firestore";
  */
 export type PlanBucket = "fire" | "growth" | "extra";
 
+export interface TimeBlock {
+  start: Timestamp;
+  end: Timestamp;
+  calendarEventId?: string | null;
+  accountId?: string | null;
+}
+
 export interface DayPlanEntry {
   itemId: string;
   bucket: PlanBucket;
@@ -13,6 +20,21 @@ export interface DayPlanEntry {
   doneToday: boolean;
   doneAt?: Timestamp | null;
   addedAt: Timestamp;
+  timeBlock?: TimeBlock | null;
+}
+
+export interface EventTag {
+  eventKey: string;
+  bucket: PlanBucket;
+  itemId?: string | null;
+}
+
+export interface PlanProposal {
+  createdAt: Timestamp;
+  source: "llm" | "heuristic";
+  entries: Array<{ itemId: string; bucket: PlanBucket; reason: string }>;
+  keyItemId?: string | null;
+  summary: string;
 }
 
 export interface DayPlan {
@@ -20,9 +42,15 @@ export interface DayPlan {
   uid: string;
   date: string;
   entries: DayPlanEntry[];
-  /** Reserved Phase 2 — do not drive UI from this in Phase 1. */
+  /** Key task lives on legacy day_plans when existingKeyTask is present. */
+  keyItemId?: string | null;
+  eventTags?: EventTag[];
   plannedAt?: Timestamp | null;
   closedAt?: Timestamp | null;
+  autoClosed?: boolean;
+  closingNote?: string | null;
+  focusScore?: number | null;
+  pendingProposal?: PlanProposal | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

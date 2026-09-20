@@ -153,10 +153,10 @@ export function useDayPlan(
         await moveEntry(uid, dateKey, itemId, toBucket, toIndex);
       } catch (err) {
         setOptimistic(prev);
-        options?.onError?.(err instanceof Error ? err.message : "Move failed");
+        onErrorRef.current?.(err instanceof Error ? err.message : "Move failed");
       }
     },
-    [uid, dateKey, plan, options],
+    [uid, dateKey, plan],
   );
 
   const remove = useCallback(
@@ -181,10 +181,10 @@ export function useDayPlan(
         await setDoneTodayService(uid, dateKey, itemId, done);
       } catch (err) {
         setOptimistic(prev);
-        options?.onError?.(err instanceof Error ? err.message : "Update failed");
+        onErrorRef.current?.(err instanceof Error ? err.message : "Update failed");
       }
     },
-    [uid, dateKey, plan, options],
+    [uid, dateKey, plan],
   );
 
   return {

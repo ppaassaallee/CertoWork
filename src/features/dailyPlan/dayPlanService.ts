@@ -32,8 +32,14 @@ function asPlan(id: string, data: Record<string, unknown> | undefined): DayPlan 
     uid: String(data.uid || ""),
     date: String(data.date || ""),
     entries: Array.isArray(data.entries) ? (data.entries as DayPlanEntry[]) : [],
+    keyItemId: (data.keyItemId as string | null | undefined) ?? null,
+    eventTags: Array.isArray(data.eventTags) ? (data.eventTags as DayPlan["eventTags"]) : [],
     plannedAt: (data.plannedAt as Timestamp | null | undefined) ?? null,
     closedAt: (data.closedAt as Timestamp | null | undefined) ?? null,
+    autoClosed: Boolean(data.autoClosed),
+    closingNote: (data.closingNote as string | null | undefined) ?? null,
+    focusScore: typeof data.focusScore === "number" ? data.focusScore : null,
+    pendingProposal: (data.pendingProposal as DayPlan["pendingProposal"]) ?? null,
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
   };
@@ -201,6 +207,109 @@ export async function setDoneToday(
         : e,
     );
     tx.update(ref, { entries, updatedAt: now });
+  });
+}
+
+export async function addEntries(
+  uid: string,
+  dateKey: string,
+  list: Array<{ itemId: string; bucket: PlanBucket }>,
+): Promise<void> {
+  if (!list.length) return;
+  const ref = planRef(uid, dateKey);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Timestamp.now();
+    let entries: DayPlanEntry[] = snap.exists()
+      ? [...((snap.data() as DayPlan).entries || [])]
+      : [];
+    const existing = new Set(entries.map((e) => e.itemId));
+    for (const row of list) {
+      if (existing.has(row.itemId)) continue;
+      const maxOrder = entries
+        .filter((e) => e.bucket === row.bucket)
+        .reduce((max, e) => Math.max(max, e.order), -1);
+      entries.push({
+        itemId: row.itemId,
+        bucket: row.bucket,
+        order: maxOrder + 1,
+        doneToday: false,
+        doneAt: null,
+        addedAt: now,
+      });
+      existing.add(row.itemId);
+    }
+    entries = renumberBuckets(entries);
+    if (!snap.exists()) {
+      tx.set(ref, {
+        id: planId(uid, dateKey),
+        uid,
+        date: dateKey,
+        entries,
+        plannedAt: now,
+        closedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      } satisfies DayPlan);
+    } else {
+      tx.update(ref, { entries, updatedAt: now });
+    }
+  });
+}
+
+export async function updatePlanFields(
+  uid: string,
+  dateKey: string,
+  partial: Partial<
+    Pick<
+      DayPlan,
+      | "closedAt"
+      | "closingNote"
+      | "focusScore"
+      | "eventTags"
+      | "pendingProposal"
+      | "autoClosed"
+      | "keyItemId"
+    >
+  >,
+): Promise<void> {
+  const ref = planRef(uid, dateKey);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Timestamp.now();
+    if (!snap.exists()) {
+      tx.set(ref, {
+        id: planId(uid, dateKey),
+        uid,
+        date: dateKey,
+        entries: [],
+        plannedAt: now,
+        closedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        ...partial,
+      } satisfies DayPlan);
+      return;
+    }
+    tx.update(ref, { ...partial, updatedAt: now });
+  });
+}
+
+export async function setTimeBlock(
+  uid: string,
+  dateKey: string,
+  itemId: string,
+  block: import("./types").TimeBlock | null,
+): Promise<void> {
+  const ref = planRef(uid, dateKey);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const data = snap.data() as DayPlan;
+    const entries = (data.entries || []).map((e) =>
+      e.itemId === itemId ? { ...e, timeBlock: block } : e,
+    );
+    tx.update(ref, { entries, updatedAt: Timestamp.now() });
   });
 }
 
