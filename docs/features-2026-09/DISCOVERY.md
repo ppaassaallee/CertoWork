@@ -20,3 +20,10 @@
 
 ## Flag pattern
 Mirror Daily Plan: `users/{uid}.flags.dailyBrief` and `users/{uid}.flags.billing` (+ localStorage overrides).
+
+## Sidebar mapping (Step 19)
+See `SIDEBAR_MAPPING` in `src/features/shell/DesktopRail.tsx`.
+
+## Step 25
+Project gallery overview skipped — projects view system not consuming `overview` type yet.
+
