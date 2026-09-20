@@ -4,6 +4,8 @@ import { Star } from "../../components/ui/Icon";
 import { useMobileHeader } from "../MobileChromeContext";
 import { MButton, MListRow } from "../ui";
 import { enableDailyPlan, useDailyPlanEnabled } from "../../features/dailyPlan";
+import { PhoneDailyBriefCard } from "../../features/brief";
+import { useDailyBriefEnabled } from "../../features/flags/featureUserFlags";
 import { useAuth } from "../../lib/AuthContext";
 
 export function PhoneHome({
@@ -32,6 +34,7 @@ export function PhoneHome({
   const navigate = useNavigate();
   const { user } = useAuth();
   const dailyPlanOn = useDailyPlanEnabled();
+  const briefOn = useDailyBriefEnabled();
   const [enabling, setEnabling] = useState(false);
 
   const dateTitle = useMemo(() => {
@@ -59,6 +62,12 @@ export function PhoneHome({
   return (
     <div className="m-phone-pad" data-testid="phone-home">
       <p style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 600 }}>{greeting}</p>
+      {briefOn ? (
+        <PhoneDailyBriefCard
+          brief={null}
+          onOpenFull={() => navigate("/home")}
+        />
+      ) : null}
       <p style={{ margin: "0 0 16px", color: "var(--c-ink-2)" }}>
         {sentence}{" "}
         {overdueCount > 0 ? (
