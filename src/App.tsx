@@ -13,6 +13,7 @@ import { PublicAppleWidget } from "./components/PublicAppleWidget";
 import { PublicRequestPortal } from "./components/PublicRequestPortal";
 import { PublicTableForm } from "./components/PublicTableForm";
 import { MobileKitPreview } from "./mobile/MobileKitPreview";
+import { DesktopKitPreview } from "./desktop/ui/DesktopKitPreview";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
 
 // TODO: Replace with the Google Calendar appointment schedule URL.
@@ -413,7 +414,10 @@ export default function App() {
       <PlatformOnboardingModal />
       <Routes>
         {import.meta.env.DEV ? (
-          <Route element={<MobileKitPreview />} path="/dev/mobile-kit" />
+          <>
+            <Route element={<MobileKitPreview />} path="/dev/mobile-kit" />
+            <Route element={<DesktopKitPreview />} path="/dev/desktop-kit" />
+          </>
         ) : null}
         <Route path="*" element={<DelivereeWorkspace />} />
       </Routes>
