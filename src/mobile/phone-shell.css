@@ -1,0 +1,37 @@
+.m-phone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-bg, #f5f6fa);
+}
+.m-phone-overlay .m-header {
+  flex: none;
+}
+.m-phone-overlay .m-phone-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(49px + 72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Phone shell — only applies under .do-shell.is-phone-shell (≤767px via useIsPhone) */
+.do-shell.is-phone-shell {
+  --tabbar-h: 49px;
+}
+.do-shell.is-phone-shell .do-sidebar,
+.do-shell.is-phone-shell .do-sidebar-backdrop,
+.do-shell.is-phone-shell .do-header .do-menu-button,
+.do-shell.is-phone-shell .do-header .do-breadcrumb,
+.do-shell.is-phone-shell .do-header .do-header-actions,
+.do-shell.is-phone-shell .do-header,
+.do-shell.is-phone-shell .do-mobile-dock,
+.do-shell.is-phone-shell .do-create-menu {
+  display: none !important;
+}
+.do-shell.is-phone-shell .do-main {
+  visibility: hidden;
+  pointer-events: none;
+}

@@ -225,6 +225,8 @@ import {
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
 import { DailyPlanOverlay, DailyPlanOptIn, useDailyPlanEnabled } from "../features/dailyPlan";
+import { useIsPhone } from "../shared/useIsPhone";
+import { PhoneOverlayHost } from "../mobile/PhoneOverlayHost";
 import {
   QuickCaptureModal,
   parentLinkPatch,
@@ -451,6 +453,7 @@ export function DelivereeWorkspace() {
   const [workOpened, setWorkOpened] = useState(() => !onCollab);
   const [collabOpened, setCollabOpened] = useState(() => onCollab);
   const mobileCore = useMobileCore();
+  const isPhone = useIsPhone();
   useEffect(() => {
     if (onCollab) setCollabOpened(true);
     else setWorkOpened(true);
@@ -6474,7 +6477,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -9034,6 +9037,199 @@ export function DelivereeWorkspace() {
           Notes
         </button>
       </nav>
+
+      {isPhone ? (
+        <PhoneOverlayHost
+          dailyPlanSlot={
+            dailyPlanEnabled ? (
+              <DailyPlanOverlay
+                items={myWorkTasks as Array<{ id: string } & Record<string, unknown>>}
+                listRenderer={({ renderRowExtra }) => (
+                  <MyWorkViewsSurface
+                    actorEmail={user?.email || ""}
+                    actorId={user?.uid || ""}
+                    actorMemberId={personalActor.memberId || null}
+                    compact
+                    listBody={{
+                      hierarchyTasks: tasks,
+                      notebookEntries,
+                      onAddTask: async (...args) => addProjectTask(...args),
+                      onAsk: (prompt) => {
+                        setComposer(prompt);
+                        goCenterView("conversation");
+                      },
+                      onAskOdysseus: (item) => {
+                        void openOdysseusPanel({
+                          kind: "item",
+                          entityId: String((item as { id?: string }).id || ""),
+                          label: entityTitle(item),
+                        });
+                      },
+                      onCreateControlledOption: createControlledOption,
+                      onCreateSprint: createSprint,
+                      onInviteAssigneeEmail: canManageMembers
+                        ? async (email) => {
+                            await inviteWorkspaceMember(email);
+                          }
+                        : undefined,
+                      onOpenFinanceLine: (financeLineId) => {
+                        setHighlightFinanceLineId(financeLineId);
+                        navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+                      },
+                      onOpenNote: (noteId) => {
+                        setSelectedWorkItemId(null);
+                        navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                      },
+                      onOpenProjectConsole: openProjectRecord,
+                      onOpenRecord: (tableId, recordId) => {
+                        setSelectedWorkItemId(null);
+                        navigate(
+                          `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                        );
+                      },
+                      onSelectItem: (id) => {
+                        if (id) openWorkOrRecord(id);
+                        else setSelectedWorkItemId(null);
+                      },
+                      onUpdateSprint: updateSprint,
+                      renderRowExtra: renderRowExtra as never,
+                      selectedItemId: selectedWorkItemId,
+                      sprints,
+                      tags: categories,
+                      workspaceRecords,
+                      workspaceTables: visibleTables,
+                    }}
+                    members={workspaceMembers}
+                    onOpenCollab={(projectId) => navigate(collabProjectPath(projectId))}
+                    onOpenItem={(id) => openWorkOrRecord(id)}
+                    onUpdateTask={updateProjectTask}
+                    projects={projects}
+                    tasks={myWorkTasks as Array<Record<string, unknown> & { id: string }>}
+                    workspaceId={workspace?.id || ""}
+                  />
+                )}
+                onNotice={(msg) => setNotice(msg)}
+                onOpenItem={(id) => openWorkOrRecord(id)}
+                onUpdateTask={updateProjectTask}
+                projects={projects}
+                workspaceId={workspace?.id || ""}
+              />
+            ) : undefined
+          }
+          doneCount={0}
+          dueTodayCount={myWorkTasks.filter((t) => {
+            const due = String(t.dueDate || t.targetDate || "").slice(0, 10);
+            const today = new Date().toISOString().slice(0, 10);
+            return due === today;
+          }).length}
+          greeting={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${(user?.displayName || "there").split(" ")[0]}.`}
+          inboxBadge={0}
+          inboxRows={[]}
+          isAdmin={canManageMembers}
+          items={myWorkTasks.map((t) => ({
+            id: String(t.id),
+            title: entityTitle(t),
+          }))}
+          keyTaskTitle={null}
+          myWorkList={() => (
+            <MyWorkViewsSurface
+              actorEmail={user?.email || ""}
+              actorId={user?.uid || ""}
+              actorMemberId={personalActor.memberId || null}
+              compact
+              listBody={{
+                hierarchyTasks: tasks,
+                notebookEntries,
+                onAddTask: async (...args) => addProjectTask(...args),
+                onAsk: (prompt) => {
+                  setComposer(prompt);
+                  goCenterView("conversation");
+                },
+                onOpenProjectConsole: openProjectRecord,
+                onSelectItem: (id) => {
+                  if (id) openWorkOrRecord(id);
+                  else setSelectedWorkItemId(null);
+                },
+                selectedItemId: selectedWorkItemId,
+                sprints,
+                tags: categories,
+                workspaceRecords,
+                workspaceTables: visibleTables,
+              }}
+              members={workspaceMembers}
+              onUpdateTask={updateProjectTask}
+              projects={projects}
+              tasks={myWorkTasks as Array<Record<string, unknown> & { id: string }>}
+              workspaceId={workspace?.id || ""}
+            />
+          )}
+          notes={notebookEntries.map((n) => ({
+            id: String((n as { id?: string }).id || ""),
+            title: String((n as { title?: string }).title || "Untitled"),
+            visibility: String((n as { visibility?: string }).visibility || "personal"),
+            updatedAt: (n as { updatedAt?: unknown }).updatedAt,
+          }))}
+          onCreate={async ({ kind, title }) => {
+            if (kind === "project") {
+              setProjectWizardOpen(true);
+              return;
+            }
+            if (kind === "note") {
+              if (user?.uid && workspace?.id) {
+                const ids = await ensurePersonalNotebook(user.uid, workspace.id);
+                const createdId = await createNotebookNote({
+                  userId: user.uid,
+                  workspaceId: workspace.id,
+                  notebookId: ids.notebookId,
+                  title: title || "Untitled",
+                  contentMarkdown: "",
+                });
+                navigate(`/notes?note=${encodeURIComponent(String(createdId))}`);
+              }
+              return;
+            }
+            if (title) sessionStorage.setItem("certo-quick-capture-seed", title);
+            setQuickCaptureOpen(true);
+          }}
+          onNavigate={(to) => navigate(to)}
+          onNotice={(msg) => setNotice(msg)}
+          onOpenItem={(id) => openWorkOrRecord(id)}
+          onOpenNote={(id) => navigate(`/notes?note=${encodeURIComponent(id)}`)}
+          onOpenOdysseus={(prompt) => {
+            void openOdysseusPanel({
+              kind: "day",
+              entityId: null,
+              label: prompt || workspace?.name || "Workspace",
+            });
+          }}
+          onOpenProject={(id) => navigate(`/work/projects/${id}`)}
+          onSignOut={() => void logOut()}
+          onSwitchWorkspace={(id) => {
+            const next = workspaces.find((w) => w.id === id);
+            if (next) void setWorkspace(next);
+          }}
+          overdueCount={myWorkTasks.filter((t) => {
+            const due = String(t.dueDate || t.targetDate || "").slice(0, 10);
+            const today = new Date().toISOString().slice(0, 10);
+            return due && due < today && String(t.status || "").toLowerCase() !== "done";
+          }).length}
+          pathname={location.pathname}
+          plannedCount={0}
+          projects={projects.map((p) => ({
+            id: String(p.id),
+            title: entityTitle(p),
+            stage: String((p as { stage?: string }).stage || (p as { status?: string }).status || ""),
+            health: String((p as { health?: string }).health || ""),
+            updatedAt: (p as { updatedAt?: unknown }).updatedAt,
+            nextCheckpoint: (p as { nextCheckpoint?: unknown }).nextCheckpoint,
+          }))}
+          userEmail={user?.email || ""}
+          userName={user?.displayName || user?.email || "You"}
+          workspaceId={workspace?.id}
+          workspaceName={workspace?.name || "Workspace"}
+          workspaces={workspaces.map((w) => ({ id: w.id, name: w.name || w.id }))}
+        />
+      ) : null}
 
       {createPortal(
         <OdysseusVoiceCall
