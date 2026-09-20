@@ -49,6 +49,7 @@ import { RecordsViewSurface } from "../views/RecordsViewSurface";
 import { TableAutomationComposer } from "./TableAutomationComposer";
 import { TableFiltersBar } from "./TableFiltersBar";
 import { TableFormView } from "./TableFormView";
+import { TableGroupedGrid } from "./TableGroupedGrid";
 import {
   TableItemsPanel,
   type TableItemCandidate,
@@ -405,17 +406,45 @@ export function TablePage({
       <div className="cw-tables-page-body">
         <div className="cw-tables-page-main">
           {view === "table" ? (
-            <RecordsViewSurface
-              actorId={actorId || ""}
-              members={members}
-              onCreateRecord={(title) => void handleCreate({ title })}
-              onDeleteRecords={(ids) => void handleDelete(ids)}
-              onFieldChange={(id, col, val) => void handleFieldChange(id, col, val as never)}
-              onOpenRecord={(id) => openRecord(id)}
-              records={visibleRecords}
-              table={table}
-              workspaceId={table.workspaceId}
-            />
+            table.groups?.length ? (
+              <TableGroupedGrid
+                table={table}
+                records={visibleRecords}
+                members={members}
+                onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
+                onOpenRecord={(id) => openRecord(id)}
+                onCreateRecord={(groupId) => {
+                  void (async () => {
+                    const values: Record<string, RecordValue> = {
+                      [table.keyColumns.title]: t("tables.untitled"),
+                    };
+                    if (onCreateRecord) {
+                      await onCreateRecord({ ...values, __groupId: groupId } as never);
+                      return;
+                    }
+                    await createRecord({
+                      tableId: table.id,
+                      workspaceId: table.workspaceId,
+                      values,
+                      actorId,
+                    });
+                    void groupId;
+                  })();
+                }}
+              />
+            ) : (
+              <RecordsViewSurface
+                actorId={actorId || ""}
+                members={members}
+                onCreateRecord={(title) => void handleCreate({ title })}
+                onDeleteRecords={(ids) => void handleDelete(ids)}
+                onFieldChange={(id, col, val) => void handleFieldChange(id, col, val as never)}
+                onOpenRecord={(id) => openRecord(id)}
+                records={visibleRecords}
+                table={table}
+                workspaceId={table.workspaceId}
+              />
+            )
           ) : null}
           {view === "board" ? (
             <RecordsBoard
