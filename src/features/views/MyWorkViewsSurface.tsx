@@ -51,6 +51,7 @@ export type MyWorkListBodyProps = {
   workspaceTables?: unknown[];
   workspaceRecords?: unknown[];
   onOpenRecord?: (tableId: string, recordId: string) => void;
+  renderRowExtra?: (item: unknown) => ReactNode;
 };
 
 /**
@@ -284,6 +285,7 @@ export function MyWorkViewsSurface({
             workspaceMembers={members}
             workspaceRecords={listBody.workspaceRecords as any[]}
             workspaceTables={listBody.workspaceTables as any[]}
+            renderRowExtra={listBody.renderRowExtra as any}
           />
         )}
         <ViewCustomizer

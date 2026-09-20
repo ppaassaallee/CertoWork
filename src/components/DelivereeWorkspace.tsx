@@ -224,6 +224,7 @@ import {
 } from "../lib/feedbackReports";
 import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
 import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
+import { DailyPlanOverlay, useDailyPlanEnabled } from "../features/dailyPlan";
 import {
   QuickCaptureModal,
   parentLinkPatch,
@@ -440,6 +441,7 @@ export function DelivereeWorkspace() {
     sendPasswordReset,
     logOut,
   } = useAuth();
+  const dailyPlanEnabled = useDailyPlanEnabled();
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -8319,7 +8321,97 @@ export function DelivereeWorkspace() {
                 tasks={tasks}
               />
             ) : lens.kind === "my-work" &&
-              (lens.section === "reviews" || lens.section === "captured") ? null : (
+              (lens.section === "reviews" || lens.section === "captured") ? null : dailyPlanEnabled ? (
+            <DailyPlanOverlay
+              items={myWorkTasks as Array<{ id: string } & Record<string, unknown>>}
+              listRenderer={({ renderRowExtra }) => (
+                <MyWorkViewsSurface
+                  actorEmail={user?.email || ""}
+                  actorId={user?.uid || ""}
+                  actorMemberId={personalActor.memberId || null}
+                  ctxExtras={{
+                    navigate: (to) => navigate(to),
+                    openOdysseus: (scope) => {
+                      void openOdysseusPanel({
+                        kind: scope.entityType === "task" ? "item" : "item",
+                        entityId: scope.entityId,
+                        label: scope.entityId,
+                      });
+                    },
+                    toast: (msg) => setNotice(msg),
+                  }}
+                  listBody={{
+                    hierarchyTasks: tasks,
+                    notebookEntries,
+                    onAddTask: async (...args) => addProjectTask(...args),
+                    onAsk: (prompt) => {
+                      setComposer(prompt);
+                      goCenterView("conversation");
+                    },
+                    onAskOdysseus: (item) => {
+                      void openOdysseusPanel({
+                        kind: "item",
+                        entityId: String((item as { id?: string }).id || ""),
+                        label: entityTitle(item),
+                      });
+                    },
+                    onCreateControlledOption: createControlledOption,
+                    onCreateSprint: createSprint,
+                    onInviteAssigneeEmail: canManageMembers
+                      ? async (email) => {
+                          await inviteWorkspaceMember(email);
+                        }
+                      : undefined,
+                    onOpenFinanceLine: (financeLineId) => {
+                      setHighlightFinanceLineId(financeLineId);
+                      navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
+                    },
+                    onOpenNote: (noteId) => {
+                      setSelectedWorkItemId(null);
+                      navigate(`/notes?note=${encodeURIComponent(noteId)}`);
+                    },
+                    onOpenProjectConsole: openProjectRecord,
+                    onOpenRecord: (tableId, recordId) => {
+                      setSelectedWorkItemId(null);
+                      navigate(
+                        `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
+                      );
+                    },
+                    onSelectItem: (id) => {
+                      if (id) openWorkOrRecord(id);
+                      else setSelectedWorkItemId(null);
+                    },
+                    onUpdateSprint: updateSprint,
+                    renderRowExtra: renderRowExtra as any,
+                    selectedItemId: selectedWorkItemId,
+                    sprints,
+                    tags: categories,
+                    workspaceRecords,
+                    workspaceTables: visibleTables,
+                  }}
+                  members={workspaceMembers}
+                  onOpenCollab={(projectId) => navigate(collabProjectPath(projectId))}
+                  onOpenItem={(id) => openWorkOrRecord(id)}
+                  onUpdateTask={updateProjectTask}
+                  preferredSystemViewId={
+                    lens.kind === "my-work" && lens.section === "today"
+                      ? "system:my-work:today"
+                      : lens.kind === "my-work" && lens.section === "this_week"
+                        ? "system:my-work:week"
+                        : null
+                  }
+                  projects={projects}
+                  tasks={myWorkTasks as Array<Record<string, unknown> & { id: string }>}
+                  workspaceId={workspace?.id || ""}
+                />
+              )}
+              onNotice={(msg) => setNotice(msg)}
+              onOpenItem={(id) => openWorkOrRecord(id)}
+              onUpdateTask={updateProjectTask}
+              projects={projects}
+              workspaceId={workspace?.id || ""}
+            />
+            ) : (
             <MyWorkViewsSurface
               actorEmail={user?.email || ""}
               actorId={user?.uid || ""}

@@ -1700,5 +1700,36 @@ service cloud.firestore {
           )
         );
     }
+
+    // Personal Daily Plan overlay (Fires / Growth / Extras). Per-uid, per-day.
+    // Separate from legacy day_plans (key task / focus / close).
+    match /dayPlans/{planId} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && planId == request.auth.uid + '_' + request.resource.data.date;
+      allow update: if request.auth != null
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.date == resource.data.date;
+      allow delete: if false;
+    }
+
+    // Daily Plan calendar connections (client may toggle selected calendars only)
+    match /calendarConnections/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if false;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['accounts', 'defaultWriteAccountId', 'autoSyncBlocks', 'updatedAt']);
+      allow delete: if false;
+    }
+    match /calendarTokens/{id} {
+      allow read, write: if false;
+    }
+
+    match /dayPlanSettings/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }

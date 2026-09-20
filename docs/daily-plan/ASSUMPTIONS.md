@@ -1,0 +1,16 @@
+# Daily Plan — Assumptions
+
+Step 1 — assumed `<useMyItems>` is the `myWorkTasks` array already loaded in `DelivereeWorkspace` (no second Firestore query); adapter `useMyItemsFromPool` joins that pool.
+Step 1 — assumed `<completeItem>` / `<reopenItem>` are `onUpdateTask` patches (`status: done` / `status: backlog`) as used by `WorkItemsCenter.toggleDone`.
+Step 1 — assumed `<addItemActivity>` is none → skip activity writes on PBI/epic check.
+Step 1 — assumed `<ProjectChip>` is inline text chip; `<SemaforoDot>` is `StatusLight` with `label={false}`.
+Step 1 — assumed `<odysseusContext>` is prop-driven `OdysseusPanelScope` (no register API) → Steps 10/19/30 skipped or scope-only.
+Step 1 — assumed toast is `setNotice` in DelivereeWorkspace; confirm is `window.confirm` via adapters/ui.
+Step 1 — assumed Cloud Functions live under `worker/` (Cloudflare) not `functions/`; Phase 2 calendar callables will add `functions/` per Step 14 fallback if worker cannot host Firebase callables.
+Step 4 — Firestore rules/indexes deploy requires `firebase login`; commands recorded in DEPLOY.md.
+Step 13 — Close the day button always visible in board header (not only after 15:00) for easier testing; menu still available.
+Step 14 — Created `functions/` Firebase callables (repo used Cloudflare worker for calendar OAuth; Daily Plan uses Firebase callables per prompt).
+Step 23 — No shared `<llmCall>` → heuristic-only proposals (`source:'heuristic'`).
+Step 27 — Routines engine not used for Daily Plan recipes → scheduled `dailyPlanRoutinesTick` + `dayPlanSettings/{uid}`.
+Step 29 — Outlook provider stubbed until MS_* secrets exist.
+Step 30 — Odysseus actions skipped (no context provider API).
