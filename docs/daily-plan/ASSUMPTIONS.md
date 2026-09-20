@@ -8,4 +8,4 @@ Step 1 — assumed `<odysseusContext>` is prop-driven `OdysseusPanelScope` (no r
 Step 1 — assumed toast is `setNotice` in DelivereeWorkspace; confirm is `window.confirm` via adapters/ui.
 Step 1 — assumed Cloud Functions live under `worker/` (Cloudflare) not `functions/`; Phase 2 calendar callables will add `functions/` per Step 14 fallback if worker cannot host Firebase callables.
 Step 4 — Firestore rules/indexes deploy requires `firebase login`; commands recorded in DEPLOY.md.
-Step 8 — key task reuses existing `day_plans` / `setKeyItem` (`<existingKeyTask>`).
+Step 13 — Close the day button always visible in board header (not only after 15:00) for easier testing; menu still available.

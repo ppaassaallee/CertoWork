@@ -4,9 +4,11 @@ import { useDayPlan as useLegacyDayPlan } from "../../dayplan/useDayPlan";
 import { useAuth } from "../../../lib/AuthContext";
 import { completeItem, reopenItem } from "../adapters/items";
 import { confirmAction, toast } from "../adapters/ui";
-import { getTodayKey, labelForKey } from "../dateKeys";
-import { addEntries } from "../dayPlanService";
+import { addDays, getTodayKey, labelForKey } from "../dateKeys";
+import { addEntries, addEntry, removeEntry, updatePlanFields } from "../dayPlanService";
+import { computeFocusScore } from "../focusScore";
 import "../dailyPlan.css";
+import { CloseDaySheet } from "./CloseDaySheet";
 import { DailyPlanCTA } from "./DailyPlanCTA";
 import { PlanningTray, RowTodayAffordance } from "./PlanningTray";
 import { TodayBoard } from "./TodayBoard";
@@ -57,6 +59,7 @@ export function DailyPlanOverlay({
   const todayKey = getTodayKey();
   const [boardDateKey, setBoardDateKey] = useState(todayKey);
   const [view, setViewState] = useState<DailyPlanView>(() => readViewParam() || "items");
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const setView = useCallback((next: DailyPlanView) => {
     setViewState(next);
@@ -165,6 +168,24 @@ export function DailyPlanOverlay({
     );
   };
 
+  const onMoveToTomorrow = async (itemId: string, bucket: PlanBucket) => {
+    if (!user?.uid) return;
+    const tomorrow = addDays(boardDateKey, 1);
+    try {
+      await removeEntry(user.uid, boardDateKey, itemId);
+      try {
+        await addEntry(user.uid, tomorrow, itemId, bucket);
+      } catch (err) {
+        await addEntry(user.uid, boardDateKey, itemId, bucket);
+        toast(err instanceof Error ? err.message : "Could not move to tomorrow", onNotice);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not move to tomorrow", onNotice);
+    }
+  };
+
+  const focusScore = computeFocusScore(day.plan, keyItemId);
+
   const board = (
     <>
       <WeekStrip
@@ -178,6 +199,14 @@ export function DailyPlanOverlay({
       />
       <div className="dp-board-header">
         <h3>{labelForKey(boardDateKey, todayKey)}</h3>
+        {boardDateKey === todayKey && focusScore != null ? (
+          <span
+            className="dp-focus-ring"
+            title="Growth 3 · Fires 2 · Extras 1"
+          >
+            {focusScore}
+          </span>
+        ) : null}
         {boardDateKey !== todayKey ? (
           <button
             className="dp-link"
@@ -187,7 +216,40 @@ export function DailyPlanOverlay({
             Back to today
           </button>
         ) : null}
+        {boardDateKey === todayKey && day.plan?.closedAt ? (
+          <button
+            className="dp-link"
+            onClick={() =>
+              user?.uid &&
+              void updatePlanFields(user.uid, boardDateKey, { closedAt: null })
+            }
+            type="button"
+          >
+            Reopen day
+          </button>
+        ) : null}
+        {boardDateKey === todayKey && !day.plan?.closedAt ? (
+          <button
+            className="dp-link"
+            onClick={() => setCloseOpen(true)}
+            type="button"
+          >
+            Close the day
+          </button>
+        ) : null}
       </div>
+      {closeOpen && day.plan && user?.uid ? (
+        <CloseDaySheet
+          dateKey={boardDateKey}
+          entriesByBucket={day.entriesByBucket}
+          keyItemId={keyItemId}
+          onCancel={() => setCloseOpen(false)}
+          onClosed={() => setCloseOpen(false)}
+          plan={day.plan}
+          uid={user.uid}
+          workspaceId={workspaceId}
+        />
+      ) : null}
       <TodayBoard
         entriesByBucket={day.entriesByBucket}
         items={items}
@@ -195,6 +257,9 @@ export function DailyPlanOverlay({
         onAdd={(itemId, bucket) => void day.actions.add(itemId, bucket)}
         onMarkItemDone={(item) => void onMarkItemDone(item)}
         onMove={(itemId, bucket, index) => void day.actions.move(itemId, bucket, index)}
+        onMoveToTomorrow={
+          readOnly ? undefined : (itemId, bucket) => void onMoveToTomorrow(itemId, bucket)
+        }
         onOpen={onOpenItem}
         onRemove={(itemId) => void day.actions.remove(itemId)}
         onToggleDone={(entry, next) => void onToggleDone(entry, next)}

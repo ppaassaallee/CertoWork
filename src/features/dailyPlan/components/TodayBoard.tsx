@@ -78,6 +78,7 @@ export function TodayBoard({
   onToggleDone,
   onMarkItemDone,
   onToggleKey,
+  onMoveToTomorrow,
 }: {
   entriesByBucket: Record<PlanBucket, JoinedEntry[]>;
   items: PlanItem[];
@@ -91,6 +92,7 @@ export function TodayBoard({
   onToggleDone: (entry: JoinedEntry, next: boolean) => void;
   onMarkItemDone: (item: PlanItem) => void;
   onToggleKey: (itemId: string) => void;
+  onMoveToTomorrow?: (itemId: string, bucket: PlanBucket) => void;
 }) {
   const plannedIds = usePlannedIds(entriesByBucket);
   const [pickerBucket, setPickerBucket] = useState<PlanBucket | null>(null);
@@ -183,6 +185,7 @@ export function TodayBoard({
                                 isKey={Boolean(keyItemId && entry.itemId === keyItemId)}
                                 onMarkItemDone={onMarkItemDone}
                                 onMoveBucket={(itemId, bucket) => onMove(itemId, bucket, 0)}
+                                onMoveToTomorrow={onMoveToTomorrow}
                                 onOpen={onOpen}
                                 onRemove={onRemove}
                                 onToggleDone={onToggleDone}

@@ -46,7 +46,9 @@ export function WeekStrip({
         const isPast = key < todayKey;
         const isFuture = key > todayKey;
         let caption = "";
-        if (plan && isPast) caption = `${done}/${planned}`;
+        if (plan?.focusScore != null && isPast) {
+          caption = String(plan.focusScore);
+        } else if (plan && isPast) caption = `${done}/${planned}`;
         else if (plan && isFuture) caption = String(planned);
         else if (plan && isToday) caption = planned ? `${done}/${planned}` : "";
         return (
@@ -62,7 +64,11 @@ export function WeekStrip({
               {labelForKey(key, getTodayKey()).slice(0, 3).toUpperCase()}
             </span>
             <span className="dp-week-num">{Number(key.slice(8))}</span>
-            {caption ? <span className="dp-week-cap">{caption}</span> : null}
+            {caption ? (
+              <span className={`dp-week-cap ${plan?.focusScore != null && isPast ? "dp-focus-ring" : ""}`}>
+                {caption}
+              </span>
+            ) : null}
           </button>
         );
       })}

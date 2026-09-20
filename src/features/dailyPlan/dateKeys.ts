@@ -39,6 +39,7 @@ export function getWeekKeys(anchorKey: string): string[] {
 export function labelForKey(key: string, todayKey: string): string {
   if (key === todayKey) return "Today";
   if (key === addDays(todayKey, -1)) return "Yesterday";
+  if (key === addDays(todayKey, 1)) return "Tomorrow";
   try {
     return format(parseISO(key), "EEEE");
   } catch {

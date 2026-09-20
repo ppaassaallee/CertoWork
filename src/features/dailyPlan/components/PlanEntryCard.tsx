@@ -48,6 +48,7 @@ export function PlanEntryCard({
   onRemove,
   onMoveBucket,
   onToggleKey,
+  onMoveToTomorrow,
 }: {
   entry: JoinedEntry;
   projects: Array<{ id: string; title?: string; name?: string; color?: string }>;
@@ -60,6 +61,7 @@ export function PlanEntryCard({
   onRemove: (itemId: string) => void;
   onMoveBucket: (itemId: string, bucket: PlanBucket) => void;
   onToggleKey: (itemId: string) => void;
+  onMoveToTomorrow?: (itemId: string, bucket: PlanBucket) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const item = entry.item;
@@ -156,6 +158,17 @@ export function PlanEntryCard({
               >
                 Remove from today
               </button>
+              {onMoveToTomorrow ? (
+                <button
+                  onClick={() => {
+                    onMoveToTomorrow(item.id, entry.bucket);
+                    setMenuOpen(false);
+                  }}
+                  type="button"
+                >
+                  Move to tomorrow
+                </button>
+              ) : null}
               {isProgressOnly ? (
                 <button
                   onClick={() => {
