@@ -12,3 +12,6 @@ Step 12 — tableEvents collection feeds structured routines; loop guard via `ro
 Step 17 — Odysseus system builder returns template draft JSON; provision reuses Step 15 callable/client.
 Step 25 — gallery overview for projects reused where present; tables gallery is card cover on files column.
 Step 26 — property-management template is the acceptance fixture; sample rents sum to $7,600.
+Step 2 — assumed collection `table_records` (existing) instead of nested `tables/{id}/records`; same fields, existing storage keeps working.
+Step 2 — filtering client-side under 5,000 records; callable `queryRecords` above that (scaffold in Step 3 computeFns).
+Step 2 — `entity_links` already exists; Step 4 extends record link targets.
