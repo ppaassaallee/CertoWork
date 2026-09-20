@@ -23,3 +23,4 @@ Step 12 — structured routines stored on RoutineSpec.structured; same activate/
 Step 17 — Odysseus builder uses heuristic template match + local provision when LLM JSON mode unavailable.
 Step 26 — vacant sample rent set to $0 so five-row sum equals $7,600 (occupied four sum to $7,600).
 Step 23 — import interactive UI caps 500 rows; CF chunk path for up to 50k documented.
+
