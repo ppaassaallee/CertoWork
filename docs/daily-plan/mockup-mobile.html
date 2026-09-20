@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Certo Work — My Work · Daily Plan (mobile mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#2547C4; --orange:#F2620F; --ink:#424242; --ink-2:#6B6F7A; --ink-3:#9A9EA8;
+    --bg:#F5F6FA; --panel:#FFFFFF; --line:#E4E6EE; --line-2:#EEF0F5;
+    --fire-bg:rgba(242,98,15,.08); --fire-bd:rgba(242,98,15,.35); --fire:#F2620F;
+    --growth-bg:rgba(37,71,196,.08); --growth-bd:rgba(37,71,196,.35); --growth:#2547C4;
+    --extra-bg:rgba(66,66,66,.06); --extra-bd:rgba(66,66,66,.25); --extra:#424242;
+    --sem-r:#E0433A; --sem-y:#E8B23A; --sem-g:#3AAE6C;
+    --r-s:6px; --r-m:10px; --r-l:14px; --shadow:0 12px 40px rgba(20,28,60,.14);
+    box-sizing:border-box;
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{height:100%}
+  body{margin:0;background:#DDE0EA;color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  svg{overflow:hidden;flex:none}
+  .phone{max-width:412px;min-height:100vh;margin:0 auto;background:var(--bg);display:flex;flex-direction:column;position:relative;padding-top:env(safe-area-inset-top,0px)}
+  @media (min-width:480px){.phone{min-height:860px;margin:24px auto;border-radius:36px;border:8px solid #1c1f2a;box-shadow:0 30px 80px rgba(0,0,0,.35);overflow:hidden}}
+
+  .top{padding:14px 16px 10px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .top h1{margin:0 0 10px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+  .tabs{display:grid;grid-template-columns:repeat(3,1fr);background:var(--line-2);border-radius:999px;padding:3px}
+  .tabs button{padding:7px 0;border-radius:999px;font-weight:500;color:var(--ink-2);font-size:13px}
+  .tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(20,28,60,.12);font-weight:600}
+  .view{display:none;flex:1}
+  .view.on{display:block}
+  .pad{padding:12px 12px 96px}
+
+  /* CTA */
+  .cta{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid var(--line);border-radius:var(--r-l);margin-bottom:10px}
+  .cta .t{flex:1;font-size:13px;color:var(--ink-2)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:var(--r-s);font-weight:500;font-size:13px;border:1px solid var(--line);background:#fff;color:var(--ink);white-space:nowrap}
+  .btn.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .btn svg{width:14px;height:14px}
+
+  /* tray */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-l);overflow:hidden}
+  .sec{padding:10px 14px 6px;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:8px}
+  .sec .sp{margin-left:auto}
+  .leftover{margin:0 10px 8px;padding:6px 10px;border-radius:var(--r-m);background:var(--extra-bg);border:1px dashed var(--extra-bd)}
+  .leftover .lr{display:flex;align-items:center;gap:8px;padding:6px 0}
+  .leftover .ttl{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+  .bpick{display:inline-flex;gap:4px}
+  .bpick button{width:26px;height:24px;font-size:11.5px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-2)}
+  .row{display:grid;grid-template-columns:18px 1fr auto;grid-template-rows:auto auto;column-gap:10px;row-gap:3px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line-2);position:relative}
+  .row:last-child{border-bottom:0}
+  .cb{width:18px;height:18px;border:1.5px solid #C9CDD8;border-radius:5px;flex:none;display:inline-grid;place-items:center;background:#fff}
+  .cb.on{background:var(--blue);border-color:var(--blue)}
+  .cb.on::after{content:"";width:9px;height:5px;border:2px solid #fff;border-top:0;border-right:0;transform:translateY(-1px) rotate(-45deg)}
+  .row .cb{grid-row:1 / span 2}
+  .row .ttl{grid-column:2;grid-row:1;line-height:1.3}
+  .row .meta{grid-column:2;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0}
+  .row .add,.row .planned{grid-column:3;grid-row:1 / span 2}
+  .add{font-size:12px;color:var(--blue);font-weight:500;padding:5px 9px;border-radius:var(--r-s);background:rgba(37,71,196,.08);white-space:nowrap}
+  .planned{width:10px;height:10px;border-radius:50%}
+  .planned.fire{background:var(--fire)} .planned.growth{background:var(--growth)} .planned.extra{background:var(--extra)}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2);background:var(--line-2);padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .chip i{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .due{font-size:12px;color:var(--ink-3);white-space:nowrap}
+  .due.late{color:var(--sem-r)}
+  .sem{width:8px;height:8px;border-radius:50%;flex:none}
+  .sem.r{background:var(--sem-r)} .sem.y{background:var(--sem-y)} .sem.g{background:var(--sem-g)}
+  .type{font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);padding:0 5px;border-radius:4px;line-height:16px}
+  .pop{position:absolute;right:12px;top:44px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow);padding:8px;display:none;gap:6px}
+  .pop.open{display:flex}
+  .pop button{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-2)}
+  .pop .lbl{font-size:11.5px;color:var(--ink-3);padding:5px 4px 0 2px}
+
+  /* week + board */
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:10px 10px 6px;background:#fff;border:1px solid var(--line);border-radius:var(--r-l);margin-bottom:10px}
+  .day{border-radius:var(--r-m);padding:7px 2px;text-align:center}
+  .day .wd{font-size:10.5px;color:var(--ink-3)}
+  .day .n{font-size:15px;font-weight:600;margin-top:1px}
+  .day .cap{font-size:10.5px;color:var(--ink-3);margin-top:3px;height:14px;display:flex;align-items:center;justify-content:center;gap:3px}
+  .day.today{background:var(--blue)}
+  .day.today .wd,.day.today .n,.day.today .cap{color:#fff}
+  .ring{display:inline-block;width:12px;height:12px;border-radius:50%;background:conic-gradient(var(--blue) calc(var(--v)*1%),#DDE1EC 0);position:relative;flex:none}
+  .ring::after{content:"";position:absolute;inset:3px;border-radius:50%;background:#fff}
+  .day.today .ring{background:conic-gradient(#fff calc(var(--v)*1%),rgba(255,255,255,.35) 0)}
+  .day.today .ring::after{background:var(--blue)}
+
+  .bh{display:flex;align-items:center;gap:10px;padding:2px 2px 10px}
+  .bh h2{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .bh .meta{font-size:12px;color:var(--ink-3)}
+  .focus{margin-left:auto;position:relative;width:30px;height:30px}
+  .focus .ring{width:30px;height:30px}
+  .focus .ring::after{inset:4px}
+  .focus b{position:absolute;inset:0;display:grid;place-items:center;font-size:10px;font-weight:600;color:var(--blue)}
+  .acts{display:flex;gap:8px;margin-bottom:12px}
+  .acts .btn{flex:1;justify-content:center}
+
+  .bucket{border-radius:var(--r-l);border:1px solid;padding:6px;margin-bottom:10px}
+  .bucket.fire{background:var(--fire-bg);border-color:var(--fire-bd)}
+  .bucket.growth{background:var(--growth-bg);border-color:var(--growth-bd)}
+  .bucket.extra{background:var(--extra-bg);border-color:var(--extra-bd)}
+  .bk{display:flex;align-items:center;gap:8px;padding:6px 8px 8px;font-weight:600;font-size:13px}
+  .bucket.fire .bk{color:var(--fire)} .bucket.growth .bk{color:var(--growth)} .bucket.extra .bk{color:var(--extra)}
+  .bk svg{width:15px;height:15px}
+  .bk .cnt{font-weight:500;color:inherit;opacity:.8;font-size:12px}
+  .bk .plus{margin-left:auto;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;border:1px solid currentColor;opacity:.7}
+  .bk .plus svg{width:11px;height:11px}
+  .hint{padding:4px 8px 10px;font-size:12.5px;color:var(--ink-3)}
+  .card{display:grid;grid-template-columns:18px 1fr auto auto;grid-template-rows:auto auto;column-gap:10px;row-gap:3px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--r-m);padding:10px 8px 10px 10px;margin-bottom:6px}
+  .card:last-child{margin-bottom:0}
+  .card .cb{grid-row:1 / span 2}
+  .card .ttl{grid-column:2;grid-row:1;line-height:1.3}
+  .card .meta{grid-column:2;grid-row:2;display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+  .card .star{grid-column:3;grid-row:1 / span 2;width:26px;height:26px;display:grid;place-items:center;color:#C9CDD8;border-radius:6px}
+  .card .star.on{color:var(--blue)}
+  .card .star svg{width:16px;height:16px}
+  .card .grip{grid-column:4;grid-row:1 / span 2;width:22px;display:grid;place-items:center;color:#C9CDD8}
+  .card .grip svg{width:14px;height:14px}
+  .card.key{border-left:3px solid var(--growth);padding-left:8px}
+  .bucket.fire .card.key{border-left-color:var(--fire)}
+  .card.done .ttl{text-decoration:line-through;color:var(--ink-3)}
+  .card.done{opacity:.6}
+  .clock{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--growth);background:var(--growth-bg);padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .clock svg{width:11px;height:11px}
+
+  /* events */
+  .evh{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line-2)}
+  .evh h2{margin:0;font-size:14px;font-weight:600}
+  .evh .cnt{font-size:12px;color:var(--ink-3)}
+  .evh .sp{margin-left:auto}
+  .icobtn{width:30px;height:30px;display:inline-grid;place-items:center;border-radius:var(--r-s);color:var(--ink-2)}
+  .icobtn svg{width:16px;height:16px}
+  .tl{position:relative;height:calc(11 * 48px);margin:8px 12px 12px}
+  .hr{position:absolute;left:0;right:0;border-top:1px solid var(--line-2);font-size:10.5px;color:var(--ink-3)}
+  .hr span{position:absolute;left:0;top:-7px;background:#fff;padding-right:4px}
+  .ev{position:absolute;left:42px;right:2px;border-radius:8px;padding:6px 9px;font-size:12.5px;line-height:1.3;border:1px solid var(--line);background:#F1F2F6;color:var(--ink-2);overflow:hidden}
+  .ev b{display:block;font-weight:600;color:var(--ink)}
+  .ev small{display:block;color:var(--ink-3);font-size:11px}
+  .ev.fire{background:var(--fire-bg);border-color:var(--fire-bd)} .ev.fire b{color:var(--fire)}
+  .ev.growth{background:var(--growth-bg);border-color:var(--growth-bd)} .ev.growth b{color:var(--growth)}
+  .ev.block{border-style:dashed;background:#fff}
+  .ev.block.growth{border-color:var(--growth)}
+  .now{position:absolute;left:38px;right:0;border-top:2px solid var(--orange);z-index:2}
+  .now::before{content:"";position:absolute;left:-5px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--orange)}
+  .evfoot{padding:10px 14px 12px;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line-2)}
+
+  /* Odysseus bar */
+  .ody{position:absolute;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 8px 30px rgba(20,28,60,.14);display:flex;align-items:center;gap:8px;padding:7px 8px 7px 12px;z-index:20}
+  .ody .ctx{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--blue);background:var(--growth-bg);padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .ody input{flex:1;border:0;outline:0;font:inherit;color:var(--ink);min-width:0;font-size:13px}
+  .ody input::placeholder{color:var(--ink-3)}
+  .ody .go{width:30px;height:30px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;flex:none}
+  .ody .go svg{width:14px;height:14px}
+  .toast{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:999px;font-size:13px;display:none;z-index:30;white-space:nowrap}
+  .toast.open{display:block}
+  :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2s1 3 4 6 4 5 4 7a8 8 0 0 1-16 0c0-2 1-3 2-4 0 2 1 3 2 3 0-4 1-6 4-12z"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M15 7h6v6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM5 17l.9 2.1L8 20l-2.1.9L5 23l-.9-2.1L2 20l2.1-.9zM19 15l.7 1.6 1.6.7-1.6.7L19 19.6l-.7-1.6-1.6-.7 1.6-.7z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></g></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></symbol>
+  <symbol id="i-ody" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-4.5 9.2c.9-1.9 2.6-2.7 4.5-2.7s3.6.8 4.5 2.7c-1.2 1.2-2.7 1.8-4.5 1.8s-3.3-.6-4.5-1.8z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M12 19V5M6 11l6-6 6 6"/></symbol>
+</svg>
+
+<div class="phone">
+  <div class="top">
+    <h1>My Work</h1>
+    <div class="tabs" role="tablist">
+      <button class="on" onclick="show('items',this)">My items</button>
+      <button onclick="show('today',this)">Today</button>
+      <button onclick="show('events',this)">Events</button>
+    </div>
+  </div>
+
+  <!-- ============ My items (existing list + CTA + leftovers) ============ -->
+  <div class="view on" id="v-items">
+    <div class="pad">
+      <div class="cta"><div class="t">Nothing planned for today yet.<br><span style="font-size:11.5px;color:var(--ink-3)">Empty state — only shown when nothing is planned</span></div><button class="btn pri" onclick="show('today',document.querySelectorAll('.tabs button')[1])">Plan today · 5 min</button></div>
+
+      <div class="panel">
+        <div class="sec">From yesterday <span class="cnt">2</span><span class="sp"></span><button style="color:var(--blue);font-size:12px">Move all…</button></div>
+        <div class="leftover">
+          <div class="lr"><span class="ttl">Speech analytics — unblock (stuck)</span><span class="bpick"><button>F</button><button>G</button><button>E</button></span></div>
+          <div class="lr"><span class="ttl">Servinform — WFM meeting</span><span class="bpick"><button>F</button><button>G</button><button>E</button></span></div>
+        </div>
+        <div class="sec" style="border-top:1px solid var(--line-2);padding-top:12px">All items <span class="cnt">by due date</span></div>
+
+        <div class="row"><span class="cb"></span><span class="ttl">Tech addendum for Banrural</span><span class="meta"><span class="type">PBI</span><span class="chip"><i style="background:#2547C4"></i>Banrural</span><span class="due late">Sep 22</span><span class="sem r"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop open"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Follow up with Roger on pending proposals</span><span class="meta"><span class="type">Task</span><span class="chip"><i style="background:#2547C4"></i>Banrural</span><span class="due">Sep 25</span><span class="sem y"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Close the Pure AI cost model and approach</span><span class="meta"><span class="type">PBI</span><span class="chip"><i style="background:#F2620F"></i>Pure AI</span><span class="due">Sep 23</span><span class="sem y"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">AI screener for TPG</span><span class="meta"><span class="type">PBI</span><span class="chip"><i style="background:#3AAE6C"></i>Gazelle Hunt</span><span class="due">Sep 26</span><span class="sem g"></span></span><span class="planned growth"></span></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Smart Dispo project — review</span><span class="meta"><span class="type">PBI</span><span class="chip"><i style="background:#E0433A"></i>PTC</span><span class="due">Sep 30</span><span class="sem g"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Confirm meeting date with Banco Industrial</span><span class="meta"><span class="type">Task</span><span class="chip"><i style="background:#64748B"></i>Commercial</span><span class="due">Sep 25</span><span class="sem g"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Check Verizon access, credentials and VPN</span><span class="meta"><span class="type">Task</span><span class="chip"><i style="background:#0EA5A5"></i>Verizon</span><span class="due">Sep 25</span><span class="sem g"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="row"><span class="cb"></span><span class="ttl">Gazelle Hunt adoption in recruiting</span><span class="meta"><span class="type">PBI</span><span class="chip"><i style="background:#3AAE6C"></i>Gazelle Hunt</span><span class="due">Sep 30</span><span class="sem g"></span></span><button class="add" onclick="togglePop(this)">+ Today</button>
+          <div class="pop"><span class="lbl">Add to</span><button onclick="pick(this,'fire')">Fires</button><button onclick="pick(this,'growth')">Growth</button><button onclick="pick(this,'extra')">Extras</button></div></div>
+        <div class="evfoot">30 more…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Today ============ -->
+  <div class="view" id="v-today">
+    <div class="pad">
+      <div class="week">
+        <div class="day"><div class="wd">Mon</div><div class="n">21</div><div class="cap"><span class="ring" style="--v:72"></span>72</div></div>
+        <div class="day today"><div class="wd">Tue</div><div class="n">22</div><div class="cap"><span class="ring" style="--v:38"></span>38</div></div>
+        <div class="day"><div class="wd">Wed</div><div class="n">23</div><div class="cap">3</div></div>
+        <div class="day"><div class="wd">Thu</div><div class="n">24</div><div class="cap"></div></div>
+        <div class="day"><div class="wd">Fri</div><div class="n">25</div><div class="cap">1</div></div>
+        <div class="day"><div class="wd">Sat</div><div class="n">26</div><div class="cap"></div></div>
+        <div class="day"><div class="wd">Sun</div><div class="n">27</div><div class="cap"></div></div>
+      </div>
+
+      <div class="bh"><div><h2>Tuesday 22 September</h2><div class="meta">8 planned, 3 done. 3 meetings, 2h 30m.</div></div><div class="focus"><span class="ring" style="--v:38"></span><b>38</b></div></div>
+      <div class="acts"><button class="btn pri"><svg><use href="#i-ody"/></svg>Plan my day</button><button class="btn">Close the day</button></div>
+
+      <div class="bucket fire" id="b-fire">
+        <div class="bk"><svg><use href="#i-flame"/></svg>Fires <span class="cnt">3</span><button class="plus"><svg><use href="#i-plus"/></svg></button></div>
+        <div class="card done"><button class="cb on" onclick="toggleDone(this)"></button><span class="ttl">Boost &amp; Klap contract — close</span><span class="meta"><span class="chip"><i style="background:#0EA5A5"></i>Klap</span><span class="due">Sep 22</span><span class="sem r"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+        <div class="card"><button class="cb" onclick="toggleDone(this)"></button><span class="ttl">Tech addendum for Banrural</span><span class="meta"><span class="chip"><i style="background:#2547C4"></i>Banrural</span><span class="due late">Sep 22</span><span class="sem r"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+        <div class="card"><button class="cb" onclick="toggleDone(this)"></button><span class="ttl">Close the Pure AI cost model and approach</span><span class="meta"><span class="chip"><i style="background:#F2620F"></i>Pure AI</span><span class="due">Sep 23</span><span class="sem y"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+      </div>
+
+      <div class="bucket growth" id="b-growth">
+        <div class="bk"><svg><use href="#i-trend"/></svg>Growth <span class="cnt">3</span><button class="plus"><svg><use href="#i-plus"/></svg></button></div>
+        <div class="card key"><button class="cb" onclick="toggleDone(this)"></button><span class="ttl">AI screener for TPG</span><span class="meta"><span class="clock"><svg><use href="#i-clock"/></svg>15:30–16:30</span><span class="chip"><i style="background:#3AAE6C"></i>Gazelle Hunt</span><span class="due">Sep 26</span><span class="sem g"></span></span><button class="star on"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+        <div class="card"><button class="cb" onclick="toggleDone(this)"></button><span class="ttl">Gazelle Hunt project for OneSource</span><span class="meta"><span class="chip"><i style="background:#3AAE6C"></i>Gazelle Hunt</span><span class="due">Sep 30</span><span class="sem g"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+        <div class="card done"><button class="cb on" onclick="toggleDone(this)"></button><span class="ttl">KruOps dev team: success criteria, roadmap, PBIs, baseline</span><span class="meta"><span class="chip"><i style="background:#8B5CF6"></i>KruOps</span><span class="due">Sep 30</span><span class="sem y"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+      </div>
+
+      <div class="bucket extra" id="b-extra">
+        <div class="bk"><svg><use href="#i-spark"/></svg>Extras <span class="cnt">2</span><button class="plus"><svg><use href="#i-plus"/></svg></button></div>
+        <div class="card done"><button class="cb on" onclick="toggleDone(this)"></button><span class="ttl">Check Verizon access, credentials and VPN</span><span class="meta"><span class="chip"><i style="background:#0EA5A5"></i>Verizon</span><span class="due">Sep 25</span><span class="sem g"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+        <div class="card"><button class="cb" onclick="toggleDone(this)"></button><span class="ttl">Mirna — pending proposals</span><span class="meta"><span class="chip"><i style="background:#64748B"></i>Commercial</span><span class="due">Sep 25</span><span class="sem g"></span></span><button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Events ============ -->
+  <div class="view" id="v-events">
+    <div class="pad">
+      <div class="panel">
+        <div class="evh"><h2>Events</h2><span class="cnt">Tuesday 22</span><span class="sp"></span><button class="icobtn"><svg><use href="#i-refresh"/></svg></button><button class="icobtn"><svg><use href="#i-gear"/></svg></button></div>
+        <div class="tl">
+          <div class="hr" style="top:0"><span>8:00</span></div>
+          <div class="hr" style="top:48px"><span>9:00</span></div>
+          <div class="hr" style="top:96px"><span>10:00</span></div>
+          <div class="hr" style="top:144px"><span>11:00</span></div>
+          <div class="hr" style="top:192px"><span>12:00</span></div>
+          <div class="hr" style="top:240px"><span>13:00</span></div>
+          <div class="hr" style="top:288px"><span>14:00</span></div>
+          <div class="hr" style="top:336px"><span>15:00</span></div>
+          <div class="hr" style="top:384px"><span>16:00</span></div>
+          <div class="hr" style="top:432px"><span>17:00</span></div>
+          <div class="hr" style="top:480px"><span>18:00</span></div>
+          <div class="ev growth" style="top:48px;height:46px"><b>Weekly with Agustín</b><small>9:00–10:00 · New Banrural proposal</small></div>
+          <div class="now" style="top:128px"></div>
+          <div class="ev fire" style="top:144px;height:22px;padding:2px 9px"><b>Banrural committee</b></div>
+          <div class="ev" style="top:288px;height:46px"><b>Apex / Pure AI sync</b><small>14:00–15:00</small></div>
+          <div class="ev block growth" style="top:360px;height:46px"><b>AI screener for TPG</b><small>15:30–16:30 · time block, not synced</small></div>
+        </div>
+        <div class="evfoot">Google · alejandro@… · 2 calendars. Use “Schedule…” on a card to block time.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ody">
+    <span class="ctx"><svg style="width:12px;height:12px"><use href="#i-ody"/></svg>Today</span>
+    <input placeholder="Ask Odysseus about today">
+    <button class="go"><svg><use href="#i-send"/></svg></button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+  function show(id,btn){
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+id));
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b===btn));
+    window.scrollTo(0,0);
+  }
+  function togglePop(btn){ document.querySelectorAll('.pop.open').forEach(p=>{ if(p!==btn.nextElementSibling) p.classList.remove('open'); }); btn.nextElementSibling.classList.toggle('open'); }
+  function pick(btn,bucket){
+    const row=btn.closest('.row'); row.querySelector('.pop').remove(); row.querySelector('.add').remove();
+    const dot=document.createElement('span'); dot.className='planned '+bucket; row.appendChild(dot);
+    const b=document.getElementById('b-'+bucket); const meta=row.querySelector('.meta').cloneNode(true); meta.querySelector('.type')?.remove();
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML='<button class="cb" onclick="toggleDone(this)"></button><span class="ttl">'+row.querySelector('.ttl').textContent+'</span>'+meta.outerHTML+'<button class="star"><svg><use href="#i-star"/></svg></button><span class="grip"><svg><use href="#i-grip"/></svg></span>';
+    b.appendChild(card); const c=b.querySelector('.bk .cnt'); c.textContent=+c.textContent+1;
+    toast('Added to '+({fire:'Fires',growth:'Growth',extra:'Extras'})[bucket]);
+  }
+  function toggleDone(cb){ cb.classList.toggle('on'); cb.closest('.card').classList.toggle('done'); }
+  let t; function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('open'); clearTimeout(t); t=setTimeout(()=>el.classList.remove('open'),2000); }
+  document.addEventListener('click',e=>{ if(!e.target.closest('.row')) document.querySelectorAll('.pop.open').forEach(p=>p.classList.remove('open')); });
+</script>
+</body>
+</html>

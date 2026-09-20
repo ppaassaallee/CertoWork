@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../../../lib/AuthContext";
 import { getTodayKey, getWeekKeys, labelForKey } from "../dateKeys";
 import { getPlansInRange } from "../dayPlanService";
@@ -12,7 +12,6 @@ export function WeekStrip({
 }: {
   todayKey: string;
   activeKey: string;
-  /** Refresh when today's plan changes */
   planRevision?: string | number | null;
   onSelectDay: (dateKey: string) => void;
 }) {
@@ -45,30 +44,40 @@ export function WeekStrip({
         const isToday = key === todayKey;
         const isPast = key < todayKey;
         const isFuture = key > todayKey;
-        let caption = "";
-        if (plan?.focusScore != null && isPast) {
-          caption = String(plan.focusScore);
+        const score = plan?.focusScore;
+        let caption: ReactNode = null;
+        if (score != null && isPast) {
+          caption = (
+            <>
+              <span className="dp-focus-ring" style={{ ["--v" as string]: score }} />
+              {score}
+            </>
+          );
         } else if (plan && isPast) caption = `${done}/${planned}`;
-        else if (plan && isFuture) caption = String(planned);
-        else if (plan && isToday) caption = planned ? `${done}/${planned}` : "";
+        else if (plan && isFuture && planned) caption = String(planned);
+        else if (plan && isToday && planned)
+          caption = (
+            <>
+              {score != null ? (
+                <span className="dp-focus-ring" style={{ ["--v" as string]: score }} />
+              ) : null}
+              {score != null ? score : `${done}/${planned}`}
+            </>
+          );
+
+        const wd = labelForKey(key, getTodayKey()).slice(0, 3);
         return (
           <button
             aria-selected={key === activeKey}
-            className={`dp-week-day ${isToday ? "is-today" : ""} ${key === activeKey ? "is-active" : ""}`}
+            className={`dp-week-day ${isToday ? "is-today" : ""} ${isPast ? "is-past" : ""} ${key === activeKey ? "is-active" : ""}`}
             key={key}
             onClick={() => onSelectDay(key)}
             role="tab"
             type="button"
           >
-            <span className="dp-week-wd">
-              {labelForKey(key, getTodayKey()).slice(0, 3).toUpperCase()}
-            </span>
+            <span className="dp-week-wd">{wd}</span>
             <span className="dp-week-num">{Number(key.slice(8))}</span>
-            {caption ? (
-              <span className={`dp-week-cap ${plan?.focusScore != null && isPast ? "dp-focus-ring" : ""}`}>
-                {caption}
-              </span>
-            ) : null}
+            <span className="dp-week-cap">{caption}</span>
           </button>
         );
       })}

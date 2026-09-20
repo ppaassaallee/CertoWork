@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "../../../components/ui/Icon";
 import { BUCKETS, BUCKET_ORDER } from "../buckets";
 import { leftoversHeader } from "../dateKeys";
@@ -47,7 +47,7 @@ export function PlanningTray({
   leftovers: LeftoverEntry[];
   todayKey: string;
   plannedIds: Set<string>;
-  children: React.ReactNode;
+  children: ReactNode;
   onAdd: (itemId: string, bucket: PlanBucket) => void;
   onMoveAll: (bucket: PlanBucket) => void;
 }) {
@@ -96,12 +96,13 @@ export function PlanningTray({
                   <div className="dp-leftovers-buckets">
                     {BUCKET_ORDER.map((b) => (
                       <button
+                        data-bucket={b}
                         key={b}
                         onClick={() => onAdd(entry.itemId, b)}
-                        style={{ color: BUCKETS[b].fg }}
+                        title={BUCKETS[b].label}
                         type="button"
                       >
-                        {BUCKETS[b].label}
+                        {b === "fire" ? "F" : b === "growth" ? "G" : "E"}
                       </button>
                     ))}
                   </div>

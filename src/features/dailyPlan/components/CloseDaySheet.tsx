@@ -46,6 +46,8 @@ export function CloseDaySheet({
     total: entriesByBucket[b].length,
   }));
 
+  const score = computeFocusScore(plan, keyItemId);
+
   const onClose = async () => {
     setBusy(true);
     try {
@@ -59,7 +61,6 @@ export function CloseDaySheet({
           await removeEntry(uid, dateKey, entry.itemId);
         }
       }
-      const score = computeFocusScore(plan, keyItemId);
       await updatePlanFields(uid, dateKey, {
         closedAt: Timestamp.now(),
         closingNote: note.trim() || null,
@@ -81,57 +82,74 @@ export function CloseDaySheet({
   };
 
   return (
-    <div className="dp-sheet" data-testid="daily-plan-close-sheet">
-      <header>
-        <h3>Close the day</h3>
-        <button onClick={onCancel} type="button">
-          Cancel
-        </button>
-      </header>
-      <ul className="dp-close-stats">
-        {doneCounts.map((row) => (
-          <li key={row.bucket} style={{ color: BUCKETS[row.bucket].fg }}>
-            {BUCKETS[row.bucket].label}: {row.done}/{row.total}
-          </li>
-        ))}
-      </ul>
-      {leftovers.length ? (
-        <section>
-          <h4>Leftovers</h4>
-          <ul className="dp-close-leftovers">
-            {leftovers.map((entry) => (
-              <li key={entry.itemId}>
-                <span>{String(entry.item?.title || "Untitled")}</span>
-                <div className="dp-seg">
-                  {(["tomorrow", "leave", "drop"] as LeftoverChoice[]).map((c) => (
-                    <button
-                      className={choices[entry.itemId] === c ? "is-active" : ""}
-                      key={c}
-                      onClick={() =>
-                        setChoices((prev) => ({ ...prev, [entry.itemId]: c }))
-                      }
-                      type="button"
-                    >
-                      {c === "tomorrow" ? "Tomorrow" : c === "leave" ? "Leave" : "Drop"}
-                    </button>
-                  ))}
+    <>
+      <div className="dp-scrim" onClick={onCancel} />
+      <aside className="dp-sheet" data-testid="daily-plan-close-sheet">
+        <header className="dp-sh">
+          <h3>Close the day</h3>
+          <span className="dp-board-meta">{dateKey}</span>
+          <button className="dp-icobtn" onClick={onCancel} style={{ marginLeft: "auto" }} type="button">
+            ✕
+          </button>
+        </header>
+        <div className="dp-sb">
+          <div className="dp-stats">
+            {doneCounts.map((row) => (
+              <div className={`dp-stat ${row.bucket}`} key={row.bucket}>
+                <div className="k">{BUCKETS[row.bucket].label}</div>
+                <div className="v">
+                  {row.done} / {row.total}
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
-        </section>
-      ) : null}
-      <label className="dp-close-note">
-        One-line note
-        <input
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="What mattered today?"
-          value={note}
-        />
-      </label>
-      <button className="dp-cta-btn" disabled={busy} onClick={() => void onClose()} type="button">
-        {busy ? "Closing…" : "Close"}
-      </button>
-    </div>
+          </div>
+          {leftovers.length ? (
+            <>
+              <div className="dp-lab">Not finished. What happens to each?</div>
+              <ul className="dp-close-leftovers">
+                {leftovers.map((entry) => (
+                  <li key={entry.itemId}>
+                    <span>{String(entry.item?.title || "Untitled")}</span>
+                    <div className="dp-seg">
+                      {(["tomorrow", "leave", "drop"] as LeftoverChoice[]).map((c) => (
+                        <button
+                          className={choices[entry.itemId] === c ? "is-active" : ""}
+                          key={c}
+                          onClick={() =>
+                            setChoices((prev) => ({ ...prev, [entry.itemId]: c }))
+                          }
+                          type="button"
+                        >
+                          {c === "tomorrow" ? "Tomorrow" : c === "leave" ? "Leave" : "Drop"}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <label className="dp-close-note">
+            One line about today
+            <textarea
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="What mattered today?"
+              value={note}
+            />
+          </label>
+          <p className="dp-board-meta" style={{ marginTop: 14 }}>
+            Focus score for today: {score ?? "—"}. No streaks, no penalties — tomorrow starts empty.
+          </p>
+        </div>
+        <div className="dp-sf">
+          <button className="dp-btn" onClick={onCancel} type="button">
+            Not yet
+          </button>
+          <button className="dp-btn pri" disabled={busy} onClick={() => void onClose()} type="button">
+            {busy ? "Closing…" : "Close the day"}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

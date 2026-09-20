@@ -192,9 +192,12 @@ export function DailyPlanOverlay({
   };
 
   const focusScore = computeFocusScore(day.plan, keyItemId);
+  const plannedCount = day.plan?.entries.length || 0;
+  const doneCount = day.plan?.entries.filter((e) => e.doneToday).length || 0;
+  const meetingCount = dayEvents.events.length;
 
   const board = (
-    <>
+    <div className="dp-panel">
       <WeekStrip
         activeKey={boardDateKey}
         onSelectDay={(key) => {
@@ -205,74 +208,71 @@ export function DailyPlanOverlay({
         todayKey={todayKey}
       />
       <div className="dp-board-header">
-        <h3>{labelForKey(boardDateKey, todayKey)}</h3>
+        <div>
+          <h3>{labelForKey(boardDateKey, todayKey)}</h3>
+          <div className="dp-board-meta">
+            {plannedCount} planned, {doneCount} done
+            {meetingCount ? ` · ${meetingCount} meetings` : ""}.
+          </div>
+        </div>
         {boardDateKey === todayKey && focusScore != null ? (
           <span
             className="dp-focus-ring"
+            style={{ ["--v" as string]: focusScore }}
             title="Growth 3 · Fires 2 · Extras 1"
           >
-            {focusScore}
+            <span>{focusScore}</span>
           </span>
         ) : null}
-        {boardDateKey !== todayKey ? (
-          <button
-            className="dp-link"
-            onClick={() => setBoardDateKey(todayKey)}
-            type="button"
-          >
-            Back to today
-          </button>
-        ) : null}
-        {boardDateKey === todayKey && day.plan?.closedAt ? (
-          <button
-            className="dp-link"
-            onClick={() =>
-              user?.uid &&
-              void updatePlanFields(user.uid, boardDateKey, { closedAt: null })
-            }
-            type="button"
-          >
-            Reopen day
-          </button>
-        ) : null}
-        {boardDateKey === todayKey && !day.plan?.closedAt ? (
-          <button
-            className="dp-link"
-            onClick={() => setCloseOpen(true)}
-            type="button"
-          >
-            Close the day
-          </button>
-        ) : null}
-        {boardDateKey >= todayKey && !day.plan?.closedAt ? (
-          <button
-            className="dp-link"
-            onClick={() => {
-              if (!user?.uid) return;
-              void (async () => {
-                await runPlanMyDayProposal({
-                  uid: user.uid,
-                  dateKey: boardDateKey,
-                  items,
-                  leftovers: day.leftovers,
-                  events: dayEvents.events,
-                  plannedIds,
-                });
-                setProposalOpen(true);
-              })();
-            }}
-            type="button"
-          >
-            Plan my day
-          </button>
-        ) : null}
+        <div className="dp-acts">
+          {boardDateKey !== todayKey ? (
+            <button className="dp-btn" onClick={() => setBoardDateKey(todayKey)} type="button">
+              Back to today
+            </button>
+          ) : null}
+          {boardDateKey === todayKey && day.plan?.closedAt ? (
+            <button
+              className="dp-btn"
+              onClick={() =>
+                user?.uid &&
+                void updatePlanFields(user.uid, boardDateKey, { closedAt: null })
+              }
+              type="button"
+            >
+              Reopen day
+            </button>
+          ) : null}
+          {boardDateKey === todayKey && !day.plan?.closedAt ? (
+            <button className="dp-btn" onClick={() => setCloseOpen(true)} type="button">
+              Close the day
+            </button>
+          ) : null}
+          {boardDateKey >= todayKey && !day.plan?.closedAt ? (
+            <button
+              className="dp-btn pri"
+              onClick={() => {
+                if (!user?.uid) return;
+                void (async () => {
+                  await runPlanMyDayProposal({
+                    uid: user.uid,
+                    dateKey: boardDateKey,
+                    items,
+                    leftovers: day.leftovers,
+                    events: dayEvents.events,
+                    plannedIds,
+                  });
+                  setProposalOpen(true);
+                })();
+              }}
+              type="button"
+            >
+              Plan my day
+            </button>
+          ) : null}
+        </div>
       </div>
       {day.plan?.pendingProposal && !proposalOpen ? (
-        <button
-          className="dp-cta"
-          onClick={() => setProposalOpen(true)}
-          type="button"
-        >
+        <button className="dp-banner" onClick={() => setProposalOpen(true)} type="button">
           Odysseus proposed a plan · Review
         </button>
       ) : null}
@@ -319,31 +319,35 @@ export function DailyPlanOverlay({
         projects={projects}
         readOnly={readOnly}
       />
-    </>
+    </div>
   );
 
   const tray = (
-    <PlanningTray
-      leftovers={day.leftovers}
-      onAdd={(itemId, bucket) => void day.actions.add(itemId, bucket)}
-      onMoveAll={(bucket) => void onMoveAllLeftovers(bucket)}
-      plannedIds={plannedIds}
-      todayKey={todayKey}
-    >
-      {view === "items" && !day.plan?.entries.length ? (
-        <DailyPlanCTA onPlan={() => setView("today")} />
-      ) : null}
-      {listRenderer({
-        renderRowExtra: (item) => (
-          <RowTodayAffordance
-            item={item}
-            onAdd={(itemId, bucket) => void day.actions.add(itemId, bucket)}
-            onMove={(itemId, bucket) => void day.actions.move(itemId, bucket, 0)}
-            plannedBucket={plannedBucketById.get(item.id) || null}
-          />
-        ),
-      })}
-    </PlanningTray>
+    <div className="dp-panel">
+      <PlanningTray
+        leftovers={day.leftovers}
+        onAdd={(itemId, bucket) => void day.actions.add(itemId, bucket)}
+        onMoveAll={(bucket) => void onMoveAllLeftovers(bucket)}
+        plannedIds={plannedIds}
+        todayKey={todayKey}
+      >
+        {!day.plan?.entries.length && (desktop || view === "items") ? (
+          <div className="dp-cta-wrap">
+            <DailyPlanCTA onPlan={() => setView("today")} />
+          </div>
+        ) : null}
+        {listRenderer({
+          renderRowExtra: (item) => (
+            <RowTodayAffordance
+              item={item}
+              onAdd={(itemId, bucket) => void day.actions.add(itemId, bucket)}
+              onMove={(itemId, bucket) => void day.actions.move(itemId, bucket, 0)}
+              plannedBucket={plannedBucketById.get(item.id) || null}
+            />
+          ),
+        })}
+      </PlanningTray>
+    </div>
   );
 
   const eventsCol =

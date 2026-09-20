@@ -7,9 +7,7 @@ import type { JoinedEntry } from "../useDayPlan";
 import type { PlanItem } from "../types";
 
 function workKind(item: PlanItem | null): string {
-  const raw = String(
-    item?.workItemType || item?.type || item?.itemType || "",
-  ).toLowerCase();
+  const raw = String(item?.workItemType || item?.type || item?.itemType || "").toLowerCase();
   if (raw.includes("epic")) return "epic";
   if (raw.includes("pbi") || raw.includes("feature") || raw.includes("story")) return "pbi";
   if (raw.includes("task") || raw.includes("bug") || raw.includes("subtask") || raw.includes("ticket")) {
@@ -30,7 +28,10 @@ function ProjectChip({
   const label = project?.title || project?.name || "";
   if (!label) return null;
   return (
-    <span className="dp-project-chip" style={project?.color ? { borderColor: project.color } : undefined}>
+    <span
+      className="dp-project-chip"
+      style={project?.color ? { color: project.color } : undefined}
+    >
       {label}
     </span>
   );
@@ -68,8 +69,12 @@ export function PlanEntryCard({
   const kind = workKind(item);
   const isProgressOnly = kind === "epic" || kind === "pbi";
   const due = item?.dueDate || item?.targetDate || null;
+  const dueStr = due ? String(due).slice(0, 10) : null;
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const late = Boolean(dueStr && dueStr < todayKey && !entry.doneToday);
   const tone = taskDueStatus({ status: item?.status, dueDate: due });
-  const bucket = BUCKETS[entry.bucket];
+  const timeBlock = entry.timeBlock;
 
   if (!item) {
     return (
@@ -89,7 +94,6 @@ export function PlanEntryCard({
       className={`dp-entry ${entry.doneToday ? "is-done-today" : ""} ${isKey ? "is-key" : ""}`}
       data-bucket={entry.bucket}
       data-testid="daily-plan-entry"
-      style={isKey ? { borderLeftColor: bucket.fg } : undefined}
     >
       {!readOnly ? (
         <button
@@ -106,15 +110,18 @@ export function PlanEntryCard({
       ) : (
         <span className={`dp-entry-check ${entry.doneToday ? "is-checked" : ""}`} />
       )}
-      <button
-        className="dp-entry-title"
-        onClick={() => onOpen(item.id)}
-        type="button"
-      >
+      <button className="dp-entry-title" onClick={() => onOpen(item.id)} type="button">
         {String(item.title || "Untitled")}
       </button>
+      {timeBlock ? (
+        <span className="dp-clock">
+          {formatBlock(timeBlock)}
+        </span>
+      ) : null}
       <ProjectChip item={item} projects={projects} />
-      {due ? <span className="dp-entry-due">{String(due).slice(0, 10)}</span> : null}
+      {dueStr ? (
+        <span className={`dp-entry-due ${late ? "is-late" : ""}`}>{formatDue(dueStr)}</span>
+      ) : null}
       <StatusLight label={false} size="sm" status={tone} />
       {!readOnly ? (
         <button
@@ -198,10 +205,28 @@ export function PlanEntryCard({
   );
 }
 
+function formatDue(iso: string) {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatBlock(block: { start?: { toDate?: () => Date }; end?: { toDate?: () => Date } }) {
+  try {
+    const s = block.start?.toDate?.();
+    const e = block.end?.toDate?.();
+    if (!s || !e) return null;
+    const fmt = (d: Date) =>
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return `${fmt(s)}–${fmt(e)}`;
+  } catch {
+    return null;
+  }
+}
+
 export function BucketIcon({ name }: { name: "flame" | "trending-up" | "sparkles" }) {
-  if (name === "flame") return <Flame size={14} />;
-  if (name === "trending-up") return <TrendingUp size={14} />;
-  return <Sparkles size={14} />;
+  if (name === "flame") return <Flame size={15} />;
+  if (name === "trending-up") return <TrendingUp size={15} />;
+  return <Sparkles size={15} />;
 }
 
 export function usePlannedIds(entriesByBucket: Record<PlanBucket, JoinedEntry[]>) {

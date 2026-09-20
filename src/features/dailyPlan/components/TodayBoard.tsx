@@ -123,13 +123,12 @@ export function TodayBoard({
               className="dp-bucket"
               data-bucket={bucketKey}
               key={bucketKey}
-              style={{ background: meta.bg, borderColor: meta.border }}
             >
               <header className="dp-bucket-head">
-                <span className="dp-bucket-icon" style={{ color: meta.fg }}>
+                <span className="dp-bucket-icon">
                   <BucketIcon name={meta.icon} />
                 </span>
-                <strong style={{ color: meta.fg }}>{meta.label}</strong>
+                <strong>{meta.label}</strong>
                 <span className="dp-bucket-count">{entries.length}</span>
                 {!readOnly ? (
                   <button
@@ -138,7 +137,7 @@ export function TodayBoard({
                     onClick={() => setPickerBucket(bucketKey)}
                     type="button"
                   >
-                    <Plus size={14} />
+                    <Plus size={11} />
                   </button>
                 ) : null}
               </header>
