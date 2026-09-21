@@ -9182,9 +9182,12 @@ export function DelivereeWorkspace() {
           inboxBadge={0}
           inboxRows={[]}
           isAdmin={canManageMembers}
-          items={myWorkTasks.map((t) => ({
+          items={openTasks.map((t) => ({
             id: String(t.id),
             title: entityTitle(t),
+            status: String(t.status || ""),
+            dueDate: (t.dueDate || t.targetDate || null) as string | null,
+            projectId: t.projectId ? String(t.projectId) : null,
           }))}
           keyTaskTitle={null}
           myWorkList={() => (
@@ -9224,6 +9227,9 @@ export function DelivereeWorkspace() {
             title: String((n as { title?: string }).title || "Untitled"),
             visibility: String((n as { visibility?: string }).visibility || "personal"),
             updatedAt: (n as { updatedAt?: unknown }).updatedAt,
+            projectId: (n as { projectId?: string | null }).projectId
+              ? String((n as { projectId?: string | null }).projectId)
+              : null,
           }))}
           onCreate={async ({ kind, title }) => {
             if (kind === "project") {
@@ -9252,6 +9258,15 @@ export function DelivereeWorkspace() {
           onOpenItem={(id) => openWorkOrRecord(id)}
           onOpenNote={(id) => navigate(`/notes?note=${encodeURIComponent(id)}`)}
           onOpenOdysseus={(prompt) => {
+            if (lens.kind === "project" && lens.projectId) {
+              const p = projects.find((row) => row.id === lens.projectId);
+              void openOdysseusPanel({
+                kind: "project",
+                entityId: lens.projectId,
+                label: prompt || entityTitle(p) || "Project",
+              });
+              return;
+            }
             void openOdysseusPanel({
               kind: "day",
               entityId: null,
@@ -9276,6 +9291,11 @@ export function DelivereeWorkspace() {
             title: entityTitle(p),
             stage: String((p as { stage?: string }).stage || (p as { status?: string }).status || ""),
             health: String((p as { health?: string }).health || ""),
+            owner: String(
+              (p as { owner?: string }).owner ||
+                (p as { ownerName?: string }).ownerName ||
+                "",
+            ),
             updatedAt: (p as { updatedAt?: unknown }).updatedAt,
             nextCheckpoint: (p as { nextCheckpoint?: unknown }).nextCheckpoint,
           }))}
