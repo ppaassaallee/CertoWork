@@ -4,6 +4,7 @@ import { MobileChromeProvider } from "./MobileChromeContext";
 import { PhoneHome } from "./pages/PhoneHome";
 import { PhoneMyWork } from "./pages/PhoneMyWork";
 import { PhoneProjects } from "./pages/PhoneProjects";
+import { PhoneProjectDetail } from "./pages/PhoneProjectDetail";
 import { PhoneNotes } from "./pages/PhoneNotes";
 import { PhoneInbox, type InboxRow } from "./pages/PhoneInbox";
 import { PhoneSearch } from "./pages/PhoneSearch";
@@ -71,8 +72,20 @@ export function PhoneOverlayHost({
     updatedAt?: unknown;
   }>;
   tables?: Array<{ id: string; name: string; recordCount?: number; icon?: string }>;
-  notes: Array<{ id: string; title: string; visibility?: string; updatedAt?: unknown }>;
-  items: Array<{ id: string; title: string }>;
+  notes: Array<{
+    id: string;
+    title: string;
+    visibility?: string;
+    updatedAt?: unknown;
+    projectId?: string | null;
+  }>;
+  items: Array<{
+    id: string;
+    title: string;
+    status?: string;
+    dueDate?: string | null;
+    projectId?: string | null;
+  }>;
   inboxRows: InboxRow[];
   inboxBadge: number;
   myWorkList: () => ReactNode;
@@ -100,23 +113,50 @@ export function PhoneOverlayHost({
   const [odyOpen, setOdyOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
+  const projectDetailId = useMemo(() => {
+    const match = pathname.match(/^\/(?:work\/)?projects\/([^/]+)/);
+    if (!match) return null;
+    const id = decodeURIComponent(match[1]);
+    if (!id || id === "health") return null;
+    return id;
+  }, [pathname]);
+
+  const detailProject = useMemo(
+    () => (projectDetailId ? projects.find((p) => p.id === projectDetailId) || null : null),
+    [projectDetailId, projects],
+  );
+
+  const isProjectDetail = Boolean(projectDetailId);
+
   const createKind: CreateKind =
-    tab === "projects" ? "project" : tab === "notes" ? "note" : "item";
+    isProjectDetail
+      ? "item"
+      : tab === "projects"
+        ? "project"
+        : tab === "notes"
+          ? "note"
+          : "item";
 
   const odysseusAnchor = useMemo(() => {
+    if (projectDetailId && detailProject) return `Project · ${detailProject.title}`;
     if (tab === "my-work") return "My Work";
     if (tab === "projects") return "Projects · Overview";
     if (tab === "notes") return "Notes";
     if (tab === "inbox") return "Inbox";
     return "Home";
-  }, [tab]);
+  }, [tab, projectDetailId, detailProject]);
 
   const suggestions = useMemo(() => {
+    if (projectDetailId && detailProject)
+      return [
+        `What needs attention in ${detailProject.title}?`,
+        "Summarize open items and risks",
+      ];
     if (tab === "projects")
       return ["What needs attention in the portfolio?", "Which projects are at risk?"];
     if (tab === "my-work") return ["What's on fire?", "Move the extras to tomorrow"];
     return ["What should I focus on?", "Summarize my day"];
-  }, [tab]);
+  }, [tab, projectDetailId, detailProject]);
 
   const attention = projects
     .filter((p) => /risk|block|overdue/i.test(String(p.health || "")))
@@ -134,10 +174,11 @@ export function PhoneOverlayHost({
 
   const isHome = tab === "home" && !pathname.startsWith("/settings");
   const isMyWork = tab === "my-work";
-  const isProjects = tab === "projects" && !pathname.includes("/work/projects/");
+  const isProjects = tab === "projects" && !isProjectDetail;
   const isNotes = tab === "notes";
   const isInbox = tab === "inbox";
-  const showPhonePage = isHome || isMyWork || isProjects || isNotes || isInbox;
+  const showPhonePage =
+    isHome || isMyWork || isProjects || isProjectDetail || isNotes || isInbox;
 
   return (
     <MobileChromeProvider>
@@ -184,6 +225,19 @@ export function PhoneOverlayHost({
           ) : null}
           {isProjects ? (
             <PhoneProjects attention={attention} kpis={kpis} projects={projects} tables={tables} />
+          ) : null}
+          {isProjectDetail && projectDetailId ? (
+            <PhoneProjectDetail
+              items={items}
+              notes={notes}
+              onAskOdysseus={() =>
+                setOdyOpen(true)
+              }
+              onOpenItem={onOpenItem}
+              onOpenNote={onOpenNote}
+              project={detailProject}
+              projectId={projectDetailId}
+            />
           ) : null}
           {isNotes ? (
             <PhoneNotes
