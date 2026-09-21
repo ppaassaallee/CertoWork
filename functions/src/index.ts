@@ -171,3 +171,10 @@ export { generateBrief } from "./brief/generateBrief";
 export { dailyBriefRoutineTick } from "./brief/dailyBriefRoutine";
 export { signalRoutinesTick } from "./signals/signalRoutines";
 export { allocateInvoiceNumber, flipOverdueInvoices, generateProjectInvoices } from "./billing/invoiceFns";
+export {
+  recomputeTableRecord,
+  onTableEventCreated,
+  dateReachedScan,
+  queryRecords,
+} from "./tables/computeFns";
+export { provisionTableTemplate } from "./tables/provisionTemplate";

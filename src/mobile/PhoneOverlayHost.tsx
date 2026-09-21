@@ -37,6 +37,7 @@ export function PhoneOverlayHost({
   inboxBadge,
   myWorkList,
   dailyPlanSlot,
+  tables,
   onNavigate,
   onOpenOdysseus,
   onOpenItem,
@@ -69,6 +70,7 @@ export function PhoneOverlayHost({
     nextCheckpoint?: unknown;
     updatedAt?: unknown;
   }>;
+  tables?: Array<{ id: string; name: string; recordCount?: number; icon?: string }>;
   notes: Array<{ id: string; title: string; visibility?: string; updatedAt?: unknown }>;
   items: Array<{ id: string; title: string }>;
   inboxRows: InboxRow[];
@@ -181,7 +183,7 @@ export function PhoneOverlayHost({
             )
           ) : null}
           {isProjects ? (
-            <PhoneProjects attention={attention} kpis={kpis} projects={projects} />
+            <PhoneProjects attention={attention} kpis={kpis} projects={projects} tables={tables} />
           ) : null}
           {isNotes ? (
             <PhoneNotes

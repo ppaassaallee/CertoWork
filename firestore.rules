@@ -1629,6 +1629,19 @@ service cloud.firestore {
         && canWriteTable(tableDoc(incoming().tableId));
       allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
     }
+    match /tableEvents/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+    match /dashboards/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
+    }
+    match /tableTemplates/{id} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
     match /table_forms/{id} {
       allow get: if resource != null
         && resource.data.token == id
