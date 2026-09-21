@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -52,7 +53,7 @@ function pillTone(status: Invoice["status"]) {
 export function BillingScreen({
   workspaceId,
   workspaceName,
-  projectFilter,
+  projectFilter: projectFilterProp,
   uid,
 }: {
   workspaceId: string;
@@ -61,6 +62,8 @@ export function BillingScreen({
   uid?: string;
 }) {
   const enabled = useBillingEnabled();
+  const [params] = useSearchParams();
+  const projectFilter = projectFilterProp || params.get("project") || undefined;
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tab, setTab] = useState("all");
   const [view, setView] = useState("list");

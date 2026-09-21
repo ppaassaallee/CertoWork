@@ -97,6 +97,8 @@ import {
   type ChargeLineType,
 } from "../lib/financeChargeTypes";
 import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
+import { ProjectCostsBillingSummary } from "../features/billing";
+import { useBillingEnabled } from "../features/flags/featureUserFlags";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { collabProjectPath } from "../lib/collabModule";
@@ -3423,6 +3425,34 @@ function rowHours(row: any, actual = false) {
   );
 }
 
+function ProjectCostsBillingBridge({
+  projectId,
+  recurring,
+  initialInvestment,
+  outstanding,
+  currency,
+}: {
+  projectId: string;
+  recurring: number;
+  initialInvestment: number;
+  outstanding: number;
+  currency: string;
+}) {
+  const billingOn = useBillingEnabled();
+  const navigate = useNavigate();
+  if (!billingOn) return null;
+  return (
+    <ProjectCostsBillingSummary
+      currency={currency}
+      initialInvestment={initialInvestment}
+      onOpenBilling={() => navigate(`/billing?project=${encodeURIComponent(projectId)}`)}
+      outstanding={outstanding}
+      overdue={0}
+      recurring={recurring}
+    />
+  );
+}
+
 function ProjectFinanceLedger({
   project,
   templates = [],
@@ -3859,6 +3889,13 @@ function ProjectFinanceLedger({
 
   return (
     <section className={`do-finance-ledger ${compact ? "is-compact" : ""}`}>
+      <ProjectCostsBillingBridge
+        outstanding={summary.outstanding}
+        projectId={project.id}
+        recurring={Number(project.monthlyRecurring || project.recurringAmount || summary.actualRevenue || 0)}
+        initialInvestment={Number(project.initialInvestment || 0)}
+        currency={String(project.currency || "USD")}
+      />
       <div className="do-finance-summary">
         <div>
           <span>Actual cost</span>

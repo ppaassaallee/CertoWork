@@ -55,5 +55,14 @@
 ## Assumptions
 See `ASSUMPTIONS.md`.
 
+## Continuity (post–Step 30)
+- Wired `ProjectCostsBillingSummary` into project finance ledger (flag on → Open in Billing).
+- Wired calendar **Month** mode into My Work week grid.
+- Docked Odysseus signals panel on Daily Brief Home.
+- Desktop icon rail appears when brief/billing flags are on.
+- My Work **Grouped list** toggle (`localStorage.certoListLanguage=1`).
+- Item modal: Ask Odysseus to summarize control (Certo blue gradient border).
+- Rebased onto main after Tables (#183): kept `flags.tables` + shell wiring; re-applied Brief/Billing host wiring.
+
 ## Deploy pending
 See `DEPLOY.md` — rules, indexes, functions, seed script.

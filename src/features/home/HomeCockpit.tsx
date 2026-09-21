@@ -30,6 +30,7 @@ import {
   PrepareSheet,
   useDailyBrief,
 } from "../brief";
+import { OdysseusSignalsPanel } from "../signals";
 import "./home.css";
 
 export type HomeCockpitProps = {
@@ -373,7 +374,9 @@ export function HomeCockpit({
 
   if (dailyBriefOn) {
     return (
-      <div className="cw-home" data-testid="home-cockpit-brief">
+      <div className="cw-home" data-testid="home-cockpit-brief" style={{ display: "flex", gap: 0, alignItems: "stretch" }}>
+        <OdysseusSignalsPanel uid={userId} workspaceId={workspaceId} />
+        <div style={{ flex: 1, minWidth: 0 }}>
         <DailyBriefHome
           brief={brief}
           loading={briefLoading}
@@ -399,6 +402,7 @@ export function HomeCockpit({
           open={prepareOpen}
           openItems={model.weekItems.slice(0, 5).map((i) => ({ id: i.id, title: i.title }))}
         />
+        </div>
       </div>
     );
   }

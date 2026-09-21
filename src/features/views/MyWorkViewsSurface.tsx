@@ -21,6 +21,17 @@ import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { WorkItemsCenter } from "../../components/WorkItemsCenter";
 import type { WorkLane } from "../../lib/projectPortfolio";
+import { GroupedItemsList } from "../lists/GroupedItemsList";
+
+const LIST_LANG_KEY = "certoListLanguage";
+
+function listLanguageOn() {
+  try {
+    return localStorage.getItem(LIST_LANG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** Props forwarded into the Asana-style list body (WorkItemsCenter). */
 export type MyWorkListBodyProps = {
@@ -126,6 +137,7 @@ export function MyWorkViewsSurface({
     [workspaceId, actorId, defaultView],
   );
   const [remoteViews, setRemoteViews] = useState<SavedView[]>([]);
+  const [groupedLook, setGroupedLook] = useState(() => listLanguageOn());
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
 
@@ -275,7 +287,55 @@ export function MyWorkViewsSurface({
         </div>
       ) : null}
       <div className="cw-views-body is-asana-list" data-testid="my-work-asana-list">
-        {listRenderer ? (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button
+            onClick={() => {
+              const next = !groupedLook;
+              setGroupedLook(next);
+              try {
+                if (next) localStorage.setItem(LIST_LANG_KEY, "1");
+                else localStorage.removeItem(LIST_LANG_KEY);
+              } catch {
+                /* ignore */
+              }
+            }}
+            style={{
+              border: "1px solid var(--c-line, #ECEEF3)",
+              borderRadius: 8,
+              background: groupedLook ? "rgba(37,71,196,.08)" : "#fff",
+              color: "var(--c-blue, #2547C4)",
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "4px 10px",
+              cursor: "pointer",
+            }}
+            type="button"
+          >
+            {groupedLook ? "Classic list" : "Grouped list"}
+          </button>
+        </div>
+        {groupedLook && !listRenderer ? (
+          <GroupedItemsList
+            items={appliedRows.map((row) => ({
+              id: row.id,
+              title: String(row.title || row.name || "Untitled"),
+              status: String(row.status || "Backlog"),
+              priority: row.priority != null ? String(row.priority) : undefined,
+              projectName: projects.find((p) => p.id === row.projectId)?.title ||
+                projects.find((p) => p.id === row.projectId)?.name,
+              due: row.dueDate ? String(row.dueDate) : row.due ? String(row.due) : null,
+              assignees: Array.isArray(row.assignees)
+                ? row.assignees.map((a: unknown) => String(a))
+                : row.assigneeId
+                  ? [String(row.assigneeId)]
+                  : [],
+              monoId: String(row.key || row.id).slice(0, 8),
+            }))}
+            onComplete={(id) => void onUpdateTask(id, { status: "done" })}
+            onDueChange={(id, due) => void onUpdateTask(id, { dueDate: due })}
+            onOpen={(id) => listBody.onSelectItem(id)}
+          />
+        ) : listRenderer ? (
           listRenderer({ rows: appliedRows, view: active, memberIds: meMemberIds })
         ) : (
           <WorkItemsCenter
