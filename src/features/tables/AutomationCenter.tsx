@@ -48,7 +48,6 @@ export function AutomationCenter({ open, table, selectedRecord, onClose }: Autom
   useEffect(() => {
     if (!open) return;
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, table.id, table.workspaceId]);
 
   const colLabel = (id: string) => table.columns.find((c) => c.id === id)?.name || id;

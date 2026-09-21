@@ -78,7 +78,6 @@ export function BillingScreen({
   useEffect(() => {
     if (!enabled || !workspaceId) return;
     void reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, workspaceId, projectFilter]);
 
   const filtered = useMemo(() => {
