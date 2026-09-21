@@ -62,5 +62,7 @@ See `ASSUMPTIONS.md`.
 - Desktop icon rail appears when brief/billing flags are on.
 - My Work **Grouped list** toggle (`localStorage.certoListLanguage=1`).
 - Item modal: Ask Odysseus to summarize control (Certo blue gradient border).
-- Fixed lint errors (`react-hooks/exhaustive-deps` disable comments).
+- Rebased onto main after Tables (#183): kept `flags.tables` + shell wiring; re-applied Brief/Billing host wiring.
 
+## Deploy pending
+See `DEPLOY.md` — rules, indexes, functions, seed script.

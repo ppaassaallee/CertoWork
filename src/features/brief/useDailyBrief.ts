@@ -61,7 +61,7 @@ export function useDailyBrief(opts: {
     return () => {
       cancelled = true;
     };
-  }, [opts.enabled, opts.uid, opts.gather.dateKey, refresh]);
+  }, [opts.enabled, opts.uid, opts.gather.dateKey]);
 
   return { brief, loading, error, refresh };
 }

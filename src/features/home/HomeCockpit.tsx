@@ -329,21 +329,19 @@ export function HomeCockpit({
     () => ({
       dateKey,
       tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-      meetings: (calendarEvents || []).slice(0, 8).map((e, i) => ({
-        eventKey: String(e.id || `ev-${i}`),
-        title: String(e.title || "Meeting"),
-        start: String(e.start || dateKey),
-        end: String(e.end || dateKey),
-        provider: undefined,
+      meetings: (calendarEvents || []).slice(0, 8).map((e: any, i: number) => ({
+        eventKey: String(e.id || e.eventKey || `ev-${i}`),
+        title: String(e.title || e.summary || "Meeting"),
+        start: String(e.start || e.startAt || dateKey),
+        end: String(e.end || e.endAt || dateKey),
+        provider: e.provider ? String(e.provider) : undefined,
       })),
       approvalCount: reviewItems.length + accessRequests.length,
       overdueCount: model.overdueItems.length,
       plannedToday: model.todayItems.length || dayPlanItems.length,
       focusScore: scoreValue || "—",
-      blockedProjects: (projects || []).filter((p) =>
-        String((p as { status?: string; health?: string }).status || (p as { health?: string }).health || "")
-          .toLowerCase()
-          .includes("block"),
+      blockedProjects: (projects || []).filter((p: any) =>
+        String(p.status || p.health || "").toLowerCase().includes("block"),
       ).length,
       freeAfternoon: (calendarEvents || []).length <= 2,
       keyThread: model.todayItems[0]?.title,

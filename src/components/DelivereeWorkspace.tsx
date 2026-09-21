@@ -147,7 +147,11 @@ import {
 import { HomeAttention } from "../pages/HomeAttention";
 import { HomeCockpit } from "../features/home";
 import { BillingScreen } from "../features/billing";
-import { useBillingEnabled, useDailyBriefEnabled } from "../features/flags/featureUserFlags";
+import {
+  useBillingEnabled,
+  useDailyBriefEnabled,
+  useTablesEnabled,
+} from "../features/flags/featureUserFlags";
 import { RoutineBuilder } from "../features/routines/RoutineBuilder";
 import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
 import { DesktopIconRail } from "../features/shell/DesktopRail";
@@ -246,6 +250,8 @@ import { MagicProjectModal } from "./MagicProjectModal";
 import { NotesWorkspace } from "./NotesWorkspace";
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
+import { SystemTemplateGallery } from "../features/tables/SystemTemplateGallery";
+import { DashboardPage } from "../features/tables/DashboardPage";
 import { DirectionPage } from "../features/direction/DirectionPage";
 import { TablesHub } from "../features/tables/TablesHub";
 import { WorkloadView } from "../features/workload/WorkloadView";
@@ -436,7 +442,8 @@ export type CenterView =
   | "routines"
   | "invoices"
   | "feedback"
-  | "requests";
+  | "requests"
+  | "tables-dashboard";
 
 export function DelivereeWorkspace() {
   const {
@@ -451,6 +458,7 @@ export function DelivereeWorkspace() {
   const dailyPlanEnabled = useDailyPlanEnabled();
   const billingEnabled = useBillingEnabled();
   const dailyBriefEnabled = useDailyBriefEnabled();
+  const tablesEnabled = useTablesEnabled();
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -665,6 +673,8 @@ export function DelivereeWorkspace() {
       ? "notes"
       : lens.kind === "tables"
       ? "tables"
+      : lens.kind === "tables-dashboard"
+      ? "tables-dashboard"
       : lens.kind === "dashboard"
       ? "dashboard"
       : lens.kind === "workload"
@@ -770,6 +780,7 @@ export function DelivereeWorkspace() {
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
+  const [systemTemplateGalleryOpen, setSystemTemplateGalleryOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
   const [agentBuilderOpen, setAgentBuilderOpen] = useState(false);
@@ -1581,6 +1592,9 @@ export function DelivereeWorkspace() {
   }, [lens, visibleTables, archivedTables, deletedTables]);
   const openCreateTableWizard = () => {
     setCreateTableWizardOpen(true);
+  };
+  const openSystemTemplateGallery = () => {
+    setSystemTemplateGalleryOpen(true);
   };
   const openTasks = useMemo(
     () => tasks.filter((task) => !isClosed(task.status)),
@@ -7080,6 +7094,7 @@ export function DelivereeWorkspace() {
             )}
           </div>
 
+          {tablesEnabled ? (
           <div className="do-sidebar-section" data-testid="sidebar-tables">
             <div className="do-section-head">
               <button
@@ -7107,7 +7122,7 @@ export function DelivereeWorkspace() {
                 {visibleTables.length === 0 ? (
                   <button
                     className="do-empty-link"
-                    onClick={() => openCreateTableWizard()}
+                    onClick={() => openSystemTemplateGallery()}
                     type="button"
                   >
                     {t("tables.empty.tables")}
@@ -7141,9 +7156,18 @@ export function DelivereeWorkspace() {
                     </div>
                   ))
                 )}
+                <button
+                  className="do-empty-link"
+                  data-testid="tables-from-template"
+                  onClick={() => openSystemTemplateGallery()}
+                  type="button"
+                >
+                  {t("tables.fromTemplate")}
+                </button>
               </div>
             )}
           </div>
+          ) : null}
 
           <div className="do-sidebar-section do-management do-mobile-advanced">
             <div className="do-section-head">
@@ -8947,7 +8971,19 @@ export function DelivereeWorkspace() {
             projects={projects}
             tasks={tasks}
           />
-        ) : centerView === "tables" ? (
+        ) : centerView === "tables-dashboard" && tablesEnabled && workspace ? (
+          <DashboardPage
+            dashboardId={lens.kind === "tables-dashboard" ? lens.dashboardId : "property-operations"}
+            workspaceId={workspace.id}
+            onOpenOdysseus={() =>
+              void openOdysseusPanel({
+                kind: "table",
+                entityId: lens.kind === "tables-dashboard" ? lens.dashboardId : "dashboard",
+                label: "Dashboard",
+              })
+            }
+          />
+        ) : centerView === "tables" && tablesEnabled ? (
           activeTable ? (
             <TablePage
               itemCandidates={openTasks.map((task) => ({
@@ -9063,6 +9099,10 @@ export function DelivereeWorkspace() {
               tables={visibleTables}
             />
           )
+        ) : centerView === "tables" && !tablesEnabled ? (
+          <div style={{ padding: 24 }}>
+            <p className="cw-tables-muted">Tables are off. Enable flags.tables to show this module.</p>
+          </div>
         ) : null}
       </main>
 
@@ -9285,6 +9325,12 @@ export function DelivereeWorkspace() {
             health: String((p as { health?: string }).health || ""),
             updatedAt: (p as { updatedAt?: unknown }).updatedAt,
             nextCheckpoint: (p as { nextCheckpoint?: unknown }).nextCheckpoint,
+          }))}
+          tables={visibleTables.map((t) => ({
+            id: t.id,
+            name: t.name,
+            recordCount: t.recordCount,
+            icon: t.icon,
           }))}
           userEmail={user?.email || ""}
           userName={user?.displayName || user?.email || "You"}
@@ -10757,6 +10803,47 @@ export function DelivereeWorkspace() {
           setSidebarOpen(false);
         }}
       />
+      {systemTemplateGalleryOpen && workspace && user ? (
+        <div
+          className="cw-tables-modal-scrim"
+          data-testid="system-template-modal"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(31,36,48,.4)",
+            zIndex: 90,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              maxWidth: 840,
+              width: "100%",
+              maxHeight: "90vh",
+              overflow: "auto",
+              boxShadow: "0 16px 48px rgba(31,36,48,.18)",
+            }}
+          >
+            <SystemTemplateGallery
+              workspaceId={workspace.id}
+              userId={user.uid}
+              onClose={() => setSystemTemplateGalleryOpen(false)}
+              onProvisioned={(tableIds, dashboardId) => {
+                const first = Object.values(tableIds)[0];
+                if (first) navigate(`/tables/${encodeURIComponent(first)}`);
+                else if (dashboardId) navigate(`/dashboards/${encodeURIComponent(dashboardId)}`);
+                setSystemTemplateGalleryOpen(false);
+                setSidebarOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {needsAlias && (
         <div className="do-alias-gate" role="dialog" aria-modal="true" aria-label="Choose a public alias">

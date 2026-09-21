@@ -73,23 +73,15 @@ export function BillingScreen({
   const [showAddView, setShowAddView] = useState(false);
   const [extraViews, setExtraViews] = useState<Array<{ id: string; type: ViewType; name: string }>>([]);
 
-  useEffect(() => {
-    if (!enabled || !workspaceId) return;
-    let cancelled = false;
-    (async () => {
-      const rows = await listInvoices(workspaceId);
-      if (cancelled) return;
-      setInvoices(projectFilter ? rows.filter((r) => r.projectId === projectFilter) : rows);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, workspaceId, projectFilter]);
-
   const reload = async () => {
     const rows = await listInvoices(workspaceId);
     setInvoices(projectFilter ? rows.filter((r) => r.projectId === projectFilter) : rows);
   };
+
+  useEffect(() => {
+    if (!enabled || !workspaceId) return;
+    void reload();
+  }, [enabled, workspaceId, projectFilter]);
 
   const filtered = useMemo(() => {
     let rows = filterByTab(invoices, tab);

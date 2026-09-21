@@ -12,12 +12,14 @@ import { listRecordLinks, unlinkRecord } from "../../lib/tables";
 import { useAuth } from "../../lib/AuthContext";
 import { t } from "../../lib/i18n";
 import { CellRenderer, type TableMember } from "./cells/RecordCells";
+import { RecordDrawerNav } from "./RecordDrawerNav";
 
 export type RecordPanelProps = {
   table: TableDoc;
   record: RecordDoc;
   members: TableMember[];
   activity?: RecordActivity[];
+  recordOrder?: string[];
   onClose(): void;
   onFieldChange(columnId: string, value: RecordValue): void;
   onComment?(text: string): void;
@@ -26,6 +28,8 @@ export type RecordPanelProps = {
   onLinkTicket?(): void;
   onLinkRecord?(): void;
   onOpenLink?(target: RecordLinkTarget): void;
+  onOpenRecord?(id: string): void;
+  onAskOdysseus?(): void;
 };
 
 function QuickChip({
@@ -48,6 +52,9 @@ function linkLabel(target: RecordLinkTarget) {
   if (target.type === "note") return t("tables.panel.linkNote");
   if (target.type === "ticket") return t("tables.panel.linkTicket");
   if (target.type === "record") return t("tables.panel.linkRecord");
+  if (target.type === "invoice") return "Invoice";
+  if (target.type === "item") return "Item";
+  if (target.type === "project") return "Project";
   return target.type;
 }
 
@@ -56,6 +63,7 @@ export function RecordPanel({
   record,
   members,
   activity = [],
+  recordOrder = [],
   onClose,
   onFieldChange,
   onComment,
@@ -64,6 +72,8 @@ export function RecordPanel({
   onLinkTicket,
   onLinkRecord,
   onOpenLink,
+  onOpenRecord,
+  onAskOdysseus,
 }: RecordPanelProps) {
   const { user } = useAuth();
   const titleColId = table.keyColumns.title;
@@ -150,6 +160,20 @@ export function RecordPanel({
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
           placeholder={t("tables.untitled")}
+        />
+        <RecordDrawerNav
+          canPrev={recordOrder.indexOf(record.id) > 0}
+          canNext={recordOrder.indexOf(record.id) >= 0 && recordOrder.indexOf(record.id) < recordOrder.length - 1}
+          onPrev={() => {
+            const i = recordOrder.indexOf(record.id);
+            if (i > 0) onOpenRecord?.(recordOrder[i - 1]);
+          }}
+          onNext={() => {
+            const i = recordOrder.indexOf(record.id);
+            if (i >= 0 && i < recordOrder.length - 1) onOpenRecord?.(recordOrder[i + 1]);
+          }}
+          fullPageHref={`/tables/${encodeURIComponent(table.id)}/records/${encodeURIComponent(record.id)}`}
+          onAskOdysseus={onAskOdysseus}
         />
         <button type="button" className="cw-tables-icon-btn" aria-label={t("tables.panel.close")} onClick={onClose}>
           <X size={16} />

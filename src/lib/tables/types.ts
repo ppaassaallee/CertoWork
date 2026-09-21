@@ -10,29 +10,87 @@ export type TableStatus = "active" | "archived" | "deleted";
 export type ColumnType =
   | "text"
   | "longtext"
+  | "longText"
   | "number"
   | "currency"
   | "date"
   | "status"
   | "dropdown"
   | "person"
+  | "people"
   | "tags"
   | "checkbox"
   | "url"
   | "email"
   | "phone"
   | "file"
+  | "files"
   | "relation"
+  | "link"
+  | "lookup"
+  | "rollup"
+  | "formula"
+  | "timeline"
   | "rating"
   | "progress"
   | "created_at"
+  | "createdAt"
   | "created_by"
-  | "updated_at";
+  | "createdBy"
+  | "updated_at"
+  | "updatedAt"
+  | "autoNumber"
+  | "ai"
+  | "button";
+
+export type SoftTint =
+  | "gray"
+  | "blue"
+  | "green"
+  | "yellow"
+  | "orange"
+  | "red"
+  | "purple"
+  | "teal";
+
+export type ColumnSummary =
+  | "none"
+  | "sum"
+  | "avg"
+  | "min"
+  | "max"
+  | "count"
+  | "countEmpty"
+  | "distribution";
+
+export type ColumnConfig = {
+  format?: "plain" | "currency" | "percent";
+  currency?: string;
+  decimals?: number;
+  options?: Array<{ id: string; label: string; color: SoftTint; done?: boolean }>;
+  multi?: boolean;
+  includeTime?: boolean;
+  targetTableId?: string;
+  twoWay?: boolean;
+  backlinkColumnId?: string;
+  viaColumnId?: string;
+  targetColumnId?: string;
+  fn?: "sum" | "count" | "avg" | "min" | "max" | "countIf";
+  countIfValue?: unknown;
+  expression?: string;
+  resultType?: "number" | "text" | "boolean" | "date" | "option";
+  prompt?: string;
+  inputColumnIds?: string[];
+  refresh?: "manual" | "onChange";
+  maxFiles?: number;
+};
 
 export type StatusOption = {
   id: string;
   label: string;
   tone: "neutral" | "info" | "success" | "warning" | "danger" | "purple";
+  color?: SoftTint;
+  done?: boolean;
 };
 
 export type Column = {
@@ -41,15 +99,20 @@ export type Column = {
   type: ColumnType;
   width?: number;
   required?: boolean;
+  unique?: boolean;
+  frozen?: boolean;
+  hidden?: boolean;
+  default?: unknown;
+  summary?: ColumnSummary;
+  config?: ColumnConfig;
   options?: StatusOption[];
   tagOptions?: string[];
-  currency?: "USD" | "GTQ" | "MXN" | "COP" | "CLP";
+  currency?: "USD" | "GTQ" | "MXN" | "COP" | "CLP" | string;
   relation?: {
     to: "task" | "project" | "note" | "ticket" | "record";
     tableId?: string;
     multiple?: boolean;
   };
-  hidden?: boolean;
 };
 
 export type KeyColumns = {
@@ -59,7 +122,21 @@ export type KeyColumns = {
   title: string;
 };
 
-export type TableVisibility = "private" | "project" | "workspace";
+export type TableVisibility = "private" | "project" | "workspace" | "members";
+
+export type TableGroup = {
+  id: string;
+  name: string;
+  color: string;
+  order: number;
+  collapsed?: boolean;
+};
+
+export type TablePermissions = {
+  visibility: TableVisibility;
+  editors: string[];
+  viewers: string[];
+};
 
 export type TableDoc = {
   id: string;
@@ -72,6 +149,11 @@ export type TableDoc = {
   visibility: TableVisibility;
   columns: Column[];
   keyColumns: KeyColumns;
+  groups?: TableGroup[];
+  titleColumnId?: string;
+  permissions?: TablePermissions;
+  nounSingular?: string;
+  nounPlural?: string;
   recordCount: number;
   itemCount?: number;
   templateId?: string | null;
@@ -87,19 +169,30 @@ export type TableDoc = {
   favorite?: boolean;
 };
 
-export type RecordValue = string | number | boolean | string[] | null;
+export type RecordValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | { start: string; end: string }
+  | Array<{ name: string; url: string }>
+  | null;
 
 export type RecordDoc = {
   id: string;
   tableId: string;
   workspaceId: string;
   values: Record<string, RecordValue>;
+  computed?: Record<string, unknown>;
+  groupId?: string;
+  title?: string;
   order: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
   linkCount?: number;
+  routineRunId?: string | null;
 };
 
 export type RecordActivity = {
@@ -128,14 +221,35 @@ export type TableEvent =
       to: string;
     }
   | {
+      type: "table.record_changed";
+      tableId: string;
+      recordId: string;
+      columnId: string;
+      from: unknown;
+      to: unknown;
+    }
+  | {
       type: "table.date_reached";
       tableId: string;
       recordId: string;
       columnId: string;
       offsetDays: number;
+    }
+  | {
+      type: "table.record_moved";
+      tableId: string;
+      recordId: string;
+      toGroupId: string;
+    }
+  | {
+      type: "table.form_submitted";
+      tableId: string;
+      recordId: string;
+      formId: string;
     };
 
 export type RecordLinkTarget = {
-  type: "task" | "project" | "note" | "ticket" | "record";
+  type: "task" | "project" | "note" | "ticket" | "record" | "invoice" | "item";
   id: string;
+  tableId?: string;
 };
