@@ -14,4 +14,5 @@ export * from "./flowModel";
 export * from "./tableEventMatch";
 export * from "./structured";
 export * from "./structuredExecutor";
+export * from "./processTableEvent";
 

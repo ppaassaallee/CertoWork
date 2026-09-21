@@ -53,13 +53,20 @@ firebase deploy --only firestore:rules,firestore:indexes,functions:recomputeTabl
 `TABLES_LIMITS` in `src/lib/tables/limits.ts`.
 
 ## Scaffolded / not fully finished
-- Worker scheduler full structured matching (CF enqueues `routine_run_queue`; app executor evaluates)
-- Monthly rent duplicate-lock (same calendar month) — ASSUMPTION: client Run-now checks existing titles
-- Public form honeypot rate limit hardening beyond existing table_forms
-- Gallery/Timeline/Chart interactive editors (types + dashboard chart placeholder)
-- i18n: new strings mostly English; GUIDE notes ES/EN sentence templates to complete in locale files
-- Desktop rail wiring of `TablesSidebarSection` behind flag (component ready; host must mount when flag on)
-- Odysseus NL→structured uses template matching heuristic until Boldi JSON mode wired
+- Chart/Timeline interactive editors now have `TableAltViews` surfaces; Gallery still lightweight
+- Odysseus NL→structured still uses template matching heuristic until Boldi JSON mode wired
+- Form honeypot rate limit uses existing `table_forms` path
+
+## Continuation (post-27)
+- Flag-gated sidebar + main tables panel (`useTablesEnabled`)
+- System template gallery + Describe process modal in shell
+- `/dashboards/:id` lens + DashboardPage mount
+- Provision remaps `tableKey` automations, creates dashboard doc, remaps link columns
+- `forEachRecord` + monthly rent duplicate skip in structured executor
+- `processTableEvent` consumer + CF queue enrichment (`preferStructured`)
+- Phone Projects › Tables segment
+- Acceptance unit tests (`tests/tables-acceptance.test.ts`) — $7,600 + loop guard
+- i18n EN/ES keys for template/automations copy
 
 ## Stop
-Step 27 complete.
+Step 27 complete; continuation hardening landed on same PR branch.

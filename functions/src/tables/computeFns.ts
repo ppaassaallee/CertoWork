@@ -20,27 +20,40 @@ export const recomputeTableRecord = onCall({ region: "us-central1" }, async (req
 
 /**
  * On tableEvents create — evaluate structured routines (loop guard).
- * Full matching lives in the app routines engine; this enqueues a run marker.
+ * Enqueues into routine_run_queue; marks loop-guard skips; stamps processedAt.
  */
 export const onTableEventCreated = onDocumentCreated(
   { document: "tableEvents/{id}", region: "us-central1" },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
+    const db = getFirestore();
     if (data.routineRunId) {
-      // Loop guard: events caused by a routine do not re-enter the same routine chain here.
+      await event.data?.ref.set(
+        { processedAt: FieldValue.serverTimestamp(), skipped: "loop_guard" },
+        { merge: true },
+      );
       return;
     }
-    const db = getFirestore();
     await db.collection("routine_run_queue").add({
       kind: "tableEvent",
+      tableEventId: event.params.id,
       tableId: data.tableId,
       recordId: data.recordId,
       eventType: data.type,
       columnId: data.columnId || null,
+      from: data.from ?? null,
+      to: data.to ?? null,
+      workspaceId: data.workspaceId || null,
       createdAt: FieldValue.serverTimestamp(),
       status: "queued",
+      // Consumer (worker or client processTableEvent) runs structured routines.
+      preferStructured: true,
     });
+    await event.data?.ref.set(
+      { processedAt: FieldValue.serverTimestamp(), queued: true },
+      { merge: true },
+    );
   },
 );
 

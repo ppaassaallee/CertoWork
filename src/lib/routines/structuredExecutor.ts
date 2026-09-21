@@ -5,6 +5,7 @@ import {
   matchesTrigger,
   renderTemplate,
   resolveSetValue,
+  type FilterOp,
   type StructuredAction,
   type StructuredRoutine,
   type TableEventDoc,
@@ -15,6 +16,21 @@ export type StructuredRunResult = {
   actions: Array<{ type: string; ok: boolean; detail?: string }>;
   dryRun?: boolean;
 };
+
+/** True if a Rent collection · title already exists for the current YYYY-MM. */
+async function findRentDuplicate(tableId: string, title: string): Promise<boolean> {
+  const month = new Date().toISOString().slice(0, 7);
+  const { listRecords } = await import("../tables/services/tableService");
+  const rows = await listRecords(tableId, 2000);
+  return rows.some((r) => {
+    const t = String(r.title || r.values.task || r.values.name || "");
+    const created = String(r.createdAt || "").slice(0, 7);
+    return t === title && created === month;
+  });
+}
+
+// widen forEach where op compatibility
+void (null as unknown as FilterOp);
 
 async function runAction(
   action: StructuredAction,
@@ -79,10 +95,18 @@ async function runAction(
           ctx.record.values as Record<string, unknown>,
           ctx.columnNames,
         );
+      } else if (v && typeof v === "object" && "fromColumn" in v) {
+        values[k] = ctx.record.values[(v as { fromColumn: string }).fromColumn];
       } else values[k] = v;
     }
+    // Monthly rent idempotency: skip if same title already exists this calendar month.
+    const titleKey = Object.keys(values).find((k) => k === "task" || k === "name" || k === "title");
+    const titleVal = titleKey ? String(values[titleKey] || "") : "";
+    if (titleVal.includes("Rent collection ·") && !ctx.dryRun) {
+      const dup = await findRentDuplicate(action.tableId, titleVal);
+      if (dup) return { type: "createRecord", ok: true, detail: "skipped_duplicate_month" };
+    }
     if (ctx.dryRun) return { type: "createRecord", ok: true, detail: JSON.stringify(values) };
-    // Target table assumed same workspace; caller remaps table ids at provision time.
     await createRecord({
       table: { ...ctx.table, id: action.tableId },
       createdBy: ctx.userId,
@@ -91,6 +115,38 @@ async function runAction(
       routineRunId: ctx.routineRunId,
     });
     return { type: "createRecord", ok: true };
+  }
+  if (action.type === "forEachRecord") {
+    const { listRecords } = await import("../tables/services/tableService");
+    const rows = await listRecords(action.tableId, 2000);
+    const matched = rows.filter((r) =>
+      (action.where || []).every((cond) => {
+        const v = r.values[cond.columnId];
+        if (cond.op === "is" || cond.op === "eq") return v === cond.value;
+        if (cond.op === "is_not") return v !== cond.value;
+        return true;
+      }),
+    );
+    if (ctx.dryRun) {
+      return { type: "forEachRecord", ok: true, detail: `would iterate ${matched.length}` };
+    }
+    const nested: Array<{ type: string; ok: boolean; detail?: string }> = [];
+    for (const row of matched) {
+      for (const nestedAction of action.actions) {
+        nested.push(
+          await runAction(nestedAction, {
+            ...ctx,
+            record: row,
+            table: { ...ctx.table, id: action.tableId },
+          }),
+        );
+      }
+    }
+    return {
+      type: "forEachRecord",
+      ok: nested.every((n) => n.ok),
+      detail: `iterated ${matched.length}`,
+    };
   }
   if (action.type === "odysseus") {
     return { type: "odysseus", ok: true, detail: "LLM action deferred to chat path" };

@@ -38,13 +38,16 @@ export type StructuredAction =
       type: "createRecord";
       tableId: string;
       groupId?: string;
-      values: Record<string, unknown | { template: string }>;
+      values: Record<
+        string,
+        unknown | { template: string } | { fromColumn: string }
+      >;
       link?: { fromColumnId: string };
     }
   | {
       type: "forEachRecord";
       tableId: string;
-      where: Array<{ columnId: string; op: FilterOp; value?: unknown }>;
+      where: Array<{ columnId: string; op: FilterOp | "eq"; value?: unknown }>;
       actions: StructuredAction[];
     }
   | {
