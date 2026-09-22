@@ -141,7 +141,13 @@ export type TablePermissions = {
 export type TableDoc = {
   id: string;
   workspaceId: string;
+  /** Primary / home project (optional). Used when visibility === "project". */
   projectId?: string | null;
+  /**
+   * Related projects this table is an asset for (many).
+   * Does not replace projectId — home + related are distinct.
+   */
+  relatedProjectIds?: string[];
   name: string;
   icon: string;
   color: string;

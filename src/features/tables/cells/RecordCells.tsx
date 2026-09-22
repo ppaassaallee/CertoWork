@@ -3,12 +3,15 @@ import type { Column, RecordValue, StatusOption } from "../../../lib/tables";
 import { t } from "../../../lib/i18n";
 
 export type TableMember = { id: string; name: string; email: string };
+export type TableProjectOption = { id: string; name: string };
 
 type CellProps = {
   column: Column;
   value: RecordValue;
   onChange: (next: RecordValue) => void;
   members?: TableMember[];
+  projects?: TableProjectOption[];
+  onOpenProject?(projectId: string): void;
   readOnly?: boolean;
 };
 
@@ -337,6 +340,121 @@ export function RelationCell({ value, onChange, readOnly }: CellProps) {
   );
 }
 
+/** Project picker for relation columns with relation.to === "project". */
+export function ProjectRelationCell({
+  column,
+  value,
+  onChange,
+  projects = [],
+  onOpenProject,
+  readOnly,
+}: CellProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const multiple = Boolean(column.relation?.multiple);
+  const selected = asStringArray(value);
+  const selectedSet = new Set(selected);
+
+  const labelFor = (id: string) =>
+    projects.find((p) => p.id === id)?.name || id;
+
+  const hits = projects
+    .filter((p) => !selectedSet.has(p.id))
+    .filter((p) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return String(p.name || "").toLowerCase().includes(q);
+    })
+    .slice(0, 10);
+
+  const commit = (ids: string[]) => {
+    if (!ids.length) {
+      onChange(null);
+      return;
+    }
+    onChange(multiple ? ids : ids[0] || null);
+  };
+
+  const add = (id: string) => {
+    if (multiple) commit([...selected, id]);
+    else commit([id]);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const remove = (id: string) => {
+    commit(selected.filter((row) => row !== id));
+  };
+
+  return (
+    <div className="cw-tables-project-rel" data-testid="tables-project-relation">
+      <div className="cw-tables-project-rel-chips">
+        {selected.map((id) => (
+          <span key={id} className="cw-tables-project-rel-chip">
+            <button
+              type="button"
+              className="cw-tables-project-rel-open"
+              onClick={() => onOpenProject?.(id)}
+            >
+              {labelFor(id)}
+            </button>
+            {!readOnly ? (
+              <button
+                type="button"
+                className="cw-tables-project-rel-x"
+                aria-label={t("tables.projectLinks.unlink")}
+                onClick={() => remove(id)}
+              >
+                ×
+              </button>
+            ) : null}
+          </span>
+        ))}
+        {!selected.length && readOnly ? (
+          <span className="cw-tables-muted">—</span>
+        ) : null}
+        {!readOnly ? (
+          <div className="cw-tables-link-menu-wrap">
+            <button
+              type="button"
+              className="cw-tables-project-rel-add"
+              onClick={() => setOpen((v) => !v)}
+            >
+              +
+            </button>
+            {open ? (
+              <div className="cw-tables-popover cw-tables-items-picker">
+                <div className="cw-tables-items-search">
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={t("tables.projectLinks.searchProjects")}
+                  />
+                </div>
+                <ul className="cw-tables-items-picker-list">
+                  {hits.map((p) => (
+                    <li key={p.id}>
+                      <button type="button" onClick={() => add(p.id)}>
+                        <span>{p.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {!hits.length ? (
+                    <li className="cw-tables-muted">
+                      {t("tables.projectLinks.noMatches")}
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function FileCell({ value, onChange, readOnly }: CellProps) {
   const url = asString(value);
   if (readOnly) {
@@ -441,9 +559,19 @@ export function CellRenderer({
   value,
   onChange,
   members,
+  projects,
+  onOpenProject,
   readOnly,
 }: CellProps) {
-  const props: CellProps = { column, value, onChange, members, readOnly };
+  const props: CellProps = {
+    column,
+    value,
+    onChange,
+    members,
+    projects,
+    onOpenProject,
+    readOnly,
+  };
   switch (column.type) {
     case "number":
     case "currency":
@@ -468,6 +596,9 @@ export function CellRenderer({
     case "phone":
       return <EmailPhoneCell {...props} />;
     case "relation":
+      if (column.relation?.to === "project") {
+        return <ProjectRelationCell {...props} />;
+      }
       return <RelationCell {...props} />;
     case "file":
       return <FileCell {...props} />;

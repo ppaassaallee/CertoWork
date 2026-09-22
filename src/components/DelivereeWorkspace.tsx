@@ -783,6 +783,7 @@ export function DelivereeWorkspace() {
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
+  const [createTableProjectId, setCreateTableProjectId] = useState<string | null>(null);
   const [systemTemplateGalleryOpen, setSystemTemplateGalleryOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [createMenuPos, setCreateMenuPos] = useState({ top: 0, right: 0 });
@@ -1601,7 +1602,8 @@ export function DelivereeWorkspace() {
       null
     );
   }, [lens, visibleTables, archivedTables, deletedTables]);
-  const openCreateTableWizard = () => {
+  const openCreateTableWizard = (projectId?: string | null) => {
+    setCreateTableProjectId(projectId ? String(projectId) : null);
     setCreateTableWizardOpen(true);
   };
   const openSystemTemplateGallery = () => {
@@ -8952,6 +8954,11 @@ export function DelivereeWorkspace() {
               workspaceMembers={workspaceMembers}
               workspaceTeams={workspaceTeams}
               projects={projects}
+              workspaceTables={visibleTables}
+              onOpenTable={(tableId) => navigate(`/tables/${encodeURIComponent(tableId)}`)}
+              onCreateTableForProject={(projectId) => {
+                openCreateTableWizard(projectId);
+              }}
             />
           ) : (
             <div className="do-panel-empty">
@@ -9068,6 +9075,15 @@ export function DelivereeWorkspace() {
                   String(member.displayName || member.email || member.userId || ""),
                 email: String(member.email || ""),
               }))}
+              projects={projects.map((project) => ({
+                id: String(project.id),
+                name: entityTitle(project),
+                status: String(project.status || ""),
+              }))}
+              onOpenProject={(projectId) => {
+                const project = projects.find((row) => row.id === projectId);
+                if (project) openProjectRecord(project);
+              }}
               onArchiveTable={() => void archiveWorkspaceTable(activeTable)}
               onDeleteTable={() => deleteWorkspaceTable(activeTable)}
               onLinkTask={(recordId) => {
@@ -9565,6 +9581,15 @@ export function DelivereeWorkspace() {
                 workspaceMembers={workspaceMembers}
                 workspaceTeams={workspaceTeams}
                 projects={projects}
+                workspaceTables={visibleTables}
+                onOpenTable={(tableId) => {
+                  setPanel(null);
+                  navigate(`/tables/${encodeURIComponent(tableId)}`);
+                }}
+                onCreateTableForProject={(projectId) => {
+                  setPanel(null);
+                  openCreateTableWizard(projectId);
+                }}
               />
             ) : (
               <div className="do-panel-empty">
@@ -10892,7 +10917,11 @@ export function DelivereeWorkspace() {
       />
       <CreateTableWizard
         open={createTableWizardOpen}
-        onClose={() => setCreateTableWizardOpen(false)}
+        initialProjectId={createTableProjectId}
+        onClose={() => {
+          setCreateTableWizardOpen(false);
+          setCreateTableProjectId(null);
+        }}
         onCreated={(table) => {
           setWorkspaceTables((current) =>
             current.some((row) => row.id === table.id)
@@ -10900,6 +10929,7 @@ export function DelivereeWorkspace() {
               : [table, ...current],
           );
           setCreateTableWizardOpen(false);
+          setCreateTableProjectId(null);
           navigate(`/tables/${encodeURIComponent(table.id)}`);
           setSidebarOpen(false);
         }}

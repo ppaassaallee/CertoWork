@@ -9,6 +9,8 @@ export type TableGroupedGridProps = {
   table: TableDoc;
   records: RecordDoc[];
   members: TableMember[];
+  projects?: Array<{ id: string; name: string }>;
+  onOpenProject?(projectId: string): void;
   density?: "compact" | "comfortable";
   onFieldChange(recordId: string, columnId: string, value: RecordValue): void;
   onOpenRecord(id: string): void;
@@ -81,6 +83,8 @@ export function TableGroupedGrid({
   table,
   records,
   members,
+  projects = [],
+  onOpenProject,
   density = "compact",
   onFieldChange,
   onOpenRecord,
@@ -242,6 +246,8 @@ export function TableGroupedGrid({
                         <CellRenderer
                           column={col}
                           members={members}
+                          projects={projects}
+                          onOpenProject={onOpenProject}
                           value={value}
                           onChange={(next) => onFieldChange(rec.id, col.id, next)}
                         />

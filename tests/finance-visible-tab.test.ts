@@ -54,7 +54,10 @@ test("Projects home and project chrome expose Costs only when privileged", () =>
   assert.match(surfaces, /canViewFinance \? \(/);
   assert.match(surfaces, /showCosts=\{canViewFinance\}/);
   assert.match(chrome, /id: "costs"/);
-  assert.match(chrome, /data-testid=\{id === "costs" \? "project-costs-tab"/);
+  assert.match(chrome, /"project-costs-tab"/);
+  assert.match(chrome, /id === "costs"/);
+  assert.match(chrome, /showTables/);
+  assert.match(chrome, /"project-tables-tab"/);
 });
 
 test("portfolio finance analyst keeps month→project sheet UX", () => {

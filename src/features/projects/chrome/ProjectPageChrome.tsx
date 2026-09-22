@@ -15,6 +15,7 @@ import {
   Kanban,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   ListChecks,
   MoreHorizontal,
   Plus,
@@ -34,7 +35,12 @@ import { checklistItems, checklistProgress } from "../../../lib/kanbanFeatures";
 import { notionEstimateHours } from "../../../lib/notionProjectTable";
 import { isOverviewEnabled } from "../../overview/overviewFlag";
 
-export type ProjectViewId = WorkItemsViewMode | "docs" | "overview" | "costs";
+export type ProjectViewId =
+  | WorkItemsViewMode
+  | "docs"
+  | "overview"
+  | "costs"
+  | "tables";
 
 type IconType = ComponentType<{ size?: number }>;
 
@@ -44,6 +50,7 @@ const BASE_VIEW_TABS: Array<{ id: ProjectViewId; label: string; Icon: IconType }
   { id: "gantt", label: "Gantt", Icon: CalendarRange },
   { id: "calendar", label: "Calendario", Icon: Calendar },
   { id: "docs", label: "Docs", Icon: FileText },
+  { id: "tables", label: "Tablas", Icon: LayoutGrid },
 ];
 
 const COSTS_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
@@ -58,8 +65,11 @@ const OVERVIEW_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
   Icon: LayoutDashboard,
 };
 
-function viewTabs(includeCosts = false) {
-  const base = isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : BASE_VIEW_TABS;
+function viewTabs(includeCosts = false, includeTables = false) {
+  let base = isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : [...BASE_VIEW_TABS];
+  if (!includeTables) {
+    base = base.filter((tab) => tab.id !== "tables");
+  }
   if (!includeCosts) return base;
   const docsIndex = base.findIndex((tab) => tab.id === "docs");
   if (docsIndex < 0) return [...base, COSTS_TAB];
@@ -373,6 +383,7 @@ type ProjectViewTabsProps = {
   onAddTask: () => void;
   showActions?: boolean;
   showCosts?: boolean;
+  showTables?: boolean;
 };
 
 export function ProjectViewTabs({
@@ -385,8 +396,9 @@ export function ProjectViewTabs({
   onAddTask,
   showActions = true,
   showCosts = false,
+  showTables = false,
 }: ProjectViewTabsProps) {
-  const tabs = viewTabs(showCosts);
+  const tabs = viewTabs(showCosts, showTables);
   return (
     <div className="do-project-page-tabs" data-testid="project-page-tabs" aria-label="Project views">
       <div className="do-project-page-tablist" role="tablist">
@@ -394,7 +406,13 @@ export function ProjectViewTabs({
           <button
             aria-selected={activeView === id}
             className={`do-project-page-tab${activeView === id ? " is-active" : ""}`}
-            data-testid={id === "costs" ? "project-costs-tab" : undefined}
+            data-testid={
+              id === "costs"
+                ? "project-costs-tab"
+                : id === "tables"
+                  ? "project-tables-tab"
+                  : undefined
+            }
             key={id}
             onClick={() => onChangeView(id)}
             role="tab"
@@ -405,7 +423,7 @@ export function ProjectViewTabs({
           </button>
         ))}
       </div>
-      {showActions && activeView !== "costs" ? (
+      {showActions && activeView !== "costs" && activeView !== "tables" ? (
       <div className="do-project-page-tab-actions">
         <span className="do-project-group-label">Agrupar: Épica</span>
         <button

@@ -98,7 +98,10 @@ import {
 } from "../lib/financeChargeTypes";
 import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { ProjectCostsBillingSummary } from "../features/billing";
-import { useBillingEnabled } from "../features/flags/featureUserFlags";
+import { useBillingEnabled, useTablesEnabled } from "../features/flags/featureUserFlags";
+import { ProjectTablesPanel } from "../features/tables/ProjectTablesPanel";
+import type { TableDoc } from "../lib/tables";
+import { listProjectTables } from "../lib/tables";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { collabProjectPath } from "../lib/collabModule";
@@ -1509,6 +1512,7 @@ export type ProjectConsoleTab =
   | "team"
   | "costs"
   | "docs"
+  | "tables"
   | "codex";
 
 export function ProjectConsolePanel({
@@ -1553,6 +1557,9 @@ export function ProjectConsolePanel({
   onInviteAssigneeEmail,
   workspaceTeams = [],
   projects: workspaceProjects,
+  workspaceTables = [],
+  onOpenTable,
+  onCreateTableForProject,
 }: {
   project: any;
   tasks: any[];
@@ -1606,6 +1613,9 @@ export function ProjectConsolePanel({
   driveMessage?: string;
   tags?: TagLike[];
   projects?: any[];
+  workspaceTables?: TableDoc[];
+  onOpenTable?: (tableId: string) => void;
+  onCreateTableForProject?: (projectId: string) => void;
   onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   onCreateControlledOption?: (
     group: "delivery_entity" | "client_entity" | "tag",
@@ -1613,6 +1623,11 @@ export function ProjectConsolePanel({
   ) => Promise<string | void> | string | void;
 }) {
   const navigate = useNavigate();
+  const tablesEnabled = useTablesEnabled();
+  const projectTables = useMemo(
+    () => listProjectTables(workspaceTables, String(project.id)),
+    [workspaceTables, project.id],
+  );
   const openCollabProject = (projectId: string) => {
     navigate(collabProjectPath(projectId));
   };
@@ -1636,7 +1651,7 @@ export function ProjectConsolePanel({
     const saved = readProjectSurfaceView(String(project?.id || ""));
     if (
       saved &&
-      ["overview", "list", "kanban", "gantt", "calendar", "docs", "flow", "epics"].includes(saved)
+      ["overview", "list", "kanban", "gantt", "calendar", "docs", "tables", "flow", "epics"].includes(saved)
     ) {
       return saved as ProjectViewId;
     }
@@ -1650,10 +1665,11 @@ export function ProjectConsolePanel({
       return;
     }
     if (
-      ["overview", "list", "kanban", "gantt", "calendar", "docs", "flow", "epics"].includes(saved)
+      ["overview", "list", "kanban", "gantt", "calendar", "docs", "tables", "flow", "epics"].includes(saved)
     ) {
       setChromeView(saved as ProjectViewId);
       if (saved === "docs") setTab("docs");
+      else if (saved === "tables") setTab("tables");
       else {
         setTab("items");
         if (saved !== "overview") setNotionMode(saved as WorkItemsViewMode);
@@ -1997,6 +2013,21 @@ export function ProjectConsolePanel({
               >
                 Documents
               </button>
+              {tablesEnabled ? (
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setTab("tables");
+                    setChromeView("tables");
+                    writeProjectSurfaceView(String(project.id), "tables");
+                  }}
+                  role="menuitem"
+                  type="button"
+                  data-testid="project-more-tables"
+                >
+                  Tables{projectTables.length ? ` (${projectTables.length})` : ""}
+                </button>
+              ) : null}
               <button
                 onClick={() => {
                   setMoreOpen(false);
@@ -2129,6 +2160,7 @@ export function ProjectConsolePanel({
       {(tab === "items" ||
         tab === "docs" ||
         tab === "costs" ||
+        tab === "tables" ||
         (isOverviewEnabled() && chromeView === "overview")) && (
         <ProjectViewTabs
           activeView={
@@ -2136,6 +2168,8 @@ export function ProjectConsolePanel({
               ? "docs"
               : tab === "costs"
                 ? "costs"
+                : tab === "tables"
+                  ? "tables"
               : isOverviewEnabled() && chromeView === "overview"
                 ? "overview"
                 : notionMode) as ProjectViewId
@@ -2157,6 +2191,13 @@ export function ProjectConsolePanel({
             if (view === "costs") {
               if (!canViewFinance) return;
               setTab("costs");
+              return;
+            }
+            if (view === "tables") {
+              if (!tablesEnabled) return;
+              setTab("tables");
+              setChromeView("tables");
+              writeProjectSurfaceView(String(project.id), "tables");
               return;
             }
             writeProjectSurfaceView(String(project.id), view);
@@ -2184,13 +2225,14 @@ export function ProjectConsolePanel({
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
           }}
-          showActions={chromeView !== "overview" && tab !== "costs"}
+          showActions={chromeView !== "overview" && tab !== "costs" && tab !== "tables"}
           showCosts={canViewFinance}
+          showTables={tablesEnabled}
           sortOpen={notionSortOpen}
         />
       )}
 
-      {tab !== "items" && tab !== "docs" && tab !== "costs" && (
+      {tab !== "items" && tab !== "docs" && tab !== "costs" && tab !== "tables" && (
         <button
           className="do-notion-page-back"
           onClick={() => {
@@ -2961,6 +3003,31 @@ export function ProjectConsolePanel({
           </div>
         </div>
       )}
+
+      {tab === "tables" && tablesEnabled ? (
+        <div className="do-console-section" data-testid="project-tables-section">
+          <ProjectTablesPanel
+            projectId={String(project.id)}
+            tables={workspaceTables}
+            candidates={workspaceTables.map((table) => ({
+              id: table.id,
+              name: table.name,
+              icon: table.icon,
+              projectId: table.projectId,
+              relatedProjectIds: table.relatedProjectIds,
+            }))}
+            onOpenTable={(tableId) => {
+              if (onOpenTable) onOpenTable(tableId);
+              else navigate(`/tables/${encodeURIComponent(tableId)}`);
+            }}
+            onCreateTable={
+              onCreateTableForProject
+                ? () => onCreateTableForProject(String(project.id))
+                : undefined
+            }
+          />
+        </div>
+      ) : null}
 
       {tab === "codex" && (
         <CodexBridgePanel

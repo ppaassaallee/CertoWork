@@ -68,6 +68,8 @@ export type ViewGridProps<Row> = {
   rows: Row[];
   ctx: ActionContext;
   members?: TableMember[];
+  projects?: Array<{ id: string; name: string }>;
+  onOpenProject?(projectId: string): void;
   /** Extra ids that count as "me" for assignee filters (workspace member ids). */
   memberIds?: string[];
   /** When set, title/status columns use table Column defs for CellRenderer. */
@@ -89,6 +91,8 @@ export function ViewGrid<Row>({
   rows,
   ctx,
   members = [],
+  projects = [],
+  onOpenProject,
   memberIds = [],
   cellColumnLookup,
   onOpenRow,
@@ -200,6 +204,8 @@ export function ViewGrid<Row>({
               <CellRenderer
                 column={tableCol}
                 members={members}
+                projects={projects}
+                onOpenProject={onOpenProject}
                 onChange={(next) => {
                   void column.write?.(row.original, next as RecordValue);
                 }}
@@ -273,6 +279,8 @@ export function ViewGrid<Row>({
     ctx,
     helper,
     members,
+    projects,
+    onOpenProject,
     onOpenRow,
     selected,
     view.quickActions,

@@ -55,6 +55,10 @@ import {
   TableItemsPanel,
   type TableItemCandidate,
 } from "./TableItemsPanel";
+import {
+  TableProjectsBar,
+  type TableProjectOption,
+} from "./TableProjectsBar";
 import type { TableMember } from "./cells/RecordCells";
 
 export type TableViewMode = "table" | "board" | "calendar" | "items" | "form";
@@ -63,10 +67,12 @@ export type TablePageProps = {
   table: TableDoc;
   records?: RecordDoc[];
   members: TableMember[];
+  projects?: TableProjectOption[];
   itemCandidates?: TableItemCandidate[];
   recordId?: string | null;
   activity?: RecordActivity[];
   onOpenRecord?(id: string | null): void;
+  onOpenProject?(projectId: string): void;
   onOpenAutomations?(): void;
   onTableChange?(table: TableDoc): void;
   onFieldChange?(recordId: string, columnId: string, value: RecordValue): void;
@@ -95,10 +101,12 @@ export function TablePage({
   table,
   records: recordsProp,
   members,
+  projects = [],
   itemCandidates = [],
   recordId = null,
   activity = [],
   onOpenRecord,
+  onOpenProject,
   onOpenAutomations: _onOpenAutomations,
   onTableChange,
   onFieldChange,
@@ -381,6 +389,15 @@ export function TablePage({
         </div>
       </header>
 
+      {lifecycle === "active" ? (
+        <TableProjectsBar
+          table={table}
+          projects={projects}
+          onOpenProject={onOpenProject}
+          onTableChange={onTableChange}
+        />
+      ) : null}
+
       <nav className="cw-tables-tabs" aria-label={t("tables.page.views")}>
         {(
           [
@@ -412,6 +429,8 @@ export function TablePage({
                 table={table}
                 records={visibleRecords}
                 members={members}
+                projects={projects}
+                onOpenProject={onOpenProject}
                 onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
                 onOpenRecord={(id) => openRecord(id)}
                 onCreateRecord={(groupId) => {
@@ -437,6 +456,8 @@ export function TablePage({
               <RecordsViewSurface
                 actorId={actorId || ""}
                 members={members}
+                projects={projects}
+                onOpenProject={onOpenProject}
                 onCreateRecord={(title) => void handleCreate({ title })}
                 onDeleteRecords={(ids) => void handleDelete(ids)}
                 onFieldChange={(id, col, val) => void handleFieldChange(id, col, val as never)}
@@ -484,10 +505,12 @@ export function TablePage({
             table={table}
             record={activeRecord}
             members={members}
+            projects={projects}
             activity={activity.filter((a) => a.recordId === activeRecord.id)}
             recordOrder={visibleRecords.map((r) => r.id)}
             onClose={() => openRecord(null)}
             onOpenRecord={(id) => openRecord(id)}
+            onOpenProject={onOpenProject}
             onAskOdysseus={
               onOpenOdysseus
                 ? () =>

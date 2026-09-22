@@ -18,6 +18,7 @@ export type RecordPanelProps = {
   table: TableDoc;
   record: RecordDoc;
   members: TableMember[];
+  projects?: Array<{ id: string; name: string }>;
   activity?: RecordActivity[];
   recordOrder?: string[];
   onClose(): void;
@@ -29,6 +30,7 @@ export type RecordPanelProps = {
   onLinkRecord?(): void;
   onOpenLink?(target: RecordLinkTarget): void;
   onOpenRecord?(id: string): void;
+  onOpenProject?(projectId: string): void;
   onAskOdysseus?(): void;
 };
 
@@ -62,6 +64,7 @@ export function RecordPanel({
   table,
   record,
   members,
+  projects = [],
   activity = [],
   recordOrder = [],
   onClose,
@@ -73,6 +76,7 @@ export function RecordPanel({
   onLinkRecord,
   onOpenLink,
   onOpenRecord,
+  onOpenProject,
   onAskOdysseus,
 }: RecordPanelProps) {
   const { user } = useAuth();
@@ -126,6 +130,8 @@ export function RecordPanel({
         column={column}
         value={record.values[column.id] ?? null}
         members={members}
+        projects={projects}
+        onOpenProject={onOpenProject}
         onChange={(next) => onFieldChange(column.id, next)}
       />
     );
