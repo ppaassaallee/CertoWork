@@ -151,7 +151,10 @@ import {
   useBillingEnabled,
   useDailyBriefEnabled,
   useTablesEnabled,
+  enableTables,
+  enableBilling,
 } from "../features/flags/featureUserFlags";
+import { FeatureLabsPanel } from "../features/flags/FeatureLabsPanel";
 import { RoutineBuilder } from "../features/routines/RoutineBuilder";
 import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
 import { DesktopIconRail } from "../features/shell/DesktopRail";
@@ -7167,7 +7170,27 @@ export function DelivereeWorkspace() {
               </div>
             )}
           </div>
-          ) : null}
+          ) : (
+          <div className="do-sidebar-section" data-testid="sidebar-tables-off">
+            <div className="do-section-head">
+              <span className="do-section-toggle" style={{ pointerEvents: "none" }}>
+                <span>{t("tables.sidebar")}</span>
+              </span>
+            </div>
+            <button
+              className="do-empty-link"
+              data-testid="enable-tables"
+              disabled={!user?.uid}
+              onClick={() => {
+                if (!user?.uid) return;
+                void enableTables(user.uid).then(() => navigate("/tables"));
+              }}
+              type="button"
+            >
+              Try Tables
+            </button>
+          </div>
+          )}
 
           <div className="do-sidebar-section do-management do-mobile-advanced">
             <div className="do-section-head">
@@ -8582,6 +8605,38 @@ export function DelivereeWorkspace() {
               workspaceName={workspace?.name || "Workspace"}
             />
           ) : (
+          <div data-testid="invoices-legacy">
+            <div
+              style={{
+                margin: "12px 16px 0",
+                padding: "12px 14px",
+                borderRadius: 12,
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "color-mix(in srgb, var(--accent) 8%, transparent)",
+              }}
+            >
+              <div>
+                <strong style={{ display: "block" }}>Billing</strong>
+                <span className="do-panel-intro" style={{ margin: 0 }}>
+                  List / board / calendar / chart, invoice numbering, CSV & reminders.
+                </span>
+              </div>
+              <button
+                className="do-button"
+                data-testid="enable-billing"
+                disabled={!user?.uid}
+                onClick={() => {
+                  if (!user?.uid) return;
+                  void enableBilling(user.uid).then(() => navigate("/billing"));
+                }}
+                type="button"
+              >
+                Try Billing
+              </button>
+            </div>
           <InvoiceCenter
             busyId={invoiceBusyId}
             canOperate={canOperateInvoiceQueue}
@@ -8594,6 +8649,7 @@ export function DelivereeWorkspace() {
             onUpdateStatus={updateInvoiceStatus}
             pending={pendingInvoiceQueue}
           />
+          </div>
           )
         ) : centerView === "feedback" ? (
           <FeedbackCenter
@@ -9100,8 +9156,24 @@ export function DelivereeWorkspace() {
             />
           )
         ) : centerView === "tables" && !tablesEnabled ? (
-          <div style={{ padding: 24 }}>
-            <p className="cw-tables-muted">Tables are off. Enable flags.tables to show this module.</p>
+          <div style={{ padding: 24, maxWidth: 480 }} data-testid="tables-flag-off">
+            <h2 style={{ marginTop: 0 }}>Tables</h2>
+            <p className="cw-tables-muted">
+              Structured grids, automations, templates, and the Odysseus system builder.
+              Enable <code>flags.tables</code> (or tap below) to show this module in the sidebar.
+            </p>
+            <button
+              className="do-button"
+              data-testid="enable-tables-page"
+              disabled={!user?.uid}
+              onClick={() => {
+                if (!user?.uid) return;
+                void enableTables(user.uid);
+              }}
+              type="button"
+            >
+              Enable Tables
+            </button>
           </div>
         ) : null}
       </main>
@@ -9839,6 +9911,7 @@ export function DelivereeWorkspace() {
                   Open calendars
                 </button>
               </section>
+              <FeatureLabsPanel onOpen={(path) => navigate(path)} />
               {canGrantPureAiFollowers ? (
                 <section
                   className="do-pure-ai-followers-callout"

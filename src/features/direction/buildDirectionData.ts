@@ -11,7 +11,12 @@ import {
   normalizedFinancePeriods,
 } from "../../lib/projectFinance";
 import { financeMonthKey, financeMonthLabel } from "../../lib/financeChargeTypes";
-import { buildWorkloadRows } from "../../lib/workload";
+import {
+  buildMemberIdentityMap,
+  buildWorkloadRows,
+  primaryAssigneeTokens,
+  resolveMemberIdentity,
+} from "../../lib/workload";
 import { tableLifecycleStatus, type TableDoc, type RecordDoc } from "../../lib/tables";
 
 export type DirectionTone = "danger" | "warning" | "ok" | "neutral";
@@ -87,9 +92,13 @@ export type DirectionInput = {
   members?: Array<{
     id?: string;
     userId?: string;
+    acceptedMemberId?: string;
+    acceptedUserId?: string;
     displayName?: string;
     email?: string;
+    emailLower?: string;
     name?: string;
+    alias?: string;
     weeklyCapacityHours?: number;
     capacityHours?: number;
   }>;
@@ -159,15 +168,7 @@ function daysBetween(earlier: string, later: string): number {
 }
 
 function taskAssignees(task: any): string[] {
-  const ids = [
-    ...(Array.isArray(task?.assigneeIds) ? task.assigneeIds : []),
-    task?.assigneeId,
-    task?.ownerId,
-    task?.owner,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-  return Array.from(new Set(ids));
+  return primaryAssigneeTokens(task);
 }
 
 function memberCapacity(
@@ -181,10 +182,15 @@ function memberCapacity(
 function memberNameMap(
   members: DirectionInput["members"] = [],
 ): Map<string, { name: string; capacity: number }> {
+  const identities = buildMemberIdentityMap(members || [], 40);
   const map = new Map<string, { name: string; capacity: number }>();
-  for (const member of members) {
-    const id = String(member.userId || member.id || "").trim();
-    if (!id) continue;
+  for (const [key, identity] of identities) {
+    map.set(key, { name: identity.name, capacity: identity.capacityHours });
+  }
+  // Also ensure canonical ids are present (buildMemberIdentityMap already does).
+  for (const member of members || []) {
+    const id = String(member.id || member.userId || "").trim();
+    if (!id || map.has(id)) continue;
     map.set(id, {
       name: String(member.displayName || member.name || member.email || id),
       capacity: memberCapacity(member, 40),
@@ -358,6 +364,7 @@ export function buildDirectionData(input: DirectionInput): DirectionData {
   const records = input.records || [];
   const risks = input.risks || [];
   const names = memberNameMap(members);
+  const identities = buildMemberIdentityMap(members, 40);
   const today = todayIsoDate(now);
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -374,12 +381,14 @@ export function buildDirectionData(input: DirectionInput): DirectionData {
   const workload: DirectionWorkloadRow[] = workloadBase
     .filter((row) => row.assigneeId !== "unassigned")
     .map((row) => {
-      const meta = names.get(row.assigneeId);
-      const hoursCapacity = meta?.capacity ?? row.capacityHours ?? 40;
+      const identity = resolveMemberIdentity(row.assigneeId, identities);
+      const meta = names.get(row.assigneeId) || names.get(row.assigneeId.toLowerCase());
+      const hoursCapacity =
+        identity?.capacityHours ?? meta?.capacity ?? row.capacityHours ?? 40;
       const hoursOpen = row.estimateHours;
       return {
-        userId: row.assigneeId,
-        name: meta?.name || row.assigneeName,
+        userId: identity?.canonicalId || row.assigneeId,
+        name: identity?.name || meta?.name || row.assigneeName,
         hoursOpen,
         hoursCapacity,
         ratio: hoursCapacity > 0 ? hoursOpen / hoursCapacity : 0,
@@ -400,10 +409,17 @@ export function buildDirectionData(input: DirectionInput): DirectionData {
     const oldestDays = daysBetween(due, today) || 1;
     const assignees = taskAssignees(task);
     const keys = assignees.length ? assignees : ["__none__"];
-    for (const key of keys) {
-      const isNone = key === "__none__";
+    const seen = new Set<string>();
+    for (const token of keys) {
+      const isNone = token === "__none__";
+      const identity = isNone ? null : resolveMemberIdentity(token, identities);
+      const key = isNone ? "__none__" : identity?.canonicalId || token;
+      if (seen.has(key)) continue;
+      seen.add(key);
       const userId = isNone ? null : key;
-      const name = isNone ? unassignedLabel : names.get(key)?.name || key;
+      const name = isNone
+        ? unassignedLabel
+        : identity?.name || names.get(token)?.name || names.get(key)?.name || token;
       const existing = overdueBuckets.get(key);
       if (!existing) {
         overdueBuckets.set(key, { userId, name, count: 1, oldestDays });
