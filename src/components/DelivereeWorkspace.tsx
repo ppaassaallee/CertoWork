@@ -341,6 +341,7 @@ import {
 } from "../lib/conversationSession";
 import {
   isAllowedProjectResourceSize,
+  projectResourceSizeLimitMessage,
 } from "../lib/projectResources";
 import { canDeleteProject } from "../lib/projectPermissions";
 import { isModernWorkItemKey, nextWorkItemKey } from "../lib/workItemKey";
@@ -5727,7 +5728,7 @@ export function DelivereeWorkspace() {
     try {
       if (file) {
         if (!isAllowedProjectResourceSize(file.size)) {
-          throw new Error("Files must be 20 MB or smaller.");
+          throw new Error(projectResourceSizeLimitMessage());
         }
         const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
         const fileRef = ref(storage, path);

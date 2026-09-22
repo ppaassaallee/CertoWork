@@ -5801,12 +5801,13 @@ a {
   word-break: break-all;
 }
 .do-docs-panel {
-  gap: 10px;
+  gap: 14px;
 }
 .do-docs-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
 }
 .do-docs-heading h4,
 .do-docs-heading p {
@@ -5824,6 +5825,31 @@ a {
   color: var(--text-secondary);
   font-size: var(--text-caption);
 }
+.do-docs-heading-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.do-docs-notes-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  padding: 0 11px;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-docs-notes-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.do-docs-count,
 .do-docs-heading > span {
   display: grid;
   min-width: 26px;
@@ -5835,41 +5861,89 @@ a {
   font-size: var(--text-caption);
   font-weight: 600;
 }
+.do-docs-composer {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  padding: 12px;
+}
+.do-docs-type-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.do-docs-type-row button {
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-docs-type-row button:hover {
+  color: var(--text-primary);
+  background: var(--surface-0);
+}
+.do-docs-type-row button.is-active {
+  border-color: var(--border);
+  background: var(--surface-0);
+  color: var(--text-primary);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
 .do-docs-compose {
   display: grid;
-  grid-template-columns: 140px minmax(180px, 0.8fr) minmax(220px, 1.2fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
+}
+.do-docs-compose--note,
+.do-docs-compose--link,
+.do-docs-compose--google_drive,
+.do-docs-compose--onedrive {
+  grid-template-columns: minmax(140px, 0.9fr) minmax(180px, 1.2fr) auto;
 }
 .do-docs-compose select,
 .do-docs-compose > input,
 .do-docs-file-button,
 .do-docs-compose > button {
   min-width: 0;
-  height: 36px;
-  border-radius: 8px;
+  height: 38px;
+  border-radius: 9px;
   font-size: var(--text-body-sm);
 }
 .do-docs-compose select,
 .do-docs-compose > input {
   border: 1px solid var(--border);
   background: var(--surface-0);
-  padding: 0 10px;
+  padding: 0 12px;
   color: var(--text-primary);
   outline: none;
 }
+.do-docs-compose > input:focus {
+  border-color: var(--accent);
+}
 .do-docs-file-button {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  padding: 0 12px;
-  color: var(--accent);
+  border: 1px solid var(--accent-hover);
+  background: var(--accent-hover);
+  padding: 0 14px;
+  color: var(--surface-0);
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+}
+.do-docs-file-button:hover {
+  filter: brightness(1.05);
 }
 .do-docs-file-button input {
   position: absolute;
@@ -5890,6 +5964,7 @@ a {
   padding: 0 14px;
   color: var(--surface-0);
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 .do-docs-compose > button:disabled {
@@ -5897,15 +5972,29 @@ a {
   color: var(--text-muted);
   cursor: default;
 }
+.do-docs-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.do-docs-error {
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--status-danger, #c2410c) 28%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--status-danger, #c2410c) 8%, var(--surface-0));
+  padding: 8px 10px;
+  color: var(--status-danger, #b45309);
+  font-size: var(--text-caption);
+}
 .do-docs-drive {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-1);
-  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-0);
+  padding: 12px;
 }
 .do-docs-drive-label {
   display: flex;
@@ -5950,7 +6039,7 @@ a {
 }
 .do-docs-drive-actions button {
   border: 1px solid var(--border);
-  background: var(--surface-0);
+  background: var(--surface-1);
   padding: 0 10px;
   color: var(--accent);
   font-weight: 600;
@@ -5970,6 +6059,38 @@ a {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-caption);
+}
+.do-docs-list {
+  gap: 8px;
+}
+.do-docs-list article {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 11px 12px;
+}
+.do-docs-item-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+}
+.do-docs-item-link {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  color: var(--accent);
+  text-decoration: none;
+}
+.do-docs-item-link:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .do-docs-list .do-project-empty {
   min-height: 130px;
@@ -18315,13 +18436,23 @@ a {
   .do-project-record-body {
     padding: 11px;
   }
-  .do-docs-compose {
-    grid-template-columns: 1fr 1fr;
+  .do-docs-heading {
+    flex-direction: column;
+    align-items: stretch;
   }
-  .do-docs-compose > input:nth-of-type(2),
+  .do-docs-heading-actions {
+    justify-content: space-between;
+  }
+  .do-docs-compose,
+  .do-docs-compose--note,
+  .do-docs-compose--link,
+  .do-docs-compose--google_drive,
+  .do-docs-compose--onedrive {
+    grid-template-columns: 1fr;
+  }
   .do-docs-compose > button,
   .do-docs-file-button {
-    grid-column: 1 / -1;
+    width: 100%;
   }
   .do-docs-drive {
     align-items: stretch;
