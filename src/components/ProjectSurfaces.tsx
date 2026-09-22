@@ -25,10 +25,12 @@ import {
   CalendarDays,
   CheckCircle2,
   Circle,
+  ExternalLink,
   FileText,
   Flag,
   FolderKanban,
   Link as LinkIcon,
+  UploadCloud,
   ListChecks,
   MessageSquare,
   Minus,
@@ -139,11 +141,12 @@ import type { WorkItemsViewMode } from "../lib/itemViewMemory";
 import { canDeleteProject } from "../lib/projectPermissions";
 import { projectWorkKey } from "../lib/workspaceDisplay";
 import {
-  PROJECT_RESOURCE_MAX_BYTES,
+  PROJECT_RESOURCE_MAX_MB,
   PROJECT_RESOURCE_TYPES,
   isAllowedProjectResourceSize,
   looksLikeExternalUrl,
-  resourceTypeLabel,
+  projectDocumentMeta,
+  projectResourceSizeLimitMessage,
 } from "../lib/projectResources";
 import { buildProjectStatusReport, downloadProjectStatusReport } from "../lib/projectStatusReport";
 import type { SprintRecord } from "../lib/sprints";
@@ -2853,104 +2856,144 @@ export function ProjectConsolePanel({
               <h4>Documents</h4>
               <p>Files, notes, and links for this project.</p>
             </div>
-            <span>{documents.length}</span>
+            <div className="do-docs-heading-actions">
+              <button
+                className="do-docs-notes-btn"
+                data-testid="project-open-notes"
+                onClick={() => navigate(`/work/projects/${project.id}/notes`)}
+                type="button"
+              >
+                <FileText size={13} /> Project notes
+              </button>
+              <span className="do-docs-count" aria-label={`${documents.length} documents`}>
+                {documents.length}
+              </span>
+            </div>
           </header>
-          <div style={{ margin: "0 0 12px" }}>
-            <button
-              className="do-btn"
-              data-testid="project-open-notes"
-              onClick={() => navigate(`/work/projects/${project.id}/notes`)}
-              type="button"
-            >
-              <FileText size={13} /> Notas del proyecto
-            </button>
-          </div>
-          <div className="do-docs-compose">
-            <select aria-label="Document type" onChange={(event) => setDocType(event.target.value as typeof docType)} value={docType}>
+
+          <section className="do-docs-composer" aria-label="Add document">
+            <div className="do-docs-type-row" role="tablist" aria-label="Document type">
               {PROJECT_RESOURCE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>{type.label}</option>
+                <button
+                  aria-pressed={docType === type.value}
+                  className={docType === type.value ? "is-active" : undefined}
+                  key={type.value}
+                  onClick={() => {
+                    setDocType(type.value);
+                    setDocError("");
+                  }}
+                  type="button"
+                >
+                  {type.label}
+                </button>
               ))}
-            </select>
-            <input aria-label="Document title" onChange={(event) => setDocTitle(event.target.value)} placeholder="Title" value={docTitle} />
-            {(docType === "link" || docType === "google_drive" || docType === "onedrive") && (
-              <input aria-label="Document URL" onChange={(event) => setDocUrl(event.target.value)} placeholder="https://..." value={docUrl} />
-            )}
-            {docType === "note" && (
-              <input aria-label="Note body" onChange={(event) => setDocBody(event.target.value)} placeholder="Note" value={docBody} />
-            )}
-            {docType === "file" && (
-              <label className="do-docs-file-button">
-                <FileText size={13} />
-                <span>Choose file</span>
+            </div>
+            <div className={`do-docs-compose do-docs-compose--${docType}`}>
+              <input
+                aria-label="Document title"
+                onChange={(event) => setDocTitle(event.target.value)}
+                placeholder={docType === "file" ? "Optional title (defaults to file name)" : "Title"}
+                value={docTitle}
+              />
+              {(docType === "link" || docType === "google_drive" || docType === "onedrive") && (
                 <input
-                  accept="*/*"
-                  aria-label="Upload file up to 20 MB"
-                  data-testid="project-docs-file-input"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file || !onAddDocument) return;
-                    if (!isAllowedProjectResourceSize(file.size)) {
-                      setDocError(`Files must be ${Math.round(PROJECT_RESOURCE_MAX_BYTES / 1024 / 1024)} MB or smaller.`);
+                  aria-label="Document URL"
+                  onChange={(event) => setDocUrl(event.target.value)}
+                  placeholder="https://..."
+                  value={docUrl}
+                />
+              )}
+              {docType === "note" && (
+                <input
+                  aria-label="Note body"
+                  onChange={(event) => setDocBody(event.target.value)}
+                  placeholder="Write a short note"
+                  value={docBody}
+                />
+              )}
+              {docType === "file" ? (
+                <label className="do-docs-file-button">
+                  <UploadCloud size={14} />
+                  <span>Choose file</span>
+                  <input
+                    accept="*/*"
+                    aria-label={`Upload file up to ${PROJECT_RESOURCE_MAX_MB} MB`}
+                    data-testid="project-docs-file-input"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file || !onAddDocument) return;
+                      if (!isAllowedProjectResourceSize(file.size)) {
+                        setDocError(projectResourceSizeLimitMessage());
+                        return;
+                      }
+                      setDocError("");
+                      void Promise.resolve(
+                        onAddDocument({ resourceType: "file", title: docTitle || file.name, file }),
+                      )
+                        .then(() => setDocTitle(""))
+                        .catch((reason) => {
+                          setDocError(
+                            reason instanceof Error
+                              ? reason.message
+                              : "The document could not be saved.",
+                          );
+                        });
+                      event.target.value = "";
+                    }}
+                    type="file"
+                  />
+                </label>
+              ) : (
+                <button
+                  disabled={!docTitle.trim() || !onAddDocument}
+                  onClick={() => {
+                    if ((docType === "link" || docType === "google_drive" || docType === "onedrive") && !looksLikeExternalUrl(docUrl)) {
+                      setDocError("Enter a valid http(s) URL.");
                       return;
                     }
                     setDocError("");
                     void Promise.resolve(
-                      onAddDocument({ resourceType: "file", title: docTitle || file.name, file }),
-                    )
-                      .then(() => setDocTitle(""))
-                      .catch((reason) => {
-                        setDocError(
-                          reason instanceof Error
-                            ? reason.message
-                            : "The document could not be saved.",
-                        );
-                      });
-                    event.target.value = "";
+                      onAddDocument?.({
+                        resourceType: docType,
+                        title: docTitle.trim(),
+                        url: docUrl,
+                        body: docBody,
+                      }),
+                    ).catch((reason) => {
+                      setDocError(
+                        reason instanceof Error
+                          ? reason.message
+                          : "The document could not be saved.",
+                      );
+                    });
+                    setDocTitle("");
+                    setDocBody("");
+                    setDocUrl("");
                   }}
-                  type="file"
-                />
-              </label>
-            )}
-            {docType !== "file" && (
-              <button
-                disabled={!docTitle.trim() || !onAddDocument}
-                onClick={() => {
-                  if ((docType === "link" || docType === "google_drive" || docType === "onedrive") && !looksLikeExternalUrl(docUrl)) {
-                    setDocError("Enter a valid http(s) URL.");
-                    return;
-                  }
-                  setDocError("");
-                  void Promise.resolve(
-                    onAddDocument?.({
-                      resourceType: docType,
-                      title: docTitle.trim(),
-                      url: docUrl,
-                      body: docBody,
-                    }),
-                  ).catch((reason) => {
-                    setDocError(
-                      reason instanceof Error
-                        ? reason.message
-                        : "The document could not be saved.",
-                    );
-                  });
-                  setDocTitle("");
-                  setDocBody("");
-                  setDocUrl("");
-                }}
-                type="button"
-              >
-                <Plus size={13} /> Add
-              </button>
-            )}
-          </div>
-          {docError && <p className="do-signin-error" role="alert">{docError}</p>}
+                  type="button"
+                >
+                  <Plus size={13} /> Add
+                </button>
+              )}
+            </div>
+            <p className="do-docs-hint">
+              {docType === "file"
+                ? `Upload PDFs, images, or docs up to ${PROJECT_RESOURCE_MAX_MB} MB.`
+                : "Keep titles short so the list stays easy to scan."}
+            </p>
+            {docError && <p className="do-docs-error" role="alert">{docError}</p>}
+          </section>
+
           <section className="do-docs-drive">
             <div className="do-docs-drive-label">
               <FolderKanban size={16} />
               <span>
                 <strong>Google Drive</strong>
-                <small>{project.externalFolderName || driveRoot?.name || (driveConnected ? "Connected" : "Not connected")}</small>
+                <small>
+                  {project.externalFolderName ||
+                    driveRoot?.name ||
+                    (driveConnected ? "Connected" : "Not connected")}
+                </small>
               </span>
             </div>
             <div className="do-docs-drive-actions">
@@ -2968,7 +3011,9 @@ export function ProjectConsolePanel({
                 >
                   <option value="">Choose root folder</option>
                   {driveFolders.map((folder) => (
-                    <option key={folder.id} value={folder.id}>{folder.name}</option>
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
                   ))}
                 </select>
               )}
@@ -2982,30 +3027,28 @@ export function ProjectConsolePanel({
             </div>
             {driveMessage && <p>{driveMessage}</p>}
           </section>
+
           <div className="do-console-list do-docs-list">
             {documents.map((document) => {
-              const content = String(
-                document.content || document.body || document.description || "",
-              );
               const href = document.url || document.href;
               return (
                 <article key={document.id}>
-                  <FileText size={13} />
+                  <span className="do-docs-item-icon" aria-hidden="true">
+                    <FileText size={14} />
+                  </span>
                   <span>
-                    <strong>
-                      {document.title || document.name || "Untitled document"}
-                    </strong>
-                    <small>
-                      {resourceTypeLabel(document.resourceType)} ·{" "}
-                      {document.summary ||
-                        content.slice(0, 120) ||
-                        href ||
-                        "No summary recorded."}
-                    </small>
+                    <strong>{document.title || document.name || "Untitled document"}</strong>
+                    <small>{projectDocumentMeta(document)}</small>
                   </span>
                   {href && (
-                    <a href={href} rel="noreferrer" target="_blank" title="Open link">
-                      <LinkIcon size={12} />
+                    <a
+                      className="do-docs-item-link"
+                      href={href}
+                      rel="noreferrer"
+                      target="_blank"
+                      title="Open"
+                    >
+                      <ExternalLink size={13} />
                     </a>
                   )}
                 </article>

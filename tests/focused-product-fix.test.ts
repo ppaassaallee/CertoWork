@@ -8,6 +8,8 @@ import {
   PROJECT_RESOURCE_MAX_BYTES,
   isAllowedProjectResourceSize,
   looksLikeExternalUrl,
+  projectDocumentMeta,
+  projectResourceSizeLimitMessage,
 } from "../src/lib/projectResources";
 import { buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../src/lib/projectStatusReport";
 import { sidebarProjectGroups } from "../src/lib/projectPortfolio";
@@ -36,11 +38,26 @@ test("project delete is limited to manager or workspace owner", () => {
   assert.equal(canDeleteProject(project, { uid: "other" }, { ownerId: "owner" }, "ws_other"), false);
 });
 
-test("project resources reject files over 20MB and accept https links", () => {
-  assert.equal(isAllowedProjectResourceSize(20 * 1024 * 1024), true);
+test("project resources reject files over 50MB and accept https links", () => {
+  assert.equal(isAllowedProjectResourceSize(50 * 1024 * 1024), true);
   assert.equal(isAllowedProjectResourceSize(PROJECT_RESOURCE_MAX_BYTES + 1), false);
+  assert.equal(projectResourceSizeLimitMessage(), "Files must be 50 MB or smaller.");
   assert.equal(looksLikeExternalUrl("https://drive.google.com/file/d/abc"), true);
   assert.equal(looksLikeExternalUrl("javascript:alert(1)"), false);
+  assert.equal(
+    projectDocumentMeta({
+      resourceType: "file",
+      url: "https://firebasestorage.googleapis.com/v0/b/x/o/y.pdf",
+    }),
+    "Uploaded file",
+  );
+  assert.equal(
+    projectDocumentMeta({
+      resourceType: "link",
+      url: "https://docs.google.com/document/d/abc",
+    }),
+    "Add link · https://docs.google.com/document/d/abc",
+  );
 });
 
 test("invite tokens expire after 7 days and used invites are not reusable", () => {
