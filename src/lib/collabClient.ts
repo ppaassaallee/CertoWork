@@ -4,6 +4,7 @@ export type CollabStatus = {
   accountId: string;
   ready: boolean;
   mount?: string;
+  error?: string;
 };
 
 export type CollabRoom = {
@@ -38,19 +39,44 @@ export type CollabSsoResult = {
 };
 
 const COLLAB_DESK_PATH = "/app";
+const SSO_TIMEOUT_MS = 20_000;
+const READY_TIMEOUT_MS = 4_000;
+const LOGIN_TIMEOUT_MS = 12_000;
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export async function collabSessionIsReady() {
   try {
-    const profile = await fetch("/api/v1/profile", {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
+    const profile = await withTimeout(
+      fetch("/api/v1/profile", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
+      READY_TIMEOUT_MS,
+      "Chat Collab session check timed out.",
+    );
     if (profile.ok) return true;
     if (profile.status === 401 || profile.status === 403) return false;
-    const desk = await fetch(COLLAB_DESK_PATH, {
-      credentials: "include",
-      redirect: "manual",
-    });
+    const desk = await withTimeout(
+      fetch(COLLAB_DESK_PATH, {
+        credentials: "include",
+        redirect: "manual",
+      }),
+      READY_TIMEOUT_MS,
+      "Chat Collab desk check timed out.",
+    );
     const location = desk.headers.get("location") || "";
     return (
       desk.ok ||
@@ -66,7 +92,11 @@ export async function collabSessionIsReady() {
 export async function consumeCollabLogin(loginUrl: string) {
   const target = String(loginUrl || "").trim();
   if (!target) return;
-  await fetch(target, { credentials: "include", redirect: "follow" });
+  await withTimeout(
+    fetch(target, { credentials: "include", redirect: "follow" }),
+    LOGIN_TIMEOUT_MS,
+    "Chat Collab sign-in timed out.",
+  );
 }
 
 export async function openCollabDesk(input: {
@@ -82,10 +112,30 @@ export async function openCollabDesk(input: {
   if (await collabSessionIsReady()) {
     return { url: COLLAB_DESK_PATH, configured: true };
   }
-  const sso = await startCollabSso(input);
+  const sso = await withTimeout(
+    startCollabSso(input),
+    SSO_TIMEOUT_MS,
+    "Chat Collab SSO timed out. Check CHATWOOT_URL points at the private host proxied by certo.work.",
+  );
   const loginUrl = sso.loginUrl || (sso.url && /\/app\/login/.test(sso.url) ? sso.url : "");
-  if (!loginUrl) return sso;
-  await consumeCollabLogin(loginUrl);
+  if (!loginUrl) {
+    if (sso.error) return sso;
+    // Fall open to same-origin desk so the iframe can still load if cookies exist.
+    return { ...sso, url: COLLAB_DESK_PATH, configured: sso.configured !== false };
+  }
+  try {
+    await consumeCollabLogin(loginUrl);
+  } catch (reason) {
+    return {
+      ...sso,
+      url: COLLAB_DESK_PATH,
+      configured: true,
+      error:
+        reason instanceof Error
+          ? reason.message
+          : "Chat Collab sign-in did not finish; opening the desk anyway.",
+    };
+  }
   return {
     ...sso,
     url: COLLAB_DESK_PATH,
@@ -102,14 +152,37 @@ export async function warmCollabSession(input: {
   company?: string;
 }) {
   if (!input.email || !input.userId) return;
-  await openCollabDesk(input);
+  try {
+    await openCollabDesk(input);
+  } catch {
+    // Warm is best-effort; Collab tab will retry.
+  }
 }
 
 export async function loadCollabStatus(): Promise<CollabStatus> {
-  const response = await fetch("/api/collab/status");
+  const response = await withTimeout(
+    fetch("/api/collab/status"),
+    READY_TIMEOUT_MS,
+    "Chat Collab status timed out.",
+  ).catch(() => null);
+  if (!response) {
+    return {
+      configured: false,
+      origin: "",
+      accountId: "",
+      ready: false,
+      error: "Chat Collab status timed out.",
+    };
+  }
   const payload = (await response.json().catch(() => ({}))) as CollabStatus;
   if (!response.ok) {
-    return { configured: false, origin: "", accountId: "", ready: false };
+    return {
+      configured: false,
+      origin: "",
+      accountId: "",
+      ready: false,
+      error: payload.error || "Chat Collab is not available.",
+    };
   }
   return {
     configured: Boolean(payload.configured),
@@ -117,6 +190,7 @@ export async function loadCollabStatus(): Promise<CollabStatus> {
     accountId: String(payload.accountId || ""),
     ready: Boolean(payload.ready),
     mount: payload.mount,
+    error: payload.error,
   };
 }
 

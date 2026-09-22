@@ -1547,6 +1547,14 @@ export function DelivereeWorkspace() {
       ),
     [projects],
   );
+  const collabProjects = useMemo(
+    () =>
+      activeProjects.map((project) => ({
+        id: String(project.id),
+        name: entityTitle(project),
+      })),
+    [activeProjects],
+  );
   const sidebarProjects = useMemo(
     () => sidebarProjectGroups(projects),
     [projects],
@@ -10977,10 +10985,7 @@ export function DelivereeWorkspace() {
       {collabOpened ? (
         <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
           <ChatCollabModule
-            projects={activeProjects.map((project) => ({
-              id: String(project.id),
-              name: entityTitle(project),
-            }))}
+            projects={collabProjects}
             workspaceName={workspace?.name}
           />
         </div>

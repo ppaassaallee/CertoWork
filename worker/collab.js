@@ -2,12 +2,29 @@ export function chatwootConfig(env = {}) {
   const origin = String(env.CHATWOOT_URL || "").trim().replace(/\/+$/, "");
   const token = String(env.CHATWOOT_PLATFORM_TOKEN || "").trim();
   const accountId = String(env.CHATWOOT_ACCOUNT_ID || "").trim();
+  const saas = isPublicChatwootSaaS(origin);
   return {
     origin,
     token,
     accountId,
-    configured: Boolean(origin && token && accountId),
+    saas,
+    configured: Boolean(origin && token && accountId && !saas),
   };
+}
+
+/** Chatwoot cloud cannot be same-origin proxied on certo.work. */
+export function isPublicChatwootSaaS(origin) {
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return (
+      host === "www.chatwoot.com" ||
+      host === "chatwoot.com" ||
+      host === "app.chatwoot.com" ||
+      host.endsWith(".chatwoot.com")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function publicOriginFrom(value) {
@@ -19,12 +36,41 @@ export function publicOriginFrom(value) {
 }
 
 export function collabStatusPayload(env = {}, publicOrigin = "") {
-  const { accountId, configured } = chatwootConfig(env);
+  const { accountId, configured, origin, saas, token } = chatwootConfig(env);
+  if (saas) {
+    return {
+      configured: false,
+      origin: "",
+      accountId: "",
+      ready: false,
+      mount: "same-origin",
+      error:
+        "CHATWOOT_URL points at Chatwoot cloud. Use the private host from ops/chatwoot (proxied on certo.work), not www.chatwoot.com.",
+    };
+  }
+  if (!configured) {
+    const missing = [];
+    if (!origin) missing.push("CHATWOOT_URL");
+    if (!token) missing.push("CHATWOOT_PLATFORM_TOKEN");
+    if (!accountId) missing.push("CHATWOOT_ACCOUNT_ID");
+    return {
+      configured: false,
+      origin: "",
+      accountId: "",
+      ready: false,
+      mount: "same-origin",
+      ...(missing.length
+        ? {
+            error: `Chat Collab secrets incomplete: set ${missing.join(", ")} on the certo.work Worker.`,
+          }
+        : {}),
+    };
+  }
   return {
-    configured,
-    origin: configured ? publicOriginFrom(publicOrigin) : "",
-    accountId: configured ? accountId : "",
-    ready: configured,
+    configured: true,
+    origin: publicOriginFrom(publicOrigin),
+    accountId,
+    ready: true,
     mount: "same-origin",
   };
 }
@@ -380,6 +426,14 @@ async function applyPlatformProfile(env, { userId, accountId, displayName, compa
 
 export async function provisionCollabSso(env, input, publicOrigin = "", options = {}) {
   const config = chatwootConfig(env);
+  if (config.saas) {
+    const error = new Error(
+      "CHATWOOT_URL is Chatwoot cloud. Point it at the private certo-chatwoot host so certo.work can proxy /app.",
+    );
+    error.status = 503;
+    error.configured = false;
+    throw error;
+  }
   if (!config.configured) {
     const error = new Error("Chat Collab is not configured.");
     error.status = 503;

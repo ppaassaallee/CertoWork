@@ -5,6 +5,11 @@ the Cloudflare Worker proxies. Do not create `collab.certo.work`.
 
 `FRONTEND_URL` is always `https://certo.work`.
 
+**Do not set `CHATWOOT_URL` to `https://www.chatwoot.com`.** Cloud Chatwoot
+cannot be same-origin proxied. Upload/deploy this `ops/chatwoot` stack (or your
+private VM), then point Worker secrets at that private origin
+(`http://<vm-ip>:3000`). The UI iframe loads `/app` on certo.work.
+
 ## What you log into
 
 Google Cloud login stays with you. This recipe uses Firebase project

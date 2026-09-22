@@ -38,7 +38,21 @@ test("Chat Collab is a separate lens from work surfaces", () => {
   assert.equal(productHomePath("collab"), "/collab");
   assert.equal(collabProjectPath("p1"), "/collab/projects/p1");
   assert.equal(collabProjectIdFromLocation("/collab/projects/p1"), "p1");
+  assert.equal(collabProjectIdFromLocation("/collab/project/p1"), "p1");
   assert.equal(collabProjectIdFromLocation("/collab", "?project=p1"), "p1");
+});
+
+test("collab status rejects Chatwoot cloud SaaS URLs", () => {
+  const saas = collabStatusPayload(
+    {
+      CHATWOOT_URL: "https://www.chatwoot.com",
+      CHATWOOT_PLATFORM_TOKEN: "tok",
+      CHATWOOT_ACCOUNT_ID: "1",
+    },
+    "https://certo.work",
+  );
+  assert.equal(saas.configured, false);
+  assert.match(String(saas.error || ""), /cloud|www\.chatwoot\.com|private/i);
 });
 
 test("mobile core does not bounce Chat Collab back to Home", () => {
@@ -53,6 +67,8 @@ test("collab status never exposes the Chatwoot platform token or private origin"
     accountId: "",
     ready: false,
     mount: "same-origin",
+    error:
+      "Chat Collab secrets incomplete: set CHATWOOT_URL, CHATWOOT_PLATFORM_TOKEN, CHATWOOT_ACCOUNT_ID on the certo.work Worker.",
   });
   const payload = collabStatusPayload(
     {

@@ -6,6 +6,7 @@ import { CertoMark } from "./CertoMark";
 import { useAuth } from "../lib/AuthContext";
 import {
   collabProjectIdFromLocation,
+  collabProjectPath,
   isConfiguredCollab,
 } from "../lib/collabModule";
 import {
@@ -33,9 +34,11 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   const [embedUrl, setEmbedUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [retryNonce, setRetryNonce] = useState(0);
   const selectedProjectId = collabProjectIdFromLocation(location.pathname, location.search);
   const openedFor = useRef("");
   const roomsSyncedFor = useRef("");
+  const deskBootstrapped = useRef(false);
 
   const projectList = useMemo(
     () =>
@@ -47,61 +50,89 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
         .filter((project) => project.id),
     [projects],
   );
-  const projectSignature = projectList
-    .map((project) => `${project.id}:${project.name}`)
-    .sort()
-    .join("|");
+  const projectSignature = useMemo(
+    () =>
+      projectList
+        .map((project) => `${project.id}:${project.name}`)
+        .sort()
+        .join("|"),
+    [projectList],
+  );
+
+  const userId = user?.uid || "";
+  const userEmail = user?.email || "";
+  const workspaceId = workspace?.id || "";
+  const sessionKey = `${userId}:${workspaceId}`;
+  const userRef = useRef(user);
+  const projectsRef = useRef(projectList);
+  userRef.current = user;
+  projectsRef.current = projectList;
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const key = `${user?.uid || ""}:${workspace?.id || ""}`;
-      const alreadyOpen = openedFor.current === key && Boolean(key);
+      if (!sessionKey || !userEmail) {
+        setLoading(false);
+        setError(userId ? "Sign in with an email to open Chat Collab." : "");
+        return;
+      }
+
+      const alreadyOpen = openedFor.current === sessionKey && deskBootstrapped.current;
       if (!alreadyOpen) {
         setLoading(true);
         setError("");
       }
+
       try {
-        const nextStatus = alreadyOpen ? null : await loadCollabStatus();
+        const nextStatus = await loadCollabStatus();
         if (cancelled) return;
-        if (nextStatus) setStatus(nextStatus);
-        const configured = alreadyOpen || isConfiguredCollab(nextStatus);
-        if (!configured) return;
-        if (!user?.email || !workspace) {
-          setError("Sign in with an email to open Chat Collab.");
+        setStatus(nextStatus);
+        if (!isConfiguredCollab(nextStatus)) {
+          setError(nextStatus.error || "");
           return;
         }
-        const token = await user.getIdToken();
+
+        const activeUser = userRef.current;
+        if (!activeUser) return;
+        const token = await activeUser.getIdToken();
+        if (cancelled) return;
+        const rooms = projectsRef.current;
         const identity = {
           token,
-          userId: user.uid,
-          workspaceId: workspace.id,
-          email: user.email,
-          displayName: user.displayName || workspaceName || "Certo Work",
+          userId,
+          workspaceId,
+          email: userEmail,
+          displayName: activeUser.displayName || workspaceName || "Certo Work",
           company: workspaceName || "",
         };
+
         if (!alreadyOpen) {
           const desk = await openCollabDesk({
             ...identity,
             projectId: selectedProjectId,
+            projects: rooms,
           });
           if (cancelled) return;
           if (desk.error && !desk.url) {
             setError(desk.error);
             return;
           }
-          openedFor.current = key;
-          setEmbedUrl(COLLAB_DESK);
+          if (desk.error) setError(desk.error);
+          openedFor.current = sessionKey;
+          deskBootstrapped.current = true;
+          setEmbedUrl(desk.url || COLLAB_DESK);
           setLoading(false);
         }
-        if (roomsSyncedFor.current === projectSignature) return;
+
+        const syncKey = `${sessionKey}:${projectSignature}:${selectedProjectId}`;
+        if (roomsSyncedFor.current === syncKey) return;
         await syncCollabRooms({
           ...identity,
           projectId: selectedProjectId,
-          projects: projectList,
+          projects: rooms,
         });
         if (cancelled) return;
-        roomsSyncedFor.current = projectSignature;
+        roomsSyncedFor.current = syncKey;
       } catch (reason) {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : "Chat Collab is unavailable.");
@@ -114,11 +145,20 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [projectList, projectSignature, selectedProjectId, user, workspace, workspaceName]);
+  }, [
+    sessionKey,
+    userEmail,
+    userId,
+    workspaceId,
+    workspaceName,
+    selectedProjectId,
+    projectSignature,
+    retryNonce,
+  ]);
 
-  const configured = isConfiguredCollab(status);
+  const configured = isConfiguredCollab(status) || Boolean(embedUrl);
   const selectedProject = projectList.find((project) => project.id === selectedProjectId);
-  const visibleRooms = projectList.slice(0, 5);
+  const visibleRooms = projectList.slice(0, 8);
 
   return (
     <div className="do-collab-shell" data-testid="chat-collab-module">
@@ -163,7 +203,7 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
               <button
                 className={project.id === selectedProjectId ? "is-active" : ""}
                 key={project.id}
-                onClick={() => navigate(`/collab/project/${encodeURIComponent(project.id)}`)}
+                onClick={() => navigate(collabProjectPath(project.id))}
                 type="button"
               >
                 <span><Folder size={14} /></span>
@@ -174,7 +214,7 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
           </div>
           <div className="do-collab-sidebar-note">
             <ShieldCheck size={15} />
-            <span>Private to workspace members with access. Project rooms sync automatically.</span>
+            <span>Private to workspace members with access. Project rooms sync automatically on certo.work.</span>
           </div>
         </aside>
         <main className="do-collab-stage">
@@ -199,8 +239,8 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
               <MessageSquare size={22} />
               <h1>Chat Collab opens on certo.work</h1>
               <p>
-                Switch Work and Collab in the rail. Each Certo Work project gets a
-                room in the desk. There is no collab subdomain.
+                {error ||
+                  "Wire the private Chatwoot host (ops/chatwoot) with CHATWOOT_URL, CHATWOOT_PLATFORM_TOKEN, and CHATWOOT_ACCOUNT_ID. Do not point at www.chatwoot.com — the Worker proxies /app on certo.work."}
               </p>
               <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
                 {t("productBackToWork")}
@@ -211,19 +251,39 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
             <div className="do-collab-state" role="alert">
               <h1>Chat Collab could not open</h1>
               <p>{error}</p>
-              <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
-                {t("productBackToWork")}
+              <button
+                className="do-collab-back"
+                onClick={() => {
+                  openedFor.current = "";
+                  deskBootstrapped.current = false;
+                  roomsSyncedFor.current = "";
+                  setEmbedUrl("");
+                  setStatus(null);
+                  setError("");
+                  setLoading(true);
+                  setRetryNonce((n) => n + 1);
+                }}
+                type="button"
+              >
+                Retry
               </button>
             </div>
           )}
           {configured && embedUrl && (
-            <iframe
-              allow="clipboard-read; clipboard-write; microphone; camera"
-              className="do-collab-frame"
-              data-testid="chat-collab-frame"
-              src={embedUrl}
-              title="Chat Collab"
-            />
+            <>
+              {error ? (
+                <p className="do-collab-inline-error" role="status">
+                  {error}
+                </p>
+              ) : null}
+              <iframe
+                allow="clipboard-read; clipboard-write; microphone; camera"
+                className="do-collab-frame"
+                data-testid="chat-collab-frame"
+                src={embedUrl}
+                title="Chat Collab"
+              />
+            </>
           )}
         </main>
       </div>
