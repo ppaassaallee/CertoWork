@@ -422,7 +422,7 @@ export function HomeCockpit({
             marginBottom: 16,
             padding: "12px 14px",
             borderRadius: 12,
-            background: "color-mix(in srgb, var(--accent, #2547C4) 8%, transparent)",
+            background: "color-mix(in srgb, var(--accent) 8%, transparent)",
           }}
         >
           <div>

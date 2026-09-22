@@ -8615,7 +8615,7 @@ export function DelivereeWorkspace() {
                 gap: 12,
                 alignItems: "center",
                 justifyContent: "space-between",
-                background: "color-mix(in srgb, var(--accent, #2547C4) 8%, transparent)",
+                background: "color-mix(in srgb, var(--accent) 8%, transparent)",
               }}
             >
               <div>
