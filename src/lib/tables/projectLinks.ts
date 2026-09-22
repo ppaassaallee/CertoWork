@@ -1,4 +1,10 @@
-import { arrayRemove, arrayUnion, doc, updateDoc } from "firebase/firestore";
+import {
+  arrayRemove,
+  arrayUnion,
+  doc,
+  updateDoc,
+  type FieldValue,
+} from "firebase/firestore";
 import { db } from "../firebase";
 import { TABLES, type Column, type TableDoc } from "./types";
 
@@ -7,6 +13,12 @@ export type ProjectTableRole = "home" | "related";
 export type ProjectTableRef = {
   table: TableDoc;
   role: ProjectTableRole;
+};
+
+type TableLinkPatch = {
+  projectId?: string | null;
+  relatedProjectIds?: FieldValue | string[];
+  updatedAt: string;
 };
 
 function nowIso() {
@@ -61,10 +73,6 @@ export async function setTableHomeProject(input: {
   previousProjectId?: string | null;
 }): Promise<void> {
   const ref = doc(db, TABLES, input.tableId);
-  const patch: Record<string, unknown> = {
-    projectId: input.projectId,
-    updatedAt: nowIso(),
-  };
   // Home must not also sit in related — remove first so a later union is clean.
   if (input.projectId) {
     await updateDoc(ref, {
@@ -72,6 +80,10 @@ export async function setTableHomeProject(input: {
       updatedAt: nowIso(),
     });
   }
+  const patch: TableLinkPatch = {
+    projectId: input.projectId,
+    updatedAt: nowIso(),
+  };
   if (
     input.keepPreviousAsRelated &&
     input.previousProjectId &&
@@ -122,7 +134,7 @@ export async function unlinkTableFromProject(input: {
 }): Promise<void> {
   const projectId = String(input.projectId || "").trim();
   if (!projectId) return;
-  const patch: Record<string, unknown> = {
+  const patch: TableLinkPatch = {
     relatedProjectIds: arrayRemove(projectId),
     updatedAt: nowIso(),
   };
