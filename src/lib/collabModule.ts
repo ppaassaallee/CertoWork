@@ -22,7 +22,8 @@ export function collabProjectPath(projectId: string) {
 
 export function collabProjectIdFromLocation(pathname: string, search = "") {
   const path = pathname.replace(/\/+$/, "") || "/";
-  const match = path.match(/^\/collab\/projects\/([^/]+)$/);
+  // Prefer plural (canonical). Also accept singular typos from older builds.
+  const match = path.match(/^\/collab\/projects?\/([^/]+)$/);
   if (match?.[1]) return decodeURIComponent(match[1]);
   const query = search.startsWith("?") ? search.slice(1) : search;
   return String(new URLSearchParams(query).get("project") || "").trim();
