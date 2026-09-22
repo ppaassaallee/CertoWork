@@ -61,7 +61,12 @@ test("create coerces project visibility without projectId to workspace", () => {
     resolve(root, "src/features/tables/CreateTableWizard.tsx"),
     "utf8",
   );
-  assert.match(wizard, /visibility === "project" \? "workspace"/);
+  // Without a home projectId, picking "project" visibility must fall back to workspace.
+  assert.match(wizard, /homeProjectId/);
+  assert.match(
+    wizard,
+    /visibility === "project"[\s\n]*\? "workspace"/,
+  );
 });
 
 test("TABLES and TABLE_RECORDS listeners are workspace-scoped", () => {
