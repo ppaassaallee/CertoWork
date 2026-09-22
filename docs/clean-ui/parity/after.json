@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T16:34:54.829Z",
+  "generatedAt": "2026-09-22T16:50:53.277Z",
   "mode": "static-source-analysis",
   "viewportNote": "Playwright 1440x900 / 390x844 deferred — see ASSUMPTIONS.md",
   "routeCount": 38,
@@ -7,6 +7,7 @@
   "routes": [
     {
       "path": "/home",
+      "routeId": "home",
       "lens": {
         "kind": "home"
       },
@@ -592,11 +593,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "home"
+      ]
     },
     {
       "path": "/my-work",
+      "routeId": "my-work:assigned",
       "lens": {
         "kind": "my-work",
         "section": "assigned"
@@ -1943,11 +1944,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:assigned"
+      ]
     },
     {
       "path": "/my-work/inbox",
+      "routeId": "my-work:inbox",
       "lens": {
         "kind": "my-work",
         "section": "inbox"
@@ -3294,11 +3295,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:inbox"
+      ]
     },
     {
       "path": "/my-work/waiting",
+      "routeId": "my-work:waiting",
       "lens": {
         "kind": "my-work",
         "section": "waiting"
@@ -4645,11 +4646,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:waiting"
+      ]
     },
     {
       "path": "/my-work/today",
+      "routeId": "my-work:today",
       "lens": {
         "kind": "my-work",
         "section": "today"
@@ -5996,11 +5997,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:today"
+      ]
     },
     {
       "path": "/my-work/this-week",
+      "routeId": "my-work:this_week",
       "lens": {
         "kind": "my-work",
         "section": "this_week"
@@ -7347,11 +7348,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:this_week"
+      ]
     },
     {
       "path": "/my-work/captured",
+      "routeId": "my-work:captured",
       "lens": {
         "kind": "my-work",
         "section": "captured"
@@ -8698,11 +8699,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:captured"
+      ]
     },
     {
       "path": "/my-work/reviews",
+      "routeId": "my-work:reviews",
       "lens": {
         "kind": "my-work",
         "section": "reviews"
@@ -10049,11 +10050,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "my-work:reviews"
+      ]
     },
     {
       "path": "/projects",
+      "routeId": "work:portfolio",
       "lens": {
         "kind": "work",
         "section": "portfolio"
@@ -11240,11 +11241,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "work:portfolio"
+      ]
     },
     {
       "path": "/my-work",
+      "routeId": "work:issues",
       "lens": {
         "kind": "work",
         "section": "issues"
@@ -12431,11 +12432,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "work:issues"
+      ]
     },
     {
       "path": "/my-work/inbox",
+      "routeId": "work:intake",
       "lens": {
         "kind": "work",
         "section": "intake"
@@ -13622,11 +13623,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "work:intake"
+      ]
     },
     {
       "path": "/agents",
+      "routeId": "agents:home",
       "lens": {
         "kind": "agents",
         "section": "home"
@@ -18516,11 +18517,11 @@
         "workspace_members",
         "workspace_settings",
         "workspaces"
-      ],
-      "routeId": "agents:home"
+      ]
     },
     {
       "path": "/rutinas",
+      "routeId": "agents:automations",
       "lens": {
         "kind": "agents",
         "section": "automations"
@@ -23410,11 +23411,11 @@
         "workspace_members",
         "workspace_settings",
         "workspaces"
-      ],
-      "routeId": "agents:automations"
+      ]
     },
     {
       "path": "/agents/activity",
+      "routeId": "agents:activity",
       "lens": {
         "kind": "agents",
         "section": "activity"
@@ -28304,11 +28305,11 @@
         "workspace_members",
         "workspace_settings",
         "workspaces"
-      ],
-      "routeId": "agents:activity"
+      ]
     },
     {
       "path": "/rutinas",
+      "routeId": "routines:index",
       "lens": {
         "kind": "routines"
       },
@@ -33197,11 +33198,11 @@
         "workspace_members",
         "workspace_settings",
         "workspaces"
-      ],
-      "routeId": "routines:index"
+      ]
     },
     {
       "path": "/work/projects/sample-a",
+      "routeId": "project:sample-a:overview",
       "lens": {
         "kind": "project",
         "projectId": "sample-a",
@@ -34389,11 +34390,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "project:sample-a:overview"
+      ]
     },
     {
       "path": "/work/projects/sample-a/notes",
+      "routeId": "project:sample-a:notes",
       "lens": {
         "kind": "project",
         "projectId": "sample-a",
@@ -35581,11 +35582,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "project:sample-a:notes"
+      ]
     },
     {
       "path": "/work/projects/sample-a/tasks",
+      "routeId": "project:sample-a:tasks",
       "lens": {
         "kind": "project",
         "projectId": "sample-a",
@@ -36773,11 +36774,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "project:sample-a:tasks"
+      ]
     },
     {
       "path": "/work/projects/sample-b",
+      "routeId": "project:sample-b:overview",
       "lens": {
         "kind": "project",
         "projectId": "sample-b",
@@ -37965,11 +37966,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "project:sample-b:overview"
+      ]
     },
     {
       "path": "/approvals",
+      "routeId": "approvals",
       "lens": {
         "kind": "approvals"
       },
@@ -38515,11 +38516,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "approvals"
+      ]
     },
     {
       "path": "/invoices",
+      "routeId": "invoices",
       "lens": {
         "kind": "invoices"
       },
@@ -39074,11 +39075,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "invoices"
+      ]
     },
     {
       "path": "/settings",
+      "routeId": "settings",
       "lens": {
         "kind": "settings"
       },
@@ -39624,11 +39625,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "settings"
+      ]
     },
     {
       "path": "/collab",
+      "routeId": "collab",
       "lens": {
         "kind": "collab"
       },
@@ -40263,11 +40264,11 @@
         "workspace_members",
         "workspace_settings",
         "workspaces"
-      ],
-      "routeId": "collab"
+      ]
     },
     {
       "path": "/supportops",
+      "routeId": "feedback:submit",
       "lens": {
         "kind": "feedback",
         "section": "submit"
@@ -40814,11 +40815,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "feedback:submit"
+      ]
     },
     {
       "path": "/workspace/supportops",
+      "routeId": "feedback:queue",
       "lens": {
         "kind": "feedback",
         "section": "queue"
@@ -41365,11 +41366,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "feedback:queue"
+      ]
     },
     {
       "path": "/requests",
+      "routeId": "requests:inbox",
       "lens": {
         "kind": "requests",
         "section": "inbox"
@@ -41916,11 +41917,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "requests:inbox"
+      ]
     },
     {
       "path": "/requests/mine",
+      "routeId": "requests:mine",
       "lens": {
         "kind": "requests",
         "section": "mine"
@@ -42467,11 +42468,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "requests:mine"
+      ]
     },
     {
       "path": "/requests/waiting",
+      "routeId": "requests:waiting",
       "lens": {
         "kind": "requests",
         "section": "waiting"
@@ -43018,11 +43019,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "requests:waiting"
+      ]
     },
     {
       "path": "/requests/resolved",
+      "routeId": "requests:resolved",
       "lens": {
         "kind": "requests",
         "section": "resolved"
@@ -43569,11 +43570,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "requests:resolved"
+      ]
     },
     {
       "path": "/requests/new",
+      "routeId": "requests:new",
       "lens": {
         "kind": "requests",
         "section": "new"
@@ -44120,11 +44121,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "requests:new"
+      ]
     },
     {
       "path": "/notes",
+      "routeId": "notes",
       "lens": {
         "kind": "notes"
       },
@@ -44678,11 +44679,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "notes"
+      ]
     },
     {
       "path": "/tables",
+      "routeId": "tables:index",
       "lens": {
         "kind": "tables"
       },
@@ -45630,11 +45631,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "tables:index"
+      ]
     },
     {
       "path": "/tables/sample-table",
+      "routeId": "tables:sample-table",
       "lens": {
         "kind": "tables",
         "tableId": "sample-table"
@@ -46583,11 +46584,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "tables:sample-table"
+      ]
     },
     {
       "path": "/dashboard",
+      "routeId": "dashboard",
       "lens": {
         "kind": "dashboard"
       },
@@ -47133,11 +47134,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "dashboard"
+      ]
     },
     {
       "path": "/workload",
+      "routeId": "workload",
       "lens": {
         "kind": "workload"
       },
@@ -47683,11 +47684,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "workload"
+      ]
     },
     {
       "path": "/more/automations",
+      "routeId": "more:automations",
       "lens": {
         "kind": "more",
         "section": "automations"
@@ -48234,11 +48235,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "more:automations"
+      ]
     },
     {
       "path": "/workspace",
+      "routeId": "more:workspace",
       "lens": {
         "kind": "more",
         "section": "workspace"
@@ -48785,11 +48786,11 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "more:workspace"
+      ]
     },
     {
       "path": "/inbox",
+      "routeId": "inbox",
       "lens": {
         "kind": "inbox"
       },
@@ -49335,8 +49336,7 @@
         "user_notifications",
         "workspace_members",
         "workspaces"
-      ],
-      "routeId": "inbox"
+      ]
     }
   ]
 }

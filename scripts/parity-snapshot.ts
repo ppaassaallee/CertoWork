@@ -32,6 +32,7 @@ type Control = {
 
 type RouteSnapshot = {
   path: string;
+  routeId: string;
   lens: DelivereeLens;
   controls: Control[];
   collections: string[];
@@ -231,6 +232,19 @@ function sourceFilesForLens(lens: DelivereeLens): string[] {
   return [...files].filter((f) => fs.existsSync(f));
 }
 
+function routeIdFor(lens: DelivereeLens) {
+  if (lens.kind === "my-work") return `my-work:${lens.section}`;
+  if (lens.kind === "work") return `work:${lens.section}`;
+  if (lens.kind === "agents") return `agents:${lens.section}`;
+  if (lens.kind === "project") return `project:${lens.projectId}:${lens.tab}`;
+  if (lens.kind === "feedback") return `feedback:${lens.section}`;
+  if (lens.kind === "requests") return `requests:${lens.section}`;
+  if (lens.kind === "tables") return `tables:${lens.tableId || "index"}`;
+  if (lens.kind === "more") return `more:${lens.section}`;
+  if (lens.kind === "routines") return `routines:${lens.routineId || "index"}`;
+  return lens.kind;
+}
+
 function snapshotRoutes(): RouteSnapshot[] {
   return routeMatrix().map((lens) => {
     const files = sourceFilesForLens(lens);
@@ -257,11 +271,19 @@ function snapshotRoutes(): RouteSnapshot[] {
       });
     return {
       path: lensToPath(lens),
+      routeId: routeIdFor(lens),
       lens,
       controls: unique,
       collections: [...collections].sort(),
     };
   });
+}
+
+function controlKey(c: Control) {
+  const name = c.name.replace(/\s+/g, " ").trim();
+  if (c.testId) return `testid:${c.testId}|${c.handlerHash}`;
+  if (c.href) return `href:${c.href}|${c.handlerHash}`;
+  return `${c.role}|${name}|${c.handlerHash}`;
 }
 
 function compare(baselinePath: string, afterPath: string) {
@@ -270,38 +292,36 @@ function compare(baselinePath: string, afterPath: string) {
   const diffs: string[] = [];
   const baseRoutes: RouteSnapshot[] = baseline.routes;
   const afterRoutes: RouteSnapshot[] = after.routes;
-  const afterByPath = new Map(afterRoutes.map((r) => [r.path, r]));
+  const afterById = new Map(
+    afterRoutes.map((r) => [r.routeId || r.path, r]),
+  );
   for (const route of baseRoutes) {
-    const next = afterByPath.get(route.path);
+    const id = route.routeId || route.path;
+    const next = afterById.get(id);
     if (!next) {
-      diffs.push(`MISSING_ROUTE ${route.path}`);
+      diffs.push(`MISSING_ROUTE ${id}`);
       continue;
     }
-    const baseKeys = new Set(
-      route.controls.map((c) => `${c.role}|${c.name}|${c.testId}|${c.href}|${c.handlerHash}`),
-    );
-    const nextKeys = new Set(
-      next.controls.map((c) => `${c.role}|${c.name}|${c.testId}|${c.href}|${c.handlerHash}`),
-    );
+    const baseKeys = new Set(route.controls.map(controlKey));
+    const nextKeys = new Set(next.controls.map(controlKey));
     for (const key of baseKeys) {
-      if (!nextKeys.has(key)) diffs.push(`LOST_CONTROL ${route.path} :: ${key}`);
+      if (!nextKeys.has(key)) diffs.push(`LOST_CONTROL ${id} :: ${key}`);
     }
     for (const key of nextKeys) {
       if (!baseKeys.has(key)) {
-        // Track B may add; Track A compare treats additions as fail unless --allow-additions
         if (!process.argv.includes("--allow-additions")) {
-          diffs.push(`ADDED_CONTROL ${route.path} :: ${key}`);
+          diffs.push(`ADDED_CONTROL ${id} :: ${key}`);
         }
       }
     }
     const baseCols = new Set(route.collections);
     const nextCols = new Set(next.collections);
     for (const c of baseCols) {
-      if (!nextCols.has(c)) diffs.push(`LOST_COLLECTION ${route.path} :: ${c}`);
+      if (!nextCols.has(c)) diffs.push(`LOST_COLLECTION ${id} :: ${c}`);
     }
     if (!process.argv.includes("--allow-additions")) {
       for (const c of nextCols) {
-        if (!baseCols.has(c)) diffs.push(`ADDED_COLLECTION ${route.path} :: ${c}`);
+        if (!baseCols.has(c)) diffs.push(`ADDED_COLLECTION ${id} :: ${c}`);
       }
     }
   }
