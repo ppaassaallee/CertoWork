@@ -4,3 +4,4 @@ export * from "./actionExecutor";
 export * from "./hermesClient";
 export * from "./hermesAdapter";
 export * from "./certoMcp";
+export * from "./boldiAdapter";

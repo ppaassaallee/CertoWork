@@ -83,15 +83,108 @@ export interface AgentVersion {
   agentId: string;
   version: number;
   instructions: string;
+  /** Short statement of what this agent owns. */
+  owns?: string;
+  /** Outcome the agent works toward. */
+  outcome?: string;
+  icon?: { emoji?: string; color?: string };
+  model?: {
+    provider: string;
+    name: string;
+    tier: "fast" | "balanced" | "deep";
+  };
   skills: Array<{ skillId: string; name: string }>;
   dataAccess: Array<{ resource: string; mode: "read" | "propose" }>;
-  connections: Array<{ connectionId: string; allowedTools: string[] }>;
+  connections: Array<{
+    connectionId: string;
+    allowedTools: string[];
+    account?: { mode: "service" | "user"; userId?: string };
+  }>;
   actionPolicy: Record<string, "allow" | "ask" | "deny">;
   memoryPolicy: { recall: boolean; rememberRequiresApproval: boolean };
   runtimePolicy: { terminal: boolean; browser: boolean; web: boolean };
   checksum: string;
   createdBy: string;
   createdAt?: unknown;
+}
+
+export interface AgentTriggerFilters {
+  projectIds?: string[];
+  states?: string[];
+  labels?: string[];
+  assigneeIds?: string[];
+  types?: string[];
+}
+
+export type AgentDomainEvent =
+  | "created"
+  | "updated"
+  | "state_changed"
+  | "reassigned"
+  | "removed"
+  | "assigned_to_agent"
+  | "mentioned";
+
+export interface AgentTrigger {
+  id?: string;
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  type: TriggerType;
+  enabled: boolean;
+  eventType?: string;
+  /** Domain events this trigger listens to (when type is domain_event). */
+  events?: AgentDomainEvent[];
+  filters?: AgentTriggerFilters;
+  schedule?: string;
+  timezone?: string;
+  hermesJobId?: string;
+  cooldownSeconds?: number;
+}
+
+export interface AgentRunRecord {
+  id?: string;
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  triggerType: TriggerType;
+  status: NormalizedRunStatus;
+  hermesProfile?: string;
+  hermesRunId?: string;
+  inputSummary: string;
+  resultSummary?: string;
+  /** Live step label for board/list activity chips. */
+  currentStepLabel?: string;
+  /** Optional warning finding shown as a signal chip. */
+  findingLabel?: string;
+  eventType?: string;
+  context?: {
+    itemId?: string;
+    projectId?: string;
+    conversationId?: string;
+    messageId?: string;
+  };
+  traceId: string;
+  correlationId: string;
+  causationId?: string;
+  depth?: number;
+  errorMessage?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface AgentTemplate {
+  id: string;
+  workspaceId?: string | null;
+  name: string;
+  description: string;
+  owns: string;
+  outcome: string;
+  worksOn: string[];
+  skillNames: string[];
+  system: boolean;
+  versionSeed: Partial<AgentVersion>;
+  triggerSeeds: Array<Partial<AgentTrigger>>;
 }
 
 export interface AgentRuntimeBinding {
@@ -116,22 +209,6 @@ export interface RuntimeInstance {
   hermesVersion: string;
 }
 
-export interface AgentRunRecord {
-  id?: string;
-  workspaceId: string;
-  agentId: string;
-  agentVersionId: string;
-  triggerType: TriggerType;
-  status: NormalizedRunStatus;
-  hermesProfile?: string;
-  hermesRunId?: string;
-  inputSummary: string;
-  resultSummary?: string;
-  traceId: string;
-  correlationId: string;
-  errorMessage?: string;
-}
-
 export interface AgentAction {
   id?: string;
   workspaceId: string;
@@ -146,20 +223,6 @@ export interface AgentAction {
   reason: string;
   idempotencyKey: string;
   status: AgentActionStatus;
-}
-
-export interface AgentTrigger {
-  id?: string;
-  workspaceId: string;
-  agentId: string;
-  agentVersionId: string;
-  type: TriggerType;
-  enabled: boolean;
-  eventType?: string;
-  schedule?: string;
-  timezone?: string;
-  hermesJobId?: string;
-  cooldownSeconds?: number;
 }
 
 export const BUILT_IN_ODYSSEUS_SLUG = "odysseus";
