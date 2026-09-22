@@ -56,20 +56,24 @@ test("project rooms stay separate from other channels and can be searched", () =
   assert.equal(collabItemMatches(atlas, "atl"), true);
 });
 
-test("Chatwoot Channels keeps project rooms searchable without a Certo left bar", () => {
+test("Chatwoot desk is full-bleed; Certo chrome is a float overlay only", () => {
   const collab = readFileSync(resolve("src/components/ChatCollabModule.tsx"), "utf8");
   const worker = readFileSync(resolve("worker/collab.js"), "utf8");
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.doesNotMatch(collab, /do-collab-nav/);
   assert.doesNotMatch(collab, /do-collab-sidebar/);
   assert.doesNotMatch(collab, /do-collab-room-stack/);
+  assert.doesNotMatch(collab, /do-collab-rail/);
+  assert.doesNotMatch(collab, /do-collab-room-picker/);
   assert.match(collab, /do-collab-frame/);
-  assert.match(collab, /do-collab-room-picker/);
+  assert.match(collab, /do-collab-float/);
+  assert.match(collab, /is-desk/);
   assert.match(worker, /Search project rooms/);
   assert.match(worker, /Project rooms/);
   assert.match(worker, /Other channels/);
   assert.match(worker, /arrangeList/);
   assert.match(css, /do-collab-stage/);
   assert.match(css, /do-collab-frame-wrap/);
+  assert.match(css, /do-collab-float/);
   assert.doesNotMatch(worker, /max-height: min\(56vh, 32rem\)/);
 });

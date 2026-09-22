@@ -19683,11 +19683,13 @@ a {
 .do-product-pane[hidden] {
   display: none !important;
 }
+
 .do-product-pane .do-collab-shell {
   flex: 1;
   min-height: 0;
 }
 .do-collab-shell {
+  position: relative;
   display: flex;
   width: 100%;
   height: 100dvh;
@@ -19695,92 +19697,72 @@ a {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  background: var(--surface-0);
+  background: #fff;
+}
+.do-collab-shell.is-desk {
+  background: #f8f9fb;
+}
+/* Tiny Certo overlay — Chatwoot owns the four-pane desk. */
+.do-collab-float {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #fff 92%, transparent);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(10px);
+}
+.do-collab-float .do-product-switch {
+  margin: 0;
+  width: auto;
+  min-width: 0;
+}
+.do-collab-float-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #475569);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.do-collab-float-back:hover {
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text-primary, #0f172a);
 }
 .do-collab-brand {
+  display: none;
+}
+.do-collab-search,
+.do-collab-rail,
+.do-collab-room-picker,
+.do-collab-rail-copy {
+  display: none !important;
+}
+.do-collab-back {
   display: inline-flex;
-  min-width: 0;
+  margin-left: auto;
   align-items: center;
-  gap: 8px;
-  color: var(--text-primary);
-}
-.do-collab-brand span {
-  display: grid;
-  min-width: 0;
-  line-height: 1.15;
-}
-.do-collab-brand strong {
-  font-size: 13px;
-}
-.do-collab-brand small {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.do-collab-search {
-  display: inline-flex;
-  min-width: 0;
-  width: min(280px, 28vw);
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-1);
-  padding: 0 10px;
-  color: var(--text-muted);
-}
-.do-collab-search input {
-  min-width: 0;
-  flex: 1;
-  height: 32px;
+  gap: 6px;
   border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  outline: none;
-}
-.do-collab-search kbd {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-.do-collab-rail {
-  display: flex;
-  min-height: 52px;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--border);
-  padding: 6px 12px;
-}
-.do-collab-rail .do-product-switch {
-  margin: 0;
-  width: min(320px, 58vw);
-}
-.do-collab-logo {
-  margin-right: 2px;
-}
-.do-collab-rooms {
-  min-width: 0;
+  background: none;
   color: var(--text-secondary);
   font-size: var(--text-caption);
-}
-.do-collab-rooms summary {
-  display: flex;
-  max-width: min(280px, 40vw);
-  align-items: center;
-  gap: 8px;
+  font-weight: 600;
   cursor: pointer;
-  list-style: none;
-}
-.do-collab-rooms summary small {
-  overflow: hidden;
-  color: var(--text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.do-collab-rooms[open] summary {
-  margin-bottom: 6px;
 }
 .do-alias-gate label {
   display: grid;
@@ -19796,53 +19778,6 @@ a {
   color: var(--text-primary);
   padding: 0 10px;
 }
-.do-collab-room-picker {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: var(--text-caption);
-}
-.do-collab-room-picker select {
-  max-width: min(240px, 36vw);
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface-0);
-  color: var(--text-primary);
-  padding: 0 8px;
-}
-.do-collab-rail-copy {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-}
-.do-collab-rail-copy strong {
-  color: var(--text-primary);
-  font-size: var(--text-caption);
-}
-.do-collab-rail-copy small {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--text-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.do-collab-back {
-  display: inline-flex;
-  margin-left: auto;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font-size: var(--text-caption);
-  font-weight: 600;
-  cursor: pointer;
-}
 .do-collab-body {
   display: flex;
   min-height: 0;
@@ -19856,9 +19791,10 @@ a {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: var(--surface-1);
+  background: #fff;
 }
 .do-collab-frame-wrap {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -19874,15 +19810,23 @@ a {
   min-height: 0;
   flex: 1;
   border: 0;
-  background: var(--surface-1);
+  background: #fff;
 }
 .do-collab-inline-error {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%);
   margin: 0;
-  flex: none;
+  max-width: min(480px, calc(100% - 24px));
   padding: 8px 12px;
+  border-radius: 8px;
   font-size: 12px;
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent, #2547c4) 10%, #fff);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 .do-collab-state {
   display: grid;
@@ -19911,11 +19855,13 @@ a {
   justify-self: start;
 }
 @media (max-width: 960px) {
-  .do-collab-search,
-  .do-collab-rail-copy {
-    display: none;
+  .do-collab-float {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    justify-content: space-between;
   }
-  .do-collab-room-picker span {
+  .do-collab-float-back span {
     display: none;
   }
 }
