@@ -13,6 +13,8 @@ import { useAuth } from "../../lib/AuthContext";
 import { t } from "../../lib/i18n";
 import { CellRenderer, type TableMember } from "./cells/RecordCells";
 import { RecordDrawerNav } from "./RecordDrawerNav";
+import { useCollabEnabled } from "../flags/featureUserFlags";
+import { ConversationThread } from "../collab/ConversationThread";
 
 export type RecordPanelProps = {
   table: TableDoc;
@@ -80,6 +82,7 @@ export function RecordPanel({
   onAskOdysseus,
 }: RecordPanelProps) {
   const { user } = useAuth();
+  const collabEnabled = useCollabEnabled();
   const titleColId = table.keyColumns.title;
   const statusCol = table.columns.find((c) => c.id === table.keyColumns.status);
   const ownerCol = table.columns.find((c) => c.id === table.keyColumns.owner);
@@ -269,6 +272,24 @@ export function RecordPanel({
           <p className="cw-tables-muted cw-tables-panel-stub">{t("tables.panel.linkedEmpty")}</p>
         )}
       </section>
+
+      {collabEnabled && user && table.workspaceId ? (
+        <section className="cw-tables-panel-section" data-testid="tables-record-conversation">
+          <h3>Conversation</h3>
+          <ConversationThread
+            compact
+            workspaceId={table.workspaceId}
+            userId={user.uid}
+            userName={user.displayName || user.email?.split("@")[0] || "You"}
+            anchor={{
+              type: "record",
+              id: record.id,
+              tableId: table.id,
+              label: title || record.id,
+            }}
+          />
+        </section>
+      ) : null}
 
       <section className="cw-tables-panel-section cw-tables-panel-activity">
         <h3>{t("tables.panel.activity")}</h3>

@@ -98,13 +98,15 @@ import {
 } from "../lib/financeChargeTypes";
 import { PortfolioFinanceAnalyst } from "./PortfolioFinanceAnalyst";
 import { ProjectCostsBillingSummary } from "../features/billing";
-import { useBillingEnabled, useTablesEnabled } from "../features/flags/featureUserFlags";
+import { useBillingEnabled, useCollabEnabled, useTablesEnabled } from "../features/flags/featureUserFlags";
 import { ProjectTablesPanel } from "../features/tables/ProjectTablesPanel";
 import type { TableDoc } from "../lib/tables";
 import { listProjectTables } from "../lib/tables";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { collabProjectPath } from "../lib/collab";
+import { ConversationThread } from "../features/collab/ConversationThread";
+import { useAuth } from "../lib/AuthContext";
 import {
   isAssignableMember,
   isInvitedMember,
@@ -1513,6 +1515,7 @@ export type ProjectConsoleTab =
   | "costs"
   | "docs"
   | "tables"
+  | "room"
   | "codex";
 
 export function ProjectConsolePanel({
@@ -1624,6 +1627,8 @@ export function ProjectConsolePanel({
 }) {
   const navigate = useNavigate();
   const tablesEnabled = useTablesEnabled();
+  const collabEnabled = useCollabEnabled();
+  const { user: authUser, workspace: authWorkspace } = useAuth();
   const projectTables = useMemo(
     () => listProjectTables(workspaceTables, String(project.id)),
     [workspaceTables, project.id],
@@ -2026,6 +2031,19 @@ export function ProjectConsolePanel({
                   data-testid="project-more-tables"
                 >
                   Tables{projectTables.length ? ` (${projectTables.length})` : ""}
+                </button>
+              ) : null}
+              {collabEnabled ? (
+                <button
+                  onClick={() => {
+                    setMoreOpen(false);
+                    setTab("room");
+                  }}
+                  role="menuitem"
+                  type="button"
+                  data-testid="project-more-room"
+                >
+                  Room
                 </button>
               ) : null}
               <button
@@ -3026,6 +3044,51 @@ export function ProjectConsolePanel({
                 : undefined
             }
           />
+        </div>
+      ) : null}
+
+      {tab === "room" && collabEnabled ? (
+        <div className="do-console-section" data-testid="project-room-section">
+          <header className="do-console-section-head">
+            <strong>Room</strong>
+            <span>Project conversation</span>
+          </header>
+          {(() => {
+            const roomWorkspaceId = String(
+              workspaceIdForViews ||
+                authWorkspace?.id ||
+                project.workspaceId ||
+                "",
+            );
+            const roomUserId = String(currentUser?.uid || authUser?.uid || "");
+            const roomUserName =
+              authUser?.displayName ||
+              authUser?.email?.split("@")[0] ||
+              "You";
+            if (!roomWorkspaceId || !roomUserId) {
+              return (
+                <p className="do-muted">Sign in to open the project room.</p>
+              );
+            }
+            return (
+              <ConversationThread
+                compact
+                workspaceId={roomWorkspaceId}
+                userId={roomUserId}
+                userName={roomUserName}
+                conversationId={conversationId || undefined}
+                anchor={
+                  conversationId
+                    ? null
+                    : {
+                        type: "project",
+                        id: String(project.id),
+                        label: projectDisplayName(project),
+                      }
+                }
+              />
+            );
+          })()}
         </div>
       ) : null}
 

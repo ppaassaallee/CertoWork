@@ -47,6 +47,9 @@ import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
 import { ItemNotesSection } from "./ItemNotesSection";
 import { ItemRecordsSection } from "./ItemRecordsSection";
 import type { RecordDoc, TableDoc } from "../../../lib/tables";
+import { useAuth } from "../../../lib/AuthContext";
+import { useCollabEnabled } from "../../flags/featureUserFlags";
+import { ConversationThread } from "../../collab/ConversationThread";
 import "./ItemModal.css";
 import "../../../desktop/ui/desktop-ui.css";
 
@@ -342,6 +345,12 @@ export function ItemModal({
   onOpenRecord,
 }: ItemModalProps) {
   const locale = getLocale();
+  const collabEnabled = useCollabEnabled();
+  const { user, workspace } = useAuth();
+  const collabWorkspaceId = String(item?.workspaceId || workspace?.id || "");
+  const collabUserId = String(user?.uid || "");
+  const collabUserName =
+    user?.displayName || user?.email?.split("@")[0] || "You";
   const [layout, setLayout] = useState<"panel" | "expanded">(layoutProp || "expanded");
   const [titleDraft, setTitleDraft] = useState(itemTitle(item));
   const [bodyDraft, setBodyDraft] = useState(
@@ -838,54 +847,78 @@ export function ItemModal({
               </form>
             </section>
 
-            <section className="cw-item-card" data-testid="item-comments">
-              <header>
-                <strong>
-                  {copy("comments", locale)} {comments.length || ""}
-                </strong>
-                {onOpenCollab && (
-                  <button onClick={onOpenCollab} type="button">
-                    {copy("openCollab", locale)}
-                  </button>
-                )}
-              </header>
-              {comments.slice(-8).map((entry: KanbanComment) => (
-                <article key={entry.id}>
-                  <span>
-                    {entry.author || "Teammate"} ·{" "}
-                    {relativeDateLabel(entry.at, locale)}
-                  </span>
-                  <p>{entry.text}</p>
-                </article>
-              ))}
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const text = commentDraft.trim();
-                  if (!text) return;
-                  const author = workspaceMembers.find(
-                    (member) => member.userId === member.id,
-                  );
-                  const next: KanbanComment = {
-                    id: `comment-${Date.now()}`,
-                    at: new Date().toISOString(),
-                    author: author ? memberName(author) : "Me",
-                    text,
-                  };
-                  void onUpdateTask(item.id, {
-                    comments: [...comments, next],
-                  });
-                  setCommentDraft("");
-                }}
-              >
-                <input
-                  aria-label="Add a comment"
-                  onChange={(event) => setCommentDraft(event.target.value)}
-                  placeholder={copy("commentPlaceholder", locale)}
-                  value={commentDraft}
+            {collabEnabled && collabWorkspaceId && collabUserId ? (
+              <section className="cw-item-card" data-testid="item-conversation">
+                <header>
+                  <strong>Conversation</strong>
+                  {onOpenCollab && (
+                    <button onClick={onOpenCollab} type="button">
+                      {copy("openCollab", locale)}
+                    </button>
+                  )}
+                </header>
+                <ConversationThread
+                  compact
+                  workspaceId={collabWorkspaceId}
+                  userId={collabUserId}
+                  userName={collabUserName}
+                  anchor={{
+                    type: "task",
+                    id: String(item.id),
+                    label: itemTitle(item) || String(item.id),
+                  }}
                 />
-              </form>
-            </section>
+              </section>
+            ) : (
+              <section className="cw-item-card" data-testid="item-comments">
+                <header>
+                  <strong>
+                    {copy("comments", locale)} {comments.length || ""}
+                  </strong>
+                  {onOpenCollab && (
+                    <button onClick={onOpenCollab} type="button">
+                      {copy("openCollab", locale)}
+                    </button>
+                  )}
+                </header>
+                {comments.slice(-8).map((entry: KanbanComment) => (
+                  <article key={entry.id}>
+                    <span>
+                      {entry.author || "Teammate"} ·{" "}
+                      {relativeDateLabel(entry.at, locale)}
+                    </span>
+                    <p>{entry.text}</p>
+                  </article>
+                ))}
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const text = commentDraft.trim();
+                    if (!text) return;
+                    const author = workspaceMembers.find(
+                      (member) => member.userId === member.id,
+                    );
+                    const next: KanbanComment = {
+                      id: `comment-${Date.now()}`,
+                      at: new Date().toISOString(),
+                      author: author ? memberName(author) : "Me",
+                      text,
+                    };
+                    void onUpdateTask(item.id, {
+                      comments: [...comments, next],
+                    });
+                    setCommentDraft("");
+                  }}
+                >
+                  <input
+                    aria-label="Add a comment"
+                    onChange={(event) => setCommentDraft(event.target.value)}
+                    placeholder={copy("commentPlaceholder", locale)}
+                    value={commentDraft}
+                  />
+                </form>
+              </section>
+            )}
 
             <ItemNotesSection
               item={item}
