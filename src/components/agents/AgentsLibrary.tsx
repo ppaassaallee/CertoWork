@@ -139,6 +139,20 @@ export function AgentsLibrary({
 
   return (
     <div className="do-agents-home" data-testid="agents-home">
+      <nav className="do-agents-side-nav" aria-label="Agents panels" data-testid="agents-panel-nav">
+        <a className="is-active" href="/agents">
+          All agents
+        </a>
+        <button onClick={onOpenActivity} type="button">
+          Runs
+        </button>
+        <button onClick={onOpenApprovals} type="button">
+          Approvals{pendingApprovals > 0 ? ` (${pendingApprovals})` : ""}
+        </button>
+        <a href="/agents/usage">Usage</a>
+        <a href="/agents">Your agents</a>
+        <a href="/agents/templates">Templates</a>
+      </nav>
       <div data-testid="agents-library">
         <header className="do-agents-head">
           <div>

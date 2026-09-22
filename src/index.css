@@ -21150,3 +21150,58 @@ a {
   cursor: pointer;
 }
 .do-collab-area.do-collab-desk { position: relative; }
+
+/* Track B — Agents panel nav + assignee agents group + signal cards */
+.do-agents-home {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.do-agents-side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-l);
+  background: var(--c-panel);
+}
+.do-agents-side-nav a,
+.do-agents-side-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink-2);
+  font: inherit;
+  font-size: var(--t-sm);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.do-agents-side-nav a.is-active,
+.do-agents-side-nav a:hover,
+.do-agents-side-nav button:hover {
+  background: var(--c-line-2);
+  color: var(--c-ink);
+}
+.cw-multi-assignee-group {
+  margin: 8px 10px 4px;
+  color: var(--c-ink-3);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.do-kanban-card.is-agent-signal {
+  border-color: rgba(242, 98, 15, 0.45);
+  box-shadow: 0 0 0 1px rgba(242, 98, 15, 0.2);
+}
+@media (max-width: 900px) {
+  .do-agents-home {
+    grid-template-columns: 1fr;
+  }
+}
