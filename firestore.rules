@@ -1464,6 +1464,7 @@ service cloud.firestore {
     match /war_room_files/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /war_room_action_plans/{id} { allow read, write: if isSignedIn(); }
     match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
+    match /work_item_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
 
     // —— Native Collab (workspace + participant scoped) ——
     function conversationDoc(conversationId) {

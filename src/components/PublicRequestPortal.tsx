@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  addDoc,
-  collection,
   doc,
   onSnapshot,
   serverTimestamp,
@@ -56,21 +54,15 @@ export function PublicRequestPortal({ token }: { token: string }) {
     setNotice("");
     try {
       const messageId = `portal_${Date.now().toString(36)}`;
-      await addDoc(collection(db, "work_item_messages"), {
-        workspaceId,
-        workItemId: ticketId,
-        visibility: "public",
-        channel: "portal",
-        authorRole: "requester",
-        portalToken: token,
-        body,
-        authorId: null,
-        authorName: String(snapshot.ticket.requesterName || "You"),
-        authorEmail: snapshot.ticket.requesterEmail
-          ? String(snapshot.ticket.requesterEmail)
-          : null,
-        createdAt: serverTimestamp(),
+      const res = await fetch(`/api/collab/portal/${encodeURIComponent(token)}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: body }),
       });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "Could not send message.");
+      }
       const nextMessages: RequestPortalSnapshot["messages"] = [
         ...snapshot.messages,
         {

@@ -11,3 +11,11 @@ Step 3 — Storage path for attachments uses `workspaces/{ws}/collab/...`; stora
 Step 4 — Migration dry-run/apply requires Admin credentials in the deploy environment; script and docs land here; production apply is a deploy-time action recorded in QA. `work_item_messages` stays writable until Step 6 adapter; War Room chat/message/participant/thread/file collections are read-only after this step (War Room rewired in Step 5).
 
 Step 5 — War Room keeps its UI types via `warRoomBridge` mappers; widgets/action_plans stay on `war_room_*`; file links become message attachments (no more `war_room_files` writes).
+
+Step 12 — `/api/collab/odysseus` ships as an offline-safe deterministic stub; full provider streaming lands in a follow-up.
+
+Step 16 — Guest portal at `/c/:token` uses Admin token APIs; invite-token hashing UI is a follow-up. Portal messages also accepted via `/api/collab/portal/:token/messages`.
+
+Step 17 — PhoneInbox Messages segment is prop-driven; PhoneOverlayHost wiring is a follow-up.
+
+Step 21 — Production QA evidence pending Admin credentials and flagged user; scaffolding recorded in QA.md.

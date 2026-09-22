@@ -207,6 +207,345 @@ async function startServer() {
     }
   });
 
+  /** Guest / portal message into an item_thread (Admin SDK). Expanded in Step 16. */
+  app.post("/api/collab/portal/:token/messages", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      const text = String(req.body?.text || req.body?.body || "").trim();
+      if (!token || !text) {
+        return res.status(400).json({ error: "token and text required" });
+      }
+      const portalSnap = await dbAdmin.collection("request_portal_tokens").doc(token).get();
+      if (!portalSnap.exists) {
+        return res.status(404).json({ error: "Portal not found" });
+      }
+      const portal = portalSnap.data() || {};
+      if (portal.revoked === true || portal.token !== token) {
+        return res.status(403).json({ error: "Portal revoked" });
+      }
+      const workspaceId = String(portal.workspaceId || "");
+      const ticketId = String(portal.ticketId || "");
+      if (!workspaceId || !ticketId) {
+        return res.status(400).json({ error: "Portal missing workspace/ticket" });
+      }
+      const conversationId = `task_${ticketId}`;
+      const snapshot = portal.snapshot || {};
+      const guestName = String(snapshot?.ticket?.requesterName || "Guest");
+      const guestEmail = String(snapshot?.ticket?.requesterEmail || "").toLowerCase();
+      const guestId = guestEmail
+        ? `guest_${guestEmail.replace(/[^a-z0-9]+/g, "_")}`
+        : `guest_${token.slice(0, 12)}`;
+      const now = new Date().toISOString();
+      const convRef = dbAdmin.collection("conversations").doc(conversationId);
+      const conv = await convRef.get();
+      if (!conv.exists) {
+        await convRef.set({
+          workspaceId,
+          type: "item_thread",
+          title: String(snapshot?.ticket?.title || ticketId).slice(0, 120),
+          anchor: { type: "task", id: ticketId, label: String(snapshot?.ticket?.title || ticketId) },
+          participantIds: [],
+          agentIds: [],
+          guestIds: [guestId],
+          isPrivate: false,
+          status: "active",
+          lastMessageAt: now,
+          lastMessagePreview: text.slice(0, 140),
+          lastMessageBy: guestId,
+          messageCount: 1,
+          pinnedMessageIds: [],
+          createdBy: guestId,
+          createdAt: now,
+          updatedAt: now,
+          legacy: { workItemId: ticketId },
+        });
+      }
+      const msgRef = await dbAdmin.collection("conversation_messages").add({
+        workspaceId,
+        conversationId,
+        threadId: null,
+        senderType: "guest",
+        senderId: guestId,
+        senderName: guestName,
+        kind: "text",
+        text,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "external",
+        channel: "portal",
+        status: "sent",
+        replyCount: 0,
+        model: null,
+        searchText: text.toLowerCase(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await dbAdmin.collection("guests").doc(guestId).set(
+        {
+          workspaceId,
+          email: guestEmail || null,
+          name: guestName,
+          status: "active",
+          conversationIds: [conversationId],
+          lastSeenAt: now,
+          createdBy: "portal",
+          createdAt: now,
+        },
+        { merge: true },
+      );
+      res.json({ ok: true, messageId: msgRef.id, conversationId });
+    } catch (err: any) {
+      console.error("[collab portal message]", err);
+      res.status(500).json({ error: err.message || "Failed to post portal message" });
+    }
+  });
+
+  /** Odysseus slash-command stub (offline-safe; Step 12). */
+  app.post("/api/collab/odysseus", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const workspaceId = String(req.body?.workspaceId || "").trim();
+      const conversationId = String(req.body?.conversationId || "").trim();
+      const userId = String(req.body?.userId || "").trim();
+      const text = String(req.body?.text || "").trim();
+      const rawCommand = req.body?.command;
+      const command =
+        rawCommand === null || rawCommand === undefined || rawCommand === ""
+          ? null
+          : String(rawCommand).trim().toLowerCase();
+      const allowed = new Set(["summarize", "actions", "status", "draft"]);
+      if (!workspaceId || !conversationId || !userId) {
+        return res.status(400).json({
+          error: "workspaceId, conversationId, and userId are required",
+        });
+      }
+      if (command !== null && !allowed.has(command)) {
+        return res.status(400).json({
+          error: "command must be summarize|actions|status|draft|null",
+        });
+      }
+
+      const effective = command || (text.startsWith("/") ? text.slice(1).split(/\s+/)[0]?.toLowerCase() : null);
+      let reply = "Odysseus is offline-safe here. Ask for a summary, actions, status, or a draft.";
+      let card: { type: "action_items"; ref: { items: Array<{ title: string }> } } | undefined;
+
+      if (effective === "summarize") {
+        reply = text
+          ? `Summary (stub): ${text.slice(0, 280)}`
+          : `Conversation ${conversationId} has no live model yet — paste context and ask again.`;
+      } else if (effective === "actions") {
+        const seed = text || "Follow up on open items";
+        const items = seed
+          .split(/[\n;]+/)
+          .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
+          .filter(Boolean)
+          .slice(0, 5)
+          .map((title) => ({ title: title.slice(0, 120) }));
+        if (!items.length) items.push({ title: "Capture next actions from this thread" });
+        reply = `Here are ${items.length} suggested action item${items.length === 1 ? "" : "s"} (stub).`;
+        card = { type: "action_items", ref: { items } };
+      } else if (effective === "status") {
+        reply = `Status (stub): workspace ${workspaceId} · conversation ${conversationId} · requester ${userId}.`;
+      } else if (effective === "draft") {
+        reply = text
+          ? `Draft reply (stub):\n\nThanks for the update.\n\n${text.slice(0, 400)}\n\n— Odysseus`
+          : "Draft (stub): share what you want said and I’ll shape a reply.";
+      } else if (text) {
+        reply = `Got it (stub): ${text.slice(0, 280)}`;
+      }
+
+      return res.json({ ok: true, reply, ...(card ? { card } : {}) });
+    } catch (err: any) {
+      console.error("[collab odysseus]", err);
+      res.status(500).json({ error: err.message || "Odysseus stub failed" });
+    }
+  });
+
+  async function findGuestByToken(token: string) {
+    if (!dbAdmin || !token) return null;
+    const byToken = await dbAdmin.collection("guests").where("token", "==", token).limit(1).get();
+    if (!byToken.empty) {
+      const doc = byToken.docs[0];
+      return { id: doc.id, ...(doc.data() || {}) };
+    }
+    const byId = await dbAdmin.collection("guests").doc(token).get();
+    if (byId.exists) {
+      const data = byId.data() || {};
+      if (data.token && data.token !== token) return null;
+      return { id: byId.id, ...data };
+    }
+    return null;
+  }
+
+  /** Guest portal snapshot for `/c/:token`. */
+  app.get("/api/collab/guest/:token", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      if (!token) return res.status(400).json({ error: "token required" });
+      const guest = await findGuestByToken(token);
+      if (!guest || guest.status === "revoked" || guest.status === "expired") {
+        return res.status(404).json({ error: "Guest link not found or revoked" });
+      }
+      const workspaceId = String(guest.workspaceId || "");
+      const conversationIds = Array.isArray(guest.conversationIds) ? guest.conversationIds : [];
+      const conversationId = String(conversationIds[0] || "").trim();
+      if (!workspaceId || !conversationId) {
+        return res.status(400).json({ error: "Guest missing workspace/conversation" });
+      }
+      const convSnap = await dbAdmin.collection("conversations").doc(conversationId).get();
+      if (!convSnap.exists) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      const conv = convSnap.data() || {};
+      const msgSnap = await dbAdmin
+        .collection("conversation_messages")
+        .where("conversationId", "==", conversationId)
+        .where("visibility", "==", "external")
+        .orderBy("createdAt", "asc")
+        .limit(100)
+        .get()
+        .catch(async () =>
+          dbAdmin
+            .collection("conversation_messages")
+            .where("conversationId", "==", conversationId)
+            .limit(100)
+            .get(),
+        );
+      const messages = msgSnap.docs
+        .map((d: any) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            text: String(data.text || ""),
+            senderName: String(data.senderName || ""),
+            senderType: String(data.senderType || "user"),
+            createdAt: String(data.createdAt || ""),
+            visibility: String(data.visibility || "internal"),
+          };
+        })
+        .filter((m: any) => m.visibility === "external" || m.senderType === "guest")
+        .sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)));
+
+      let workspaceName = "";
+      try {
+        const ws = await dbAdmin.collection("workspaces").doc(workspaceId).get();
+        workspaceName = String(ws.data()?.name || "");
+      } catch {
+        /* optional */
+      }
+
+      await dbAdmin.collection("guests").doc(guest.id).set(
+        { lastSeenAt: new Date().toISOString() },
+        { merge: true },
+      );
+
+      return res.json({
+        ok: true,
+        guest: {
+          id: guest.id,
+          name: String(guest.name || "Guest"),
+          email: guest.email || null,
+        },
+        conversation: {
+          id: conversationId,
+          title: String(conv.title || "Conversation"),
+          workspaceId,
+        },
+        workspaceName,
+        messages,
+      });
+    } catch (err: any) {
+      console.error("[collab guest get]", err);
+      res.status(500).json({ error: err.message || "Failed to load guest portal" });
+    }
+  });
+
+  /** Guest posts into their conversation (Admin SDK). */
+  app.post("/api/collab/guest/:token/messages", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      const text = String(req.body?.text || req.body?.body || "").trim();
+      if (!token || !text) {
+        return res.status(400).json({ error: "token and text required" });
+      }
+      const guest = await findGuestByToken(token);
+      if (!guest || guest.status === "revoked" || guest.status === "expired") {
+        return res.status(404).json({ error: "Guest link not found or revoked" });
+      }
+      const workspaceId = String(guest.workspaceId || "");
+      const conversationIds = Array.isArray(guest.conversationIds) ? guest.conversationIds : [];
+      const conversationId = String(conversationIds[0] || "").trim();
+      if (!workspaceId || !conversationId) {
+        return res.status(400).json({ error: "Guest missing workspace/conversation" });
+      }
+      const guestId = String(guest.id);
+      const guestName = String(guest.name || "Guest");
+      const now = new Date().toISOString();
+      const convRef = dbAdmin.collection("conversations").doc(conversationId);
+      const conv = await convRef.get();
+      if (!conv.exists) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      const msgRef = await dbAdmin.collection("conversation_messages").add({
+        workspaceId,
+        conversationId,
+        threadId: null,
+        senderType: "guest",
+        senderId: guestId,
+        senderName: guestName,
+        kind: "text",
+        text,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "external",
+        channel: "portal",
+        status: "sent",
+        replyCount: 0,
+        model: null,
+        searchText: text.toLowerCase(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await convRef.set(
+        {
+          lastMessageAt: now,
+          lastMessagePreview: text.slice(0, 140),
+          lastMessageBy: guestId,
+          messageCount: FieldValue.increment(1),
+          updatedAt: now,
+          guestIds: FieldValue.arrayUnion(guestId),
+        },
+        { merge: true },
+      );
+      await dbAdmin.collection("guests").doc(guestId).set(
+        {
+          lastSeenAt: now,
+          conversationIds: FieldValue.arrayUnion(conversationId),
+        },
+        { merge: true },
+      );
+      res.json({ ok: true, messageId: msgRef.id, conversationId });
+    } catch (err: any) {
+      console.error("[collab guest message]", err);
+      res.status(500).json({ error: err.message || "Failed to post guest message" });
+    }
+  });
+
   app.post("/api/capture/inbound/email", async (req, res) => {
     try {
       const { createCaptureRequestsHandlers } = await import("./worker/captureRequests.js");

@@ -72,6 +72,11 @@ import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
 import { collabProjectPath, collabProjectIdFromLocation } from "../lib/collab";
+import {
+  sendItemMessage,
+  subscribeWorkspaceItemMessages,
+} from "../lib/collab/legacyAdapter";
+import { useInboxRows } from "../features/inbox/useInboxRows";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -460,6 +465,10 @@ export function DelivereeWorkspace() {
   const billingEnabled = useBillingEnabled();
   const dailyBriefEnabled = useDailyBriefEnabled();
   const tablesEnabled = useTablesEnabled();
+  const inboxFeed = useInboxRows({
+    userId: user?.uid,
+    workspaceId: workspace?.id,
+  });
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -1018,22 +1027,7 @@ export function DelivereeWorkspace() {
         },
         () => setTeamCaptureAddresses([]),
       ),
-      onSnapshot(
-        query(
-          collection(db, "work_item_messages"),
-          where("workspaceId", "==", workspace.id),
-        ),
-        (snapshot) =>
-          setWorkItemMessages(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }) as any)
-              .sort(
-                (left: any, right: any) =>
-                  timestamp(left.createdAt) - timestamp(right.createdAt),
-              ),
-          ),
-        () => setWorkItemMessages([]),
-      ),
+      subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages),
       makeQuery("milestones", setMilestones),
       makeQuery("invoice_documents", (items) =>
         setInvoiceDocuments(items as InvoiceDocument[]),
@@ -5399,17 +5393,20 @@ export function DelivereeWorkspace() {
     const ticket = tasks.find((item) => item.id === ticketId);
     const authorName =
       memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null;
-    await addDoc(collection(db, "work_item_messages"), {
+    await sendItemMessage({
       workspaceId: workspace.id,
       workItemId: ticketId,
+      title: entityTitle(ticket) || ticketId,
+      text: body,
       visibility,
+      senderId: user.uid,
+      senderName: authorName || user.displayName || "Team",
+      participantIds: [
+        user.uid,
+        String(ticket?.assigneeId || ""),
+        String(ticket?.reporterId || ticket?.createdBy || ""),
+      ].filter(Boolean),
       channel: "app",
-      authorRole: "team",
-      body,
-      authorId: user.uid,
-      authorName,
-      authorEmail: user.email || null,
-      createdAt: serverTimestamp(),
     });
     if (visibility === "public") {
       const sla = markTicketFirstResponseSla(ticket);
@@ -9283,8 +9280,8 @@ export function DelivereeWorkspace() {
             return due === today;
           }).length}
           greeting={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${(user?.displayName || "there").split(" ")[0]}.`}
-          inboxBadge={0}
-          inboxRows={[]}
+          inboxBadge={inboxFeed.needsActionCount + inboxFeed.unreadDmCount}
+          inboxRows={inboxFeed.rows}
           isAdmin={canManageMembers}
           items={openTasks.map((t) => ({
             id: String(t.id),
@@ -10977,7 +10974,11 @@ export function DelivereeWorkspace() {
         <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
           <CollabArea
             projectId={collabProjectIdFromLocation(location.pathname, location.search)}
+            workspaceId={workspace?.id}
             workspaceName={workspace?.name}
+            userId={user?.uid}
+            userName={user?.displayName || user?.email?.split("@")[0] || undefined}
+            onOpenOdysseus={() => void openOdysseusPanel()}
           />
         </div>
       ) : null}

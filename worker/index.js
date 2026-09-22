@@ -2043,15 +2043,62 @@ async function inboundItemUpdate(request, env) {
   }
   // Persist via admin when configured; otherwise acknowledge parse for clients.
   if (firestoreAdminConfigured(env)) {
-    await firestoreCreateDocument(env, "work_item_messages", {
-      workItemId: itemId,
-      body: message,
-      channel: body.source === "slack" ? "slack" : "email",
-      visibility: "public",
-      authorRole: "external",
-      authorName: String(body.actorName || body.user_name || "External"),
-      createdAt: new Date().toISOString(),
-      workspaceId: String(body.workspaceId || ""),
+    const conversationId = `task_${itemId}`;
+    const now = new Date().toISOString();
+    const workspaceId = String(body.workspaceId || "");
+    const authorName = String(body.actorName || body.user_name || "External");
+    const channel = body.source === "slack" ? "portal" : "email";
+    const existing = await firestoreGetDocument(env, "conversations", conversationId);
+    if (!existing) {
+      await firestoreUpsertDocument(env, "conversations", conversationId, {
+        workspaceId,
+        type: "item_thread",
+        title: String(body.itemTitle || itemId).slice(0, 120),
+        anchor: { type: "task", id: itemId, label: String(body.itemTitle || itemId) },
+        participantIds: [],
+        agentIds: [],
+        guestIds: [],
+        isPrivate: false,
+        status: "active",
+        lastMessageAt: now,
+        lastMessagePreview: message.slice(0, 140),
+        lastMessageBy: authorName,
+        messageCount: 1,
+        pinnedMessageIds: [],
+        createdBy: "inbound",
+        createdAt: now,
+        updatedAt: now,
+        legacy: { workItemId: itemId },
+      });
+    } else {
+      await firestorePatchDocument(env, "conversations", conversationId, {
+        lastMessageAt: now,
+        lastMessagePreview: message.slice(0, 140),
+        lastMessageBy: authorName,
+        updatedAt: now,
+      });
+    }
+    await firestoreCreateDocument(env, "conversation_messages", {
+      workspaceId,
+      conversationId,
+      threadId: null,
+      senderType: "guest",
+      senderId: `guest_inbound_${itemId}`,
+      senderName: authorName,
+      kind: "text",
+      text: message,
+      mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+      attachments: [],
+      card: null,
+      reactions: {},
+      visibility: "external",
+      channel,
+      status: "sent",
+      replyCount: 0,
+      model: null,
+      searchText: message.toLowerCase(),
+      createdAt: now,
+      updatedAt: now,
     });
   }
   return json({ ok: true, itemId, message });
