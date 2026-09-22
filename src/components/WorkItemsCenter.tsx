@@ -2567,6 +2567,27 @@ export function WorkItemsCenter({
     return (
       <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""}`} data-testid="kanban-card" key={item.id}>
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
+        <div className="do-kanban-card-idrow">
+          <span className={`do-kanban-type-tile is-${kind}`} aria-hidden="true" />
+          <code className="do-kanban-item-id">
+            {String(item.key || item.projectKey || item.id || "").slice(0, 12) || "ITEM"}
+          </code>
+          <span
+            className="c-pri"
+            data-level={
+              priority === "1"
+                ? "urgent"
+                : priority === "2"
+                  ? "high"
+                  : priority === "3"
+                    ? "medium"
+                    : "low"
+            }
+            aria-hidden="true"
+          >
+            <i /><i /><i />
+          </span>
+        </div>
         <div className="do-kanban-card-head">
           <span onPointerDown={stopCardDrag}>{renderBulkSelect(item)}</span>
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">

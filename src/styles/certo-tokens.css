@@ -3309,16 +3309,16 @@
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
-  background: var(--surface-0);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--c-panel);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-l);
   overflow: hidden;
 }
 .cw-views-grid th,
 .cw-views-grid td {
   padding: 0 8px;
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-bottom: 1px solid var(--c-line);
+  border-right: 1px solid color-mix(in srgb, var(--c-line) 70%, transparent);
   vertical-align: middle;
   font-size: var(--text-body-sm);
 }
@@ -3326,9 +3326,9 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--surface-1);
-  color: var(--text-secondary);
-  font-weight: 500;
+  background: var(--c-wash);
+  color: var(--c-ink-2);
+  font-weight: 600;
   text-align: left;
   font-size: 12px;
 }
