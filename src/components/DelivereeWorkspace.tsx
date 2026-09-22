@@ -69,11 +69,9 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
-import { ChatCollabModule } from "./ChatCollabModule";
+import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
-import { ProductSwitcher } from "./ProductSwitcher";
-import { collabProjectPath } from "../lib/collabModule";
-import { warmCollabSession } from "../lib/collabClient";
+import { collabProjectPath, collabProjectIdFromLocation } from "../lib/collab";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -476,34 +474,6 @@ export function DelivereeWorkspace() {
     if (onCollab) setCollabOpened(true);
     else setWorkOpened(true);
   }, [onCollab]);
-  useEffect(() => {
-    // Warm Chat Collab only when the user opens Collab — never on every app boot.
-    if (!onCollab || !user?.email || !workspace) return;
-    let cancelled = false;
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = window.setTimeout(() => controller?.abort(), 8_000);
-    void (async () => {
-      try {
-        const token = await user.getIdToken();
-        if (cancelled) return;
-        await warmCollabSession({
-          token,
-          userId: user.uid,
-          workspaceId: workspace.id,
-          email: user.email || "",
-          displayName: user.displayName || workspace.name || "Certo Work",
-          company: workspace.name || "",
-        });
-      } catch {
-        // The desk still opens from the Collab tab if warming fails.
-      }
-    })();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      controller?.abort();
-    };
-  }, [onCollab, user, workspace]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1547,14 +1517,6 @@ export function DelivereeWorkspace() {
         projects.filter((project) => !isClosed(project.status)),
       ),
     [projects],
-  );
-  const collabProjects = useMemo(
-    () =>
-      activeProjects.map((project) => ({
-        id: String(project.id),
-        name: entityTitle(project),
-      })),
-    [activeProjects],
   );
   const sidebarProjects = useMemo(
     () => sidebarProjectGroups(projects),
@@ -6332,16 +6294,16 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-collab",
-        label: "Open Chat Collab",
+        label: "Open Collab",
         group: "Navigate",
-        keywords: "chat slack teams chatwoot messages",
+        keywords: "chat messages collab inbox mentions dm",
         onSelect: () => navigate("/collab"),
       },
       ...activeProjects.map((project) => ({
         id: `nav-collab-room-${project.id}`,
         label: `Open room · ${entityTitle(project)}`,
         group: "Navigate",
-        keywords: `chat collab room chatwoot ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
+        keywords: `chat collab room messages ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -6792,7 +6754,6 @@ export function DelivereeWorkspace() {
             ]}
           />
         ) : null}
-        <ProductSwitcher product="work" />
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -11014,8 +10975,8 @@ export function DelivereeWorkspace() {
       ) : null}
       {collabOpened ? (
         <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
-          <ChatCollabModule
-            projects={collabProjects}
+          <CollabArea
+            projectId={collabProjectIdFromLocation(location.pathname, location.search)}
             workspaceName={workspace?.name}
           />
         </div>

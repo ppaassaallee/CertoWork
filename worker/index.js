@@ -1,13 +1,6 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
-import {
-  collabStatusPayload,
-  isChatwootProxyPath,
-  isCertoCollabBrandPath,
-  provisionCollabSso,
-  proxyChatwoot,
-} from "./collab.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
@@ -1916,7 +1909,6 @@ function capabilities(env) {
         ? "OneDrive connector credentials are present."
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
-    collab: collabStatusPayload(env),
     googleCalendar: {
       configured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET),
       tokenKey: Boolean(env.CALENDAR_TOKEN_KEY),
@@ -2414,9 +2406,6 @@ const worker = {
         return capture.handleTicketReply(request, env);
       }
     }
-    if (request.method === "GET" && url.pathname === "/api/collab/status") {
-      return json(collabStatusPayload(env, url.origin));
-    }
     if (request.method === "POST" && url.pathname === "/api/calendar/oauth/google/start") {
       try {
         const body = await readJson(request);
@@ -2633,55 +2622,6 @@ const worker = {
       return new Response("ok", { status: 200 });
     }
 
-    if (request.method === "POST" && url.pathname === "/api/collab/sso") {
-      try {
-        const body = await readJson(request);
-        await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: false });
-        return json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
-        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
-        return json(
-          {
-            error: message,
-            configured: collabStatusPayload(env, url.origin).configured,
-          },
-          status,
-        );
-      }
-    }
-    if (request.method === "POST" && url.pathname === "/api/collab/rooms") {
-      try {
-        const body = await readJson(request);
-        await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: true });
-        return json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
-        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
-        return json(
-          {
-            error: message,
-            configured: collabStatusPayload(env, url.origin).configured,
-          },
-          status,
-        );
-      }
-    }
-    if (request.method === "GET" && isCertoCollabBrandPath(url.pathname)) {
-      const mark = new URL("/certo-mark.svg", request.url);
-      return serveAsset(
-        new Request(mark.toString(), {
-          method: "GET",
-          headers: { accept: "image/svg+xml" },
-        }),
-        env,
-      );
-    }
-    if (isChatwootProxyPath(url.pathname)) {
-      return proxyChatwoot(request, env);
-    }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {
         firebaseProjectId: FIREBASE_PROJECT_ID,

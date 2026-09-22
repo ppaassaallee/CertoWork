@@ -104,7 +104,7 @@ import type { TableDoc } from "../lib/tables";
 import { listProjectTables } from "../lib/tables";
 import { CodexBridgePanel } from "./CodexBridgePanel";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
-import { collabProjectPath } from "../lib/collabModule";
+import { collabProjectPath } from "../lib/collab";
 import {
   isAssignableMember,
   isInvitedMember,
