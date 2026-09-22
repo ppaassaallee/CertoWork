@@ -177,6 +177,21 @@ export type TypingDoc = {
   at: string;
 };
 
+/** External guest invited into a conversation (portal / /c/:token). */
+export type Guest = {
+  id: string;
+  workspaceId: string;
+  email?: string | null;
+  name: string;
+  /** Invite token used for `/c/:token` lookup (hashed in production later). */
+  token?: string;
+  status: "active" | "revoked" | "expired";
+  conversationIds: string[];
+  lastSeenAt?: string | null;
+  createdBy: string;
+  createdAt: string;
+};
+
 export const conversationTypeSchema = z.enum([
   "project_room",
   "item_thread",
