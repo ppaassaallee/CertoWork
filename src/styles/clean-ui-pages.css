@@ -1,0 +1,69 @@
+/* Track A6 — remaining pages unified to Plane kit (presentational only). */
+.do-main {
+  background: var(--c-wash);
+}
+.do-thread-viewport,
+.do-items-center,
+.do-notes-center,
+.do-command-center,
+.do-project-console,
+.do-strategy,
+.do-panel-empty {
+  background: var(--c-wash);
+}
+.do-home-brief,
+.do-day-plan,
+.do-billing-page,
+.do-tables-page,
+.do-notes-center,
+.do-agents-library,
+.do-approvals,
+.do-settings-page,
+.do-workload,
+.do-dashboard,
+.do-feedback,
+.do-inbox {
+  color: var(--c-ink);
+}
+.do-project-card,
+.do-console-section,
+.do-command-card,
+.cw-brief-card,
+.d-brief-card {
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-l);
+  background: var(--c-panel);
+  box-shadow: var(--sh-card);
+}
+.do-project-empty,
+.do-items-empty,
+.cw-empty {
+  border: 1px dashed var(--c-line);
+  border-radius: var(--r-l);
+  background: var(--c-panel);
+  color: var(--c-ink-2);
+}
+.do-account > button,
+.do-nav-admin button {
+  min-height: 34px;
+  border-radius: 8px;
+}
+.do-account > button:hover,
+.do-nav-admin button:hover {
+  background: var(--c-wash);
+}
+/* Reduce noisy double borders on dense admin tables */
+.do-team-table,
+.do-command-table {
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-l);
+  background: var(--c-panel);
+  overflow: hidden;
+}
+.do-team-table th,
+.do-command-table th {
+  background: var(--c-wash);
+  color: var(--c-ink-2);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
