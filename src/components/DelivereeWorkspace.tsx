@@ -69,11 +69,15 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
-import { ChatCollabModule } from "./ChatCollabModule";
+import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
-import { ProductSwitcher } from "./ProductSwitcher";
-import { collabProjectPath } from "../lib/collabModule";
-import { warmCollabSession } from "../lib/collabClient";
+import { collabProjectPath, collabProjectIdFromLocation, conversationService } from "../lib/collab";
+import type { Conversation as CollabConversation } from "../lib/collab";
+import {
+  sendItemMessage,
+  subscribeWorkspaceItemMessages,
+} from "../lib/collab/legacyAdapter";
+import { useInboxRows } from "../features/inbox/useInboxRows";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
@@ -462,6 +466,10 @@ export function DelivereeWorkspace() {
   const billingEnabled = useBillingEnabled();
   const dailyBriefEnabled = useDailyBriefEnabled();
   const tablesEnabled = useTablesEnabled();
+  const inboxFeed = useInboxRows({
+    userId: user?.uid,
+    workspaceId: workspace?.id,
+  });
   const { capabilities } = usePlatformCapabilities();
   const emailInvitesConfigured = Boolean(capabilities?.email?.configured);
   const location = useLocation();
@@ -472,38 +480,40 @@ export function DelivereeWorkspace() {
   const [collabOpened, setCollabOpened] = useState(() => onCollab);
   const mobileCore = useMobileCore();
   const isPhone = useIsPhone();
+  const [phoneCollabConversations, setPhoneCollabConversations] = useState<
+    CollabConversation[]
+  >([]);
+  useEffect(() => {
+    if (!isPhone || !user?.uid || !workspace?.id) {
+      setPhoneCollabConversations([]);
+      return;
+    }
+    let cancelled = false;
+    void conversationService
+      .listForUser(user.uid, workspace.id)
+      .then((list) => {
+        if (!cancelled) setPhoneCollabConversations(list);
+      })
+      .catch(() => {
+        if (!cancelled) setPhoneCollabConversations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPhone, user?.uid, workspace?.id, location.pathname]);
+  const phoneInboxConversations = useMemo(
+    () =>
+      phoneCollabConversations.map((c) => ({
+        id: c.id,
+        title: c.title || "Conversation",
+        preview: c.lastMessagePreview || undefined,
+      })),
+    [phoneCollabConversations],
+  );
   useEffect(() => {
     if (onCollab) setCollabOpened(true);
     else setWorkOpened(true);
   }, [onCollab]);
-  useEffect(() => {
-    // Warm Chat Collab only when the user opens Collab — never on every app boot.
-    if (!onCollab || !user?.email || !workspace) return;
-    let cancelled = false;
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = window.setTimeout(() => controller?.abort(), 8_000);
-    void (async () => {
-      try {
-        const token = await user.getIdToken();
-        if (cancelled) return;
-        await warmCollabSession({
-          token,
-          userId: user.uid,
-          workspaceId: workspace.id,
-          email: user.email || "",
-          displayName: user.displayName || workspace.name || "Certo Work",
-          company: workspace.name || "",
-        });
-      } catch {
-        // The desk still opens from the Collab tab if warming fails.
-      }
-    })();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      controller?.abort();
-    };
-  }, [onCollab, user, workspace]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1048,22 +1058,7 @@ export function DelivereeWorkspace() {
         },
         () => setTeamCaptureAddresses([]),
       ),
-      onSnapshot(
-        query(
-          collection(db, "work_item_messages"),
-          where("workspaceId", "==", workspace.id),
-        ),
-        (snapshot) =>
-          setWorkItemMessages(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }) as any)
-              .sort(
-                (left: any, right: any) =>
-                  timestamp(left.createdAt) - timestamp(right.createdAt),
-              ),
-          ),
-        () => setWorkItemMessages([]),
-      ),
+      subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages),
       makeQuery("milestones", setMilestones),
       makeQuery("invoice_documents", (items) =>
         setInvoiceDocuments(items as InvoiceDocument[]),
@@ -1547,14 +1542,6 @@ export function DelivereeWorkspace() {
         projects.filter((project) => !isClosed(project.status)),
       ),
     [projects],
-  );
-  const collabProjects = useMemo(
-    () =>
-      activeProjects.map((project) => ({
-        id: String(project.id),
-        name: entityTitle(project),
-      })),
-    [activeProjects],
   );
   const sidebarProjects = useMemo(
     () => sidebarProjectGroups(projects),
@@ -5437,17 +5424,20 @@ export function DelivereeWorkspace() {
     const ticket = tasks.find((item) => item.id === ticketId);
     const authorName =
       memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null;
-    await addDoc(collection(db, "work_item_messages"), {
+    await sendItemMessage({
       workspaceId: workspace.id,
       workItemId: ticketId,
+      title: entityTitle(ticket) || ticketId,
+      text: body,
       visibility,
+      senderId: user.uid,
+      senderName: authorName || user.displayName || "Team",
+      participantIds: [
+        user.uid,
+        String(ticket?.assigneeId || ""),
+        String(ticket?.reporterId || ticket?.createdBy || ""),
+      ].filter(Boolean),
       channel: "app",
-      authorRole: "team",
-      body,
-      authorId: user.uid,
-      authorName,
-      authorEmail: user.email || null,
-      createdAt: serverTimestamp(),
     });
     if (visibility === "public") {
       const sla = markTicketFirstResponseSla(ticket);
@@ -6332,16 +6322,16 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-collab",
-        label: "Open Chat Collab",
+        label: "Open Collab",
         group: "Navigate",
-        keywords: "chat slack teams chatwoot messages",
+        keywords: "chat messages collab inbox mentions dm",
         onSelect: () => navigate("/collab"),
       },
       ...activeProjects.map((project) => ({
         id: `nav-collab-room-${project.id}`,
         label: `Open room · ${entityTitle(project)}`,
         group: "Navigate",
-        keywords: `chat collab room chatwoot ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
+        keywords: `chat collab room messages ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -6792,7 +6782,6 @@ export function DelivereeWorkspace() {
             ]}
           />
         ) : null}
-        <ProductSwitcher product="work" />
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -9322,8 +9311,9 @@ export function DelivereeWorkspace() {
             return due === today;
           }).length}
           greeting={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${(user?.displayName || "there").split(" ")[0]}.`}
-          inboxBadge={0}
-          inboxRows={[]}
+          inboxBadge={inboxFeed.needsActionCount + inboxFeed.unreadDmCount}
+          inboxRows={inboxFeed.rows}
+          conversations={phoneInboxConversations}
           isAdmin={canManageMembers}
           items={openTasks.map((t) => ({
             id: String(t.id),
@@ -9449,6 +9439,7 @@ export function DelivereeWorkspace() {
             icon: t.icon,
           }))}
           userEmail={user?.email || ""}
+          userId={user?.uid || ""}
           userName={user?.displayName || user?.email || "You"}
           workspaceId={workspace?.id}
           workspaceName={workspace?.name || "Workspace"}
@@ -11014,9 +11005,13 @@ export function DelivereeWorkspace() {
       ) : null}
       {collabOpened ? (
         <div aria-hidden={!onCollab} className="do-product-pane" hidden={!onCollab}>
-          <ChatCollabModule
-            projects={collabProjects}
+          <CollabArea
+            projectId={collabProjectIdFromLocation(location.pathname, location.search)}
+            workspaceId={workspace?.id}
             workspaceName={workspace?.name}
+            userId={user?.uid}
+            userName={user?.displayName || user?.email?.split("@")[0] || undefined}
+            onOpenOdysseus={() => void openOdysseusPanel()}
           />
         </div>
       ) : null}

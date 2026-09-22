@@ -207,6 +207,414 @@ async function startServer() {
     }
   });
 
+  /** Guest / portal message into an item_thread (Admin SDK). Expanded in Step 16. */
+  app.post("/api/collab/portal/:token/messages", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      const text = String(req.body?.text || req.body?.body || "").trim();
+      if (!token || !text) {
+        return res.status(400).json({ error: "token and text required" });
+      }
+      const portalSnap = await dbAdmin.collection("request_portal_tokens").doc(token).get();
+      if (!portalSnap.exists) {
+        return res.status(404).json({ error: "Portal not found" });
+      }
+      const portal = portalSnap.data() || {};
+      if (portal.revoked === true || portal.token !== token) {
+        return res.status(403).json({ error: "Portal revoked" });
+      }
+      const workspaceId = String(portal.workspaceId || "");
+      const ticketId = String(portal.ticketId || "");
+      if (!workspaceId || !ticketId) {
+        return res.status(400).json({ error: "Portal missing workspace/ticket" });
+      }
+      const conversationId = `task_${ticketId}`;
+      const snapshot = portal.snapshot || {};
+      const guestName = String(snapshot?.ticket?.requesterName || "Guest");
+      const guestEmail = String(snapshot?.ticket?.requesterEmail || "").toLowerCase();
+      const guestId = guestEmail
+        ? `guest_${guestEmail.replace(/[^a-z0-9]+/g, "_")}`
+        : `guest_${token.slice(0, 12)}`;
+      const now = new Date().toISOString();
+      const convRef = dbAdmin.collection("conversations").doc(conversationId);
+      const conv = await convRef.get();
+      if (!conv.exists) {
+        await convRef.set({
+          workspaceId,
+          type: "item_thread",
+          title: String(snapshot?.ticket?.title || ticketId).slice(0, 120),
+          anchor: { type: "task", id: ticketId, label: String(snapshot?.ticket?.title || ticketId) },
+          participantIds: [],
+          agentIds: [],
+          guestIds: [guestId],
+          isPrivate: false,
+          status: "active",
+          lastMessageAt: now,
+          lastMessagePreview: text.slice(0, 140),
+          lastMessageBy: guestId,
+          messageCount: 1,
+          pinnedMessageIds: [],
+          createdBy: guestId,
+          createdAt: now,
+          updatedAt: now,
+          legacy: { workItemId: ticketId },
+        });
+      }
+      const msgRef = await dbAdmin.collection("conversation_messages").add({
+        workspaceId,
+        conversationId,
+        threadId: null,
+        senderType: "guest",
+        senderId: guestId,
+        senderName: guestName,
+        kind: "text",
+        text,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "external",
+        channel: "portal",
+        status: "sent",
+        replyCount: 0,
+        model: null,
+        searchText: text.toLowerCase(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await dbAdmin.collection("guests").doc(guestId).set(
+        {
+          workspaceId,
+          email: guestEmail || null,
+          name: guestName,
+          status: "active",
+          conversationIds: [conversationId],
+          lastSeenAt: now,
+          createdBy: "portal",
+          createdAt: now,
+        },
+        { merge: true },
+      );
+      res.json({ ok: true, messageId: msgRef.id, conversationId });
+    } catch (err: any) {
+      console.error("[collab portal message]", err);
+      res.status(500).json({ error: err.message || "Failed to post portal message" });
+    }
+  });
+
+  /** Odysseus slash-command stub (offline-safe; Step 12). */
+  app.post("/api/collab/odysseus", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const workspaceId = String(req.body?.workspaceId || "").trim();
+      const conversationId = String(req.body?.conversationId || "").trim();
+      const userId = String(req.body?.userId || "").trim();
+      const text = String(req.body?.text || "").trim();
+      const rawCommand = req.body?.command;
+      const command =
+        rawCommand === null || rawCommand === undefined || rawCommand === ""
+          ? null
+          : String(rawCommand).trim().toLowerCase();
+      const allowed = new Set(["summarize", "actions", "status", "draft"]);
+      if (!workspaceId || !conversationId || !userId) {
+        return res.status(400).json({
+          error: "workspaceId, conversationId, and userId are required",
+        });
+      }
+      if (command !== null && !allowed.has(command)) {
+        return res.status(400).json({
+          error: "command must be summarize|actions|status|draft|null",
+        });
+      }
+
+      const effective = command || (text.startsWith("/") ? text.slice(1).split(/\s+/)[0]?.toLowerCase() : null);
+
+      // Pull recent messages for grounded replies.
+      let historyLines: string[] = [];
+      try {
+        const hist = await dbAdmin
+          .collection("conversation_messages")
+          .where("conversationId", "==", conversationId)
+          .orderBy("createdAt", "desc")
+          .limit(20)
+          .get();
+        historyLines = hist.docs
+          .map((d: any) => {
+            const data = d.data() || {};
+            return `${data.senderName || data.senderId || "?"}: ${String(data.text || "").slice(0, 200)}`;
+          })
+          .reverse();
+      } catch {
+        try {
+          const hist = await dbAdmin
+            .collection("conversation_messages")
+            .where("conversationId", "==", conversationId)
+            .limit(20)
+            .get();
+          historyLines = hist.docs.map((d: any) => {
+            const data = d.data() || {};
+            return `${data.senderName || data.senderId || "?"}: ${String(data.text || "").slice(0, 200)}`;
+          });
+        } catch {
+          historyLines = [];
+        }
+      }
+      const historyBlob = historyLines.join("\n");
+
+      let reply = "Odysseus is ready. Ask for a summary, actions, status, or a draft.";
+      let card: { type: "action_items"; ref: { items: Array<{ title: string }> } } | undefined;
+
+      if (effective === "summarize") {
+        reply = historyLines.length
+          ? `Summary of recent messages:\n\n${historyLines.slice(-8).join("\n")}`
+          : text
+            ? `Summary: ${text.slice(0, 280)}`
+            : "No messages yet to summarize.";
+      } else if (effective === "actions") {
+        const seed = text || historyBlob || "Follow up on open items";
+        const items = seed
+          .split(/[\n;]+/)
+          .map((line: string) => line.replace(/^[-*•\d.)\s]+/, "").replace(/^[^:]+:\s*/, "").trim())
+          .filter((line: string) => line.length > 8)
+          .slice(0, 5)
+          .map((title: string) => ({ title: title.slice(0, 120) }));
+        if (!items.length) items.push({ title: "Capture next actions from this thread" });
+        reply = `Here are ${items.length} suggested action item${items.length === 1 ? "" : "s"}.`;
+        card = { type: "action_items", ref: { items } };
+      } else if (effective === "status") {
+        const conv = (await dbAdmin.collection("conversations").doc(conversationId).get()).data() || {};
+        reply = `Status: ${conv.title || conversationId} · type ${conv.type || "?"} · messages ${conv.messageCount || historyLines.length} · last: ${conv.lastMessagePreview || "—"}`;
+      } else if (effective === "draft") {
+        reply = text
+          ? `Draft reply:\n\nThanks for the update.\n\n${text.slice(0, 400)}\n\nBest regards`
+          : historyLines.length
+            ? `Draft reply:\n\nThanks for your note.\n\nRegarding: ${historyLines[historyLines.length - 1]}\n\nBest regards`
+            : "Draft: share what you want said and I’ll shape a reply.";
+      } else if (text) {
+        reply = historyLines.length
+          ? `Based on the thread (${historyLines.length} recent messages): ${text.slice(0, 200)}`
+          : `Got it: ${text.slice(0, 280)}`;
+      }
+
+      const shouldPost = Boolean(req.body?.post);
+      let messageId: string | undefined;
+      if (shouldPost && reply) {
+        const now = new Date().toISOString();
+        const msgRef = await dbAdmin.collection("conversation_messages").add({
+          workspaceId,
+          conversationId,
+          threadId: null,
+          senderType: "odysseus",
+          senderId: "odysseus",
+          senderName: "Odysseus",
+          kind: card ? "card" : "text",
+          text: reply,
+          mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+          attachments: [],
+          card: card || null,
+          reactions: {},
+          visibility: "internal",
+          channel: "system",
+          status: "sent",
+          replyCount: 0,
+          model: { provider: "offline-safe", name: "collab-odysseus-stub" },
+          searchText: reply.toLowerCase(),
+          createdAt: now,
+          updatedAt: now,
+        });
+        messageId = msgRef.id;
+      }
+
+      return res.json({ ok: true, reply, ...(card ? { card } : {}), ...(messageId ? { messageId, posted: true } : {}) });
+    } catch (err: any) {
+      console.error("[collab odysseus]", err);
+      res.status(500).json({ error: err.message || "Odysseus stub failed" });
+    }
+  });
+
+  async function findGuestByToken(token: string) {
+    if (!dbAdmin || !token) return null;
+    const byToken = await dbAdmin.collection("guests").where("token", "==", token).limit(1).get();
+    if (!byToken.empty) {
+      const doc = byToken.docs[0];
+      return { id: doc.id, ...(doc.data() || {}) };
+    }
+    const byId = await dbAdmin.collection("guests").doc(token).get();
+    if (byId.exists) {
+      const data = byId.data() || {};
+      if (data.token && data.token !== token) return null;
+      return { id: byId.id, ...data };
+    }
+    return null;
+  }
+
+  /** Guest portal snapshot for `/c/:token`. */
+  app.get("/api/collab/guest/:token", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      if (!token) return res.status(400).json({ error: "token required" });
+      const guest = await findGuestByToken(token);
+      if (!guest || guest.status === "revoked" || guest.status === "expired") {
+        return res.status(404).json({ error: "Guest link not found or revoked" });
+      }
+      const workspaceId = String(guest.workspaceId || "");
+      const conversationIds = Array.isArray(guest.conversationIds) ? guest.conversationIds : [];
+      const conversationId = String(conversationIds[0] || "").trim();
+      if (!workspaceId || !conversationId) {
+        return res.status(400).json({ error: "Guest missing workspace/conversation" });
+      }
+      const convSnap = await dbAdmin.collection("conversations").doc(conversationId).get();
+      if (!convSnap.exists) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      const conv = convSnap.data() || {};
+      const msgSnap = await dbAdmin
+        .collection("conversation_messages")
+        .where("conversationId", "==", conversationId)
+        .where("visibility", "==", "external")
+        .orderBy("createdAt", "asc")
+        .limit(100)
+        .get()
+        .catch(async () =>
+          dbAdmin
+            .collection("conversation_messages")
+            .where("conversationId", "==", conversationId)
+            .limit(100)
+            .get(),
+        );
+      const messages = msgSnap.docs
+        .map((d: any) => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            text: String(data.text || ""),
+            senderName: String(data.senderName || ""),
+            senderType: String(data.senderType || "user"),
+            createdAt: String(data.createdAt || ""),
+            visibility: String(data.visibility || "internal"),
+          };
+        })
+        .filter((m: any) => m.visibility === "external" || m.senderType === "guest")
+        .sort((a: any, b: any) => String(a.createdAt).localeCompare(String(b.createdAt)));
+
+      let workspaceName = "";
+      try {
+        const ws = await dbAdmin.collection("workspaces").doc(workspaceId).get();
+        workspaceName = String(ws.data()?.name || "");
+      } catch {
+        /* optional */
+      }
+
+      await dbAdmin.collection("guests").doc(guest.id).set(
+        { lastSeenAt: new Date().toISOString() },
+        { merge: true },
+      );
+
+      return res.json({
+        ok: true,
+        guest: {
+          id: guest.id,
+          name: String(guest.name || "Guest"),
+          email: guest.email || null,
+        },
+        conversation: {
+          id: conversationId,
+          title: String(conv.title || "Conversation"),
+          workspaceId,
+        },
+        workspaceName,
+        messages,
+      });
+    } catch (err: any) {
+      console.error("[collab guest get]", err);
+      res.status(500).json({ error: err.message || "Failed to load guest portal" });
+    }
+  });
+
+  /** Guest posts into their conversation (Admin SDK). */
+  app.post("/api/collab/guest/:token/messages", async (req, res) => {
+    try {
+      if (!dbAdmin) {
+        return res.status(503).json({ error: "Firebase Admin is not initialized" });
+      }
+      const token = String(req.params.token || "").trim();
+      const text = String(req.body?.text || req.body?.body || "").trim();
+      if (!token || !text) {
+        return res.status(400).json({ error: "token and text required" });
+      }
+      const guest = await findGuestByToken(token);
+      if (!guest || guest.status === "revoked" || guest.status === "expired") {
+        return res.status(404).json({ error: "Guest link not found or revoked" });
+      }
+      const workspaceId = String(guest.workspaceId || "");
+      const conversationIds = Array.isArray(guest.conversationIds) ? guest.conversationIds : [];
+      const conversationId = String(conversationIds[0] || "").trim();
+      if (!workspaceId || !conversationId) {
+        return res.status(400).json({ error: "Guest missing workspace/conversation" });
+      }
+      const guestId = String(guest.id);
+      const guestName = String(guest.name || "Guest");
+      const now = new Date().toISOString();
+      const convRef = dbAdmin.collection("conversations").doc(conversationId);
+      const conv = await convRef.get();
+      if (!conv.exists) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      const msgRef = await dbAdmin.collection("conversation_messages").add({
+        workspaceId,
+        conversationId,
+        threadId: null,
+        senderType: "guest",
+        senderId: guestId,
+        senderName: guestName,
+        kind: "text",
+        text,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "external",
+        channel: "portal",
+        status: "sent",
+        replyCount: 0,
+        model: null,
+        searchText: text.toLowerCase(),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await convRef.set(
+        {
+          lastMessageAt: now,
+          lastMessagePreview: text.slice(0, 140),
+          lastMessageBy: guestId,
+          messageCount: FieldValue.increment(1),
+          updatedAt: now,
+          guestIds: FieldValue.arrayUnion(guestId),
+        },
+        { merge: true },
+      );
+      await dbAdmin.collection("guests").doc(guestId).set(
+        {
+          lastSeenAt: now,
+          conversationIds: FieldValue.arrayUnion(conversationId),
+        },
+        { merge: true },
+      );
+      res.json({ ok: true, messageId: msgRef.id, conversationId });
+    } catch (err: any) {
+      console.error("[collab guest message]", err);
+      res.status(500).json({ error: err.message || "Failed to post guest message" });
+    }
+  });
+
   app.post("/api/capture/inbound/email", async (req, res) => {
     try {
       const { createCaptureRequestsHandlers } = await import("./worker/captureRequests.js");
@@ -1356,19 +1764,20 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       // 1. Get user message
-      const msgSnap = await dbAdmin.collection("war_room_messages").doc(messageId).get();
+      const msgSnap = await dbAdmin.collection("conversation_messages").doc(messageId).get();
       if (!msgSnap.exists) {
         return res.status(404).json({ error: "Source message not found" });
       }
       const userMsg = msgSnap.data();
+      const userMsgText = String(userMsg.text || userMsg.content || "");
 
       // 2. Get chat document
-      const chatSnap = await dbAdmin.collection("war_room_chats").doc(chatId).get();
+      const chatSnap = await dbAdmin.collection("conversations").doc(chatId).get();
       if (!chatSnap.exists) {
         return res.status(404).json({ error: "Chat room not found" });
       }
       const chatData = chatSnap.data();
-      const linkedProjectId = chatData.linkedProjectId || null;
+      const linkedProjectId = chatData.linkedProjectId || chatData.anchor?.id || null;
 
       // 3. Get workspace agents
       const agentsSnap = await dbAdmin.collection("boldi_agents")
@@ -1399,8 +1808,8 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       // 5. Get recent chat history
-      let historyQuery = dbAdmin.collection("war_room_messages")
-        .where("chatId", "==", chatId);
+      let historyQuery = dbAdmin.collection("conversation_messages")
+        .where("conversationId", "==", chatId);
       
       if (threadId) {
         historyQuery = historyQuery.where("threadId", "==", threadId);
@@ -1410,20 +1819,23 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       const historySnap = await historyQuery.orderBy("createdAt", "desc").limit(15).get();
-      const recentMessages = historySnap.docs.map((d: any) => ({
-        id: d.id,
-        senderType: d.data().senderType,
-        senderAgentId: d.data().senderAgentId,
-        content: d.data().content,
-        messageType: d.data().messageType
-      })).reverse();
+      const recentMessages = historySnap.docs.map((d: any) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          senderType: data.senderType,
+          senderAgentId: data.senderType === "agent" ? data.senderId || data.senderAgentId : data.senderAgentId,
+          content: data.text || data.content || "",
+          messageType: data.kind || data.messageType || "text",
+        };
+      }).reverse();
 
       // 6. Multi-agent Orchestration queue
       // Determine which agents should participate.
       // Rule A: If user explicitly @mentioned some agents, queue them in order.
       // Rule B: If no explicit @mentions, run the "orchestrator" agent to coordinate.
       let executionQueue: any[] = [];
-      const mentionedAgentIds = userMsg.mentionsAgentIds || [];
+      const mentionedAgentIds = userMsg.mentionsAgentIds || userMsg.mentions?.agentIds || [];
       
       if (mentionedAgentIds.length > 0) {
         executionQueue = workspaceAgents.filter((a: any) => mentionedAgentIds.includes(a.id));
@@ -1457,7 +1869,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           triggerMessageId: messageId,
           runType: "reply",
           status: "running",
-          inputSummary: userMsg.content,
+          inputSummary: userMsgText,
           modelProvider: currentAgent.modelProvider || "google",
           modelName: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           createdAt: new Date(),
@@ -1478,7 +1890,7 @@ Recent Conversation History:
 ${JSON.stringify(recentMessages, null, 2)}
 
 Your task:
-Analyze the user's input: "${userMsg.content}" and the previous conversation context.
+Analyze the user's input: "${userMsgText}" and the previous conversation context.
 Formulate a highly strategic, professional response conforming to your persona.
 
 Optional Deliverables:
@@ -1548,7 +1960,7 @@ Respond STRICTLY in a valid JSON schema:
             
             // Check if a widget with this title already exists in the chat to mutate it (v2, v3, etc.)
             const existingWidgetsSnap = await dbAdmin.collection("war_room_widgets")
-              .where("chatId", "==", chatId)
+              .where("conversationId", "==", chatId)
               .where("title", "==", wPayload.document_title)
               .get();
             
@@ -1628,18 +2040,28 @@ Respond STRICTLY in a valid JSON schema:
           }
 
           // Save agent's message doc
-          const agentMsgRef = await dbAdmin.collection("war_room_messages").add({
+          const agentMsgRef = await dbAdmin.collection("conversation_messages").add({
             workspaceId,
-            chatId,
+            conversationId: chatId,
             threadId: threadId || null,
             senderType: "agent",
-            senderAgentId: currentAgent.id,
-            messageType,
-            content: parsed.response_text || "",
-            linkedWidgetId: linkedWidgetId || null,
+            senderId: currentAgent.id,
+            senderName: currentAgent.name || currentAgent.id,
+            kind: messageType === "action_plan" ? "action_plan" : messageType === "status_report" ? "status_report" : messageType === "system" ? "system" : "text",
+            text: parsed.response_text || "",
+            mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+            attachments: [],
+            card: null,
+            reactions: {},
+            visibility: "internal",
+            channel: "app",
             status: "sent",
-            createdAt: new Date(),
-            updatedAt: new Date()
+            replyCount: 0,
+            model: null,
+            searchText: String(parsed.response_text || "").toLowerCase(),
+            linkedWidgetId: linkedWidgetId || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
 
           // Log run completion
@@ -1678,16 +2100,27 @@ Respond STRICTLY in a valid JSON schema:
             updatedAt: new Date()
           });
           // Also save standard system error message
-          await dbAdmin.collection("war_room_messages").add({
+          await dbAdmin.collection("conversation_messages").add({
             workspaceId,
-            chatId,
+            conversationId: chatId,
             threadId: threadId || null,
             senderType: "system",
-            messageType: "system",
-            content: `Agent ${currentAgent.name} failed to complete run. Reason: ${runErr.message || 'stateless exception'}`,
+            senderId: "system",
+            senderName: "system",
+            kind: "system",
+            text: `Agent ${currentAgent.name} failed to complete run. Reason: ${runErr.message || 'stateless exception'}`,
+            mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+            attachments: [],
+            card: null,
+            reactions: {},
+            visibility: "internal",
+            channel: "app",
             status: "sent",
-            createdAt: new Date(),
-            updatedAt: new Date()
+            replyCount: 0,
+            model: null,
+            searchText: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
         }
       }
@@ -1746,16 +2179,28 @@ Respond STRICTLY in a valid JSON schema:
       });
 
       // Write system announcement message back to chat
-      await dbAdmin.collection("war_room_messages").add({
+      const announce = `Action Plan applied. Created database Tasks: ${createdTasksIds.join(", ")}. Verification complete.`;
+      await dbAdmin.collection("conversation_messages").add({
         workspaceId,
-        chatId: plan.chatId,
+        conversationId: plan.chatId || plan.conversationId,
         threadId: plan.threadId || null,
         senderType: "system",
-        messageType: "system",
-        content: `Action Plan applied. Created database Tasks: ${createdTasksIds.join(", ")}. Verification complete.`,
+        senderId: "system",
+        senderName: "system",
+        kind: "system",
+        text: announce,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "internal",
+        channel: "app",
         status: "sent",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        replyCount: 0,
+        model: null,
+        searchText: announce.toLowerCase(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
 
       res.json({ status: "ok", createdTasksCount: createdTasksIds.length });

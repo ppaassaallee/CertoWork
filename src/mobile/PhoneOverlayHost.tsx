@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { PhoneAppChrome, phoneTabFromPath } from "./PhoneAppChrome";
 import { MobileChromeProvider } from "./MobileChromeContext";
 import { PhoneHome } from "./pages/PhoneHome";
@@ -6,7 +6,8 @@ import { PhoneMyWork } from "./pages/PhoneMyWork";
 import { PhoneProjects } from "./pages/PhoneProjects";
 import { PhoneProjectDetail } from "./pages/PhoneProjectDetail";
 import { PhoneNotes } from "./pages/PhoneNotes";
-import { PhoneInbox, type InboxRow } from "./pages/PhoneInbox";
+import { PhoneInbox, type InboxConversation, type InboxRow } from "./pages/PhoneInbox";
+import { PhoneConversation } from "./pages/PhoneConversation";
 import { PhoneSearch } from "./pages/PhoneSearch";
 import { CreateSheet, type CreateKind } from "./sheets/CreateSheet";
 import { ProfileSheet } from "./sheets/ProfileSheet";
@@ -22,6 +23,7 @@ export function PhoneOverlayHost({
   workspaceName,
   workspaceId,
   workspaces,
+  userId,
   userName,
   userEmail,
   isAdmin,
@@ -35,6 +37,7 @@ export function PhoneOverlayHost({
   notes,
   items,
   inboxRows,
+  conversations,
   inboxBadge,
   myWorkList,
   dailyPlanSlot,
@@ -44,6 +47,7 @@ export function PhoneOverlayHost({
   onOpenItem,
   onOpenProject,
   onOpenNote,
+  onOpenConversation,
   onSwitchWorkspace,
   onSignOut,
   onCreate,
@@ -53,6 +57,7 @@ export function PhoneOverlayHost({
   workspaceName: string;
   workspaceId?: string;
   workspaces: Array<{ id: string; name: string }>;
+  userId?: string;
   userName: string;
   userEmail: string;
   isAdmin?: boolean;
@@ -87,6 +92,7 @@ export function PhoneOverlayHost({
     projectId?: string | null;
   }>;
   inboxRows: InboxRow[];
+  conversations?: InboxConversation[];
   inboxBadge: number;
   myWorkList: () => ReactNode;
   dailyPlanSlot?: ReactNode;
@@ -95,6 +101,7 @@ export function PhoneOverlayHost({
   onOpenItem: (id: string) => void;
   onOpenProject: (id: string) => void;
   onOpenNote: (id: string) => void;
+  onOpenConversation?: (id: string) => void;
   onSwitchWorkspace: (id: string) => void;
   onSignOut: () => void;
   onCreate: (payload: {
@@ -112,6 +119,7 @@ export function PhoneOverlayHost({
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [odyOpen, setOdyOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
 
   const projectDetailId = useMemo(() => {
     const match = pathname.match(/^\/(?:work\/)?projects\/([^/]+)/);
@@ -180,6 +188,33 @@ export function PhoneOverlayHost({
   const showPhonePage =
     isHome || isMyWork || isProjects || isProjectDetail || isNotes || isInbox;
 
+  useEffect(() => {
+    if (!isInbox) setActiveConversationId(null);
+  }, [isInbox]);
+
+  const inboxConversations = useMemo(() => {
+    if (!Array.isArray(conversations)) return undefined;
+    return conversations.map((c) => ({
+      ...c,
+      onOpen: () => {
+        setActiveConversationId(c.id);
+        onOpenConversation?.(c.id);
+        c.onOpen?.();
+      },
+    }));
+  }, [conversations, onOpenConversation]);
+
+  const activeConversation = useMemo(
+    () =>
+      activeConversationId
+        ? (conversations || []).find((c) => c.id === activeConversationId) || null
+        : null,
+    [activeConversationId, conversations],
+  );
+
+  const showConversation =
+    Boolean(isInbox && activeConversationId && workspaceId && userId);
+
   return (
     <MobileChromeProvider>
       <div className="m-root m-phone-overlay" data-testid="phone-overlay">
@@ -246,7 +281,19 @@ export function PhoneOverlayHost({
               onOpen={onOpenNote}
             />
           ) : null}
-          {isInbox ? <PhoneInbox rows={inboxRows} /> : null}
+          {isInbox && showConversation && activeConversationId && workspaceId && userId ? (
+            <PhoneConversation
+              conversationId={activeConversationId}
+              onBack={() => setActiveConversationId(null)}
+              title={activeConversation?.title}
+              userId={userId}
+              userName={userName}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+          {isInbox && !showConversation ? (
+            <PhoneInbox conversations={inboxConversations} rows={inboxRows} />
+          ) : null}
           {!showPhonePage ? (
             <p className="m-caption" style={{ padding: 16 }}>
               Opened {pathname}. Use Profile for Settings and Conversations.

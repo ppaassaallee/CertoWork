@@ -12,6 +12,7 @@ import { PublicInvoicePortal } from "./components/PublicInvoicePortal";
 import { PublicAppleWidget } from "./components/PublicAppleWidget";
 import { PublicRequestPortal } from "./components/PublicRequestPortal";
 import { PublicTableForm } from "./components/PublicTableForm";
+import { GuestPortal } from "./features/collab/GuestPortal";
 import { MobileKitPreview } from "./mobile/MobileKitPreview";
 import { DesktopKitPreview } from "./desktop/ui/DesktopKitPreview";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
@@ -374,6 +375,9 @@ export default function App() {
   const requestPortalToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/request\/([^/]+)/) || [])[1] || "")
     : "";
+  const guestPortalToken = typeof window !== "undefined"
+    ? decodeURIComponent((window.location.pathname.match(/^\/c\/([^/]+)/) || [])[1] || "")
+    : "";
   const formToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/form\/([^/]+)/) || [])[1] || "")
     : "";
@@ -388,6 +392,9 @@ export default function App() {
   }
   if (requestPortalToken) {
     return <PublicRequestPortal token={requestPortalToken} />;
+  }
+  if (guestPortalToken) {
+    return <GuestPortal token={guestPortalToken} />;
   }
   if (formToken) {
     return <PublicTableForm token={formToken} />;

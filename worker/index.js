@@ -1,13 +1,6 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
-import {
-  collabStatusPayload,
-  isChatwootProxyPath,
-  isCertoCollabBrandPath,
-  provisionCollabSso,
-  proxyChatwoot,
-} from "./collab.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
@@ -1916,7 +1909,6 @@ function capabilities(env) {
         ? "OneDrive connector credentials are present."
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
-    collab: collabStatusPayload(env),
     googleCalendar: {
       configured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET),
       tokenKey: Boolean(env.CALENDAR_TOKEN_KEY),
@@ -2051,15 +2043,62 @@ async function inboundItemUpdate(request, env) {
   }
   // Persist via admin when configured; otherwise acknowledge parse for clients.
   if (firestoreAdminConfigured(env)) {
-    await firestoreCreateDocument(env, "work_item_messages", {
-      workItemId: itemId,
-      body: message,
-      channel: body.source === "slack" ? "slack" : "email",
-      visibility: "public",
-      authorRole: "external",
-      authorName: String(body.actorName || body.user_name || "External"),
-      createdAt: new Date().toISOString(),
-      workspaceId: String(body.workspaceId || ""),
+    const conversationId = `task_${itemId}`;
+    const now = new Date().toISOString();
+    const workspaceId = String(body.workspaceId || "");
+    const authorName = String(body.actorName || body.user_name || "External");
+    const channel = body.source === "slack" ? "portal" : "email";
+    const existing = await firestoreGetDocument(env, "conversations", conversationId);
+    if (!existing) {
+      await firestoreUpsertDocument(env, "conversations", conversationId, {
+        workspaceId,
+        type: "item_thread",
+        title: String(body.itemTitle || itemId).slice(0, 120),
+        anchor: { type: "task", id: itemId, label: String(body.itemTitle || itemId) },
+        participantIds: [],
+        agentIds: [],
+        guestIds: [],
+        isPrivate: false,
+        status: "active",
+        lastMessageAt: now,
+        lastMessagePreview: message.slice(0, 140),
+        lastMessageBy: authorName,
+        messageCount: 1,
+        pinnedMessageIds: [],
+        createdBy: "inbound",
+        createdAt: now,
+        updatedAt: now,
+        legacy: { workItemId: itemId },
+      });
+    } else {
+      await firestorePatchDocument(env, "conversations", conversationId, {
+        lastMessageAt: now,
+        lastMessagePreview: message.slice(0, 140),
+        lastMessageBy: authorName,
+        updatedAt: now,
+      });
+    }
+    await firestoreCreateDocument(env, "conversation_messages", {
+      workspaceId,
+      conversationId,
+      threadId: null,
+      senderType: "guest",
+      senderId: `guest_inbound_${itemId}`,
+      senderName: authorName,
+      kind: "text",
+      text: message,
+      mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+      attachments: [],
+      card: null,
+      reactions: {},
+      visibility: "external",
+      channel,
+      status: "sent",
+      replyCount: 0,
+      model: null,
+      searchText: message.toLowerCase(),
+      createdAt: now,
+      updatedAt: now,
     });
   }
   return json({ ok: true, itemId, message });
@@ -2414,9 +2453,6 @@ const worker = {
         return capture.handleTicketReply(request, env);
       }
     }
-    if (request.method === "GET" && url.pathname === "/api/collab/status") {
-      return json(collabStatusPayload(env, url.origin));
-    }
     if (request.method === "POST" && url.pathname === "/api/calendar/oauth/google/start") {
       try {
         const body = await readJson(request);
@@ -2633,55 +2669,6 @@ const worker = {
       return new Response("ok", { status: 200 });
     }
 
-    if (request.method === "POST" && url.pathname === "/api/collab/sso") {
-      try {
-        const body = await readJson(request);
-        await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: false });
-        return json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
-        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
-        return json(
-          {
-            error: message,
-            configured: collabStatusPayload(env, url.origin).configured,
-          },
-          status,
-        );
-      }
-    }
-    if (request.method === "POST" && url.pathname === "/api/collab/rooms") {
-      try {
-        const body = await readJson(request);
-        await authorize(request, body, env);
-        const result = await provisionCollabSso(env, body, url.origin, { syncRooms: true });
-        return json(result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Chat Collab is unavailable.";
-        const status = error?.status || (message.includes("Authentication") ? 401 : 502);
-        return json(
-          {
-            error: message,
-            configured: collabStatusPayload(env, url.origin).configured,
-          },
-          status,
-        );
-      }
-    }
-    if (request.method === "GET" && isCertoCollabBrandPath(url.pathname)) {
-      const mark = new URL("/certo-mark.svg", request.url);
-      return serveAsset(
-        new Request(mark.toString(), {
-          method: "GET",
-          headers: { accept: "image/svg+xml" },
-        }),
-        env,
-      );
-    }
-    if (isChatwootProxyPath(url.pathname)) {
-      return proxyChatwoot(request, env);
-    }
     if (url.pathname === "/mcp/delivereeos" || url.pathname.startsWith("/api/codex/")) {
       const response = await handleCodexBridgeRequest(request, env, {
         firebaseProjectId: FIREBASE_PROJECT_ID,

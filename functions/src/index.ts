@@ -178,3 +178,4 @@ export {
   queryRecords,
 } from "./tables/computeFns";
 export { provisionTableTemplate } from "./tables/provisionTemplate";
+export { onMessageCreated } from "./collab/onMessageCreated";

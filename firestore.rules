@@ -1451,18 +1451,169 @@ service cloud.firestore {
       );
     }
 
-    match /war_room_chats/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_participants/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_messages/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_threads/{id} { allow read, write: if isSignedIn(); }
+    // Legacy War Room collections — read-only during Collab migration window (30 days).
+    match /war_room_chats/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_participants/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_threads/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /boldi_agents/{id} { allow read, write: if isSignedIn(); }
     match /agent_templates/{id} { allow read, write: if isSignedIn(); }
     match /agent_runs/{id} { allow read, write: if isSignedIn(); }
     match /war_room_widgets/{id} { allow read, write: if isSignedIn(); }
     match /war_room_widget_versions/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_files/{id} { allow read, write: if isSignedIn(); }
+    match /war_room_files/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /war_room_action_plans/{id} { allow read, write: if isSignedIn(); }
     match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
+    match /work_item_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
+
+    // —— Native Collab (workspace + participant scoped) ——
+    function conversationDoc(conversationId) {
+      return get(/databases/$(database)/documents/conversations/$(conversationId));
+    }
+    function canReadConversation(conversationId) {
+      let c = conversationDoc(conversationId);
+      return c != null
+        && isWorkspaceMember(c.data.workspaceId)
+        && (
+          c.data.isPrivate != true
+          || request.auth.uid in c.data.participantIds
+        );
+    }
+    function canWriteAsParticipant(conversationId) {
+      let c = conversationDoc(conversationId);
+      return c != null
+        && isWorkspaceMember(c.data.workspaceId)
+        && request.auth.uid in c.data.participantIds;
+    }
+
+    match /conversations/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          resource.data.isPrivate != true
+          || request.auth.uid in resource.data.participantIds
+        );
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().createdBy == request.auth.uid
+        && incoming().type is string
+        && incoming().title is string
+        && incoming().participantIds is list
+        && incoming().messageCount is int;
+      allow update: if isSignedIn()
+        && isWorkspaceMember(resource.data.workspaceId)
+        && request.auth.uid in resource.data.participantIds
+        && incoming().workspaceId == resource.data.workspaceId
+        && incoming().createdBy == resource.data.createdBy
+        && incoming().type == resource.data.type;
+      allow delete: if false;
+    }
+
+    match /conversation_participants/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().conversationId is string
+        && (
+          canWriteAsParticipant(incoming().conversationId)
+          || (
+            incoming().kind == "user"
+            && incoming().userId == request.auth.uid
+            && canReadConversation(incoming().conversationId)
+          )
+        );
+      allow update: if isSignedIn()
+        && isWorkspaceMember(resource.data.workspaceId)
+        && (
+          canWriteAsParticipant(resource.data.conversationId)
+          || resource.data.userId == request.auth.uid
+        )
+        && incoming().workspaceId == resource.data.workspaceId
+        && incoming().conversationId == resource.data.conversationId;
+      allow delete: if false;
+    }
+
+    match /conversation_messages/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && canReadConversation(resource.data.conversationId);
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().conversationId is string
+        && canWriteAsParticipant(incoming().conversationId)
+        && incoming().senderType == "user"
+        && incoming().senderId == request.auth.uid
+        && incoming().text is string;
+      allow update: if isSignedIn()
+        && canReadConversation(resource.data.conversationId)
+        && (
+          (
+            resource.data.senderId == request.auth.uid
+            && resource.data.senderType == "user"
+            && incoming().senderId == resource.data.senderId
+            && incoming().senderType == resource.data.senderType
+            && incoming().conversationId == resource.data.conversationId
+          )
+          || (
+            // reactions: same conversation, keep authorship
+            incoming().senderId == resource.data.senderId
+            && incoming().conversationId == resource.data.conversationId
+            && incoming().text == resource.data.text
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /conversation_threads/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && canReadConversation(resource.data.conversationId);
+      allow create: if isSignedIn()
+        && incoming().conversationId is string
+        && canWriteAsParticipant(incoming().conversationId)
+        && incoming().createdBy == request.auth.uid;
+      allow update: if isSignedIn()
+        && canWriteAsParticipant(resource.data.conversationId)
+        && incoming().conversationId == resource.data.conversationId;
+      allow delete: if false;
+    }
+
+    match /conversation_typing/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && canReadConversation(resource.data.conversationId);
+      allow create, update: if isSignedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().conversationId is string
+        && canWriteAsParticipant(incoming().conversationId);
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /presence/{id} {
+      allow read: if isSignedIn()
+        && resource != null
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isSignedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /guests/{id} {
+      // Guests never use client Auth — server/Admin only.
+      allow read: if isSignedIn()
+        && resource != null
+        && isWorkspaceMember(resource.data.workspaceId)
+        && isWorkspaceAdmin(resource.data.workspaceId);
+      allow write: if false;
+    }
     match /agent_resources/{id} { allow read, write: if isSignedIn(); }
     match /agent_invites/{id} { allow read, write: if isSignedIn(); }
     match /user_notifications/{id} {

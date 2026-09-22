@@ -150,7 +150,9 @@ test("primary sidebar keeps essentials short; management is secondary", () => {
   assert.doesNotMatch(source, /className="do-new-conversation"/);
   assert.doesNotMatch(source, /data-testid="nav-workspace"/);
   assert.doesNotMatch(source, /data-testid="nav-settings"/);
-  assert.match(source, /ProductSwitcher/);
+  assert.match(source, /CollabArea/);
+  assert.doesNotMatch(source, /ProductSwitcher/);
+  assert.doesNotMatch(source, /ChatCollabModule/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);
   assert.doesNotMatch(source, /do-odiseus-hire/);
   assert.match(source, /data-testid="sidebar-search"/);

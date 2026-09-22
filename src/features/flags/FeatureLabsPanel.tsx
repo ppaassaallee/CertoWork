@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useAuth } from "../../lib/AuthContext";
 import {
   enableBilling,
+  enableCollab,
   enableDailyBrief,
   enableTables,
   useBillingEnabled,
+  useCollabEnabled,
   useDailyBriefEnabled,
   useTablesEnabled,
 } from "../flags/featureUserFlags";
@@ -18,7 +20,7 @@ type FlagRow = {
   onEnable: () => Promise<void>;
 };
 
-/** One-tap toggles for Tables / Brief / Billing / Daily Plan. */
+/** One-tap toggles for Tables / Brief / Billing / Daily Plan / Collab. */
 export function FeatureLabsPanel({
   onOpen,
 }: {
@@ -29,6 +31,7 @@ export function FeatureLabsPanel({
   const briefOn = useDailyBriefEnabled();
   const billingOn = useBillingEnabled();
   const dailyPlanOn = useDailyPlanEnabled();
+  const collabOn = useCollabEnabled();
   const [busy, setBusy] = useState<string | null>(null);
 
   if (!user?.uid) return null;
@@ -62,7 +65,22 @@ export function FeatureLabsPanel({
       enabled: dailyPlanOn,
       onEnable: () => enableDailyPlan(user.uid),
     },
+    {
+      id: "collab",
+      title: "Collab",
+      where: "/collab · native conversations · flags.collab",
+      enabled: collabOn,
+      onEnable: () => enableCollab(user.uid),
+    },
   ];
+
+  const openPath = (id: string) => {
+    if (id === "tables") return "/tables";
+    if (id === "brief") return "/home";
+    if (id === "billing") return "/billing";
+    if (id === "collab") return "/collab";
+    return "/my-work";
+  };
 
   return (
     <section className="do-workspace-admin-card" data-testid="feature-labs-panel">
@@ -74,7 +92,7 @@ export function FeatureLabsPanel({
         Turn on shipped modules for this account. Also works via{" "}
         <code>localStorage</code> keys <code>certoTables</code>,{" "}
         <code>certoDailyBrief</code>, <code>certoBilling</code>,{" "}
-        <code>certoDailyPlan</code> (=1).
+        <code>certoDailyPlan</code>, <code>certoCollab</code> (=1).
       </p>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
         {rows.map((row) => (
@@ -98,17 +116,7 @@ export function FeatureLabsPanel({
             {row.enabled ? (
               <button
                 className="do-button"
-                onClick={() =>
-                  onOpen?.(
-                    row.id === "tables"
-                      ? "/tables"
-                      : row.id === "brief"
-                        ? "/home"
-                        : row.id === "billing"
-                          ? "/billing"
-                          : "/my-work",
-                  )
-                }
+                onClick={() => onOpen?.(openPath(row.id))}
                 type="button"
               >
                 Open
