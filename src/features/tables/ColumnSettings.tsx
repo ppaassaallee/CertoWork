@@ -31,6 +31,9 @@ const TYPE_LABELS: Partial<Record<ColumnType, string>> = {
   createdAt: "Created at",
   updatedAt: "Updated at",
   button: "Button",
+  rating: "Rating",
+  progress: "Progress",
+  relation: "Relation",
 };
 
 export type ColumnSettingsProps = {
@@ -65,6 +68,9 @@ export function migrateColumnType(column: Column, nextType: ColumnType): Column 
   }
   if (nextType === "formula") {
     next.config = { ...next.config, expression: "1", resultType: "number" };
+  }
+  if (nextType === "relation" && !next.relation) {
+    next.relation = { to: "project", multiple: false };
   }
   return next;
 }
@@ -246,6 +252,51 @@ export function ColumnSettings({
             ))}
           </select>
         </label>
+      )}
+
+      {draft.type === "relation" && (
+        <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+          <label style={{ fontSize: 12 }}>
+            Link to
+            <select
+              value={draft.relation?.to || "record"}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  relation: {
+                    to: e.target.value as NonNullable<Column["relation"]>["to"],
+                    multiple: draft.relation?.multiple ?? false,
+                    tableId: draft.relation?.tableId,
+                  },
+                })
+              }
+              style={{ display: "block", width: "100%", marginTop: 4, padding: 8 }}
+            >
+              <option value="project">Project</option>
+              <option value="task">Task / item</option>
+              <option value="record">Table record</option>
+              <option value="note">Note</option>
+              <option value="ticket">Ticket</option>
+            </select>
+          </label>
+          <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={Boolean(draft.relation?.multiple)}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  relation: {
+                    to: draft.relation?.to || "project",
+                    multiple: e.target.checked,
+                    tableId: draft.relation?.tableId,
+                  },
+                })
+              }
+            />
+            Allow multiple
+          </label>
+        </div>
       )}
 
       {(draft.type === "lookup" || draft.type === "rollup") && (

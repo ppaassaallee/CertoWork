@@ -20,23 +20,27 @@ export function RecordsViewSurface({
   table,
   records,
   members,
+  projects = [],
   actorId,
   workspaceId,
   onFieldChange: _onFieldChange,
   onCreateRecord,
   onDeleteRecords: _onDeleteRecords,
   onOpenRecord,
+  onOpenProject,
   ctxExtras,
 }: {
   table: TableDoc;
   records: RecordDoc[];
   members: TableMember[];
+  projects?: Array<{ id: string; name: string }>;
   actorId: string;
   workspaceId: string;
   onFieldChange(recordId: string, columnId: string, value: unknown): void;
   onCreateRecord(title?: string): void;
   onDeleteRecords(ids: string[]): void;
   onOpenRecord(id: string): void;
+  onOpenProject?(projectId: string): void;
   ctxExtras?: Partial<ActionContext>;
 }) {
   const surface = `table:${table.id}` as Surface;
@@ -136,6 +140,8 @@ export function RecordsViewSurface({
           cellColumnLookup={(id) => table.columns.find((col) => col.id === id)}
           ctx={ctx}
           members={members}
+          projects={projects}
+          onOpenProject={onOpenProject}
           onCreateRow={onCreateRecord}
           onOpenRow={(row) => onOpenRecord(row.id)}
           rows={records}

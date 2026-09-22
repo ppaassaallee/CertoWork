@@ -62,7 +62,7 @@ export function isActiveTable(table: Pick<TableDoc, "status"> | null | undefined
 }
 
 export function canSeeTable(
-  table: Pick<TableDoc, "visibility" | "createdBy" | "projectId" | "status">,
+  table: Pick<TableDoc, "visibility" | "createdBy" | "projectId" | "relatedProjectIds" | "status">,
   uid: string,
   projectIds: string[],
   opts?: { includeArchived?: boolean; includeDeleted?: boolean },
@@ -72,7 +72,12 @@ export function canSeeTable(
   if (status === "deleted" && !opts?.includeDeleted) return false;
   if (table.visibility === "private") return table.createdBy === uid;
   if (table.visibility === "project") {
-    return Boolean(table.projectId && projectIds.includes(String(table.projectId)));
+    const home = table.projectId ? String(table.projectId) : "";
+    if (home && projectIds.includes(home)) return true;
+    const related = (table.relatedProjectIds || [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+    return related.some((id) => projectIds.includes(id));
   }
   return true;
 }

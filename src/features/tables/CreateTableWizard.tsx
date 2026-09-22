@@ -54,6 +54,8 @@ export type CreateTableWizardProps = {
   open: boolean;
   onClose(): void;
   onCreated(table: TableDoc): void;
+  /** When set, new tables are home-linked to this project. */
+  initialProjectId?: string | null;
 };
 
 type PreviewSource = "template" | "phrase" | "blank";
@@ -307,7 +309,12 @@ function MiniTable(props: {
   );
 }
 
-export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizardProps) {
+export function CreateTableWizard({
+  open,
+  onClose,
+  onCreated,
+  initialProjectId = null,
+}: CreateTableWizardProps) {
   const { user, workspace } = useAuth();
   const locale = getLocale();
   const [phrase, setPhrase] = useState("");
@@ -552,8 +559,12 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       return;
     }
     // Project scope without a projectId is invisible in canSeeTable — fall back to workspace.
-    const resolvedVisibility: TableVisibility =
-      visibility === "project" ? "workspace" : visibility;
+    const homeProjectId = String(initialProjectId || "").trim() || null;
+    const resolvedVisibility: TableVisibility = homeProjectId
+      ? "project"
+      : visibility === "project"
+        ? "workspace"
+        : visibility;
     setBusy("create");
     setError("");
     try {
@@ -561,7 +572,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       const color = preview.color.startsWith("var(") ? "#3C3489" : preview.color;
       const id = await createTable({
         workspaceId: workspace.id,
-        projectId: null,
+        projectId: homeProjectId,
         name,
         icon: preview.iconName === "Sparkles" ? "✦" : "▦",
         color,
@@ -637,7 +648,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
       const created: TableDoc = {
         id,
         workspaceId: workspace.id,
-        projectId: null,
+        projectId: homeProjectId,
         name,
         icon: preview.iconName === "Sparkles" ? "✦" : "▦",
         color,
@@ -669,7 +680,7 @@ export function CreateTableWizard({ open, onClose, onCreated }: CreateTableWizar
     ? {
         id: "draft",
         workspaceId: workspace?.id || "",
-        projectId: null,
+        projectId: String(initialProjectId || "").trim() || null,
         name: preview.name,
         icon: "▦",
         color: preview.color,

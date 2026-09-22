@@ -115,6 +115,9 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
         : {}),
       ...(newType === "rating" ? { width: 120 } : {}),
       ...(newType === "progress" ? { width: 140 } : {}),
+      ...(newType === "relation"
+        ? { relation: { to: "project" as const, multiple: false } }
+        : {}),
     };
     commit([...columns, col], keys);
     setNewName("");
