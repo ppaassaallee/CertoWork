@@ -5,11 +5,11 @@ export const PROJECT_RESOURCE_MAX_MB = Math.round(
 );
 
 export const PROJECT_RESOURCE_TYPES = [
-  { value: "file", label: "Upload file" },
-  { value: "note", label: "Create note" },
-  { value: "link", label: "Add link" },
-  { value: "google_drive", label: "Google Drive" },
-  { value: "onedrive", label: "OneDrive" },
+  { value: "file", label: "Upload file", shortLabel: "File" },
+  { value: "note", label: "Create note", shortLabel: "Note" },
+  { value: "link", label: "Add link", shortLabel: "Link" },
+  { value: "google_drive", label: "Google Drive", shortLabel: "Drive" },
+  { value: "onedrive", label: "OneDrive", shortLabel: "OneDrive" },
 ] as const;
 
 export type ProjectResourceType = (typeof PROJECT_RESOURCE_TYPES)[number]["value"];

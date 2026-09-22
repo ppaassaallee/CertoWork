@@ -2873,20 +2873,36 @@ export function ProjectConsolePanel({
 
           <section className="do-docs-composer" aria-label="Add document">
             <div className="do-docs-type-row" role="tablist" aria-label="Document type">
-              {PROJECT_RESOURCE_TYPES.map((type) => (
-                <button
-                  aria-pressed={docType === type.value}
-                  className={docType === type.value ? "is-active" : undefined}
-                  key={type.value}
-                  onClick={() => {
-                    setDocType(type.value);
-                    setDocError("");
-                  }}
-                  type="button"
-                >
-                  {type.label}
-                </button>
-              ))}
+              {PROJECT_RESOURCE_TYPES.map((type) => {
+                const TypeIcon =
+                  type.value === "file"
+                    ? UploadCloud
+                    : type.value === "note"
+                      ? FileText
+                      : type.value === "link"
+                        ? LinkIcon
+                        : type.value === "google_drive"
+                          ? FolderKanban
+                          : ExternalLink;
+                return (
+                  <button
+                    aria-label={type.label}
+                    aria-pressed={docType === type.value}
+                    className={docType === type.value ? "is-active" : undefined}
+                    data-testid={`docs-type-${type.value}`}
+                    key={type.value}
+                    onClick={() => {
+                      setDocType(type.value);
+                      setDocError("");
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    <TypeIcon size={14} aria-hidden="true" />
+                    <span>{type.shortLabel}</span>
+                  </button>
+                );
+              })}
             </div>
             <div className={`do-docs-compose do-docs-compose--${docType}`}>
               <input

@@ -4015,30 +4015,33 @@ export function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr is-on ${open("type") ? "is-open" : ""}`}>
+                  <div className={`do-item-attr is-on is-type ${open("type") ? "is-open" : ""}`}>
                     <button
                       aria-expanded={open("type")}
                       aria-label={`Type: ${workItemLabel(newType)}`}
-                      className="do-item-attr-btn"
+                      className="do-item-attr-btn do-item-type-trigger"
                       data-testid="item-create-type"
                       onClick={() => toggle("type")}
                       title={`Type: ${workItemLabel(newType)}`}
                       type="button"
                     >
                       <TypeIcon size={13} />
+                      <span className="do-item-type-trigger-label">{workItemLabel(newType)}</span>
                     </button>
                     {open("type") && (
                       <div className="do-item-attr-pop do-items-create-type-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
                         <strong>Type</strong>
-                        <div className="do-items-create-type-grid">
+                        <div className="do-items-create-type-grid" role="listbox" aria-label="Work item type">
                           {pickerWorkTypes(newType).map((kind) => {
                             const Icon = WORK_ITEM_TYPE_ICONS[kind] || Target;
                             return (
                               <button
                                 aria-label={workItemLabel(kind)}
+                                aria-selected={kind === newType}
                                 className={kind === newType ? "is-active" : ""}
                                 key={kind}
                                 onClick={() => { setNewType(kind); setNewParentId(""); setCreateAttr(null); }}
+                                role="option"
                                 title={workItemLabel(kind)}
                                 type="button"
                               >
@@ -4547,16 +4550,22 @@ export function WorkItemsCenter({
               role="dialog"
             >
             <div className="do-item-detail-head">
-              <select
-                aria-label="Item type"
-                data-testid="item-assign-type"
-                onChange={(event) => changeItemType(selectedItem, event.target.value as WorkItemKind)}
-                value={workItemKind(selectedItem)}
-              >
-                {pickerWorkTypes(workItemKind(selectedItem)).map((kind) => (
-                  <option key={kind} value={kind}>{workItemLabel(kind)}</option>
-                ))}
-              </select>
+              <div className="do-item-type-select-wrap">
+                <label className="do-item-type-select-label" htmlFor="item-assign-type-legacy">
+                  Type
+                </label>
+                <select
+                  aria-label="Item type"
+                  data-testid="item-assign-type"
+                  id="item-assign-type-legacy"
+                  onChange={(event) => changeItemType(selectedItem, event.target.value as WorkItemKind)}
+                  value={workItemKind(selectedItem)}
+                >
+                  {pickerWorkTypes(workItemKind(selectedItem)).map((kind) => (
+                    <option key={kind} value={kind}>{workItemLabel(kind)}</option>
+                  ))}
+                </select>
+              </div>
               <div className="do-item-detail-head-actions">
                 <RoutineLaunchButton
                   compact
