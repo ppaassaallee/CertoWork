@@ -8,7 +8,13 @@ export type MoreSection =
   | "knowledge"
   | "workspace";
 export type MyWorkSection = "assigned" | "inbox" | "waiting" | "today" | "this_week" | "week" | "captured" | "reviews";
-export type AgentsSection = "home" | "automations" | "activity";
+export type AgentsSection =
+  | "home"
+  | "automations"
+  | "activity"
+  | "builder"
+  | "templates"
+  | "usage";
 
 export type FeedbackSection = "submit" | "queue";
 export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new";
@@ -17,7 +23,7 @@ export type DelivereeLens =
   | { kind: "home" }
   | { kind: "my-work"; section: MyWorkSection }
   | { kind: "work"; section: "portfolio" | "issues" | "intake" }
-  | { kind: "agents"; section: AgentsSection }
+  | { kind: "agents"; section: AgentsSection; agentId?: string }
   | { kind: "routines"; routineId?: string; build?: boolean }
   | { kind: "project"; projectId: string; tab: ProjectTab }
   | { kind: "approvals" }
@@ -134,6 +140,23 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     path === "/more/automations"
   ) {
     return { kind: "routines" };
+  }
+  if (path === "/agents/new") {
+    return { kind: "agents", section: "builder", agentId: "new" };
+  }
+  if (path === "/agents/templates") {
+    return { kind: "agents", section: "templates" };
+  }
+  if (path === "/agents/usage") {
+    return { kind: "agents", section: "usage" };
+  }
+  const agentSetupMatch = path.match(/^\/agents\/([^/]+)\/setup$/);
+  if (agentSetupMatch) {
+    return {
+      kind: "agents",
+      section: "builder",
+      agentId: decodeURIComponent(agentSetupMatch[1]),
+    };
   }
   if (path === "/agents" || path === "/agents/odysseus" || path === "/work/agent-workspace") {
     return { kind: "agents", section: "home" };
@@ -262,6 +285,12 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "agents") {
     if (lens.section === "automations") return "/rutinas";
     if (lens.section === "activity") return "/agents/activity";
+    if (lens.section === "templates") return "/agents/templates";
+    if (lens.section === "usage") return "/agents/usage";
+    if (lens.section === "builder") {
+      if (!lens.agentId || lens.agentId === "new") return "/agents/new";
+      return `/agents/${encodeURIComponent(lens.agentId)}/setup`;
+    }
     return "/agents";
   }
   if (lens.kind === "routines") {

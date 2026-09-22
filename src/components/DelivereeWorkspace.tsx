@@ -134,6 +134,13 @@ import { Integrations } from "./Settings/Integrations";
 import { WeekGrid } from "../features/calendar/WeekGrid";
 import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
+import {
+  AgentBuilderPage,
+  AgentTemplatesGallery,
+} from "../features/agents/AgentBuilderPage";
+import { AgentsUsagePage } from "../features/agents/AgentsUsagePage";
+import { AgentsMobileContinueCard } from "../features/agents/AgentsMobileContinueCard";
+import { isAgentsJobsEnabled } from "../features/agents/agentJobsFlag";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
 import { RoutinesHome } from "./routines/RoutinesHome";
@@ -8735,7 +8742,23 @@ export function DelivereeWorkspace() {
           />
           )
         ) : centerView === "agents" ? (
-          agentBuilderOpen ? (
+          lens.kind === "agents" && lens.section === "builder" && isAgentsJobsEnabled() ? (
+            isPhone ? (
+              <AgentsMobileContinueCard />
+            ) : (
+              <AgentBuilderPage
+                ownerUserId={user?.uid || ""}
+                workspaceId={workspace?.id || ""}
+              />
+            )
+          ) : lens.kind === "agents" && lens.section === "templates" && isAgentsJobsEnabled() ? (
+            <AgentTemplatesGallery
+              ownerUserId={user?.uid || ""}
+              workspaceId={workspace?.id || ""}
+            />
+          ) : lens.kind === "agents" && lens.section === "usage" && isAgentsJobsEnabled() ? (
+            <AgentsUsagePage workspaceId={workspace?.id || ""} />
+          ) : agentBuilderOpen && !isAgentsJobsEnabled() ? (
             <AgentBuilderDraft
               onChange={setAgentOutcomeDraft}
               onContinue={() => {
@@ -8757,7 +8780,10 @@ export function DelivereeWorkspace() {
               routines={agentRoutines}
               viewerUserId={user?.uid}
               workspaceName={workspace?.name || undefined}
-              onCreateAgent={() => setAgentBuilderOpen(true)}
+              onCreateAgent={() => {
+                if (isAgentsJobsEnabled()) navigate("/agents/new");
+                else setAgentBuilderOpen(true);
+              }}
               onOpenActivity={() => navigate("/agents/activity")}
               onOpenApprovals={() => setPanel("approvals")}
               onOpenAutomations={() => navigate("/rutinas")}
