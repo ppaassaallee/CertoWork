@@ -19705,8 +19705,8 @@ a {
 /* Tiny Certo overlay — Chatwoot owns the four-pane desk. */
 .do-collab-float {
   position: absolute;
-  top: 10px;
   right: 12px;
+  bottom: 12px;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -19715,7 +19715,7 @@ a {
   border-radius: 12px;
   background: color-mix(in srgb, #fff 92%, transparent);
   border: 1px solid rgba(15, 23, 42, 0.08);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(10px);
 }
 .do-collab-float .do-product-switch {
@@ -19856,10 +19856,9 @@ a {
 }
 @media (max-width: 960px) {
   .do-collab-float {
-    top: 8px;
     right: 8px;
-    left: 8px;
-    justify-content: space-between;
+    bottom: 8px;
+    left: auto;
   }
   .do-collab-float-back span {
     display: none;
