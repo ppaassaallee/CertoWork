@@ -16,3 +16,8 @@ export {
   PRESENCE,
   GUESTS,
 } from "./collections";
+export * as conversationService from "./conversationService";
+export * as messageService from "./messageService";
+export * as attachmentService from "./attachmentService";
+export * as presenceService from "./presenceService";
+export { parseMentions, previewFromText } from "./mentions";

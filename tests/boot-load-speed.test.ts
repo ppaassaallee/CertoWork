@@ -20,7 +20,6 @@ test("workspace data listeners use a stable access key", () => {
   );
   assert.match(source, /dataAccessKey/);
   assert.match(source, /\[dataAccessKey\]/);
-  assert.match(source, /Warm Chat Collab only when the user opens Collab/);
   assert.match(source, /do not re-run Auth bootstrap/);
   assert.match(source, /setWorkspace\(pureAi, \{ reload: false \}\)/);
 });

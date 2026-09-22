@@ -13,7 +13,6 @@ import worker, {
   rewriteInstructions,
   signPlatformIdentityPayload,
 } from "../worker/index.js";
-import { collabStatusPayload } from "../worker/collab.js";
 
 const PLATFORM_SECRET = "test-platform-identity-secret";
 
@@ -109,17 +108,13 @@ test("Firebase auth helpers are resolved through the legacy Firebase host", () =
   );
 });
 
-test("Chat Collab status is public and unconfigured by default", async () => {
-  const response = await worker.fetch(
+test("legacy Chatwoot Collab proxy routes are gone", async () => {
+  const status = await worker.fetch(
     new Request("https://gazelle.test/api/collab/status"),
     environment(),
   );
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), collabStatusPayload({}, "https://gazelle.test"));
-});
-
-test("Chat Collab SSO requires authentication", async () => {
-  const response = await worker.fetch(
+  assert.notEqual(status.status, 200);
+  const sso = await worker.fetch(
     new Request("https://gazelle.test/api/collab/sso", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -127,7 +122,7 @@ test("Chat Collab SSO requires authentication", async () => {
     }),
     environment(),
   );
-  assert.equal(response.status, 401);
+  assert.notEqual(sso.status, 200);
 });
 
 test("Firebase auth redirects stay on the public Certo Work origin", () => {
