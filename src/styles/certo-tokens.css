@@ -3233,14 +3233,14 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-1) 70%, var(--surface-0));
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-panel);
 }
 .cw-views-tabs {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 .cw-views-tabs > button,
@@ -3251,22 +3251,23 @@
   gap: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--c-ink-2);
   font: inherit;
-  font-size: 12px;
-  padding: 5px 10px;
-  border-radius: 999px;
+  font-size: var(--t-sm);
+  padding: 0 10px;
+  height: var(--h-ctrl-sm);
+  border-radius: var(--r-m);
   cursor: pointer;
 }
 .cw-views-tabs > button.is-active {
-  background: var(--surface-0);
-  border-color: var(--border);
-  color: var(--text-primary);
+  background: var(--c-accent-bg);
+  border-color: transparent;
+  color: var(--c-accent);
   font-weight: 600;
 }
 .cw-views-tab-add {
   border-style: dashed;
-  border-color: var(--border);
+  border-color: var(--c-line);
 }
 .cw-views-bar-tools {
   display: flex;
@@ -3277,8 +3278,8 @@
 .cw-views-bar-tools > button:hover,
 .cw-views-tabs > button:hover,
 .cw-views-tab-add:hover {
-  background: var(--hover-overlay);
-  color: var(--text-primary);
+  background: var(--c-wash);
+  color: var(--c-ink);
 }
 .cw-views-grid-wrap {
   position: relative;
