@@ -134,6 +134,13 @@ import { Integrations } from "./Settings/Integrations";
 import { WeekGrid } from "../features/calendar/WeekGrid";
 import { useCalendarEvents } from "../features/calendar/useCalendarEvents";
 import { AgentBuilderDraft } from "./agents/AgentsLibrary";
+import {
+  AgentBuilderPage,
+  AgentTemplatesGallery,
+} from "../features/agents/AgentBuilderPage";
+import { AgentsUsagePage } from "../features/agents/AgentsUsagePage";
+import { AgentsMobileContinueCard } from "../features/agents/AgentsMobileContinueCard";
+import { isAgentsJobsEnabled } from "../features/agents/agentJobsFlag";
 import { AgentsArea } from "../features/agentsMap";
 import { RoutineHostProvider } from "./routines/RoutineHost";
 import { RoutinesHome } from "./routines/RoutinesHome";
@@ -6783,6 +6790,7 @@ export function DelivereeWorkspace() {
             ]}
           />
         ) : null}
+        <div className="do-panel-col">
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -7546,6 +7554,7 @@ export function DelivereeWorkspace() {
             </div>
           )}
         </div>
+        </div>
       </aside>
 
       <main className="do-main">
@@ -7559,7 +7568,24 @@ export function DelivereeWorkspace() {
           >
             <Menu size={18} />
           </button>
-          <div className="do-breadcrumb">
+          <div className="do-header-center">
+            {centerView !== "portfolio" ? (
+              <button
+                aria-label="Open command palette"
+                className="do-top-search"
+                onClick={() => setCommandPaletteOpen(true)}
+                title="Command palette (⌘K)"
+                type="button"
+              >
+                <Search size={15} />
+                <span>{t("headerSearch")}</span>
+                <kbd>⌘K</kbd>
+              </button>
+            ) : (
+              <div className="do-top-search-spacer" />
+            )}
+          </div>
+          <div className="do-breadcrumb do-breadcrumb-compact">
             <AppBreadcrumbs
               segments={[
                 {
@@ -7662,13 +7688,14 @@ export function DelivereeWorkspace() {
             />
             <button
               aria-label="Odysseus"
-              className={`do-icon-button ${odysseusPanelOpen ? "is-active" : ""}`}
+              className={`do-ody-btn ${odysseusPanelOpen ? "is-active" : ""}`}
               data-testid="header-odysseus"
               onClick={() => void toggleOdysseusPanel()}
               title="Odysseus (⌘J)"
               type="button"
             >
-              <Sparkles size={15} />
+              <Sparkles size={14} />
+              <span>Odysseus</span>
             </button>
             {mobileCore && (
               <>
@@ -7699,17 +7726,6 @@ export function DelivereeWorkspace() {
                   <Settings size={15} />
                 </button>
               </>
-            )}
-            {centerView !== "portfolio" && (
-              <button
-                aria-label="Open command palette"
-                className="do-icon-button"
-                onClick={() => setCommandPaletteOpen(true)}
-                title="Command palette (⌘K)"
-                type="button"
-              >
-                <Search size={15} />
-              </button>
             )}
             {centerView !== "portfolio" && (
             <div className="do-create-menu" ref={createMenuRef}>
@@ -8727,7 +8743,23 @@ export function DelivereeWorkspace() {
           />
           )
         ) : centerView === "agents" ? (
-          agentBuilderOpen ? (
+          lens.kind === "agents" && lens.section === "builder" && isAgentsJobsEnabled() ? (
+            isPhone ? (
+              <AgentsMobileContinueCard />
+            ) : (
+              <AgentBuilderPage
+                ownerUserId={user?.uid || ""}
+                workspaceId={workspace?.id || ""}
+              />
+            )
+          ) : lens.kind === "agents" && lens.section === "templates" && isAgentsJobsEnabled() ? (
+            <AgentTemplatesGallery
+              ownerUserId={user?.uid || ""}
+              workspaceId={workspace?.id || ""}
+            />
+          ) : lens.kind === "agents" && lens.section === "usage" && isAgentsJobsEnabled() ? (
+            <AgentsUsagePage workspaceId={workspace?.id || ""} />
+          ) : agentBuilderOpen && !isAgentsJobsEnabled() ? (
             <AgentBuilderDraft
               onChange={setAgentOutcomeDraft}
               onContinue={() => {
@@ -8749,7 +8781,10 @@ export function DelivereeWorkspace() {
               routines={agentRoutines}
               viewerUserId={user?.uid}
               workspaceName={workspace?.name || undefined}
-              onCreateAgent={() => setAgentBuilderOpen(true)}
+              onCreateAgent={() => {
+                if (isAgentsJobsEnabled()) navigate("/agents/new");
+                else setAgentBuilderOpen(true);
+              }}
               onOpenActivity={() => navigate("/agents/activity")}
               onOpenApprovals={() => setPanel("approvals")}
               onOpenAutomations={() => navigate("/rutinas")}

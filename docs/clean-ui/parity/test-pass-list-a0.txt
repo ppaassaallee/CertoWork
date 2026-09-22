@@ -1,0 +1,667 @@
+ok 1 - workspace members who are not viewers can see the full project portfolio
+ok 2 - portfolio query tries the workspace list unless the member is a known viewer
+ok 3 - project role lookups include membership id, uid, and email
+ok 4 - login membership writes grant portfolio access to non-viewers
+ok 5 - project search opens the portfolio list instead of staying on the dashboard
+ok 6 - formatAgentActivityLine uses verb, actor, and actionCount
+ok 7 - formatAgentActivityLine rewrites Odiseus in plain summaries
+ok 8 - activityResultTone maps governance outcomes
+ok 9 - countAgentRunsToday counts completed Odysseus runs
+ok 10 - formatRelativeTime is compact
+ok 11 - policy defaults ask for mutations and deny privileged ops
+ok 12 - MCP denies cross-tenant reads
+ok 13 - MCP search returns evidence refs inside tenant
+ok 14 - worker MCP mirror matches tenant isolation
+ok 15 - proposeAgentAction requires approval for create_task
+ok 16 - hermes profile ids are opaque and stable-ish
+ok 17 - Hermes user profiles stay isolated per workspace and user
+ok 18 - normalized runtime events are product-safe
+ok 19 - hermes runtime flag defaults off
+ok 20 - normalizeHermesBaseUrl strips trailing slash and /v1
+ok 21 - keeps one accountable orchestrator and eight bounded specialists
+ok 22 - agents map feature derives health without Firestore writes in map modules
+ok 23 - health thresholds: sana / degradada / fallando
+ok 24 - loop detection uses chainDepth >= 3
+ok 25 - consecutive failures count from newest runs
+ok 26 - successRate returns null without decided runs
+ok 27 - buildAgentsMapModel creates four layers from routines
+ok 28 - agents network map is off by default and linked from Analítica
+ok 29 - API auth rejects requests without a Bearer token
+ok 30 - API auth rejects a body userId that does not match the token
+ok 31 - API auth rejects a workspace the caller cannot access
+ok 32 - API auth stamps the verified uid onto the body
+ok 33 - HubSpot webhook rejects unsigned requests
+ok 34 - HubSpot webhook accepts a valid HMAC signature
+ok 35 - today's P1s become the 2 must-dos and remaining today tasks become should-dos
+ok 36 - if there is no P1, the first two today tasks become must-dos
+ok 37 - closed and non-today tasks stay out of the widget
+ok 38 - widget share tokens and public paths stay opaque
+ok 39 - Firestore widget tokens are public-get and owner-updated, including snapshot
+ok 40 - Firestore REST maps empty arrays and widget snapshots
+ok 41 - Apple widget feed rejects short tokens without calling Firestore
+ok 42 - Apple widget feed returns a decoded snapshot and hides revoked tokens
+ok 43 - queues a capture when the browser is offline
+ok 44 - queues a capture when fetch fails before receiving a response
+ok 45 - does not mislabel a provider error response as offline
+ok 46 - normalizes Firebase auth error codes
+ok 47 - gives a recoverable path when the Google popup is blocked
+ok 48 - explains delayed popup completion instead of leaving a spinner
+ok 49 - reports an unauthorized deployment domain precisely
+ok 50 - gives useful email and password account guidance
+ok 51 - keeps Firebase-hosted authDomain on localhost and uses the app host in production
+ok 52 - prefers full-page Google sign-in on iPhone and in-app browsers
+ok 53 - detects Outlook-style in-app browsers and tells people to open Safari
+ok 54 - falls back to redirect when a Google popup cannot keep session storage
+ok 55 - explains the Firebase missing-initial-state redirect failure
+ok 56 - production Google sign-in stays on the app origin and does not force a popup
+ok 57 - auth bootstrap opens workspace before invite waterfall
+ok 58 - workspace data listeners use a stable access key
+ok 59 - buildTemplateBrief
+ok 60 - bulk paste turns each line into a PBI and tabs into subtasks
+ok 61 - bulk paste ignores markdown bullets and empty lines
+ok 62 - magic project fallback reads a pasted definition
+ok 63 - magic project normalize fills missing AI fields from the source text
+ok 64 - note markup strips markers for list snippets
+ok 65 - calendar connect wizard steps advance provider → done
+ok 66 - calendar wizard stays narrow so provider actions are visible inside admin drawer
+ok 67 - timed event uses local day (Guatemala UTC-6)
+ok 68 - all-day single day uses start date only (end exclusive)
+ok 69 - all-day multi-day spans inclusive starts
+ok 70 - minutesFromMidnight uses local clock
+ok 71 - empty day yields one workHours slot
+ok 72 - midday event splits into two slots
+ok 73 - overlapping events merge
+ok 74 - 45 min gap ignored when minMinutes is 60
+ok 75 - capture addresses use Certo domains
+ok 76 - deterministic capture understands actionable email
+ok 77 - ticket triage marks outages as priority 1
+ok 78 - tickets have no hierarchy parents
+ok 79 - captured section filters capture-sourced items
+ok 80 - routes resolve capture and requests lenses
+ok 81 - customer status stays non-technical
+ok 82 - Brevo reply email stays brief
+ok 83 - worker capture understand endpoint is offline-safe
+ok 84 - worker request reply sends through Brevo
+ok 85 - workspace wires Requests nav and Capture settings
+ok 86 - requester portal route is public and token-based
+ok 87 - SLA helpers set first response and next update clocks
+ok 88 - workspace wires core requests polish
+ok 89 - portal snapshot only exposes public customer fields
+ok 90 - worker understand matches client helper
+ok 91 - worker understand can use OpenAI dependency when provided
+ok 92 - finish gaps wire portal task update, understand API, team list, express parity
+ok 93 - Codex handoff codes are recognizable and non-secret selectors
+ok 94 - the bridge shares canonical executable work without flattening planning containers
+ok 95 - the launch brief requires claim, evidence, and truthful delivery reporting
+ok 96 - completion events update the canonical work item and retain delivery evidence
+ok 97 - the MCP surface separates reads, scoped updates, completion, and new-scope review
+ok 98 - collab mentions
+ok 99 - conversation schema accepts a minimal dm
+ok 100 - firestore rules scope conversations to workspace members
+ok 101 - collab path helpers
+ok 102 - Chatwoot integration is fully removed
+ok 103 - pending invite user ids are not treated as Firebase auth uids
+ok 104 - sharing an invited teammate grants their email so they can see the work after they join
+ok 105 - sharing an active teammate grants their auth uid
+ok 106 - assigning a teammate writes member id plus email/uid access fields
+ok 107 - assigning an invited teammate still grants email access
+ok 108 - project share and item share look up members by id instead of pending user ids
+ok 109 - keeps legacy project conversations compatible
+ok 110 - classifies general, project, task, and mixed conversation scopes
+ok 111 - describes multi-entity context without pretending it is one project
+ok 112 - home history only treats chats without project ids as standalone
+ok 113 - Home conversation prefers the personal chief-of-staff thread
+ok 114 - computeFocusScore
+ok 115 - no plan → 0
+ok 116 - key task set → 10
+ok 117 - key task done, nothing else planned → 100
+ok 118 - adding planned items lowers nothing but never raises
+ok 119 - clearing (moving) an item counts like done for the 30 points
+ok 120 - project wizard is registered as the first Certo Work skill
+ok 121 - project wizard blocks vague projects until minimum clarity exists
+ok 122 - project wizard accepts a complete guided project brief
+ok 123 - project wizard can prefill from an existing project
+ok 124 - project wizard can create without a typed first next action
+ok 125 - project wizard recognizes direct invocations
+ok 126 - legacy and new routes resolve into one conversational lens
+ok 127 - delivery stage normalization keeps the portfolio coherent
+ok 128 - project health and task language support conversational productivity
+ok 129 - Certo Calm Authority tokens define required surfaces and accent
+ok 130 - index.css imports the design language tokens
+ok 131 - project wizard create button stays a primary CTA
+ok 132 - header Create menu is anchored to the button, not the main pane bottom
+ok 133 - DESIGN_LANGUAGE.md documents accent usage rules
+ok 134 - excludes deleted and archived projects from attention
+ok 135 - counts unassigned overdue as Sin dueño
+ok 136 - marginPct is null when costs are missing
+ok 137 - workload sorts by ratio descending and caps at 6
+ok 138 - never returns raw descriptions in list rows
+ok 139 - formatDirectionMoney uses compact k notation
+ok 140 - resolves composite workspace member ids on workload and overdue
+ok 141 - Direction page replaces widget composer
+ok 142 - composer files are removed
+ok 143 - i18n ships Direction labels in en and es
+ok 144 - daysPastDue is null without a due date
+ok 145 - dueEdgeTone maps overdue weeks to neon bands
+ok 146 - dueEdgeTone skips closed items and undated rows
+ok 147 - DunTasks system tokens include hues, ai-glow, and black primary
+ok 148 - system UI primitives exist
+ok 149 - CommandPalette v2 has scope, create-empty, and footer shortcuts
+ok 150 - critical destructive flows no longer use window.confirm
+ok 151 - user override wins over workspace, tenant, and environment
+ok 152 - defaults remain enabled when no scoped override exists
+ok 153 - feedback kinds map onto backlog work item types
+ok 154 - converting feedback produces a PBI patch linked to the report
+ok 155 - feedback routes split submit from the admin queue
+ok 156 - feedback rules and UI stay aligned
+ok 157 - normalizes billing and vendor pay statuses
+ok 158 - parses finance line ids and patches project finance periods
+ok 159 - default finance columns hide source and keep follow-up + billing fields
+ok 160 - builds rows with billing and invoice fields
+ok 161 - detects finance-line follow-up tasks
+ok 162 - infers charge line types from legacy cost metadata
+ok 163 - marks billed and paid finance lines
+ok 164 - formats month keys for period subtotals
+ok 165 - finance privilege: owner/admin or financeAccess can operate
+ok 166 - /finance and /costs open portfolio (Costs sheet), not invoices
+ok 167 - shell surfaces privilege-gated Costs entry points
+ok 168 - Projects home and project chrome expose Costs only when privileged
+ok 169 - portfolio finance analyst keeps month→project sheet UX
+ok 170 - project read rules and client queries stay aligned
+ok 171 - item read rules and client queries stay aligned
+ok 172 - task records keep createdBy immutable and restrict delete to the record owner
+ok 173 - shared workspace members can update projects they can already see
+ok 174 - project sharing writes user ids that the rules can honor
+ok 175 - personal notes stay owner-scoped; project documents are workspace-readable
+ok 176 - conversations stay personal; Home and project scopes stay distinct
+ok 177 - workspace membership helpers remain available to project access rules
+ok 178 - firebase.json deploys rules and indexes to the named production database
+ok 179 - invoice documents are member-listed and finance-operated
+ok 180 - feedback reports are member-created and admin-triaged
+ok 181 - personal Home context still excludes another member's assigned work
+ok 182 - Apple widget tokens are publicly readable and owner-updated
+ok 183 - voice apply writes tasks directly and stages review candidates by userId
+ok 184 - item view memory is user-owned on the existing preferences document
+ok 185 - kanban presence is workspace-member scoped
+ok 186 - assignment notifications are readable only by the target user
+ok 187 - workspaces are tenant-private and do not allow every signed-in user to read names
+ok 188 - standalone conversations exclude project-linked chats
+ok 189 - kanban maps statuses to delivery columns without duplicating items
+ok 190 - project delete is limited to manager or workspace owner
+ok 191 - project resources reject files over 20MB and accept https links
+ok 192 - invite tokens expire after 7 days and used invites are not reusable
+ok 193 - invite reminder cadence follows day 1 / 3 / 6 best practice
+ok 194 - home recency keeps six recent projects
+ok 195 - status report and sprint matching use the same item records
+ok 196 - public status snapshots only include report fields
+ok 197 - items view switcher buttons size to their labels instead of a 30px icon box
+ok 198 - project team panel is a short two-column table without hover tooltips
+ok 199 - project Docs uses a compact structured panel instead of raw browser controls
+ok 200 - formatDate handles Date, seconds map, and Timestamp
+ok 201 - formatDate never returns Timestamp( for objects
+ok 202 - formatDateFull and relative
+ok 203 - guided manifests cover WRAP, Plan and Close Day
+ok 204 - prepare gathers win signals and undone items deterministically
+ok 205 - WRAP semantic blocks round-trip
+ok 206 - Home action queue surfaces ready ritual sessions
+ok 207 - week label helpers
+ok 208 - home attention groups blocked and at-risk projects ahead of healthy ones
+ok 209 - short project names strip years and keep tooltip-length titles separate
+ok 210 - past milestone cannot stay on track at 0%
+ok 211 - Sunday editorial mentions tomorrow and overdue, never on-track 0%
+ok 212 - empty action queue counts stay available for collapsed line
+ok 213 - canonical IA routes resolve to mental-model lenses
+ok 214 - legacy URLs alias into the new IA
+ok 215 - lens writers prefer semantic canonical paths
+ok 216 - primary sidebar keeps essentials short; management is secondary
+ok 217 - opening a project record stays on the project URL, not Home
+ok 218 - Home stays a personal conversation space
+ok 219 - treats enumeration-protected sign-in failures as a cue to create the account
+ok 220 - treats create failures as an existing account, including remapped invalid-credential
+ok 221 - signs in existing invitees before trying to create a new account
+ok 222 - creates an account when sign-in fails because the email is new
+ok 223 - does not show a raw Firebase invalid-credential error when the email already exists
+ok 224 - reads autofilled invite credentials from the form, not stale React state
+ok 225 - invite activation never surfaces the raw Firebase invalid-credential string
+ok 226 - invite screen signs in existing users and offers Google or reset instead of a dead create-only path
+ok 227 - invite links stay on the activation screen so an existing workspace cannot skip acceptance
+ok 228 - invite emails force the public certo.work origin off workers.dev
+ok 229 - invite template includes Certo branding and reminder variants
+ok 230 - Ariba-style invoice statuses cover billed through paid, plus problem and void
+ok 231 - finance can send, approve, pay, reject, void, or flag a problem
+ok 232 - client portal can only confirm payment, reject, or flag a problem
+ok 233 - pending project revenue lines become the push queue until they have a document
+ok 234 - paid invoices write collection back onto the project finance line
+ok 235 - overdue tiles only include open invoices past due
+ok 236 - invoice numbers increment inside the calendar month
+ok 237 - invoice routes split finance queue from the client portal
+ok 238 - invoice rules and UI stay aligned
+ok 239 - PBIs and tasks nest under an epic even without a feature in between
+ok 240 - a PBI still appears under its epic when a stale featureId is missing from the list
+ok 241 - priority sort keeps children with the highest parent even when children have no priority
+ok 242 - a nested feature still follows the epic when sorting families
+ok 243 - PBIs pick Features as parents; Features pick Epics; tasks pick PBIs
+ok 244 - features stored as type=feature still appear as PBI parents
+ok 245 - parent picker never offers items from another project
+ok 246 - allowedChildKinds is the inverse nesting table
+ok 247 - effectivePriority inherits from the highest ancestor; due dates stay local
+ok 248 - My Work-style filtered roots still resolve children from the full hierarchy pool
+ok 249 - tree nodes start collapsed until the user expands them this visit
+ok 250 - canNestUnder mirrors Epic → Feature → PBI → Task rules
+ok 251 - wouldCreateHierarchyCycle blocks dropping an ancestor under its descendant
+ok 252 - item modal field map covers discovery fields
+ok 253 - item modal v2 is behind a Vite flag with safe defaults
+ok 254 - WorkItemsCenter keeps legacy modal when flag is off
+ok 255 - ItemModal uses DestructiveDialog and existing save props
+ok 256 - Today mark follows due date, not a stale timeSector pin
+ok 257 - Today mark is active only when due is today
+ok 258 - changing due date clears stale Today sector
+ok 259 - dateInputValue keeps local calendar days for timestamps
+ok 260 - item view surfaces are split between My Work and each project
+ok 261 - named views and last sessions are keyed by user id
+ok 262 - saving a named view replaces the same name and keeps sort
+ok 263 - My Work defaults to project sections
+ok 264 - normalize forces My Work to project groupBy and restores project session sorts
+ok 265 - parent-owned notion/force modes win over local mode (no tab thrash)
+ok 266 - session hydrate skips mode when parent controls the view
+ok 267 - blocks commitments that use a past explicit date
+ok 268 - challenges project creation when WIP is high and the outcome is vague
+ok 269 - does not repeat a portfolio warning during ordinary daily planning
+ok 270 - keeps project delivery moving without importing global portfolio overload
+ok 271 - clears a reversible capture when no deterministic conflict exists
+ok 272 - blocks a new meeting when real travel context exists
+ok 273 - kanban delivery columns use Asana-like names
+ok 274 - adding a card to a kanban column maps to the matching work lane
+ok 275 - kanban columns can be made shorter or longer within a usable range
+ok 276 - WIP limits flag a column at capacity and reject extra drops
+ok 277 - swimlanes group cards by assignee, priority, or project
+ok 278 - droppable ids keep the column key when swimlanes are on
+ok 279 - checklist and subtask progress stay on the parent card
+ok 280 - column automations assign and retag when a card enters a lane
+ok 281 - cycle and lead time use start and completion stamps
+ok 282 - cumulative flow counts cards that existed on each day
+ok 283 - calendar weeks start Monday and comments extract mentions and links
+ok 284 - calendar month matrix fills Monday–Sunday weeks for the visible month
+ok 285 - status history appends a column change without duplicating the last event
+ok 286 - stacked area layers keep done under in-progress
+ok 287 - mobile core keeps Home, My Work, Projects, and Notes
+ok 288 - mobile core sends power surfaces back to Home
+ok 289 - mobile core hides advanced chrome in the live shell
+ok 290 - table filters match query status owner and dates
+ok 291 - workload groups assignees for this week and overdue
+ok 292 - direction layout hide and reorder widgets
+ok 293 - inbound item update parses item id
+ok 294 - dashboard route stays as Leadership / Direction page
+ok 295 - worker exposes item notify and inbound endpoints
+ok 296 - table form and filter UI are wired
+ok 297 - Assigned keeps items I created even when they were stored without assignees
+ok 298 - My Work filtering never mutates or drops the source record object
+ok 299 - creating an item without assignees assigns the creator
+ok 300 - explicit assignees are preserved when someone else is picked
+ok 301 - waiting tab only shows assigned waiting-for items
+ok 302 - today tab groups must-dos and should-dos from today's goals
+ok 303 - My Work passes a filtered task list instead of the whole workspace
+ok 304 - self-created items without createdBy still belong in Assigned
+ok 305 - teammate unassigned items are not restored onto my assignee list
+ok 306 - unmatched assignee labels catch free-text names that were never invited
+ok 307 - My Work forces project sections and No Project label
+ok 308 - Project Items Asana hybrid keeps Filter/Sort in WorkItemsCenter toolbar
+ok 309 - My Work Today ships a day schedule beside the 2+8 plan
+ok 310 - markdown becomes HTML with visible heading sizes and inline styles
+ok 311 - HTML from the rich editor round-trips back to markdown
+ok 312 - contenteditable Chrome markup converts to markdown
+ok 313 - notebook UI uses one formatted editor instead of split markdown preview
+ok 314 - normalizes reusable tags for notes and workspace records
+ok 315 - builds notebook context from notebook section note hierarchy
+ok 316 - archived notes are not sent into assistant context
+ok 317 - notes without aiVisible stay out of Odysseus context
+ok 318 - entity links round-trip item, person, and record chips
+ok 319 - proposeItemsFromNote reads proximos_pasos lines
+ok 320 - upsertProximosPasosBlock appends chips
+ok 321 - meeting template returns five blocks in order
+ok 322 - note template returns empty content
+ok 323 - Notion more menu is a full-width dropdown in the project header
+ok 324 - notion status maps lanes to Spanish labels
+ok 325 - notion difficulty follows priority
+ok 326 - notion short date formats YYYY-MM-DD
+ok 327 - normalizeOdysseusRun keeps human work steps
+ok 328 - actionIdempotencyKey is stable for retries
+ok 329 - firestore rules allow Odysseus run and activity collections
+ok 330 - personal knowledge stays owner-only; project documents can be read by workspace members
+ok 331 - chat persistence does not hard-fail on Odysseus run writes
+ok 332 - worker chat supports SSE step streaming
+ok 333 - client chat requests and consumes SSE
+ok 334 - firestore rules cover odiseus memory
+ok 335 - Odysseus search_projects returns accessible projects with health
+ok 336 - Odysseus get_overdue_items finds only past-due open work
+ok 337 - Odysseus propose_followups returns approval-bound create_task actions
+ok 338 - Odysseus get_activity_summary aggregates portfolio attention
+ok 339 - Odysseus prepare_status_report returns a markdown artifact
+ok 340 - Odysseus tools refuse unknown project ids outside scope
+ok 341 - Odysseus recall_memory and remember_fact use personal memory
+ok 342 - Odysseus run_skill returns an artifact from workspace skills
+ok 343 - Odysseus list_schedules returns configured jobs
+ok 344 - Odysseus list_my_items filters by assignee and today
+ok 345 - Odysseus get_item_context returns item and children
+ok 346 - Odysseus brand copy is hire-first
+ok 347 - Odysseus conversations keep the legacy chief_of_staff key
+ok 348 - Action Board model clarifies captured work before it enters execution
+ok 349 - Action Board model separates today execution from waiting and someday work
+ok 350 - repository versioning distinguishes code readiness from release readiness
+ok 351 - overview feature is read-only (no Firestore writes)
+ok 352 - project date range falls back to item dates when project dates missing
+ok 353 - overdue counts dueDate before today and excludes done
+ok 354 - completed vs prior month hides when completedAt missing or prior month empty
+ok 355 - MoM subtitle never shows +0%
+ok 356 - blocked subtitle only when blocked > 0
+ok 357 - stage progress excludes epics and features
+ok 358 - item stage uses productPhase then project deliveryStage (2A)
+ok 359 - empty project shows zero tiles without subtitles and empty dated flag
+ok 360 - roadmap includes onboarding stage row
+ok 361 - personal work matching uses owner, assignee, and member ids
+ok 362 - Home RAG keeps this user's tasks and only a compact workspace radar
+ok 363 - unfocused Home context is personal and does not dump teammate tasks
+ok 364 - focused project conversations still receive attached project work
+ok 365 - Home navigation attaches the personal Odysseus thread
+ok 366 - platform onboarding is required until name, company, and email exist
+ok 367 - generic workspace names do not count as a company
+ok 368 - first-run profile lives on Certo Work, not only inside Chat Collab
+ok 369 - portfolio bulk actions await updates and show feedback
+ok 370 - bulk add member is wired to workspace notice toast
+ok 371 - portfolio bulk bar and quiet list styles exist
+ok 372 - builds Excel-like flat rows and skips revenue lines
+ok 373 - filters by client, period, product, type, and billed
+ok 374 - groups by client, period, and product with cost/price subtotals
+ok 375 - breaks by month chronologically then by project with cost and price totals
+ok 376 - applies Excel-style column filters and keeps project column frozen first
+ok 377 - parses every executive portfolio row with all excel columns
+ok 378 - maps excel attributes onto live project fields without dropping columns
+ok 379 - keeps production rows visible and hold/eol mapped
+ok 380 - shares with alias users even when emails differ
+ok 381 - never auto-replaces a live Pure AI portfolio
+ok 382 - clear Pure AI projects helper is owner-gated and keeps My Work items
+ok 383 - email local-part becomes the automatic alias
+ok 384 - portfolio Member/PM dropdowns exclude pending invites and Needs alias
+ok 385 - assignee picker excludes pending invites and never shows Needs alias
+ok 386 - pricing JSON has 44 projects and transaction rows
+ok 387 - maps charge types, units, and Excel quantities without inventing blanks
+ok 388 - builds finance periods from monthly + build transactions
+ok 389 - BPO maps to deliveryEntity and Client to clientEntity
+ok 390 - pricing updates preserve Operations and repair Producción drift
+ok 391 - fuzzy match reaches ~80% and prefixes unmatched with X
+ok 392 - retrieves relevant project-document excerpts without sending an entire long PRD
+ok 393 - deleted projects count as closed in shared filters
+ok 394 - workspace exposes permanent delete for soft-deleted projects
+ok 395 - project console shows restore + delete forever for deleted projects
+ok 396 - notion table can disable create while project is deleted
+ok 397 - delivery uses five stable stages with four controlled phases each
+ok 398 - legacy project phases normalize into the controlled stage model
+ok 399 - Spanish Excel phases map to delivery stages instead of collapsing to Build
+ok 400 - unstaged and planning projects land in Define so they stay findable by stage
+ok 401 - pricing sync preserves Operations and restores Producción from the sheet
+ok 402 - a saved deliveryPhase wins over the Excel fase field
+ok 403 - an incompatible phase falls back to the first valid phase
+ok 404 - financial ledger separates revenue, invoicing and cash collection
+ok 405 - a spreadsheet cost line can carry its own price
+ok 406 - portfolio uses all build costs and only the latest monthly period
+ok 407 - void financial movements do not affect audited totals
+ok 408 - calendar-month billing keeps budget, invoice and collection separate
+ok 409 - every financial movement keeps an exact date, calendar period and simple status
+ok 410 - cost allocation lines preserve Excel-style drivers and feed capacity planning
+ok 411 - financial periods are cleaned before Firestore storage
+ok 412 - project /tasks route stays a project lens (items live in the console)
+ok 413 - project console uses an Asana-style Items list, not Tasks + Backlog tabs
+ok 414 - puts favorite projects first and keeps the six latest non-favorites
+ok 415 - does not hide a just-created project behind insertion order
+ok 416 - derives project health and Jira-like work lanes from real records
+ok 417 - upcoming checkpoints skip closed projects and past dates
+ok 418 - need attention matches open health that is not on track
+ok 419 - checkpoint labels are human-readable and mark overdue
+ok 420 - project templates preserve hierarchy and relative dates
+ok 421 - applying a template recalculates dates and resolves role placeholders
+ok 422 - cockpit mounts header, summary strip, and view tabs
+ok 423 - header no longer shows Open / In progress / Done KPIs
+ok 424 - project display name strips trailing key badge text
+ok 425 - project KPIs split open / in progress / done
+ok 426 - summary strip rolls up items and hours
+ok 427 - project date range uses earliest and latest dated fields
+ok 428 - notion table renders type glyph, hierarchy indent, attrs, and nest drag
+ok 429 - Projects home filters out past checkpoints and uses one attention definition
+ok 430 - Projects home hides empty investment KPI and warns at capacity hours
+ok 431 - Projects home drops marketing chrome and portfolio access banner
+ok 432 - Projects home puts attention first and asks via compact input
+ok 433 - Projects KPIs and health chips open the list with removable filters
+ok 434 - Pure AI follower aliases cover Regina, César, Rafael and Edgar
+ok 435 - prefers Pure AI over Personal Focus / email-named workspaces for followers
+ok 436 - resolves follower members and promotes them to admin portfolio viewers
+ok 437 - project follower patch merges team + visibility without dropping existing access
+ok 438 - invite email retry fires when the first send never left Brevo
+ok 439 - parseCaptureTitle extracts type person priority and date
+ok 440 - parseNaturalDate handles en 3 dias
+ok 441 - compileItemSentence builds typed blocks and mirrors acceptance
+ok 442 - clipboard list proposes multiple roots
+ok 443 - ranks title and semantic-layer matches across multiple record types
+ok 444 - WRAP Review flow has trigger, prepare, steps, chain decision, deliver
+ok 445 - weekly plan flow builds without chain decision
+ok 446 - compileRoutineSentence persists a plan with node ids
+ok 447 - automatic plan builder includes editItems decision and email deliver
+ok 448 - Rutinas no longer opens on the aggregate map by default
+ok 449 - curated recipes cover project and portfolio
+ok 450 - compiler turns a morning brief sentence into a weekday schedule card
+ok 451 - compiler asks once when the deliverable is for a client
+ok 452 - blocked event sentences become event triggers
+ok 453 - dry-run preview lists read/think/draft/deliver steps
+ok 454 - schedule helper computes a future weekday morning slot
+ok 455 - invoice recipes exist for cobranza
+ok 456 - project and portfolio surfaces expose the Rutina entry points
+ok 457 - Phase 2+ surfaces: /rutinas, Agents Rutinas, event outbox, everywhere entry
+ok 458 - recognizes stale deployment chunk failures
+ok 459 - does not reload for ordinary application errors
+ok 460 - getBlocks reads fence blocks and mirrors acceptanceCriteria
+ok 461 - semantic fences round-trip through markdown HTML
+ok 462 - Sites worker reports an offline-safe health state without an API key
+ok 463 - AI health never returns the OpenAI secret
+ok 464 - Firebase auth helpers are resolved through the legacy Firebase host
+ok 465 - legacy Chatwoot Collab proxy routes are gone
+ok 466 - Firebase auth redirects stay on the public Certo Work origin
+ok 467 - Sites worker truthfully disables Google AI Studio
+ok 468 - calendar oauth start requires auth and reports missing Google secrets
+ok 469 - capture understand and request reply routes require auth
+ok 470 - workspace invite email route requires authentication
+ok 471 - invite emails use the public certo.work origin and fail loudly without Brevo
+ok 472 - workspace invite delivery route requires authentication
+ok 473 - Sites worker exposes the signed-in platform identity for the migration path
+ok 474 - Sites session rejects unsigned oai-* header spoofing
+ok 475 - Sites session rejects oai-* headers when PLATFORM_IDENTITY_SECRET is unset
+ok 476 - Sites session endpoint rejects anonymous requests
+ok 477 - Codex bridge exposes its scoped MCP tools only to the signed-in platform user
+ok 478 - Codex bridge rejects unsigned platform identity spoofing
+ok 479 - Codex bridge rejects anonymous MCP calls
+ok 480 - Sites worker preserves client-side routes through the SPA fallback
+ok 481 - Boldi compatibility route rejects unauthenticated requests
+ok 482 - inline AI rewriting preserves facts and rejects anonymous requests
+ok 483 - magic project extraction rejects anonymous requests and asks for JSON structure
+ok 484 - tables compile rejects anonymous requests
+ok 485 - project conversations use delivery-team behavior instead of Odysseus lecturing
+ok 486 - Odysseus can route an approved handoff to an existing conversation
+ok 487 - voice conversation asks Odysseus to listen and wrap up into tasks
+ok 488 - the current pasted PRD and the latest prior PRD remain available for follow-up
+ok 489 - create project requests keep the explicit project name instead of the generic command
+ok 490 - Wrangler config serves the SPA and API on Workers Static Assets
+ok 491 - GitHub Actions deploys the Worker with Wrangler
+ok 492 - health maps onto semáforo tones
+ok 493 - task due dates map onto semáforo tones
+ok 494 - primary nav labels stay in one language
+ok 495 - approvals and project tabs are URL screens
+ok 496 - strategy progress is outcome-led and bounded
+ok 497 - linked epics and projects can act as live lead measures
+ok 498 - gems use an append-only balance and never hide redemptions
+ok 499 - only workspace leaders or named project leaders can award boosts
+ok 500 - property management sample rents sum to 7600
+ok 501 - footerSummary sum and distribution
+ok 502 - loop guard blocks same routineRunId
+ok 503 - matchesTrigger status change
+ok 504 - sentenceFromStructured
+ok 505 - soft tint labels stay readable
+ok 506 - tableLifecycleStatus defaults missing status to active
+ok 507 - canSeeTable hides archived and deleted by default
+ok 508 - isActiveTable only accepts active lifecycle
+ok 509 - storage exports archive/delete/item membership helpers
+ok 510 - TablePage exposes archive/delete and Items tab
+ok 511 - sidebar lists active tables only; trash lives on Tables hub
+ok 512 - table page menu stacks above body so archive/delete are clickable
+ok 513 - firestore rules let workspace members write non-private tables
+ok 514 - firestore indexes cover table cascade delete queries
+ok 515 - table forms list scopes by workspaceId
+ok 516 - TableItemsPanel supports associated vs general filters
+ok 517 - RecordPanel lists and unlinks record links
+ok 518 - nextStatusTone prefers unused tones then least-used
+ok 519 - withStatusTone auto-assigns when tone is missing
+ok 520 - ensureStatusOptionTones fills gaps without clobbering picks
+ok 521 - blank table starts with title-only columns
+ok 522 - CreateTableWizard exposes blank create entry
+ok 523 - ColumnsEditor edits status option colors
+ok 524 - deterministic parser extracts Spanish vendors phrase
+ok 525 - deterministic parser extracts English pipeline phrase
+ok 526 - vague phrase asks one clarification question
+ok 527 - empty phrase asks for guidance
+ok 528 - validateCompiledTableSchema rejects bad payloads
+ok 529 - worker deterministic parser stays in sync with src
+ok 530 - CreateTableWizard has no unknown eslint-disable for react-hooks
+ok 531 - phrase compile produces a schema the create path can persist
+ok 532 - created workspace table is visible immediately after optimistic insert
+ok 533 - create coerces project visibility without projectId to workspace
+ok 534 - TABLES and TABLE_RECORDS listeners are workspace-scoped
+ok 535 - create table modal uses two-panel grid, not a single-column flex body
+ok 536 - tables listener is workspace-scoped (not personal userId-only)
+ok 537 - createTable writes userId alongside createdBy
+ok 538 - create wizard returns TableDoc and parent inserts optimistically
+ok 539 - recordOwnedByActor matches owner column
+ok 540 - recordToMyWorkItem maps key columns
+ok 541 - buildMyWorkRecords filters by today section
+ok 542 - relatedProjectIdsOf dedupes and trims
+ok 543 - tableTouchesProject covers home and related
+ok 544 - listProjectTables sorts home before related
+ok 545 - projectIdsFromRelationValue accepts string or array
+ok 546 - isProjectRelationColumn detects project relations
+ok 547 - matchesTableEventFilter requires tableId when present in filter
+ok 548 - matchesTableEventFilter matches optional to / columnId / offsetDays
+ok 549 - worker matchesTableEventFilter stays in sync with src helper
+ok 550 - compile accepts triggerOverride for table.* events
+ok 551 - compile recognizes table.record_created from NL
+ok 552 - prepare record_context loads table + record + links
+ok 553 - TABLE_TEMPLATES exposes eight curated templates
+ok 554 - each template has columns, keyColumns, status tones, and one automation
+ok 555 - getTableTemplate finds by id
+ok 556 - pipeline automation triggers on Ganado status
+ok 557 - vendors automation is 15 days before renewal
+ok 558 - okrs automation is Friday schedule
+ok 559 - coerceValue covers each column type
+ok 560 - validateRecord requires title and required columns
+ok 561 - displayValue formats currency status and tags
+ok 562 - tag helpers support current and legacy tag fields
+ok 563 - tag helpers label and toggle tags without duplicates
+ok 564 - tag labels never expose raw Firestore ids when a readable label exists
+ok 565 - controlled tag lists do not duplicate discovered ids for existing masters
+ok 566 - status patches do not count as assignment writes
+ok 567 - Certo keeps exactly one primary assignee and demotes extras to collaborators
+ok 568 - normalizeAssignmentPatch keeps ids out of status-only patches and resolves name-only assigns
+ok 569 - kanban swimlane and automations write assigneeIds when the member is known
+ok 570 - collaborators get access without becoming My Work assignees
+ok 571 - invite accept remap replaces pending member ids and grants auth visibility
+ok 572 - My Work matches pending assignee seats by email and acceptedMemberId
+ok 573 - assignment notifications target auth users, not pending seats
+ok 574 - invited members store email-derived aliases instead of Pending acceptance
+ok 575 - new wizard and magic projects start in Define with a work key
+ok 576 - portfolio search and command palette include derived work keys like GWL
+ok 577 - missing delivery stage defaults to Define instead of Build
+ok 578 - app shell locks to the viewport and allows pane scrolling
+ok 579 - project Items tab fills leftover console height instead of leaving a white band
+ok 580 - landing is a bounded scrollport so phones can scroll the page
+ok 581 - filter me matches workspace member ids, not only Firebase uid
+ok 582 - filter me matches assigneeIds arrays from taskAdapter
+ok 583 - filter today includes timeSector / One Thing without dueDate
+ok 584 - filter me keeps only current user rows
+ok 585 - filter overdue excludes done and future dates
+ok 586 - sorts by two columns
+ok 587 - groups by status using option labels
+ok 588 - hierarchy keeps child under parent after sort
+ok 589 - filters today and week date windows
+ok 590 - views engine flag and project items use Asana hybrid surface
+ok 591 - live typography exposes the Notion five-token hierarchy
+ok 592 - all five text sizes survive startup and use one language
+ok 593 - header keeps command palette and create utilities
+ok 594 - primary navigation uses consistent English labels
+ok 595 - tag controls collapse multiple values to a no-wrap count
+ok 596 - project Team uses the dense caption tier
+ok 597 - spoken Odysseus replies drop markdown so TTS stays natural
+ok 598 - natural voice prefers Samantha or Google over novelty voices
+ok 599 - speech result events keep live captions and only commit finals
+ok 600 - voice wrap-up asks Odysseus to recap, flag gaps, and create tasks
+ok 601 - Firestore permission errors stay actionable instead of raw SDK text
+ok 602 - selected voice actions become the plan that can be applied
+ok 603 - voice conversation is wired as a listener with wrap-up and per-item approval
+ok 604 - voice wrap-up instructions ask for a recap and tasks, not an interview
+ok 605 - voice transcription requires authentication
+ok 606 - work classification keeps product development separate from delivery stage
+ok 607 - work classification infers product development from product-like legacy project types
+ok 608 - work classification lets items inherit classification from their project
+ok 609 - work classification has stable explicit option sets for UI dropdowns
+ok 610 - item keys do not copy company or project names
+ok 611 - sequence continues across the workspace and encodes alphanumerically
+ok 612 - date stamp is day, month, then two-digit year
+ok 613 - canonical work item labels match product naming
+ok 614 - parent search labels dedupe pbi/story aliases
+ok 615 - parent picker CSS stacks options in a column with opaque rows
+ok 616 - item modal parent field uses full-width layout to avoid crush
+ok 617 - shared label helper is wired into modal and items center
+ok 618 - My Work uses the same unscoped item center as project backlog
+ok 619 - project Work tab uses the same Kanban center as Items
+ok 620 - item field picker exposes every backlog field, including Project
+ok 621 - My Work keeps backlog features that used to require an active project
+ok 622 - items and project backlog can paste a line-per-PBI list with tabbed subtasks
+ok 623 - items and project backlog sort families by the parent, not each child
+ok 624 - items list hides unique keys and shows an inline type icon
+ok 625 - epic section heads include a complete/reopen control like other rows
+ok 626 - hierarchy keeps parents collapsed until toggled for this visit
+ok 627 - expanded parents hide completed children unless status filter includes them
+ok 628 - items list shows faded attribute icons instead of field columns
+ok 629 - items list CSS is Asana-like: inline flags, pills, and no boxed fields
+ok 630 - items and backlog keep last sort and named views per signed-in user
+ok 631 - kanban board uses compact cards, WIP bounce, rules, and flow
+ok 632 - any item including epics can be deleted with a grey-to-red bin
+ok 633 - list hierarchy nests children under epics and opens an expanded item popup
+ok 634 - My Work hierarchy expands children from the full pool like Asana project lists
+ok 635 - items and backlog can select all visible rows and bulk-edit assignee, date, and project
+ok 636 - portfolio list opens a project from the title and renames on double-click
+ok 637 - type filter matches exact work item kinds only
+ok 638 - detail modal can change item type and re-validate parent
+ok 639 - expanded tree nodes offer an inline add-child control
+ok 640 - add item form exposes optional quick attributes before create
+ok 641 - toolbar views fields filter sort are icon-only with hover titles
+ok 642 - add item quick attributes use icon popovers like item attrs
+ok 643 - platformIdentity ignores unsigned oai-* headers even when a secret is configured
+ok 644 - platformIdentity ignores oai-* headers when PLATFORM_IDENTITY_SECRET is unset
+ok 645 - platformIdentity accepts a valid HMAC signature
+ok 646 - platformIdentity rejects expired timestamps
+ok 647 - authorize refuses unsigned platform identity and requires Bearer
+ok 648 - authorize accepts signed platform identity without Firebase
+ok 649 - enforceRateLimit returns 429 after the window is exhausted
+ok 650 - chat route rejects unsigned oai-* spoofing without Firebase
+ok 651 - resolves workspace member ids to display names
+ok 652 - does not duplicate the same person under id + owner label
+ok 653 - uses 1h per item when estimates are missing
+ok 654 - workspace creation is capped at three workspaces
+ok 655 - a user only sees workspaces they own, are listed on, or belong to
+ok 656 - workspace invite emails and assignment labels stay private
+ok 657 - assignment matching uses ids without exposing email
+ok 658 - membership public patch never stores email as alias
+ok 659 - workspace member ids and statuses are deterministic
+ok 660 - password change guidance follows the sign-in provider
+ok 661 - workspace admin labels show invite emails instead of unknown user
+ok 662 - pending invite directory keeps invited people visible until they join
+ok 663 - pending invite directory drops people who already joined
+ok 664 - pending invite directory hides leftover Boldr invite rows after accept or revoke
+ok 665 - email-named teams are detected so invites are not confused with groups
+ok 666 - data-management audit rejects a malformed body with field errors
+ok 667 - data-management audit accepts a workspace-scoped body

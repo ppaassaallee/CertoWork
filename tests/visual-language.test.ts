@@ -7,17 +7,22 @@ import { compactTagSummary } from "../src/components/CompactTagPicker";
 const read = (relativePath: string) =>
   readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
 
-test("live typography exposes the Notion five-token hierarchy", async () => {
+test("live typography exposes the Plane clean-UI token hierarchy", async () => {
+  const plane = await read("src/styles/tokens.css");
   const tokens = await read("src/styles/certo-tokens.css");
   const css = await read("src/index.css");
-  assert.match(tokens, /--font-body: "Inter"/);
-  assert.match(tokens, /--text-primary: #37352f/);
-  assert.match(tokens, /--accent: #2383e2/);
+  assert.match(plane, /--c-accent:\s*#2547[cC]4/);
+  assert.match(plane, /--c-signal:\s*#f2620f/i);
+  assert.match(plane, /--f-mono:.*"JetBrains Mono"/);
+  assert.match(tokens, /--font-body:\s*Inter/);
+  assert.match(tokens, /--accent:\s*var\(--c-accent\)/);
+  assert.match(tokens, /--text-primary:\s*var\(--c-ink\)/);
   assert.match(tokens, /--text-h2: calc\(1\.75rem/);
   assert.match(tokens, /--text-h4: calc\(1\.125rem/);
   assert.match(tokens, /--text-body: calc\(0\.875rem/);
   assert.match(tokens, /--text-body-sm: calc\(0\.8125rem/);
   assert.match(tokens, /--text-caption: calc\(0\.75rem/);
+  assert.match(css, /tokens\.css/);
   assert.match(css, /certo-tokens\.css/);
   assert.equal(css.includes("Manrope"), false);
   assert.equal(css.includes("DM Sans"), false);

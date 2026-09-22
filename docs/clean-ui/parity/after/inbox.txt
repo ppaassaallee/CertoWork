@@ -1,0 +1,4 @@
+Screenshot placeholder for /inbox
+Mode: static parity (no Playwright)
+Controls: 63
+Collections: access_requests, agent_groups, agent_invites, agent_templates, boldi_action_plans, boldi_conversations, boldi_messages, boldr_risks, capture_addresses, capture_routes, categories, cost_templates, daily_briefs, feedback_reports, integration_configs, invoice_documents, key_results, knowledge_items, milestones, notebook_entries, odiseus_activity, odiseus_memory, project_status_shares, projects, review_candidates, scheduled_tasks, skills, sprints, strategic_goals, strategic_initiatives, support_cases, tasks, user_notifications, workspace_members, workspaces

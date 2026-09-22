@@ -56,6 +56,14 @@ import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { AgentActivityChip } from "../features/agents/AgentActivityChip";
+import { isAgentsJobsEnabled } from "../features/agents/agentJobsFlag";
+import {
+  listActiveRunsForItem,
+  publishedAgentsAsMembers,
+  startRunOnAgentAssign,
+  startRunsOnAgentMention,
+} from "../lib/agent-platform";
 import { looksLikeEmail } from "../lib/workspaceCollaboration";
 import { assignmentFieldsFromMembers, itemCollaboratorMemberIds } from "../lib/taskAssignment";
 import {
@@ -2564,9 +2572,34 @@ export function WorkItemsCenter({
       const names = Array.isArray(item.assignees) ? item.assignees : [item.owner || item.assignee];
       return names.some((name: string) => String(name || "").toLowerCase() === viewer.displayName.toLowerCase());
     });
+    const agentRuns = isAgentsJobsEnabled() ? listActiveRunsForItem(String(item.id)) : [];
+    const agentMembers = isAgentsJobsEnabled() && workspaceId
+      ? publishedAgentsAsMembers(workspaceId)
+      : [];
     return (
-      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""}`} data-testid="kanban-card" key={item.id}>
+      <article className={`do-kanban-card is-compact is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${bouncingId === item.id ? "is-wip-bounce" : ""} ${agentRuns.some((r) => r.findingLabel) ? "is-agent-signal" : ""}`} data-testid="kanban-card" key={item.id}>
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
+        <div className="do-kanban-card-idrow">
+          <span className={`do-kanban-type-tile is-${kind}`} aria-hidden="true" />
+          <code className="do-kanban-item-id">
+            {String(item.key || item.projectKey || item.id || "").slice(0, 12) || "ITEM"}
+          </code>
+          <span
+            className="c-pri"
+            data-level={
+              priority === "1"
+                ? "urgent"
+                : priority === "2"
+                  ? "high"
+                  : priority === "3"
+                    ? "medium"
+                    : "low"
+            }
+            aria-hidden="true"
+          >
+            <i /><i /><i />
+          </span>
+        </div>
         <div className="do-kanban-card-head">
           <span onPointerDown={stopCardDrag}>{renderBulkSelect(item)}</span>
           <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
@@ -2586,21 +2619,31 @@ export function WorkItemsCenter({
           <span className={`do-kanban-live-wrap ${live ? "is-live" : ""}`}>
             <i className="do-kanban-live-dot" data-testid="kanban-live-dot" />
             <MultiAssigneePicker
+              agentMembers={agentMembers}
               compact
               helperText="One person is accountable for finishing this work."
               label="Assignee"
               maxSelections={1}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
-              onChange={(assigneeIds, assignees) =>
+              onChange={(assigneeIds, assignees) => {
                 onUpdateTask(item.id, {
                   assigneeIds,
                   assignees,
                   owner: assignees[0] || "",
                   assignee: assignees[0] || "",
                   assigneeId: assigneeIds[0] || "",
-                })
-              }
+                });
+                if (workspaceId && assigneeIds[0]) {
+                  void startRunOnAgentAssign({
+                    workspaceId,
+                    assigneeId: assigneeIds[0],
+                    itemId: String(item.id),
+                    projectId: String(item.projectId || ""),
+                    itemTitle: title(item),
+                  });
+                }
+              }}
               selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
               selectedNames={
                 Array.isArray(item.assignees)
@@ -2609,6 +2652,13 @@ export function WorkItemsCenter({
               }
             />
           </span>
+          {agentRuns.map((run) => (
+            <AgentActivityChip
+              key={run.id}
+              run={run}
+              variant={run.findingLabel ? "signal" : "pink"}
+            />
+          ))}
           {allowedParentKinds(kind).length > 0 && (
             <button
               aria-label={`Assign parent for ${title(item)}`}
@@ -4764,6 +4814,18 @@ export function WorkItemsCenter({
                         label.split(/\s+/)[0] === name.toLowerCase(),
                     );
                   });
+                  if (isAgentsJobsEnabled() && workspaceId) {
+                    void startRunsOnAgentMention({
+                      workspaceId,
+                      text,
+                      itemId: String(selectedItem.id),
+                      projectId: String(selectedItem.projectId || ""),
+                      knownAgents: publishedAgentsAsMembers(workspaceId).map((agent) => ({
+                        id: agent.id,
+                        name: agent.displayName || agent.alias || "",
+                      })),
+                    });
+                  }
                   let accessPatch: Record<string, unknown> = {};
                   for (const member of mentionedMembers) {
                     accessPatch = withCollaboratorAccess(
