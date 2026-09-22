@@ -142,6 +142,7 @@ export function AliasProfileEditor({
 
 export function MultiAssigneePicker({
   members,
+  agentMembers = [],
   selectedIds = [],
   selectedNames = [],
   onChange,
@@ -153,6 +154,8 @@ export function MultiAssigneePicker({
   helperText,
 }: {
   members: AssignableMember[];
+  /** Published agents shown in an Agents group (Track B). */
+  agentMembers?: AssignableMember[];
   selectedIds?: string[];
   selectedNames?: string[];
   onChange: (ids: string[], names: string[]) => void;
@@ -390,7 +393,38 @@ export function MultiAssigneePicker({
                 </label>
               );
             })}
-            {activeMembers.length === 0 && (
+            {agentMembers.length > 0 && (
+              <>
+                <p className="cw-multi-assignee-group" data-testid="assignee-agents-group">
+                  Agents
+                </p>
+                {agentMembers.map((member) => {
+                  const checked = selectedIds.includes(member.id);
+                  return (
+                    <label key={member.id}>
+                      <input
+                        checked={checked}
+                        onChange={() => {
+                          onChange(
+                            checked ? [] : [member.id],
+                            checked ? [] : [memberName(member)],
+                          );
+                          if (single && !checked) setOpen(false);
+                        }}
+                        type={single ? "radio" : "checkbox"}
+                        name={single ? `assignee-${label}` : undefined}
+                      />
+                      <em aria-hidden="true">✦</em>
+                      <span>
+                        <strong>{memberName(member)}</strong>
+                        <small>Agent</small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </>
+            )}
+            {activeMembers.length === 0 && agentMembers.length === 0 && (
               <p className="cw-multi-assignee-empty">
                 No joined teammates yet. Open <strong>Workspace &amp; team</strong> and invite
                 someone — once they accept, they will appear here.
