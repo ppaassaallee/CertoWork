@@ -1451,16 +1451,17 @@ service cloud.firestore {
       );
     }
 
-    match /war_room_chats/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_participants/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_messages/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_threads/{id} { allow read, write: if isSignedIn(); }
+    // Legacy War Room collections — read-only during Collab migration window (30 days).
+    match /war_room_chats/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_participants/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_threads/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /boldi_agents/{id} { allow read, write: if isSignedIn(); }
     match /agent_templates/{id} { allow read, write: if isSignedIn(); }
     match /agent_runs/{id} { allow read, write: if isSignedIn(); }
     match /war_room_widgets/{id} { allow read, write: if isSignedIn(); }
     match /war_room_widget_versions/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_files/{id} { allow read, write: if isSignedIn(); }
+    match /war_room_files/{id} { allow read: if isSignedIn(); allow write: if false; }
     match /war_room_action_plans/{id} { allow read, write: if isSignedIn(); }
     match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
 
