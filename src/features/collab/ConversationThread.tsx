@@ -402,11 +402,12 @@ export function ConversationThread({
                     }}
                     onCreateItem={(item) => {
                       void (async () => {
+                        const title = String(item.title || item.text || "Action item");
                         const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
                         const { db } = await import("../../lib/firebase");
                         const taskRef = await addDoc(collection(db, "tasks"), {
                           workspaceId,
-                          title: item.title,
+                          title,
                           status: "todo",
                           createdBy: userId,
                           assigneeId: userId,
@@ -419,9 +420,9 @@ export function ConversationThread({
                           conversationId: resolvedId!,
                           senderId: userId,
                           senderName: userName || "You",
-                          text: `Created from action plan: ${item.title}`,
+                          text: `Created from action plan: ${title}`,
                           kind: "card",
-                          card: { type: "item", ref: { id: taskRef.id, title: item.title, status: "todo" } },
+                          card: { type: "item", ref: { id: taskRef.id, title, status: "todo" } },
                         });
                       })();
                     }}
