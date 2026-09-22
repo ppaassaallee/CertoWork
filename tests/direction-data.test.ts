@@ -186,3 +186,35 @@ test("formatDirectionMoney uses compact k notation", () => {
   assert.equal(formatDirectionMoney(12400), "$12.4k");
   assert.equal(formatDirectionMoney(27800), "$27.8k");
 });
+
+test("resolves composite workspace member ids on workload and overdue", () => {
+  const ws = "BZWdZExcupV1EuBrJysG";
+  const uid = "2duHALPBnsgbFpzO1j4XA0SdqCt2";
+  const memberId = `${ws}_${uid}`;
+  const data = buildDirectionData({
+    now: NOW,
+    members: [
+      {
+        id: memberId,
+        userId: uid,
+        displayName: "Alejandro Pascual",
+      },
+    ],
+    tasks: [
+      {
+        id: "t1",
+        title: "Overdue for Alejandro",
+        status: "open",
+        dueDate: "2026-09-01",
+        assigneeIds: [memberId],
+        owner: "Alejandro Pascual",
+      },
+    ],
+  });
+  assert.equal(data.overdueByOwner.length, 1);
+  assert.equal(data.overdueByOwner[0]?.name, "Alejandro Pascual");
+  assert.doesNotMatch(data.overdueByOwner[0]?.name || "", /BZWd/);
+  assert.equal(data.workload.length, 1);
+  assert.equal(data.workload[0]?.name, "Alejandro Pascual");
+  assert.ok((data.workload[0]?.hoursOpen || 0) > 0);
+});
