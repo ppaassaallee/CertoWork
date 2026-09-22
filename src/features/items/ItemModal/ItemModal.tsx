@@ -358,6 +358,7 @@ export function ItemModal({
   );
   const [bodyFocused, setBodyFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [classificationOpen, setClassificationOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
@@ -430,6 +431,10 @@ export function ItemModal({
       if (event.key === "Escape") {
         if (deleteOpen) {
           setDeleteOpen(false);
+          return;
+        }
+        if (typeMenuOpen) {
+          setTypeMenuOpen(false);
           return;
         }
         if (menuOpen) {
@@ -517,21 +522,44 @@ export function ItemModal({
       >
         <header className="cw-item-modal-bar">
           <div className="cw-item-modal-bar-left">
-            <label className="cw-item-type-chip">
-              <TypeIcon size={14} />
-              <select
+            <div className={`cw-item-type-chip ${typeMenuOpen ? "is-open" : ""}`}>
+              <button
+                aria-expanded={typeMenuOpen}
+                aria-haspopup="listbox"
                 aria-label="Item type"
+                className="cw-item-type-trigger"
                 data-testid="item-assign-type"
-                onChange={(event) => onChangeType(event.target.value as WorkItemKind)}
-                value={kind}
+                onClick={() => setTypeMenuOpen((open) => !open)}
+                type="button"
               >
-                {typeSelectOptions(kind).map((entry) => (
-                  <option key={entry} value={entry}>
-                    {typeLabel(entry, locale)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <TypeIcon size={14} aria-hidden="true" />
+                <span>{typeLabel(kind, locale)}</span>
+                <ChevronDown size={12} aria-hidden="true" />
+              </button>
+              {typeMenuOpen && (
+                <div className="cw-item-type-menu" role="listbox" aria-label="Item type">
+                  {typeSelectOptions(kind).map((entry) => {
+                    const Icon = TYPE_ICONS[entry] || Target;
+                    return (
+                      <button
+                        aria-selected={entry === kind}
+                        className={entry === kind ? "is-active" : undefined}
+                        key={entry}
+                        onClick={() => {
+                          onChangeType(entry);
+                          setTypeMenuOpen(false);
+                        }}
+                        role="option"
+                        type="button"
+                      >
+                        <Icon size={13} aria-hidden="true" />
+                        <span>{typeLabel(entry, locale)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button
               className="cw-item-key"
               onClick={() => void copyKey()}
