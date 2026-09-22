@@ -1,83 +1,83 @@
 /**
- * Certo Work — Notion-style white minimal tokens (single source of truth).
- * Components must use these variables; do not introduce raw hex in UI chrome.
+ * Certo Work — legacy token aliases → Plane clean-UI (`tokens.css`).
+ * Keep every existing variable name; values map to Track A tokens.
  */
 :root {
-  /* Warm Notion neutrals */
-  --surface-0: #ffffff;
-  --surface-1: #f7f7f5;
-  --surface-2: #f1f1ef;
-  --border: #e9e9e7;
-  --border-strong: rgba(55, 53, 47, 0.16);
-  --text-primary: #37352f;
-  --text-secondary: #787774;
-  --text-muted: #9b9a97;
-  --hover-overlay: rgba(55, 53, 47, 0.06);
-  --active-overlay: rgba(55, 53, 47, 0.1);
+  /* Surfaces / ink mapped to Plane wash/panel/line */
+  --surface-0: var(--c-panel);
+  --surface-1: var(--c-wash);
+  --surface-2: var(--c-line-2);
+  --border: var(--c-line);
+  --border-strong: color-mix(in srgb, var(--c-ink) 16%, transparent);
+  --text-primary: var(--c-ink);
+  --text-secondary: var(--c-ink-2);
+  --text-muted: var(--c-ink-3);
+  --hover-overlay: rgba(31, 36, 48, 0.06);
+  --active-overlay: rgba(31, 36, 48, 0.1);
 
-  /* Accent — links, focus, active chrome (not primary fill) */
-  --accent: #2383e2;
-  --accent-hover: #1a73c7;
-  --accent-soft: #e7f3f8;
+  /* Accent — single Plane blue */
+  --accent: var(--c-accent);
+  --accent-hover: #1e3ba8;
+  --accent-soft: var(--c-accent-bg);
   --accent-on: #ffffff;
 
-  /* Primary CTA fill — DunTasks black pill */
-  --btn-primary-bg: var(--text-primary);
-  --btn-primary-hover: #2f2e29;
+  /* Primary CTA — accent (no black buttons) */
+  --btn-primary-bg: var(--c-accent);
+  --btn-primary-hover: #1e3ba8;
   --btn-primary-on: #ffffff;
-  --radius-btn: 20px;
+  --radius-btn: var(--r-m);
 
-  /* Semantic hues — chip text / soft fill pairs */
-  --hue-blue: #1a6fb5;
-  --hue-blue-soft: #e7f3f8;
-  --hue-green: #1c7a52;
-  --hue-green-soft: #dbeddb;
-  --hue-amber: #9f6b00;
-  --hue-amber-soft: #fdecc8;
-  --hue-red: #c4554d;
-  --hue-red-soft: #ffe2dd;
-  --hue-pink: #c14c8a;
-  --hue-pink-soft: #f5e0ea;
-  --hue-purple: #6940a5;
-  --hue-purple-soft: #eae4f2;
-  --hue-teal: #0f7b6c;
-  --hue-teal-soft: #d6ebe7;
-  --hue-orange: #d9730d;
-  --hue-orange-soft: #fadec9;
-  --hue-lime: #548164;
-  --hue-lime-soft: #e0eadc;
-  --hue-indigo: #4a5fc1;
-  --hue-indigo-soft: #e0e4f5;
+  /* Semantic hues — soft tint + ink */
+  --hue-blue: var(--sem-blue);
+  --hue-blue-soft: var(--sem-blue-bg);
+  --hue-green: var(--sem-green);
+  --hue-green-soft: var(--sem-green-bg);
+  --hue-amber: var(--sem-yellow);
+  --hue-amber-soft: var(--sem-yellow-bg);
+  --hue-red: var(--sem-red);
+  --hue-red-soft: var(--sem-red-bg);
+  --hue-pink: var(--sem-pink);
+  --hue-pink-soft: var(--sem-pink-bg);
+  --hue-purple: var(--sem-purple);
+  --hue-purple-soft: var(--sem-purple-bg);
+  --hue-teal: var(--sem-teal);
+  --hue-teal-soft: var(--sem-teal-bg);
+  --hue-orange: var(--sem-orange);
+  --hue-orange-soft: var(--sem-orange-bg);
+  --hue-lime: var(--sem-green);
+  --hue-lime-soft: var(--sem-green-bg);
+  --hue-indigo: var(--sem-blue);
+  --hue-indigo-soft: var(--sem-blue-bg);
   --hue-brown: #9f6b53;
   --hue-brown-soft: #f0e4dc;
-  --hue-gray: #787774;
-  --hue-gray-soft: #f1f1ef;
+  --hue-gray: var(--sem-gray);
+  --hue-gray-soft: var(--sem-gray-bg);
 
-  /* AI-only glow — never use outside Odysseus / ✦ moments */
+  /* AI glow — reserved; keep subtle, no heavy purple product chrome */
   --ai-glow: radial-gradient(
     circle at 50% 40%,
-    rgba(193, 76, 138, 0.12) 0%,
-    rgba(105, 64, 165, 0.1) 42%,
+    rgba(37, 71, 196, 0.1) 0%,
+    rgba(242, 98, 15, 0.06) 42%,
     transparent 70%
   );
 
-  /* Notion pastel status tags */
-  --status-success: #1c7a52;
-  --status-success-soft: #dbeddb;
-  --status-warning: #9f6b00;
-  --status-warning-soft: #fdecc8;
-  --status-danger: #c4554d;
-  --status-danger-soft: #ffe2dd;
-  --status-info: #2383e2;
-  --status-info-soft: #d3e5ef;
-  --status-neutral: #787774;
-  --status-neutral-soft: #f1f1ef;
+  /* Status tags */
+  --status-success: var(--c-ok);
+  --status-success-soft: var(--sem-green-bg);
+  --status-warning: var(--sem-yellow);
+  --status-warning-soft: var(--sem-yellow-bg);
+  --status-danger: var(--c-bad);
+  --status-danger-soft: var(--sem-red-bg);
+  --status-info: var(--c-accent);
+  --status-info-soft: var(--c-accent-bg);
+  --status-neutral: var(--c-ink-2);
+  --status-neutral-soft: var(--sem-gray-bg);
 
-  /* Delivery stage accents (overview roadmap) */
-  --stage-deploy: #7f77dd;
+  /* Delivery stage accents */
+  --stage-deploy: var(--c-purple);
   --stage-deploy-soft: color-mix(in srgb, var(--stage-deploy) 15%, white);
 
-  /* Legacy aliases → Calm Authority (keep older CSS compiling) */
+  /* Legacy aliases */
   --status-green: var(--status-success);
   --status-amber: var(--status-warning);
   --status-red: var(--status-danger);
@@ -89,34 +89,35 @@
   --status-blue-bg: var(--status-info-soft);
   --status-gray-bg: var(--status-neutral-soft);
 
-  /* Typography — Inter workhorse, 1.25 scale */
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Typography */
+  --font-body: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: var(--font-body);
+  --font-mono: var(--f-mono);
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
   --cw-text-scale: 1;
-  --text-caption: calc(0.75rem * var(--cw-text-scale)); /* 12 */
-  --text-body-sm: calc(0.8125rem * var(--cw-text-scale)); /* 13 */
-  --text-body: calc(0.875rem * var(--cw-text-scale)); /* 14 */
-  --text-body-lg: calc(1rem * var(--cw-text-scale)); /* 16 */
-  --text-h4: calc(1.125rem * var(--cw-text-scale)); /* 18 */
-  --text-h3: calc(1.375rem * var(--cw-text-scale)); /* 22 */
-  --text-h2: calc(1.75rem * var(--cw-text-scale)); /* 28 */
-  --text-h1: calc(2.125rem * var(--cw-text-scale)); /* 34 */
+  --text-caption: calc(0.75rem * var(--cw-text-scale));
+  --text-body-sm: calc(0.8125rem * var(--cw-text-scale));
+  --text-body: calc(0.875rem * var(--cw-text-scale));
+  --text-body-lg: calc(1rem * var(--cw-text-scale));
+  --text-h4: calc(1.125rem * var(--cw-text-scale));
+  --text-h3: calc(1.375rem * var(--cw-text-scale));
+  --text-h2: calc(1.75rem * var(--cw-text-scale));
+  --text-h1: calc(2.125rem * var(--cw-text-scale));
   --text-eyebrow: var(--text-caption);
 
-  --leading-body: 1.5;
+  --leading-body: 1.45;
   --leading-heading: 1.25;
 
-  /* Spacing — 4px base */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
+  /* Spacing — prefer --sp-* but keep legacy names */
+  --space-1: var(--sp-1);
+  --space-2: var(--sp-2);
+  --space-3: var(--sp-3);
+  --space-4: var(--sp-4);
+  --space-5: var(--sp-5);
+  --space-6: var(--sp-6);
   --space-7: 48px;
   --space-8: 64px;
   --space-20: 20px;
@@ -126,28 +127,29 @@
   --card-pad-compact: var(--space-4);
   --card-pad: var(--space-5);
 
-  /* Radius — nested rule: inner = outer − padding */
-  --radius-control: 6px;
-  --radius-input: 8px;
-  --radius-card: 12px;
-  --radius-panel: 16px;
-  --radius-modal: 16px;
+  /* Radius */
+  --radius-control: var(--r-s);
+  --radius-input: var(--r-m);
+  --radius-card: var(--r-l);
+  --radius-panel: var(--r-xl);
+  --radius-modal: var(--r-xl);
   --radius-pill: 999px;
 
-  /* Elevation — hairline in-flow; shadow for floating */
-  --shadow-sm:
-    0 1px 2px rgba(15, 15, 15, 0.06), 0 4px 12px rgba(15, 15, 15, 0.06);
-  --shadow-md:
-    0 2px 4px rgba(15, 15, 15, 0.06), 0 12px 28px rgba(15, 15, 15, 0.1);
+  /* Elevation — card shadow capped per Track A */
+  --shadow-sm: var(--sh-card);
+  --shadow-md: var(--sh-pop);
 
   /* Motion */
   --motion-fast: 150ms ease-out;
   --motion-enter: 200ms ease-out;
 
-  /* Controls */
-  --control-sm: 32px;
-  --control-md: 40px;
+  /* Controls / shell */
+  --control-sm: var(--h-ctrl-sm);
+  --control-md: var(--h-ctrl);
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--accent);
+  --shell-top: var(--h-top);
+  --shell-rail: var(--w-rail);
+  --shell-panel: var(--w-panel);
 
   /* Shell aliases used across legacy rules */
   --ink: var(--text-primary);
@@ -155,9 +157,9 @@
   --line: var(--border);
   --paper: var(--surface-0);
   --green: var(--accent);
-  --nav-home: var(--status-warning);
+  --nav-home: var(--c-signal);
   --nav-work: var(--status-info);
-  --nav-approvals: var(--status-warning);
+  --nav-approvals: var(--c-signal);
   --nav-settings: var(--status-neutral);
 
   /* Compatibility with older text token names */

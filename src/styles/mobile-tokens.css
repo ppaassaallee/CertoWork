@@ -1,24 +1,24 @@
-/* Mobile-only tokens — consumed by src/mobile/ui/* under .m-root */
+/* Mobile-only tokens — aliases into Plane clean-UI tokens under .m-root */
 .m-root {
-  --c-blue: #2547c4;
-  --c-orange: #f2620f;
-  --c-ink: #424242;
-  --c-ink-2: #6b6f7a;
-  --c-ink-3: #9a9ea8;
-  --c-line: #e4e6ee;
-  --c-line-2: #eef0f5;
-  --c-bg: #f5f6fa;
-  --c-panel: #fff;
-  --c-danger: #e0433a;
-  --c-ok: #3aae6c;
-  --r-s: 6px;
-  --r-m: 10px;
-  --r-l: 14px;
+  --c-blue: var(--c-accent);
+  --c-orange: var(--c-signal);
+  --c-ink: var(--c-ink);
+  --c-ink-2: var(--c-ink-2);
+  --c-ink-3: var(--c-ink-3);
+  --c-line: var(--c-line);
+  --c-line-2: var(--c-line-2);
+  --c-bg: var(--c-wash);
+  --c-panel: var(--c-panel);
+  --c-danger: var(--c-bad);
+  --c-ok: var(--c-ok);
+  --r-s: var(--r-s);
+  --r-m: var(--r-m);
+  --r-l: var(--r-xl);
   --tap: 44px;
   --tabbar-h: 49px;
-  --m-shadow: 0 12px 40px rgba(20, 28, 60, 0.14);
+  --m-shadow: var(--sh-pop);
   color: var(--c-ink);
-  font-size: 14px;
+  font-size: var(--t-md);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }

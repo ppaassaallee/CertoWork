@@ -30,26 +30,15 @@ export function DesktopIconRail({
           type="button"
         >
           {it.icon}
+          <span className="d-rail-label">{it.label}</span>
           {it.badge ? (
-            <em
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                background: "#F2620F",
-                color: "#fff",
-                fontSize: 9,
-                borderRadius: 99,
-                padding: "0 4px",
-                fontStyle: "normal",
-              }}
-            >
+            <em className="d-rail-badge">
               {it.badge}
             </em>
           ) : null}
         </button>
       ))}
-      <div style={{ flex: 1 }} />
+      <div className="d-rail-spacer" />
       {bottom}
     </nav>
   );

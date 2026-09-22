@@ -1,0 +1,280 @@
+/**
+ * Certo Work — Plane clean-UI tokens (Track A Step A1).
+ * Single source for color, radius, shadow, spacing, type, shell chrome.
+ * Legacy names are aliased in certo-tokens.css so existing CSS keeps compiling.
+ */
+:root {
+  --c-accent: #2547c4;
+  --c-accent-bg: rgba(37, 71, 196, 0.08);
+  --c-signal: #f2620f;
+  --c-ink: #1f2430;
+  --c-ink-2: #6b7280;
+  --c-ink-3: #9ca3af;
+  --c-line: #e6e8ee;
+  --c-line-2: #f1f2f6;
+  --c-wash: #f7f8fa;
+  --c-col: #eff1f5;
+  --c-panel: #ffffff;
+  --c-ok: #3aae6c;
+  --c-warn: #e8b23a;
+  --c-bad: #e0433a;
+  --c-purple: #8b5cf6;
+  --c-teal: #0ea5a5;
+  --c-pink: #ec4899;
+
+  --r-s: 7px;
+  --r-m: 10px;
+  --r-l: 12px;
+  --r-xl: 14px;
+
+  --sh-card: 0 1px 2px rgba(20, 24, 40, 0.04);
+  --sh-pop: 0 12px 40px rgba(20, 24, 40, 0.14);
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+  --sp-6: 32px;
+
+  --f-body: 14px / 1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --t-xs: 11.5px;
+  --t-sm: 12.5px;
+  --t-md: 14px;
+  --t-lg: 15px;
+  --t-xl: 17px;
+  --t-2xl: 22px;
+
+  --h-top: 56px;
+  --w-rail: 64px;
+  --w-panel: 236px;
+  --h-ctrl: 36px;
+  --h-ctrl-sm: 30px;
+  --h-row: 44px;
+  --h-row-compact: 36px;
+
+  /* Semantic soft tints (label / state / priority chips) */
+  --sem-gray: #6b7280;
+  --sem-gray-bg: rgba(107, 114, 128, 0.1);
+  --sem-blue: #2547c4;
+  --sem-blue-bg: rgba(37, 71, 196, 0.1);
+  --sem-green: #3aae6c;
+  --sem-green-bg: rgba(58, 174, 108, 0.12);
+  --sem-yellow: #b8860b;
+  --sem-yellow-bg: rgba(232, 178, 58, 0.18);
+  --sem-orange: #f2620f;
+  --sem-orange-bg: rgba(242, 98, 15, 0.12);
+  --sem-red: #e0433a;
+  --sem-red-bg: rgba(224, 67, 58, 0.12);
+  --sem-purple: #8b5cf6;
+  --sem-purple-bg: rgba(139, 92, 246, 0.12);
+  --sem-teal: #0ea5a5;
+  --sem-teal-bg: rgba(14, 165, 165, 0.12);
+  --sem-pink: #ec4899;
+  --sem-pink-bg: rgba(236, 72, 153, 0.12);
+}
+
+/* Priority glyph — three bars */
+.c-pri {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.c-pri i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: var(--c-line);
+}
+.c-pri i:nth-child(1) {
+  height: 5px;
+}
+.c-pri i:nth-child(2) {
+  height: 8px;
+}
+.c-pri i:nth-child(3) {
+  height: 12px;
+}
+.c-pri[data-level="low"] i:nth-child(1) {
+  background: var(--c-ok);
+}
+.c-pri[data-level="medium"] i:nth-child(1),
+.c-pri[data-level="medium"] i:nth-child(2) {
+  background: var(--c-warn);
+}
+.c-pri[data-level="high"] i {
+  background: var(--c-signal);
+}
+.c-pri[data-level="urgent"] i {
+  background: var(--c-bad);
+}
+
+/* State glyphs — circle variants for column headers */
+.c-state {
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  flex-shrink: 0;
+}
+.c-state::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.c-state[data-state="backlog"]::before {
+  border: 1.5px dashed var(--c-ink-3);
+  background: transparent;
+}
+.c-state[data-state="todo"]::before,
+.c-state[data-state="to_do"]::before {
+  border: 1.5px solid var(--c-ink-2);
+  background: transparent;
+}
+.c-state[data-state="in_progress"]::before,
+.c-state[data-state="doing"]::before {
+  border: 1.5px solid var(--c-warn);
+  background: linear-gradient(90deg, var(--c-warn) 50%, transparent 50%);
+}
+.c-state[data-state="done"]::before,
+.c-state[data-state="completed"]::before {
+  border: 1.5px solid var(--c-ok);
+  background: var(--c-ok);
+}
+.c-state[data-state="cancelled"]::before,
+.c-state[data-state="canceled"]::before {
+  border: 1.5px solid var(--c-ink-3);
+  background: transparent;
+  background-image: linear-gradient(
+    135deg,
+    transparent 44%,
+    var(--c-ink-3) 44%,
+    var(--c-ink-3) 56%,
+    transparent 56%
+  );
+}
+
+/* Soft label chip (dot + name) */
+.c-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  background: var(--c-panel);
+  color: var(--c-ink-2);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.c-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.c-chip[data-tone="blue"] {
+  color: var(--sem-blue);
+  background: var(--sem-blue-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="green"] {
+  color: var(--sem-green);
+  background: var(--sem-green-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="yellow"] {
+  color: var(--sem-yellow);
+  background: var(--sem-yellow-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="orange"] {
+  color: var(--sem-orange);
+  background: var(--sem-orange-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="red"] {
+  color: var(--sem-red);
+  background: var(--sem-red-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="purple"] {
+  color: var(--sem-purple);
+  background: var(--sem-purple-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="teal"] {
+  color: var(--sem-teal);
+  background: var(--sem-teal-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="pink"] {
+  color: var(--sem-pink);
+  background: var(--sem-pink-bg);
+  border-color: transparent;
+}
+.c-chip[data-tone="gray"] {
+  color: var(--sem-gray);
+  background: var(--sem-gray-bg);
+  border-color: transparent;
+}
+
+/* Agent / signal activity chips (Track B visuals, tokens owned here) */
+.c-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 4px;
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  max-width: 100%;
+}
+.c-activity > em {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 4px;
+  font-style: normal;
+  flex-shrink: 0;
+}
+.c-activity[data-tone="accent"] {
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+}
+.c-activity[data-tone="accent"] > em {
+  background: var(--c-accent);
+  color: #fff;
+}
+.c-activity[data-tone="signal"] {
+  background: var(--sem-orange-bg);
+  color: var(--c-signal);
+}
+.c-activity[data-tone="signal"] > em {
+  background: var(--c-signal);
+  color: #fff;
+}
+.c-activity[data-tone="pink"] {
+  background: var(--sem-pink-bg);
+  color: var(--c-pink);
+}
+.c-activity[data-tone="pink"] > em {
+  background: var(--c-pink);
+  color: #fff;
+}
+.c-activity[data-tone="yellow"] {
+  background: var(--sem-yellow-bg);
+  color: var(--sem-yellow);
+}
+.c-activity[data-tone="yellow"] > em {
+  background: var(--c-warn);
+  color: #fff;
+}
