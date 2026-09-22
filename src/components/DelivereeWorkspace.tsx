@@ -6782,6 +6782,7 @@ export function DelivereeWorkspace() {
             ]}
           />
         ) : null}
+        <div className="do-panel-col">
         <div className="do-brand-row">
           <button
             className="do-brand"
@@ -7545,6 +7546,7 @@ export function DelivereeWorkspace() {
             </div>
           )}
         </div>
+        </div>
       </aside>
 
       <main className="do-main">
@@ -7558,7 +7560,24 @@ export function DelivereeWorkspace() {
           >
             <Menu size={18} />
           </button>
-          <div className="do-breadcrumb">
+          <div className="do-header-center">
+            {centerView !== "portfolio" ? (
+              <button
+                aria-label="Open command palette"
+                className="do-top-search"
+                onClick={() => setCommandPaletteOpen(true)}
+                title="Command palette (⌘K)"
+                type="button"
+              >
+                <Search size={15} />
+                <span>{t("headerSearch")}</span>
+                <kbd>⌘K</kbd>
+              </button>
+            ) : (
+              <div className="do-top-search-spacer" />
+            )}
+          </div>
+          <div className="do-breadcrumb do-breadcrumb-compact">
             <AppBreadcrumbs
               segments={[
                 {
@@ -7661,13 +7680,14 @@ export function DelivereeWorkspace() {
             />
             <button
               aria-label="Odysseus"
-              className={`do-icon-button ${odysseusPanelOpen ? "is-active" : ""}`}
+              className={`do-ody-btn ${odysseusPanelOpen ? "is-active" : ""}`}
               data-testid="header-odysseus"
               onClick={() => void toggleOdysseusPanel()}
               title="Odysseus (⌘J)"
               type="button"
             >
-              <Sparkles size={15} />
+              <Sparkles size={14} />
+              <span>Odysseus</span>
             </button>
             {mobileCore && (
               <>
@@ -7698,17 +7718,6 @@ export function DelivereeWorkspace() {
                   <Settings size={15} />
                 </button>
               </>
-            )}
-            {centerView !== "portfolio" && (
-              <button
-                aria-label="Open command palette"
-                className="do-icon-button"
-                onClick={() => setCommandPaletteOpen(true)}
-                title="Command palette (⌘K)"
-                type="button"
-              >
-                <Search size={15} />
-              </button>
             )}
             {centerView !== "portfolio" && (
             <div className="do-create-menu" ref={createMenuRef}>
