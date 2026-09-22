@@ -1356,19 +1356,20 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       // 1. Get user message
-      const msgSnap = await dbAdmin.collection("war_room_messages").doc(messageId).get();
+      const msgSnap = await dbAdmin.collection("conversation_messages").doc(messageId).get();
       if (!msgSnap.exists) {
         return res.status(404).json({ error: "Source message not found" });
       }
       const userMsg = msgSnap.data();
+      const userMsgText = String(userMsg.text || userMsg.content || "");
 
       // 2. Get chat document
-      const chatSnap = await dbAdmin.collection("war_room_chats").doc(chatId).get();
+      const chatSnap = await dbAdmin.collection("conversations").doc(chatId).get();
       if (!chatSnap.exists) {
         return res.status(404).json({ error: "Chat room not found" });
       }
       const chatData = chatSnap.data();
-      const linkedProjectId = chatData.linkedProjectId || null;
+      const linkedProjectId = chatData.linkedProjectId || chatData.anchor?.id || null;
 
       // 3. Get workspace agents
       const agentsSnap = await dbAdmin.collection("boldi_agents")
@@ -1399,8 +1400,8 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       // 5. Get recent chat history
-      let historyQuery = dbAdmin.collection("war_room_messages")
-        .where("chatId", "==", chatId);
+      let historyQuery = dbAdmin.collection("conversation_messages")
+        .where("conversationId", "==", chatId);
       
       if (threadId) {
         historyQuery = historyQuery.where("threadId", "==", threadId);
@@ -1410,20 +1411,23 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
       }
 
       const historySnap = await historyQuery.orderBy("createdAt", "desc").limit(15).get();
-      const recentMessages = historySnap.docs.map((d: any) => ({
-        id: d.id,
-        senderType: d.data().senderType,
-        senderAgentId: d.data().senderAgentId,
-        content: d.data().content,
-        messageType: d.data().messageType
-      })).reverse();
+      const recentMessages = historySnap.docs.map((d: any) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          senderType: data.senderType,
+          senderAgentId: data.senderType === "agent" ? data.senderId || data.senderAgentId : data.senderAgentId,
+          content: data.text || data.content || "",
+          messageType: data.kind || data.messageType || "text",
+        };
+      }).reverse();
 
       // 6. Multi-agent Orchestration queue
       // Determine which agents should participate.
       // Rule A: If user explicitly @mentioned some agents, queue them in order.
       // Rule B: If no explicit @mentions, run the "orchestrator" agent to coordinate.
       let executionQueue: any[] = [];
-      const mentionedAgentIds = userMsg.mentionsAgentIds || [];
+      const mentionedAgentIds = userMsg.mentionsAgentIds || userMsg.mentions?.agentIds || [];
       
       if (mentionedAgentIds.length > 0) {
         executionQueue = workspaceAgents.filter((a: any) => mentionedAgentIds.includes(a.id));
@@ -1457,7 +1461,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           triggerMessageId: messageId,
           runType: "reply",
           status: "running",
-          inputSummary: userMsg.content,
+          inputSummary: userMsgText,
           modelProvider: currentAgent.modelProvider || "google",
           modelName: currentAgent.modelName || process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",
           createdAt: new Date(),
@@ -1478,7 +1482,7 @@ Recent Conversation History:
 ${JSON.stringify(recentMessages, null, 2)}
 
 Your task:
-Analyze the user's input: "${userMsg.content}" and the previous conversation context.
+Analyze the user's input: "${userMsgText}" and the previous conversation context.
 Formulate a highly strategic, professional response conforming to your persona.
 
 Optional Deliverables:
@@ -1548,7 +1552,7 @@ Respond STRICTLY in a valid JSON schema:
             
             // Check if a widget with this title already exists in the chat to mutate it (v2, v3, etc.)
             const existingWidgetsSnap = await dbAdmin.collection("war_room_widgets")
-              .where("chatId", "==", chatId)
+              .where("conversationId", "==", chatId)
               .where("title", "==", wPayload.document_title)
               .get();
             
@@ -1628,18 +1632,28 @@ Respond STRICTLY in a valid JSON schema:
           }
 
           // Save agent's message doc
-          const agentMsgRef = await dbAdmin.collection("war_room_messages").add({
+          const agentMsgRef = await dbAdmin.collection("conversation_messages").add({
             workspaceId,
-            chatId,
+            conversationId: chatId,
             threadId: threadId || null,
             senderType: "agent",
-            senderAgentId: currentAgent.id,
-            messageType,
-            content: parsed.response_text || "",
-            linkedWidgetId: linkedWidgetId || null,
+            senderId: currentAgent.id,
+            senderName: currentAgent.name || currentAgent.id,
+            kind: messageType === "action_plan" ? "action_plan" : messageType === "status_report" ? "status_report" : messageType === "system" ? "system" : "text",
+            text: parsed.response_text || "",
+            mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+            attachments: [],
+            card: null,
+            reactions: {},
+            visibility: "internal",
+            channel: "app",
             status: "sent",
-            createdAt: new Date(),
-            updatedAt: new Date()
+            replyCount: 0,
+            model: null,
+            searchText: String(parsed.response_text || "").toLowerCase(),
+            linkedWidgetId: linkedWidgetId || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
 
           // Log run completion
@@ -1678,16 +1692,27 @@ Respond STRICTLY in a valid JSON schema:
             updatedAt: new Date()
           });
           // Also save standard system error message
-          await dbAdmin.collection("war_room_messages").add({
+          await dbAdmin.collection("conversation_messages").add({
             workspaceId,
-            chatId,
+            conversationId: chatId,
             threadId: threadId || null,
             senderType: "system",
-            messageType: "system",
-            content: `Agent ${currentAgent.name} failed to complete run. Reason: ${runErr.message || 'stateless exception'}`,
+            senderId: "system",
+            senderName: "system",
+            kind: "system",
+            text: `Agent ${currentAgent.name} failed to complete run. Reason: ${runErr.message || 'stateless exception'}`,
+            mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+            attachments: [],
+            card: null,
+            reactions: {},
+            visibility: "internal",
+            channel: "app",
             status: "sent",
-            createdAt: new Date(),
-            updatedAt: new Date()
+            replyCount: 0,
+            model: null,
+            searchText: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           });
         }
       }
@@ -1746,16 +1771,28 @@ Respond STRICTLY in a valid JSON schema:
       });
 
       // Write system announcement message back to chat
-      await dbAdmin.collection("war_room_messages").add({
+      const announce = `Action Plan applied. Created database Tasks: ${createdTasksIds.join(", ")}. Verification complete.`;
+      await dbAdmin.collection("conversation_messages").add({
         workspaceId,
-        chatId: plan.chatId,
+        conversationId: plan.chatId || plan.conversationId,
         threadId: plan.threadId || null,
         senderType: "system",
-        messageType: "system",
-        content: `Action Plan applied. Created database Tasks: ${createdTasksIds.join(", ")}. Verification complete.`,
+        senderId: "system",
+        senderName: "system",
+        kind: "system",
+        text: announce,
+        mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+        attachments: [],
+        card: null,
+        reactions: {},
+        visibility: "internal",
+        channel: "app",
         status: "sent",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        replyCount: 0,
+        model: null,
+        searchText: announce.toLowerCase(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
 
       res.json({ status: "ok", createdTasksCount: createdTasksIds.length });

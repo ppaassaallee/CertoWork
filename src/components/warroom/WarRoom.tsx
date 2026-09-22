@@ -75,6 +75,17 @@ import {
   Contact,
   ContactRequest
 } from './types';
+import {
+  WR_CHATS,
+  WR_PARTICIPANTS,
+  WR_MESSAGES,
+  snapConversation,
+  snapParticipant,
+  snapMessage,
+  warRoomChatWrite,
+  warRoomParticipantWrite,
+  warRoomMessageWrite,
+} from '../../lib/collab/warRoomBridge';
 
 // System Templates
 const TEAM_TEMPLATES = [
@@ -446,12 +457,16 @@ export function WarRoom() {
 
     // Load Chats
     const chatsQ = query(
-      collection(db, 'war_room_chats'),
+      collection(db, WR_CHATS),
       where('workspaceId', '==', workspace.id),
       orderBy('createdAt', 'desc')
     );
     const unsubChats = onSnapshot(chatsQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomChat));
+      const list = snap.docs
+        .map(doc => snapConversation(doc.id, doc.data() as Record<string, unknown>))
+        .filter((c) =>
+          ["group", "dm", "project_room", "agent_room"].includes(String(c.type)),
+        );
       setChats(list);
       // Auto-select first chat if none active
       if (list.length > 0 && !activeChat) {
@@ -461,7 +476,7 @@ export function WarRoom() {
         setActiveChat(saved || list[0]);
       }
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_chats');
+      handleFirestoreError(err, OperationType.LIST, 'conversations');
     });
 
     // Load custom workspace Agents
@@ -622,15 +637,15 @@ export function WarRoom() {
 
     // Load active user's participant records to filter private rooms and direct messages
     const myParticipantsQ = query(
-      collection(db, 'war_room_participants'),
+      collection(db, WR_PARTICIPANTS),
       where('workspaceId', '==', workspace.id),
       where('userId', '==', userId)
     );
     const unsubMyParts = onSnapshot(myParticipantsQ, (snap) => {
-      const ids = snap.docs.map(doc => doc.data().chatId);
+      const ids = snap.docs.map(doc => (doc.data().conversationId || doc.data().chatId));
       setMyParticipantChatIds(ids);
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_participants');
+      handleFirestoreError(err, OperationType.LIST, 'conversation_participants');
     });
 
     return () => {
@@ -658,28 +673,28 @@ export function WarRoom() {
 
     // Fetch Chat Participants
     const participantsQ = query(
-      collection(db, 'war_room_participants'),
-      where('chatId', '==', activeChat.id),
+      collection(db, WR_PARTICIPANTS),
+      where('conversationId', '==', activeChat.id),
       where('status', '==', 'active')
     );
     const unsubParts = onSnapshot(participantsQ, (snap) => {
-      setParticipants(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomParticipant)));
+      setParticipants(snap.docs.map(doc => snapParticipant(doc.id, doc.data() as Record<string, unknown>)));
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_participants');
+      handleFirestoreError(err, OperationType.LIST, 'conversation_participants');
     });
 
     // Fetch Chat Messages
     const messagesQ = query(
-      collection(db, 'war_room_messages'),
-      where('chatId', '==', activeChat.id),
+      collection(db, WR_MESSAGES),
+      where('conversationId', '==', activeChat.id),
       orderBy('createdAt', 'asc')
     );
     const unsubMsgs = onSnapshot(messagesQ, (snap) => {
-      const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomMessage));
+      const msgs = snap.docs.map(doc => snapMessage(doc.id, doc.data() as Record<string, unknown>));
       setMessages(msgs);
       setTimeout(() => messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_messages');
+      handleFirestoreError(err, OperationType.LIST, 'conversation_messages');
     });
 
     // Close right panel thread if activeChat changes
@@ -699,16 +714,16 @@ export function WarRoom() {
     }
 
     const threadMsgsQ = query(
-      collection(db, 'war_room_messages'),
+      collection(db, WR_MESSAGES),
       where('threadId', '==', activeThread.id),
       orderBy('createdAt', 'asc')
     );
 
     const unsubThreadMsgs = onSnapshot(threadMsgsQ, (snap) => {
-      setThreadMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomMessage)));
+      setThreadMessages(snap.docs.map(doc => snapMessage(doc.id, doc.data() as Record<string, unknown>)));
       setTimeout(() => threadEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_messages_thread');
+      handleFirestoreError(err, OperationType.LIST, 'conversation_messages_thread');
     });
 
     return () => unsubThreadMsgs();
@@ -746,57 +761,55 @@ export function WarRoom() {
       }
     });
 
-    const msgRef = doc(collection(db, 'war_room_messages'));
-    const msgData: Partial<WarRoomMessage> = {
-      id: msgRef.id,
-      workspaceId,
-      chatId: activeChat!.id,
-      senderType: 'user',
-      senderUserId: userId,
-      messageType: 'text',
-      content: content.trim(),
-      mentionsAgentIds,
-      status: 'sent',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    };
-    if (isThread && activeThread) {
-      msgData.threadId = activeThread.id;
-    }
-
-    // If project is linked or files linked
+    const msgRef = doc(collection(db, WR_MESSAGES));
+    const nowIso = new Date().toISOString();
+    let linkedEntityType: string | undefined;
+    let linkedEntityId: string | undefined;
     if (selectedProjectId) {
-      msgData.linkedEntityType = 'project';
-      msgData.linkedEntityId = selectedProjectId;
-      setSelectedProjectId('');
+      linkedEntityType = "project";
+      linkedEntityId = selectedProjectId;
+      setSelectedProjectId("");
     }
-
+    const attachments: Array<{
+      id: string;
+      name: string;
+      url: string;
+      mime: string;
+      size: number;
+      storagePath: string;
+    }> = [];
     if (selectedFileUrl && selectedFileTitle) {
-      // Create war_room_file record first
-      const fileRef = doc(collection(db, 'war_room_files'));
-      const fileData: WarRoomFile = {
-        id: fileRef.id,
-        workspaceId,
-        chatId: activeChat!.id,
-        title: selectedFileTitle,
-        fileType: selectedFileUrl.includes('drive.google.com') ? 'google_drive_file' : 'external_link',
+      attachments.push({
+        id: `link_${Date.now()}`,
+        name: selectedFileTitle,
         url: selectedFileUrl,
-        contentAvailable: false,
-        extractedTextAvailable: false,
-        createdBy: userId,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      };
-      if (isThread && activeThread) {
-        fileData.threadId = activeThread.id;
-      }
-      await setDoc(fileRef, fileData);
-      msgData.linkedFileIds = [fileRef.id];
-      setSelectedFileUrl('');
-      setSelectedFileTitle('');
+        mime: "text/uri-list",
+        size: 0,
+        storagePath: "",
+      });
+      setSelectedFileUrl("");
+      setSelectedFileTitle("");
     }
-
-    // Persist message
+    const msgData = {
+      ...warRoomMessageWrite(
+        {
+          workspaceId,
+          chatId: activeChat!.id,
+          threadId: isThread && activeThread ? activeThread.id : undefined,
+          senderType: "user",
+          senderUserId: userId,
+          senderName: userDisplayName,
+          messageType: "text",
+          content: content.trim(),
+          mentionsAgentIds,
+          linkedEntityType,
+          linkedEntityId,
+          status: "sent",
+        },
+        nowIso,
+      ),
+      attachments,
+    };
     await setDoc(msgRef, msgData);
 
     // Call Backend Multi-Agent Orchestration
@@ -873,61 +886,75 @@ export function WarRoom() {
 
     if (!title.trim()) return;
 
-    const chatRef = doc(collection(db, 'war_room_chats'));
+    const chatRef = doc(collection(db, WR_CHATS));
+    const nowIso = new Date().toISOString();
+    const chatWrite = warRoomChatWrite(
+      {
+        id: chatRef.id,
+        workspaceId,
+        title: title.trim(),
+        description: desc.trim(),
+        type,
+        status: "active",
+        createdBy: userId,
+        isPrivate,
+        linkedProjectId: projectId || undefined,
+      },
+      nowIso,
+    );
+    const participantIds = [userId];
+    const agentIds = [...selectedAgents];
+    await setDoc(chatRef, {
+      ...chatWrite,
+      participantIds,
+      agentIds,
+    });
+
     const chatData: WarRoomChat = {
       id: chatRef.id,
       workspaceId,
       title: title.trim(),
       description: desc.trim(),
-      type: type,
-      status: 'active',
+      type,
+      status: "active",
       createdBy: userId,
-      isPrivate: isPrivate,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
+      isPrivate,
+      linkedProjectId: projectId || undefined,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
-    if (projectId) {
-      chatData.linkedProjectId = projectId;
-    }
-
-    await setDoc(chatRef, chatData);
 
     // Create participant records
-    // Add User
-    const userPartRef = doc(collection(db, 'war_room_participants'));
-    await setDoc(userPartRef, {
-      id: userPartRef.id,
-      workspaceId,
-      chatId: chatRef.id,
-      participantType: 'user',
-      userId,
-      displayName: userDisplayName,
-      status: 'active',
-      joinedAt: Timestamp.now(),
-      addedBy: userId,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
-
-    // Add selected Agents
-    for (const agentId of selectedAgents) {
-      const agent = agents.find(a => a.id === agentId);
-      if (!agent) continue;
-      const partRef = doc(collection(db, 'war_room_participants'));
-      await setDoc(partRef, {
-        id: partRef.id,
+    const userPart = warRoomParticipantWrite(
+      {
         workspaceId,
         chatId: chatRef.id,
-        participantType: 'agent',
-        agentId: agent.id,
-        displayName: agent.name,
-        avatarUrl: agent.avatarEmoji || '🤖',
-        status: 'active',
-        joinedAt: Timestamp.now(),
+        participantType: "user",
+        userId,
+        displayName: userDisplayName,
+        roleInChat: "owner",
         addedBy: userId,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
+      },
+      nowIso,
+    );
+    await setDoc(doc(db, WR_PARTICIPANTS, userPart.id), userPart);
+
+    for (const agentId of selectedAgents) {
+      const agent = agents.find((a) => a.id === agentId);
+      if (!agent) continue;
+      const part = warRoomParticipantWrite(
+        {
+          workspaceId,
+          chatId: chatRef.id,
+          participantType: "agent",
+          agentId: agent.id,
+          displayName: agent.name,
+          avatarUrl: agent.avatarEmoji || "🤖",
+          addedBy: userId,
+        },
+        nowIso,
+      );
+      await setDoc(doc(db, WR_PARTICIPANTS, part.id), part);
     }
 
     // Clear and close
@@ -941,25 +968,28 @@ export function WarRoom() {
     setActiveChat(chatData);
 
     // Send a system message welcoming everyone
-    const sysMsgRef = doc(collection(db, 'war_room_messages'));
-    await setDoc(sysMsgRef, {
-      id: sysMsgRef.id,
-      workspaceId,
-      chatId: chatRef.id,
-      senderType: 'system',
-      messageType: 'system',
-      content: `Collaboration initiated inside War Room. Active agents: ${newChatSelectedAgents.map(id => agents.find(a => a.id === id)?.name).filter(Boolean).join(', ')}.`,
-      status: 'sent',
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
+    const sysMsgRef = doc(collection(db, WR_MESSAGES));
+    await setDoc(
+      sysMsgRef,
+      warRoomMessageWrite(
+        {
+          workspaceId,
+          chatId: chatRef.id,
+          senderType: "system",
+          messageType: "system",
+          content: `Collaboration initiated inside War Room. Active agents: ${selectedAgents.map((id) => agents.find((a) => a.id === id)?.name).filter(Boolean).join(", ")}.`,
+          status: "sent",
+        },
+        nowIso,
+      ),
+    );
   };
 
   // Handle Edit/Update Chat Room details
   const handleUpdateChat = async (chatId: string, updatedTitle: string, updatedDesc: string, updatedType: ChatType, updatedIsPrivate: boolean) => {
     if (!updatedTitle.trim()) return;
     try {
-      const chatRef = doc(db, 'war_room_chats', chatId);
+      const chatRef = doc(db, WR_CHATS, chatId);
       await updateDoc(chatRef, {
         title: updatedTitle.trim(),
         description: updatedDesc.trim(),
@@ -986,7 +1016,7 @@ export function WarRoom() {
   // Handle Archive Chat Room
   const handleArchiveChat = async (chatId: string) => {
     try {
-      const chatRef = doc(db, 'war_room_chats', chatId);
+      const chatRef = doc(db, WR_CHATS, chatId);
       await updateDoc(chatRef, {
         status: 'archived',
         updatedAt: Timestamp.now()
@@ -1003,7 +1033,7 @@ export function WarRoom() {
   // Handle Unarchive Chat Room
   const handleUnarchiveChat = async (chatId: string) => {
     try {
-      const chatRef = doc(db, 'war_room_chats', chatId);
+      const chatRef = doc(db, WR_CHATS, chatId);
       await updateDoc(chatRef, {
         status: 'active',
         updatedAt: Timestamp.now()
@@ -1021,7 +1051,7 @@ export function WarRoom() {
   const handleDeleteChat = async (chatId: string) => {
     if (!window.confirm('Are you absolutely sure you want to delete this chat room? This cannot be undone.')) return;
     try {
-      const chatRef = doc(db, 'war_room_chats', chatId);
+      const chatRef = doc(db, WR_CHATS, chatId);
       await deleteDoc(chatRef);
       // If activeChat is deleted, set activeChat to null
       if (activeChat && activeChat.id === chatId) {
@@ -1037,35 +1067,39 @@ export function WarRoom() {
   const handleAddParticipant = async (contact: Contact) => {
     if (!activeChat) return;
     try {
-      const pId = doc(collection(db, 'war_room_participants')).id;
-      const partRef = doc(db, 'war_room_participants', pId);
-      await setDoc(partRef, {
-        id: pId,
-        workspaceId,
-        chatId: activeChat.id,
-        participantType: 'user',
-        userId: contact.userId || contact.id, // Fallback if no userId
-        displayName: contact.displayName,
-        status: 'active',
-        joinedAt: Timestamp.now(),
-        addedBy: userId,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
+      const nowIso = new Date().toISOString();
+      const part = warRoomParticipantWrite(
+        {
+          workspaceId,
+          chatId: activeChat.id,
+          participantType: "user",
+          userId: contact.userId || contact.id,
+          displayName: contact.displayName,
+          addedBy: userId,
+        },
+        nowIso,
+      );
+      await setDoc(doc(db, WR_PARTICIPANTS, part.id), part);
+      await updateDoc(doc(db, WR_CHATS, activeChat.id), {
+        participantIds: [...(activeChat as any).participantIds || [], contact.userId || contact.id].filter(Boolean),
+        updatedAt: nowIso,
+      }).catch(() => undefined);
 
-      // Post system message
-      const sysRef = doc(collection(db, 'war_room_messages'));
-      await setDoc(sysRef, {
-        id: sysRef.id,
-        workspaceId,
-        chatId: activeChat.id,
-        senderType: 'system',
-        messageType: 'system',
-        content: `${userDisplayName} added ${contact.displayName} to this room.`,
-        status: 'sent',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
+      const sysRef = doc(collection(db, WR_MESSAGES));
+      await setDoc(
+        sysRef,
+        warRoomMessageWrite(
+          {
+            workspaceId,
+            chatId: activeChat.id,
+            senderType: "system",
+            messageType: "system",
+            content: `${userDisplayName} added ${contact.displayName} to this room.`,
+            status: "sent",
+          },
+          nowIso,
+        ),
+      );
       setShowAddMemberModal(false);
     } catch (err) {
       console.error('Failed to add participant:', err);
@@ -1094,7 +1128,7 @@ export function WarRoom() {
 
       if (deploySquadDestination === 'new') {
         const titleToDeploy = deploySquadNewChannelTitle.trim() || `${template.title} War Room`;
-        const chatRef = doc(collection(db, 'war_room_chats'));
+        const chatRef = doc(collection(db, WR_CHATS));
         const chatData: WarRoomChat = {
           id: chatRef.id,
           workspaceId,
@@ -1111,7 +1145,7 @@ export function WarRoom() {
         chatTitle = titleToDeploy;
 
         // Add human
-        const humanPartRef = doc(collection(db, 'war_room_participants'));
+        const humanPartRef = doc(collection(db, WR_PARTICIPANTS));
         await setDoc(humanPartRef, {
           id: humanPartRef.id,
           workspaceId,
@@ -1138,39 +1172,22 @@ export function WarRoom() {
       for (const slug of template.agents) {
         const match = agents.find(a => a.slug === slug);
         if (match) {
-          const partId = `part_${chatIdToUse}_${match.id}`;
-          const partRef = doc(db, 'war_room_participants', partId);
-          await setDoc(partRef, {
-            id: partId,
-            workspaceId,
-            chatId: chatIdToUse,
-            participantType: 'agent',
-            agentId: match.id,
-            displayName: match.name,
-            avatarUrl: match.avatarEmoji || '🤖',
-            status: 'active',
-            joinedAt: Timestamp.now(),
-            addedBy: userId,
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now()
-          });
+          const agentPart = warRoomParticipantWrite({
+            workspaceId, chatId: chatIdToUse, participantType: 'agent', agentId: match.id,
+            displayName: match.name, avatarUrl: match.avatarEmoji || '🤖', addedBy: userId,
+          }, new Date().toISOString());
+          await setDoc(doc(db, WR_PARTICIPANTS, agentPart.id), agentPart);
           addedAgentsNames.push(match.name);
         }
       }
 
       // Send launch system message
-      const sysRef = doc(collection(db, 'war_room_messages'));
-      await setDoc(sysRef, {
-        id: sysRef.id,
-        workspaceId,
-        chatId: chatIdToUse,
-        senderType: 'system',
-        messageType: 'system',
+      const sysRef = doc(collection(db, WR_MESSAGES));
+      await setDoc(sysRef, warRoomMessageWrite({
+        workspaceId, chatId: chatIdToUse, senderType: 'system', messageType: 'system',
         content: `Squad "${template.title}" has been successfully deployed to "${chatTitle}"! Active agents added: ${addedAgentsNames.join(', ')}.`,
         status: 'sent',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      });
+      }, new Date().toISOString()));
 
       if (deploySquadDestination === 'existing') {
         const updatedChat = chats.find(c => c.id === chatIdToUse);
@@ -1331,7 +1348,7 @@ export function WarRoom() {
       }
 
       // Also create an associated War Room chat for the group
-      const chatRef = doc(collection(db, 'war_room_chats'));
+      const chatRef = doc(collection(db, WR_CHATS));
       const chatData: WarRoomChat = {
         id: chatRef.id,
         workspaceId,
@@ -1346,7 +1363,7 @@ export function WarRoom() {
       await setDoc(chatRef, chatData);
 
       // Add human as participant
-      const humanPartRef = doc(collection(db, 'war_room_participants'));
+      const humanPartRef = doc(collection(db, WR_PARTICIPANTS));
       await setDoc(humanPartRef, {
         id: humanPartRef.id,
         workspaceId,
@@ -1365,7 +1382,7 @@ export function WarRoom() {
       for (const agentId of newGroupSelectedMembers) {
         const ag = agents.find(a => a.id === agentId);
         if (ag) {
-          const partRef = doc(collection(db, 'war_room_participants'));
+          const partRef = doc(collection(db, WR_PARTICIPANTS));
           await setDoc(partRef, {
             id: partRef.id,
             workspaceId,
