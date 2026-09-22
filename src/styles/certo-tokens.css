@@ -196,8 +196,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: var(--control-md);
-  border-radius: var(--radius-btn);
+  min-height: var(--h-ctrl);
+  border-radius: var(--r-m);
   border: 1px solid transparent;
   padding: 0 var(--space-4);
   font-size: var(--text-body-sm);
@@ -218,37 +218,37 @@
   cursor: not-allowed;
 }
 .cw-btn-sm {
-  min-height: var(--control-sm);
+  min-height: var(--h-ctrl-sm);
   padding: 0 var(--space-3);
   font-size: var(--text-caption);
 }
 .cw-btn-md {
-  min-height: var(--control-md);
+  min-height: var(--h-ctrl);
 }
 .cw-btn-primary {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-on);
+  background: var(--c-accent);
+  color: #fff;
 }
 .cw-btn-primary:hover:not(:disabled) {
-  background: var(--btn-primary-hover);
+  background: #1e3ba8;
 }
 .cw-btn-secondary {
-  background: var(--surface-0);
-  border-color: var(--border);
-  color: var(--text-primary);
+  background: var(--c-panel);
+  border-color: var(--c-line);
+  color: var(--c-ink);
 }
 .cw-btn-secondary:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: var(--c-wash);
 }
 .cw-btn-tertiary,
 .cw-btn-ghost {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--c-ink-2);
 }
 .cw-btn-tertiary:hover:not(:disabled),
 .cw-btn-ghost:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text-primary);
+  background: var(--c-line-2);
+  color: var(--c-ink);
 }
 .cw-btn-destructive {
   background: var(--status-danger);

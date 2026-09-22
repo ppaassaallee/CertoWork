@@ -278,3 +278,36 @@
   background: var(--c-warn);
   color: #fff;
 }
+
+/* A5 — shared control focus + toast placement */
+.do-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):focus,
+.do-shell textarea:focus,
+.do-shell select:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-bg);
+  outline: none;
+}
+.cw-toast,
+.do-toast,
+[data-testid="toast"] {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 120;
+  transform: translateX(-50%);
+  border: 1px solid var(--c-line);
+  border-radius: 999px;
+  background: var(--c-panel);
+  box-shadow: var(--sh-pop);
+  padding: 10px 16px;
+  color: var(--c-ink);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+@media (pointer: coarse) {
+  .do-top-search kbd,
+  .do-sidebar-search kbd,
+  .cw-kbd {
+    display: none;
+  }
+}
