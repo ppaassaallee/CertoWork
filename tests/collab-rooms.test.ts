@@ -61,10 +61,15 @@ test("Chatwoot Channels keeps project rooms searchable without a Certo left bar"
   const worker = readFileSync(resolve("worker/collab.js"), "utf8");
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.doesNotMatch(collab, /do-collab-nav/);
+  assert.doesNotMatch(collab, /do-collab-sidebar/);
+  assert.doesNotMatch(collab, /do-collab-room-stack/);
+  assert.match(collab, /do-collab-frame/);
+  assert.match(collab, /do-collab-room-picker/);
   assert.match(worker, /Search project rooms/);
   assert.match(worker, /Project rooms/);
   assert.match(worker, /Other channels/);
   assert.match(worker, /arrangeList/);
   assert.match(css, /do-collab-stage/);
+  assert.match(css, /do-collab-frame-wrap/);
   assert.doesNotMatch(worker, /max-height: min\(56vh, 32rem\)/);
 });

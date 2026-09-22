@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Folder, Loader2, MessageSquare, Search, ShieldCheck, Sparkles, Tag, Users } from "./ui/Icon";
+import { ArrowLeft, Loader2, MessageSquare, Search, Sparkles } from "./ui/Icon";
 import { ProductSwitcher } from "./ProductSwitcher";
 import { CertoMark } from "./CertoMark";
 import { useAuth } from "../lib/AuthContext";
@@ -158,7 +158,17 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
 
   const configured = isConfiguredCollab(status) || Boolean(embedUrl);
   const selectedProject = projectList.find((project) => project.id === selectedProjectId);
-  const visibleRooms = projectList.slice(0, 8);
+
+  const retry = () => {
+    openedFor.current = "";
+    deskBootstrapped.current = false;
+    roomsSyncedFor.current = "";
+    setEmbedUrl("");
+    setStatus(null);
+    setError("");
+    setLoading(true);
+    setRetryNonce((n) => n + 1);
+  };
 
   return (
     <div className="do-collab-shell" data-testid="chat-collab-module">
@@ -176,10 +186,28 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
           <input aria-label="Search Collab" placeholder="Search conversations..." />
           <kbd>⌘ K</kbd>
         </label>
+        <label className="do-collab-room-picker">
+          <span>Room</span>
+          <select
+            aria-label="Project room"
+            onChange={(event) => {
+              const next = event.target.value;
+              navigate(next ? collabProjectPath(next) : "/collab");
+            }}
+            value={selectedProjectId}
+          >
+            <option value="">General · workspace</option>
+            {projectList.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="do-collab-rail-copy">
           <Sparkles size={14} />
           <strong>{selectedProject ? selectedProject.name : t("productCollab")}</strong>
-          <small>{configured ? "Rooms synced" : "Setup check"}</small>
+          <small>{configured ? (embedUrl ? "Desk live on certo.work" : "Rooms synced") : "Setup check"}</small>
         </span>
         <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
           <ArrowLeft size={14} />
@@ -187,54 +215,14 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
         </button>
       </header>
       <div className="do-collab-body">
-        <aside className="do-collab-sidebar" aria-label="Collab rooms">
-          <section>
-            <span className="do-kicker">Desk</span>
-            <h2>Team inbox</h2>
-            <p>Project rooms, support conversations, and human follow-ups stay in one place.</p>
-          </section>
-          <div className="do-collab-room-stack">
-            <button className={!selectedProjectId ? "is-active" : ""} onClick={() => navigate("/collab")} type="button">
-              <span><Tag size={14} /></span>
-              <strong>General</strong>
-              <small>Workspace room</small>
-            </button>
-            {visibleRooms.map((project) => (
-              <button
-                className={project.id === selectedProjectId ? "is-active" : ""}
-                key={project.id}
-                onClick={() => navigate(collabProjectPath(project.id))}
-                type="button"
-              >
-                <span><Folder size={14} /></span>
-                <strong>{project.name}</strong>
-                <small>Project room</small>
-              </button>
-            ))}
-          </div>
-          <div className="do-collab-sidebar-note">
-            <ShieldCheck size={15} />
-            <span>Private to workspace members with access. Project rooms sync automatically on certo.work.</span>
-          </div>
-        </aside>
         <main className="do-collab-stage">
-          <div className="do-collab-stage-head">
-            <div>
-              <span className="do-kicker">{selectedProject ? "Project conversation" : "Workspace conversation"}</span>
-              <h1>{selectedProject ? selectedProject.name : "General team desk"}</h1>
-            </div>
-            <div className="do-collab-stage-pills">
-              <span><Users size={13} /> Team</span>
-              <span><MessageSquare size={13} /> Live chat</span>
-            </div>
-          </div>
-          {loading && !embedUrl && (
+          {loading && !embedUrl ? (
             <div className="do-collab-state">
               <Loader2 className="spin" size={18} />
               <p>Opening Chat Collab…</p>
             </div>
-          )}
-          {!loading && !configured && (
+          ) : null}
+          {!loading && !configured ? (
             <div className="do-collab-state" data-testid="chat-collab-setup">
               <MessageSquare size={22} />
               <h1>Chat Collab opens on certo.work</h1>
@@ -246,31 +234,18 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
                 {t("productBackToWork")}
               </button>
             </div>
-          )}
-          {!loading && configured && error && !embedUrl && (
+          ) : null}
+          {!loading && configured && error && !embedUrl ? (
             <div className="do-collab-state" role="alert">
               <h1>Chat Collab could not open</h1>
               <p>{error}</p>
-              <button
-                className="do-collab-back"
-                onClick={() => {
-                  openedFor.current = "";
-                  deskBootstrapped.current = false;
-                  roomsSyncedFor.current = "";
-                  setEmbedUrl("");
-                  setStatus(null);
-                  setError("");
-                  setLoading(true);
-                  setRetryNonce((n) => n + 1);
-                }}
-                type="button"
-              >
+              <button className="do-collab-back" onClick={retry} type="button">
                 Retry
               </button>
             </div>
-          )}
-          {configured && embedUrl && (
-            <>
+          ) : null}
+          {configured && embedUrl ? (
+            <div className="do-collab-frame-wrap">
               {error ? (
                 <p className="do-collab-inline-error" role="status">
                   {error}
@@ -283,8 +258,8 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
                 src={embedUrl}
                 title="Chat Collab"
               />
-            </>
-          )}
+            </div>
+          ) : null}
         </main>
       </div>
     </div>
