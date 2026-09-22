@@ -77,7 +77,10 @@ function matchesFilter(
   userId?: string,
 ): boolean {
   if (filter === "all") return true;
-  if (filter === "unread") return false; // unread needs participant docs — stub empty
+  if (filter === "unread") {
+    // Heuristic until participant unreadCount is subscribed on the list.
+    return Boolean(c.lastMessageAt) && c.lastMessageBy !== userId;
+  }
   if (filter === "me") {
     const hay = `${c.lastMessagePreview || ""} ${c.title}`.toLowerCase();
     return Boolean(userId && hay.includes(`@${userId.toLowerCase()}`)) || hay.includes("@me");
@@ -116,6 +119,10 @@ type Props = {
   onSelect: (conversationId: string) => void;
   onSelectOdysseus: () => void;
   onRefresh?: () => void;
+  onNewGroup?: () => void;
+  onNewDm?: () => void;
+  onOpenProjectRoom?: () => void;
+  onInviteExternal?: () => void;
 };
 
 export function ConversationList({
@@ -127,6 +134,10 @@ export function ConversationList({
   onSelect,
   onSelectOdysseus,
   onRefresh,
+  onNewGroup,
+  onNewDm,
+  onOpenProjectRoom,
+  onInviteExternal,
 }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ConversationFilter>("all");
@@ -200,17 +211,49 @@ export function ConversationList({
             </button>
             {newOpen ? (
               <div className="do-collab-new-menu" role="menu">
-                <button type="button" role="menuitem" disabled>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!onNewDm}
+                  onClick={() => {
+                    setNewOpen(false);
+                    onNewDm?.();
+                  }}
+                >
+                  Message a person
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!onNewGroup}
+                  onClick={() => {
+                    setNewOpen(false);
+                    onNewGroup?.();
+                  }}
+                >
                   New group
                 </button>
-                <button type="button" role="menuitem" disabled>
-                  Direct message
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!onInviteExternal}
+                  onClick={() => {
+                    setNewOpen(false);
+                    onInviteExternal?.();
+                  }}
+                >
+                  New external thread
                 </button>
-                <button type="button" role="menuitem" disabled>
-                  Project room
-                </button>
-                <button type="button" role="menuitem" disabled>
-                  Invite external
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!onOpenProjectRoom}
+                  onClick={() => {
+                    setNewOpen(false);
+                    onOpenProjectRoom?.();
+                  }}
+                >
+                  Open project room
                 </button>
               </div>
             ) : null}

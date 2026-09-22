@@ -44,6 +44,7 @@ export function CollabArea({
   const [odysseusMode, setOdysseusMode] = useState(false);
   const [contextCollapsed, setContextCollapsed] = useState(false);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     if (!workspaceId || !userId) {
@@ -79,6 +80,66 @@ export function CollabArea({
     setOdysseusMode(true);
   };
 
+  const onInviteExternal = async () => {
+    if (!workspaceId || !userId) return;
+    const email = window.prompt("Guest email for external thread?");
+    if (!email || !email.includes("@")) return;
+    const title = window.prompt("Thread title?", `Client · ${email}`) || `Client · ${email}`;
+    try {
+      const { createExternalThread } = await import("../../lib/collab/guestService");
+      const created = await createExternalThread({
+        workspaceId,
+        createdBy: userId,
+        title,
+        guestEmail: email,
+      });
+      setNotice(`Guest link: ${created.portalPath}`);
+      await loadList();
+      setSelectedId(created.conversationId);
+      setOdysseusMode(false);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not create external thread");
+    }
+  };
+
+  const onNewGroup = async () => {
+    if (!workspaceId || !userId) return;
+    const title = window.prompt("Group name?");
+    if (!title?.trim()) return;
+    try {
+      const created = await conversationService.createGroup({
+        workspaceId,
+        title: title.trim(),
+        createdBy: userId,
+        userIds: [userId],
+      });
+      await loadList();
+      setSelectedId(created.id);
+      setOdysseusMode(false);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not create group");
+    }
+  };
+
+  const onNewDm = async () => {
+    if (!workspaceId || !userId) return;
+    const other = window.prompt("Other member user id?");
+    if (!other?.trim() || other.trim() === userId) return;
+    try {
+      const created = await conversationService.ensureDm({
+        workspaceId,
+        uidA: userId,
+        uidB: other.trim(),
+        nameA: userName,
+      });
+      await loadList();
+      setSelectedId(created.id);
+      setOdysseusMode(false);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Could not open DM");
+    }
+  };
+
   if (!enabled) {
     return (
       <div className="do-collab-area" data-testid="collab-area-coming-soon">
@@ -107,7 +168,19 @@ export function CollabArea({
         onSelect={onSelect}
         onSelectOdysseus={onSelectOdysseus}
         onRefresh={() => void loadList()}
+        onNewGroup={() => void onNewGroup()}
+        onNewDm={() => void onNewDm()}
+        onInviteExternal={() => void onInviteExternal()}
       />
+
+      {notice ? (
+        <div className="do-collab-desk-notice" role="status">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {odysseusMode ? (
         <div className="do-collab-thread do-collab-odysseus-panel" data-testid="collab-odysseus-panel">
@@ -146,6 +219,8 @@ export function CollabArea({
         collapsed={contextCollapsed}
         onToggle={() => setContextCollapsed((v) => !v)}
         onOpenOdysseus={onOpenOdysseus}
+        workspaceId={workspaceId}
+        userId={userId}
       />
     </div>
   );

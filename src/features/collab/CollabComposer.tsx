@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Hash, Icon, Send } from "../../components/ui/Icon";
+import { SLASH_HELP } from "../../lib/collab/commands";
 
 const DRAFT_PREFIX = "collab-draft:";
 
@@ -38,11 +39,12 @@ type Props = {
 export function CollabComposer({
   conversationId,
   disabled,
-  placeholder = "Write a message…",
+  placeholder = "Message…  @mention  #item  /task /approve /summarize",
   onSend,
 }: Props) {
   const [text, setText] = useState(() => readDraft(conversationId));
   const [sending, setSending] = useState(false);
+  const [showSlash, setShowSlash] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export function CollabComposer({
 
   useEffect(() => {
     writeDraft(conversationId, text);
+    setShowSlash(/^\/[a-zA-Z]*$/.test(text.trim()) || text.trim() === "/");
   }, [conversationId, text]);
 
   const submit = useCallback(async () => {
@@ -89,7 +92,12 @@ export function CollabComposer({
           <Icon name="AtSign" size={14} />
           <span>@</span>
         </button>
-        <button type="button" className="do-collab-composer-tool" onClick={() => insertStub("#")} title="# link">
+        <button
+          type="button"
+          className="do-collab-composer-tool"
+          onClick={() => insertStub("#item:")}
+          title="# item card"
+        >
           <Hash size={14} />
           <span>#</span>
         </button>
@@ -97,6 +105,25 @@ export function CollabComposer({
           <span>/</span>
         </button>
       </div>
+      {showSlash ? (
+        <ul className="do-collab-slash-menu" role="listbox">
+          {SLASH_HELP.map((row) => (
+            <li key={row.cmd}>
+              <button
+                type="button"
+                onClick={() => {
+                  setText(`${row.cmd} `);
+                  setShowSlash(false);
+                  taRef.current?.focus();
+                }}
+              >
+                <strong>{row.cmd}</strong>
+                <span>{row.hint}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="do-collab-composer-row">
         <textarea
           ref={taRef}
@@ -120,7 +147,7 @@ export function CollabComposer({
           <Send size={16} />
         </button>
       </div>
-      <p className="do-collab-composer-hint">Enter to send · Shift+Enter for newline</p>
+      <p className="do-collab-composer-hint">Enter to send · Shift+Enter newline · / for commands</p>
     </div>
   );
 }

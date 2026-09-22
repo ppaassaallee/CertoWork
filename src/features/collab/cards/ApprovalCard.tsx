@@ -40,22 +40,36 @@ export function ApprovalCard({
   onApprove?: () => void;
   onDecline?: () => void;
 }) {
-  const title = String(card.ref.title || card.ref.name || "Approval needed");
-  const reason = card.ref.reason != null ? String(card.ref.reason) : card.ref.why != null ? String(card.ref.why) : null;
+  const title = String(
+    card.ref.what || card.ref.title || card.ref.name || "Approval needed",
+  );
+  const reason =
+    card.ref.askedByName != null
+      ? `Asked by ${String(card.ref.askedByName)}`
+      : card.ref.reason != null
+        ? String(card.ref.reason)
+        : card.ref.why != null
+          ? String(card.ref.why)
+          : null;
+  const status = String(card.ref.status || "pending");
 
   return (
     <div className="collab-card collab-card-approval" data-testid="collab-approval-card" style={shell}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: "#2547C4", marginBottom: 4 }}>Approval</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "#2547C4", marginBottom: 4 }}>
+        Approval{status !== "pending" ? ` · ${status}` : ""}
+      </div>
       <strong style={{ display: "block", fontSize: 14 }}>{title}</strong>
       {reason ? <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6B7280" }}>{reason}</p> : null}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button onClick={onApprove} style={btnPrimary} type="button">
-          Approve
-        </button>
-        <button onClick={onDecline} style={btnSecondary} type="button">
-          Decline
-        </button>
-      </div>
+      {status === "pending" ? (
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={onApprove} style={btnPrimary} type="button">
+            Approve
+          </button>
+          <button onClick={onDecline} style={btnSecondary} type="button">
+            Decline
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

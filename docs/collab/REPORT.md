@@ -32,10 +32,9 @@ npm run deploy:cloudflare
 ## Follow-ups
 - WhatsApp `ChannelAdapter` implementation
 - Delete legacy `war_room_*` / `work_item_messages` after 30 days
-- Production Odysseus streaming (replace stub)
-- Guest invite UI (hashed tokens + email)
-- Wire PhoneOverlayHost `conversations` prop
-- Full QA matrix in `docs/collab/QA.md` against prod
+- Swap Odysseus stub for live provider streaming when keys are present
+- Hashed guest tokens (currently shareable clear token for portal URL)
+- Full QA matrix against prod with Alejandro's flagged user
 
 ## Assumptions
 See `docs/collab/ASSUMPTIONS.md`.

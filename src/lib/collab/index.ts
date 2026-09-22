@@ -26,3 +26,6 @@ export * from "./warRoomBridge";
 export * from "./retrieval";
 export * from "./routines";
 export * from "./channels";
+export * from "./commands";
+export * from "./odysseusClient";
+export * from "./guestService";

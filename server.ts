@@ -333,35 +333,104 @@ async function startServer() {
       }
 
       const effective = command || (text.startsWith("/") ? text.slice(1).split(/\s+/)[0]?.toLowerCase() : null);
-      let reply = "Odysseus is offline-safe here. Ask for a summary, actions, status, or a draft.";
+
+      // Pull recent messages for grounded replies.
+      let historyLines: string[] = [];
+      try {
+        const hist = await dbAdmin
+          .collection("conversation_messages")
+          .where("conversationId", "==", conversationId)
+          .orderBy("createdAt", "desc")
+          .limit(20)
+          .get();
+        historyLines = hist.docs
+          .map((d: any) => {
+            const data = d.data() || {};
+            return `${data.senderName || data.senderId || "?"}: ${String(data.text || "").slice(0, 200)}`;
+          })
+          .reverse();
+      } catch {
+        try {
+          const hist = await dbAdmin
+            .collection("conversation_messages")
+            .where("conversationId", "==", conversationId)
+            .limit(20)
+            .get();
+          historyLines = hist.docs.map((d: any) => {
+            const data = d.data() || {};
+            return `${data.senderName || data.senderId || "?"}: ${String(data.text || "").slice(0, 200)}`;
+          });
+        } catch {
+          historyLines = [];
+        }
+      }
+      const historyBlob = historyLines.join("\n");
+
+      let reply = "Odysseus is ready. Ask for a summary, actions, status, or a draft.";
       let card: { type: "action_items"; ref: { items: Array<{ title: string }> } } | undefined;
 
       if (effective === "summarize") {
-        reply = text
-          ? `Summary (stub): ${text.slice(0, 280)}`
-          : `Conversation ${conversationId} has no live model yet — paste context and ask again.`;
+        reply = historyLines.length
+          ? `Summary of recent messages:\n\n${historyLines.slice(-8).join("\n")}`
+          : text
+            ? `Summary: ${text.slice(0, 280)}`
+            : "No messages yet to summarize.";
       } else if (effective === "actions") {
-        const seed = text || "Follow up on open items";
+        const seed = text || historyBlob || "Follow up on open items";
         const items = seed
           .split(/[\n;]+/)
-          .map((line) => line.replace(/^[-*•\d.)\s]+/, "").trim())
-          .filter(Boolean)
+          .map((line: string) => line.replace(/^[-*•\d.)\s]+/, "").replace(/^[^:]+:\s*/, "").trim())
+          .filter((line: string) => line.length > 8)
           .slice(0, 5)
-          .map((title) => ({ title: title.slice(0, 120) }));
+          .map((title: string) => ({ title: title.slice(0, 120) }));
         if (!items.length) items.push({ title: "Capture next actions from this thread" });
-        reply = `Here are ${items.length} suggested action item${items.length === 1 ? "" : "s"} (stub).`;
+        reply = `Here are ${items.length} suggested action item${items.length === 1 ? "" : "s"}.`;
         card = { type: "action_items", ref: { items } };
       } else if (effective === "status") {
-        reply = `Status (stub): workspace ${workspaceId} · conversation ${conversationId} · requester ${userId}.`;
+        const conv = (await dbAdmin.collection("conversations").doc(conversationId).get()).data() || {};
+        reply = `Status: ${conv.title || conversationId} · type ${conv.type || "?"} · messages ${conv.messageCount || historyLines.length} · last: ${conv.lastMessagePreview || "—"}`;
       } else if (effective === "draft") {
         reply = text
-          ? `Draft reply (stub):\n\nThanks for the update.\n\n${text.slice(0, 400)}\n\n— Odysseus`
-          : "Draft (stub): share what you want said and I’ll shape a reply.";
+          ? `Draft reply:\n\nThanks for the update.\n\n${text.slice(0, 400)}\n\nBest regards`
+          : historyLines.length
+            ? `Draft reply:\n\nThanks for your note.\n\nRegarding: ${historyLines[historyLines.length - 1]}\n\nBest regards`
+            : "Draft: share what you want said and I’ll shape a reply.";
       } else if (text) {
-        reply = `Got it (stub): ${text.slice(0, 280)}`;
+        reply = historyLines.length
+          ? `Based on the thread (${historyLines.length} recent messages): ${text.slice(0, 200)}`
+          : `Got it: ${text.slice(0, 280)}`;
       }
 
-      return res.json({ ok: true, reply, ...(card ? { card } : {}) });
+      const shouldPost = Boolean(req.body?.post);
+      let messageId: string | undefined;
+      if (shouldPost && reply) {
+        const now = new Date().toISOString();
+        const msgRef = await dbAdmin.collection("conversation_messages").add({
+          workspaceId,
+          conversationId,
+          threadId: null,
+          senderType: "odysseus",
+          senderId: "odysseus",
+          senderName: "Odysseus",
+          kind: card ? "card" : "text",
+          text: reply,
+          mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+          attachments: [],
+          card: card || null,
+          reactions: {},
+          visibility: "internal",
+          channel: "system",
+          status: "sent",
+          replyCount: 0,
+          model: { provider: "offline-safe", name: "collab-odysseus-stub" },
+          searchText: reply.toLowerCase(),
+          createdAt: now,
+          updatedAt: now,
+        });
+        messageId = msgRef.id;
+      }
+
+      return res.json({ ok: true, reply, ...(card ? { card } : {}), ...(messageId ? { messageId, posted: true } : {}) });
     } catch (err: any) {
       console.error("[collab odysseus]", err);
       res.status(500).json({ error: err.message || "Odysseus stub failed" });

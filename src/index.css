@@ -20187,6 +20187,43 @@ a {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.do-collab-slash-menu {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 6px;
+  border: 1px solid #ECEEF3;
+  border-radius: 10px;
+  background: #fff;
+  max-height: 180px;
+  overflow: auto;
+}
+.do-collab-slash-menu li button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  color: #1F2430;
+}
+.do-collab-slash-menu li button:hover {
+  background: #F7F8FA;
+}
+.do-collab-slash-menu strong {
+  color: #2547C4;
+  font-size: 13px;
+}
+.do-collab-slash-menu span {
+  color: #6b7280;
+  font-size: 12px;
+}
+
 .do-collab-composer-hint {
   margin: 0;
   color: var(--collab-muted);
@@ -20937,3 +20974,28 @@ a {
 .do-agents-routines-lead { margin: 0 0 10px; color: var(--text-muted); font-size: 13px; line-height: 1.4; }
 .do-agent-builder-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .do-invoice-head .do-project-routine-btn { margin-top: 10px; }
+
+.do-collab-desk-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: #1F2430;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(31,36,48,.18);
+}
+.do-collab-desk-notice button {
+  border: 0;
+  background: transparent;
+  color: #93c5fd;
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-collab-area.do-collab-desk { position: relative; }

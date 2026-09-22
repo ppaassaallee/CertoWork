@@ -153,12 +153,137 @@ export function ConversationThread({
   const send = useCallback(
     async (text: string) => {
       if (!resolvedId || !workspaceId || !userId) return;
+      const { parseSlashCommand, approvalCard } = await import("../../lib/collab/commands");
+      const { askOdysseus } = await import("../../lib/collab/odysseusClient");
+      const parsed = parseSlashCommand(text);
+
+      if (parsed.command === "summarize" || parsed.command === "actions" || parsed.command === "status" || parsed.command === "draft") {
+        await messageService.send({
+          workspaceId,
+          conversationId: resolvedId,
+          senderId: userId,
+          senderName: userName || "You",
+          text,
+        });
+        const result = await askOdysseus({
+          workspaceId,
+          conversationId: resolvedId,
+          userId,
+          text: parsed.rest,
+          command: parsed.command,
+          post: true,
+        });
+        if (!result.ok) {
+          await messageService.send({
+            workspaceId,
+            conversationId: resolvedId,
+            senderId: "odysseus",
+            senderName: "Odysseus",
+            senderType: "odysseus",
+            text: result.error || "Odysseus could not answer.",
+            channel: "system",
+          });
+        } else if (result.ok && result.reply && !result.posted) {
+          // Client write when server did not persist.
+          await messageService.send({
+            workspaceId,
+            conversationId: resolvedId,
+            senderId: "odysseus",
+            senderName: "Odysseus",
+            senderType: "odysseus",
+            text: result.reply,
+            card: result.card || null,
+            channel: "system",
+            kind: result.card ? "card" : "text",
+          });
+        }
+        void messageService.markRead(resolvedId, userId).catch(() => undefined);
+        return;
+      }
+
+      if (parsed.command === "approve") {
+        const what = parsed.rest || "Please approve this request";
+        await messageService.send({
+          workspaceId,
+          conversationId: resolvedId,
+          senderId: userId,
+          senderName: userName || "You",
+          text: what,
+          kind: "card",
+          card: approvalCard({
+            what,
+            askedBy: userId,
+            askedByName: userName || "You",
+          }),
+        });
+        void messageService.markRead(resolvedId, userId).catch(() => undefined);
+        return;
+      }
+
+      if (parsed.command === "task") {
+        const title = parsed.rest || "New item from Collab";
+        const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
+        const { db } = await import("../../lib/firebase");
+        const taskRef = await addDoc(collection(db, "tasks"), {
+          workspaceId,
+          title,
+          status: "todo",
+          createdBy: userId,
+          assigneeId: userId,
+          sourceConversationId: resolvedId,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        await messageService.send({
+          workspaceId,
+          conversationId: resolvedId,
+          senderId: userId,
+          senderName: userName || "You",
+          text: `Created item: ${title}`,
+          kind: "card",
+          card: { type: "item", ref: { id: taskRef.id, title, status: "todo" } },
+          mentions: {
+            userIds: [],
+            agentIds: [],
+            itemIds: [taskRef.id],
+            projectIds: [],
+            recordRefs: [],
+          },
+        });
+        void messageService.markRead(resolvedId, userId).catch(() => undefined);
+        return;
+      }
+
+      if (parsed.command === "invoice") {
+        const invoiceId = parsed.rest;
+        await messageService.send({
+          workspaceId,
+          conversationId: resolvedId,
+          senderId: userId,
+          senderName: userName || "You",
+          text: invoiceId ? `Invoice ${invoiceId}` : "Invoice",
+          kind: "card",
+          card: {
+            type: "invoice",
+            ref: { id: invoiceId || "", number: invoiceId || "—" },
+          },
+        });
+        void messageService.markRead(resolvedId, userId).catch(() => undefined);
+        return;
+      }
+
+      // #item:id shorthand → attach item card
+      const itemMention = text.match(/#item:([a-zA-Z0-9_-]+)/i);
       await messageService.send({
         workspaceId,
         conversationId: resolvedId,
         senderId: userId,
         senderName: userName || "You",
         text,
+        card: itemMention
+          ? { type: "item", ref: { id: itemMention[1] } }
+          : null,
+        kind: itemMention ? "card" : "text",
       });
       void messageService.markRead(resolvedId, userId).catch(() => undefined);
     },
@@ -249,8 +374,58 @@ export function ConversationThread({
               )}
               {msg.card ? (
                 <div className="do-collab-msg-card">
-                  {/* CardRenderer wired in step 9 */}
-                  <CardRenderer card={msg.card} />
+                  <CardRenderer
+                    card={msg.card}
+                    onApprove={() => {
+                      void messageService.send({
+                        workspaceId,
+                        conversationId: resolvedId!,
+                        senderId: userId,
+                        senderName: userName || "You",
+                        text: `Approved: ${String(msg.card?.ref?.what || msg.card?.ref?.title || "request")}`,
+                        senderType: "user",
+                        channel: "system",
+                        kind: "system",
+                      });
+                    }}
+                    onDecline={() => {
+                      void messageService.send({
+                        workspaceId,
+                        conversationId: resolvedId!,
+                        senderId: userId,
+                        senderName: userName || "You",
+                        text: `Declined: ${String(msg.card?.ref?.what || msg.card?.ref?.title || "request")}`,
+                        senderType: "user",
+                        channel: "system",
+                        kind: "system",
+                      });
+                    }}
+                    onCreateItem={(item) => {
+                      void (async () => {
+                        const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
+                        const { db } = await import("../../lib/firebase");
+                        const taskRef = await addDoc(collection(db, "tasks"), {
+                          workspaceId,
+                          title: item.title,
+                          status: "todo",
+                          createdBy: userId,
+                          assigneeId: userId,
+                          sourceConversationId: resolvedId,
+                          createdAt: serverTimestamp(),
+                          updatedAt: serverTimestamp(),
+                        });
+                        await messageService.send({
+                          workspaceId,
+                          conversationId: resolvedId!,
+                          senderId: userId,
+                          senderName: userName || "You",
+                          text: `Created from action plan: ${item.title}`,
+                          kind: "card",
+                          card: { type: "item", ref: { id: taskRef.id, title: item.title, status: "todo" } },
+                        });
+                      })();
+                    }}
+                  />
                 </div>
               ) : null}
             </div>

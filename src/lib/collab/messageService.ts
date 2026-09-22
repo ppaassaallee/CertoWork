@@ -27,6 +27,7 @@ import {
   type MessageAttachment,
   type MessageCard,
   type MessageKind,
+  type MessageMentions,
 } from "./types";
 
 function nowIso() {
@@ -50,18 +51,25 @@ export type SendMessageInput = {
   channel?: ConversationMessage["channel"];
   kind?: MessageKind;
   senderType?: ConversationMessage["senderType"];
+  mentions?: MessageMentions;
 };
 
 export async function send(input: SendMessageInput): Promise<string> {
   const now = nowIso();
   const parsed = parseMentions(input.text);
-  const mentions = {
+  const mentions = input.mentions || {
     userIds: parsed.userIds,
     agentIds: parsed.agentIds,
     itemIds: parsed.itemIds,
     projectIds: parsed.projectIds,
     recordRefs: parsed.recordRefs,
   };
+  if (input.mentions) {
+    // merge parsed tokens with explicit mentions
+    for (const id of parsed.itemIds) {
+      if (!mentions.itemIds.includes(id)) mentions.itemIds.push(id);
+    }
+  }
   const preview = previewFromText(input.text);
   const kind: MessageKind =
     input.kind ||

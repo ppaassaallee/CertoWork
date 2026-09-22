@@ -1,10 +1,13 @@
 import { motion } from "motion/react";
-import { Users, Link as LinkIcon, Shield, Activity, Database, Zap, ChevronRight, ArrowLeft } from "../ui/Icon";
+import { Users, Link as LinkIcon, Shield, Activity, Database, Zap, ChevronRight, ArrowLeft, MessageSquare } from "../ui/Icon";
 import { useNavigate } from "react-router-dom";
 import { TextSizeControl } from "../TextSizeControl";
+import { useAuth } from "../../lib/AuthContext";
+import { CollabSettingsPanel } from "../../features/collab/CollabSettingsPanel";
 
 export function SettingsIndex() {
   const navigate = useNavigate();
+  const { workspace } = useAuth();
 
   const settingsNav = [
     { title: "Workspace Settings", description: "Manage members, roles, and name", icon: Users, path: "/settings/workspace", color: "text-indigo-600", bg: "bg-indigo-50" },
@@ -41,6 +44,16 @@ export function SettingsIndex() {
         </div>
         <TextSizeControl />
       </section>
+
+      {workspace?.id ? (
+        <section className="bg-white rounded-2xl border border-gray-200 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-blue-600" />
+            <h2 className="font-semibold text-gray-900">Collab</h2>
+          </div>
+          <CollabSettingsPanel workspaceId={workspace.id} />
+        </section>
+      ) : null}
 
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
         {settingsNav.map((item) => (

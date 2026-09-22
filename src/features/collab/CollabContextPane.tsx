@@ -1,4 +1,7 @@
+import { useState } from "react";
 import type { Conversation } from "../../lib/collab/types";
+import { askOdysseus } from "../../lib/collab/odysseusClient";
+import { messageService } from "../../lib/collab";
 import { Bot, Sparkles, Users, X } from "../../components/ui/Icon";
 
 type Props = {
@@ -6,15 +9,70 @@ type Props = {
   collapsed: boolean;
   onToggle: () => void;
   onOpenOdysseus?: () => void;
+  workspaceId?: string;
+  userId?: string;
 };
 
-/** Right context pane: anchor summary, participants, Odysseus action stubs. */
+/** Right context pane: anchor summary, participants, Odysseus actions. */
 export function CollabContextPane({
   conversation,
   collapsed,
   onToggle,
   onOpenOdysseus,
+  workspaceId,
+  userId,
 }: Props) {
+  const [busy, setBusy] = useState<"summarize" | "actions" | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const runOdysseus = async (command: "summarize" | "actions", post: boolean) => {
+    if (!conversation || !workspaceId || !userId) return;
+    setBusy(command);
+    setError(null);
+    const result = await askOdysseus({
+      workspaceId,
+      conversationId: conversation.id,
+      userId,
+      command,
+      post: false,
+    });
+    setBusy(null);
+    if (!result.ok) {
+      setError(result.error || "Failed");
+      return;
+    }
+    setDraft(result.reply);
+    if (post && result.reply) {
+      await messageService.send({
+        workspaceId,
+        conversationId: conversation.id,
+        senderId: "odysseus",
+        senderName: "Odysseus",
+        senderType: "odysseus",
+        text: result.reply,
+        card: result.card || null,
+        kind: result.card ? "card" : "text",
+        channel: "system",
+      });
+      setDraft(null);
+    }
+  };
+
+  const postDraft = async () => {
+    if (!draft || !conversation || !workspaceId) return;
+    await messageService.send({
+      workspaceId,
+      conversationId: conversation.id,
+      senderId: "odysseus",
+      senderName: "Odysseus",
+      senderType: "odysseus",
+      text: draft,
+      channel: "system",
+    });
+    setDraft(null);
+  };
+
   if (collapsed) {
     return (
       <aside className="do-collab-context is-collapsed" aria-label="Context">
@@ -97,13 +155,23 @@ export function CollabContextPane({
 
           <section className="do-collab-context-section">
             <h3>Odysseus</h3>
-            <p className="do-collab-muted">Ask Odysseus about this thread or summarize later.</p>
+            <p className="do-collab-muted">Summarize or extract actions, then post when ready.</p>
             <div className="do-collab-context-actions">
-              <button type="button" className="do-collab-btn-secondary" disabled title="Coming soon">
-                <Sparkles size={14} /> Summarize
+              <button
+                type="button"
+                className="do-collab-btn-secondary"
+                disabled={Boolean(busy) || !workspaceId || !userId}
+                onClick={() => void runOdysseus("summarize", false)}
+              >
+                <Sparkles size={14} /> {busy === "summarize" ? "…" : "Summarize"}
               </button>
-              <button type="button" className="do-collab-btn-secondary" disabled title="Coming soon">
-                Extract actions
+              <button
+                type="button"
+                className="do-collab-btn-secondary"
+                disabled={Boolean(busy) || !workspaceId || !userId}
+                onClick={() => void runOdysseus("actions", false)}
+              >
+                {busy === "actions" ? "…" : "Extract actions"}
               </button>
               <button
                 type="button"
@@ -114,6 +182,22 @@ export function CollabContextPane({
                 Open Odysseus
               </button>
             </div>
+            {error ? <p className="do-collab-thread-error">{error}</p> : null}
+            {draft ? (
+              <div className="do-collab-context-card" style={{ marginTop: 10 }}>
+                <p className="do-collab-muted" style={{ whiteSpace: "pre-wrap" }}>
+                  {draft}
+                </p>
+                <button
+                  type="button"
+                  className="do-collab-btn-primary"
+                  style={{ marginTop: 8 }}
+                  onClick={() => void postDraft()}
+                >
+                  Post to conversation
+                </button>
+              </div>
+            ) : null}
           </section>
         </div>
       )}

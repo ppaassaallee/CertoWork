@@ -71,7 +71,8 @@ import { db, storage } from "../lib/firebase";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
-import { collabProjectPath, collabProjectIdFromLocation } from "../lib/collab";
+import { collabProjectPath, collabProjectIdFromLocation, conversationService } from "../lib/collab";
+import type { Conversation as CollabConversation } from "../lib/collab";
 import {
   sendItemMessage,
   subscribeWorkspaceItemMessages,
@@ -479,6 +480,36 @@ export function DelivereeWorkspace() {
   const [collabOpened, setCollabOpened] = useState(() => onCollab);
   const mobileCore = useMobileCore();
   const isPhone = useIsPhone();
+  const [phoneCollabConversations, setPhoneCollabConversations] = useState<
+    CollabConversation[]
+  >([]);
+  useEffect(() => {
+    if (!isPhone || !user?.uid || !workspace?.id) {
+      setPhoneCollabConversations([]);
+      return;
+    }
+    let cancelled = false;
+    void conversationService
+      .listForUser(user.uid, workspace.id)
+      .then((list) => {
+        if (!cancelled) setPhoneCollabConversations(list);
+      })
+      .catch(() => {
+        if (!cancelled) setPhoneCollabConversations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPhone, user?.uid, workspace?.id, location.pathname]);
+  const phoneInboxConversations = useMemo(
+    () =>
+      phoneCollabConversations.map((c) => ({
+        id: c.id,
+        title: c.title || "Conversation",
+        preview: c.lastMessagePreview || undefined,
+      })),
+    [phoneCollabConversations],
+  );
   useEffect(() => {
     if (onCollab) setCollabOpened(true);
     else setWorkOpened(true);
@@ -9282,6 +9313,7 @@ export function DelivereeWorkspace() {
           greeting={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${(user?.displayName || "there").split(" ")[0]}.`}
           inboxBadge={inboxFeed.needsActionCount + inboxFeed.unreadDmCount}
           inboxRows={inboxFeed.rows}
+          conversations={phoneInboxConversations}
           isAdmin={canManageMembers}
           items={openTasks.map((t) => ({
             id: String(t.id),
@@ -9407,6 +9439,7 @@ export function DelivereeWorkspace() {
             icon: t.icon,
           }))}
           userEmail={user?.email || ""}
+          userId={user?.uid || ""}
           userName={user?.displayName || user?.email || "You"}
           workspaceId={workspace?.id}
           workspaceName={workspace?.name || "Workspace"}
