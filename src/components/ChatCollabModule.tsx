@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, MessageSquare, Search, Sparkles } from "./ui/Icon";
+import { ArrowLeft, Loader2, MessageSquare } from "./ui/Icon";
 import { ProductSwitcher } from "./ProductSwitcher";
-import { CertoMark } from "./CertoMark";
 import { useAuth } from "../lib/AuthContext";
 import {
   collabProjectIdFromLocation,
-  collabProjectPath,
   isConfiguredCollab,
 } from "../lib/collabModule";
 import {
@@ -24,6 +22,7 @@ type Props = {
   projects?: ProjectRef[];
 };
 
+/** Same-origin Chatwoot desk — four-pane inbox lives entirely inside /app. */
 const COLLAB_DESK = "/app";
 
 export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
@@ -120,7 +119,8 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
           if (desk.error) setError(desk.error);
           openedFor.current = sessionKey;
           deskBootstrapped.current = true;
-          setEmbedUrl(desk.url || COLLAB_DESK);
+          // Prefer room deep-link when SSO returns one; otherwise the full desk.
+          setEmbedUrl(desk.roomUrl || desk.url || COLLAB_DESK);
           setLoading(false);
         }
 
@@ -157,7 +157,6 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   ]);
 
   const configured = isConfiguredCollab(status) || Boolean(embedUrl);
-  const selectedProject = projectList.find((project) => project.id === selectedProjectId);
 
   const retry = () => {
     openedFor.current = "";
@@ -171,49 +170,21 @@ export function ChatCollabModule({ workspaceName, projects = [] }: Props) {
   };
 
   return (
-    <div className="do-collab-shell" data-testid="chat-collab-module">
-      <header className="do-collab-rail">
-        <span className="do-collab-brand">
-          <CertoMark className="do-collab-logo" size={30} />
-          <span>
-            <strong>Collab Desk</strong>
-            <small>{workspaceName || "Certo Work"}</small>
-          </span>
-        </span>
+    <div className="do-collab-shell is-desk" data-testid="chat-collab-module">
+      {/* Floating Certo chrome only — Chatwoot owns the four-pane desk. */}
+      <div className="do-collab-float" data-testid="chat-collab-float">
         <ProductSwitcher product="collab" />
-        <label className="do-collab-search">
-          <Search size={14} />
-          <input aria-label="Search Collab" placeholder="Search conversations..." />
-          <kbd>⌘ K</kbd>
-        </label>
-        <label className="do-collab-room-picker">
-          <span>Room</span>
-          <select
-            aria-label="Project room"
-            onChange={(event) => {
-              const next = event.target.value;
-              navigate(next ? collabProjectPath(next) : "/collab");
-            }}
-            value={selectedProjectId}
-          >
-            <option value="">General · workspace</option>
-            {projectList.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="do-collab-rail-copy">
-          <Sparkles size={14} />
-          <strong>{selectedProject ? selectedProject.name : t("productCollab")}</strong>
-          <small>{configured ? (embedUrl ? "Desk live on certo.work" : "Rooms synced") : "Setup check"}</small>
-        </span>
-        <button className="do-collab-back" onClick={() => navigate("/home")} type="button">
+        <button
+          className="do-collab-float-back"
+          onClick={() => navigate("/home")}
+          type="button"
+          title={t("productBackToWork")}
+        >
           <ArrowLeft size={14} />
-          {t("productBackToWork")}
+          <span>{t("productBackToWork")}</span>
         </button>
-      </header>
+      </div>
+
       <div className="do-collab-body">
         <main className="do-collab-stage">
           {loading && !embedUrl ? (
