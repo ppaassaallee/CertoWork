@@ -1383,13 +1383,16 @@ export function WorkItemsCenter({
     const self = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
     const displayName = self ? memberName(self) : "You";
     const beat = () => {
+      if (document.visibilityState !== "visible") return;
       heartbeatKanbanPresence({ workspaceId, userId: viewerId, surface, displayName }).catch(() => undefined);
     };
     beat();
     const timer = window.setInterval(beat, KANBAN_PRESENCE_HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", beat);
     const stop = listenKanbanPresence(workspaceId, surface, setBoardViewers);
     return () => {
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", beat);
       stop();
     };
   }, [surface, viewerId, workspaceId, workspaceMembers]);

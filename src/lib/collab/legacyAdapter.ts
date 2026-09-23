@@ -102,6 +102,7 @@ export async function sendItemMessage(input: {
 export function subscribeItemMessages(
   workItemId: string,
   onChange: (messages: LegacyItemMessage[]) => void,
+  onError?: (error: unknown) => void,
 ): Unsubscribe {
   const conversationId = `task_${workItemId}`;
   return subscribeMessages(conversationId, {
@@ -109,7 +110,7 @@ export function subscribeItemMessages(
     onChange: (messages) => {
       onChange(messages.map((m) => messageToLegacy(m, workItemId)));
     },
-    onError: () => onChange([]),
+    onError,
   });
 }
 
@@ -117,11 +118,11 @@ export function subscribeItemMessages(
 export async function listItemMessages(
   workItemId: string,
 ): Promise<LegacyItemMessage[]> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const unsub = subscribeItemMessages(workItemId, (msgs) => {
       unsub();
       resolve(msgs);
-    });
+    }, reject);
   });
 }
 

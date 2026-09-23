@@ -11,7 +11,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fs from "fs";
 import { generateWithOpenAI, resolveAssistantProvider } from "./server/ai-provider";
 import { rankRetrievalCandidates, type RetrievalCandidate } from "./server/retrieval";
-import { generateContentWithFallback } from "./server/lib/ai";
+import { generateContentWithFallback, isGeminiEnabled } from "./server/lib/ai";
 import { parseCleanJSON } from "./server/lib/json";
 import {
   createRequireWorkspaceApiAuth,
@@ -102,7 +102,7 @@ async function startServer() {
     res.json({
       status: "ok",
       ai: {
-        available: !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY,
+        available: !!process.env.OPENAI_API_KEY || isGeminiEnabled(),
         provider: resolveAssistantProvider(),
       },
       database: dbAdmin ? "available" : "degraded",
@@ -116,11 +116,11 @@ async function startServer() {
         description: "Primary Responses API adapter for structured Odysseus conversations."
       },
       gemini: {
-        configured: !!process.env.GEMINI_API_KEY,
+        configured: isGeminiEnabled(),
         description: "Preserved legacy provider and fallback for existing AI workflows."
       },
       activeAIProvider: {
-        configured: !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY,
+        configured: !!process.env.OPENAI_API_KEY || isGeminiEnabled(),
         description: `Current routing policy: ${resolveAssistantProvider()}.`
       },
       firebase: {
@@ -1650,7 +1650,7 @@ Omit optional fields when they do not apply. Do not wrap the object in Markdown.
           resultData = parseCleanJSON(response.text);
           providerMetadata = { provider: response.provider, model: response.model };
         } catch (openAIError) {
-          if (!process.env.GEMINI_API_KEY) throw openAIError;
+          if (!isGeminiEnabled()) throw openAIError;
           console.warn("[Boldi Provider] OpenAI failed; preserving the request through Gemini fallback.");
           const fallbackResponse = await generateContentWithFallback({
             model: process.env.BOLDI_GEMINI_MODEL || "gemini-2.5-flash-lite",

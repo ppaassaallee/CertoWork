@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, BookOpen, Maximize2, MoreHorizontal, Sparkles } from "./ui/Icon";
 import { emitDomainEvent } from "../lib/routines";
 import {
@@ -7,6 +7,8 @@ import {
   doc,
   serverTimestamp,
   updateDoc,
+  type DocumentData,
+  type UpdateData,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../lib/AuthContext";
@@ -101,7 +103,27 @@ export function NotesWorkspace({
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [editor, setEditor] = useState({ title: "", content: "", tagsText: "", projectId: "" });
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const pendingSaveRef = useRef<{ noteId: string; patch: UpdateData<DocumentData>; revision: number } | null>(null);
+  const saveRevisionRef = useRef(0);
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const activeNoteIdRef = useRef<string | null>(null);
+  const flushPendingSave = useCallback(async () => {
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    try {
+      const write = saveQueueRef.current.then(() =>
+        updateDoc(doc(db, "notebook_entries", pending.noteId), pending.patch));
+      saveQueueRef.current = write.catch(() => undefined);
+      await write;
+      if (!pendingSaveRef.current && pending.revision === saveRevisionRef.current && activeNoteIdRef.current === pending.noteId) setSaveState("saved");
+    } catch (error) {
+      if (!pendingSaveRef.current) pendingSaveRef.current = pending;
+      setSaveState("error");
+      console.error("Could not save note", error);
+    }
+  }, []);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [search, setSearch] = useState("");
   const [listTab, setListTab] = useState<"all" | "meetings" | "mine" | "linked">("all");
@@ -166,6 +188,7 @@ export function NotesWorkspace({
   );
   const selectedNote =
     visibleEntries.find((entry) => entry.id === selectedNoteId && entry.kind === "note") || null;
+  activeNoteIdRef.current = selectedNote?.id || null;
   const selectedNotebook = notebooks.find((entry) => entry.id === selectedNotebookId) || null;
   const selectedSection = visibleEntries.find((entry) => entry.id === selectedSectionId) || null;
 
@@ -230,10 +253,15 @@ export function NotesWorkspace({
       editor.content === (selectedNote.content || "") &&
       editor.projectId === (selectedNote.projectId || "") &&
       tags.join(",") === (selectedNote.tags || []).join(",");
-    if (unchanged) return;
+    if (unchanged) {
+      if (pendingSaveRef.current?.noteId === selectedNote.id) pendingSaveRef.current = null;
+      return;
+    }
     setSaveState("saving");
-    const timer = window.setTimeout(async () => {
-      await updateDoc(doc(db, "notebook_entries", selectedNote.id), {
+    pendingSaveRef.current = {
+      noteId: selectedNote.id,
+      revision: ++saveRevisionRef.current,
+      patch: {
         title: editor.title.trim() || t("notes.untitled"),
         content: editor.content,
         tags,
@@ -241,11 +269,15 @@ export function NotesWorkspace({
         lastEditedBy: user.uid,
         lastEditedAt: new Date().toISOString(),
         updatedAt: serverTimestamp(),
-      });
-      setSaveState("saved");
-    }, NOTES_AUTOSAVE_DEBOUNCE_MS);
+      },
+    };
+    const timer = window.setTimeout(() => { void flushPendingSave(); }, NOTES_AUTOSAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [editor.content, editor.projectId, editor.tagsText, editor.title, selectedNote, user, workspace]);
+  }, [editor.content, editor.projectId, editor.tagsText, editor.title, selectedNote, user, workspace, flushPendingSave]);
+
+  // Navigating away or selecting another note must not discard the draft left
+  // inside the longer debounce window.
+  useEffect(() => () => { void flushPendingSave(); }, [selectedNote?.id, flushPendingSave]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -385,6 +417,8 @@ export function NotesWorkspace({
                     ? t("notes.saving")
                     : saveState === "saved"
                       ? t("notes.saved")
+                      : saveState === "error"
+                        ? t("notes.saveError")
                       : ""}
                 </span>
                 <button

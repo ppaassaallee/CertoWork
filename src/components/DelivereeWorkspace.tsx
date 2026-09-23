@@ -58,6 +58,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   serverTimestamp,
@@ -77,14 +78,14 @@ import { collabProjectPath, collabProjectIdFromLocation, conversationService } f
 import type { Conversation as CollabConversation } from "../lib/collab";
 import {
   sendItemMessage,
-  subscribeWorkspaceItemMessages,
+  subscribeItemMessages,
 } from "../lib/collab/legacyAdapter";
 import { useInboxRows } from "../features/inbox/useInboxRows";
 import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
-import { resolveFirestoreListenPacks } from "../lib/firestoreListenDiet";
+import { resolveFirestoreListenPacks, type FirestoreListenPacks } from "../lib/firestoreListenDiet";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
 import {
@@ -579,6 +580,53 @@ export function DelivereeWorkspace() {
   const [odiseusActivity, setOdysseusActivity] = useState<any[]>([]);
   const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
   const [odiseusSchedules, setOdysseusSchedules] = useState<any[]>([]);
+  const deferredSubscribeRef = useRef<((packs: FirestoreListenPacks) => () => void) | null>(null);
+  const aiContextCacheRef = useRef<{
+    workspaceId: string;
+    loadedAt: number;
+    rows: Record<string, any[]>;
+  } | null>(null);
+  const previousWorkspaceDataId = useRef(workspace?.id ?? null);
+  useEffect(() => {
+    if (!workspace?.id || previousWorkspaceDataId.current === workspace.id) return;
+    previousWorkspaceDataId.current = workspace.id;
+    setConversations([]);
+    setConversationId(null);
+    setMessages([]);
+    setProjects([]);
+    setTasks([]);
+    setMilestones([]);
+    setRisks([]);
+    setKnowledgeItems([]);
+    setCategories([]);
+    setNotebookEntries([]);
+    setWorkspaceTables([]);
+    setWorkspaceRecords([]);
+    setSupportCases([]);
+    setReviewItems([]);
+    setReviewHistory([]);
+    setInvoiceDocuments([]);
+    setWorkspaceMembers([]);
+    setWorkspaceTeams([]);
+    setSprints([]);
+    setWorkspaceInvites([]);
+    setAccessRequests([]);
+    setFeedbackReports([]);
+    setCaptureAddress(null);
+    setTeamCaptureAddresses([]);
+    setWorkItemMessages([]);
+    setSelectedRequestId(null);
+    setCostTemplates([]);
+    setProjectTemplates([]);
+    setStrategicGoals([]);
+    setStrategicMeasures([]);
+    setStrategicRecords([]);
+    setOdysseusMemory([]);
+    setOdysseusActivity([]);
+    setWorkspaceSkills([]);
+    setOdysseusSchedules([]);
+    aiContextCacheRef.current = null;
+  }, [workspace?.id]);
   const [agentRoutines, setAgentRoutines] = useState<RoutineSpec[]>([]);
   const [liveOdysseusSteps, setLiveOdysseusSteps] = useState<OdysseusRunStep[]>(
     [],
@@ -919,6 +967,7 @@ export function DelivereeWorkspace() {
       return queryClauses.map((clauses, index) =>
         onSnapshot(
           query(collection(db, name), ...clauses),
+          { includeMetadataChanges: true },
           (snapshot) => {
             if (!hasConfirmedSnapshotData(snapshot)) return;
             merge.update(
@@ -949,6 +998,7 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
+        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
@@ -988,6 +1038,7 @@ export function DelivereeWorkspace() {
       ? [
           onSnapshot(
             query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
+            { includeMetadataChanges: true },
             (snapshot) => {
               if (!hasConfirmedSnapshotData(snapshot)) return;
               setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
@@ -1060,6 +1111,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
@@ -1078,6 +1130,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
@@ -1092,18 +1145,11 @@ export function DelivereeWorkspace() {
       ),
     ];
 
-    if (listenPacks.itemMessages) {
-      unsubscribers.push(
-        subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages, reportDataSyncError),
-      );
-    } else {
-      setWorkItemMessages([]);
-    }
+    deferredSubscribeRef.current = (listenPacks) => {
+    const unsubscribers: Array<() => void> = [];
 
     if (listenPacks.milestones) {
       unsubscribers.push(makeQuery("milestones", setMilestones));
-    } else {
-      setMilestones([]);
     }
 
     if (listenPacks.financeOps) {
@@ -1116,12 +1162,6 @@ export function DelivereeWorkspace() {
         makeQuery("boldr_risks", setRisks),
         makeQuery("cost_templates", setCostTemplates),
       );
-    } else {
-      setInvoiceDocuments([]);
-      setSupportCases([]);
-      setSprints([]);
-      setRisks([]);
-      setCostTemplates([]);
     }
 
     if (listenPacks.templatesCategories) {
@@ -1133,9 +1173,6 @@ export function DelivereeWorkspace() {
           ),
         ),
       );
-    } else {
-      setCategories([]);
-      setProjectTemplates([]);
     }
 
     if (listenPacks.strategyKnowledge) {
@@ -1152,11 +1189,6 @@ export function DelivereeWorkspace() {
           setKnowledgeItems,
         ),
       );
-    } else {
-      setStrategicGoals([]);
-      setStrategicMeasures([]);
-      setStrategicRecords([]);
-      setKnowledgeItems([]);
     }
 
     if (listenPacks.notes) {
@@ -1168,8 +1200,6 @@ export function DelivereeWorkspace() {
           true,
         ),
       );
-    } else {
-      setNotebookEntries([]);
     }
 
     if (listenPacks.tables) {
@@ -1187,27 +1217,6 @@ export function DelivereeWorkspace() {
           false,
         ),
       );
-    } else {
-      setWorkspaceTables([]);
-    }
-
-    if (listenPacks.tableRecords) {
-      unsubscribers.push(
-        makeQuery(
-          TABLE_RECORDS,
-          (items) =>
-            setWorkspaceRecords(
-              (items as RecordDoc[]).map((row) => ({
-                ...row,
-                id: row.id,
-              })),
-            ),
-          false,
-          false,
-        ),
-      );
-    } else {
-      setWorkspaceRecords([]);
     }
 
     if (listenPacks.review) {
@@ -1226,9 +1235,6 @@ export function DelivereeWorkspace() {
           true,
         ),
       );
-    } else {
-      setReviewItems([]);
-      setReviewHistory([]);
     }
 
     if (listenPacks.odysseus) {
@@ -1249,20 +1255,44 @@ export function DelivereeWorkspace() {
         makeQuery("skills", setWorkspaceSkills, false, true),
         makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
       );
-    } else {
-      setOdysseusMemory([]);
-      setOdysseusActivity([]);
-      setWorkspaceSkills([]);
-      setOdysseusSchedules([]);
     }
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
 
     return () => {
       cancelled = true;
+      deferredSubscribeRef.current = null;
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-    // dataAccessKey + listenPacks.key: restart only when ACL mode or route packs change.
-  }, [dataAccessKey, dataRetryVersion, listenPacks.key, reportDataSyncError]);
+    // The core shell stays subscribed across route changes.
+  }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
+
+  useEffect(() => {
+    const subscribe = deferredSubscribeRef.current;
+    if (!subscribe) return;
+    return subscribe(listenPacks);
+  }, [dataAccessKey, dataRetryVersion, listenPacks.key]);
+
+  useEffect(() => {
+    if (!user?.uid || !workspace?.id || !listenPacks.tableRecords) return;
+    return onSnapshot(
+      query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
+        setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
+      },
+      reportDataSyncError,
+    );
+  }, [user?.uid, workspace?.id, listenPacks.tableRecords, dataRetryVersion, reportDataSyncError]);
+
+  useEffect(() => {
+    if (lens.kind !== "requests" || !selectedRequestId) return;
+    setWorkItemMessages([]);
+    return subscribeItemMessages(selectedRequestId, setWorkItemMessages, reportDataSyncError);
+  }, [lens.kind, selectedRequestId, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1537,6 +1567,7 @@ export function DelivereeWorkspace() {
           collection(db, "workspace_members"),
           where("workspaceId", "==", workspace.id),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceMembers(
@@ -1552,6 +1583,7 @@ export function DelivereeWorkspace() {
           collection(db, "agent_groups"),
           where("workspaceId", "==", workspace.id),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceTeams(
@@ -1568,64 +1600,48 @@ export function DelivereeWorkspace() {
       ),
     ];
 
-    if (listenPacks.invites) {
-      unsubscribers.push(
-        onSnapshot(
-          query(
-            collection(db, "agent_invites"),
-            where("workspaceId", "==", workspace.id),
-          ),
-          (snapshot) => {
-            if (!hasConfirmedSnapshotData(snapshot)) return;
-            setWorkspaceInvites(
-              snapshot.docs
-                .map((item) => ({ id: item.id, ...item.data() }))
-                .filter(
-                  (invite: any) => invite.inviteType === "workspace_member",
-                ),
-            );
-          },
-          reportDataSyncError,
-        ),
-      );
-    } else {
-      setWorkspaceInvites([]);
-    }
-
-    // Kill the global pending access_requests listen. Owner settings only, one-shot.
-    if (listenPacks.accessRequests && workspace.ownerId === user.uid) {
-      let cancelled = false;
-      void getDocs(query(collection(db, "access_requests"), where("status", "==", "pending")))
-        .then((snapshot) => {
-          if (cancelled) return;
-          setAccessRequests(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
-              .sort(
-                (left, right) =>
-                  timestamp(right.requestedAt || right.updatedAt) -
-                  timestamp(left.requestedAt || left.updatedAt),
-              ),
-          );
-        })
-        .catch(reportDataSyncError);
-      return () => {
-        cancelled = true;
-        unsubscribers.forEach((unsubscribe) => unsubscribe());
-      };
-    }
-
-    setAccessRequests([]);
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [
     user?.uid,
     workspace?.id,
-    workspace?.ownerId,
     dataRetryVersion,
-    listenPacks.invites,
-    listenPacks.accessRequests,
     reportDataSyncError,
   ]);
+
+  useEffect(() => {
+    if (!workspace?.id || !listenPacks.invites) return;
+    return onSnapshot(
+      query(collection(db, "agent_invites"), where("workspaceId", "==", workspace.id)),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
+        setWorkspaceInvites(snapshot.docs
+          .map((item) => ({ id: item.id, ...item.data() }))
+          .filter((invite: any) => invite.inviteType === "workspace_member"));
+      },
+      reportDataSyncError,
+    );
+  }, [workspace?.id, listenPacks.invites, dataRetryVersion, reportDataSyncError]);
+
+  const canReadAccessRequests = Boolean(user?.uid && workspace?.id) && canManageWorkspaceMembers(
+    workspaceMembers.find((row) => row.userId === user?.uid)?.role,
+    workspace?.ownerId === user?.uid,
+  );
+  useEffect(() => {
+    if (!listenPacks.accessRequests || !user?.uid || !workspace?.id || !canReadAccessRequests) return;
+    let cancelled = false;
+    void getDocsFromServer(query(collection(db, "access_requests"), where("status", "==", "pending")))
+      .then((snapshot) => {
+        if (cancelled) return;
+        setAccessRequests(snapshot.docs
+          .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
+          .sort((left, right) =>
+            timestamp(right.requestedAt || right.updatedAt) -
+            timestamp(left.requestedAt || left.updatedAt)));
+      })
+      .catch(reportDataSyncError);
+    return () => { cancelled = true; };
+  }, [listenPacks.accessRequests, user?.uid, workspace?.id, canReadAccessRequests, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     if (!conversationId || !user || !workspace) {
@@ -1639,6 +1655,7 @@ export function DelivereeWorkspace() {
         where("userId", "==", user.uid),
         where("workspaceId", "==", workspace.id),
       ),
+      { includeMetadataChanges: true },
       (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setMessages(
@@ -1817,15 +1834,6 @@ export function DelivereeWorkspace() {
       routeOrPrimaryProject ||
       null,
     [projectConsoleId, projects, routeOrPrimaryProject],
-  );
-  const projectDocuments = useMemo(
-    () =>
-      knowledgeItems.filter(
-        (item) =>
-          contextProjectIds.includes(item.projectId) &&
-          item.status !== "archived",
-      ),
-    [contextProjectIds, knowledgeItems],
   );
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
@@ -2591,6 +2599,56 @@ export function DelivereeWorkspace() {
         createdAt: serverTimestamp(),
       });
 
+      // Route-scoped streams should not silently remove context from the AI.
+      // Load the cold collections only when a conversation actually needs them.
+      const cachedAiRows = aiContextCacheRef.current;
+      const aiRows: Record<string, any[]> = cachedAiRows?.workspaceId === workspace.id &&
+        Date.now() - cachedAiRows.loadedAt < 5 * 60_000 ? { ...cachedAiRows.rows } : {};
+      const coldWorkspace = [
+        ...(!listenPacks.milestones ? ["milestones"] : []),
+        ...(!listenPacks.financeOps ? ["boldr_risks"] : []),
+        ...(!listenPacks.strategyKnowledge ? ["strategic_goals", "key_results", "strategic_initiatives"] : []),
+      ].filter((name) => !aiRows[name]);
+      const coldPersonal = [
+        ...(!listenPacks.review ? ["review_candidates"] : []),
+        ...(!listenPacks.notes ? ["notebook_entries"] : []),
+        ...(!listenPacks.odysseus ? ["odiseus_memory", "skills", "scheduled_tasks"] : []),
+      ].filter((name) => !aiRows[name]);
+      const needKnowledge = !listenPacks.strategyKnowledge && !aiRows.knowledge_items;
+      if (coldWorkspace.length || coldPersonal.length || needKnowledge) {
+        try {
+          const fetchRows = async (name: string, personal: boolean) => {
+            const constraints = [where("workspaceId", "==", workspace.id)];
+            if (personal) constraints.push(where("userId", "==", user.uid));
+            const snapshot = await getDocsFromServer(query(collection(db, name), ...constraints));
+            return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+          };
+          const requested = await Promise.all([
+            ...coldWorkspace.map(async (name) => [name, await fetchRows(name, false)] as const),
+            ...coldPersonal.map(async (name) => [name, await fetchRows(name, true)] as const),
+          ]);
+          for (const [name, rows] of requested) aiRows[name] = rows;
+          if (needKnowledge) {
+            const [personal, project] = await Promise.all([
+              fetchRows("knowledge_items", true),
+              getDocsFromServer(query(collection(db, "knowledge_items"), where("workspaceId", "==", workspace.id), where("projectId", "!=", "")))
+                .then((snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+            ]);
+            const knowledge = new Map<string, any>();
+            for (const item of [...personal, ...project]) knowledge.set(item.id, item);
+            aiRows.knowledge_items = [...knowledge.values()];
+          }
+          aiContextCacheRef.current = { workspaceId: workspace.id, loadedAt: Date.now(), rows: aiRows };
+        } catch (error) {
+          reportDataSyncError(error);
+        }
+      }
+      const aiValue = (name: string, live: any[], isLive: boolean) =>
+        isLive ? live : aiRows[name] || live;
+      const aiKnowledge = aiValue("knowledge_items", knowledgeItems, listenPacks.strategyKnowledge);
+      const aiReviewItems = aiValue("review_candidates", reviewItems, listenPacks.review)
+        .filter((item) => ["pending", "approved_for_review"].includes(item.status));
+
       const requestContext = buildConversationRequestContext({
         text,
         currentUserMessageId: userMessageRef.id,
@@ -2606,28 +2664,28 @@ export function DelivereeWorkspace() {
         projectTasks,
         openTasks,
         activeProjects,
-        milestones,
-        risks,
+        milestones: aiValue("milestones", milestones, listenPacks.milestones),
+        risks: aiValue("boldr_risks", risks, listenPacks.financeOps),
         todayTasks,
         projects,
         tasks,
         conversations,
-        reviewItems,
-        strategicGoals,
-        strategicMeasures,
-        strategicRecords,
+        reviewItems: aiReviewItems,
+        strategicGoals: aiValue("strategic_goals", strategicGoals, listenPacks.strategyKnowledge),
+        strategicMeasures: aiValue("key_results", strategicMeasures, listenPacks.strategyKnowledge),
+        strategicRecords: aiValue("strategic_initiatives", strategicRecords, listenPacks.strategyKnowledge),
         workspaceMembers,
         workspaceTeams,
-        projectDocuments,
-        notebookEntries,
+        projectDocuments: aiKnowledge.filter((item) => contextProjectIds.includes(item.projectId) && item.status !== "archived"),
+        notebookEntries: aiValue("notebook_entries", notebookEntries, listenPacks.notes),
         userId: user.uid,
         workspaceId: workspace.id,
         conversationId: activeConversationId,
         currentMemberId: personalActor.memberId,
         currentUserEmail: personalActor.email,
-        odiseusMemory,
-        skills: workspaceSkills,
-        schedules: odiseusSchedules,
+        odiseusMemory: aiValue("odiseus_memory", odiseusMemory, listenPacks.odysseus),
+        skills: aiValue("skills", workspaceSkills, listenPacks.odysseus),
+        schedules: aiValue("scheduled_tasks", odiseusSchedules, listenPacks.odysseus),
         calendarEvents: calendarEventsForAi,
         odysseusScope: odysseusPanelScope,
       });

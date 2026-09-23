@@ -8,7 +8,15 @@ import {
 
 let aiInstance: GoogleGenAI | null = null;
 
+/** A key alone must not create surprise billable Gemini traffic. */
+export function isGeminiEnabled() {
+  return process.env.CERTO_GEMINI_ENABLED === "1" && Boolean(process.env.GEMINI_API_KEY);
+}
+
 export function getGeminiClient(): GoogleGenAI {
+  if (!isGeminiEnabled()) {
+    throw new Error("Gemini is disabled. Set CERTO_GEMINI_ENABLED=1 to opt in.");
+  }
   if (!aiInstance) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {

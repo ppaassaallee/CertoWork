@@ -69,7 +69,7 @@ test("create coerces project visibility without projectId to workspace", () => {
   );
 });
 
-test("TABLES and TABLE_RECORDS listeners are workspace-scoped", () => {
+test("TABLES and on-demand TABLE_RECORDS listeners are workspace-scoped", () => {
   const shell = readFileSync(
     resolve(root, "src/components/DelivereeWorkspace.tsx"),
     "utf8",
@@ -78,8 +78,5 @@ test("TABLES and TABLE_RECORDS listeners are workspace-scoped", () => {
     shell,
     /makeQuery\(\s*TABLES,\s*\(items\)\s*=>[\s\S]*?false,\s*false,\s*\)/,
   );
-  assert.match(
-    shell,
-    /makeQuery\(\s*TABLE_RECORDS,\s*\(items\)\s*=>[\s\S]*?false,\s*false,\s*\)/,
-  );
+  assert.match(shell, /!listenPacks\.tableRecords\) return;[\s\S]*?collection\(db, TABLE_RECORDS\), where\("workspaceId", "==", workspace\.id\)/);
 });

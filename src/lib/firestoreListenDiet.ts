@@ -86,7 +86,6 @@ export function resolveFirestoreListenPacks(lens: DelivereeLens): FirestoreListe
       packs.milestones = true;
       break;
     case "collab":
-      packs.itemMessages = true;
       break;
     case "agents":
     case "routines":
