@@ -5750,6 +5750,9 @@ export function ProjectCommandCenter({
         : `${label}: ${ok} project${ok === 1 ? "" : "s"} updated`;
       setBulkFeedback(message);
       onNotice?.(message);
+      if (label === "Archive" && failed === 0) {
+        setSelectedProjectIds([]);
+      }
     } catch (reason) {
       const message =
         reason instanceof Error
@@ -7349,9 +7352,11 @@ export function ProjectCommandCenter({
               onOpenBrief={(project) => onOpenProject(project)}
               onOpenProject={(project) => onOpenProject(project)}
               onOpenSummary={(project) => onOpenProject(project)}
+              onSelectionChange={setSelectedProjectIds}
               onUpdateProject={onUpdateProject}
               projects={sortedFiltered as Array<Record<string, unknown> & { id: string }>}
               risks={risks}
+              selectedIds={selectedProjectIds}
               tasks={tasks}
               workspaceId={workspaceId || String(projects[0]?.workspaceId || "")}
             />

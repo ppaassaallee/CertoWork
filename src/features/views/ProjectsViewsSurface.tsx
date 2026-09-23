@@ -29,6 +29,8 @@ export function ProjectsViewsSurface({
   onOpenProject,
   onOpenBrief,
   onOpenSummary,
+  selectedIds,
+  onSelectionChange,
   ctxExtras,
 }: {
   projects: ProjectRow[];
@@ -42,6 +44,8 @@ export function ProjectsViewsSurface({
   onOpenProject(project: ProjectRow): void;
   onOpenBrief?(project: ProjectRow): void;
   onOpenSummary?(project: ProjectRow): void;
+  selectedIds?: string[];
+  onSelectionChange?(ids: string[]): void;
   ctxExtras?: Partial<ActionContext>;
 }) {
   const surface: Surface = "projects-list";
@@ -164,7 +168,9 @@ export function ProjectsViewsSurface({
             email: member.email || "",
           }))}
           onOpenRow={(row) => onOpenProject(row)}
+          onSelectionChange={onSelectionChange}
           rows={projects}
+          selectedIds={selectedIds}
           testId="projects-grid"
           view={active}
         />

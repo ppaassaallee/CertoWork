@@ -77,6 +77,9 @@ export type ViewGridProps<Row> = {
   onViewChange?(next: SavedView): void;
   onOpenRow?(row: Row): void;
   onCreateRow?(title?: string): void;
+  /** Controlled selection (e.g. portfolio bulk bar). */
+  selectedIds?: string[];
+  onSelectionChange?(ids: string[]): void;
   testId?: string;
 };
 
@@ -97,9 +100,16 @@ export function ViewGrid<Row>({
   cellColumnLookup,
   onOpenRow,
   onCreateRow,
+  selectedIds,
+  onSelectionChange,
   testId = "views-grid",
 }: ViewGridProps<Row>) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<string>>(new Set());
+  const selected = selectedIds ? new Set(selectedIds) : internalSelected;
+  const commitSelection = (next: Set<string>) => {
+    if (!selectedIds) setInternalSelected(next);
+    onSelectionChange?.([...next]);
+  };
   const [draftTitle, setDraftTitle] = useState("");
   const [menuRowId, setMenuRowId] = useState<string | null>(null);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
@@ -112,6 +122,16 @@ export function ViewGrid<Row>({
       }),
     [rows, adapter, view, ctx.userId, memberIds],
   );
+
+  const appliedRowIdsKey = applied.rows.map((row) => adapter.rowId(row)).join("|");
+
+  // Drop selection for rows that left the dataset (archive/delete/filter).
+  useEffect(() => {
+    const alive = new Set(appliedRowIdsKey ? appliedRowIdsKey.split("|") : []);
+    const pruned = [...selected].filter((id) => alive.has(id));
+    if (pruned.length !== selected.size) commitSelection(new Set(pruned));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedRowIdsKey]);
 
   const visibleColumnDefs = useMemo(() => {
     const byId = new Map(adapter.columns.map((col) => [col.id, col]));
@@ -139,7 +159,7 @@ export function ViewGrid<Row>({
             aria-label={t("tables.grid.selectAll")}
             checked={all}
             onChange={(e) => {
-              setSelected(
+              commitSelection(
                 e.target.checked
                   ? new Set(applied.rows.map((row) => adapter.rowId(row)))
                   : new Set(),
@@ -156,12 +176,10 @@ export function ViewGrid<Row>({
             aria-label={t("tables.grid.selectRow")}
             checked={selected.has(id)}
             onChange={(e) => {
-              setSelected((prev) => {
-                const next = new Set(prev);
-                if (e.target.checked) next.add(id);
-                else next.delete(id);
-                return next;
-              });
+              const next = new Set(selected);
+              if (e.target.checked) next.add(id);
+              else next.delete(id);
+              commitSelection(next);
             }}
             onClick={(e) => e.stopPropagation()}
             type="checkbox"
@@ -433,8 +451,8 @@ export function ViewGrid<Row>({
         ) : null}
       </div>
 
-      {selectedRows.length > 0 ? (
-        <div className="cw-views-bulk-bar" role="toolbar">
+      {selectedRows.length > 0 && !onSelectionChange ? (
+        <div className="cw-views-bulk-bar" data-testid="views-bulk-bar" role="toolbar">
           <span>
             {t("tables.grid.selected").replace("{n}", String(selectedRows.length))}
           </span>
@@ -442,7 +460,13 @@ export function ViewGrid<Row>({
             <button
               className={action.danger ? "cw-views-btn-danger" : "cw-views-btn-ghost"}
               key={action.id}
-              onClick={() => void action.run(selectedRows, ctx)}
+              onClick={() => {
+                void Promise.resolve(action.run(selectedRows, ctx)).finally(() => {
+                  if (action.id === "archive" || action.danger) {
+                    commitSelection(new Set());
+                  }
+                });
+              }}
               type="button"
             >
               <ActionIcon name={action.icon} />
