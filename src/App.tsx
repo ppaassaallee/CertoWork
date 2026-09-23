@@ -16,6 +16,11 @@ import { GuestPortal } from "./features/collab/GuestPortal";
 import { MobileKitPreview } from "./mobile/MobileKitPreview";
 import { DesktopKitPreview } from "./desktop/ui/DesktopKitPreview";
 import { applyCertoTextSize, getStoredCertoTextSize } from "./lib/textSize";
+import {
+  CERTO_FIREBASE_PROJECT_ID,
+  firestoreUsageConsoleUrl,
+  isFirestoreQuotaMessage,
+} from "./lib/workspaceLoadError";
 
 // TODO: Replace with the Google Calendar appointment schedule URL.
 const DEMO_BOOKING_URL = "PLACEHOLDER_CALENDAR_URL";
@@ -326,15 +331,35 @@ function SignIn() {
 function WorkspaceRecovery() {
   const { reloadWorkspaces, logOut, workspaceError, workspaceLoading } = useAuth();
   const [retrying, setRetrying] = useState(false);
+  const quotaOutage = isFirestoreQuotaMessage(workspaceError || "");
 
   return (
-    <main className="do-recovery">
+    <main className="do-recovery" data-testid="workspace-recovery">
       <span className="do-logo">
         <CertoMark size={18} />
       </span>
       <h1>{workspaceLoading ? "Opening your workspace…" : "We couldn’t open your workspace."}</h1>
       <p>{workspaceError || "This should only take a few seconds. You can retry without losing any data."}</p>
-      <div>
+      {quotaOutage && !workspaceLoading ? (
+        <div className="do-recovery-admin" data-testid="workspace-recovery-quota">
+          <strong>Admin checklist (Firebase)</strong>
+          <ol>
+            <li>Open Firestore usage for project <code>{CERTO_FIREBASE_PROJECT_ID}</code>.</li>
+            <li>Confirm whether the Spark free daily quota is exhausted, or Blaze billing is disabled / over budget.</li>
+            <li>Enable or fix billing, or wait until the daily quota resets (midnight Pacific on Spark).</li>
+            <li>Come back here and press Try again — no data was deleted by this screen.</li>
+          </ol>
+          <a
+            className="do-recovery-link"
+            href={firestoreUsageConsoleUrl()}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open Firebase usage
+          </a>
+        </div>
+      ) : null}
+      <div className="do-recovery-actions">
         <button
           disabled={retrying || workspaceLoading}
           onClick={async () => {
