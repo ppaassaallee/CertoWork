@@ -154,9 +154,20 @@ test("primary sidebar keeps essentials short; management is secondary", () => {
   assert.doesNotMatch(source, /ProductSwitcher/);
   assert.doesNotMatch(source, /ChatCollabModule/);
   assert.doesNotMatch(source, /\{t\("navMore"\)\}/);
+  assert.doesNotMatch(source, /\? "Más" : "More"/);
+  assert.doesNotMatch(source, /DesktopIconRail/);
+  assert.doesNotMatch(source, /data-testid="nav-dashboard"/);
+  assert.doesNotMatch(source, /data-testid="nav-workload"/);
   assert.doesNotMatch(source, /do-odiseus-hire/);
+  assert.match(source, /t\("navManagement"\)/);
   assert.match(source, /data-testid="sidebar-search"/);
   assert.match(source, /data-testid="my-work-shell"/);
+  // Rutinas lives in the primary rail, not buried under Management.
+  const primaryChunk = source.slice(
+    source.indexOf('aria-label="Primary"'),
+    source.indexOf("do-sidebar-scroll"),
+  );
+  assert.match(primaryChunk, /data-testid="nav-rutinas"/);
   assert.match(agents, /data-testid="agents-home"/);
   assert.match(agents, /data-testid="agents-library"/);
   assert.match(agents, /do-agents-list/);
