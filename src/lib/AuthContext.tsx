@@ -34,6 +34,7 @@ import {
   pickPreferredWorkspace,
 } from './pureAiPortfolioFollowers';
 import { remapWorkspaceAccessAfterInviteAccept } from './inviteAcceptRemap';
+import { isFirestoreQuotaError, workspaceLoadErrorMessage } from './workspaceLoadError';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -122,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const wsMap = new Map<string, Workspace>();
       const memberWorkspaceIds = new Set<string>();
       let lookupSucceeded = false;
+      const lookupFailures: unknown[] = [];
       let pendingInviteDocs: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
 
       const visibleWorkspaces = () =>
@@ -214,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lookupSucceeded = true;
         ownerResult.value.forEach((d) => wsMap.set(d.id, { id: d.id, ...d.data() } as Workspace));
       } else {
+        lookupFailures.push(ownerResult.reason);
         console.error("Failed to load owned workspaces:", ownerResult.reason);
       }
 
@@ -221,7 +224,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lookupSucceeded = true;
         await ingestMembershipSnap(memberResult.value);
       } else {
+        lookupFailures.push(memberResult.reason);
         console.error("Failed to load member workspaces:", memberResult.reason);
+      }
+
+      // When both entry-point reads hit a quota outage, further invite lookups
+      // cannot recover the workspace and only add failed requests.
+      if (ownerResult.status === 'rejected' && memberResult.status === 'rejected') {
+        const quotaFailure = lookupFailures.find(isFirestoreQuotaError);
+        if (quotaFailure) throw quotaFailure;
       }
 
       const openedEarly = openWorkspaceList(visibleWorkspaces());
@@ -262,6 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }),
           );
         } catch (eEmailInvite) {
+          lookupFailures.push(eEmailInvite);
           console.error("Failed to load email-invited workspaces:", eEmailInvite instanceof Error ? eEmailInvite.message : eEmailInvite);
         }
 
@@ -282,6 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             inviteSnaps = snapInvites.docs;
             pendingInviteDocs = snapInvites.docs;
           } catch (eInviteDocs) {
+            lookupFailures.push(eInviteDocs);
             console.error("Failed to load pending invite documents:", eInviteDocs);
           }
 
@@ -359,6 +372,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }),
           );
         } catch (eInvite) {
+          lookupFailures.push(eInvite);
           console.error("Failed to load invited workspaces:", eInvite instanceof Error ? eInvite.message : eInvite);
         }
       };
@@ -381,9 +395,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (!lookupSucceeded) {
-        throw new Error('Workspace lookups did not complete');
-      }
+      const quotaFailure = lookupFailures.find(isFirestoreQuotaError);
+      if (quotaFailure) throw quotaFailure;
+      if (!lookupSucceeded) throw lookupFailures[0] || new Error('Workspace lookups did not complete');
       const openInvites = pendingInviteDocs.filter((inviteDoc) => {
         const data = inviteDoc.data() as { status?: string; inviteType?: string; workspaceId?: string };
         return inviteIsUsable(data) && String(data.workspaceId || "");
@@ -486,7 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('activeWorkspaceName', created.name);
     } catch (e) {
       console.error("Failed in loadWorkspaces master routine:", e instanceof Error ? e.message : e);
-      setWorkspaceError("Your workspace could not be opened. Check your connection and try again.");
+      setWorkspaceError(workspaceLoadErrorMessage(e));
     }
   };
 
