@@ -13828,6 +13828,27 @@ a {
   background: var(--surface-0);
   box-shadow: 0 1px 2px rgba(18, 42, 28, 0.025);
 }
+.do-command-body-overview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.do-command-body-overview > .do-command-portfolio {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.do-command-body-overview .cw-views-surface {
+  flex: 1;
+  min-height: 0;
+}
+.do-command-center-embedded .do-items-bulk.do-command-bulk {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--surface-0);
+}
 .do-command-toolbar {
   display: flex;
   align-items: center;
