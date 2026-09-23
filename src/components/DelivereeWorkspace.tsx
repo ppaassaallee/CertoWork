@@ -48,7 +48,6 @@ import {
   WandSparkles,
   X,
   LayoutGrid,
-  Gauge,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -164,7 +163,6 @@ import { HomeCockpit } from "../features/home";
 import { BillingScreen } from "../features/billing";
 import {
   useBillingEnabled,
-  useDailyBriefEnabled,
   useTablesEnabled,
   enableTables,
   enableBilling,
@@ -172,7 +170,6 @@ import {
 import { FeatureLabsPanel } from "../features/flags/FeatureLabsPanel";
 import { RoutineBuilder } from "../features/routines/RoutineBuilder";
 import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
-import { DesktopIconRail } from "../features/shell/DesktopRail";
 import { ApprovalsPage } from "../features/approvals/ApprovalsPage";
 import { RitualRunner, RevisionesView } from "../features/routines";
 import { DayHeader } from "../features/dayplan/DayHeader";
@@ -478,7 +475,6 @@ export function DelivereeWorkspace() {
   } = useAuth();
   const dailyPlanEnabled = useDailyPlanEnabled();
   const billingEnabled = useBillingEnabled();
-  const dailyBriefEnabled = useDailyBriefEnabled();
   const tablesEnabled = useTablesEnabled();
   const inboxFeed = useInboxRows({
     userId: user?.uid,
@@ -6952,47 +6948,6 @@ export function DelivereeWorkspace() {
         className={`do-sidebar ${sidebarOpen ? "is-open" : ""}`}
         data-testid="primary-sidebar"
       >
-        {(billingEnabled || dailyBriefEnabled) && !isPhone ? (
-          <DesktopIconRail
-            items={[
-              {
-                id: "home",
-                label: "Home",
-                active: lens.kind === "home" || centerView === "conversation",
-                icon: <Home size={18} />,
-                onClick: () => navigate("/home"),
-              },
-              {
-                id: "my-work",
-                label: "My Work",
-                active: lens.kind === "my-work",
-                icon: <ListTodo size={18} />,
-                onClick: () => navigate("/my-work"),
-              },
-              {
-                id: "projects",
-                label: "Projects",
-                active: lens.kind === "work" || lens.kind === "project",
-                icon: <Folder size={18} />,
-                onClick: () => navigate("/projects"),
-              },
-              {
-                id: "billing",
-                label: "Billing",
-                active: lens.kind === "invoices",
-                icon: <Receipt size={18} />,
-                onClick: () => navigate(billingEnabled ? "/billing" : "/invoices"),
-              },
-              {
-                id: "routines",
-                label: "Routines",
-                active: lens.kind === "routines",
-                icon: <Sparkles size={18} />,
-                onClick: () => navigate("/rutinas"),
-              },
-            ]}
-          />
-        ) : null}
         <div className="do-panel-col">
         <div className="do-brand-row">
           <button
@@ -7114,6 +7069,18 @@ export function DelivereeWorkspace() {
               </em>
             )}
           </button>
+          <button
+            className={`do-nav-item is-rutinas ${lens.kind === "routines" || lens.kind === "agents" ? "is-active" : ""}`}
+            data-testid="nav-rutinas"
+            onClick={() => {
+              navigate("/rutinas");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Sparkles size="sm" />
+            <span>{t("navRutinas")}</span>
+          </button>
         </nav>
 
         <div className="do-sidebar-scroll">
@@ -7165,7 +7132,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced">
+                  <span className="do-project-actions do-mobile-advanced is-quiet">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -7234,7 +7201,7 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced">
+                  <span className="do-project-actions do-mobile-advanced is-quiet">
                     <button
                       aria-label={`Archive ${entityTitle(project)}`}
                       className="do-project-icon"
@@ -7377,37 +7344,11 @@ export function DelivereeWorkspace() {
                   className={sidebarSections.management ? "" : "is-collapsed"}
                   size={13}
                 />
-                <span>{getLocale() === "es" ? "Más" : "More"}</span>
+                <span>{t("navManagement")}</span>
               </button>
             </div>
             {sidebarSections.management && (
               <div className="do-section-body">
-                <button className={`do-nav-item ${lens.kind === "routines" ? "is-active" : ""}`} data-testid="nav-rutinas" onClick={() => { navigate("/rutinas"); setSidebarOpen(false); }} type="button"><Sparkles size="sm" /><span>{t("navRutinas")}</span></button>
-                <button className={`do-nav-item ${lens.kind === "agents" ? "is-active" : ""}`} onClick={() => { navigate("/agents"); setSidebarOpen(false); }} type="button"><WandSparkles size="sm" /><span>{t("navAgents")}</span></button>
-                <button
-                  className={`do-nav-item is-dashboard ${lens.kind === "dashboard" ? "is-active" : ""}`}
-                  data-testid="nav-dashboard"
-                  onClick={() => {
-                    navigate("/dashboard");
-                    setSidebarOpen(false);
-                  }}
-                  type="button"
-                >
-                  <Gauge size="sm" />
-                  <span>{t("nav.direction")}</span>
-                </button>
-                <button
-                  className={`do-nav-item is-workload ${lens.kind === "workload" ? "is-active" : ""}`}
-                  data-testid="nav-workload"
-                  onClick={() => {
-                    navigate("/workload");
-                    setSidebarOpen(false);
-                  }}
-                  type="button"
-                >
-                  <Users size="sm" />
-                  <span>Workload</span>
-                </button>
                 <button
                   className={`do-nav-item is-requests ${lens.kind === "requests" ? "is-active" : ""}`}
                   data-testid="nav-requests"

@@ -6347,63 +6347,76 @@ export function ProjectCommandCenter({
           workspaceMembers={workspaceMembers}
         />
       )}
-      {(operationsCount > 0 || allAttention.length > 0 || totals.plannedHours > 0 || totals.actualHours > 0 || totals.recurring > 0 || totals.initial > 0) && <div className="do-command-metrics is-text-row" data-testid="projects-kpi-row">
-        {operationsCount > 0 &&
-        <button
-          onClick={() => openListWith({ stageFilter: "operations" })}
-          type="button"
-        >
-          <strong>{operationsCount}</strong>
-          <span>in operations</span>
-        </button>}
-        {allAttention.length > 0 &&
-        <button
-          className={allAttention.length ? "is-risk" : ""}
-          onClick={() => openListWith({ healthFilter: "needs_attention" })}
-          type="button"
-        >
-          <strong>{allAttention.length}</strong>
-          <span>need attention</span>
-        </button>}
-        {(totals.plannedHours > 0 || totals.actualHours > 0) && (
-          <button
-            className={hoursAtCapacity ? "is-risk" : ""}
-            onClick={() =>
-              openListWith({
-                primarySort: "hours_variance",
-                secondarySort: "project",
-                view: "overview",
-              })
-            }
-            type="button"
-          >
-            <strong>
-              {Math.round(
-                totals.plannedHours
-                  ? (totals.actualHours / totals.plannedHours) * 100
-                  : 0,
-              )}
-              % hours used
-            </strong>
-            <span>
-              {Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h
-              {hoursAtCapacity ? " · at capacity" : ""}
-            </span>
-          </button>
+      {(operationsCount > 0 || allAttention.length > 0) && view !== "economics" ? (
+        <div className="do-command-metrics is-text-row is-compact" data-testid="projects-kpi-row">
+          {operationsCount > 0 && (
+            <button
+              onClick={() => openListWith({ stageFilter: "operations" })}
+              type="button"
+            >
+              <strong>{operationsCount}</strong>
+              <span>in operations</span>
+            </button>
+          )}
+          {allAttention.length > 0 && (
+            <button
+              className="is-risk"
+              onClick={() => openListWith({ healthFilter: "needs_attention" })}
+              type="button"
+            >
+              <strong>{allAttention.length}</strong>
+              <span>need attention</span>
+            </button>
+          )}
+        </div>
+      ) : null}
+      {view === "economics" &&
+        canViewFinance &&
+        (totals.plannedHours > 0 ||
+          totals.actualHours > 0 ||
+          totals.recurring > 0 ||
+          totals.initial > 0) && (
+          <div className="do-command-metrics is-text-row" data-testid="projects-kpi-finance">
+            {(totals.plannedHours > 0 || totals.actualHours > 0) && (
+              <button
+                className={hoursAtCapacity ? "is-risk" : ""}
+                onClick={() =>
+                  openListWith({
+                    primarySort: "hours_variance",
+                    secondarySort: "project",
+                    view: "overview",
+                  })
+                }
+                type="button"
+              >
+                <strong>
+                  {Math.round(
+                    totals.plannedHours
+                      ? (totals.actualHours / totals.plannedHours) * 100
+                      : 0,
+                  )}
+                  % hours used
+                </strong>
+                <span>
+                  {Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h
+                  {hoursAtCapacity ? " · at capacity" : ""}
+                </span>
+              </button>
+            )}
+            {totals.recurring > 0 && (
+              <button onClick={() => selectPortfolioView("economics")} type="button">
+                <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
+                <span>monthly recurring</span>
+              </button>
+            )}
+            {totals.initial > 0 && (
+              <button onClick={() => selectPortfolioView("economics")} type="button">
+                <strong>${Math.round(totals.initial).toLocaleString()}</strong>
+                <span>initial investment</span>
+              </button>
+            )}
+          </div>
         )}
-        {totals.recurring > 0 && canViewFinance && (
-          <button onClick={() => selectPortfolioView("economics")} type="button">
-            <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
-            <span>monthly recurring</span>
-          </button>
-        )}
-        {totals.initial > 0 && canViewFinance && (
-          <button onClick={() => selectPortfolioView("economics")} type="button">
-            <strong>${Math.round(totals.initial).toLocaleString()}</strong>
-            <span>initial investment</span>
-          </button>
-        )}
-      </div>}
       <div className={`do-command-body do-command-body-${view}`}>
         {view === "dashboard" && (
           <section className="do-portfolio-dashboard">
