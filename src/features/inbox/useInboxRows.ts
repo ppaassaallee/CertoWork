@@ -99,7 +99,6 @@ export function useInboxRows({
     );
     return onSnapshot(
       q,
-      { includeMetadataChanges: true },
       (snap) => {
         if (!hasConfirmedSnapshotData(snap)) return;
         const rows = snap.docs.map(

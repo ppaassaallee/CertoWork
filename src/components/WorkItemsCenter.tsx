@@ -118,6 +118,7 @@ import {
   type KanbanSwimlaneBy,
 } from "../lib/kanbanFeatures";
 import { heartbeatKanbanPresence, listenKanbanPresence, type KanbanPresence } from "../lib/kanbanPresence";
+import { KANBAN_PRESENCE_HEARTBEAT_MS } from "../lib/firestoreListenDiet";
 import { getNextOccurrence } from "../lib/recurrence-utils";
 import type { RecurrenceType } from "../types";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
@@ -1385,7 +1386,7 @@ export function WorkItemsCenter({
       heartbeatKanbanPresence({ workspaceId, userId: viewerId, surface, displayName }).catch(() => undefined);
     };
     beat();
-    const timer = window.setInterval(beat, 20_000);
+    const timer = window.setInterval(beat, KANBAN_PRESENCE_HEARTBEAT_MS);
     const stop = listenKanbanPresence(workspaceId, surface, setBoardViewers);
     return () => {
       window.clearInterval(timer);

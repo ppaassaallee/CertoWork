@@ -24,7 +24,6 @@ export function TablesSidebarSection(props: {
     );
     return onSnapshot(
       q,
-      { includeMetadataChanges: true },
       (snap) => {
         if (!hasConfirmedSnapshotData(snap)) return;
         setTables(

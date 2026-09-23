@@ -138,7 +138,6 @@ export function subscribeWorkspaceItemMessages(
   );
   return onSnapshot(
     q,
-    { includeMetadataChanges: true },
     (snap) => {
       if (!hasConfirmedSnapshotData(snap)) return;
       const rows: LegacyItemMessage[] = [];

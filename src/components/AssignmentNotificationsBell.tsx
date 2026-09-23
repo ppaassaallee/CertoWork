@@ -54,7 +54,6 @@ export function AssignmentNotificationsBell({
     );
     return onSnapshot(
       q,
-      { includeMetadataChanges: true },
       (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setItems(

@@ -149,7 +149,6 @@ export function TablePage({
     );
     return onSnapshot(
       q,
-      { includeMetadataChanges: true },
       (snap) => {
         if (!hasConfirmedSnapshotData(snap)) return;
         setLiveRecords(

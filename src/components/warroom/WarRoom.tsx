@@ -440,11 +440,10 @@ export function WarRoom() {
     seedWorkspace();
   }, [user, workspace?.id]);
 
-  // 1. Fetch Real-time data from Firestore
+  // 1. Live: chats + my rooms. Secondary catalogs are one-shot reads (cost diet).
   useEffect(() => {
     if (!user || !workspace) return;
 
-    // Load available Projects from the workspace
     const projectsQ = query(
       collection(db, 'projects'),
       where('userId', '==', user.uid),
@@ -455,7 +454,6 @@ export function WarRoom() {
       setProjectsList(items);
     });
 
-    // Load Chats
     const chatsQ = query(
       collection(db, WR_CHATS),
       where('workspaceId', '==', workspace.id),
@@ -468,9 +466,7 @@ export function WarRoom() {
           ["group", "dm", "project_room", "agent_room"].includes(String(c.type)),
         );
       setChats(list);
-      // Auto-select first chat if none active
       if (list.length > 0 && !activeChat) {
-        // Find if we had a saved activeChatId
         const savedChatId = localStorage.getItem(`active_chat_${workspace.id}`);
         const saved = list.find(c => c.id === savedChatId);
         setActiveChat(saved || list[0]);
@@ -479,163 +475,6 @@ export function WarRoom() {
       handleFirestoreError(err, OperationType.LIST, 'conversations');
     });
 
-    // Load custom workspace Agents
-    const agentsQ = query(
-      collection(db, 'boldi_agents'),
-      where('workspaceId', '==', workspace.id)
-    );
-    const unsubAgents = onSnapshot(agentsQ, (snap) => {
-      let list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as BoldiAgent));
-      setAgents(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'boldi_agents');
-    });
-
-    // Load all files
-    const filesQ = query(
-      collection(db, 'war_room_files'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubFiles = onSnapshot(filesQ, (snap) => {
-      setFiles(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomFile)));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_files');
-    });
-
-    // Load workspace deliverables (widgets)
-    const widgetsQ = query(
-      collection(db, 'war_room_widgets'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('updatedAt', 'desc')
-    );
-    const unsubWidgets = onSnapshot(widgetsQ, (snap) => {
-      setWidgets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomWidget)));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_widgets');
-    });
-
-    // Load action plans
-    const actionsQ = query(
-      collection(db, 'war_room_action_plans'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubActions = onSnapshot(actionsQ, (snap) => {
-      setActionPlans(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomActionPlan)));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'war_room_action_plans');
-    });
-
-    // Load Agent runs (Audit trail)
-    const runsQ = query(
-      collection(db, 'agent_runs'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
-    const unsubRuns = onSnapshot(runsQ, (snap) => {
-      setAgentRuns(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentRun)));
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'agent_runs');
-    });
-
-    // Load Workspace Resources
-    const resourcesQ = query(
-      collection(db, 'agent_resources'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubResources = onSnapshot(resourcesQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentResource));
-      
-      // De-duplicate list by resourceType and title to prevent duplicate display
-      const uniqueList: AgentResource[] = [];
-      const titlesSeen = new Set<string>();
-      for (const item of list) {
-        if (!item.title) continue;
-        const key = `${item.resourceType}_${item.title.trim().toLowerCase()}`;
-        if (!titlesSeen.has(key)) {
-          titlesSeen.add(key);
-          uniqueList.push(item);
-        }
-      }
-      
-      setResources(uniqueList);
-      // Auto-select first resource if none is active
-      if (uniqueList.length > 0 && !activeResource) {
-        setActiveResource(uniqueList[0]);
-      }
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'agent_resources');
-    });
-
-    // Load Workspace Contacts
-    const contactsQ = query(
-      collection(db, 'contacts'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('displayName', 'asc')
-    );
-    const unsubContacts = onSnapshot(contactsQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact));
-      setContacts(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'contacts');
-    });
-
-    // Load Contact Requests
-    const requestsQ = query(
-      collection(db, 'contact_requests'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubRequests = onSnapshot(requestsQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ContactRequest));
-      setContactRequests(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'contact_requests');
-    });
-
-    // Load Collaborative Groups
-    const groupsQ = query(
-      collection(db, 'agent_groups'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubGroups = onSnapshot(groupsQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentGroup));
-      setAgentGroups(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'agent_groups');
-    });
-
-    // Load Saved Moments
-    const momentsQ = query(
-      collection(db, 'agent_moments'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubMoments = onSnapshot(momentsQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentMoment));
-      setAgentMoments(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'agent_moments');
-    });
-
-    // Load Agent Invites
-    const invitesQ = query(
-      collection(db, 'agent_invites'),
-      where('workspaceId', '==', workspace.id),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubInvites = onSnapshot(invitesQ, (snap) => {
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentInvite));
-      setAgentInvites(list);
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'agent_invites');
-    });
-
-    // Load active user's participant records to filter private rooms and direct messages
     const myParticipantsQ = query(
       collection(db, WR_PARTICIPANTS),
       where('workspaceId', '==', workspace.id),
@@ -648,19 +487,69 @@ export function WarRoom() {
       handleFirestoreError(err, OperationType.LIST, 'conversation_participants');
     });
 
+    const loadOnce = async () => {
+      try {
+        const [
+          agentsSnap,
+          filesSnap,
+          widgetsSnap,
+          actionsSnap,
+          runsSnap,
+          resourcesSnap,
+          contactsSnap,
+          requestsSnap,
+          groupsSnap,
+          momentsSnap,
+          invitesSnap,
+        ] = await Promise.all([
+          getDocs(query(collection(db, 'boldi_agents'), where('workspaceId', '==', workspace.id))),
+          getDocs(query(collection(db, 'war_room_files'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'war_room_widgets'), where('workspaceId', '==', workspace.id), orderBy('updatedAt', 'desc'))),
+          getDocs(query(collection(db, 'war_room_action_plans'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'agent_runs'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'), limit(100))),
+          getDocs(query(collection(db, 'agent_resources'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'contacts'), where('workspaceId', '==', workspace.id), orderBy('displayName', 'asc'))),
+          getDocs(query(collection(db, 'contact_requests'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'agent_groups'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'agent_moments'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+          getDocs(query(collection(db, 'agent_invites'), where('workspaceId', '==', workspace.id), orderBy('createdAt', 'desc'))),
+        ]);
+
+        setAgents(agentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as BoldiAgent)));
+        setFiles(filesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomFile)));
+        setWidgets(widgetsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomWidget)));
+        setActionPlans(actionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarRoomActionPlan)));
+        setAgentRuns(runsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentRun)));
+
+        const resourcesList = resourcesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentResource));
+        const uniqueList: AgentResource[] = [];
+        const titlesSeen = new Set<string>();
+        for (const item of resourcesList) {
+          if (!item.title) continue;
+          const key = `${item.resourceType}_${item.title.trim().toLowerCase()}`;
+          if (!titlesSeen.has(key)) {
+            titlesSeen.add(key);
+            uniqueList.push(item);
+          }
+        }
+        setResources(uniqueList);
+        if (uniqueList.length > 0 && !activeResource) {
+          setActiveResource(uniqueList[0]);
+        }
+
+        setContacts(contactsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Contact)));
+        setContactRequests(requestsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as ContactRequest)));
+        setAgentGroups(groupsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentGroup)));
+        setAgentMoments(momentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentMoment)));
+        setAgentInvites(invitesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AgentInvite)));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, 'war_room_catalog');
+      }
+    };
+    void loadOnce();
+
     return () => {
       unsubChats();
-      unsubAgents();
-      unsubFiles();
-      unsubWidgets();
-      unsubActions();
-      unsubRuns();
-      unsubResources();
-      unsubContacts();
-      unsubRequests();
-      unsubGroups();
-      unsubMoments();
-      unsubInvites();
       unsubMyParts();
     };
   }, [user, workspace]);
