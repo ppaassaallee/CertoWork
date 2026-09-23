@@ -376,7 +376,42 @@ export async function fetchGoogleProfile(accessToken) {
   const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: { authorization: `Bearer ${accessToken}` },
   });
-  return response.json().catch(() => ({}));
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: payload.error?.message || payload.error || `userinfo_${response.status}`,
+    };
+  }
+  return {
+    ok: true,
+    id: payload.id || "",
+    email: payload.email || "",
+    name: payload.name || payload.email || "",
+  };
+}
+
+/** Fallback identity when userinfo scope is missing — use primary calendar. */
+export async function resolveGoogleIdentity(accessToken) {
+  const profile = await fetchGoogleProfile(accessToken);
+  if (profile.ok && (profile.email || profile.id)) {
+    return {
+      id: String(profile.id || profile.email || ""),
+      email: String(profile.email || ""),
+      name: String(profile.name || profile.email || "Google Calendar"),
+    };
+  }
+  const calendars = await listGoogleCalendars(accessToken);
+  const primary = calendars.find((row) => row.primary) || calendars[0] || null;
+  const email = String(primary?.id || "").includes("@")
+    ? String(primary.id)
+    : "";
+  return {
+    id: email || String(primary?.id || `cal_${Date.now()}`),
+    email,
+    name: String(primary?.summary || email || "Google Calendar"),
+  };
 }
 
 export async function listGoogleCalendars(accessToken) {
@@ -385,6 +420,11 @@ export async function listGoogleCalendars(accessToken) {
     { headers: { authorization: `Bearer ${accessToken}` } },
   );
   const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      payload.error?.message || payload.error || `calendarList_failed_${response.status}`,
+    );
+  }
   return Array.isArray(payload.items) ? payload.items : [];
 }
 

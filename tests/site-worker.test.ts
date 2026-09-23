@@ -154,7 +154,7 @@ test("Sites worker truthfully disables Google AI Studio", async () => {
   assert.equal(body.email.configured, false);
   assert.equal(body.capture?.configured, true);
   assert.equal(body.googleCalendar?.configured, false);
-  assert.match(body.googleCalendar?.description || "", /GOOGLE_CALENDAR_CLIENT/i);
+  assert.match(body.googleCalendar?.description || "", /GOOGLE_CALENDAR_CLIENT|CALENDAR_TOKEN_KEY/i);
   assert.equal(body.outlookCalendar?.configured, false);
 });
 

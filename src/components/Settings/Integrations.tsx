@@ -43,6 +43,22 @@ function calendarConnectErrorMessage(payload: { error?: string; code?: string },
   return error || t("calendar.connectError");
 }
 
+function calendarCallbackErrorMessage(reason: string): string {
+  const code = String(reason || "").toLowerCase();
+  if (!code || code === "unknown") return t("calendar.callbackError");
+  if (code === "access_denied") return t("calendar.callbackAccessDenied");
+  if (code === "invalid_state" || code === "missing_code") {
+    return t("calendar.callbackState");
+  }
+  if (/redirect_uri/i.test(reason) || code === "redirect_uri_mismatch") {
+    return t("calendar.callbackRedirect");
+  }
+  if (/oauth exchange|invalid_grant|code/i.test(reason)) {
+    return t("calendar.callbackExchange");
+  }
+  return `${t("calendar.callbackError")} (${reason.slice(0, 80)})`;
+}
+
 export function Integrations() {
   const navigate = useNavigate();
   const { user, workspace } = useAuth();
@@ -64,6 +80,7 @@ export function Integrations() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const calendarParam = params.get("calendar");
+    const reason = String(params.get("reason") || "").trim();
     if (calendarParam === "connected") {
       setConnectNotice({ kind: "ok", text: t("calendar.connected") });
       const pending = consumeCalendarWizardPending();
@@ -72,16 +89,20 @@ export function Integrations() {
         setWizardOpen(true);
       }
     } else if (calendarParam === "error") {
-      setConnectNotice({ kind: "error", text: t("calendar.callbackError") });
+      setConnectNotice({
+        kind: "error",
+        text: calendarCallbackErrorMessage(reason),
+      });
       const pending = consumeCalendarWizardPending();
       if (pending) {
         setWizardStep("authorize");
         setWizardOpen(true);
       }
     }
-    if (calendarParam || params.get("wizard")) {
+    if (calendarParam || params.get("wizard") || params.get("reason")) {
       params.delete("calendar");
       params.delete("wizard");
+      params.delete("reason");
       const next = params.toString();
       window.history.replaceState({}, "", `${window.location.pathname}${next ? `?${next}` : ""}`);
     }
