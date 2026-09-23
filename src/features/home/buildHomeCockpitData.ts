@@ -416,12 +416,14 @@ function buildEditorial(input: {
 
   if (hour >= 18) {
     const parts: EditorialPart[] = [];
-    parts.push({
-      text:
-        locale === "es"
-          ? `Hoy cerraste ${input.doneToday}. `
-          : `You closed ${input.doneToday} today. `,
-    });
+    if (input.doneToday > 0) {
+      parts.push({
+        text:
+          locale === "es"
+            ? `Hoy cerraste ${input.doneToday}. `
+            : `You closed ${input.doneToday} today. `,
+      });
+    }
     if (input.overdueCount > 0) {
       parts.push({
         text: locale === "es" ? "Siguen " : "Still ",
@@ -446,7 +448,7 @@ function buildEditorial(input: {
       });
     } else {
       parts.push({
-        text: locale === "es" ? "Día limpio." : "Clean day.",
+        text: locale === "es" ? "Nada pendiente esta noche." : "Nothing due tonight.",
       });
     }
     return parts;

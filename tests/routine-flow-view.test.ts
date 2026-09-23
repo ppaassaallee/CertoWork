@@ -90,7 +90,7 @@ test("Rutinas no longer opens on the aggregate map by default", () => {
     ),
     /initialTab="map"/,
   );
-  assert.match(home, /Mis rutinas/);
+  assert.match(home, /t\("routinesMy"\)/);
   assert.match(home, /FlowMini/);
   assert.match(home, /RoutineDetail/);
   assert.match(workspace, /Ver flujo de/);

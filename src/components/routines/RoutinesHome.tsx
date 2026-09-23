@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Pause, Play, Sparkles } from "../ui/Icon";
+import { Loader2, Sparkles } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
+import { getLocale, t } from "../../lib/i18n";
 import {
   activateGuidedRecipe,
   activateRoutine,
@@ -10,6 +11,7 @@ import {
   getManifest,
   listRoutineRuns,
   listRoutinesForWorkspace,
+  localizedRoutineRecipe,
   pauseRoutine,
   relativeNextRunLabel,
   recipesForDomain,
@@ -22,7 +24,7 @@ import { RoutineDetail } from "../../features/routines/RoutineDetail";
 
 function scopeLabel(routine: RoutineSpec) {
   const title = routine.scope?.entityTitle || routine.scope?.entityType || "—";
-  if (routine.scope?.entityType === "portfolio") return "Mi trabajo";
+  if (routine.scope?.entityType === "portfolio") return getLocale() === "es" ? "Mi trabajo" : "My work";
   if (routine.scope?.entityType === "project" && routine.scope.entityId) {
     return title;
   }
@@ -56,7 +58,8 @@ export function RoutinesHome({
     () => routines.find((routine) => routine.id === selectedRoutineId) || null,
     [routines, selectedRoutineId],
   );
-  const gallery = useMemo(() => recipesForDomain(recipeDomain), [recipeDomain]);
+  const locale = getLocale();
+  const gallery = useMemo(() => recipesForDomain(recipeDomain).map((recipe) => localizedRoutineRecipe(recipe, locale)), [recipeDomain, locale]);
   const recipePreview = useMemo(() => {
     if (!recipePreviewId) return null;
     return gallery.find((recipe) => recipe.id === recipePreviewId) || null;
@@ -70,7 +73,7 @@ export function RoutinesHome({
       const rows = await listRoutinesForWorkspace(workspace.id, user?.uid);
       setRoutines(rows);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No pude cargar las rutinas.");
+      setError(reason instanceof Error ? reason.message : locale === "es" ? "No pude cargar las rutinas." : "Could not load routines.");
     } finally {
       setLoading(false);
     }
@@ -115,7 +118,7 @@ export function RoutinesHome({
       else await activateRoutine(routine);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No pude actualizar la rutina.");
+      setError(reason instanceof Error ? reason.message : locale === "es" ? "No pude actualizar la rutina." : "Could not update the routine.");
     } finally {
       setBusyId(null);
     }
@@ -135,7 +138,7 @@ export function RoutinesHome({
       await reload();
       if (id) navigate(`/rutinas/${id}`);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "No pude activar la rutina.");
+      setError(reason instanceof Error ? reason.message : locale === "es" ? "No pude activar la rutina." : "Could not activate the routine.");
     } finally {
       setBusyId(null);
     }
@@ -155,39 +158,40 @@ export function RoutinesHome({
     <div className="do-routines-home" data-testid="routines-home">
       <header className="do-routines-home-head">
         <div>
-          <span className="do-routine-kicker">
-            <Sparkles size={13} /> Rutinas
-          </span>
-          <h1>Rutinas</h1>
-          <p>Cada rutina es una frase dibujada. Abrí el Flujo para ver cómo funciona.</p>
+          <h1>{t("navRutinas")}</h1>
+          <p>{t("routinesSubtitle")}</p>
         </div>
-        <div className="do-routines-tabs" role="tablist">
+        <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setTab("recipes")} type="button">+ {t("routinesNew")}</button>
+      </header>
+      <div className="do-routines-tabs" role="tablist">
           <button
             className={tab === "list" ? "is-active" : ""}
             onClick={() => setTab("list")}
             role="tab"
+            aria-selected={tab === "list"}
             type="button"
           >
-            Mis rutinas
+            {t("routinesMy")}
           </button>
           <button
             className={tab === "recipes" ? "is-active" : ""}
             onClick={() => setTab("recipes")}
             role="tab"
+            aria-selected={tab === "recipes"}
             type="button"
           >
-            Recetas
+            {t("routinesRecipes")}
           </button>
           <button
             className={tab === "runs" ? "is-active" : ""}
             onClick={() => setTab("runs")}
             role="tab"
+            aria-selected={tab === "runs"}
             type="button"
           >
-            Corridas
+            {t("routinesRuns")}
           </button>
-        </div>
-      </header>
+      </div>
 
       {error ? <p className="do-routine-error">{error}</p> : null}
 
@@ -207,7 +211,7 @@ export function RoutinesHome({
                 }}
                 type="button"
               >
-                ← Recetas
+                ← {t("routinesRecipes")}
               </button>
               <h2 style={{ fontSize: 16, fontWeight: 500 }}>{recipePreview.title}</h2>
               <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>
@@ -250,7 +254,7 @@ export function RoutinesHome({
                   style={{ marginTop: 12 }}
                   type="button"
                 >
-                  Usar en Mi trabajo
+                  {t("routinesUseRecipe")}
                 </button>
               ) : (
                 <button
@@ -259,19 +263,19 @@ export function RoutinesHome({
                   style={{ marginTop: 12 }}
                   type="button"
                 >
-                  Usar en…
+                  {t("routinesUseRecipe")}
                 </button>
               )}
             </div>
           ) : (
             <>
-              <div className="do-routine-domain-filters" role="tablist" aria-label="Dominio">
+              <div className="do-routine-domain-filters" aria-label={t("routinesType")}>
                 {(
                   [
-                    ["all", "Todas"],
-                    ["personal", "Personal"],
-                    ["project", "Proyecto"],
-                    ["portfolio", "Portafolio"],
+                    ["all", t("routinesAll")],
+                    ["personal", t("routinesPersonal")],
+                    ["project", t("routinesProject")],
+                    ["portfolio", t("routinesPortfolio")],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -321,7 +325,7 @@ export function RoutinesHome({
                         onClick={() => setRecipePreviewId(recipe.id)}
                         type="button"
                       >
-                        Ver flujo
+                        {t("routinesViewFlow")}
                       </button>
                     </article>
                   );
@@ -333,7 +337,7 @@ export function RoutinesHome({
       ) : tab === "runs" ? (
         <div data-testid="routines-runs-tab">
           {allRuns.length === 0 ? (
-            <p className="do-routine-muted">Sin corridas todavía.</p>
+            <p className="do-routine-muted">{t("routinesNoRuns")}</p>
           ) : (
             <ul className="do-routines-run-list">
               {allRuns.map(({ routine, run }) => (
@@ -366,25 +370,24 @@ export function RoutinesHome({
           <div className="do-routines-table-wrap">
             {loading ? (
               <p className="do-routine-muted">
-                <Loader2 size={14} className="do-spin" /> Cargando…
+                <Loader2 size={14} className="do-spin" /> {t("routinesLoading")}
               </p>
             ) : routines.length === 0 ? (
               <div className="do-routines-empty">
                 <Sparkles size={22} />
-                <strong>Todavía no hay rutinas</strong>
-                <span>Partí de una receta o abrí un proyecto y tocá ✦ Rutina.</span>
+                <strong>{t("routinesEmpty")}</strong>
+                <button className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => setTab("recipes")} type="button">{t("routinesRecipes")}</button>
               </div>
             ) : (
               <table className="do-routines-table">
                 <thead>
                   <tr>
-                    <th>Nombre</th>
-                    <th>Clase</th>
-                    <th>Dónde</th>
-                    <th>Cuándo</th>
-                    <th>Flujo</th>
-                    <th>Estado</th>
-                    <th />
+                    <th>{t("routinesName")}</th>
+                    <th>{t("routinesType")}</th>
+                    <th>{t("routinesWhere")}</th>
+                    <th>{t("routinesWhen")}</th>
+                    <th>{t("routinesFlow")}</th>
+                    <th>{t("routinesStatus")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -404,7 +407,7 @@ export function RoutinesHome({
                             {routine.title}
                           </button>
                         </td>
-                        <td>{routine.class === "guided" ? "Guiada" : "Automática"}</td>
+                        <td>{routine.class === "guided" ? t("routinesGuided") : t("routinesAutomatic")}</td>
                         <td>{scopeLabel(routine)}</td>
                         <td>
                           {whenLabel(routine)}
@@ -416,13 +419,10 @@ export function RoutinesHome({
                           <FlowMini model={mini} />
                         </td>
                         <td>
-                          <span className={`do-routine-status is-${tone}`}>
-                            {routine.status}
-                          </span>
-                        </td>
-                        <td>
                           <button
-                            aria-label={routine.status === "active" ? "Pausar" : "Activar"}
+                            aria-label={routine.status === "active" ? t("routinesPause") : t("routinesActivate")}
+                            aria-pressed={routine.status === "active"}
+                            className={`do-routine-toggle is-${tone}`}
                             disabled={busyId === routine.id}
                             onClick={(event) => {
                               event.stopPropagation();
@@ -430,11 +430,7 @@ export function RoutinesHome({
                             }}
                             type="button"
                           >
-                            {routine.status === "active" ? (
-                              <Pause size={14} />
-                            ) : (
-                              <Play size={14} />
-                            )}
+                            <span />
                           </button>
                         </td>
                       </tr>

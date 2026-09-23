@@ -18,7 +18,6 @@ import {
   type HomeItemRow,
   type HomeRoutineHint,
 } from "./buildHomeCockpitData";
-import { MiSemanaCard } from "../routines/MiSemanaCard";
 import { useCalendarEvents } from "../calendar/useCalendarEvents";
 import { eventDayKeys } from "../../lib/calendar/dates";
 import "../calendar/calendarOverlay.css";
@@ -66,6 +65,8 @@ export type HomeCockpitProps = {
   onOpenApprovals: () => void;
   onStartRitual?: (session: any) => void;
   onReviewFriday?: () => void;
+  onOpenToday?: () => void;
+  onOpenMyWork?: (filter: "today" | "overdue" | "week") => void;
   userId?: string;
   workspaceId?: string;
   dayPlanItems?: Array<{ id: string; status: "open" | "done" | "archived" }>;
@@ -125,31 +126,6 @@ function ProgressRing({
   );
 }
 
-function useCountUp(value: number, duration = 400) {
-  const [shown, setShown] = useState(0);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setShown(value);
-      return;
-    }
-    let frame = 0;
-    const start = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / duration);
-      setShown(Math.round(value * p));
-      if (p < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [value, duration]);
-  return shown;
-}
-
-function QuietStatValue({ value, tone }: { value: number; tone: "plain" | "danger" }) {
-  const shown = useCountUp(value);
-  return <b className={tone === "danger" ? "is-danger" : undefined}>{shown}</b>;
-}
-
 function EditorialLine({
   parts,
   onPart,
@@ -204,6 +180,8 @@ export function HomeCockpit({
   onOpenApprovals,
   onStartRitual,
   onReviewFriday,
+  onOpenToday,
+  onOpenMyWork,
   userId,
   workspaceId,
   dayPlanItems = [],
@@ -444,7 +422,7 @@ export function HomeCockpit({
         <p className="cw-home-date">{model.longDate}</p>
         <div className="cw-home-greeting-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>{model.greeting}</h1>
-          <span
+          {(day.plan?.plannedItemIds.length || day.plan?.keyItemId) ? <span
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -461,7 +439,7 @@ export function HomeCockpit({
               value={scoreValue}
             />
             {scoreValue}%
-          </span>
+          </span> : null}
         </div>
       </header>
 
@@ -508,51 +486,8 @@ export function HomeCockpit({
         ) : null}
       </div>
 
-      <div
-        className="cw-home-numbers cw-home-stagger"
-        data-testid="home-quiet-numbers"
-        style={{ ["--i" as string]: 2 }}
-      >
-        {model.quietStats.map((stat) => (
-          <button
-            className="cw-home-num"
-            key={stat.id}
-            onClick={() => {
-              if (stat.action === "overdue") setItemTab("overdue");
-              else if (stat.action === "today") setItemTab("today");
-              else if (stat.action === "week") setItemTab("week");
-              else if (stat.action === "projects") setFocusSection("projects");
-              else if (stat.action === "approvals") onOpenApprovals();
-            }}
-            type="button"
-          >
-            <QuietStatValue tone={stat.tone} value={stat.value} />
-            <span>{stat.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {showActions &&
-        (model.actions.length === 0 ? (
-          <div
-            className="cw-home-action-collapsed cw-home-stagger"
-            data-testid="home-action-queue"
-            style={{ ["--i" as string]: 3 }}
-          >
-            <span className="cw-home-action-ok" aria-hidden>
-              ✓
-            </span>
-            <span>
-              {locale === "es" ? "Nada te espera." : "Nothing waiting on you."}{" "}
-              <em>
-                {model.actionCounts.approvals}{" "}
-                {locale === "es" ? "aprobaciones" : "approvals"} ·{" "}
-                {model.actionCounts.requests} requests · {model.actionCounts.mentions}{" "}
-                {locale === "es" ? "menciones" : "mentions"}
-              </em>
-            </span>
-          </div>
-        ) : (
+      {showActions && model.actions.length > 0 &&
+        (
           <section
             className="cw-home-card cw-home-stagger"
             data-testid="home-action-queue"
@@ -610,13 +545,36 @@ export function HomeCockpit({
               ))}
             </ul>
           </section>
-        ))}
+        )}
 
-      <MiSemanaCard session={weeklyPlanSession} onReviewFriday={onReviewFriday} />
+      <section className="cw-home-card cw-home-today cw-home-stagger" data-testid="home-today-plan">
+        <div className="cw-home-card-head">
+          <h2>{locale === "es" ? "Hoy" : "Today"}</h2>
+          {day.plan && day.score.planned > 0 ? (
+            <span>{day.score.done} / {day.score.planned} {locale === "es" ? "hechos" : "done"}</span>
+          ) : null}
+        </div>
+        {day.plan && (day.plan.keyItemId || day.plan.plannedItemIds.length > 0) ? (
+          <div className="cw-home-today-content">
+            <div>
+              <span className="cw-home-today-caption">{locale === "es" ? "Tu prioridad" : "Your priority"}</span>
+              <strong>{tasks.find((task) => String(task.id) === day.plan?.keyItemId)?.title || (locale === "es" ? "Elegir prioridad" : "Choose a priority")}</strong>
+            </div>
+            <button className="cw-home-today-link" onClick={onOpenToday} type="button">{locale === "es" ? "Abrir mi día" : "Open my day"} →</button>
+          </div>
+        ) : (
+          <div className="cw-home-today-content">
+            <p>{locale === "es" ? "Elige lo más importante para hoy." : "Choose what matters most today."}</p>
+            <button className="cw-home-today-link" onClick={onOpenToday} type="button">{locale === "es" ? "Planear hoy · 5 min" : "Plan today · 5 min"} →</button>
+          </div>
+        )}
+        {weeklyPlanSession && onReviewFriday ? <button className="cw-home-weekly-link" onClick={onReviewFriday} type="button">{locale === "es" ? "Revisar la semana" : "Review the week"}</button> : null}
+      </section>
 
       <div className="cw-home-split cw-home-stagger" style={{ ["--i" as string]: 4 }}>
         <section className="cw-home-card" data-testid="home-my-items">
           <div className="cw-home-card-head cw-home-tabs">
+            <h2>{locale === "es" ? "Mi trabajo" : "My work"}</h2>
             <div className="cw-home-tab-row">
               {(
                 [
@@ -640,9 +598,6 @@ export function HomeCockpit({
                 </button>
               ))}
             </div>
-            <span className="cw-home-card-label">
-              {locale === "es" ? "Mis ítems" : "My items"}
-            </span>
           </div>
           {items.length === 0 ? (
             <p className="cw-home-empty-line">{emptyItemsLabel}</p>
@@ -681,9 +636,9 @@ export function HomeCockpit({
               </ul>
               {items.length > 5 ? (
                 <div className="cw-home-card-foot">
-                  <span>
-                    + {items.length - 5} {locale === "es" ? "más" : "more"}
-                  </span>
+                  <button onClick={() => onOpenMyWork?.(itemTab)} type="button">
+                    + {items.length - 5} {locale === "es" ? "más" : "more"} →
+                  </button>
                   {model.overdueItems.length > 0 ? (
                     <button
                       onClick={() =>
@@ -838,44 +793,6 @@ export function HomeCockpit({
         </div>
       </section>
 
-      <section
-        className="cw-home-card cw-home-stagger"
-        data-testid="home-activity"
-        style={{ ["--i" as string]: 6 }}
-      >
-        <div className="cw-home-card-head">
-          <h2>{locale === "es" ? "Actividad" : "Activity"}</h2>
-        </div>
-        {model.activity.length === 0 ? (
-          <p className="cw-home-empty-line">
-            {locale === "es" ? "Sin actividad reciente" : "No recent activity"}
-          </p>
-        ) : (
-          <ul className="cw-home-activity-list">
-            {model.activity.map((row) => (
-              <li key={row.id}>
-                <span className="cw-home-activity-avatar">{row.avatar || "·"}</span>
-                <span className="cw-home-activity-body">
-                  {row.verb ? <strong>{row.verb}</strong> : null}
-                  {row.verb ? " " : null}
-                  {row.itemId && row.object ? (
-                    <button
-                      className="cw-home-activity-chip"
-                      onClick={() => onOpenItem(row.itemId!)}
-                      type="button"
-                    >
-                      {row.object}
-                    </button>
-                  ) : (
-                    <span>{row.text}</span>
-                  )}
-                </span>
-                <em>{row.when}</em>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

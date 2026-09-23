@@ -34,6 +34,7 @@ import {
   ListTodo,
   Kanban,
   Maximize2,
+  MoreHorizontal,
   Minimize2,
   Minus,
   Plus,
@@ -874,6 +875,7 @@ export function WorkItemsCenter({
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [viewsOpen, setViewsOpen] = useState(false);
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [addSprintOpen, setAddSprintOpen] = useState(false);
@@ -926,7 +928,9 @@ export function WorkItemsCenter({
     ? notionQuickAttrColumns
     : [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
-    gridTemplateColumns: "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
+    gridTemplateColumns: isMyWork
+      ? "20px 20px 28px minmax(160px, 1fr) auto"
+      : "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
   const currentItemViewFilters: ItemViewFilters = {
     mode,
@@ -2199,6 +2203,29 @@ export function WorkItemsCenter({
     </div>
   );
 
+  const renderCompactActions = (item: any) => {
+    const due = dateInputValue(item.dueDate || item.targetDate);
+    const assignee = Array.isArray(item.assignees) && item.assignees.length
+      ? item.assignees[0]
+      : item.owner || item.assignee || "";
+    return (
+      <div className="do-my-work-row-end">
+        {assignee ? <span className="do-my-work-row-owner" title={assignee}>{assignee}</span> : null}
+        {due ? <time dateTime={due}>{dateLabel(new Date(`${due}T00:00:00`))}</time> : null}
+        <details className="do-my-work-row-more" onClick={(event) => event.stopPropagation()}>
+          <summary aria-label={`More actions for ${title(item)}`} title="More fields and actions"><MoreHorizontal size={17} /></summary>
+          <div className="do-my-work-row-popover">
+            <strong>Fields and actions</strong>
+            {renderAttributeIcons(item)}
+            {renderTimingButtons(item)}
+            {renderRowExtra ? renderRowExtra(item) : null}
+            {renderDeleteButton(item)}
+          </div>
+        </details>
+      </div>
+    );
+  };
+
   const renderRow = (
     item: any,
     peers: any[],
@@ -2268,10 +2295,7 @@ export function WorkItemsCenter({
           <GripVertical size={14} />
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
-        {renderAttributeIcons(item)}
-        {renderTimingButtons(item)}
-        {renderRowExtra ? renderRowExtra(item) : null}
-        {renderDeleteButton(item)}
+        {isMyWork ? renderCompactActions(item) : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderRowExtra ? renderRowExtra(item) : null}{renderDeleteButton(item)}</>}
       </article>
     );
   };
@@ -2308,9 +2332,8 @@ export function WorkItemsCenter({
       {renderSelectAll()}
       <span />
       <strong>Item</strong>
-      <span className="do-items-attr-head">Fields</span>
-      <span />
-      <span />
+      <span className="do-items-attr-head">{isMyWork ? "Owner · Due · More" : "Fields"}</span>
+      {!isMyWork && <><span /><span /></>}
     </div>
   );
 
@@ -2398,9 +2421,7 @@ export function WorkItemsCenter({
           showToggle: false,
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
-        {renderAttributeIcons(item)}
-        {renderTimingButtons(item)}
-        {renderDeleteButton(item)}
+        {isMyWork ? renderCompactActions(item) : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderDeleteButton(item)}</>}
       </header>
     );
   };
@@ -3410,7 +3431,7 @@ export function WorkItemsCenter({
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
-        {chromeCollapsed || compact ? (
+        {chromeCollapsed || compact || isMyWork ? (
           <label className="do-items-mode-select">
             <span className="sr-only">Work item view</span>
             <select
@@ -3806,21 +3827,31 @@ export function WorkItemsCenter({
             </div>
           ) : (
             <>
-              <button aria-label="Add item" className="do-button do-button-dark" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> Add item</button>
-              <button
+              <button aria-label="Add item" className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> Add item</button>
+              {!isMyWork && <button
                 aria-label="Paste bulk items"
                 className="do-button-secondary do-mobile-advanced"
                 onClick={() => { setPasteOpen(true); setPasteError(""); }}
                 type="button"
               >
                 <Clipboard size={13} /> Paste bulk items
-              </button>
-              {onCreateSprint && (
+              </button>}
+              {!isMyWork && onCreateSprint && (
                 <button aria-label="Add sprint" className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
               )}
             </>
           )}
-          <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>
+          {isMyWork ? (
+            <div className="do-popover-anchor">
+              <button aria-expanded={moreActionsOpen} aria-label="More item actions" className="do-items-focus-toggle" onClick={() => setMoreActionsOpen((open) => !open)} type="button"><MoreHorizontal size={15} /></button>
+              {moreActionsOpen && <div className="do-popover do-items-more-popover" role="menu">
+                <button onClick={() => { setPasteOpen(true); setPasteError(""); setMoreActionsOpen(false); }} type="button">Paste bulk items</button>
+                {onCreateSprint && <button onClick={() => { setAddSprintOpen(true); setMoreActionsOpen(false); }} type="button">New sprint</button>}
+                <button onClick={() => { setFieldsOpen(true); setMoreActionsOpen(false); }} type="button">Customize fields</button>
+                <button onClick={() => { setChromeCollapsed((collapsed) => !collapsed); setMoreActionsOpen(false); }} type="button">{chromeCollapsed ? "Show controls" : "Focus list"}</button>
+              </div>}
+            </div>
+          ) : <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>}
         </div>
       </section>
       )}

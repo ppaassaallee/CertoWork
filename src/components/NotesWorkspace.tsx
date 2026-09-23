@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Maximize2, MoreHorizontal, Sparkles } from "./ui/Icon";
+import { Archive, BookOpen, Maximize2, MoreHorizontal, Sparkles } from "./ui/Icon";
 import { emitDomainEvent } from "../lib/routines";
 import {
   addDoc,
@@ -96,13 +96,12 @@ export function NotesWorkspace({
   const { user, workspace } = useAuth();
   const locale = getLocale() === "es" ? "es" : "en";
   const [selectedNotebookId, setSelectedNotebookId] = useState("");
+  const [notebookChosenByUser, setNotebookChosenByUser] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState("");
   const [selectedNoteId, setSelectedNoteId] = useState("");
   const [editor, setEditor] = useState({ title: "", content: "", tagsText: "", projectId: "" });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 1280 : false,
-  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [search, setSearch] = useState("");
   const [listTab, setListTab] = useState<"all" | "meetings" | "mine" | "linked">("all");
   const [focusMode, setFocusMode] = useState(false);
@@ -182,18 +181,30 @@ export function NotesWorkspace({
       String(activeProject.title || activeProject.name || "Project"),
       user.uid,
     ).then((notebookId) => {
-      if (notebookId) setSelectedNotebookId(notebookId);
+      if (notebookId) {
+        setNotebookChosenByUser(true);
+        setSelectedNotebookId(notebookId);
+      }
     });
   }, [activeProject?.id, user?.uid, workspace?.id]);
 
   useEffect(() => {
-    if (initialNoteId) setSelectedNoteId(initialNoteId);
-  }, [initialNoteId]);
+    if (!initialNoteId) return;
+    setSelectedNoteId(initialNoteId);
+    const initialNote = allNotes.find((entry) => entry.id === initialNoteId);
+    if (initialNote?.notebookId) {
+      setNotebookChosenByUser(true);
+      setSelectedNotebookId(initialNote.notebookId);
+    }
+  }, [allNotes, initialNoteId]);
 
   useEffect(() => {
-    if (selectedNotebookId && notebooks.some((entry) => entry.id === selectedNotebookId)) return;
-    setSelectedNotebookId(notebooks[0]?.id || "");
-  }, [notebooks, selectedNotebookId]);
+    const withNotes = notebooks.find((entry) => allNotes.some((note) => note.notebookId === entry.id));
+    const selectionIsValid = notebooks.some((entry) => entry.id === selectedNotebookId);
+    if (selectionIsValid && notebookChosenByUser) return;
+    const preferredId = withNotes?.id || (selectionIsValid ? selectedNotebookId : notebooks[0]?.id) || "";
+    if (preferredId !== selectedNotebookId) setSelectedNotebookId(preferredId);
+  }, [allNotes, notebookChosenByUser, notebooks, selectedNotebookId]);
 
   useEffect(() => {
     if (selectedNoteId && (notes.some((entry) => entry.id === selectedNoteId) || allNotes.some((e) => e.id === selectedNoteId))) return;
@@ -307,6 +318,7 @@ export function NotesWorkspace({
       updatedAt: serverTimestamp(),
     });
     setSelectedNotebookId(notebookRef.id);
+    setNotebookChosenByUser(true);
   };
 
   return (
@@ -320,6 +332,7 @@ export function NotesWorkspace({
           onCreateNotebook={(title, visibility) => void createNotebookWithVisibility(title, visibility)}
           onSearch={setSearch}
           onSelectNotebook={(id, sectionId) => {
+            setNotebookChosenByUser(true);
             setSelectedNotebookId(id);
             setSelectedSectionId(sectionId || "");
             setSelectedNoteId("");
@@ -337,12 +350,14 @@ export function NotesWorkspace({
           notebookTitle={selectedSection?.title || selectedNotebook?.title || ""}
           notes={listNotes}
           onCreate={(type) => void createTypedNote(type)}
+          onToggleNotebooks={() => setSidebarCollapsed((collapsed) => !collapsed)}
           onSelect={setSelectedNoteId}
           onTab={setListTab}
           selectedNoteId={selectedNoteId}
           showLinkedTab={Boolean(searchResults)}
           showMineTab={selectedNotebookVis !== "private"}
           tab={listTab}
+          notebooksOpen={!sidebarCollapsed}
         />
       ) : null}
       <div className="cw-notes-editor">
@@ -561,13 +576,11 @@ export function NotesWorkspace({
             </div>
           </>
         ) : (
-          <div className="cw-notes-empty">
-            <div className="cw-notes-empty-sketch">
-              <i style={{ width: "70%" }} />
-              <i style={{ width: "90%" }} />
-              <i style={{ width: "55%" }} />
-            </div>
-            <p style={{ textAlign: "center" }}>{t("notes.pickOrCreate")}</p>
+          <div className="cw-notes-empty cw-notes-empty-editor">
+            <BookOpen size={28} aria-hidden="true" />
+            <strong>{locale === "es" ? "Tu espacio para pensar" : "A place for your thinking"}</strong>
+            <p>{locale === "es" ? "Captura una idea, una reunión o una decisión. Empieza con una nota." : "Capture an idea, meeting, or decision. Start with a note."}</p>
+            <button onClick={() => void createTypedNote("note")} type="button">{locale === "es" ? "Crear nota" : "Create note"}</button>
           </div>
         )}
       </div>

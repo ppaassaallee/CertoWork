@@ -1,4 +1,4 @@
-import { Link2, Sparkles } from "../../components/ui/Icon";
+import { Book, Link2, Sparkles } from "../../components/ui/Icon";
 import { t } from "../../lib/i18n";
 import type { NotebookEntry } from "../../lib/notebookContext";
 import { withDefaults } from "../../lib/notes";
@@ -41,6 +41,8 @@ export type NotesListProps = {
   onTab: (tab: NotesListProps["tab"]) => void;
   onSelect: (id: string) => void;
   onCreate: (noteType: "note" | "meeting" | "idea" | "spec" | "client") => void;
+  onToggleNotebooks: () => void;
+  notebooksOpen: boolean;
   locale: "es" | "en";
   currentUserId?: string;
 };
@@ -55,6 +57,8 @@ export function NotesList({
   onTab,
   onSelect,
   onCreate,
+  onToggleNotebooks,
+  notebooksOpen,
   locale,
   currentUserId,
 }: NotesListProps) {
@@ -69,7 +73,7 @@ export function NotesList({
   return (
     <aside className="cw-notes-list" data-testid="notes-list">
       <div className="cw-notes-list-head">
-        <strong>{notebookTitle || t("notes.untitled")}</strong>
+        <button aria-expanded={notebooksOpen} className="cw-notes-notebook-switch" onClick={onToggleNotebooks} type="button"><Book size={14} /><strong>{notebookTitle || t("notes.untitled")}</strong><span>⌄</span></button>
         <details>
           <summary className="cw-notes-muted-btn" style={{ listStyle: "none", cursor: "pointer" }}>
             + {locale === "es" ? "Nota" : "Note"} ▾

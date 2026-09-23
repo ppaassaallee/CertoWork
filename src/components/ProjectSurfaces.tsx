@@ -6316,34 +6316,9 @@ export function ProjectCommandCenter({
       <header className="do-command-head is-compact">
         <div>
           <h1>Projects</h1>
+          <p><button className="do-projects-subtitle-filter" onClick={() => openListWith({ filter: "active" })} type="button">{openCount} open</button>{operationsCount ? ` · ${operationsCount} in operations` : ""}{allAttention.length ? ` · ${allAttention.length} need attention` : ""}</p>
         </div>
         <div className="do-command-head-actions">
-          <nav aria-label="Projects views" className="do-command-view-tabs">
-            <button
-              className={view === "dashboard" ? "is-active" : ""}
-              onClick={() => selectPortfolioView("dashboard")}
-              type="button"
-            >
-              Overview
-            </button>
-            <button
-              className={view === "overview" ? "is-active" : ""}
-              onClick={() => selectPortfolioView("overview")}
-              type="button"
-            >
-              List
-            </button>
-            {canViewFinance ? (
-              <button
-                className={view === "economics" ? "is-active" : ""}
-                data-testid="projects-costs-tab"
-                onClick={() => selectPortfolioView("economics")}
-                type="button"
-              >
-                Costs
-              </button>
-            ) : null}
-          </nav>
           {onNewProject && (
             <button
               className="do-command-primary"
@@ -6356,6 +6331,11 @@ export function ProjectCommandCenter({
           )}
         </div>
       </header>
+      <nav aria-label="Projects views" className="do-command-view-tabs do-projects-view-tabs">
+        <button aria-current={view === "dashboard" ? "page" : undefined} className={view === "dashboard" ? "is-active" : ""} onClick={() => selectPortfolioView("dashboard")} type="button">Overview</button>
+        <button aria-current={view === "overview" ? "page" : undefined} className={view === "overview" ? "is-active" : ""} onClick={() => selectPortfolioView("overview")} type="button">List</button>
+        {canViewFinance ? <button aria-current={view === "economics" ? "page" : undefined} className={view === "economics" ? "is-active" : ""} data-testid="projects-costs-tab" onClick={() => selectPortfolioView("economics")} type="button">Costs</button> : null}
+      </nav>
       {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
         <ProjectTemplatesPanel
           onApply={onApplyProjectTemplate}
@@ -6367,21 +6347,16 @@ export function ProjectCommandCenter({
           workspaceMembers={workspaceMembers}
         />
       )}
-      <div className="do-command-metrics is-text-row" data-testid="projects-kpi-row">
-        <button
-          onClick={() => openListWith({ filter: "active" })}
-          type="button"
-        >
-          <strong>{openCount}</strong>
-          <span>open</span>
-        </button>
+      {(operationsCount > 0 || allAttention.length > 0 || totals.plannedHours > 0 || totals.actualHours > 0 || totals.recurring > 0 || totals.initial > 0) && <div className="do-command-metrics is-text-row" data-testid="projects-kpi-row">
+        {operationsCount > 0 &&
         <button
           onClick={() => openListWith({ stageFilter: "operations" })}
           type="button"
         >
           <strong>{operationsCount}</strong>
           <span>in operations</span>
-        </button>
+        </button>}
+        {allAttention.length > 0 &&
         <button
           className={allAttention.length ? "is-risk" : ""}
           onClick={() => openListWith({ healthFilter: "needs_attention" })}
@@ -6389,7 +6364,7 @@ export function ProjectCommandCenter({
         >
           <strong>{allAttention.length}</strong>
           <span>need attention</span>
-        </button>
+        </button>}
         {(totals.plannedHours > 0 || totals.actualHours > 0) && (
           <button
             className={hoursAtCapacity ? "is-risk" : ""}
@@ -6428,11 +6403,11 @@ export function ProjectCommandCenter({
             <span>initial investment</span>
           </button>
         )}
-      </div>
+      </div>}
       <div className={`do-command-body do-command-body-${view}`}>
         {view === "dashboard" && (
           <section className="do-portfolio-dashboard">
-            <section className="do-portfolio-card do-portfolio-card-wide do-attention-board">
+            {allAttention.length > 0 && <section className="do-portfolio-card do-portfolio-card-wide do-attention-board">
               <div className="do-portfolio-card-head">
                 <h3>Needs your attention</h3>
                 {allAttention.length > 0 && (
@@ -6496,9 +6471,11 @@ export function ProjectCommandCenter({
                   </span>
                 </div>
               )}
-            </section>
+            </section>}
 
             {onAsk && (
+              <details className="do-projects-tools">
+                <summary><Sparkles size={14} /> Ask Odysseus or start a routine</summary>
               <form
                 className="do-pm-ask-bar"
                 data-testid="projects-ask-bar"
@@ -6556,6 +6533,7 @@ export function ProjectCommandCenter({
                   Ask
                 </button>
               </form>
+              </details>
             )}
 
             <div className="do-portfolio-dashboard-grid">
@@ -6575,7 +6553,7 @@ export function ProjectCommandCenter({
                       <i>
                         <em
                           style={{
-                            width: `${openProjects.length ? Math.max(4, (count / openProjects.length) * 100) : 0}%`,
+                            width: `${openProjects.length && count ? Math.max(4, (count / openProjects.length) * 100) : 0}%`,
                           }}
                         />
                       </i>

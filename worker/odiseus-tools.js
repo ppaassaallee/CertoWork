@@ -20,7 +20,15 @@ function isClosed(status) {
 function dueTime(value) {
   if (!value) return 0;
   if (typeof value === "number") return value;
-  if (typeof value === "string") return Date.parse(value) || 0;
+  if (typeof value === "string") {
+    // Date-only values represent a calendar day in the user's local time.
+    // Date.parse("YYYY-MM-DD") interprets midnight as UTC and can put it on yesterday.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split("-").map(Number);
+      return new Date(year, month - 1, day).getTime();
+    }
+    return Date.parse(value) || 0;
+  }
   if (value?.seconds) return value.seconds * 1000;
   if (value?.toMillis) return value.toMillis();
   return 0;

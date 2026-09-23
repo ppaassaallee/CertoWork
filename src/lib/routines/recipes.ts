@@ -1,4 +1,5 @@
 import type { RoutineEntityType, RoutineRecipe } from "./types";
+import type { Locale } from "../i18n";
 
 /** Curated recipes — project, portfolio, task, note, request, invoice. */
 export const ROUTINE_RECIPES: RoutineRecipe[] = [
@@ -133,6 +134,28 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     class: "guided",
   },
 ];
+
+const englishRecipeCopy: Record<string, Pick<RoutineRecipe, "title" | "sentence" | "triggerHint" | "deliverableHint">> = {
+  "brief-matutino": { title: "Morning brief", sentence: "Summarize this project by email every weekday at 7 am.", triggerHint: "Mon–Fri 07:00", deliverableHint: "Email to owner" },
+  "vigia-fechas": { title: "Due date watch", sentence: "Every day at 8 am, alert me about items due within three days or overdue.", triggerHint: "Daily 08:00", deliverableHint: "Comment and email" },
+  "cazador-bloqueos": { title: "Blocker watch", sentence: "When an item becomes blocked, email me the reason and a suggested next step.", triggerHint: "When blocked", deliverableHint: "Email to owner" },
+  "resumen-cliente": { title: "Weekly client update", sentence: "Every Friday at 4 pm, draft a client update for my approval.", triggerHint: "Fri 16:00", deliverableHint: "Draft for approval" },
+  "pulso-portafolio": { title: "Portfolio pulse", sentence: "Every Monday at 7:30 am, email me projects at risk, blocked projects and upcoming checkpoints.", triggerHint: "Mon 07:30", deliverableHint: "Email to owner" },
+  "higiene-backlog": { title: "Backlog cleanup", sentence: "Every three days, propose owners, estimates and types for incomplete items before applying changes.", triggerHint: "Every 3 days", deliverableHint: "Proposals for approval" },
+  "preparar-sprint": { title: "Prepare the sprint", sentence: "Every other Monday, suggest sprint scope and risks in a note.", triggerHint: "Every 2 weeks", deliverableHint: "Proposal note" },
+  "item-pulse": { title: "Item pulse", sentence: "Each morning, comment when this item is blocked or overdue and suggest the next step.", triggerHint: "Daily", deliverableHint: "Item comment" },
+  "item-due-watch": { title: "Item due date watch", sentence: "Email me when this item nears its due date or becomes blocked.", triggerHint: "On event", deliverableHint: "Email to owner" },
+  "nota-a-estado": { title: "Notes to status", sentence: "When meeting notes are created, propose status and progress updates for mentioned items.", triggerHint: "When notes are created", deliverableHint: "Updates for approval" },
+  "seguimiento-request": { title: "Request follow-up", sentence: "After 48 hours without a reply, remind the assignee; after 96 hours, email the owner.", triggerHint: "48 h / 96 h", deliverableHint: "Comment and email" },
+  "cobranza-factura": { title: "Invoice follow-up", sentence: "Three days after an invoice is due, draft a client reminder for my approval.", triggerHint: "3 days overdue", deliverableHint: "Draft for approval" },
+  "wrap-review": { title: "WRAP Review", sentence: "Guide my weekly review every Friday at 4 pm.", triggerHint: "Fri 16:00", deliverableHint: "Guided session · ~12 min" },
+  "weekly-plan": { title: "Weekly plan", sentence: "Every Monday at 8 am, help me plan two or three goals and protect time for them.", triggerHint: "Mon 08:00", deliverableHint: "Guided session · ~7 min" },
+  "close-day": { title: "Close the day", sentence: "Help me close each workday in one minute at 6 pm.", triggerHint: "Mon–Fri 18:00", deliverableHint: "Daily note and score" },
+};
+
+export function localizedRoutineRecipe(recipe: RoutineRecipe, locale: Locale): RoutineRecipe {
+  return locale === "en" ? { ...recipe, ...englishRecipeCopy[recipe.id] } : recipe;
+}
 
 export function recipesForEntity(entityType: RoutineEntityType): RoutineRecipe[] {
   return ROUTINE_RECIPES.filter((recipe) => recipe.entityTypes.includes(entityType));

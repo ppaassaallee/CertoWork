@@ -107,7 +107,7 @@ import {
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
-import { getLocale, t } from "../lib/i18n";
+import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
 import {
   entityTitle,
   findMatchingProject,
@@ -169,6 +169,7 @@ import { FeatureLabsPanel } from "../features/flags/FeatureLabsPanel";
 import { RoutineBuilder } from "../features/routines/RoutineBuilder";
 import { MembersAdminRoute } from "../features/admin/MembersAdminRoute";
 import { DesktopIconRail } from "../features/shell/DesktopRail";
+import { ApprovalsPage } from "../features/approvals/ApprovalsPage";
 import { RitualRunner, RevisionesView } from "../features/routines";
 import { DayHeader } from "../features/dayplan/DayHeader";
 import { useDayPlan } from "../features/dayplan/useDayPlan";
@@ -445,6 +446,7 @@ export type Panel =
   | null;
 export type CenterView =
   | "conversation"
+  | "approvals"
   | "items"
   | "notes"
   | "tables"
@@ -537,6 +539,9 @@ export function DelivereeWorkspace() {
   const [supportCases, setSupportCases] = useState<any[]>([]);
   const [tablesTrashOpen, setTablesTrashOpen] = useState(false);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
+  const [reviewHistory, setReviewHistory] = useState<any[]>([]);
+  const [showMyWorkOverview, setShowMyWorkOverview] = useState(false);
+  const [displayLocale, setDisplayLocale] = useState<Locale>(getLocale);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
@@ -597,14 +602,14 @@ export function DelivereeWorkspace() {
       tables: true,
       favorites: true,
       recent: true,
-      conversations: true,
+      conversations: false,
       management: false,
     };
     if (typeof window === "undefined") return defaults;
     try {
       const raw = window.localStorage.getItem("certo-sidebar-sections");
       if (!raw) return defaults;
-      return { ...defaults, ...JSON.parse(raw) };
+      return { ...defaults, ...JSON.parse(raw), conversations: false };
     } catch {
       return defaults;
     }
@@ -652,9 +657,7 @@ export function DelivereeWorkspace() {
   const [projectConsoleId, setProjectConsoleId] = useState<string | null>(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const panel = (
-    lens.kind === "approvals"
-      ? "approvals"
-      : lens.kind === "settings"
+    lens.kind === "settings"
         ? "settings"
         : lens.kind === "agents"
           ? lens.section === "automations"
@@ -690,7 +693,9 @@ export function DelivereeWorkspace() {
     else if (next === "settings") navigate("/settings");
   };
   const centerView: CenterView =
-    lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
+    lens.kind === "approvals"
+      ? "approvals"
+      : lens.kind === "notes" || (lens.kind === "project" && lens.tab === "notes")
       ? "notes"
       : lens.kind === "tables"
       ? "tables"
@@ -1124,12 +1129,14 @@ export function DelivereeWorkspace() {
       ),
       makeQuery(
         "review_candidates",
-        (items) =>
+        (items) => {
           setReviewItems(
             items.filter((item) =>
               ["pending", "approved_for_review"].includes(item.status),
             ),
-          ),
+          );
+          setReviewHistory(items.filter((item) => ["approved", "dismissed"].includes(item.status)));
+        },
         false,
         true,
       ),
@@ -1945,6 +1952,13 @@ export function DelivereeWorkspace() {
       ) || null,
     [workspaceMembers, user?.uid],
   );
+  useEffect(() => {
+    const saved = (currentWorkspaceMember as (WorkspaceMember & { locale?: Locale }) | null)?.locale;
+    if (saved === "en" || saved === "es") {
+      setLocale(saved);
+      setDisplayLocale(saved);
+    }
+  }, [currentWorkspaceMember?.id, (currentWorkspaceMember as (WorkspaceMember & { locale?: Locale }) | null)?.locale]);
   const needsAlias = Boolean(
     user && workspace && currentWorkspaceMember && !memberHasAlias(currentWorkspaceMember),
   );
@@ -3729,8 +3743,8 @@ export function DelivereeWorkspace() {
         ? ""
         : result.error ||
           (result.configured === false
-            ? "BREVO_API_KEY is not configured on the Certo Work worker."
-            : "Invite email provider rejected the send.");
+            ? "Email invitations are unavailable right now. Copy the invite link to share it directly."
+            : "The invitation email could not be sent. Copy the invite link or try again.");
       const schedule = reminderScheduleAfterSend(
         { createdAt: inviteCreatedAt || Date.now() },
         kind,
@@ -6509,7 +6523,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}
@@ -6911,48 +6925,10 @@ export function DelivereeWorkspace() {
               </em>
             )}
           </button>
-          <button
-            className={`do-nav-item is-agents do-mobile-advanced ${lens.kind === "agents" || lens.kind === "routines" ? "is-active" : ""}`}
-            data-testid="nav-rutinas"
-            onClick={() => {
-              navigate("/rutinas");
-              setSidebarOpen(false);
-            }}
-            type="button"
-          >
-            <Sparkles size="sm" />
-            <span>{t("navRutinas")}</span>
-          </button>
         </nav>
 
         <div className="do-sidebar-scroll">
           <div className="do-sidebar-section">
-            <div className="do-section-head">
-              <button
-                aria-expanded={sidebarSections.projects}
-                className="do-section-toggle"
-                onClick={() => toggleSidebarSection("projects")}
-                type="button"
-              >
-                <ChevronDown
-                  className={sidebarSections.projects ? "" : "is-collapsed"}
-                  size={13}
-                />
-                <span>Projects</span>
-              </button>
-              <button
-                aria-label="Open projects portfolio"
-                onClick={() => {
-                  goCenterView("portfolio");
-                  setPanel(null);
-                  setSidebarOpen(false);
-                }}
-                type="button"
-              >
-                All projects
-              </button>
-            </div>
-            {sidebarSections.projects && (
             <div className="do-project-list">
               {sidebarProjects.favorites.length > 0 && (
                 <button
@@ -7102,7 +7078,6 @@ export function DelivereeWorkspace() {
                 </button>
               )}
             </div>
-            )}
           </div>
 
           {tablesEnabled ? (
@@ -7213,11 +7188,13 @@ export function DelivereeWorkspace() {
                   className={sidebarSections.management ? "" : "is-collapsed"}
                   size={13}
                 />
-                <span>{t("navManagement")}</span>
+                <span>{getLocale() === "es" ? "Más" : "More"}</span>
               </button>
             </div>
             {sidebarSections.management && (
               <div className="do-section-body">
+                <button className={`do-nav-item ${lens.kind === "routines" ? "is-active" : ""}`} data-testid="nav-rutinas" onClick={() => { navigate("/rutinas"); setSidebarOpen(false); }} type="button"><Sparkles size="sm" /><span>{t("navRutinas")}</span></button>
+                <button className={`do-nav-item ${lens.kind === "agents" ? "is-active" : ""}`} onClick={() => { navigate("/agents"); setSidebarOpen(false); }} type="button"><WandSparkles size="sm" /><span>{t("navAgents")}</span></button>
                 <button
                   className={`do-nav-item is-dashboard ${lens.kind === "dashboard" ? "is-active" : ""}`}
                   data-testid="nav-dashboard"
@@ -7338,7 +7315,7 @@ export function DelivereeWorkspace() {
             )}
           </div>
 
-          <div className="do-sidebar-section do-conversations">
+          {sidebarSections.conversations && <div className="do-sidebar-section do-conversations">
             <div className="do-section-head">
               <button
                 aria-expanded={sidebarSections.conversations}
@@ -7472,7 +7449,7 @@ export function DelivereeWorkspace() {
             )}
             </>
             )}
-          </div>
+          </div>}
         </div>
 
         <nav className="do-nav-admin" aria-label="Workspace administration">
@@ -7522,6 +7499,9 @@ export function DelivereeWorkspace() {
           </button>
           {workspaceOpen && (
             <div className="do-account-menu">
+              <button onClick={() => { toggleSidebarSection("conversations"); setWorkspaceOpen(false); }} type="button">
+                <MessageSquare size={14} /> Conversations
+              </button>
               <div className="do-account-menu-preference">
                 <span>Text size</span>
                 <TextSizeControl compact />
@@ -7806,7 +7786,9 @@ export function DelivereeWorkspace() {
                   onApprove={(item) => {
                     if (item) void processReview(item, "approve");
                   }}
-                  onOpenApprovals={() => setPanel("approvals")}
+                  onOpenApprovals={() => navigate("/approvals")}
+                  onOpenToday={() => navigate("/my-work/today")}
+                  onOpenMyWork={(filter) => navigate(filter === "today" ? "/my-work/today" : filter === "week" ? "/my-work/this-week" : "/my-work")}
                   onOpenItem={(itemId) => {
                     setSelectedWorkItemId(itemId);
                     navigate(`${location.pathname}?item=${encodeURIComponent(itemId)}`, {
@@ -8299,79 +8281,71 @@ export function DelivereeWorkspace() {
             </div>
           </>
           )
+        ) : centerView === "approvals" ? (
+          <ApprovalsPage
+            history={reviewHistory}
+            onDecide={(item, decision) => void processReview(item, decision)}
+            onEdit={(item) => {
+              navigate("/home");
+              setComposer(`Edit this pending change before applying it: ${item.title || "Change"}\n\n${item.why || item.action || ""}`);
+            }}
+            pending={reviewItems}
+          />
         ) : centerView === "items" ? (
           <div className={`do-my-work-shell ${lens.kind === "my-work" && lens.section === "today" ? "is-today" : ""} ${dailyPlanEnabled ? "is-daily-plan" : ""}`} data-testid="my-work-shell">
-            {lens.kind === "my-work" && isOverviewEnabled() && user?.uid ? (
-              <MyWorkOverview
-                actor={personalActor}
-                members={workspaceMembers}
-                projects={projects}
-                tasks={tasks}
-                userId={user.uid}
-              />
-            ) : null}
             {lens.kind === "my-work" && !dailyPlanEnabled ? (
               <DailyPlanOptIn compact={Boolean(mobileCore)} />
             ) : null}
             {lens.kind === "my-work" && !dailyPlanEnabled && (
               <div className="do-my-work-tabs" role="tablist" aria-label="My Work views">
                 <button
-                  className={lens.section === "assigned" ? "is-active" : ""}
-                  onClick={() => navigate("/my-work")}
-                  role="tab"
-                  type="button"
-                >
-                  {t("myWorkAssigned")}
-                </button>
-                <button
-                  className={lens.section === "inbox" ? "is-active" : ""}
-                  onClick={() => navigate("/my-work/inbox")}
-                  role="tab"
-                  type="button"
-                >
-                  {t("myWorkInbox")}
-                </button>
-                <button
-                  className={lens.section === "waiting" ? "is-active" : ""}
-                  onClick={() => navigate("/my-work/waiting")}
-                  role="tab"
-                  type="button"
-                >
-                  {t("myWorkWaiting")}
-                </button>
-                <button
                   className={lens.section === "today" ? "is-active" : ""}
                   data-testid="my-work-today-tab"
                   onClick={() => navigate("/my-work/today")}
                   role="tab"
+                  aria-selected={lens.section === "today"}
                   type="button"
                 >
                   {t("myWorkToday")}
                 </button>
                 <button
-                  className={lens.section === "this_week" ? "is-active" : ""}
-                  data-testid="my-work-this-week-tab"
-                  onClick={() => navigate("/my-work/this-week")}
+                  className={lens.section === "assigned" ? "is-active" : ""}
+                  onClick={() => navigate("/my-work")}
                   role="tab"
+                  aria-selected={lens.section === "assigned"}
                   type="button"
                 >
-                  {t("myWorkThisWeek")}
+                  {getLocale() === "es" ? "Mis ítems" : "My items"}
                 </button>
                 <button
                   className={lens.section === "week" ? "is-active" : ""}
                   data-testid="my-work-week-tab"
                   onClick={() => navigate("/my-work/week")}
                   role="tab"
+                  aria-selected={lens.section === "week"}
                   type="button"
                 >
                   <CalendarDays size={13} aria-hidden />
-                  {getLocale() === "es" ? "Semana" : "Week"}
+                  {getLocale() === "es" ? "Eventos" : "Events"}
+                </button>
+                <details className="do-my-work-more">
+                  <summary>{getLocale() === "es" ? "Más vistas" : "More views"}</summary>
+                  <div>
+                  <button className={lens.section === "inbox" ? "is-active" : ""} onClick={() => navigate("/my-work/inbox")} type="button">{t("myWorkInbox")}</button>
+                  <button className={lens.section === "waiting" ? "is-active" : ""} onClick={() => navigate("/my-work/waiting")} type="button">{t("myWorkWaiting")}</button>
+                  {isOverviewEnabled() && <button onClick={() => setShowMyWorkOverview((visible) => !visible)} type="button">{getLocale() === "es" ? "Resumen" : "Overview"}</button>}
+                  <button
+                  className={lens.section === "this_week" ? "is-active" : ""}
+                  data-testid="my-work-this-week-tab"
+                  onClick={() => navigate("/my-work/this-week")}
+                  type="button"
+                >
+                  {t("myWorkThisWeek")}
                 </button>
                 <button
                   className={lens.section === "captured" ? "is-active" : ""}
                   data-testid="my-work-captured-tab"
                   onClick={() => navigate("/my-work/captured")}
-                  role="tab"
                   type="button"
                 >
                   Captured
@@ -8380,13 +8354,23 @@ export function DelivereeWorkspace() {
                   className={lens.section === "reviews" ? "is-active" : ""}
                   data-testid="my-work-reviews-tab"
                   onClick={() => navigate("/my-work/reviews")}
-                  role="tab"
                   type="button"
                 >
                   {getLocale() === "es" ? "Revisiones" : "Reviews"}
                 </button>
+                  </div>
+                </details>
               </div>
             )}
+            {lens.kind === "my-work" && isOverviewEnabled() && showMyWorkOverview && user?.uid ? (
+              <MyWorkOverview
+                actor={personalActor}
+                members={workspaceMembers}
+                projects={projects}
+                tasks={tasks}
+                userId={user.uid}
+              />
+            ) : null}
             {lens.kind === "my-work" && lens.section === "reviews" && user?.uid && workspace?.id ? (
               <RevisionesView
                 onOpenNote={() => navigate("/notes")}
@@ -9538,8 +9522,16 @@ export function DelivereeWorkspace() {
                       ? "Automations"
                       : panel === "digest"
                         ? "Updates"
-                        : panel === "workspace" || panel === "settings"
-                          ? "Admin & settings"
+                        : panel === "workspace"
+                          ? getLocale() === "es" ? "Personas y equipos" : "People & teams"
+                        : panel === "settings"
+                          ? location.pathname.includes("integrations")
+                            ? getLocale() === "es" ? "Integraciones y calendarios" : "Integrations & calendars"
+                            : location.pathname.includes("preferences")
+                              ? getLocale() === "es" ? "Preferencias" : "Preferences"
+                              : location.pathname.includes("data")
+                                ? getLocale() === "es" ? "Datos y etiquetas" : "Data & labels"
+                                : getLocale() === "es" ? "Cuenta y perfil" : "Account & profile"
                           : "Pending changes"}
             </h2>
           </div>
@@ -9553,6 +9545,17 @@ export function DelivereeWorkspace() {
         </div>
 
         <div className="do-panel-body">
+          {(panel === "settings" || panel === "workspace") && (
+            <nav className="cw-settings-nav" aria-label="Settings sections">
+              <small>{getLocale() === "es" ? "Espacio" : "Workspace"}</small>
+              <button className={panel === "workspace" ? "is-active" : ""} onClick={() => navigate("/workspace")} type="button">{getLocale() === "es" ? "Personas y equipos" : "People & teams"}</button>
+              <button className={location.pathname.includes("integrations") ? "is-active" : ""} onClick={() => navigate("/settings/integrations")} type="button">{getLocale() === "es" ? "Integraciones y calendarios" : "Integrations & calendars"}</button>
+              <button className={location.pathname === "/settings/data" ? "is-active" : ""} onClick={() => navigate("/settings/data")} type="button">{getLocale() === "es" ? "Datos y etiquetas" : "Data & labels"}</button>
+              <small>{getLocale() === "es" ? "Tú" : "You"}</small>
+              <button className={location.pathname === "/settings" ? "is-active" : ""} onClick={() => navigate("/settings")} type="button">{getLocale() === "es" ? "Cuenta y perfil" : "Account & profile"}</button>
+              <button className={location.pathname === "/settings/preferences" ? "is-active" : ""} onClick={() => navigate("/settings/preferences")} type="button">{getLocale() === "es" ? "Preferencias" : "Preferences"}</button>
+            </nav>
+          )}
           {panel === "project" &&
             (consoleProject ? (
               <ProjectConsolePanel
@@ -9928,6 +9931,16 @@ export function DelivereeWorkspace() {
           {panel === "settings" && location.pathname.startsWith("/settings/integrations") ? (
             <div className="do-panel-settings" data-testid="settings-integrations-panel">
               <Integrations />
+              <CaptureSettingsPanel
+                address={captureAddress}
+                busy={captureBusy}
+                onEnsureAddress={ensureCaptureAddress}
+                onEnsureTeamAddress={ensureTeamCaptureAddress}
+                onRotateAlias={rotateCaptureAlias}
+                teamAddresses={teamCaptureAddresses}
+                userEmail={user?.email}
+                userName={user?.displayName}
+              />
             </div>
           ) : null}
 
@@ -9954,55 +9967,7 @@ export function DelivereeWorkspace() {
                   <ListTodo size={14} /> Data
                 </button>
               </nav>
-              <section className="do-workspace-admin-card" data-testid="settings-calendars-entry">
-                <div className="do-workspace-admin-head">
-                  <span className="do-kicker">{t("calendar.calendars")}</span>
-                  <strong>{t("calendar.connectGoogle")}</strong>
-                </div>
-                <p className="do-panel-intro">
-                  Google Calendar read overlay — connect, sync, and choose Full vs Busy privacy.
-                </p>
-                <button
-                  className="do-button"
-                  onClick={() => navigate("/settings/integrations")}
-                  type="button"
-                >
-                  <CalendarDays size={14} />
-                  Open calendars
-                </button>
-              </section>
-              <FeatureLabsPanel onOpen={(path) => navigate(path)} />
-              {canGrantPureAiFollowers ? (
-                <section
-                  className="do-pure-ai-followers-callout"
-                  data-testid="pure-ai-grant-followers"
-                  id="pure-ai-followers-callout"
-                >
-                  <div>
-                    <span className="do-kicker">Pure AI · acceso</span>
-                    <strong>Regina, César, Rafael y Edgar</strong>
-                    <p>
-                      Este es el botón: dales admin + followers en todos los proyectos de Pure AI.
-                      También aparece arriba en Projects / Portfolio.
-                    </p>
-                  </div>
-                  <button
-                    className="do-button do-pure-ai-followers-btn"
-                    data-testid="pure-ai-grant-followers-btn"
-                    disabled={portfolioFollowersBusy || pricingSyncBusy || clearPureAiBusy}
-                    onClick={() => void grantPureAiAdminFollowers()}
-                    type="button"
-                  >
-                    <Users size={14} />
-                    {portfolioFollowersBusy
-                      ? "Aplicando…"
-                      : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                        ? "Volver a dar acceso"
-                        : "Dar acceso admin ahora"}
-                  </button>
-                </section>
-              ) : null}
-              <section className="do-workspace-admin-card">
+              {location.pathname === "/settings" && <section className="do-workspace-admin-card" id="settings-profile">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Public profile</span>
                   <strong>Alias and icon</strong>
@@ -10023,8 +9988,25 @@ export function DelivereeWorkspace() {
                 >
                   Save alias
                 </button>
-              </section>
-              {isPureAiWorkspace(workspace) && workspace?.ownerId === user?.uid ? (
+              </section>}
+              {location.pathname === "/settings/preferences" && <section className="do-workspace-admin-card" id="settings-language">
+                <div className="do-workspace-admin-head">
+                  <strong>{getLocale() === "es" ? "Idioma" : "Language"}</strong>
+                </div>
+                <p className="do-panel-intro">{getLocale() === "es" ? "Elige el idioma de tu espacio de trabajo." : "Choose the language for your workspace."}</p>
+                <select aria-label={getLocale() === "es" ? "Idioma" : "Language"} value={displayLocale} onChange={(event) => {
+                  const next = event.target.value as Locale;
+                  setLocale(next);
+                  setDisplayLocale(next);
+                  if (currentWorkspaceMember?.id) {
+                    void updateDoc(doc(db, "workspace_members", currentWorkspaceMember.id), { locale: next, updatedAt: serverTimestamp() });
+                  }
+                }}>
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                </select>
+              </section>}
+              {location.pathname === "/settings/data" && isPureAiWorkspace(workspace) && workspace?.ownerId === user?.uid ? (
                 <section className="do-workspace-admin-card" data-testid="pure-ai-clear-projects">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Pure AI portfolio</span>
@@ -10063,7 +10045,7 @@ export function DelivereeWorkspace() {
                   </div>
                 </section>
               ) : null}
-              <section className="do-workspace-admin-card">
+              {location.pathname === "/settings" && <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Account security</span>
                   <strong>{user?.email || "Signed-in account"}</strong>
@@ -10084,8 +10066,8 @@ export function DelivereeWorkspace() {
                 >
                   Send password reset
                 </button>
-              </section>
-              <section className="do-settings-appearance">
+              </section>}
+              {location.pathname === "/settings/preferences" && <section className="do-settings-appearance">
                 <div>
                   <span>Appearance</span>
                   <h2>Text size</h2>
@@ -10095,26 +10077,16 @@ export function DelivereeWorkspace() {
                   </p>
                 </div>
                 <TextSizeControl />
-              </section>
-              <AppleWidgetSettings
+              </section>}
+              {location.pathname === "/settings/preferences" && <AppleWidgetSettings
                 busy={widgetBusy}
                 enabled={Boolean(widgetToken)}
                 error={widgetError}
                 onEnable={() => void enableAppleWidget()}
                 onRevoke={() => void revokeAppleWidget()}
                 token={widgetToken}
-              />
-              <CaptureSettingsPanel
-                address={captureAddress}
-                busy={captureBusy}
-                onEnsureAddress={ensureCaptureAddress}
-                onEnsureTeamAddress={ensureTeamCaptureAddress}
-                onRotateAlias={rotateCaptureAlias}
-                teamAddresses={teamCaptureAddresses}
-                userEmail={user?.email}
-                userName={user?.displayName}
-              />
-              <ControlledListsSettings
+              />}
+              {location.pathname === "/settings/data" && <ControlledListsSettings
                 categories={categories}
                 onBack={() => setPanel(null)}
                 onCreateOption={createControlledOption}
@@ -10122,7 +10094,11 @@ export function DelivereeWorkspace() {
                 onRenameOption={renameControlledOption}
                 projects={projects}
                 tasks={tasks}
-              />
+              />}
+              {location.pathname === "/settings/data" && <details className="cw-admin-disclosure">
+                <summary>Labs <span>Available workspace modules</span></summary>
+                <FeatureLabsPanel onOpen={(path) => navigate(path)} />
+              </details>}
             </div>
           )}
 
@@ -10142,37 +10118,10 @@ export function DelivereeWorkspace() {
                   <ListTodo size={14} /> Data
                 </button>
               </nav>
-              <p className="do-panel-intro">
-                Workspaces separate companies, teams, or operating contexts.
-                This version supports up to {WORKSPACE_LIMIT}; conversations
-                stay personal, while projects and tasks live inside the selected
-                workspace. People are shown by alias only.
-              </p>
+              <p className="do-panel-intro">Invite people, manage access, and organize teams in {workspace?.name || "this workspace"}.</p>
 
-              <section className="do-workspace-admin-card">
-                <div className="do-workspace-admin-head">
-                  <span className="do-kicker">Your profile</span>
-                  <strong>Alias required</strong>
-                </div>
-                <p className="do-panel-intro">
-                  Set the name and icon teammates will see when they assign work.
-                  Email is never shown in the workspace.
-                </p>
-                <AliasProfileEditor
-                  alias={aliasDraft}
-                  emoji={emojiDraft}
-                  onAliasChange={setAliasDraft}
-                  onEmojiChange={setEmojiDraft}
-                />
-                <button
-                  disabled={!normalizeAlias(aliasDraft)}
-                  onClick={saveAliasProfile}
-                  type="button"
-                >
-                  Save alias
-                </button>
-              </section>
-
+              <details className="cw-admin-disclosure">
+                <summary>Workspace details <span>Rename, switch, or create a workspace</span></summary>
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Current workspace</span>
@@ -10255,6 +10204,7 @@ export function DelivereeWorkspace() {
                   </button>
                 </div>
               </section>
+              </details>
 
               {canManageMembers && (
               <section className="do-workspace-admin-card">
@@ -10264,14 +10214,12 @@ export function DelivereeWorkspace() {
                 </div>
                 {!emailInvitesConfigured && (
                   <p className="do-invite-delivery-banner is-warn">
-                    Invite emails are not configured on this environment (`BREVO_API_KEY` missing).
-                    Invites still create a link you can copy, but nothing will reach the inbox until Brevo is connected.
+                    Email invitations are unavailable right now. You can still create an invite and copy its link to share directly.
                   </p>
                 )}
                 {emailInvitesConfigured && (
                   <p className="do-invite-delivery-banner">
-                    Certo Work emails invites immediately, then reminds on day 1, 3, and 6. Invites expire after 7 days.
-                    Use Confirm delivery to check Brevo inbox status.
+                    Invitations expire after 7 days. Pending invites show delivery status and offer reminders or a new link.
                   </p>
                 )}
                 <div className="do-workspace-create-row">
@@ -10318,11 +10266,10 @@ export function DelivereeWorkspace() {
               )}
 
               {canGrantPureAiFollowers ? (
-                <section className="do-pure-ai-followers-callout" data-testid="pure-ai-grant-followers-workspace">
+                <section className="do-workspace-admin-card" data-testid="pure-ai-grant-followers-workspace">
                   <div>
-                    <span className="do-kicker">Pure AI · acceso</span>
-                    <strong>Regina, César, Rafael y Edgar</strong>
-                    <p>Admin + followers en todos los proyectos del portafolio Pure AI.</p>
+                    <strong>{getLocale() === "es" ? "Acceso al portafolio Pure AI" : "Pure AI portfolio access"}</strong>
+                    <p>{getLocale() === "es" ? "Actualiza el acceso de Regina, César, Rafael y Edgar a los proyectos de Pure AI." : "Refresh Regina, César, Rafael and Edgar's access to Pure AI projects."}</p>
                   </div>
                   <button
                     className="do-button do-pure-ai-followers-btn"
@@ -10333,14 +10280,14 @@ export function DelivereeWorkspace() {
                   >
                     <Users size={14} />
                     {portfolioFollowersBusy
-                      ? "Aplicando…"
-                      : workspace?.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY
-                        ? "Volver a dar acceso"
-                        : "Dar acceso admin ahora"}
+                      ? getLocale() === "es" ? "Actualizando…" : "Updating…"
+                      : getLocale() === "es" ? "Actualizar acceso" : "Refresh access"}
                   </button>
                 </section>
               ) : null}
 
+              {(canOperateInvoiceQueue || canManageMembers) && <details className="cw-admin-disclosure">
+                <summary>Other workspace tools <span>Invoices and SupportOps</span></summary>
               {canOperateInvoiceQueue && (
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -10382,7 +10329,10 @@ export function DelivereeWorkspace() {
                 </button>
               </section>
               )}
+              </details>}
 
+              <details className="cw-admin-disclosure" open={accessRequests.length > 0}>
+              <summary>Beta access <span>{accessRequests.length} pending</span></summary>
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
                   <span className="do-kicker">Beta access</span>
@@ -10475,6 +10425,7 @@ export function DelivereeWorkspace() {
                   )}
                 </div>
               </section>
+              </details>
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -10688,9 +10639,7 @@ export function DelivereeWorkspace() {
                   <strong>{workspaceTeams.length} teams</strong>
                 </div>
                 <p className="do-invite-delivery-banner">
-                  Hierarchy: Workspace → Teams → Projects → Items. Teams (Engineering, Ops) own projects.
-                  Assign each task to exactly one person; add Collaborators on the item for followers.
-                  Invite people by email — do not create a team named after an email.
+                  Group people by team to organize project ownership and collaboration.
                 </p>
                 <div className="do-workspace-create-row">
                   <input

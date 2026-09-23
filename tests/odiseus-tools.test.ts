@@ -101,7 +101,7 @@ test("Odysseus list_schedules returns configured jobs", () => {
 test("Odysseus list_my_items filters by assignee and today", () => {
   const today = new Date();
   today.setHours(12, 0, 0, 0);
-  const todayIso = today.toISOString().slice(0, 10);
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const withMine = {
     ...context,
     userId: "u1",

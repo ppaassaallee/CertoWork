@@ -8,6 +8,30 @@ const dictionaries = {
     navNotes: "Notes",
     navAgents: "Agents",
     navRutinas: "Routines",
+    routinesSubtitle: "Each routine is a simple flow. Open one to see how it works.",
+    routinesMy: "My routines",
+    routinesRecipes: "Recipes",
+    routinesRuns: "Runs",
+    routinesNew: "New routine",
+    routinesAll: "All",
+    routinesPersonal: "Personal",
+    routinesProject: "Project",
+    routinesPortfolio: "Portfolio",
+    routinesViewFlow: "View flow",
+    routinesUseRecipe: "Use recipe",
+    routinesEmpty: "No routines yet. Start from a recipe.",
+    routinesName: "Name",
+    routinesType: "Type",
+    routinesWhere: "Where",
+    routinesWhen: "When",
+    routinesFlow: "Flow",
+    routinesStatus: "Status",
+    routinesGuided: "Guided",
+    routinesAutomatic: "Automatic",
+    routinesLoading: "Loading…",
+    routinesNoRuns: "No runs yet.",
+    routinesPause: "Pause routine",
+    routinesActivate: "Activate routine",
     navWork: "Projects",
     navApprovals: "Approvals",
     navInvoices: "Invoices",
@@ -575,6 +599,30 @@ const dictionaries = {
     navNotes: "Notas",
     navAgents: "Agentes",
     navRutinas: "Rutinas",
+    routinesSubtitle: "Cada rutina es un flujo sencillo. Ábrela para ver cómo funciona.",
+    routinesMy: "Mis rutinas",
+    routinesRecipes: "Recetas",
+    routinesRuns: "Ejecuciones",
+    routinesNew: "Nueva rutina",
+    routinesAll: "Todas",
+    routinesPersonal: "Personal",
+    routinesProject: "Proyecto",
+    routinesPortfolio: "Portafolio",
+    routinesViewFlow: "Ver flujo",
+    routinesUseRecipe: "Usar receta",
+    routinesEmpty: "Todavía no hay rutinas. Empieza con una receta.",
+    routinesName: "Nombre",
+    routinesType: "Tipo",
+    routinesWhere: "Dónde",
+    routinesWhen: "Cuándo",
+    routinesFlow: "Flujo",
+    routinesStatus: "Estado",
+    routinesGuided: "Guiada",
+    routinesAutomatic: "Automática",
+    routinesLoading: "Cargando…",
+    routinesNoRuns: "Aún no hay ejecuciones.",
+    routinesPause: "Pausar rutina",
+    routinesActivate: "Activar rutina",
     navWork: "Proyectos",
     navApprovals: "Aprobaciones",
     navInvoices: "Facturas",
@@ -1141,6 +1189,10 @@ export type MessageKey = keyof typeof dictionaries.en;
 
 function detectLocale(): Locale {
   if (typeof navigator === "undefined") return "en";
+  try {
+    const saved = window.localStorage.getItem("certo-locale");
+    if (saved === "en" || saved === "es") return saved;
+  } catch { /* storage may be unavailable */ }
   return navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
 }
 
@@ -1148,6 +1200,7 @@ let currentLocale: Locale = detectLocale();
 
 export function setLocale(locale: Locale) {
   currentLocale = locale;
+  try { window.localStorage.setItem("certo-locale", locale); } catch { /* storage may be unavailable */ }
 }
 
 export function getLocale() {

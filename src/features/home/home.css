@@ -1,6 +1,6 @@
 .cw-home {
   --cw-home-radius: 12px;
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 14px 20px 48px;
   font-family: var(--font-body);
@@ -35,15 +35,15 @@
 
 .cw-home-header h1 {
   margin: 2px 0 0;
-  font-size: 22px;
-  font-weight: 500;
+  font-size: 26px;
+  font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
 
 .cw-home-date {
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   letter-spacing: 0.02em;
   text-transform: capitalize;
@@ -157,6 +157,7 @@
   background: var(--surface-0, #fff);
   margin-bottom: 12px;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .cw-home-card-head {
@@ -164,24 +165,82 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 34px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .cw-home-card-head h2 {
   margin: 0;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
 .cw-home-card-head button,
 .cw-home-card-head span {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   background: none;
   border: none;
+  cursor: pointer;
+}
+
+.cw-home-today-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.cw-home-today-content > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cw-home-today-content strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cw-home-today-content p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.cw-home-today-caption {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.cw-home-today-link {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-input);
+  background: var(--accent);
+  color: var(--accent-on);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cw-home-weekly-link {
+  margin: 0 20px 14px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
   cursor: pointer;
 }
 
