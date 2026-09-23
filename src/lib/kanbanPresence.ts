@@ -2,7 +2,8 @@ import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, where } fr
 import { db } from "./firebase";
 
 export const KANBAN_PRESENCE_COLLECTION = "kanban_board_presence";
-export const PRESENCE_TTL_MS = 45_000;
+/** Readers treat presence stale after this window (must exceed heartbeat). */
+export const PRESENCE_TTL_MS = 120_000;
 
 export type KanbanPresence = {
   id: string;

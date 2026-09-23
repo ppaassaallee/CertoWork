@@ -7,7 +7,9 @@ import {
   typingDocId,
 } from "./types";
 
-const HEARTBEAT_MS = 45_000;
+import { COLLAB_PRESENCE_HEARTBEAT_MS } from "../firestoreListenDiet";
+
+const HEARTBEAT_MS = COLLAB_PRESENCE_HEARTBEAT_MS;
 const TYPING_THROTTLE_MS = 3_000;
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;

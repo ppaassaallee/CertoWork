@@ -26,7 +26,7 @@
     "enabled": true
   },
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/15 * * * *"]
   },
   "vars": {
     "BOLDI_AI_PROVIDER": "openai",

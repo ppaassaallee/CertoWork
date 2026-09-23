@@ -17,6 +17,7 @@ import {
 import { NoteRichEditor } from "./NoteRichEditor";
 import { EntityPeek } from "./EntityPeek";
 import { getLocale, t } from "../lib/i18n";
+import { NOTES_AUTOSAVE_DEBOUNCE_MS } from "../lib/firestoreListenDiet";
 import {
   createNote as createNoteDoc,
   ensurePersonalNotebook,
@@ -242,7 +243,7 @@ export function NotesWorkspace({
         updatedAt: serverTimestamp(),
       });
       setSaveState("saved");
-    }, 800);
+    }, NOTES_AUTOSAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [editor.content, editor.projectId, editor.tagsText, editor.title, selectedNote, user, workspace]);
 

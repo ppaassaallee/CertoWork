@@ -84,6 +84,7 @@ import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
+import { resolveFirestoreListenPacks } from "../lib/firestoreListenDiet";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
 import {
@@ -487,6 +488,7 @@ export function DelivereeWorkspace() {
   const location = useLocation();
   const navigate = useNavigate();
   const lens = resolveDelivereeLens(location.pathname);
+  const listenPacks = useMemo(() => resolveFirestoreListenPacks(lens), [lens]);
   const onCollab = lens.kind === "collab";
   const [workOpened, setWorkOpened] = useState(() => !onCollab);
   const [collabOpened, setCollabOpened] = useState(() => onCollab);
@@ -917,7 +919,6 @@ export function DelivereeWorkspace() {
       return queryClauses.map((clauses, index) =>
         onSnapshot(
           query(collection(db, name), ...clauses),
-          { includeMetadataChanges: true },
           (snapshot) => {
             if (!hasConfirmedSnapshotData(snapshot)) return;
             merge.update(
@@ -948,7 +949,6 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
@@ -988,7 +988,6 @@ export function DelivereeWorkspace() {
       ? [
           onSnapshot(
             query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
-            { includeMetadataChanges: true },
             (snapshot) => {
               if (!hasConfirmedSnapshotData(snapshot)) return;
               setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
@@ -1017,7 +1016,8 @@ export function DelivereeWorkspace() {
             ],
             setTasks,
           );
-    const unsubscribers = [
+    // Core always-on: conversations, projects, tasks, feedback, capture — keep the shell usable.
+    const unsubscribers: Array<() => void> = [
       makeQuery(
         "boldi_conversations",
         (items) => {
@@ -1060,7 +1060,6 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
-        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
@@ -1079,7 +1078,6 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
-        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
@@ -1092,98 +1090,179 @@ export function DelivereeWorkspace() {
         },
         reportDataSyncError,
       ),
-      subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages, reportDataSyncError),
-      makeQuery("milestones", setMilestones),
-      makeQuery("invoice_documents", (items) =>
-        setInvoiceDocuments(items as InvoiceDocument[]),
-      ),
-      makeQuery("support_cases", setSupportCases),
-      makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
-      makeQuery("boldr_risks", setRisks),
-      makeQuery("categories", setCategories, false, true),
-      makeQuery("cost_templates", setCostTemplates),
-      makeQuery("agent_templates", (items) =>
-        setProjectTemplates(
-          items.filter((item) => item.templateType === "project"),
-        ),
-      ),
-      makeQuery("strategic_goals", setStrategicGoals),
-      makeQuery("key_results", setStrategicMeasures),
-      makeQuery("strategic_initiatives", setStrategicRecords),
-      ...mergeQueries(
-        "knowledge_items",
-        [
-          [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-          [where("workspaceId", "==", workspace.id), where("projectId", "!=", "")],
-        ],
-        setKnowledgeItems,
-      ),
-      makeQuery(
-        "notebook_entries",
-        (items) => setNotebookEntries(items as NotebookEntry[]),
-        false,
-        true,
-      ),
-      makeQuery(
-        TABLES,
-        (items) =>
-          setWorkspaceTables(
-            (items as TableDoc[]).map((row) => ({
-              ...row,
-              id: row.id,
-            })),
-          ),
-        false,
-        false,
-      ),
-      makeQuery(
-        TABLE_RECORDS,
-        (items) =>
-          setWorkspaceRecords(
-            (items as RecordDoc[]).map((row) => ({
-              ...row,
-              id: row.id,
-            })),
-          ),
-        false,
-        false,
-      ),
-      makeQuery(
-        "review_candidates",
-        (items) => {
-          setReviewItems(
-            items.filter((item) =>
-              ["pending", "approved_for_review"].includes(item.status),
-            ),
-          );
-          setReviewHistory(items.filter((item) => ["approved", "dismissed"].includes(item.status)));
-        },
-        false,
-        true,
-      ),
-      makeQuery("odiseus_memory", setOdysseusMemory, false, true),
-      makeQuery(
-        "odiseus_activity",
-        (items) =>
-          setOdysseusActivity(
-            items.sort(
-              (left, right) =>
-                timestamp(right.createdAt) - timestamp(left.createdAt),
-            ),
-          ),
-        false,
-        true,
-      ),
-      makeQuery("skills", setWorkspaceSkills, false, true),
-      makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
     ];
+
+    if (listenPacks.itemMessages) {
+      unsubscribers.push(
+        subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages, reportDataSyncError),
+      );
+    } else {
+      setWorkItemMessages([]);
+    }
+
+    if (listenPacks.milestones) {
+      unsubscribers.push(makeQuery("milestones", setMilestones));
+    } else {
+      setMilestones([]);
+    }
+
+    if (listenPacks.financeOps) {
+      unsubscribers.push(
+        makeQuery("invoice_documents", (items) =>
+          setInvoiceDocuments(items as InvoiceDocument[]),
+        ),
+        makeQuery("support_cases", setSupportCases),
+        makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
+        makeQuery("boldr_risks", setRisks),
+        makeQuery("cost_templates", setCostTemplates),
+      );
+    } else {
+      setInvoiceDocuments([]);
+      setSupportCases([]);
+      setSprints([]);
+      setRisks([]);
+      setCostTemplates([]);
+    }
+
+    if (listenPacks.templatesCategories) {
+      unsubscribers.push(
+        makeQuery("categories", setCategories, false, true),
+        makeQuery("agent_templates", (items) =>
+          setProjectTemplates(
+            items.filter((item) => item.templateType === "project"),
+          ),
+        ),
+      );
+    } else {
+      setCategories([]);
+      setProjectTemplates([]);
+    }
+
+    if (listenPacks.strategyKnowledge) {
+      unsubscribers.push(
+        makeQuery("strategic_goals", setStrategicGoals),
+        makeQuery("key_results", setStrategicMeasures),
+        makeQuery("strategic_initiatives", setStrategicRecords),
+        ...mergeQueries(
+          "knowledge_items",
+          [
+            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
+            [where("workspaceId", "==", workspace.id), where("projectId", "!=", "")],
+          ],
+          setKnowledgeItems,
+        ),
+      );
+    } else {
+      setStrategicGoals([]);
+      setStrategicMeasures([]);
+      setStrategicRecords([]);
+      setKnowledgeItems([]);
+    }
+
+    if (listenPacks.notes) {
+      unsubscribers.push(
+        makeQuery(
+          "notebook_entries",
+          (items) => setNotebookEntries(items as NotebookEntry[]),
+          false,
+          true,
+        ),
+      );
+    } else {
+      setNotebookEntries([]);
+    }
+
+    if (listenPacks.tables) {
+      unsubscribers.push(
+        makeQuery(
+          TABLES,
+          (items) =>
+            setWorkspaceTables(
+              (items as TableDoc[]).map((row) => ({
+                ...row,
+                id: row.id,
+              })),
+            ),
+          false,
+          false,
+        ),
+      );
+    } else {
+      setWorkspaceTables([]);
+    }
+
+    if (listenPacks.tableRecords) {
+      unsubscribers.push(
+        makeQuery(
+          TABLE_RECORDS,
+          (items) =>
+            setWorkspaceRecords(
+              (items as RecordDoc[]).map((row) => ({
+                ...row,
+                id: row.id,
+              })),
+            ),
+          false,
+          false,
+        ),
+      );
+    } else {
+      setWorkspaceRecords([]);
+    }
+
+    if (listenPacks.review) {
+      unsubscribers.push(
+        makeQuery(
+          "review_candidates",
+          (items) => {
+            setReviewItems(
+              items.filter((item) =>
+                ["pending", "approved_for_review"].includes(item.status),
+              ),
+            );
+            setReviewHistory(items.filter((item) => ["approved", "dismissed"].includes(item.status)));
+          },
+          false,
+          true,
+        ),
+      );
+    } else {
+      setReviewItems([]);
+      setReviewHistory([]);
+    }
+
+    if (listenPacks.odysseus) {
+      unsubscribers.push(
+        makeQuery("odiseus_memory", setOdysseusMemory, false, true),
+        makeQuery(
+          "odiseus_activity",
+          (items) =>
+            setOdysseusActivity(
+              items.sort(
+                (left, right) =>
+                  timestamp(right.createdAt) - timestamp(left.createdAt),
+              ),
+            ),
+          false,
+          true,
+        ),
+        makeQuery("skills", setWorkspaceSkills, false, true),
+        makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
+      );
+    } else {
+      setOdysseusMemory([]);
+      setOdysseusActivity([]);
+      setWorkspaceSkills([]);
+      setOdysseusSchedules([]);
+    }
+
     return () => {
       cancelled = true;
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-    // dataAccessKey captures portfolio/triage mode; avoid restarting ~30 listeners on roster churn.
-  }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
+    // dataAccessKey + listenPacks.key: restart only when ACL mode or route packs change.
+  }, [dataAccessKey, dataRetryVersion, listenPacks.key, reportDataSyncError]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1452,13 +1531,12 @@ export function DelivereeWorkspace() {
 
   useEffect(() => {
     if (!user || !workspace) return;
-    const unsubscribers = [
+    const unsubscribers: Array<() => void> = [
       onSnapshot(
         query(
           collection(db, "workspace_members"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceMembers(
@@ -1474,7 +1552,6 @@ export function DelivereeWorkspace() {
           collection(db, "agent_groups"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
         (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceTeams(
@@ -1489,29 +1566,38 @@ export function DelivereeWorkspace() {
         },
         reportDataSyncError,
       ),
-      onSnapshot(
-        query(
-          collection(db, "agent_invites"),
-          where("workspaceId", "==", workspace.id),
+    ];
+
+    if (listenPacks.invites) {
+      unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, "agent_invites"),
+            where("workspaceId", "==", workspace.id),
+          ),
+          (snapshot) => {
+            if (!hasConfirmedSnapshotData(snapshot)) return;
+            setWorkspaceInvites(
+              snapshot.docs
+                .map((item) => ({ id: item.id, ...item.data() }))
+                .filter(
+                  (invite: any) => invite.inviteType === "workspace_member",
+                ),
+            );
+          },
+          reportDataSyncError,
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
-          if (!hasConfirmedSnapshotData(snapshot)) return;
-          setWorkspaceInvites(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }))
-              .filter(
-                (invite: any) => invite.inviteType === "workspace_member",
-              ),
-          );
-        },
-        reportDataSyncError,
-      ),
-      onSnapshot(
-        query(collection(db, "access_requests"), where("status", "==", "pending")),
-        { includeMetadataChanges: true },
-        (snapshot) => {
-          if (!hasConfirmedSnapshotData(snapshot)) return;
+      );
+    } else {
+      setWorkspaceInvites([]);
+    }
+
+    // Kill the global pending access_requests listen. Owner settings only, one-shot.
+    if (listenPacks.accessRequests && workspace.ownerId === user.uid) {
+      let cancelled = false;
+      void getDocs(query(collection(db, "access_requests"), where("status", "==", "pending")))
+        .then((snapshot) => {
+          if (cancelled) return;
           setAccessRequests(
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
@@ -1521,12 +1607,25 @@ export function DelivereeWorkspace() {
                   timestamp(left.requestedAt || left.updatedAt),
               ),
           );
-        },
-        reportDataSyncError,
-      ),
-    ];
+        })
+        .catch(reportDataSyncError);
+      return () => {
+        cancelled = true;
+        unsubscribers.forEach((unsubscribe) => unsubscribe());
+      };
+    }
+
+    setAccessRequests([]);
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [user?.uid, workspace?.id, dataRetryVersion, reportDataSyncError]);
+  }, [
+    user?.uid,
+    workspace?.id,
+    workspace?.ownerId,
+    dataRetryVersion,
+    listenPacks.invites,
+    listenPacks.accessRequests,
+    reportDataSyncError,
+  ]);
 
   useEffect(() => {
     if (!conversationId || !user || !workspace) {
@@ -1540,7 +1639,6 @@ export function DelivereeWorkspace() {
         where("userId", "==", user.uid),
         where("workspaceId", "==", workspace.id),
       ),
-      { includeMetadataChanges: true },
       (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setMessages(
