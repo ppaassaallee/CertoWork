@@ -12,4 +12,5 @@ test("quota failures are identified and explained without blaming the user", () 
 test("other workspace failures keep an appropriate recovery message", () => {
   assert.match(workspaceLoadErrorMessage({ code: "permission-denied" }), /membership/);
   assert.match(workspaceLoadErrorMessage(new Error("offline")), /connection/);
+  assert.match(workspaceLoadErrorMessage(new Error("Workspace owner lookup timed out")), /couldn't confirm your workspace data/);
 });

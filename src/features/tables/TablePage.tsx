@@ -22,6 +22,7 @@ import {
 } from "../../components/ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
+import { hasConfirmedSnapshotData } from "../../lib/firestoreSnapshotSafety";
 import { t } from "../../lib/i18n";
 import {
   TABLE_RECORDS,
@@ -140,6 +141,7 @@ export function TablePage({
 
   useEffect(() => {
     if (!ownsData) return;
+    setLiveRecords([]);
     const q = query(
       collection(db, TABLE_RECORDS),
       where("tableId", "==", table.id),
@@ -147,12 +149,14 @@ export function TablePage({
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!hasConfirmedSnapshotData(snap)) return;
         setLiveRecords(
           snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<RecordDoc, "id">) })),
         );
       },
-      () => setLiveRecords([]),
+      (error) => console.error(`Table ${table.id} records could not be refreshed`, error),
     );
   }, [ownsData, table.id]);
 

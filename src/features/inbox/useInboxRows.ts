@@ -11,6 +11,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+import { hasConfirmedSnapshotData } from "../../lib/firestoreSnapshotSafety";
 import type { InboxRow } from "../../mobile/pages/PhoneInbox";
 import type { Signal } from "../signals/types";
 
@@ -98,7 +99,9 @@ export function useInboxRows({
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!hasConfirmedSnapshotData(snap)) return;
         const rows = snap.docs.map(
           (d) => ({ id: d.id, ...d.data() }) as CollabNotification,
         );
@@ -108,7 +111,7 @@ export function useInboxRows({
             : rows,
         );
       },
-      () => setNotifications([]),
+      (error) => console.error("Inbox notifications could not be refreshed", error),
     );
   }, [userId, workspaceId]);
 

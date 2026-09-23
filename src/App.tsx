@@ -426,7 +426,7 @@ export default function App() {
             <Route element={<DesktopKitPreview />} path="/dev/desktop-kit" />
           </>
         ) : null}
-        <Route path="*" element={<DelivereeWorkspace />} />
+        <Route path="*" element={<DelivereeWorkspace key={workspace.id} />} />
       </Routes>
     </BrowserRouter>
   );

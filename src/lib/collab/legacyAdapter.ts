@@ -13,6 +13,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { hasConfirmedSnapshotData } from "../firestoreSnapshotSafety";
 import { ensureAnchorConversation } from "./conversationService";
 import { send as sendMessage, subscribe as subscribeMessages } from "./messageService";
 import { CONVERSATION_MESSAGES, type ConversationMessage } from "./types";
@@ -128,6 +129,7 @@ export async function listItemMessages(
 export function subscribeWorkspaceItemMessages(
   workspaceId: string,
   onChange: (messages: LegacyItemMessage[]) => void,
+  onError?: (error: unknown) => void,
 ): Unsubscribe {
   const q = query(
     collection(db, CONVERSATION_MESSAGES),
@@ -136,7 +138,9 @@ export function subscribeWorkspaceItemMessages(
   );
   return onSnapshot(
     q,
+    { includeMetadataChanges: true },
     (snap) => {
+      if (!hasConfirmedSnapshotData(snap)) return;
       const rows: LegacyItemMessage[] = [];
       for (const d of snap.docs) {
         const data = d.data() as ConversationMessage;
@@ -146,6 +150,6 @@ export function subscribeWorkspaceItemMessages(
       }
       onChange(rows);
     },
-    () => onChange([]),
+    (error) => onError?.(error),
   );
 }

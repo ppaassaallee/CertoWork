@@ -68,6 +68,8 @@ import {
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
+import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
+import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -504,8 +506,8 @@ export function DelivereeWorkspace() {
       .then((list) => {
         if (!cancelled) setPhoneCollabConversations(list);
       })
-      .catch(() => {
-        if (!cancelled) setPhoneCollabConversations([]);
+      .catch((error) => {
+        if (!cancelled) console.error("Phone conversations could not be refreshed", error);
       });
     return () => {
       cancelled = true;
@@ -784,6 +786,18 @@ export function DelivereeWorkspace() {
     }
   }, [highlightFinanceLineIdFromUrl]);
   const [notice, setNotice] = useState("");
+  const [dataSyncIssue, setDataSyncIssue] = useState<"quota" | "unavailable" | null>(null);
+  const [dataRetryVersion, setDataRetryVersion] = useState(0);
+  const reportDataSyncError = useCallback((error: unknown) => {
+    if (isFirestoreQuotaError(error)) {
+      setDataSyncIssue("quota");
+    } else if (
+      error && typeof error === "object" && "code" in error &&
+      ["unavailable", "deadline-exceeded"].includes(String(error.code))
+    ) {
+      setDataSyncIssue((current) => current || "unavailable");
+    }
+  }, []);
   const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error" | "info">(
     "success",
   );
@@ -895,28 +909,26 @@ export function DelivereeWorkspace() {
       queryClauses: any[][],
       callback: (items: any[]) => void,
     ) => {
-      const buckets = new Map<number, any[]>();
-      const publish = () => {
-        const merged = new Map<string, any>();
-        [...buckets.values()].flat().forEach((item) => {
-          if (item?.workspaceId === workspace.id) merged.set(item.id, item);
-        });
-        callback([...merged.values()]);
-      };
+      const merge = createCompleteSnapshotMerge<any>(
+        queryClauses.length,
+        callback,
+        (item) => item?.workspaceId === workspace.id,
+      );
       return queryClauses.map((clauses, index) =>
         onSnapshot(
           query(collection(db, name), ...clauses),
+          { includeMetadataChanges: true },
           (snapshot) => {
-            buckets.set(
+            if (!hasConfirmedSnapshotData(snapshot)) return;
+            merge.update(
               index,
               snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
             );
-            publish();
           },
           (error) => {
             console.error(`Firestore ${name} query ${index} failed`, error);
-            buckets.set(index, []);
-            publish();
+            merge.fail(index);
+            reportDataSyncError(error);
           },
         ),
       );
@@ -936,13 +948,14 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-        (snapshot) =>
-          callback(
-            snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-          ),
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
+          callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+        },
         (error) => {
           console.error(`Firestore ${name} query failed`, error);
-          callback([]);
+          reportDataSyncError(error);
         },
       );
     };
@@ -975,11 +988,15 @@ export function DelivereeWorkspace() {
       ? [
           onSnapshot(
             query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
-            (snapshot) =>
-              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+            { includeMetadataChanges: true },
+            (snapshot) => {
+              if (!hasConfirmedSnapshotData(snapshot)) return;
+              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+            },
             (error) => {
               console.error("Workspace projects query failed; falling back to role queries", error);
-              startRoleProjectQueries();
+              reportDataSyncError(error);
+              if (!isFirestoreQuotaError(error)) startRoleProjectQueries();
             },
           ),
         ]
@@ -1043,7 +1060,9 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
             (item) => ({ id: item.id, ...item.data() }) as CaptureAddress,
           );
@@ -1051,7 +1070,7 @@ export function DelivereeWorkspace() {
             rows.find((row) => (row.status || "active") === "active") || rows[0] || null;
           setCaptureAddress(active);
         },
-        () => setCaptureAddress(null),
+        reportDataSyncError,
       ),
       onSnapshot(
         query(
@@ -1060,7 +1079,9 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
+        { includeMetadataChanges: true },
         (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as CaptureAddress)
             .filter((row) => (row.status || "active") === "active")
@@ -1069,9 +1090,9 @@ export function DelivereeWorkspace() {
             );
           setTeamCaptureAddresses(rows);
         },
-        () => setTeamCaptureAddresses([]),
+        reportDataSyncError,
       ),
-      subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages),
+      subscribeWorkspaceItemMessages(workspace.id, setWorkItemMessages, reportDataSyncError),
       makeQuery("milestones", setMilestones),
       makeQuery("invoice_documents", (items) =>
         setInvoiceDocuments(items as InvoiceDocument[]),
@@ -1162,7 +1183,7 @@ export function DelivereeWorkspace() {
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
     // dataAccessKey captures portfolio/triage mode; avoid restarting ~30 listeners on roster churn.
-  }, [dataAccessKey]);
+  }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1322,13 +1343,13 @@ export function DelivereeWorkspace() {
       .then((rows) => {
         if (!cancelled) setAgentRoutines(rows);
       })
-      .catch(() => {
-        if (!cancelled) setAgentRoutines([]);
+      .catch((error) => {
+        if (!cancelled) reportDataSyncError(error);
       });
     return () => {
       cancelled = true;
     };
-  }, [workspace?.id, user?.uid, centerView]);
+  }, [workspace?.id, user?.uid, centerView, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     if (!workspace?.id || !user?.uid) {
@@ -1350,16 +1371,13 @@ export function DelivereeWorkspace() {
         );
         setWeeklyPlanSession(weekly);
       })
-      .catch(() => {
-        if (!cancelled) {
-          setRitualSessions([]);
-          setWeeklyPlanSession(null);
-        }
+      .catch((error) => {
+        if (!cancelled) reportDataSyncError(error);
       });
     return () => {
       cancelled = true;
     };
-  }, [workspace?.id, user?.uid, activeRitual?.id]);
+  }, [workspace?.id, user?.uid, activeRitual?.id, dataRetryVersion, reportDataSyncError]);
 
   const openRitualSession = async (sessionLike: any) => {
     if (!sessionLike?.id) return;
@@ -1440,20 +1458,25 @@ export function DelivereeWorkspace() {
           collection(db, "workspace_members"),
           where("workspaceId", "==", workspace.id),
         ),
-        (snapshot) =>
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceMembers(
             snapshot.docs.map(
               (item) => ({ id: item.id, ...item.data() }) as WorkspaceMember,
             ),
-          ),
-        () => setWorkspaceMembers([]),
+          );
+        },
+        reportDataSyncError,
       ),
       onSnapshot(
         query(
           collection(db, "agent_groups"),
           where("workspaceId", "==", workspace.id),
         ),
-        (snapshot) =>
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceTeams(
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }) as WorkspaceTeam)
@@ -1462,27 +1485,33 @@ export function DelivereeWorkspace() {
                   team.groupType === "workspace_team" &&
                   team.status !== "archived",
               ),
-          ),
-        () => setWorkspaceTeams([]),
+          );
+        },
+        reportDataSyncError,
       ),
       onSnapshot(
         query(
           collection(db, "agent_invites"),
           where("workspaceId", "==", workspace.id),
         ),
-        (snapshot) =>
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceInvites(
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }))
               .filter(
                 (invite: any) => invite.inviteType === "workspace_member",
               ),
-          ),
-        () => setWorkspaceInvites([]),
+          );
+        },
+        reportDataSyncError,
       ),
       onSnapshot(
         query(collection(db, "access_requests"), where("status", "==", "pending")),
-        (snapshot) =>
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
           setAccessRequests(
             snapshot.docs
               .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
@@ -1491,12 +1520,13 @@ export function DelivereeWorkspace() {
                   timestamp(right.requestedAt || right.updatedAt) -
                   timestamp(left.requestedAt || left.updatedAt),
               ),
-          ),
-        () => setAccessRequests([]),
+          );
+        },
+        reportDataSyncError,
       ),
     ];
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [user, workspace]);
+  }, [user?.uid, workspace?.id, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     if (!conversationId || !user || !workspace) {
@@ -1510,7 +1540,9 @@ export function DelivereeWorkspace() {
         where("userId", "==", user.uid),
         where("workspaceId", "==", workspace.id),
       ),
-      (snapshot) =>
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
         setMessages(
           snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as Message)
@@ -1518,10 +1550,11 @@ export function DelivereeWorkspace() {
               (left, right) =>
                 timestamp(left.createdAt) - timestamp(right.createdAt),
             ),
-        ),
-      () => setMessages([]),
+        );
+      },
+      reportDataSyncError,
     );
-  }, [conversationId, user, workspace]);
+  }, [conversationId, user?.uid, workspace?.id, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -7760,6 +7793,25 @@ export function DelivereeWorkspace() {
             )}
           </div>
         </header>
+
+        {dataSyncIssue && (
+          <div className="do-data-sync-banner" data-testid="data-sync-warning" role="alert">
+            <span>
+              {dataSyncIssue === "quota"
+                ? "Certo Work has reached its data usage limit. This error does not delete records; the last loaded view may be incomplete until Firebase is available again."
+                : "Certo Work cannot refresh data right now. This error does not delete records; the last loaded view may be incomplete."}
+            </span>
+            <button
+              onClick={() => {
+                setDataSyncIssue(null);
+                setDataRetryVersion((version) => version + 1);
+              }}
+              type="button"
+            >
+              Retry sync
+            </button>
+          </div>
+        )}
 
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>

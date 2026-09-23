@@ -19,7 +19,7 @@ test("workspace data listeners use a stable access key", () => {
     "utf8",
   );
   assert.match(source, /dataAccessKey/);
-  assert.match(source, /\[dataAccessKey\]/);
+  assert.match(source, /\[dataAccessKey, dataRetryVersion, reportDataSyncError\]/);
   assert.match(source, /do not re-run Auth bootstrap/);
   assert.match(source, /setWorkspace\(pureAi, \{ reload: false \}\)/);
 });

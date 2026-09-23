@@ -2364,6 +2364,33 @@ a {
 .do-main > .do-composer-note {
   flex: none;
 }
+.do-data-sync-banner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #f1d28a;
+  background: #fff8e7;
+  padding: 9px 18px;
+  color: #6b4c0f;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.do-data-sync-banner button {
+  flex: none;
+  border: 1px solid #d9b970;
+  border-radius: 7px;
+  background: #fff;
+  padding: 5px 10px;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .do-data-sync-banner { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
 /* Thread viewport is the scroll container (Home + chat). Do not set
    overflow:hidden here — it overrides .do-thread-viewport { overflow-y:auto }
    and traps Home content with no vertical scroll. */

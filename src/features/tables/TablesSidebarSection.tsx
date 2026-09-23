@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+import { hasConfirmedSnapshotData } from "../../lib/firestoreSnapshotSafety";
 import type { TableDoc } from "../../lib/tables";
 import { useTablesEnabled } from "../flags/featureUserFlags";
 
@@ -15,6 +16,7 @@ export function TablesSidebarSection(props: {
 
   useEffect(() => {
     if (!enabled) return;
+    setTables([]);
     const q = query(
       collection(db, "tables"),
       where("workspaceId", "==", props.workspaceId),
@@ -22,14 +24,16 @@ export function TablesSidebarSection(props: {
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: true },
       (snap) => {
+        if (!hasConfirmedSnapshotData(snap)) return;
         setTables(
           snap.docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<TableDoc, "id">) }))
             .filter((t) => t.status !== "deleted"),
         );
       },
-      () => setTables([]),
+      (error) => console.error(`Workspace ${props.workspaceId} tables could not be refreshed`, error),
     );
   }, [enabled, props.workspaceId]);
 

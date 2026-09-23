@@ -22,5 +22,8 @@ export function workspaceLoadErrorMessage(error: unknown) {
   if (code === "permission-denied" || code === "firestore/permission-denied") {
     return "Certo Work couldn't access your workspace. Ask an admin to check your workspace membership and data permissions.";
   }
+  if (code === "unavailable" || code === "deadline-exceeded" || /timed out|not confirmed by server/i.test(errorMessage(error))) {
+    return "Certo Work couldn't confirm your workspace data right now. Your records have not been cleared by this error. Wait a moment and try again; if it continues, ask an admin to check Firestore availability and usage.";
+  }
   return "Your workspace could not be opened. Check your connection and try again.";
 }

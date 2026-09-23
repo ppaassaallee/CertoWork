@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { Bell } from "./ui/Icon";
 import { db } from "../lib/firebase";
+import { hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
 
 export type UserNotification = {
   id: string;
@@ -53,14 +54,16 @@ export function AssignmentNotificationsBell({
     );
     return onSnapshot(
       q,
+      { includeMetadataChanges: true },
       (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
         setItems(
           sortNotifications(
             snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as UserNotification)),
           ).slice(0, 20),
         );
       },
-      () => setItems([]),
+      (error) => console.error("Assignment notifications could not be refreshed", error),
     );
   }, [userId]);
 

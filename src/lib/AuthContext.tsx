@@ -123,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const wsMap = new Map<string, Workspace>();
       const memberWorkspaceIds = new Set<string>();
       let lookupSucceeded = false;
+      let coreLookupsConfirmed = false;
       const lookupFailures: unknown[] = [];
       let pendingInviteDocs: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
 
@@ -134,6 +135,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const openWorkspaceList = (list: Workspace[]) => {
         if (!list.length) return false;
         const storedId = localStorage.getItem('activeWorkspaceId');
+        // A partial/cached lookup must not silently switch away from the
+        // user's last workspace and make its projects appear to disappear.
+        if (storedId && !list.some((ws) => ws.id === storedId) && !coreLookupsConfirmed) return false;
         const active =
           pickPreferredWorkspace(list, {
             userEmail: u.email,
@@ -213,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (ownerResult.status === 'fulfilled') {
-        lookupSucceeded = true;
+        lookupSucceeded ||= !ownerResult.value.metadata.fromCache;
         ownerResult.value.forEach((d) => wsMap.set(d.id, { id: d.id, ...d.data() } as Workspace));
       } else {
         lookupFailures.push(ownerResult.reason);
@@ -221,12 +225,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (memberResult.status === 'fulfilled') {
-        lookupSucceeded = true;
+        lookupSucceeded ||= !memberResult.value.metadata.fromCache;
         await ingestMembershipSnap(memberResult.value);
       } else {
         lookupFailures.push(memberResult.reason);
         console.error("Failed to load member workspaces:", memberResult.reason);
       }
+      coreLookupsConfirmed = ownerResult.status === 'fulfilled' && !ownerResult.value.metadata.fromCache
+        && memberResult.status === 'fulfilled' && !memberResult.value.metadata.fromCache;
 
       // When both entry-point reads hit a quota outage, further invite lookups
       // cannot recover the workspace and only add failed requests.
@@ -250,7 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             7_000,
             'Workspace email invite lookup',
           );
-          lookupSucceeded = true;
+          lookupSucceeded ||= !snapEmailWorkspaces.metadata.fromCache;
           await Promise.allSettled(
             snapEmailWorkspaces.docs.map(async (wsDoc) => {
               const ws = { id: wsDoc.id, ...wsDoc.data() } as Workspace;
@@ -283,7 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             7_000,
             'Workspace invite lookup',
           );
-          lookupSucceeded = true;
+          lookupSucceeded ||= !snapInvited.metadata.fromCache;
           let inviteSnaps: Awaited<ReturnType<typeof getDocs>>["docs"] = [];
           try {
             const snapInvites = await withTimeout(
@@ -397,7 +403,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const quotaFailure = lookupFailures.find(isFirestoreQuotaError);
       if (quotaFailure) throw quotaFailure;
-      if (!lookupSucceeded) throw lookupFailures[0] || new Error('Workspace lookups did not complete');
+      if (!lookupSucceeded) throw lookupFailures[0] || new Error('Workspace lookups were not confirmed by server');
       const openInvites = pendingInviteDocs.filter((inviteDoc) => {
         const data = inviteDoc.data() as { status?: string; inviteType?: string; workspaceId?: string };
         return inviteIsUsable(data) && String(data.workspaceId || "");
@@ -455,6 +461,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setWorkspaces([]);
         setWorkspaceError("You have a workspace invitation. Open the invite link from your email (or ask an admin to resend it), then sign in with that exact email.");
         return;
+      }
+      if (!coreLookupsConfirmed) {
+        throw lookupFailures[0] || new Error('Workspace lookups were not confirmed by server');
       }
       const isEmailPasswordAccount = u.providerData.some((provider) => provider.providerId === "password");
       if (isEmailPasswordAccount) {
