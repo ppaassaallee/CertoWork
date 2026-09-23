@@ -7678,24 +7678,7 @@ export function DelivereeWorkspace() {
           >
             <Menu size={18} />
           </button>
-          <div className="do-header-center">
-            {centerView !== "portfolio" ? (
-              <button
-                aria-label="Open command palette"
-                className="do-top-search"
-                onClick={() => setCommandPaletteOpen(true)}
-                title="Command palette (⌘K)"
-                type="button"
-              >
-                <Search size={15} />
-                <span>{t("headerSearch")}</span>
-                <kbd>⌘K</kbd>
-              </button>
-            ) : (
-              <div className="do-top-search-spacer" />
-            )}
-          </div>
-          <div className="do-breadcrumb do-breadcrumb-compact">
+          <div className="do-breadcrumb do-breadcrumb-path">
             <AppBreadcrumbs
               segments={[
                 {
@@ -7788,6 +7771,23 @@ export function DelivereeWorkspace() {
               ]}
             />
           </div>
+          <div className="do-header-center">
+            {centerView !== "portfolio" ? (
+              <button
+                aria-label="Open command palette"
+                className="do-top-search"
+                onClick={() => setCommandPaletteOpen(true)}
+                title="Command palette (⌘K)"
+                type="button"
+              >
+                <Search size={15} />
+                <span>{t("headerSearch")}</span>
+                <kbd>⌘K</kbd>
+              </button>
+            ) : (
+              <div className="do-top-search-spacer" aria-hidden="true" />
+            )}
+          </div>
           <div className="do-header-actions">
             <AssignmentNotificationsBell
               onOpenTask={(taskId) => {
@@ -7805,7 +7805,7 @@ export function DelivereeWorkspace() {
               type="button"
             >
               <Sparkles size={14} />
-              <span>Odysseus</span>
+              <span className="do-ody-label">Odysseus</span>
             </button>
             {mobileCore && (
               <>

@@ -26,9 +26,6 @@ const FILTERS: Array<{ id: ConversationFilter; label: string }> = [
   { id: "me", label: "@Me" },
   { id: "projects", label: "Projects" },
   { id: "direct", label: "Direct" },
-  { id: "groups", label: "Groups" },
-  { id: "external", label: "External" },
-  { id: "agents", label: "Agents" },
 ];
 
 type SectionId =
@@ -200,7 +197,7 @@ export function ConversationList({
             ) : null}
             <button
               type="button"
-              className="do-collab-btn-primary do-collab-new-btn"
+              className="do-collab-btn-secondary do-collab-new-btn"
               onClick={() => setNewOpen((o) => !o)}
               aria-expanded={newOpen}
               data-testid="collab-new-btn"
