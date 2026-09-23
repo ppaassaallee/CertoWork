@@ -4818,6 +4818,68 @@ export function DelivereeWorkspace() {
     });
   };
 
+  const permanentlyDeleteProjects = async (projectsToRemove: any[]) => {
+    const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
+    const deleted = projectsToRemove.filter(
+      (project) => String(project.status || "").toLowerCase() === "deleted",
+    );
+    if (!deleted.length) {
+      setNotice("Select projects that are already in Deleted.");
+      return;
+    }
+    const blocked = deleted.find(
+      (project) => !canDeleteProject(project, user, workspace, memberId),
+    );
+    if (blocked) {
+      setNotice("Only the Project Manager or workspace owner can delete projects forever.");
+      return;
+    }
+    if (!user || !workspace) return;
+    const linkedTaskCount = openTasks.filter((task) =>
+      deleted.some((project) => project.id === task.projectId),
+    ).length;
+    setDestructiveDialog({
+      verb: "Delete forever",
+      entityName: `${deleted.length} project${deleted.length === 1 ? "" : "s"}`,
+      impact: [
+        "This cannot be undone",
+        `${linkedTaskCount} linked item${linkedTaskCount === 1 ? "" : "s"} will also be removed`,
+        "Documents stay in knowledge unless removed separately",
+        "Use this to clear Deleted projects you will not restore",
+      ],
+      onConfirm: async () => {
+        if (!user || !workspace) return;
+        setDestructiveBusy(true);
+        try {
+          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
+          for (const project of deleted) {
+            for (const task of openTasks.filter((row) => row.projectId === project.id)) {
+              deletions.push((batch) => batch.delete(doc(db, "tasks", task.id)));
+            }
+            deletions.push((batch) => batch.delete(doc(db, "projects", project.id)));
+          }
+          for (let index = 0; index < deletions.length; index += 400) {
+            const batch = writeBatch(db);
+            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
+            await batch.commit();
+          }
+          if (deleted.some((project) => project.id === projectConsoleId)) {
+            setProjectConsoleId(null);
+            setPanel(null);
+            goCenterView("portfolio");
+          }
+          if (deleted.some((project) => project.id === activeProject?.id)) navigate("/");
+          setNotice(
+            `${deleted.length} project${deleted.length === 1 ? "" : "s"} deleted forever.`,
+          );
+          setDestructiveDialog(null);
+        } finally {
+          setDestructiveBusy(false);
+        }
+      },
+    });
+  };
+
   const leaveTableSurface = (tableId: string) => {
     if (lens.kind === "tables" && lens.tableId === tableId) {
       navigate("/");
@@ -8956,6 +9018,7 @@ export function DelivereeWorkspace() {
             onDeleteProject={deleteProject}
             onRestoreProject={restoreProject}
             onPermanentlyDeleteProject={permanentlyDeleteProject}
+            onPermanentlyDeleteProjects={permanentlyDeleteProjects}
             onClose={() => goCenterView("conversation")}
             onAsk={(prompt) => {
               setComposer(prompt);

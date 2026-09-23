@@ -156,8 +156,10 @@ export function ViewGrid<Row>({
     sizingSyncedForView.current = key;
     const next: ColumnSizingState = {};
     for (const col of visibleColumnDefs) {
-      next[col.id] =
-        col.width || (col.render === "title" || col.fixed ? 240 : 140);
+      const fallback = col.render === "title" || col.fixed ? 240 : 140;
+      const min = col.minWidth || (col.render === "title" || col.fixed ? 160 : 72);
+      const raw = col.width || fallback;
+      next[col.id] = Math.max(min, Math.min(480, raw));
     }
     next._select = 36;
     next._actions = 120;
@@ -492,12 +494,22 @@ export function ViewGrid<Row>({
                       onClick={(e) => {
                         if (
                           (e.target as HTMLElement).closest(
+                            "input,select,button,a,label,.cw-tables-status,.cw-tables-person,.cw-views-cell",
+                          )
+                        ) {
+                          setFocusedRowId(id);
+                          return;
+                        }
+                        setFocusedRowId(id);
+                      }}
+                      onDoubleClick={(e) => {
+                        if (
+                          (e.target as HTMLElement).closest(
                             "input,select,button,a,label",
                           )
                         ) {
                           return;
                         }
-                        setFocusedRowId(id);
                         onOpenRow?.(rowData);
                       }}
                     >

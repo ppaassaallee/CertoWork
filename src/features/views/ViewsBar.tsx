@@ -41,17 +41,32 @@ export function ViewsBar({
         </button>
       </div>
       <div className="cw-views-bar-tools">
-        <button type="button">
+        <button
+          data-testid="views-filter"
+          onClick={onOpenCustomizer}
+          title={t("views.customize")}
+          type="button"
+        >
           <Filter size={13} />
           {t("views.filter")}
           {filterCount > 0 ? ` ${filterCount}` : ""}
         </button>
-        <button type="button">
+        <button
+          data-testid="views-sort"
+          onClick={onOpenCustomizer}
+          title={t("views.customize")}
+          type="button"
+        >
           <Layers size={13} />
           {t("views.sort")}
           {sortLabel ? ` ${sortLabel}` : ""}
         </button>
-        <button type="button">
+        <button
+          data-testid="views-group"
+          onClick={onOpenCustomizer}
+          title={t("views.customize")}
+          type="button"
+        >
           <LayoutGrid size={13} />
           {t("views.group")}
           {groupLabel ? ` ${groupLabel}` : ""}

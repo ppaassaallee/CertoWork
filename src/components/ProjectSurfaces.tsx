@@ -355,6 +355,7 @@ type SharedProjectActions = {
   onDeleteProject?: (project: any) => Promise<void> | void;
   onRestoreProject?: (project: any) => Promise<void> | void;
   onPermanentlyDeleteProject?: (project: any) => Promise<void> | void;
+  onPermanentlyDeleteProjects?: (projects: any[]) => Promise<void> | void;
 };
 
 function projectTitle(project: any) {
@@ -5560,8 +5561,9 @@ export function ProjectCommandCenter({
   onUpdateProject,
   onArchiveProject,
   onDeleteProject: _onDeleteProject,
-  onRestoreProject: _onRestoreProject,
-  onPermanentlyDeleteProject: _onPermanentlyDeleteProject,
+  onRestoreProject,
+  onPermanentlyDeleteProject,
+  onPermanentlyDeleteProjects,
   onOpenProject,
   onCreateCostTemplate,
   onUpdateCostTemplate,
@@ -5983,6 +5985,17 @@ export function ProjectCommandCenter({
     visibleProjectIds.every((id) => selectedProjectIds.includes(id));
   const someVisibleProjectsSelected = visibleProjectIds.some((id) =>
     selectedProjectIds.includes(id),
+  );
+  const selectedProjects = selectedProjectIds
+    .map((id) => projects.find((project) => project.id === id))
+    .filter(Boolean) as any[];
+  const selectedDeletedProjects = selectedProjects.filter(
+    (project) => String(project.status || "").toLowerCase() === "deleted",
+  );
+  const viewingDeletedOnly =
+    statusFilters.length === 1 && statusFilters[0] === "deleted";
+  const deletedProjectsInView = sortedFiltered.filter(
+    (project) => String(project.status || "").toLowerCase() === "deleted",
   );
   const toggleSelectAllProjects = () => {
     if (allVisibleProjectsSelected) {
@@ -7065,25 +7078,98 @@ export function ProjectCommandCenter({
 
                 <div className="do-command-bulk-group is-danger">
                   <span>Danger</span>
-                  <button
-                    className="do-command-bulk-danger"
-                    disabled={bulkBusy}
-                    onClick={() =>
-                      void runBulkProjectAction("Archive", () =>
-                        selectedProjectIds.map((id) => {
-                          const project = projects.find((item) => item.id === id);
-                          return project ? onArchiveProject(project) : Promise.resolve();
-                        }),
-                      )
-                    }
-                    type="button"
-                  >
-                    Archive
-                  </button>
+                  {selectedDeletedProjects.length > 0 &&
+                  (onPermanentlyDeleteProjects || onPermanentlyDeleteProject) ? (
+                    <button
+                      className="do-command-bulk-danger"
+                      data-testid="project-bulk-delete-forever"
+                      disabled={bulkBusy}
+                      onClick={() => {
+                        if (onPermanentlyDeleteProjects) {
+                          void onPermanentlyDeleteProjects(selectedDeletedProjects);
+                          return;
+                        }
+                        void runBulkProjectAction("Delete forever", () =>
+                          selectedDeletedProjects.map((project) =>
+                            onPermanentlyDeleteProject?.(project),
+                          ),
+                        );
+                      }}
+                      type="button"
+                    >
+                      Delete forever ({selectedDeletedProjects.length})
+                    </button>
+                  ) : null}
+                  {selectedDeletedProjects.length > 0 && onRestoreProject ? (
+                    <button
+                      disabled={bulkBusy}
+                      onClick={() =>
+                        void runBulkProjectAction("Restore", () =>
+                          selectedDeletedProjects.map((project) =>
+                            onRestoreProject(project),
+                          ),
+                        )
+                      }
+                      type="button"
+                    >
+                      Restore
+                    </button>
+                  ) : null}
+                  {selectedDeletedProjects.length === 0 ? (
+                    <button
+                      className="do-command-bulk-danger"
+                      disabled={bulkBusy}
+                      onClick={() =>
+                        void runBulkProjectAction("Archive", () =>
+                          selectedProjectIds.map((id) => {
+                            const project = projects.find((item) => item.id === id);
+                            return project ? onArchiveProject(project) : Promise.resolve();
+                          }),
+                        )
+                      }
+                      type="button"
+                    >
+                      Archive
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>
           )}
+          {viewingDeletedOnly &&
+          deletedProjectsInView.length > 0 &&
+          (onPermanentlyDeleteProjects || onPermanentlyDeleteProject) ? (
+            <div
+              className="do-command-deleted-purge"
+              data-testid="projects-deleted-purge"
+            >
+              <span>
+                {deletedProjectsInView.length} deleted project
+                {deletedProjectsInView.length === 1 ? "" : "s"} — permanently remove
+                ones you do not plan to restore.
+              </span>
+              <button
+                className="do-command-bulk-danger"
+                data-testid="projects-purge-all-deleted"
+                disabled={bulkBusy}
+                onClick={() => {
+                  if (onPermanentlyDeleteProjects) {
+                    void onPermanentlyDeleteProjects(deletedProjectsInView);
+                    return;
+                  }
+                  setSelectedProjectIds(deletedProjectsInView.map((project) => project.id));
+                  void runBulkProjectAction("Delete forever", () =>
+                    deletedProjectsInView.map((project) =>
+                      onPermanentlyDeleteProject?.(project),
+                    ),
+                  );
+                }}
+                type="button"
+              >
+                Delete all forever
+              </button>
+            </div>
+          ) : null}
           <div className="do-command-subtoolbar">
             <label>
               Stage

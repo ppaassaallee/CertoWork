@@ -6,6 +6,11 @@ import type {
   Surface,
 } from "../../../lib/views/types";
 import { projectHealth, projectHealthLabel } from "../../../lib/projectPortfolio";
+import {
+  DELIVERY_STAGES,
+  deliveryPhaseLabels,
+  deliveryStageLabels,
+} from "../../../lib/projectDelivery";
 import { t } from "../../../lib/i18n";
 import { toDateKey } from "../../../shared/formatDate";
 
@@ -118,9 +123,9 @@ export function buildProjectAdapter(
         });
       },
       options: () =>
-        ["define", "onboarding", "build", "deploy", "operations"].map((id) => ({
+        DELIVERY_STAGES.map((id) => ({
           id,
-          label: id,
+          label: deliveryStageLabels[id],
           tone: "neutral",
         })),
     },
@@ -130,12 +135,19 @@ export function buildProjectAdapter(
       type: "dropdown",
       sortable: true,
       groupable: true,
+      width: 120,
       read: (row) => readString(row, ["deliveryPhase", "phase", "productPhase"]),
       write: async (row, value) => {
         await deps.onUpdateProject(row.id, {
           deliveryPhase: value ? String(value) : null,
         });
       },
+      options: () =>
+        Object.entries(deliveryPhaseLabels).map(([id, label]) => ({
+          id,
+          label,
+          tone: "neutral",
+        })),
     },
     {
       id: "health",

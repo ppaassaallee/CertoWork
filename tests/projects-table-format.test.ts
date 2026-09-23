@@ -13,6 +13,7 @@ test("project adapter coerces Firestore dates and never stringifies Timestamp(",
   assert.match(adapter, /toDateKey/);
   assert.match(adapter, /function readDate/);
   assert.match(adapter, /type: "updated_at"/);
+  assert.match(adapter, /deliveryPhaseLabels/);
   assert.doesNotMatch(
     adapter,
     /readString\(row, \["updatedAt"\]\)/,
@@ -28,8 +29,22 @@ test("ViewGrid enables mouse column resize with visible handles", () => {
   assert.match(viewGrid, /cw-views-col-resizer/);
   assert.match(viewGrid, /readOnly=\{!column\.write\}/);
   assert.match(viewGrid, /onViewChange/);
+  assert.match(viewGrid, /onDoubleClick/);
+  assert.match(viewGrid, /onDoubleClick=\{[\s\S]*?onOpenRow\?\.\(rowData\)/);
+  assert.match(
+    viewGrid,
+    /onClick=\{[\s\S]*?setFocusedRowId\(id\);\s*return;/,
+  );
   assert.match(css, /\.cw-views-col-resizer/);
   assert.match(css, /cursor:\s*col-resize/);
+});
+
+test("ViewsBar Filter Sort Group open the customizer", () => {
+  const bar = readFileSync(resolve("src/features/views/ViewsBar.tsx"), "utf8");
+  assert.match(bar, /data-testid="views-filter"/);
+  assert.match(bar, /data-testid="views-sort"/);
+  assert.match(bar, /data-testid="views-group"/);
+  assert.match(bar, /onClick=\{onOpenCustomizer\}/);
 });
 
 test("ProjectsViewsSurface persists resized column widths", () => {
@@ -62,4 +77,21 @@ test("toDateKey produces ISO keys for project updatedAt shapes", () => {
   assert.match(toDateKey(ts), /^2026-09-2[23]$/);
   assert.equal(String(ts).includes("Timestamp("), true);
   assert.equal(toDateKey(ts).includes("Timestamp"), false);
+});
+
+test("Projects list can permanently purge Deleted projects", () => {
+  const surfaces = readFileSync(
+    resolve("src/components/ProjectSurfaces.tsx"),
+    "utf8",
+  );
+  const workspace = readFileSync(
+    resolve("src/components/DelivereeWorkspace.tsx"),
+    "utf8",
+  );
+  assert.match(surfaces, /onPermanentlyDeleteProjects/);
+  assert.match(surfaces, /project-bulk-delete-forever/);
+  assert.match(surfaces, /projects-purge-all-deleted/);
+  assert.match(surfaces, /Delete all forever/);
+  assert.match(workspace, /permanentlyDeleteProjects/);
+  assert.match(workspace, /onPermanentlyDeleteProjects=\{permanentlyDeleteProjects\}/);
 });
