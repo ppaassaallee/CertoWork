@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
+  type ColumnSizingState,
 } from "@tanstack/react-table";
 import {
   AlertTriangle,
@@ -98,6 +99,7 @@ export function ViewGrid<Row>({
   onOpenProject,
   memberIds = [],
   cellColumnLookup,
+  onViewChange,
   onOpenRow,
   onCreateRow,
   selectedIds,
@@ -113,6 +115,9 @@ export function ViewGrid<Row>({
   const [draftTitle, setDraftTitle] = useState("");
   const [menuRowId, setMenuRowId] = useState<string | null>(null);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const sizingSyncedForView = useRef<string | null>(null);
+  const wasResizing = useRef(false);
 
   const applied = useMemo(
     () =>
@@ -144,6 +149,23 @@ export function ViewGrid<Row>({
       .filter(Boolean) as typeof adapter.columns;
   }, [adapter.columns, view.columns]);
 
+  // Sync sizing from the active view when columns change (not while dragging).
+  useEffect(() => {
+    const key = `${view.id}:${visibleColumnDefs.map((col) => `${col.id}:${col.width || 0}`).join("|")}`;
+    if (sizingSyncedForView.current === key) return;
+    sizingSyncedForView.current = key;
+    const next: ColumnSizingState = {};
+    for (const col of visibleColumnDefs) {
+      const fallback = col.render === "title" || col.fixed ? 240 : 140;
+      const min = col.minWidth || (col.render === "title" || col.fixed ? 160 : 72);
+      const raw = col.width || fallback;
+      next[col.id] = Math.max(min, Math.min(480, raw));
+    }
+    next._select = 36;
+    next._actions = 120;
+    setColumnSizing(next);
+  }, [view.id, visibleColumnDefs]);
+
   const titleCol = visibleColumnDefs.find((col) => col.render === "title" || col.fixed);
   const helper = useMemo(() => createColumnHelper<Row>(), []);
 
@@ -151,6 +173,9 @@ export function ViewGrid<Row>({
     const selectCol = helper.display({
       id: "_select",
       size: 36,
+      minSize: 36,
+      maxSize: 36,
+      enableResizing: false,
       header: () => {
         const all =
           applied.rows.length > 0 && selected.size === applied.rows.length;
@@ -193,6 +218,9 @@ export function ViewGrid<Row>({
         id: column.id,
         header: () => column.label,
         size: column.width || (column.render === "title" ? 240 : 140),
+        minSize: column.minWidth || (column.render === "title" || column.fixed ? 160 : 72),
+        maxSize: 480,
+        enableResizing: true,
         cell: ({ row, getValue }) => {
           const tableCol =
             cellColumnLookup?.(column.id) ||
@@ -211,11 +239,15 @@ export function ViewGrid<Row>({
             column.render === "hierarchy" && adapter.parentId?.(row.original)
               ? 1
               : 0;
+          const numeric =
+            column.type === "number" ||
+            column.type === "currency" ||
+            column.type === "progress";
           return (
             <div
               className={`cw-views-cell${isTitle ? " is-title" : ""}${
                 column.render === "hierarchy" ? " is-hierarchy" : ""
-              }`}
+              }${numeric ? " is-numeric" : ""}`}
               onDoubleClick={() => isTitle && onOpenRow?.(row.original)}
               style={depth ? { paddingLeft: depth * 16 } : undefined}
             >
@@ -227,6 +259,7 @@ export function ViewGrid<Row>({
                 onChange={(next) => {
                   void column.write?.(row.original, next as RecordValue);
                 }}
+                readOnly={!column.write}
                 value={getValue() as RecordValue}
               />
             </div>
@@ -246,6 +279,9 @@ export function ViewGrid<Row>({
               id: "_actions",
               header: () => t("views.actions"),
               size: 120,
+              minSize: 96,
+              maxSize: 200,
+              enableResizing: true,
               cell: ({ row }) => {
                 const rowArr = [row.original];
                 return (
@@ -310,7 +346,35 @@ export function ViewGrid<Row>({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => adapter.rowId(row),
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
+    state: { columnSizing },
+    onColumnSizingChange: setColumnSizing,
+    defaultColumn: {
+      minSize: 72,
+      maxSize: 480,
+    },
   });
+
+  // Persist column widths when a drag resize ends.
+  const resizingColumn = reactTable.getState().columnSizingInfo.isResizingColumn;
+  useEffect(() => {
+    if (resizingColumn) {
+      wasResizing.current = true;
+      return;
+    }
+    if (!wasResizing.current || !onViewChange) return;
+    wasResizing.current = false;
+    const nextColumns = view.columns.map((entry) => {
+      const width = columnSizing[entry.id];
+      return width != null ? { ...entry, width: Math.round(width) } : entry;
+    });
+    const changed = nextColumns.some(
+      (entry, index) => entry.width !== view.columns[index]?.width,
+    );
+    if (!changed) return;
+    onViewChange({ ...view, columns: nextColumns });
+  }, [resizingColumn, onViewChange, columnSizing, view]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -351,9 +415,17 @@ export function ViewGrid<Row>({
     : [];
 
   return (
-    <div className={`cw-views-grid-wrap ${densityClass}`} data-testid={testId}>
+    <div
+      className={`cw-views-grid-wrap ${densityClass}${
+        resizingColumn ? " is-resizing" : ""
+      }`}
+      data-testid={testId}
+    >
       <div className="cw-views-grid-scroll">
-        <table className="cw-views-grid">
+        <table
+          className="cw-views-grid"
+          style={{ width: reactTable.getTotalSize() }}
+        >
           <thead>
             {reactTable.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
@@ -363,9 +435,36 @@ export function ViewGrid<Row>({
                       header.column.id === titleCol?.id ? "is-sticky-title" : ""
                     }
                     key={header.id}
-                    style={{ width: header.getSize() }}
+                    style={{
+                      width: header.getSize(),
+                      minWidth: header.column.columnDef.minSize,
+                      maxWidth: header.column.columnDef.maxSize,
+                    }}
                   >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    <div className="cw-views-th-inner">
+                      <span className="cw-views-th-label">
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                      </span>
+                      {header.column.getCanResize() ? (
+                        <button
+                          aria-label="Resize column"
+                          className={`cw-views-col-resizer${
+                            header.column.getIsResizing() ? " is-resizing" : ""
+                          }`}
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            header.column.resetSize();
+                          }}
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          type="button"
+                        />
+                      ) : null}
+                    </div>
                   </th>
                 ))}
               </tr>
@@ -395,12 +494,22 @@ export function ViewGrid<Row>({
                       onClick={(e) => {
                         if (
                           (e.target as HTMLElement).closest(
+                            "input,select,button,a,label,.cw-tables-status,.cw-tables-person,.cw-views-cell",
+                          )
+                        ) {
+                          setFocusedRowId(id);
+                          return;
+                        }
+                        setFocusedRowId(id);
+                      }}
+                      onDoubleClick={(e) => {
+                        if (
+                          (e.target as HTMLElement).closest(
                             "input,select,button,a,label",
                           )
                         ) {
                           return;
                         }
-                        setFocusedRowId(id);
                         onOpenRow?.(rowData);
                       }}
                     >
@@ -410,6 +519,11 @@ export function ViewGrid<Row>({
                             cell.column.id === titleCol?.id ? "is-sticky-title" : ""
                           }
                           key={cell.id}
+                          style={{
+                            width: cell.column.getSize(),
+                            minWidth: cell.column.columnDef.minSize,
+                            maxWidth: cell.column.columnDef.maxSize,
+                          }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>

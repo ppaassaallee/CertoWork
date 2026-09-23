@@ -6,7 +6,13 @@ import type {
   Surface,
 } from "../../../lib/views/types";
 import { projectHealth, projectHealthLabel } from "../../../lib/projectPortfolio";
+import {
+  DELIVERY_STAGES,
+  deliveryPhaseLabels,
+  deliveryStageLabels,
+} from "../../../lib/projectDelivery";
 import { t } from "../../../lib/i18n";
+import { toDateKey } from "../../../shared/formatDate";
 
 export type ProjectRow = Record<string, unknown> & { id: string };
 
@@ -29,6 +35,17 @@ function readString(row: ProjectRow, keys: string[]): string {
     return String(value);
   }
   return "";
+}
+
+/** Coerce Firestore Timestamp / Date / ISO into `YYYY-MM-DD` (never `Timestamp(`). */
+function readDate(row: ProjectRow, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (value == null || value === "") continue;
+    const keyDate = toDateKey(value as never);
+    if (keyDate) return keyDate;
+  }
+  return null;
 }
 
 function tasksFor(deps: ProjectAdapterDeps, projectId: string) {
@@ -106,9 +123,9 @@ export function buildProjectAdapter(
         });
       },
       options: () =>
-        ["define", "onboarding", "build", "deploy", "operations"].map((id) => ({
+        DELIVERY_STAGES.map((id) => ({
           id,
-          label: id,
+          label: deliveryStageLabels[id],
           tone: "neutral",
         })),
     },
@@ -118,12 +135,19 @@ export function buildProjectAdapter(
       type: "dropdown",
       sortable: true,
       groupable: true,
+      width: 120,
       read: (row) => readString(row, ["deliveryPhase", "phase", "productPhase"]),
       write: async (row, value) => {
         await deps.onUpdateProject(row.id, {
           deliveryPhase: value ? String(value) : null,
         });
       },
+      options: () =>
+        Object.entries(deliveryPhaseLabels).map(([id, label]) => ({
+          id,
+          label,
+          tone: "neutral",
+        })),
     },
     {
       id: "health",
@@ -160,6 +184,8 @@ export function buildProjectAdapter(
       label: t("views.col.progress"),
       type: "progress",
       sortable: true,
+      width: 110,
+      minWidth: 88,
       read: (row) => {
         const n = Number(row.progress ?? "");
         return Number.isFinite(n) ? n : null;
@@ -176,6 +202,8 @@ export function buildProjectAdapter(
       label: t("views.col.nextMilestone"),
       type: "text",
       sortable: true,
+      width: 160,
+      minWidth: 120,
       read: (row) => nextMilestoneTitle(tasksFor(deps, row.id)),
     },
     {
@@ -184,10 +212,9 @@ export function buildProjectAdapter(
       type: "date",
       sortable: true,
       filterable: true,
-      read: (row) => {
-        const raw = readString(row, ["revisedDueDate", "dueDate", "targetDate"]);
-        return raw ? raw.slice(0, 10) : null;
-      },
+      width: 120,
+      minWidth: 100,
+      read: (row) => readDate(row, ["revisedDueDate", "dueDate", "targetDate"]),
       write: async (row, value) => {
         await deps.onUpdateProject(row.id, {
           revisedDueDate: value ? String(value) : null,
@@ -201,6 +228,8 @@ export function buildProjectAdapter(
       sortable: true,
       groupable: true,
       filterable: true,
+      width: 140,
+      minWidth: 110,
       read: (row) =>
         readString(row, ["projectManagerId", "ownerId", "owner", "contactId"]) ||
         null,
@@ -217,6 +246,8 @@ export function buildProjectAdapter(
       label: t("views.col.members"),
       type: "number",
       sortable: true,
+      width: 88,
+      minWidth: 72,
       read: (row) => {
         const ids = Array.isArray(row.memberIds)
           ? row.memberIds
@@ -231,6 +262,8 @@ export function buildProjectAdapter(
       label: t("views.col.openItems"),
       type: "number",
       sortable: true,
+      width: 96,
+      minWidth: 80,
       read: (row) => tasksFor(deps, row.id).filter(isOpenTask).length,
     },
     {
@@ -238,6 +271,8 @@ export function buildProjectAdapter(
       label: t("views.col.blocked"),
       type: "number",
       sortable: true,
+      width: 88,
+      minWidth: 72,
       read: (row) => tasksFor(deps, row.id).filter(isBlockedTask).length,
     },
     {
@@ -245,6 +280,8 @@ export function buildProjectAdapter(
       label: t("views.col.budget"),
       type: "currency",
       sortable: true,
+      width: 110,
+      minWidth: 88,
       read: (row) => {
         const n = Number(
           row.budget ?? row.totalUsd ?? row.augustUsd ?? row.initialInvestment ?? "",
@@ -257,6 +294,8 @@ export function buildProjectAdapter(
       label: t("views.col.hours"),
       type: "text",
       sortable: true,
+      width: 110,
+      minWidth: 88,
       read: (row) => {
         const planned = Number(row.plannedHours ?? 0);
         const actual = Number(row.actualHours ?? 0);
@@ -267,12 +306,11 @@ export function buildProjectAdapter(
     {
       id: "updated",
       label: t("views.col.updated"),
-      type: "date",
+      type: "updated_at",
       sortable: true,
-      read: (row) => {
-        const raw = readString(row, ["updatedAt"]);
-        return raw ? raw.slice(0, 10) : null;
-      },
+      width: 120,
+      minWidth: 100,
+      read: (row) => readDate(row, ["updatedAt"]),
     },
   ];
 

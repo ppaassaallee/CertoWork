@@ -27,7 +27,25 @@ function asString(value: RecordValue): string {
 
 function asDateKey(value: RecordValue): string | null {
   if (value == null || value === "") return null;
+  if (typeof value === "object") {
+    const obj = value as {
+      toDate?: () => Date;
+      seconds?: number;
+    };
+    if (typeof obj.toDate === "function") {
+      try {
+        const d = obj.toDate();
+        if (d instanceof Date && !Number.isNaN(d.getTime())) return todayKey(d);
+      } catch {
+        /* fall through */
+      }
+    }
+    if (typeof obj.seconds === "number") {
+      return todayKey(new Date(obj.seconds * 1000));
+    }
+  }
   const raw = String(value);
+  if (raw.startsWith("Timestamp(")) return null;
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
   const parsed = Date.parse(raw);
   if (!Number.isFinite(parsed)) return null;

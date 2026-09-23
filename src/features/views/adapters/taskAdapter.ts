@@ -11,6 +11,7 @@ import { setKeyItem } from "../../../lib/dayplan/storage";
 import { localDateKey } from "../../../lib/dayplan/types";
 import { ancestorCandidateIds } from "../../../lib/itemHierarchy";
 import { t } from "../../../lib/i18n";
+import { toDateKey } from "../../../shared/formatDate";
 
 /** Loose row shape — My Work mixes tasks and table records. */
 export type TaskRow = Record<string, unknown> & { id: string };
@@ -40,9 +41,13 @@ function readString(row: TaskRow, keys: string[]): string {
 }
 
 function readDate(row: TaskRow, keys: string[]): string | null {
-  const raw = readString(row, keys);
-  if (!raw) return null;
-  return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : raw;
+  for (const key of keys) {
+    const value = row[key];
+    if (value == null || value === "") continue;
+    const keyDate = toDateKey(value as never);
+    if (keyDate) return keyDate;
+  }
+  return null;
 }
 
 function assigneeIdsOf(row: TaskRow): string[] {
