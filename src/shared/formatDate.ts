@@ -38,6 +38,16 @@ function toDate(value: Dateish): Date | null {
   return null;
 }
 
+/** ISO calendar key `YYYY-MM-DD` (local), or "" when unparseable. */
+export function toDateKey(value: Dateish): string {
+  const d = toDate(value);
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Short calendar date: `Sep 20` */
 export function formatDate(value: Dateish): string {
   const d = toDate(value);

@@ -90,11 +90,25 @@ export function NumberCell({ value, onChange, readOnly, column }: CellProps) {
         : String(typeof value === "number" ? value : Number(value)),
     );
   }, [value]);
+
+  const formatRead = () => {
+    if (value == null || value === "") return "—";
+    const n = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(n)) return asString(value);
+    if (column.type === "currency") {
+      return n.toLocaleString(undefined, {
+        style: "currency",
+        currency: column.currency || "USD",
+        maximumFractionDigits: n % 1 === 0 ? 0 : 2,
+      });
+    }
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
   if (readOnly) {
     return (
       <span className="cw-tables-cell-num">
-        {value == null || value === "" ? "—" : asString(value)}
-        {column.currency ? ` ${column.currency}` : ""}
+        {formatRead()}
       </span>
     );
   }
@@ -120,14 +134,32 @@ export function NumberCell({ value, onChange, readOnly, column }: CellProps) {
   );
 }
 
-export function DateCell({ value, onChange, readOnly }: CellProps) {
-  const iso = asString(value).slice(0, 10);
+export function DateCell({ value, onChange, readOnly, column }: CellProps) {
+  const iso = (() => {
+    const raw = asString(value).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    return "";
+  })();
   const rel = relativeDateLabel(iso);
-  if (readOnly) {
+  const absLabel = iso
+    ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+  const isMeta = column.type === "updated_at" || column.type === "created_at";
+  const display = isMeta
+    ? rel.label || absLabel || "—"
+    : absLabel || "—";
+
+  if (readOnly || isMeta) {
     return (
-      <span className={`cw-tables-date ${rel.past ? "is-past" : ""}`}>
-        <span className="cw-tables-date-abs">{iso || "—"}</span>
-        {rel.label ? <span className="cw-tables-date-rel">{rel.label}</span> : null}
+      <span
+        className={`cw-tables-date is-single ${rel.past && !isMeta ? "is-past" : ""}`}
+        title={absLabel || undefined}
+      >
+        {display}
       </span>
     );
   }
@@ -139,7 +171,6 @@ export function DateCell({ value, onChange, readOnly }: CellProps) {
         value={iso}
         onChange={(e) => onChange(e.target.value || null)}
       />
-      {rel.label ? <span className="cw-tables-date-rel">{rel.label}</span> : null}
     </label>
   );
 }
@@ -521,14 +552,19 @@ export function ProgressCell({ value, onChange, readOnly }: CellProps) {
     );
   }
   return (
-    <input
-      className="cw-tables-input cw-tables-input-num"
-      type="number"
-      min={0}
-      max={100}
-      value={pct}
-      onChange={(e) => onChange(Number(e.target.value) || 0)}
-    />
+    <label className="cw-tables-progress is-edit" title={`${pct}%`}>
+      <span style={{ width: `${pct}%` }} />
+      <em>{pct}%</em>
+      <input
+        aria-label="Progress"
+        max={100}
+        min={0}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        step={5}
+        type="range"
+        value={pct}
+      />
+    </label>
   );
 }
 

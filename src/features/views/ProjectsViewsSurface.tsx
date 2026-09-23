@@ -169,6 +169,18 @@ export function ProjectsViewsSurface({
           }))}
           onOpenRow={(row) => onOpenProject(row)}
           onSelectionChange={onSelectionChange}
+          onViewChange={(next) => {
+            void (async () => {
+              const saved = await ensurePersisted(next);
+              setViews((current) => {
+                const without = current.filter(
+                  (view) => view.id !== saved.id && view.id !== next.id,
+                );
+                return [defaultView, ...without.filter((view) => !view.isDefault), saved];
+              });
+              setActiveId(saved.id);
+            })();
+          }}
           rows={projects}
           selectedIds={selectedIds}
           testId="projects-grid"
