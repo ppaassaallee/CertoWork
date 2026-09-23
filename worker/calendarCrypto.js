@@ -1,6 +1,8 @@
 /**
  * AES-GCM token encryption for calendar OAuth refresh/access tokens.
  * Key: CALENDAR_TOKEN_KEY as 32-byte hex or utf8 secret (hashed to 32 bytes).
+ *
+ * OAuth `state` uses URL-safe base64 so Google callback never mangles `+` / `/`.
  */
 
 function base64FromBytes(bytes) {
@@ -14,6 +16,19 @@ function bytesFromBase64(value) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+function toBase64Url(value) {
+  return String(value || "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value) {
+  const raw = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const pad = raw.length % 4 === 0 ? "" : "=".repeat(4 - (raw.length % 4));
+  return raw + pad;
 }
 
 async function deriveKey(env) {
@@ -53,21 +68,56 @@ export async function decryptCalendarSecrets(env, sealed) {
   return JSON.parse(new TextDecoder().decode(plain));
 }
 
+function stateSecret(env) {
+  return String(env.CALENDAR_TOKEN_KEY || "dev");
+}
+
+/** Build a URL-safe signed OAuth state that survives Google redirects. */
 export function signCalendarState(env, uid, workspaceId) {
   const iat = Date.now();
-  const body = `${uid}:${workspaceId}:${iat}`;
-  return `${body}|${btoa(body + ":" + String(env.CALENDAR_TOKEN_KEY || "dev"))}`;
+  const payload = JSON.stringify({
+    uid: String(uid || ""),
+    workspaceId: String(workspaceId || ""),
+    iat,
+  });
+  const body = toBase64Url(btoa(payload));
+  const sig = toBase64Url(btoa(`${body}.${stateSecret(env)}`));
+  return `${body}.${sig}`;
 }
 
 export function verifyCalendarState(env, state) {
-  const raw = String(state || "");
+  const raw = String(state || "").trim();
+  // New format: body.sig (URL-safe base64)
+  if (raw.includes(".")) {
+    const [body, sig] = raw.split(".");
+    if (!body || !sig) return null;
+    const expected = toBase64Url(btoa(`${body}.${stateSecret(env)}`));
+    if (sig !== expected) return null;
+    try {
+      const parsed = JSON.parse(atob(fromBase64Url(body)));
+      const uid = String(parsed.uid || "");
+      const workspaceId = String(parsed.workspaceId || "");
+      const iat = Number(parsed.iat);
+      if (!uid || !workspaceId) return null;
+      if (!Number.isFinite(iat) || Date.now() - iat > 15 * 60 * 1000) return null;
+      return { uid, workspaceId, iat };
+    } catch {
+      return null;
+    }
+  }
+
+  // Legacy format: uid:workspaceId:iat|btoa(...) — keep accepting briefly
   const [body, sig] = raw.split("|");
   if (!body || !sig) return null;
-  const expected = btoa(body + ":" + String(env.CALENDAR_TOKEN_KEY || "dev"));
+  const expected = btoa(body + ":" + stateSecret(env));
   if (sig !== expected) return null;
-  const [uid, workspaceId, iatRaw] = body.split(":");
+  const parts = body.split(":");
+  if (parts.length < 3) return null;
+  const iatRaw = parts[parts.length - 1];
+  const uid = parts[0];
+  const workspaceId = parts.slice(1, -1).join(":");
   if (!uid || !workspaceId) return null;
   const iat = Number(iatRaw);
-  if (!Number.isFinite(iat) || Date.now() - iat > 10 * 60 * 1000) return null;
+  if (!Number.isFinite(iat) || Date.now() - iat > 15 * 60 * 1000) return null;
   return { uid, workspaceId, iat };
 }

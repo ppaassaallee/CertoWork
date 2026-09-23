@@ -117,6 +117,12 @@ const dictionaries = {
     "calendar.oauthNotConfigured":
       "The Google Calendar connector is not enabled on this Certo environment yet. Ask your Certo admin to turn it on once — then anyone can connect with the wizard.",
     "calendar.callbackError": "Google connection failed. Try again.",
+    "calendar.callbackAccessDenied": "Google access was denied. Allow Calendar access and try again.",
+    "calendar.callbackState": "The Google sign-in session expired. Start Connect calendar again.",
+    "calendar.callbackRedirect":
+      "Google rejected the redirect URI. It must be https://certo.work/api/calendar/oauth/google/callback.",
+    "calendar.callbackExchange":
+      "Google could not finish the token exchange. Revoke Certo in Google Account › Security › Third-party access, then connect again.",
     "calendar.connectCalendar": "Connect calendar",
     "calendar.wizard.title": "Connect your calendar",
     "calendar.wizard.kicker": "Personal connector",
@@ -708,6 +714,14 @@ const dictionaries = {
     "calendar.oauthNotConfigured":
       "El conector de Google Calendar todavía no está activado en este entorno de Certo. Pedile a quien administra Certo que lo encienda una vez — después cualquiera conecta con el wizard.",
     "calendar.callbackError": "Falló la conexión con Google. Probá de nuevo.",
+    "calendar.callbackAccessDenied":
+      "Google denegó el acceso. Permití Calendar e intentá de nuevo.",
+    "calendar.callbackState":
+      "La sesión de Google expiró. Volvé a abrir Conectar calendario.",
+    "calendar.callbackRedirect":
+      "Google rechazó la URI de redirección. Debe ser https://certo.work/api/calendar/oauth/google/callback.",
+    "calendar.callbackExchange":
+      "Google no pudo terminar el intercambio de token. Revocá Certo en Cuenta de Google › Seguridad › Acceso de terceros y conectá de nuevo.",
     "calendar.connectCalendar": "Conectar calendario",
     "calendar.wizard.title": "Conectá tu calendario",
     "calendar.wizard.kicker": "Conector personal",

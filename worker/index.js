@@ -16,11 +16,11 @@ import {
   CALENDAR_TOKENS,
   disconnectAccount,
   exchangeGoogleCode,
-  fetchGoogleProfile,
   listGoogleCalendars,
   queryByField,
   refreshGoogleAccess,
   renewCalendarChannels,
+  resolveGoogleIdentity,
   syncAccount,
   syncCalendar,
 } from "./calendarSync.js";
@@ -266,6 +266,19 @@ const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 };
+
+/** Prefer a fixed public origin so Google redirect_uri stays stable across hosts. */
+function calendarPublicOrigin(requestUrl, env) {
+  const configured = String(env.PUBLIC_ORIGIN || env.CERTO_PUBLIC_ORIGIN || "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (configured) return configured;
+  try {
+    return new URL(requestUrl).origin;
+  } catch {
+    return String(requestUrl?.origin || "https://certo.work");
+  }
+}
 
 function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -1910,11 +1923,18 @@ function capabilities(env) {
         : "OneDrive connector has not been configured. You can still paste a OneDrive link in Docs.",
     },
     googleCalendar: {
-      configured: Boolean(env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET),
+      configured: Boolean(
+        env.GOOGLE_CALENDAR_CLIENT_ID &&
+          env.GOOGLE_CALENDAR_CLIENT_SECRET &&
+          env.CALENDAR_TOKEN_KEY,
+      ),
       tokenKey: Boolean(env.CALENDAR_TOKEN_KEY),
-      description: env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET
-        ? "Google Calendar OAuth is configured on this Worker."
-        : "Add GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET as Cloudflare Worker secrets to enable Connect Google.",
+      description:
+        env.GOOGLE_CALENDAR_CLIENT_ID &&
+        env.GOOGLE_CALENDAR_CLIENT_SECRET &&
+        env.CALENDAR_TOKEN_KEY
+          ? "Google Calendar OAuth is configured on this Worker."
+          : "Add GOOGLE_CALENDAR_CLIENT_ID, GOOGLE_CALENDAR_CLIENT_SECRET, and CALENDAR_TOKEN_KEY as Cloudflare Worker secrets. Authorized redirect URI must be https://certo.work/api/calendar/oauth/google/callback",
     },
     outlookCalendar: {
       configured: Boolean(env.MICROSOFT_CALENDAR_CLIENT_ID && env.MICROSOFT_CALENDAR_CLIENT_SECRET),
@@ -2490,17 +2510,27 @@ const worker = {
             503,
           );
         }
-        const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
+        const origin = calendarPublicOrigin(url, env);
+        const redirectUri = `${origin}/api/calendar/oauth/google/callback`;
         const state = signCalendarState(env, auth.subject, workspaceId);
         const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
         authUrl.searchParams.set("client_id", clientId);
         authUrl.searchParams.set("redirect_uri", redirectUri);
         authUrl.searchParams.set("response_type", "code");
-        authUrl.searchParams.set("scope", "https://www.googleapis.com/auth/calendar");
+        authUrl.searchParams.set(
+          "scope",
+          [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/calendar",
+          ].join(" "),
+        );
         authUrl.searchParams.set("access_type", "offline");
+        authUrl.searchParams.set("include_granted_scopes", "true");
         authUrl.searchParams.set("prompt", "consent");
         authUrl.searchParams.set("state", state);
-        return json({ url: authUrl.toString() });
+        return json({ url: authUrl.toString(), redirectUri });
       } catch (error) {
         const message = error instanceof Error ? error.message : "oauth_start_failed";
         const status = /Authentication required/i.test(message) ? 401 : 500;
@@ -2509,19 +2539,35 @@ const worker = {
     }
 
     if (request.method === "GET" && url.pathname === "/api/calendar/oauth/google/callback") {
+      const origin = calendarPublicOrigin(url, env);
+      const fail = (reason) =>
+        Response.redirect(
+          `${origin}/settings/integrations?calendar=error&reason=${encodeURIComponent(reason || "unknown")}`,
+          302,
+        );
       try {
+        const oauthError = String(url.searchParams.get("error") || "").trim();
+        if (oauthError) {
+          const detail = String(url.searchParams.get("error_description") || oauthError);
+          console.error("[calendar.oauth.callback] google_error", detail);
+          return fail(oauthError);
+        }
         const code = String(url.searchParams.get("code") || "");
         const state = verifyCalendarState(env, url.searchParams.get("state"));
-        if (!code || !state) {
-          return Response.redirect(`${url.origin}/settings/integrations?calendar=error`, 302);
-        }
-        const redirectUri = `${url.origin}/api/calendar/oauth/google/callback`;
+        if (!code) return fail("missing_code");
+        if (!state) return fail("invalid_state");
+        const redirectUri = `${origin}/api/calendar/oauth/google/callback`;
         const tokens = await exchangeGoogleCode(env, code, redirectUri);
-        const profile = await fetchGoogleProfile(tokens.access_token);
+        if (!tokens.refresh_token) {
+          console.warn(
+            "[calendar.oauth.callback] missing refresh_token — user may need to revoke prior grant",
+          );
+        }
+        const profile = await resolveGoogleIdentity(tokens.access_token);
         const accountId = `google_${state.uid}_${String(profile.id || profile.email || Date.now()).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
         const sealed = await encryptCalendarSecrets(env, {
           accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
+          refreshToken: tokens.refresh_token || null,
           expiresAt: new Date(Date.now() + Number(tokens.expires_in || 3600) * 1000).toISOString(),
         });
         await firestoreUpsertDocument(env, CALENDAR_TOKENS, accountId, sealed);
@@ -2544,7 +2590,12 @@ const worker = {
           createdAt: existingAccount?.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
-        const calendars = await listGoogleCalendars(tokens.access_token);
+        let calendars = [];
+        try {
+          calendars = await listGoogleCalendars(tokens.access_token);
+        } catch (listError) {
+          console.error("[calendar.oauth.callback] list_calendars", listError);
+        }
         for (const calendar of calendars) {
           const calendarId = `${accountId}__${String(calendar.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
           const existingCal = await firestoreGetDocument(env, CALENDARS, calendarId);
@@ -2579,14 +2630,23 @@ const worker = {
             });
           }
         }
-        await syncAccount(env, accountId);
+        // Sync is best-effort — never fail the OAuth redirect after tokens are stored.
+        try {
+          await syncAccount(env, accountId);
+        } catch (syncError) {
+          console.error("[calendar.oauth.callback] sync", syncError);
+        }
         return Response.redirect(
-          `${url.origin}/settings/integrations?calendar=connected`,
+          `${origin}/settings/integrations?calendar=connected&wizard=1`,
           302,
         );
       } catch (error) {
         console.error("[calendar.oauth.callback]", error);
-        return Response.redirect(`${url.origin}/settings/integrations?calendar=error`, 302);
+        const reason =
+          error instanceof Error
+            ? error.message.slice(0, 120)
+            : "callback_failed";
+        return fail(reason);
       }
     }
 
