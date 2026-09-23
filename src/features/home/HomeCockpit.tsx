@@ -23,7 +23,7 @@ import { eventDayKeys } from "../../lib/calendar/dates";
 import "../calendar/calendarOverlay.css";
 import { FocusRing } from "../dayplan/FocusRing";
 import { useDayPlan } from "../dayplan/useDayPlan";
-import { useDailyBriefEnabled, enableDailyBrief } from "../flags/featureUserFlags";
+import { useDailyBriefEnabled } from "../flags/featureUserFlags";
 import {
   DailyBriefHome,
   PrepareSheet,
@@ -387,37 +387,6 @@ export function HomeCockpit({
 
   return (
     <div className="cw-home" data-testid="home-cockpit">
-      {!dailyBriefOn && userId ? (
-        <div
-          className="cw-home-stagger"
-          data-testid="daily-brief-optin"
-          style={{
-            ["--i" as string]: 0,
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 16,
-            padding: "12px 14px",
-            borderRadius: 12,
-            background: "color-mix(in srgb, var(--accent) 8%, transparent)",
-          }}
-        >
-          <div>
-            <strong style={{ display: "block" }}>Daily Brief</strong>
-            <span className="cw-home-muted" style={{ fontSize: 13 }}>
-              Template-first morning plan, Prepare sheet, and Odysseus signals.
-            </span>
-          </div>
-          <button
-            className="do-button"
-            onClick={() => void enableDailyBrief(userId)}
-            type="button"
-          >
-            Try Daily Brief
-          </button>
-        </div>
-      ) : null}
       <header className="cw-home-header cw-home-stagger" style={{ ["--i" as string]: 0 }}>
         <p className="cw-home-date">{model.longDate}</p>
         <div className="cw-home-greeting-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
