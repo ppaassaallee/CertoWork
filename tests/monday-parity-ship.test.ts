@@ -103,7 +103,9 @@ test("dashboard route stays as Leadership / Direction page", () => {
   const shell = readFileSync(resolve(root, "src/components/DelivereeWorkspace.tsx"), "utf8");
   assert.match(shell, /DirectionPage/);
   assert.doesNotMatch(shell, /ComposedDashboard/);
-  assert.match(shell, /nav\.direction/);
+  // Title lives on DirectionPage (shell only mounts it).
+  const direction = readFileSync(resolve(root, "src/features/direction/DirectionPage.tsx"), "utf8");
+  assert.match(direction, /nav\.direction/);
 });
 
 test("worker exposes item notify and inbound endpoints", () => {
