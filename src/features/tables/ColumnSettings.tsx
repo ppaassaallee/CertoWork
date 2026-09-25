@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Column, ColumnConfig, ColumnSummary, ColumnType, SoftTint } from "../../lib/tables";
 import { softTintToCss } from "../../lib/tables/extendedTypes";
+import { t } from "../../lib/i18n";
 
 const TINTS: SoftTint[] = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "teal"];
 
@@ -42,6 +43,7 @@ export type ColumnSettingsProps = {
   tables?: Array<{ id: string; name: string }>;
   onSave(next: Column): void;
   onChangeType?(nextType: ColumnType): void;
+  onOpenAccess?(): void;
   onClose(): void;
 };
 
@@ -81,6 +83,7 @@ export function ColumnSettings({
   tables = [],
   onSave,
   onChangeType,
+  onOpenAccess,
   onClose,
 }: ColumnSettingsProps) {
   const [draft, setDraft] = useState<Column>(() => ({ ...column, config: { ...(column.config || {}) } }));
@@ -363,7 +366,23 @@ export function ColumnSettings({
         </label>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+        {onOpenAccess ? (
+          <button
+            type="button"
+            onClick={onOpenAccess}
+            data-testid="column-settings-access"
+            style={{
+              border: "1px solid #ECEEF3",
+              borderRadius: 8,
+              padding: "8px 14px",
+              background: "#fff",
+              cursor: "pointer",
+            }}
+          >
+            {t("tables.columns.access")}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => onSave(draft)}

@@ -135,8 +135,7 @@ export function ViewGrid<Row>({
     const alive = new Set(appliedRowIdsKey ? appliedRowIdsKey.split("|") : []);
     const pruned = [...selected].filter((id) => alive.has(id));
     if (pruned.length !== selected.size) commitSelection(new Set(pruned));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedRowIdsKey]);
+  }, [appliedRowIdsKey]); // selected/commitSelection intentionally omitted — prune only when row set changes
 
   const visibleColumnDefs = useMemo(() => {
     const byId = new Map(adapter.columns.map((col) => [col.id, col]));

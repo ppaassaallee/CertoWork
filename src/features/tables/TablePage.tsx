@@ -26,13 +26,16 @@ import { hasConfirmedSnapshotData } from "../../lib/firestoreSnapshotSafety";
 import { t } from "../../lib/i18n";
 import {
   TABLE_RECORDS,
+  assertCanWriteColumn,
   createRecord,
   deleteRecord,
   emptyTableFilters,
   filterTableRecords,
+  redactRecordsForActor,
   tableLifecycleStatus,
   updateRecordField,
   updateTableColumns,
+  visibleColumnsForActor,
   type KeyColumns,
   type Column,
   type RecordActivity,
@@ -164,10 +167,36 @@ export function TablePage({
   }, [table.itemCount, table.id]);
 
   const records = recordsProp ?? liveRecords;
-  const visibleRecords = useMemo(
+  const accessActor = useMemo(
+    () => ({ userId: actorId, isAdmin: false }),
+    [actorId],
+  );
+  const accessTable = useMemo(
+    () => ({
+      ...table,
+      columns: visibleColumnsForActor(table, accessActor),
+    }),
+    [table, accessActor],
+  );
+  const filteredRecords = useMemo(
     () => filterTableRecords(table, records, filters),
     [table, records, filters],
   );
+  const visibleRecords = useMemo(
+    () => redactRecordsForActor(table, filteredRecords, accessActor),
+    [table, filteredRecords, accessActor],
+  );
+  const readOnlyColumnIds = useMemo(() => {
+    const locked = new Set<string>();
+    for (const column of accessTable.columns) {
+      try {
+        assertCanWriteColumn(table, column.id, accessActor);
+      } catch {
+        locked.add(column.id);
+      }
+    }
+    return locked;
+  }, [accessTable.columns, table, accessActor]);
 
   const openRecord = useCallback(
     (id: string | null) => {
@@ -178,6 +207,11 @@ export function TablePage({
 
   const handleFieldChange = useCallback(
     async (recordId: string, columnId: string, value: RecordValue) => {
+      try {
+        assertCanWriteColumn(table, columnId, accessActor);
+      } catch {
+        return;
+      }
       if (onFieldChange) {
         onFieldChange(recordId, columnId, value);
         return;
@@ -190,7 +224,7 @@ export function TablePage({
         actorId,
       });
     },
-    [onFieldChange, table, actorId],
+    [onFieldChange, table, actorId, accessActor],
   );
 
   const handleCreate = useCallback(
@@ -429,10 +463,11 @@ export function TablePage({
           {view === "table" ? (
             table.groups?.length ? (
               <TableGroupedGrid
-                table={table}
+                table={accessTable}
                 records={visibleRecords}
                 members={members}
                 projects={projects}
+                readOnlyColumnIds={readOnlyColumnIds}
                 onOpenProject={onOpenProject}
                 onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
                 onOpenRecord={(id) => openRecord(id)}
@@ -466,14 +501,14 @@ export function TablePage({
                 onFieldChange={(id, col, val) => void handleFieldChange(id, col, val as never)}
                 onOpenRecord={(id) => openRecord(id)}
                 records={visibleRecords}
-                table={table}
+                table={accessTable}
                 workspaceId={table.workspaceId}
               />
             )
           ) : null}
           {view === "board" ? (
             <RecordsBoard
-              table={table}
+              table={accessTable}
               records={visibleRecords}
               members={members}
               onFieldChange={(id, col, val) => void handleFieldChange(id, col, val)}
@@ -483,7 +518,7 @@ export function TablePage({
           ) : null}
           {view === "calendar" ? (
             <RecordsCalendar
-              table={table}
+              table={accessTable}
               records={visibleRecords}
               onOpenRecord={(id) => openRecord(id)}
             />
@@ -505,12 +540,13 @@ export function TablePage({
 
         {activeRecord && view !== "items" && view !== "form" ? (
           <RecordPanel
-            table={table}
+            table={accessTable}
             record={activeRecord}
             members={members}
             projects={projects}
             activity={activity.filter((a) => a.recordId === activeRecord.id)}
             recordOrder={visibleRecords.map((r) => r.id)}
+            readOnlyColumnIds={readOnlyColumnIds}
             onClose={() => openRecord(null)}
             onOpenRecord={(id) => openRecord(id)}
             onOpenProject={onOpenProject}
@@ -538,6 +574,7 @@ export function TablePage({
         {columnsOpen ? (
           <ColumnsEditor
             table={table}
+            members={members}
             onClose={() => setColumnsOpen(false)}
             onChange={(cols, keys) => void handleColumnsChange(cols, keys)}
           />

@@ -17,6 +17,7 @@ import { db } from "../firebase";
 import { emitDomainEvent } from "../routines/events";
 import { coerceValue, validateRecord } from "./validate";
 import { ensureStatusOptionTones } from "./statusTones";
+import { assertCanWriteColumn } from "./permissions";
 import {
   RECORD_ACTIVITY,
   RECORD_LINK_RELATION,
@@ -440,6 +441,7 @@ export async function updateRecordField(input: {
 }): Promise<void> {
   const column = input.table.columns.find((c) => c.id === input.columnId);
   if (!column) throw new Error("Unknown column");
+  assertCanWriteColumn(input.table, input.columnId, { userId: input.actorId });
 
   const coerced = coerceValue(column, input.value);
   if (coerced === undefined && input.value !== null) {
