@@ -1,5 +1,9 @@
 import type { RecordDoc, RecordValue, TableDoc } from "../../../lib/tables";
 import { updateRecordField, deleteRecord, createRecord } from "../../../lib/tables/storage";
+import {
+  canEditColumn,
+  canViewColumn,
+} from "../../../lib/tables/permissions";
 import type {
   ActionContext,
   ActionDef,
@@ -28,42 +32,48 @@ function toneOf(raw?: string): string {
 
 export function buildRecordAdapter(deps: RecordAdapterDeps): EntityAdapter<RecordDoc> {
   const { table, members, actorId } = deps;
+  const actor = { userId: actorId };
   const titleCol = table.keyColumns.title;
   const statusCol = table.keyColumns.status || null;
   const ownerCol = table.keyColumns.owner || null;
 
   const columns: ColumnDef<RecordDoc>[] = table.columns
-    .filter((col) => !col.hidden)
-    .map((col) => ({
-      id: col.id,
-      label: col.name,
-      type: col.type,
-      width: col.width,
-      sortable: true,
-      groupable: col.type === "status" || col.type === "dropdown" || col.type === "person",
-      filterable: true,
-      fixed: col.id === titleCol,
-      render: col.id === titleCol ? "title" : "default",
-      read: (row) => (row.values?.[col.id] ?? null) as RecordValue,
-      write: async (row, value) => {
-        await updateRecordField({
-          table,
-          recordId: row.id,
-          columnId: col.id,
-          value,
-          actorId,
-        });
-      },
-      options:
-        col.options?.length
-          ? () =>
-              (col.options || []).map((opt) => ({
-                id: opt.id,
-                label: opt.label,
-                tone: toneOf(opt.tone),
-              }))
+    .filter((col) => !col.hidden && canViewColumn(table, col, actor))
+    .map((col) => {
+      const editable = canEditColumn(table, col, actor);
+      return {
+        id: col.id,
+        label: col.name,
+        type: col.type,
+        width: col.width,
+        sortable: true,
+        groupable: col.type === "status" || col.type === "dropdown" || col.type === "person",
+        filterable: true,
+        fixed: col.id === titleCol,
+        render: col.id === titleCol ? ("title" as const) : ("default" as const),
+        read: (row: RecordDoc) => (row.values?.[col.id] ?? null) as RecordValue,
+        write: editable
+          ? async (row: RecordDoc, value: RecordValue) => {
+              await updateRecordField({
+                table,
+                recordId: row.id,
+                columnId: col.id,
+                value,
+                actorId,
+              });
+            }
           : undefined,
-    }));
+        options:
+          col.options?.length
+            ? () =>
+                (col.options || []).map((opt) => ({
+                  id: opt.id,
+                  label: opt.label,
+                  tone: toneOf(opt.tone),
+                }))
+            : undefined,
+      };
+    });
 
   const actions: ActionDef<RecordDoc>[] = [
     {

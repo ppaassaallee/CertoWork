@@ -23,6 +23,7 @@ export type RecordPanelProps = {
   projects?: Array<{ id: string; name: string }>;
   activity?: RecordActivity[];
   recordOrder?: string[];
+  readOnlyColumnIds?: Set<string>;
   onClose(): void;
   onFieldChange(columnId: string, value: RecordValue): void;
   onComment?(text: string): void;
@@ -69,6 +70,7 @@ export function RecordPanel({
   projects = [],
   activity = [],
   recordOrder = [],
+  readOnlyColumnIds,
   onClose,
   onFieldChange,
   onComment,
@@ -135,6 +137,7 @@ export function RecordPanel({
         members={members}
         projects={projects}
         onOpenProject={onOpenProject}
+        readOnly={readOnlyColumnIds?.has(column.id)}
         onChange={(next) => onFieldChange(column.id, next)}
       />
     );

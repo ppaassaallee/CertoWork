@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Plus, X } from "../../components/ui/Icon";
+import { Lock, Plus, X } from "../../components/ui/Icon";
 import type {
   Column,
+  ColumnAccess,
   ColumnType,
   KeyColumns,
   StatusOption,
@@ -10,13 +11,19 @@ import type {
 import {
   STATUS_TONES,
   ensureStatusOptionTones,
+  normalizeColumnAccess,
   nextStatusTone,
   withStatusTone,
 } from "../../lib/tables";
 import { t } from "../../lib/i18n";
+import {
+  PropertyAccessModal,
+  type PropertyAccessMember,
+} from "./PropertyAccessModal";
 
 export type ColumnsEditorProps = {
   table: TableDoc;
+  members?: PropertyAccessMember[];
   onClose(): void;
   onChange(columns: Column[], keyColumns: KeyColumns): void;
 };
@@ -60,7 +67,12 @@ function defaultStatusSeed(): StatusOption[] {
   ]);
 }
 
-export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) {
+export function ColumnsEditor({
+  table,
+  members = [],
+  onClose,
+  onChange,
+}: ColumnsEditorProps) {
   const [columns, setColumns] = useState<Column[]>(() =>
     table.columns.map((col) =>
       col.type === "status" || col.type === "dropdown"
@@ -72,6 +84,7 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<ColumnType>("text");
   const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({});
+  const [accessColumnId, setAccessColumnId] = useState<string | null>(null);
 
   const statusCandidates = useMemo(
     () => columns.filter((c) => c.type === "status" || c.type === "dropdown"),
@@ -201,21 +214,37 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
               {col.id === keys.title ? (
                 <span className="cw-tables-col-badge">{t("tables.columns.titleKey")}</span>
               ) : (
-                <button
-                  type="button"
-                  className="cw-tables-btn-ghost"
-                  data-testid={`tables-remove-col-${col.id}`}
-                  onClick={() => {
-                    const next = columns.filter((c) => c.id !== col.id);
-                    const nextKeys: KeyColumns = { ...keys };
-                    if (keys.status === col.id) nextKeys.status = null;
-                    if (keys.owner === col.id) nextKeys.owner = null;
-                    if (keys.date === col.id) nextKeys.date = null;
-                    commit(next, nextKeys);
-                  }}
-                >
-                  {t("tables.columns.remove")}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="cw-tables-btn-ghost"
+                    data-testid={`tables-access-col-${col.id}`}
+                    onClick={() => setAccessColumnId(col.id)}
+                    title={t("tables.columns.access")}
+                  >
+                    <span className="cw-tables-col-lock">
+                      <Lock size={12} />
+                      {normalizeColumnAccess(col).defaultAccess !== "full"
+                        ? t("tables.columns.access")
+                        : t("tables.columns.access")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="cw-tables-btn-ghost"
+                    data-testid={`tables-remove-col-${col.id}`}
+                    onClick={() => {
+                      const next = columns.filter((c) => c.id !== col.id);
+                      const nextKeys: KeyColumns = { ...keys };
+                      if (keys.status === col.id) nextKeys.status = null;
+                      if (keys.owner === col.id) nextKeys.owner = null;
+                      if (keys.date === col.id) nextKeys.date = null;
+                      commit(next, nextKeys);
+                    }}
+                  >
+                    {t("tables.columns.remove")}
+                  </button>
+                </>
               )}
             </div>
 
@@ -384,6 +413,22 @@ export function ColumnsEditor({ table, onClose, onChange }: ColumnsEditorProps) 
           <small>{t("tables.columns.dateHelp")}</small>
         </label>
       </section>
+
+      {accessColumnId ? (
+        <PropertyAccessModal
+          columnId={accessColumnId}
+          columns={columns}
+          members={members}
+          onChangeColumn={setAccessColumnId}
+          onClose={() => setAccessColumnId(null)}
+          onSave={(columnId, access: ColumnAccess) => {
+            updateColumn(columnId, {
+              access,
+              hiddenForViewers: access.defaultAccess === "none",
+            });
+          }}
+        />
+      ) : null}
     </aside>
   );
 }

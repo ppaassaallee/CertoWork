@@ -102,6 +102,13 @@ export type Column = {
   unique?: boolean;
   frozen?: boolean;
   hidden?: boolean;
+  /**
+   * When true, table viewers (non-editors) cannot see this column.
+   * Prefer `access.defaultAccess = "none"`; kept for backward compatibility.
+   */
+  hiddenForViewers?: boolean;
+  /** Per-column view/edit access (Notion-style property permissions). */
+  access?: ColumnAccess;
   default?: unknown;
   summary?: ColumnSummary;
   config?: ColumnConfig;
@@ -113,6 +120,26 @@ export type Column = {
     tableId?: string;
     multiple?: boolean;
   };
+};
+
+/** Who can see/edit a property relative to table viewers. */
+export type ColumnAccessLevel = "full" | "view" | "none";
+
+export type ColumnAccessSubjectType = "user" | "role" | "group";
+
+export type ColumnAccessException = {
+  id: string;
+  subjectType: ColumnAccessSubjectType;
+  /** Member user id, workspace role key, or freeform group label. */
+  subjectId: string;
+  label?: string;
+  access: ColumnAccessLevel;
+};
+
+export type ColumnAccess = {
+  /** Access for people who can view the table but are not table editors. */
+  defaultAccess: ColumnAccessLevel;
+  exceptions: ColumnAccessException[];
 };
 
 export type KeyColumns = {

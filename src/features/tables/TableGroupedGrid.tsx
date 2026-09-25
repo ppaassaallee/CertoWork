@@ -12,6 +12,8 @@ export type TableGroupedGridProps = {
   projects?: Array<{ id: string; name: string }>;
   onOpenProject?(projectId: string): void;
   density?: "compact" | "comfortable";
+  /** Column ids the current user can view but not edit. */
+  readOnlyColumnIds?: Set<string>;
   onFieldChange(recordId: string, columnId: string, value: RecordValue): void;
   onOpenRecord(id: string): void;
   onCreateRecord(groupId: string): void;
@@ -86,6 +88,7 @@ export function TableGroupedGrid({
   projects = [],
   onOpenProject,
   density = "compact",
+  readOnlyColumnIds,
   onFieldChange,
   onOpenRecord,
   onCreateRecord,
@@ -248,6 +251,7 @@ export function TableGroupedGrid({
                           members={members}
                           projects={projects}
                           onOpenProject={onOpenProject}
+                          readOnly={readOnlyColumnIds?.has(col.id)}
                           value={value}
                           onChange={(next) => onFieldChange(rec.id, col.id, next)}
                         />
