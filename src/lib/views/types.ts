@@ -3,7 +3,7 @@ import type { ColumnType, RecordValue } from "../tables/types";
 export const SAVED_VIEWS = "saved_views";
 
 export type EntityKind = "task" | "project" | "record";
-export type ViewLayout = "table" | "board" | "calendar" | "gantt";
+export type ViewLayout = "table" | "board" | "calendar" | "gantt" | "list";
 export type ViewScope = "personal" | "team";
 export type Surface = "my-work" | "projects-list" | `project:${string}` | `table:${string}`;
 

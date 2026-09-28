@@ -247,7 +247,11 @@ export function ViewGrid<Row>({
               className={`cw-views-cell${isTitle ? " is-title" : ""}${
                 column.render === "hierarchy" ? " is-hierarchy" : ""
               }${numeric ? " is-numeric" : ""}`}
-              onDoubleClick={() => isTitle && onOpenRow?.(row.original)}
+              onClick={(e) => {
+                if (!isTitle) return;
+                e.stopPropagation();
+                onOpenRow?.(row.original);
+              }}
               style={depth ? { paddingLeft: depth * 16 } : undefined}
             >
               <CellRenderer
@@ -493,13 +497,14 @@ export function ViewGrid<Row>({
                       onClick={(e) => {
                         if (
                           (e.target as HTMLElement).closest(
-                            "input,select,button,a,label,.cw-tables-status,.cw-tables-person,.cw-views-cell",
+                            "input,select,button,a,label,.cw-tables-status,.cw-tables-person,.cw-views-cell:not(.is-title)",
                           )
                         ) {
                           setFocusedRowId(id);
                           return;
                         }
                         setFocusedRowId(id);
+                        onOpenRow?.(rowData);
                       }}
                       onDoubleClick={(e) => {
                         if (

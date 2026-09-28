@@ -29,12 +29,8 @@ test("ViewGrid enables mouse column resize with visible handles", () => {
   assert.match(viewGrid, /cw-views-col-resizer/);
   assert.match(viewGrid, /readOnly=\{!column\.write\}/);
   assert.match(viewGrid, /onViewChange/);
-  assert.match(viewGrid, /onDoubleClick/);
-  assert.match(viewGrid, /onDoubleClick=\{[\s\S]*?onOpenRow\?\.\(rowData\)/);
-  assert.match(
-    viewGrid,
-    /onClick=\{[\s\S]*?setFocusedRowId\(id\);\s*return;/,
-  );
+  assert.match(viewGrid, /onOpenRow\?\.\(rowData\)/);
+  assert.match(viewGrid, /isTitle &&[\s\S]*?onOpenRow|if \(!isTitle\) return/);
   assert.match(css, /\.cw-views-col-resizer/);
   assert.match(css, /cursor:\s*col-resize/);
 });
@@ -47,13 +43,16 @@ test("ViewsBar Filter Sort Group open the customizer", () => {
   assert.match(bar, /onClick=\{onOpenCustomizer\}/);
 });
 
-test("ProjectsViewsSurface persists resized column widths", () => {
+test("ProjectsViewsSurface uses Asana list (not spreadsheet ViewGrid)", () => {
   const surface = readFileSync(
     resolve("src/features/views/ProjectsViewsSurface.tsx"),
     "utf8",
   );
-  assert.match(surface, /onViewChange=\{/);
+  assert.match(surface, /data-testid="projects-asana-list"/);
+  assert.match(surface, /is-asana-list/);
   assert.match(surface, /ensurePersisted/);
+  assert.doesNotMatch(surface, /from ["']\.\/ViewGrid["']/);
+  assert.doesNotMatch(surface, /<ViewGrid[\s>]/);
 });
 
 test("Progress and Date cells prefer compact single-value UX", () => {
