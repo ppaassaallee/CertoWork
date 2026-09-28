@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { google } from "googleapis";
 import type { CalendarProvider, CalEvent } from "./types";
 
-function oauthClient() {
+function oauthClient(redirectUri?: string) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
   if (!clientId || !clientSecret) {
@@ -10,7 +10,7 @@ function oauthClient() {
     (err as Error & { code: string }).code = "failed-precondition";
     throw err;
   }
-  return new google.auth.OAuth2(clientId, clientSecret);
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
 export function accountIdFor(provider: string, email: string) {
@@ -19,8 +19,7 @@ export function accountIdFor(provider: string, email: string) {
 
 export const googleProvider: CalendarProvider = {
   async exchangeCode(code, redirectUri) {
-    const client = oauthClient();
-    client.redirectUri = redirectUri;
+    const client = oauthClient(redirectUri);
     const { tokens } = await client.getToken(code);
     if (!tokens.refresh_token) throw new Error("No refresh token — re-consent required");
     client.setCredentials(tokens);
