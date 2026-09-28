@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
@@ -5430,10 +5430,9 @@ function _projectMoney(value: unknown) {
 function projectSortValue(
   project: any,
   key: ProjectSortKey,
-  tasks: any[],
-  risks: any[],
+  projectTasks: any[],
+  projectRisks: any[],
 ) {
-  const projectTasks = tasks.filter((task) => task.projectId === project.id);
   const summary = projectSummary(project, projectTasks);
   if (key === "delivery_entity")
     return String(project.deliveryEntity || project.bpo || "").toLowerCase();
@@ -5452,11 +5451,7 @@ function projectSortValue(
   if (key === "health")
     return String(
       { blocked: 0, at_risk: 1, on_track: 2 }[
-        projectHealth(
-          project,
-          projectTasks,
-          risks.filter((risk) => risk.projectId === project.id),
-        )
+        projectHealth(project, projectTasks, projectRisks)
       ] ?? 3,
     );
   if (key === "progress")
@@ -5491,8 +5486,8 @@ function projectSortValue(
 function portfolioDimensionValue(
   project: any,
   dimension: PortfolioDimension,
-  tasks: any[],
-  risks: any[],
+  projectTasks: any[],
+  projectRisks: any[],
 ) {
   if (dimension === "bpo")
     return String(project.deliveryEntity || project.bpo || "Internal").trim() || "Internal";
@@ -5505,11 +5500,7 @@ function portfolioDimensionValue(
     return projectStatusLabel(String(project.status || "planning"));
   if (dimension === "health")
     return projectHealthLabel(
-      projectHealth(
-        project,
-        tasks.filter((task) => task.projectId === project.id),
-        risks.filter((risk) => risk.projectId === project.id),
-      ),
+      projectHealth(project, projectTasks, projectRisks),
     );
   if (dimension === "service")
     return (
@@ -5545,7 +5536,22 @@ function escapeHtml(value: any) {
   );
 }
 
-export function ProjectCommandCenter({
+const EMPTY_PROJECT_TASKS: any[] = [];
+const EMPTY_PROJECT_RISKS: any[] = [];
+
+function groupByProjectId<T extends { projectId?: string }>(rows: T[]) {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = String(row.projectId || "");
+    if (!id) continue;
+    const list = map.get(id);
+    if (list) list.push(row);
+    else map.set(id, [row]);
+  }
+  return map;
+}
+
+function ProjectCommandCenterInner({
   projects,
   tasks,
   risks,
@@ -5727,12 +5733,39 @@ export function ProjectCommandCenter({
     }
   });
   const tableScrollRef = useRef<HTMLDivElement>(null);
-  const sorted = sortProjectsByRecency(projects);
+  const tasksByProject = useMemo(() => groupByProjectId(tasks), [tasks]);
+  const risksByProject = useMemo(() => groupByProjectId(risks), [risks]);
+  const tasksFor = (projectId: string) =>
+    tasksByProject.get(projectId) ?? EMPTY_PROJECT_TASKS;
+  const risksFor = (projectId: string) =>
+    risksByProject.get(projectId) ?? EMPTY_PROJECT_RISKS;
+
+  const sorted = useMemo(() => sortProjectsByRecency(projects), [projects]);
   const portfolio = sorted;
   const realProjects = sorted;
-  const allMemberOptions = portfolioMemberOptions(workspaceMembers);
-  const readyMemberOptions = allMemberOptions.filter((member) => member.ready);
+  const allMemberOptions = useMemo(
+    () => portfolioMemberOptions(workspaceMembers),
+    [workspaceMembers],
+  );
+  const readyMemberOptions = useMemo(
+    () => allMemberOptions.filter((member) => member.ready),
+    [allMemberOptions],
+  );
   const shareMemberOptions = readyMemberOptions;
+
+  const summaries = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof projectSummary>>();
+    for (const project of projects) {
+      map.set(
+        project.id,
+        projectSummary(
+          project,
+          tasksByProject.get(project.id) ?? EMPTY_PROJECT_TASKS,
+        ),
+      );
+    }
+    return map;
+  }, [projects, tasksByProject]);
 
   const runBulkProjectAction = async (
     label: string,
@@ -5900,86 +5933,139 @@ export function ProjectCommandCenter({
     setSavedViews(next);
     window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
   };
-  const filtered = portfolio.filter((project) => {
-    const status = String(project.status || "planning").toLowerCase();
-    const health = projectHealth(
-      project,
-      tasks.filter((task) => task.projectId === project.id),
-      risks.filter((risk) => risk.projectId === project.id),
-    );
-    const matchesFilter =
-      statusFilters.length > 0
-        ? statusFilters.some((value) =>
-            value === "active"
-              ? ["active", "in_progress"].includes(status)
-              : status === value,
-          )
-        : filter === "all"
-          ? true
-          : filter === "active"
-            ? !["completed", "archived", "done", "deleted", "cancelled"].includes(
-                status,
+  const filtered = useMemo(
+    () =>
+      portfolio.filter((project) => {
+        const status = String(project.status || "planning").toLowerCase();
+        const health = projectHealth(
+          project,
+          tasksFor(project.id),
+          risksFor(project.id),
+        );
+        const matchesFilter =
+          statusFilters.length > 0
+            ? statusFilters.some((value) =>
+                value === "active"
+                  ? ["active", "in_progress"].includes(status)
+                  : status === value,
               )
-            : status === filter;
-    const matchesStage =
-      stageFilter === "all" || deliveryStage(project) === stageFilter;
-    const matchesPhase =
-      phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
-    const matchesHealth =
-      healthFilter === "all"
-        ? true
-        : healthFilter === "needs_attention"
-          ? health !== "on_track"
-          : health === healthFilter;
-    const matchesProjectTag = matchesTag(project, tagFilter);
-    const matchesWorkCategory =
-      workCategoryFilter === "all" || workCategory(project) === workCategoryFilter;
-    const matchesProductPhase =
-      productPhaseFilter === "all" || productPhase(project) === productPhaseFilter;
-    const matchesTaxonomy =
-      !taxonomyValue ||
-      portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
-        taxonomyValue;
-    const haystack =
-      `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${workCategory(project)} ${productPhase(project)} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`.toLowerCase();
-    return (
-      matchesFilter &&
-      matchesStage &&
-      matchesHealth &&
-      matchesProjectTag &&
-      matchesWorkCategory &&
-      matchesProductPhase &&
-      matchesPhase &&
-      matchesTaxonomy &&
-      haystack.includes(search.toLowerCase())
-    );
-  });
-  const sortedFiltered = [...filtered].sort((left, right) => {
-    const primary = projectSortValue(
-      left,
-      primarySort,
-      tasks,
-      risks,
-    ).localeCompare(projectSortValue(right, primarySort, tasks, risks));
-    if (primary) return primary;
-    if (primarySort !== secondarySort) {
-      const secondary = projectSortValue(
-        left,
-        secondarySort,
-        tasks,
-        risks,
-      ).localeCompare(projectSortValue(right, secondarySort, tasks, risks));
-      if (secondary) return secondary;
-    }
-    return projectTitle(left).localeCompare(projectTitle(right));
-  });
-  const financeSourceProjects = sortedFiltered.filter(
-    (project) =>
-      !["deleted", "archived", "cancelled"].includes(
-        String(project.status || "").toLowerCase(),
-      ),
+            : filter === "all"
+              ? true
+              : filter === "active"
+                ? ![
+                    "completed",
+                    "archived",
+                    "done",
+                    "deleted",
+                    "cancelled",
+                  ].includes(status)
+                : status === filter;
+        const matchesStage =
+          stageFilter === "all" || deliveryStage(project) === stageFilter;
+        const matchesPhase =
+          phaseFilter === "all" || deliveryPhase(project) === phaseFilter;
+        const matchesHealth =
+          healthFilter === "all"
+            ? true
+            : healthFilter === "needs_attention"
+              ? health !== "on_track"
+              : health === healthFilter;
+        const matchesProjectTag = matchesTag(project, tagFilter);
+        const matchesWorkCategory =
+          workCategoryFilter === "all" ||
+          workCategory(project) === workCategoryFilter;
+        const matchesProductPhase =
+          productPhaseFilter === "all" ||
+          productPhase(project) === productPhaseFilter;
+        const matchesTaxonomy =
+          !taxonomyValue ||
+          portfolioDimensionValue(
+            project,
+            taxonomyDimension,
+            tasksFor(project.id),
+            risksFor(project.id),
+          ) === taxonomyValue;
+        const haystack =
+          `${projectTitle(project)} ${project.clientEntity || project.client || ""} ${project.deliveryEntity || project.bpo || ""} ${workCategory(project)} ${productPhase(project)} ${tagLabels(project, tags).join(" ")} ${project.serviceLine || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`.toLowerCase();
+        return (
+          matchesFilter &&
+          matchesStage &&
+          matchesHealth &&
+          matchesProjectTag &&
+          matchesWorkCategory &&
+          matchesProductPhase &&
+          matchesPhase &&
+          matchesTaxonomy &&
+          haystack.includes(search.toLowerCase())
+        );
+      }),
+    [
+      portfolio,
+      statusFilters,
+      filter,
+      stageFilter,
+      phaseFilter,
+      healthFilter,
+      tagFilter,
+      workCategoryFilter,
+      productPhaseFilter,
+      taxonomyValue,
+      taxonomyDimension,
+      search,
+      tags,
+      tasksByProject,
+      risksByProject,
+    ],
   );
-  const visibleProjectIds = sortedFiltered.map((project) => project.id);
+  const sortedFiltered = useMemo(() => {
+    return [...filtered].sort((left, right) => {
+      const primary = projectSortValue(
+        left,
+        primarySort,
+        tasksFor(left.id),
+        risksFor(left.id),
+      ).localeCompare(
+        projectSortValue(
+          right,
+          primarySort,
+          tasksFor(right.id),
+          risksFor(right.id),
+        ),
+      );
+      if (primary) return primary;
+      if (primarySort !== secondarySort) {
+        const secondary = projectSortValue(
+          left,
+          secondarySort,
+          tasksFor(left.id),
+          risksFor(left.id),
+        ).localeCompare(
+          projectSortValue(
+            right,
+            secondarySort,
+            tasksFor(right.id),
+            risksFor(right.id),
+          ),
+        );
+        if (secondary) return secondary;
+      }
+      return projectTitle(left).localeCompare(projectTitle(right));
+    });
+  }, [filtered, primarySort, secondarySort, tasksByProject, risksByProject]);
+  const financeSourceProjects = useMemo(
+    () =>
+      sortedFiltered.filter(
+        (project) =>
+          !["deleted", "archived", "cancelled"].includes(
+            String(project.status || "").toLowerCase(),
+          ),
+      ),
+    [sortedFiltered],
+  );
+  const visibleProjectIds = useMemo(
+    () => sortedFiltered.map((project) => project.id),
+    [sortedFiltered],
+  );
   const allVisibleProjectsSelected =
     visibleProjectIds.length > 0 &&
     visibleProjectIds.every((id) => selectedProjectIds.includes(id));
@@ -6008,65 +6094,99 @@ export function ProjectCommandCenter({
       ...new Set([...current, ...visibleProjectIds]),
     ]);
   };
-  const openProjects = portfolio.filter((project) => !isProjectClosed(project));
-  const allAttention = openProjects.filter((project) =>
-    projectNeedsAttention(
-      project,
-      tasks.filter((task) => task.projectId === project.id),
-      risks.filter((risk) => risk.projectId === project.id),
-    ),
+  const openProjects = useMemo(
+    () => portfolio.filter((project) => !isProjectClosed(project)),
+    [portfolio],
+  );
+  const allAttention = useMemo(
+    () =>
+      openProjects.filter((project) =>
+        projectNeedsAttention(
+          project,
+          tasksFor(project.id),
+          risksFor(project.id),
+        ),
+      ),
+    [openProjects, tasksByProject, risksByProject],
   );
   const attention = allAttention;
-  const allRows = openProjects.map((project) =>
-    projectSummary(
-      project,
-      tasks.filter((task) => task.projectId === project.id),
-    ),
-  );
-  const totals = allRows.reduce(
-    (acc, row) => ({
-      plannedHours: acc.plannedHours + Number(row.plannedHours || 0),
-      actualHours: acc.actualHours + Number(row.actualHours || 0),
-      initial: acc.initial + row.initial,
-      recurring: acc.recurring + row.recurring,
-    }),
-    { plannedHours: 0, actualHours: 0, initial: 0, recurring: 0 },
-  );
-  const stageCounts = DELIVERY_STAGES.map((stage) => ({
-    stage,
-    count: openProjects.filter((project) => deliveryStage(project) === stage)
-      .length,
-  }));
-  const healthCounts = (["on_track", "at_risk", "blocked"] as const).map(
-    (health) => ({
-      health,
-      count: openProjects.filter(
+  const allRows = useMemo(
+    () =>
+      openProjects.map(
         (project) =>
-          projectHealth(
-            project,
-            tasks.filter((task) => task.projectId === project.id),
-            risks.filter((risk) => risk.projectId === project.id),
-          ) === health,
-      ).length,
-    }),
-  );
-  const upcomingProjects = upcomingProjectCheckpoints(openProjects, 8);
-  const taxonomyBreakdown = [
-    ...new Set(
-      openProjects.map((project) =>
-        portfolioDimensionValue(project, taxonomyDimension, tasks, risks),
+          summaries.get(project.id) ??
+          projectSummary(project, tasksFor(project.id)),
       ),
-    ),
-  ]
-    .map((value) => ({
-      value,
-      count: openProjects.filter(
-        (project) =>
-          portfolioDimensionValue(project, taxonomyDimension, tasks, risks) ===
-          value,
-      ).length,
-    }))
-    .sort((left, right) => right.count - left.count);
+    [openProjects, summaries, tasksByProject],
+  );
+  const totals = useMemo(
+    () =>
+      allRows.reduce(
+        (acc, row) => ({
+          plannedHours: acc.plannedHours + Number(row.plannedHours || 0),
+          actualHours: acc.actualHours + Number(row.actualHours || 0),
+          initial: acc.initial + row.initial,
+          recurring: acc.recurring + row.recurring,
+        }),
+        { plannedHours: 0, actualHours: 0, initial: 0, recurring: 0 },
+      ),
+    [allRows],
+  );
+  const stageCounts = useMemo(
+    () =>
+      DELIVERY_STAGES.map((stage) => ({
+        stage,
+        count: openProjects.filter((project) => deliveryStage(project) === stage)
+          .length,
+      })),
+    [openProjects],
+  );
+  const healthCounts = useMemo(
+    () =>
+      (["on_track", "at_risk", "blocked"] as const).map((health) => ({
+        health,
+        count: openProjects.filter(
+          (project) =>
+            projectHealth(
+              project,
+              tasksFor(project.id),
+              risksFor(project.id),
+            ) === health,
+        ).length,
+      })),
+    [openProjects, tasksByProject, risksByProject],
+  );
+  const upcomingProjects = useMemo(
+    () => upcomingProjectCheckpoints(openProjects, 8),
+    [openProjects],
+  );
+  const taxonomyBreakdown = useMemo(() => {
+    return [
+      ...new Set(
+        openProjects.map((project) =>
+          portfolioDimensionValue(
+            project,
+            taxonomyDimension,
+            tasksFor(project.id),
+            risksFor(project.id),
+          ),
+        ),
+      ),
+    ]
+      .map((value) => ({
+        value,
+        count: openProjects.filter(
+          (project) =>
+            portfolioDimensionValue(
+              project,
+              taxonomyDimension,
+              tasksFor(project.id),
+              risksFor(project.id),
+            ) === value,
+        ).length,
+      }))
+      .sort((left, right) => right.count - left.count);
+  }, [openProjects, taxonomyDimension, tasksByProject, risksByProject]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -6122,8 +6242,8 @@ export function ProjectCommandCenter({
         ? `${allAttention.length} project${allAttention.length === 1 ? "" : "s"} need attention:`
         : "No open projects currently need attention.",
       ...allAttention.slice(0, 8).map((project) => {
-        const projectTasks = tasks.filter((task) => task.projectId === project.id);
-        const projectRisks = risks.filter((risk) => risk.projectId === project.id);
+        const projectTasks = tasksFor(project.id);
+        const projectRisks = risksFor(project.id);
         return `• ${projectTitle(project)} — ${projectAttentionReason(project, projectTasks, projectRisks)} · ${projectOwnerLabel(project)}`;
       }),
       "",
@@ -6639,8 +6759,8 @@ export function ProjectCommandCenter({
                   {upcomingProjects.map((project) => {
                     const health = projectHealth(
                       project,
-                      tasks.filter((task) => task.projectId === project.id),
-                      risks.filter((risk) => risk.projectId === project.id),
+                      tasksFor(project.id),
+                      risksFor(project.id),
                     );
                     const label = checkpointLabel(project);
                     return (
@@ -7523,6 +7643,8 @@ export function ProjectCommandCenter({
     </section>
   );
 }
+
+export const ProjectCommandCenter = memo(ProjectCommandCenterInner);
 
 void _ProjectTitleCell;
 void _projectMoney;
