@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -244,7 +246,7 @@ import {
   type FeedbackSeverity,
   type FeedbackStatus,
 } from "../lib/feedbackReports";
-import { ProjectCommandCenter, ProjectConsolePanel } from "./ProjectSurfaces";
+import { ProjectConsolePanel } from "./ProjectSurfaces";
 import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
 import { DailyPlanOverlay, DailyPlanOptIn, useDailyPlanEnabled } from "../features/dailyPlan";
 import { useIsPhone } from "../shared/useIsPhone";
@@ -258,9 +260,27 @@ import { MyWorkTodayPanel } from "./MyWorkTodayPanel";
 import { isOverviewEnabled, MyWorkOverview } from "../features/overview";
 import { FeedbackCenter } from "./FeedbackCenter";
 import { AssignmentNotificationsBell } from "./AssignmentNotificationsBell";
-import { ProjectWizardSkill } from "./ProjectWizardSkill";
-import { MagicProjectModal } from "./MagicProjectModal";
+import {
+  applyStoreUpdate,
+  clearWorkspaceDataStores,
+  conversationsStore,
+  membersStore,
+  projectsStore,
+  tasksStore,
+  uiStore,
+  useConversations,
+  useMembers,
+  useProjects,
+  useTasks,
+} from "../data";
+import { ModalHost } from "../routes/ModalHost";
 import { NotesWorkspace } from "./NotesWorkspace";
+
+const ProjectsRouteSuspense = lazy(() =>
+  import("../routes/ProjectsRoute").then((mod) => ({
+    default: mod.ProjectsRouteSuspense,
+  })),
+);
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import { SystemTemplateGallery } from "../features/tables/SystemTemplateGallery";
@@ -522,11 +542,29 @@ export function DelivereeWorkspace() {
     if (onCollab) setCollabOpened(true);
     else setWorkOpened(true);
   }, [onCollab]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const conversations = useConversations() as Conversation[];
+  const setConversations = useCallback(
+    (update: Conversation[] | ((prev: Conversation[]) => Conversation[])) => {
+      applyStoreUpdate(conversationsStore, update as any);
+    },
+    [],
+  );
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const projects = useProjects() as any[];
+  const setProjects = useCallback(
+    (update: any[] | ((prev: any[]) => any[])) => {
+      applyStoreUpdate(projectsStore, update as any);
+    },
+    [],
+  );
+  const tasks = useTasks() as any[];
+  const setTasks = useCallback(
+    (update: any[] | ((prev: any[]) => any[])) => {
+      applyStoreUpdate(tasksStore, update as any);
+    },
+    [],
+  );
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
@@ -542,7 +580,11 @@ export function DelivereeWorkspace() {
   const [displayLocale, setDisplayLocale] = useState<Locale>(getLocale);
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>(
+  const workspaceMembers = useMembers() as WorkspaceMember[];
+  const setWorkspaceMembers = useCallback(
+    (update: WorkspaceMember[] | ((prev: WorkspaceMember[]) => WorkspaceMember[])) => {
+      applyStoreUpdate(membersStore, update as any);
+    },
     [],
   );
   const [workspaceTeams, setWorkspaceTeams] = useState<WorkspaceTeam[]>([]);
@@ -581,6 +623,7 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!workspace?.id || previousWorkspaceDataId.current === workspace.id) return;
     previousWorkspaceDataId.current = workspace.id;
+    clearWorkspaceDataStores();
     setConversations([]);
     setConversationId(null);
     setMessages([]);
@@ -858,15 +901,10 @@ export function DelivereeWorkspace() {
   const [cleanConfirmText, setCleanConfirmText] = useState("");
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
-  const [projectWizardOpen, setProjectWizardOpen] = useState(false);
-  // "create" = blank New project. "context" = update the project the current
-  // conversation/route is anchored to (Odysseus "update project" invocations only).
-  const [projectWizardIntent, setProjectWizardIntent] = useState<"create" | "context">("create");
+  // Wizard open state lives in uiStore (create vs context). Local mirrors removed.
   const openProjectWizard = useCallback((intent: "create" | "context" = "create") => {
-    setProjectWizardIntent(intent);
-    setProjectWizardOpen(true);
+    uiStore.openProjectWizard(intent);
   }, []);
-  const [magicProjectOpen, setMagicProjectOpen] = useState(false);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const [createTableProjectId, setCreateTableProjectId] = useState<string | null>(null);
   const [systemTemplateGalleryOpen, setSystemTemplateGalleryOpen] = useState(false);
@@ -2216,8 +2254,8 @@ export function DelivereeWorkspace() {
           setCreateMenuOpen(false);
           return;
         }
-        if (magicProjectOpen) {
-          setMagicProjectOpen(false);
+        if (uiStore.getSnapshot().magicProjectOpen) {
+          uiStore.closeMagicProject();
           return;
         }
         if (panel) {
@@ -2234,7 +2272,6 @@ export function DelivereeWorkspace() {
   }, [
     commandPaletteOpen,
     createMenuOpen,
-    magicProjectOpen,
     odysseusPanelOpen,
     panel,
     quickCaptureOpen,
@@ -7778,7 +7815,7 @@ export function DelivereeWorkspace() {
                     <button onClick={() => { setCreateMenuOpen(false); openProjectWizard("create"); }} type="button">
                       {t("createProject")}
                     </button>
-                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
+                    <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); uiStore.openMagicProject(); }} type="button">
                       {t("createMagicProject")}
                     </button>
                     <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
@@ -8852,7 +8889,14 @@ export function DelivereeWorkspace() {
             workspaceMembers={workspaceMembers}
           />
         ) : centerView === "portfolio" ? (
-          <ProjectCommandCenter
+          <Suspense
+            fallback={
+              <div className="do-panel-empty" data-testid="projects-route-loading">
+                <strong>Loading projects…</strong>
+              </div>
+            }
+          >
+          <ProjectsRouteSuspense
             actorId={user?.uid || ""}
             canViewFinance={canViewFinance}
             highlightFinanceLineId={highlightFinanceLineId}
@@ -8917,14 +8961,12 @@ export function DelivereeWorkspace() {
             costTemplates={costTemplates}
             onCreateCostTemplate={createCostTemplate}
             onUpdateCostTemplate={updateCostTemplate}
-            projects={projects}
             projectTemplates={projectTemplates}
             risks={risks}
             tags={categories}
-            tasks={tasks}
             workspaceId={workspace?.id || ""}
-            workspaceMembers={workspaceMembers}
           />
+          </Suspense>
         ) : centerView === "project" ? (
           consoleProject ? (
             <ProjectConsolePanel
@@ -10932,22 +10974,12 @@ export function DelivereeWorkspace() {
         </div>
       )}
 
-      <ProjectWizardSkill
-        activeProject={projectWizardIntent === "context" ? routeOrPrimaryProject : null}
-        isOpen={projectWizardOpen}
-        onClose={() => setProjectWizardOpen(false)}
-        onCreateProject={createProjectFromWizard}
-        onOpenMagicProject={() => {
-          setProjectWizardOpen(false);
-          setMagicProjectOpen(true);
-        }}
-        onUpdateProject={updateProjectFromWizard}
+      <ModalHost
+        contextProject={routeOrPrimaryProject}
         projects={activeProjects}
-      />
-      <MagicProjectModal
-        isOpen={magicProjectOpen}
-        onClose={() => setMagicProjectOpen(false)}
-        onCreate={createMagicProject}
+        onCreateProject={createProjectFromWizard}
+        onUpdateProject={updateProjectFromWizard}
+        onCreateMagicProject={createMagicProject}
       />
       <CreateTableWizard
         open={createTableWizardOpen}
