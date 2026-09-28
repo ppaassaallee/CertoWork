@@ -6,6 +6,36 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Match both npm (`node_modules/pkg`) and pnpm (`node_modules/.pnpm/pkg@…`) layouts. */
+function vendorChunk(id: string): string | undefined {
+  if (!id.includes('node_modules')) return undefined;
+  if (id.includes('firebase') || id.includes('@firebase')) {
+    if (id.includes('firestore')) return 'firebase-firestore';
+    if (id.includes('auth')) return 'firebase-auth';
+    if (
+      id.includes('@firebase/app') ||
+      id.includes('@firebase/component') ||
+      id.includes('@firebase/logger') ||
+      id.includes('@firebase/util') ||
+      id.includes('/firebase/app')
+    ) {
+      return 'firebase-core';
+    }
+    return 'firebase';
+  }
+  if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
+  if (id.includes('lucide-react')) return 'icons';
+  if (id.includes('recharts')) return 'charts';
+  if (
+    id.includes('/react/') ||
+    id.includes('/react-dom/') ||
+    id.includes('react-router')
+  ) {
+    return 'react';
+  }
+  return undefined;
+}
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -24,28 +54,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/.pnpm/@firebase+firestore')) return 'firebase-firestore';
-          if (id.includes('node_modules/.pnpm/@firebase+auth')) return 'firebase-auth';
-          if (
-            id.includes('node_modules/.pnpm/@firebase+app') ||
-            id.includes('node_modules/.pnpm/@firebase+component') ||
-            id.includes('node_modules/.pnpm/@firebase+logger') ||
-            id.includes('node_modules/.pnpm/@firebase+util')
-          ) {
-            return 'firebase-core';
-          }
-          if (id.includes('node_modules/.pnpm/firebase@')) return 'firebase';
-          if (id.includes('node_modules/.pnpm/motion@')) return 'motion';
-          if (id.includes('node_modules/.pnpm/lucide-react@')) return 'icons';
-          if (id.includes('node_modules/.pnpm/recharts@')) return 'charts';
-          if (
-            id.includes('node_modules/.pnpm/react@') ||
-            id.includes('node_modules/.pnpm/react-dom@') ||
-            id.includes('node_modules/.pnpm/react-router')
-          ) {
-            return 'react';
-          }
-          return undefined;
+          return vendorChunk(id);
         },
       },
     },
