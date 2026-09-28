@@ -72,8 +72,12 @@ test("task records keep createdBy immutable and restrict delete to the record ow
   assert.match(block, /resource\.data\.userId == request\.auth\.uid/);
   assert.match(block, /resource\.data\.createdBy == request\.auth\.uid/);
   assert.match(block, /Work items are archived or cancelled in product/);
-  assert.match(workspace, /needsCreatorAssigneeRestore/);
-  assert.match(workspace, /My Work is a view: never delete records/);
+  // Creator-assignee restore helper stays available for Cloud Functions / admin tools,
+  // but the shell must not write it on every tasks snapshot.
+  const helpers = readFileSync(new URL("../src/lib/myWorkItems.ts", import.meta.url), "utf8");
+  assert.match(helpers, /needsCreatorAssigneeRestore/);
+  assert.match(helpers, /My Work is a view\. It never deletes records\./);
+  assert.doesNotMatch(workspace, /needsCreatorAssigneeRestore/);
 });
 
 test("shared workspace members can update projects they can already see", () => {

@@ -197,8 +197,7 @@ test("My Work passes a filtered task list instead of the whole workspace", () =>
   assert.match(workspace, /MyWorkTodayPanel/);
   assert.match(workspace, /data-testid="my-work-today-tab"/);
   assert.match(workspace, /withCreatorAssignee/);
-  assert.match(workspace, /needsCreatorAssigneeRestore/);
-  assert.match(workspace, /updateDoc\(doc\(db, "tasks", item\.id\)/);
+  assert.doesNotMatch(workspace, /needsCreatorAssigneeRestore/);
   assert.match(helpers, /My Work is a view\. It never deletes records\./);
   assert.doesNotMatch(helpers, /deleteDoc/);
 });

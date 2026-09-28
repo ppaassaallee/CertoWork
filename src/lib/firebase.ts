@@ -6,7 +6,12 @@ import {
   initializeAuth,
   type Auth,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { resolveFirebaseAuthDomain } from './authFlow';
@@ -19,7 +24,25 @@ const app = initializeApp({
   ...firebaseConfig,
   authDomain: resolveFirebaseAuthDomain(firebaseConfig.authDomain),
 });
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+function createFirestore() {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+      firebaseConfig.firestoreDatabaseId,
+    );
+  } catch {
+    // HMR / second init — reuse the existing named database handle.
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+}
+
+export const db = createFirestore();
 export const storage = getStorage(app);
 
 // Firebase defaults to IndexedDB before falling back to localStorage. Safari and

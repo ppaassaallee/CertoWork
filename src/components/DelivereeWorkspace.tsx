@@ -92,16 +92,13 @@ import {
   selfHealPureAiFollowerMembership,
 } from "../lib/runPureAiPortfolioFollowers";
 import {
-  PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
   emailMatchesPureAiFollower,
   isPersonalOrEmailNamedWorkspace,
-  pureAiFollowerEmailsMissingFromWorkspace,
 } from "../lib/pureAiPortfolioFollowers";
 import {
   pricingPortfolioProjectCount,
   syncPureAiPricingPortfolio,
 } from "../lib/runPricingPortfolioSync";
-import { PRICING_PORTFOLIO_IMPORT_KEY } from "../lib/pricingPortfolioSync";
 import {
   projectHealth,
   sidebarProjectGroups,
@@ -208,7 +205,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
+import { filterMyWorkTasks, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -562,8 +559,6 @@ export function DelivereeWorkspace() {
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
   const [portfolioFollowersBusy, setPortfolioFollowersBusy] = useState(false);
-  const pricingAutoSyncRef = useRef(false);
-  const portfolioFollowersAutoRef = useRef(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -898,7 +893,6 @@ export function DelivereeWorkspace() {
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceSessionRef = useRef(false);
-  const restoredCreatorAssignees = useRef(new Set<string>());
 
   const dataAccessKey = useMemo(() => {
     if (!user || !workspace) return "";
@@ -1297,118 +1291,6 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
-
-  // Owner one-shot: apply Pricing 2026 portfolio as soon as Pure AI loads.
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!isPureAiWorkspace(workspace)) return;
-    if (workspace.ownerId !== user.uid) return;
-    if (workspace.portfolioImportKey === PRICING_PORTFOLIO_IMPORT_KEY) return;
-    // Wait until membership roster is live so share targets resolve.
-    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (pricingAutoSyncRef.current || pricingSyncBusy || clearPureAiBusy) return;
-    pricingAutoSyncRef.current = true;
-    setPricingSyncBusy(true);
-    void (async () => {
-      try {
-        const result = await syncPureAiPricingPortfolio({
-          db,
-          user,
-          workspace,
-          members: workspaceMembers,
-        });
-        if (result.skipped) {
-          pricingAutoSyncRef.current = false;
-          setNotice(
-            result.reason === "not-owner"
-              ? "Only the Pure AI workspace owner can sync pricing."
-              : "Could not auto-sync pricing portfolio.",
-          );
-          return;
-        }
-        goCenterView("portfolio");
-        setNotice(
-          `Pricing sync applied: updated ${result.updatedProjects}, created ${result.createdProjects}, marked X on ${result.markedUnmatched}.`,
-        );
-      } catch (reason) {
-        pricingAutoSyncRef.current = false;
-        setNotice(
-          reason instanceof Error
-            ? `Could not auto-sync pricing portfolio: ${reason.message}`
-            : "Could not auto-sync pricing portfolio.",
-        );
-      } finally {
-        setPricingSyncBusy(false);
-      }
-    })();
-  }, [
-    user,
-    workspace,
-    workspaceMembers,
-    pricingSyncBusy,
-    clearPureAiBusy,
-  ]);
-
-  // One-shot: grant Regina / César / Rafael / Edgar admin + all-project follow.
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!isPureAiWorkspace(workspace)) return;
-    const actor = workspaceMembers.find((member) => {
-      if (member.userId === user.uid) return true;
-      const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
-      return Boolean(user.email && memberEmail === normalizeAccessEmail(user.email));
-    });
-    const role = String(actor?.role || "").toLowerCase();
-    const canGrant =
-      workspace.ownerId === user.uid || ["owner", "admin"].includes(role);
-    if (!canGrant) return;
-    const missingSeats = pureAiFollowerEmailsMissingFromWorkspace(workspace, workspaceMembers);
-    const keyFresh = workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY;
-    if (keyFresh && missingSeats.length === 0) return;
-    if (!actor && !workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (
-      portfolioFollowersAutoRef.current ||
-      portfolioFollowersBusy ||
-      pricingSyncBusy ||
-      clearPureAiBusy
-    ) {
-      return;
-    }
-    portfolioFollowersAutoRef.current = true;
-    setPortfolioFollowersBusy(true);
-    void (async () => {
-      try {
-        const result = await grantPureAiPortfolioFollowers({
-          db,
-          user,
-          workspace,
-          members: workspaceMembers,
-        });
-        if (result.skipped) {
-          portfolioFollowersAutoRef.current = false;
-          return;
-        }
-        // Listeners already pick up project/member writes — do not re-run Auth bootstrap.
-        setNotice(result.message);
-      } catch (reason) {
-        portfolioFollowersAutoRef.current = false;
-        setNotice(
-          reason instanceof Error
-            ? `Could not auto-grant Pure AI followers: ${reason.message}`
-            : "Could not auto-grant Pure AI followers.",
-        );
-      } finally {
-        setPortfolioFollowersBusy(false);
-      }
-    })();
-  }, [
-    user,
-    workspace,
-    workspaceMembers,
-    portfolioFollowersBusy,
-    pricingSyncBusy,
-    clearPureAiBusy,
-  ]);
 
   // Move Pure AI followers off empty Personal / email-named workspaces.
   useEffect(() => {
@@ -2003,39 +1885,6 @@ export function DelivereeWorkspace() {
     const created = refreshed.find((row) => row.id === id);
     if (created) setActiveRitual(applySessionExpiry(created, manifest));
   };
-
-  useEffect(() => {
-    if (!user || !workspace) return;
-    const pending = tasks
-      .filter(
-        (item) =>
-          needsCreatorAssigneeRestore(item, personalActor) &&
-          !restoredCreatorAssignees.current.has(item.id),
-      )
-      .slice(0, 40);
-    if (!pending.length) return;
-    const patch = creatorAssigneePatch(personalActor, workspaceMembers);
-    if (!patch.assigneeIds.length && !patch.assignees.length) return;
-    for (const item of pending) restoredCreatorAssignees.current.add(item.id);
-    // Additive restore only. My Work is a view: never delete records to change a filter.
-    void Promise.all(
-      pending.map((item) =>
-        updateDoc(doc(db, "tasks", item.id), {
-          ...patch,
-          ...buildTaskAccessPatch({
-            task: { ...item, ...patch },
-            workspaceId: workspace.id,
-            userId: user.uid,
-            email: user.email,
-            members: workspaceMembers,
-          }),
-          updatedAt: serverTimestamp(),
-        }),
-      ),
-    ).catch(() => {
-      for (const item of pending) restoredCreatorAssignees.current.delete(item.id);
-    });
-  }, [personalActor, tasks, user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) {

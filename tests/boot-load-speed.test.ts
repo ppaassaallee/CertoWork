@@ -20,6 +20,8 @@ test("workspace data listeners use a stable access key", () => {
   );
   assert.match(source, /dataAccessKey/);
   assert.match(source, /\[dataAccessKey, dataRetryVersion, reportDataSyncError\]/);
-  assert.match(source, /do not re-run Auth bootstrap/);
   assert.match(source, /setWorkspace\(pureAi, \{ reload: false \}\)/);
+  // Pricing / follower grants are explicit Settings actions — not on every load.
+  assert.doesNotMatch(source, /pricingAutoSyncRef/);
+  assert.doesNotMatch(source, /portfolioFollowersAutoRef/);
 });

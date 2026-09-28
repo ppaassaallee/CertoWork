@@ -9,6 +9,32 @@ import {
   resolveFirestoreListenPacks,
 } from "../src/lib/firestoreListenDiet";
 
+test("projects portfolio does not subscribe to workspace-wide table records or finance ops", () => {
+  const portfolio = resolveFirestoreListenPacks({ kind: "work", section: "portfolio" });
+  assert.equal(portfolio.tables, true);
+  assert.equal(portfolio.milestones, true);
+  assert.equal(portfolio.tableRecords, false);
+  assert.equal(portfolio.financeOps, false);
+  assert.equal(portfolio.strategyKnowledge, false);
+
+  const projectOverview = resolveFirestoreListenPacks({
+    kind: "project",
+    projectId: "p1",
+    tab: "overview",
+  });
+  assert.equal(projectOverview.tableRecords, true);
+  assert.equal(projectOverview.financeOps, true);
+
+  const projectNotes = resolveFirestoreListenPacks({
+    kind: "project",
+    projectId: "p1",
+    tab: "notes",
+  });
+  assert.equal(projectNotes.notes, true);
+  assert.equal(projectNotes.tableRecords, false);
+  assert.equal(projectNotes.financeOps, false);
+});
+
 test("home and my-work keep tables/records but not odysseus or access requests", () => {
   const home = resolveFirestoreListenPacks({ kind: "home" });
   assert.equal(home.tables, true);
