@@ -21,6 +21,9 @@ export type ProjectAdapterDeps = {
   workspaceId: string;
   tasks?: Array<Record<string, unknown> & { id?: string; projectId?: string }>;
   risks?: Array<Record<string, unknown> & { projectId?: string }>;
+  /** Prefer indexed maps — O(1) health/open counts instead of O(n) filters per cell. */
+  tasksByProject?: Map<string, Array<Record<string, unknown> & { id?: string; projectId?: string }>>;
+  risksByProject?: Map<string, Array<Record<string, unknown> & { projectId?: string }>>;
   onUpdateProject: (projectId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onArchiveProject: (project: ProjectRow) => Promise<void> | void;
   onOpenProject: (project: ProjectRow) => void;
@@ -49,10 +52,16 @@ function readDate(row: ProjectRow, keys: string[]): string | null {
 }
 
 function tasksFor(deps: ProjectAdapterDeps, projectId: string) {
+  if (deps.tasksByProject) {
+    return deps.tasksByProject.get(projectId) || [];
+  }
   return (deps.tasks || []).filter((task) => String(task.projectId || "") === projectId);
 }
 
 function risksFor(deps: ProjectAdapterDeps, projectId: string) {
+  if (deps.risksByProject) {
+    return deps.risksByProject.get(projectId) || [];
+  }
   return (deps.risks || []).filter((risk) => String(risk.projectId || "") === projectId);
 }
 
@@ -95,6 +104,26 @@ export function buildProjectAdapter(
       write: async (row, value) => {
         await deps.onUpdateProject(row.id, { title: String(value || "") });
       },
+    },
+    {
+      id: "status",
+      label: t("views.col.status"),
+      type: "status",
+      sortable: true,
+      groupable: true,
+      filterable: true,
+      width: 120,
+      read: (row) => readString(row, ["status"]) || "active",
+      write: async (row, value) => {
+        await deps.onUpdateProject(row.id, { status: value ? String(value) : "active" });
+      },
+      options: () => [
+        { id: "active", label: "Active", tone: "success" },
+        { id: "on_hold", label: "On hold", tone: "warning" },
+        { id: "completed", label: "Completed", tone: "neutral" },
+        { id: "archived", label: "Archived", tone: "neutral" },
+        { id: "deleted", label: "Deleted", tone: "danger" },
+      ],
     },
     {
       id: "client",
@@ -397,20 +426,12 @@ export function buildProjectAdapter(
 
   const defaultColumnIds = [
     "title",
-    "client",
-    "stage",
-    "phase",
+    "status",
     "health",
-    "progress",
-    "next_milestone",
-    "due",
+    "stage",
     "owner",
-    "members",
+    "due",
     "open_items",
-    "blocked",
-    "budget",
-    "hours",
-    "updated",
   ];
 
   return {
@@ -427,9 +448,9 @@ export function buildProjectAdapter(
         name: t("views.default"),
         scope: "personal",
         ownerId: deps.actorId,
-        layout: "table",
+        layout: "list",
         columns: defaultColumnIds.map((id) => ({ id })),
-        quickActions: ["open", "mark_at_risk", "brief", "archive"],
+        quickActions: ["open", "mark_at_risk", "archive"],
         filters: [],
         sort: [{ columnId: "updated", dir: "desc" }],
         groupBy: null,

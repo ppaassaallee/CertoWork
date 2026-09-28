@@ -313,6 +313,7 @@ test("items and backlog can select all visible rows and bulk-edit assignee, date
 
 test("portfolio list opens a project from the title and renames on double-click", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
+  const tokens = readFileSync(resolve("src/styles/certo-tokens.css"), "utf8");
   const projectsSurface = readFileSync(
     resolve("src/features/views/ProjectsViewsSurface.tsx"),
     "utf8",
@@ -323,10 +324,17 @@ test("portfolio list opens a project from the title and renames on double-click"
   );
   assert.match(projectSurfaces, /ProjectsViewsSurface/);
   assert.match(projectsSurface, /data-testid="projects-views-surface"/);
+  assert.match(projectsSurface, /data-testid="projects-asana-list"/);
+  assert.match(projectsSurface, /data-testid="project-title-open"/);
+  assert.match(projectsSurface, /Click to open · Double-click to rename/);
+  assert.match(projectsSurface, /is-asana-list/);
   assert.match(projectAdapter, /id: "title"/);
   assert.match(projectAdapter, /id: "open"/);
+  assert.match(projectAdapter, /layout: "list"/);
+  assert.match(projectAdapter, /tasksByProject/);
   assert.match(projectSurfaces, /onOpenProject=\{\(project\) => onOpenProject\(project\)\}/);
   assert.match(css, /\.do-command-project-title-open/);
+  assert.match(tokens, /\.do-projects-asana-list/);
 });
 
 test("type filter matches exact work item kinds only", () => {

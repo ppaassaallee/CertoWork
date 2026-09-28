@@ -3488,6 +3488,98 @@
 .cw-views-surface.is-asana-list .cw-views-filter-chips {
   padding: 0 8px 8px;
 }
+
+/* Projects portfolio — Asana-style list (parity with My Work) */
+.do-projects-asana-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 4px 24px;
+}
+.do-projects-asana-head,
+.do-projects-asana-row {
+  display: grid;
+  grid-template-columns: 36px minmax(180px, 1.6fr) 100px 100px 110px 130px 100px 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+}
+.do-projects-asana-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 36px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--surface-0) 92%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+.do-projects-asana-row {
+  min-height: 48px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
+.do-projects-asana-row:hover {
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface-0));
+}
+.do-projects-asana-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-0));
+}
+.do-projects-asana-row .do-command-project-name {
+  min-width: 0;
+}
+.do-projects-asana-pill,
+.do-projects-asana-health {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+}
+.do-projects-asana-health.is-on-track {
+  background: color-mix(in srgb, var(--status-success, #3d8b40) 16%, transparent);
+  color: var(--status-success, #2f6b32);
+}
+.do-projects-asana-health.is-at-risk {
+  background: color-mix(in srgb, var(--status-warning, #c47f17) 16%, transparent);
+  color: var(--status-warning, #8a5a10);
+}
+.do-projects-asana-health.is-blocked {
+  background: color-mix(in srgb, var(--status-danger, #c0392b) 16%, transparent);
+  color: var(--status-danger, #922b21);
+}
+.do-projects-asana-due,
+.do-projects-asana-open {
+  color: var(--text-muted);
+}
+.do-projects-asana-empty {
+  padding: 28px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  .do-projects-asana-head,
+  .do-projects-asana-row {
+    grid-template-columns: 36px minmax(140px, 1fr) 90px 90px;
+  }
+  .do-projects-asana-head > span:nth-child(n + 5),
+  .do-projects-asana-row > span:nth-child(n + 5) {
+    display: none;
+  }
+}
+
 .cw-views-bar {
   display: flex;
   align-items: center;
