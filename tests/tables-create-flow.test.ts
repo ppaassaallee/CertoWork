@@ -76,7 +76,10 @@ test("TABLES and on-demand TABLE_RECORDS listeners are workspace-scoped", () => 
   );
   assert.match(
     shell,
-    /makeQuery\(\s*TABLES,\s*\(items\)\s*=>[\s\S]*?false,\s*false,\s*\)/,
+    /makeQueryLocal\(\s*TABLES,\s*\(items\)\s*=>[\s\S]*?false,\s*false,\s*\)/,
   );
-  assert.match(shell, /!listenPacks\.tableRecords\) return;[\s\S]*?collection\(db, TABLE_RECORDS\), where\("workspaceId", "==", workspace\.id\)/);
+  assert.match(
+    shell,
+    /!listenPacks\.tableRecords[\s\S]*?collection\(db, TABLE_RECORDS\),\s*where\("workspaceId", "==", workspace\.id\)/,
+  );
 });

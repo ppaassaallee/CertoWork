@@ -12,10 +12,14 @@ import { isPersonalWorkItem } from "../src/lib/personalHomeContext";
 
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
 const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
+const workspaceData = readFileSync(resolve("src/data/startWorkspaceData.ts"), "utf8");
 const knowledgeBase = readFileSync(resolve("src/components/KnowledgeBase.tsx"), "utf8");
 const knowledgeService = readFileSync(resolve("src/services/KnowledgeService.ts"), "utf8");
 const projectSurfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
 const workItems = readFileSync(resolve("src/components/WorkItemsCenter.tsx"), "utf8");
+
+/** Core project/task/conversation listeners live in startWorkspaceData; shell still owns packs. */
+const dataLayer = `${workspaceData}\n${workspace}`;
 
 function ruleFn(name: string) {
   const start = rules.indexOf(`function ${name}(`);
@@ -35,12 +39,12 @@ test("project read rules and client queries stay aligned", () => {
   assert.match(rules, /isJoinedMemberStatus/);
   assert.match(rules, /status == "accepted"/);
 
-  assert.match(workspace, /canSeeWorkspacePortfolio/);
-  assert.match(workspace, /where\("userId", "==", user\.uid\)/);
-  assert.match(workspace, /where\("visibleToUserIds", "array-contains", user\.uid\)/);
-  assert.match(workspace, /where\("teamMemberIds", "array-contains-any", roleLookupIds\)/);
-  assert.match(workspace, /where\("projectManagerId", "in", roleLookupIds\)/);
-  assert.match(workspace, /falling back to role queries/);
+  assert.match(dataLayer, /canSeeWorkspacePortfolio/);
+  assert.match(dataLayer, /where\("userId", "==", user\.uid\)/);
+  assert.match(dataLayer, /where\("visibleToUserIds", "array-contains", user\.uid\)/);
+  assert.match(dataLayer, /where\("teamMemberIds", "array-contains-any", roleLookupIds\)/);
+  assert.match(dataLayer, /where\("projectManagerId", "in", roleLookupIds\)/);
+  assert.match(dataLayer, /falling back to role queries/);
   assert.match(rules, /function isSelfRoleId/);
   const explicit = ruleFn("hasExplicitUserAccess");
   assert.match(explicit, /authEmailLower\(\)/);
@@ -57,10 +61,10 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(canRead, /accessMemberIds/);
   assert.match(canRead, /sharedWithUserIds/);
 
-  assert.match(workspace, /workspace\.ownerId === user\.uid/);
-  assert.match(workspace, /where\("createdBy", "==", user\.uid\)/);
-  assert.match(workspace, /where\("assigneeIds", "array-contains", memberId\)/);
-  assert.match(workspace, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
+  assert.match(dataLayer, /workspace\.ownerId === user\.uid/);
+  assert.match(dataLayer, /where\("createdBy", "==", user\.uid\)/);
+  assert.match(dataLayer, /where\("assigneeIds", "array-contains", memberId\)/);
+  assert.match(dataLayer, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
 });
 
 test("task records keep createdBy immutable and restrict delete to the record owner", () => {
@@ -111,12 +115,12 @@ test("personal notes stay owner-scoped; project documents are workspace-readable
   assert.match(workspace, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeBase, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeService, /where\("userId", "==", request\.userId\)/);
-  assert.match(workspace, /makeQuery\("categories", setCategories, false, true\)/);
+  assert.match(workspace, /makeQueryLocal\("categories",[\s\S]*?false,\s*true\)/);
 });
 
 test("conversations stay personal; Home and project scopes stay distinct", () => {
-  assert.match(workspace, /makeQuery\(\s*"boldi_conversations"/);
-  assert.match(workspace, /selectHomeConversation\(sorted\)/);
+  assert.match(dataLayer, /makeQuery\(\s*"boldi_conversations"/);
+  assert.match(dataLayer, /selectHomeConversation\(sorted\)/);
   assert.match(rules, /function canAccessBoldiRecord\(data\)/);
   assert.match(rules, /data\.userId == request\.auth\.uid/);
 
