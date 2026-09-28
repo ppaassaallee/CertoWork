@@ -3,6 +3,7 @@ import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
+import { portalEmailContent } from "./portalEmail.js";
 import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
 import {
   encryptCalendarSecrets,
@@ -2252,6 +2253,39 @@ async function sendInviteEmail(request, env) {
   });
 }
 
+async function sendPortalEmail(request, env) {
+  let body;
+  try {
+    body = await readJson(request);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Invalid request" }, 400);
+  }
+  const toEmail = String(body.toEmail || "").trim().toLowerCase();
+  if (!toEmail || !body.kind || !body.deepLink) {
+    return json({ error: "toEmail, kind and deepLink are required" }, 400);
+  }
+  try {
+    await authorize(request, body, env);
+  } catch (error) {
+    return json({ error: error instanceof Error ? error.message : "Authentication failed" }, 401);
+  }
+  const content = portalEmailContent(body);
+  const senderEmail = env.CERTO_EMAIL_FROM || "support@certo.work";
+  const senderName = env.CERTO_EMAIL_FROM_NAME || "Certo Work";
+  const result = await sendBrevoTransactionalEmail(env, {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: toEmail, name: String(body.toName || toEmail).trim() }],
+    subject: content.subject,
+    htmlContent: content.html,
+    textContent: content.text,
+    tags: ["client-portal", String(body.kind || "portal")],
+  });
+  if (!result.sent) {
+    return json({ error: result.error || "Email failed", ...result }, result.configured ? 502 : 503);
+  }
+  return json({ ok: true, messageId: result.messageId || null });
+}
+
 async function inviteDeliveryStatus(request, env) {
   let body;
   try {
@@ -2439,6 +2473,9 @@ const worker = {
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite") {
       return sendInviteEmail(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/email/portal") {
+      return sendPortalEmail(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/email/invite/delivery") {
       return inviteDeliveryStatus(request, env);
