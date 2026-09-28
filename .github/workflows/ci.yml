@@ -20,3 +20,4 @@ jobs:
       - run: npx tsc -b --pretty false
       - run: npm test
       - run: npm run build
+      - run: node scripts/perf-guards.mjs
