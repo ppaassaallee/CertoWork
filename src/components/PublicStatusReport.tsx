@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { downloadProjectStatusReport, projectStatusReportHtml } from "../lib/projectStatusReport";
+import { PortalTransitionBanner } from "../features/clientPortal/PortalTransitionBanner";
 
 export function PublicStatusReport({ token }: { token: string }) {
   const [html, setHtml] = useState("");
@@ -64,6 +65,9 @@ export function PublicStatusReport({ token }: { token: string }) {
           </button>
         )}
       </header>
+      <div style={{ maxWidth: 960, margin: "12px auto", padding: "0 12px" }}>
+        <PortalTransitionBanner />
+      </div>
       <iframe
         sandbox=""
         srcDoc={html}

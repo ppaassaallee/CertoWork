@@ -17,6 +17,7 @@ import {
 import { ProjectsViewsSurface } from "../features/views/ProjectsViewsSurface";
 import { ProjectItemsViewsSurface } from "../features/views/ProjectItemsViewsSurface";
 import { type TaskRow } from "../features/views/adapters/taskAdapter";
+import { ClientPortalTab } from "../features/clientPortal/ClientPortalTab";
 import {
   AlertTriangle,
   Archive,
@@ -1520,7 +1521,8 @@ export type ProjectConsoleTab =
   | "docs"
   | "tables"
   | "room"
-  | "codex";
+  | "codex"
+  | "portal";
 
 export function ProjectConsolePanel({
   project,
@@ -2021,6 +2023,17 @@ export function ProjectConsolePanel({
                 type="button"
               >
                 Documents
+              </button>
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  setTab("portal");
+                }}
+                role="menuitem"
+                type="button"
+                data-testid="project-more-portal"
+              >
+                Client portal
               </button>
               {tablesEnabled ? (
                 <button
@@ -3102,6 +3115,23 @@ export function ProjectConsolePanel({
               onCreateTableForProject
                 ? () => onCreateTableForProject(String(project.id))
                 : undefined
+            }
+          />
+        </div>
+      ) : null}
+
+      {tab === "portal" ? (
+        <div className="do-console-section" data-testid="project-portal-section">
+          <ClientPortalTab
+            workspaceId={String((workspace as any)?.id || project.workspaceId || "")}
+            project={project}
+            userId={String((currentUser as any)?.uid || (currentUser as any)?.id || "")}
+            onOpenPreview={(cid) =>
+              window.open(
+                `/portal/preview/${encodeURIComponent(cid)}/${encodeURIComponent(String(project.id))}`,
+                "_blank",
+                "noopener,noreferrer",
+              )
             }
           />
         </div>

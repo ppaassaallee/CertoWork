@@ -179,3 +179,15 @@ export {
 } from "./tables/computeFns";
 export { provisionTableTemplate } from "./tables/provisionTemplate";
 export { onMessageCreated } from "./collab/onMessageCreated";
+export {
+  portalLoginPrecheck,
+  portalEnsureClaims,
+  publishPortalUpdate,
+  getPortalDocumentUrl,
+  createPortalRequest,
+  portalAsk,
+  onApprovalDecided,
+  onProjectWriteForPortal,
+  onTaskWriteForPortal,
+  onClientSettingsWrite,
+} from "./clientPortal";

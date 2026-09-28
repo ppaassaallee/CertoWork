@@ -14,6 +14,7 @@ import {
   type InvoiceExceptionCode,
   type InvoiceStatus,
 } from "../lib/invoiceDocuments";
+import { PortalTransitionBanner } from "../features/clientPortal/PortalTransitionBanner";
 
 function money(amount: number, currency = "USD") {
   try {
@@ -146,6 +147,9 @@ export function PublicInvoicePortal({ token }: { token: string }) {
         <span>Certo Work · client invoice portal</span>
         <strong>{invoice.invoiceNumber || "Invoice"}</strong>
       </header>
+      <div style={{ maxWidth: 720, margin: "12px auto", padding: "0 12px" }}>
+        <PortalTransitionBanner />
+      </div>
       <section className="do-access-card do-invoice-portal-card">
         <span className="do-kicker">Invoice status</span>
         <h1>{invoice.title || "Invoice"}</h1>

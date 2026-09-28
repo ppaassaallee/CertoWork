@@ -36,6 +36,16 @@ export const ROUTINE_RECIPES: RoutineRecipe[] = [
     deliverableHint: "Borrador (pide aprobación)",
   },
   {
+    id: "client-weekly-update",
+    title: "Client weekly update",
+    sentence:
+      "Cada viernes a las 15 prepará el borrador del portal (Done / Next / Needs the client) para este proyecto con portal activo, sin auto-publicar si hay needsClient",
+    entityTypes: ["project"],
+    triggerHint: "Vie 15:00",
+    deliverableHint: "ProjectUpdate draft (portal)",
+    domain: "project",
+  },
+  {
     id: "pulso-portafolio",
     title: "Pulso del portafolio",
     sentence: "Cada lunes a las 7:30 enviame un correo con proyectos at risk, blocked y próximos checkpoints",

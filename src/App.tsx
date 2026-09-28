@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ArrowRight, Check, Loader2, LogIn, Mail, RefreshCw, ShieldCheck, Sparkles } from "./components/ui/Icon";
 import { useAuth } from "./lib/AuthContext";
@@ -22,6 +22,20 @@ import {
   isFirestoreQuotaMessage,
 } from "./lib/workspaceLoadError";
 
+const PortalApp = lazy(() =>
+  import("./portal/PortalApp").then((m) => ({ default: m.PortalApp })),
+);
+
+function isPortalHost() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  return host.startsWith("portal.") || host.startsWith("client.");
+}
+
+function isPortalPath() {
+  if (typeof window === "undefined") return false;
+  return window.location.pathname.startsWith("/portal");
+}
 // TODO: Replace with the Google Calendar appointment schedule URL.
 const DEMO_BOOKING_URL = "PLACEHOLDER_CALENDAR_URL";
 
@@ -385,11 +399,32 @@ export default function App() {
     applyCertoTextSize(getStoredCertoTextSize());
   }, []);
 
+  if (isPortalPath() || isPortalHost()) {
+    return (
+      <Suspense
+        fallback={
+          <div className="do-loading">
+            <Loader2 className="spin" size={18} />
+            <p>Opening client portal…</p>
+          </div>
+        }
+      >
+        <PortalApp />
+      </Suspense>
+    );
+  }
+
   const inviteToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/invite\/([^/]+)/) || [])[1] || "")
     : "";
   const reportToken = typeof window !== "undefined"
-    ? decodeURIComponent((window.location.pathname.match(/^\/report\/([^/]+)/) || [])[1] || "")
+    ? decodeURIComponent(
+        (
+          window.location.pathname.match(/^\/report\/([^/]+)/) ||
+          window.location.pathname.match(/^\/status\/([^/]+)/) ||
+          []
+        )[1] || "",
+      )
     : "";
   const invoiceToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/invoice\/([^/]+)/) || [])[1] || "")
@@ -398,7 +433,13 @@ export default function App() {
     ? decodeURIComponent((window.location.pathname.match(/^\/widget\/([^/]+)/) || [])[1] || "")
     : "";
   const requestPortalToken = typeof window !== "undefined"
-    ? decodeURIComponent((window.location.pathname.match(/^\/request\/([^/]+)/) || [])[1] || "")
+    ? decodeURIComponent(
+        (
+          window.location.pathname.match(/^\/request\/([^/]+)/) ||
+          window.location.pathname.match(/^\/r\/([^/]+)/) ||
+          []
+        )[1] || "",
+      )
     : "";
   const guestPortalToken = typeof window !== "undefined"
     ? decodeURIComponent((window.location.pathname.match(/^\/c\/([^/]+)/) || [])[1] || "")

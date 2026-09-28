@@ -64,8 +64,32 @@ service cloud.firestore {
       return status == "active" || status == "accepted";
     }
 
+    function isPortalToken() {
+      return isSignedIn() && request.auth.token.portal == true;
+    }
+
+    function portalClientIds() {
+      return isPortalToken() && request.auth.token.clientIds is list
+        ? request.auth.token.clientIds
+        : [];
+    }
+
+    function isPortalMemberOf(clientId) {
+      return isPortalToken()
+        && clientId is string
+        && clientId in portalClientIds();
+    }
+
+    function isPortalApprover() {
+      return isPortalToken()
+        && exists(/databases/$(database)/documents/portal_members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/portal_members/$(request.auth.uid)).data.role == "approver"
+        && get(/databases/$(database)/documents/portal_members/$(request.auth.uid)).data.status != "revoked";
+    }
+
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() && workspaceId != null
+        && request.auth.token.portal != true
         && exists(memberDoc(workspaceId))
         && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status);
     }
@@ -1541,16 +1565,42 @@ service cloud.firestore {
     match /conversation_messages/{id} {
       allow read: if isSignedIn()
         && resource != null
-        && canReadConversation(resource.data.conversationId);
+        && (
+          (
+            !isPortalToken()
+            && canReadConversation(resource.data.conversationId)
+          )
+          || (
+            isPortalToken()
+            && resource.data.visibility == "external"
+            && resource.data.conversationId is string
+            && portalClientIds().size() > 0
+            && exists(/databases/$(database)/documents/client_portal/$(portalClientIds()[0])/threads/$(resource.data.conversationId))
+          )
+        );
       allow create: if isSignedIn()
         && incoming().workspaceId is string
-        && isWorkspaceMember(incoming().workspaceId)
         && incoming().conversationId is string
-        && canWriteAsParticipant(incoming().conversationId)
-        && incoming().senderType == "user"
-        && incoming().senderId == request.auth.uid
-        && incoming().text is string;
+        && incoming().text is string
+        && (
+          (
+            !isPortalToken()
+            && isWorkspaceMember(incoming().workspaceId)
+            && canWriteAsParticipant(incoming().conversationId)
+            && incoming().senderType == "user"
+            && incoming().senderId == request.auth.uid
+          )
+          || (
+            isPortalToken()
+            && incoming().senderType == "guest"
+            && incoming().visibility == "external"
+            && incoming().senderId == request.auth.uid
+            && portalClientIds().size() > 0
+            && exists(/databases/$(database)/documents/client_portal/$(portalClientIds()[0])/threads/$(incoming().conversationId))
+          )
+        );
       allow update: if isSignedIn()
+        && !isPortalToken()
         && canReadConversation(resource.data.conversationId)
         && (
           (
@@ -1942,6 +1992,129 @@ service cloud.firestore {
     }
     match /views/{workspaceId}/definitions/{id} {
       allow read, create, update, delete: if request.auth != null;
+    }
+
+    // —— Client Portal (projection + members) ——
+    match /clients/{clientId} {
+      allow read: if isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if isWorkspaceMember(incoming().workspaceId)
+        && (isWorkspaceAdmin(incoming().workspaceId) || isPortfolioViewer(incoming().workspaceId));
+      allow delete: if isWorkspaceAdmin(resource.data.workspaceId);
+    }
+
+    match /portal_members/{uid} {
+      allow read: if isSignedIn()
+        && (
+          request.auth.uid == uid
+          || (
+            !isPortalToken()
+            && resource.data.workspaceId is string
+            && isWorkspaceMember(resource.data.workspaceId)
+          )
+        );
+      allow create: if !isPortalToken()
+        && isSignedIn()
+        && incoming().workspaceId is string
+        && isWorkspaceMember(incoming().workspaceId);
+      allow update: if isSignedIn()
+        && (
+          (
+            request.auth.uid == uid
+            && incoming().uid == resource.data.uid
+            && incoming().email == resource.data.email
+            && incoming().clientIds == resource.data.clientIds
+            && incoming().workspaceId == resource.data.workspaceId
+            && incoming().role == resource.data.role
+            && incoming().status == resource.data.status
+            && incoming().diff(resource.data).affectedKeys()
+              .hasOnly(["name", "title", "locale", "notificationPrefs", "lastSeenAt"])
+          )
+          || (
+            !isPortalToken()
+            && isWorkspaceMember(resource.data.workspaceId)
+          )
+        );
+      allow delete: if !isPortalToken()
+        && isWorkspaceAdmin(resource.data.workspaceId);
+    }
+
+    match /project_updates/{id} {
+      allow read: if !isPortalToken()
+        && isWorkspaceMember(resource.data.workspaceId);
+      allow create, update: if !isPortalToken()
+        && isWorkspaceMember(incoming().workspaceId);
+      allow delete: if !isPortalToken()
+        && isWorkspaceAdmin(resource.data.workspaceId);
+    }
+
+    match /client_approvals/{id} {
+      allow read: if (!isPortalToken() && isWorkspaceMember(resource.data.workspaceId))
+        || (isPortalMemberOf(resource.data.clientId));
+      allow create, update: if !isPortalToken()
+        && isWorkspaceMember(incoming().workspaceId);
+      allow delete: if !isPortalToken()
+        && isWorkspaceAdmin(resource.data.workspaceId);
+    }
+
+    match /portal_events/{id} {
+      allow create: if isPortalToken()
+        && incoming().uid == request.auth.uid
+        && incoming().clientId is string
+        && isPortalMemberOf(incoming().clientId);
+      allow read: if !isPortalToken()
+        && isSignedIn()
+        && resource.data.clientId is string
+        && exists(/databases/$(database)/documents/clients/$(resource.data.clientId))
+        && isWorkspaceMember(get(/databases/$(database)/documents/clients/$(resource.data.clientId)).data.workspaceId);
+      allow update, delete: if false;
+    }
+
+    match /client_stats/{clientId}/{document=**} {
+      allow read: if !isPortalToken()
+        && exists(/databases/$(database)/documents/clients/$(clientId))
+        && isWorkspaceMember(get(/databases/$(database)/documents/clients/$(clientId)).data.workspaceId);
+      allow write: if false;
+    }
+
+    match /client_portal/{clientId}/{document=**} {
+      allow read: if isPortalMemberOf(clientId)
+        || (
+          !isPortalToken()
+          && exists(/databases/$(database)/documents/clients/$(clientId))
+          && isWorkspaceMember(get(/databases/$(database)/documents/clients/$(clientId)).data.workspaceId)
+        );
+      allow create, delete: if false;
+      allow update: if false;
+    }
+
+    match /client_portal/{clientId}/approvals/{approvalId} {
+      allow read: if isPortalMemberOf(clientId)
+        || (
+          !isPortalToken()
+          && exists(/databases/$(database)/documents/clients/$(clientId))
+          && isWorkspaceMember(get(/databases/$(database)/documents/clients/$(clientId)).data.workspaceId)
+        );
+      allow update: if isPortalApprover()
+        && isPortalMemberOf(clientId)
+        && resource.data.status == "pending"
+        && incoming().status in ["accepted", "rejected"]
+        && incoming().decidedBy == request.auth.uid
+        && incoming().diff(resource.data).affectedKeys()
+          .hasOnly(["status", "decidedBy", "decidedAt", "comment"]);
+      allow create, delete: if false;
+    }
+
+    match /client_portal/{clientId}/csat/{csatId} {
+      allow read: if isPortalMemberOf(clientId)
+        || (
+          !isPortalToken()
+          && exists(/databases/$(database)/documents/clients/$(clientId))
+          && isWorkspaceMember(get(/databases/$(database)/documents/clients/$(clientId)).data.workspaceId)
+        );
+      allow update: if isPortalMemberOf(clientId)
+        && incoming().diff(resource.data).affectedKeys()
+          .hasOnly(["score", "comment", "answeredAt"]);
+      allow create, delete: if false;
     }
   }
 }

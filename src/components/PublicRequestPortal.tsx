@@ -12,6 +12,7 @@ import {
   REQUEST_PORTAL_COLLECTION,
   type RequestPortalSnapshot,
 } from "../lib/captureRequests";
+import { PortalTransitionBanner } from "../features/clientPortal/PortalTransitionBanner";
 
 /** Public portal for the ticket requester (creator) — no sign-in. */
 export function PublicRequestPortal({ token }: { token: string }) {
@@ -147,6 +148,10 @@ export function PublicRequestPortal({ token }: { token: string }) {
           <em>{snapshot.workspaceName}</em>
         </div>
       </header>
+
+      <div style={{ maxWidth: 720, margin: "12px auto", padding: "0 12px" }}>
+        <PortalTransitionBanner />
+      </div>
 
       <section className="do-request-portal-card">
         <p className="do-request-portal-status" data-testid="request-portal-status">

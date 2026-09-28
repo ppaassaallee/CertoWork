@@ -17,3 +17,4 @@ patch_*.py
 grep_output.txt
 firestore_full.txt
 scan-and-update.js
+functions/lib/
