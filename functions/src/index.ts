@@ -171,6 +171,7 @@ export { generateBrief } from "./brief/generateBrief";
 export { dailyBriefRoutineTick } from "./brief/dailyBriefRoutine";
 export { signalRoutinesTick } from "./signals/signalRoutines";
 export { allocateInvoiceNumber, flipOverdueInvoices, generateProjectInvoices } from "./billing/invoiceFns";
+export { restoreCreatorAssignees } from "./tasks/restoreCreatorAssignees";
 export {
   recomputeTableRecord,
   onTableEventCreated,

@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { useEffect, useMemo, useState } from "react";
 import type { OverviewProgress } from "../useOverviewData";
 
 const COLORS = {
@@ -9,6 +8,8 @@ const COLORS = {
   pending: "var(--status-neutral-soft)",
 };
 
+type RechartsMod = typeof import("recharts");
+
 export function ProgressDonut({
   progress,
   animate = true,
@@ -16,6 +17,18 @@ export function ProgressDonut({
   progress: OverviewProgress;
   animate?: boolean;
 }) {
+  const [charts, setCharts] = useState<RechartsMod | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void import("recharts").then((mod) => {
+      if (!cancelled) setCharts(mod);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const data = useMemo(() => {
     const rows = [
       { key: "completed", name: "Completados", value: progress.completed, color: COLORS.completed },
@@ -32,30 +45,39 @@ export function ProgressDonut({
   const total =
     progress.completed + progress.inProgress + progress.overdue + Math.max(0, progress.pending);
 
+  const ResponsiveContainer = charts?.ResponsiveContainer;
+  const PieChart = charts?.PieChart;
+  const Pie = charts?.Pie;
+  const Cell = charts?.Cell;
+
   return (
     <div className="cw-overview-donut" data-testid="overview-progress-donut">
       <div className="cw-overview-donut-chart">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              cx="50%"
-              cy="50%"
-              data={data}
-              dataKey="value"
-              endAngle={-270}
-              innerRadius="60%"
-              isAnimationActive={animate}
-              outerRadius="88%"
-              paddingAngle={1}
-              startAngle={90}
-              stroke="none"
-            >
-              {data.map((entry) => (
-                <Cell key={entry.key} fill={entry.color} />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
+        {ResponsiveContainer && PieChart && Pie && Cell ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                cx="50%"
+                cy="50%"
+                data={data}
+                dataKey="value"
+                endAngle={-270}
+                innerRadius="60%"
+                isAnimationActive={animate}
+                outerRadius="88%"
+                paddingAngle={1}
+                startAngle={90}
+                stroke="none"
+              >
+                {data.map((entry) => (
+                  <Cell key={entry.key} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="cw-overview-donut-placeholder" aria-hidden />
+        )}
         <div className="cw-overview-donut-center">
           <strong className="tabular-nums">{progress.pct}%</strong>
         </div>

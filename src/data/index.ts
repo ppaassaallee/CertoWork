@@ -4,7 +4,9 @@ export {
   conversationsStore,
   membersStore,
   useProjects,
+  useProjectsWhen,
   useTasks,
+  useTasksWhen,
   useConversations,
   useMembers,
   useProject,
@@ -13,7 +15,12 @@ export {
   clearWorkspaceCollectionStores,
 } from "./collections";
 export { applyStoreUpdate } from "./applyStoreUpdate";
-export { startWorkspaceData, clearWorkspaceDataStores } from "./startWorkspaceData";
+export {
+  startWorkspaceData,
+  clearWorkspaceDataStores,
+  subscribeProjectTasks,
+  applyDocChanges,
+} from "./startWorkspaceData";
 export {
   uiStore,
   useUiStore,
@@ -26,3 +33,28 @@ export {
   useDocStore,
   useDocSelector,
 } from "./createDocStore";
+export {
+  milestonesStore,
+  risksStore,
+  invoicesStore,
+  tablesStore,
+  tableRecordsStore,
+  costTemplatesStore,
+  categoriesStore,
+  useMilestones,
+  useRisks,
+  useInvoices,
+  useTables,
+  useMilestonesByProject,
+  useRisksByProject,
+  clearPackStores,
+} from "./packStores";
+export {
+  useSidebarProjects,
+  useFavoriteProjects,
+  useConversation,
+  useTask,
+  useOpenTaskCountByProject,
+  getProjectsSnapshot,
+  getTasksSnapshot,
+} from "./selectors";
