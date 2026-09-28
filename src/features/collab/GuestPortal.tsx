@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CertoMark } from "../../components/CertoMark";
 import { Loader2, Send } from "../../components/ui/Icon";
+import { PortalTransitionBanner } from "../clientPortal/PortalTransitionBanner";
 
 type GuestMessage = {
   id: string;
@@ -120,6 +121,10 @@ export function GuestPortal({ token }: { token: string }) {
           <em>{snapshot.workspaceName || "Guest access"}</em>
         </div>
       </header>
+
+      <div style={{ maxWidth: 720, margin: "12px auto", padding: "0 12px" }}>
+        <PortalTransitionBanner />
+      </div>
 
       <section className="do-request-portal-card">
         <p className="do-request-portal-status" data-testid="guest-portal-status">

@@ -12,4 +12,5 @@ Fallbacks when a piece was missing or ambiguous during the continuous run.
 8. **`flags.clientPortal`** lives on the workspace document (boolean); per-project enablement is `clients.portalEnabled` / project Client portal tab, independent of the workspace flag.
 9. **Functions package** did not ship `zod`; it is added as a dependency for projection strict parses (or schemas are duplicated under `functions/src/clientPortal/schemas.ts` importing zod).
 10. **Email-link auth** domain/action URL defaults to `{origin}/portal/auth`; Firebase console Authorized domains must include production host (noted in `DEPLOY.md`).
-11. **Multi-client conversation_messages rules** check `clientIds[0]` for thread existence (rules cannot loop); members with multiple clients rely on projection linking threads under each client tree.
+12. **Clients sidebar route** — `ClientsPages` ships for `/clients` and `/clients/:id`; DelivereeWorkspace nav group wiring is a follow-up if the path is not already handled by the catch-all workspace router.
+13. **Nightly client_stats** — Insights UI reads `client_stats/{clientId}/days/{date}`; aggregator function is listed as a follow-up in REPORT.md.
