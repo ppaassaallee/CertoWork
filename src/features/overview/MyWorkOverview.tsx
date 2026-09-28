@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ChevronDown, ChevronRight } from "../../components/ui/Icon";
 import { KpiTile } from "./components/KpiTile";
@@ -23,7 +23,7 @@ import {
 import { useAuth } from "../../lib/AuthContext";
 import "./overview.css";
 
-export function MyWorkOverview({
+export const MyWorkOverview = memo(function MyWorkOverview({
   userId,
   tasks,
   projects,
@@ -212,4 +212,4 @@ export function MyWorkOverview({
       ) : null}
     </div>
   );
-}
+});

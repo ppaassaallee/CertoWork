@@ -46,6 +46,41 @@ export function useTasks() {
   return useDocStore(tasksStore);
 }
 
+const EMPTY_TASKS: TaskDoc[] = [];
+
+/**
+ * Subscribe to tasks only while `enabled` is true. When false, returns a stable
+ * empty array and ignores store emits — so the Projects portfolio shell does not
+ * re-render on every task snapshot (My Work / Home / Project routes opt in).
+ */
+export function useTasksWhen(enabled: boolean) {
+  return useDocSelector(
+    tasksStore,
+    (rows) => (enabled ? rows : EMPTY_TASKS),
+    (a, b) => {
+      if (!enabled) return true;
+      return a === b;
+    },
+  );
+}
+
+const EMPTY_PROJECTS: ProjectDoc[] = [];
+
+/**
+ * Subscribe to projects only while `enabled` is true. Routes that own
+ * useProjects() (Home/MyWork/Projects/Project) keep the shell quiet.
+ */
+export function useProjectsWhen(enabled: boolean) {
+  return useDocSelector(
+    projectsStore,
+    (rows) => (enabled ? rows : EMPTY_PROJECTS),
+    (a, b) => {
+      if (!enabled) return true;
+      return a === b;
+    },
+  );
+}
+
 export function useConversations() {
   return useDocStore(conversationsStore);
 }

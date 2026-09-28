@@ -7,10 +7,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type KeyboardEvent,
+  type LazyExoticComponent,
 } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   Archive,
   ArrowUp,
@@ -69,7 +72,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { app, db, storage } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
 import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
 import { AliasProfileEditor } from "./ProjectControls";
@@ -158,8 +161,6 @@ import {
   type RoutineSession,
 } from "../lib/routines";
 import { HomeAttention } from "../pages/HomeAttention";
-import { HomeCockpit } from "../features/home";
-import { BillingScreen } from "../features/billing";
 import {
   useBillingEnabled,
   useTablesEnabled,
@@ -246,7 +247,6 @@ import {
   type FeedbackSeverity,
   type FeedbackStatus,
 } from "../lib/feedbackReports";
-import { ProjectConsolePanel } from "./ProjectSurfaces";
 import { MyWorkViewsSurface } from "../features/views/MyWorkViewsSurface";
 import { DailyPlanOverlay, DailyPlanOptIn, useDailyPlanEnabled } from "../features/dailyPlan";
 import { useIsPhone } from "../shared/useIsPhone";
@@ -270,16 +270,43 @@ import {
   uiStore,
   useConversations,
   useMembers,
-  useProjects,
-  useTasks,
+  useOpenTaskCountByProject,
+  useProject,
+  useProjectsWhen,
+  useTask,
+  useTasksWhen,
+  getProjectsSnapshot,
+  getTasksSnapshot,
+  startWorkspaceData,
+  subscribeProjectTasks,
 } from "../data";
 import { ModalHost } from "../routes/ModalHost";
 import { NotesWorkspace } from "./NotesWorkspace";
+import {
+  milestonesStore,
+  risksStore,
+  invoicesStore,
+  tablesStore,
+  costTemplatesStore,
+  categoriesStore,
+} from "../data/packStores";
 
 const ProjectsRouteSuspense = lazy(() =>
   import("../routes/ProjectsRoute").then((mod) => ({
     default: mod.ProjectsRouteSuspense,
   })),
+);
+const HomeRouteLazy = lazy(() =>
+  import("../routes/HomeRoute").then((m) => ({ default: m.HomeRoute })),
+);
+const MyWorkRouteLazy = lazy(() =>
+  import("../routes/MyWorkRoute").then((m) => ({ default: m.MyWorkRoute })),
+);
+const ProjectRouteLazy = lazy(() =>
+  import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
+) as LazyExoticComponent<ComponentType<any>>;
+const BillingScreenLazy = lazy(() =>
+  import("../features/billing").then((m) => ({ default: m.BillingScreen })),
 );
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
@@ -322,9 +349,6 @@ import {
   buildOwnedAccessPatch,
   buildTaskAccessPatch,
   normalizeAccessEmail,
-  projectAccessEmails,
-  projectAccessLookupIds,
-  projectAccessNameValues,
   shouldTryWorkspacePortfolioQuery,
 } from "../lib/accessControl";
 import {
@@ -551,20 +575,31 @@ export function DelivereeWorkspace() {
   );
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const projects = useProjects() as any[];
+  // Routes own task arrays on home / portfolio / project. Shell keeps projects
+  // for chrome (sidebar) except on portfolio where ProjectsRoute owns both.
+  const shellNeedsProjectArray =
+    lens.kind !== "work" && lens.kind !== "settings" && lens.kind !== "more";
+  const shellNeedsTaskArray =
+    lens.kind !== "work" &&
+    lens.kind !== "home" &&
+    lens.kind !== "project" &&
+    lens.kind !== "settings" &&
+    lens.kind !== "more";
+  const projects = useProjectsWhen(shellNeedsProjectArray) as any[];
   const setProjects = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(projectsStore, update as any);
     },
     [],
   );
-  const tasks = useTasks() as any[];
+  const tasks = useTasksWhen(shellNeedsTaskArray) as any[];
   const setTasks = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(tasksStore, update as any);
     },
     [],
   );
+  const openTaskCounts = useOpenTaskCountByProject();
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
@@ -601,6 +636,7 @@ export function DelivereeWorkspace() {
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
   const [portfolioFollowersBusy, setPortfolioFollowersBusy] = useState(false);
+  const [restoreCreatorAssigneesBusy, setRestoreCreatorAssigneesBusy] = useState(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -968,56 +1004,26 @@ export function DelivereeWorkspace() {
       const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
       return Boolean(emailLower && memberEmail && memberEmail === emailLower);
     });
-    const canSeeWorkspacePortfolio = shouldTryWorkspacePortfolioQuery({
-      isOwner: workspace.ownerId === user.uid,
-      member: currentMember,
-    });
-    const roleLookupIds = projectAccessLookupIds({
-      workspaceId: workspace.id,
-      userId: user.uid,
-      email: user.email,
-      memberIds: [memberId, currentMember?.id],
-    }).slice(0, 10);
-    const roleEmails = projectAccessEmails(user.email);
-    const roleNames = projectAccessNameValues({
-      alias: currentMember?.alias,
-      displayName: currentMember?.displayName,
-      email: currentMember?.email || user.email,
-      emailLower: currentMember?.emailLower || emailLower,
-    }).slice(0, 10);
     const canTriageFeedback = canManageWorkspaceMembers(
       currentMember?.role,
       workspace.ownerId === user.uid,
     );
-    const mergeQueries = (
-      name: string,
-      queryClauses: any[][],
-      callback: (items: any[]) => void,
-    ) => {
-      const merge = createCompleteSnapshotMerge<any>(
-        queryClauses.length,
-        callback,
-        (item) => item?.workspaceId === workspace.id,
-      );
-      return queryClauses.map((clauses, index) =>
-        onSnapshot(
-          query(collection(db, name), ...clauses),
-                    (snapshot) => {
-            if (!hasConfirmedSnapshotData(snapshot)) return;
-            merge.update(
-              index,
-              snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-            );
-          },
-          (error) => {
-            console.error(`Firestore ${name} query ${index} failed`, error);
-            merge.fail(index);
-            reportDataSyncError(error);
-          },
-        ),
-      );
-    };
-    const makeQuery = (
+    const extraUnsubscribers: Array<() => void> = [];
+
+    // Core collections owned by startWorkspaceData → stores (signature-stable).
+    const stopWorkspaceData = startWorkspaceData({
+      db,
+      user: { uid: user.uid, email: user.email },
+      workspace: { id: workspace.id, ownerId: workspace.ownerId },
+      members: workspaceMembers as any[],
+      memberId,
+      emailLower,
+      onConversationId: setConversationId,
+      onError: reportDataSyncError,
+    });
+
+    // Non-store shell listeners (feedback, capture, deferred packs).
+    const makeQueryLocal = (
       name: string,
       callback: (items: any[]) => void,
       activeOnly = false,
@@ -1032,7 +1038,7 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-                (snapshot) => {
+        (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         },
@@ -1042,85 +1048,38 @@ export function DelivereeWorkspace() {
         },
       );
     };
-    const projectRoleClauses = [
-      [where("userId", "==", user.uid)],
-      [where("visibleToUserIds", "array-contains", user.uid)],
-      ...roleEmails.map((email) => [where("visibleToEmails", "array-contains", email)]),
-      ...(roleLookupIds.length
-        ? [
-            [where("teamMemberIds", "array-contains-any", roleLookupIds)],
-            [where("sponsorIds", "array-contains-any", roleLookupIds)],
-            [where("projectManagerId", "in", roleLookupIds)],
-            [where("productOwnerId", "in", roleLookupIds)],
-          ]
-        : []),
-      ...(roleNames.length
-        ? [
-            [where("projectManager", "in", roleNames), where("workspaceId", "==", workspace.id)],
-            [where("contact", "in", roleNames), where("workspaceId", "==", workspace.id)],
-          ]
-        : []),
-    ];
-    let cancelled = false;
-    const extraUnsubscribers: Array<() => void> = [];
-    const startRoleProjectQueries = () => {
-      if (cancelled) return;
-      extraUnsubscribers.push(...mergeQueries("projects", projectRoleClauses, setProjects));
+    const mergeQueriesLocal = (
+      name: string,
+      queryClauses: any[][],
+      publish: (items: any[]) => void,
+    ) => {
+      const merge = createCompleteSnapshotMerge<any>(
+        queryClauses.length,
+        publish,
+        (item) => item?.workspaceId === workspace.id,
+      );
+      return queryClauses.map((clauses, index) =>
+        onSnapshot(
+          query(collection(db, name), ...clauses),
+          (snapshot) => {
+            if (!hasConfirmedSnapshotData(snapshot)) return;
+            merge.update(
+              index,
+              snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+            );
+          },
+          (error) => {
+            console.error(`Firestore ${name} query ${index} failed`, error);
+            merge.fail(index);
+            reportDataSyncError(error);
+          },
+        ),
+      );
     };
-    const projectUnsubscribers = canSeeWorkspacePortfolio
-      ? [
-          onSnapshot(
-            query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
-                        (snapshot) => {
-              if (!hasConfirmedSnapshotData(snapshot)) return;
-              setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-            },
-            (error) => {
-              console.error("Workspace projects query failed; falling back to role queries", error);
-              reportDataSyncError(error);
-              if (!isFirestoreQuotaError(error)) startRoleProjectQueries();
-            },
-          ),
-        ]
-      : mergeQueries("projects", projectRoleClauses, setProjects);
-    const taskUnsubscribers =
-      workspace.ownerId === user.uid
-        ? [makeQuery("tasks", setTasks)]
-        : mergeQueries(
-            "tasks",
-            [
-              [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-              [where("createdBy", "==", user.uid), where("workspaceId", "==", workspace.id)],
-              [where("visibleToUserIds", "array-contains", user.uid)],
-              [where("visibleToEmails", "array-contains", emailLower)],
-              [where("assigneeIds", "array-contains", memberId)],
-              [where("accessMemberIds", "array-contains", memberId)],
-              [where("sharedWithUserIds", "array-contains", user.uid)],
-            ],
-            setTasks,
-          );
-    // Core always-on: conversations, projects, tasks, feedback, capture — keep the shell usable.
+
     const unsubscribers: Array<() => void> = [
-      makeQuery(
-        "boldi_conversations",
-        (items) => {
-          const sorted = items.sort(
-            (left, right) =>
-              timestamp(right.updatedAt || right.createdAt) -
-              timestamp(left.updatedAt || left.createdAt),
-          );
-          setConversations(sorted);
-          setConversationId((current) => {
-            if (current) return current;
-            return selectHomeConversation(sorted)?.id || null;
-          });
-        },
-        true,
-        true,
-      ),
-      ...projectUnsubscribers,
-      ...taskUnsubscribers,
-      ...mergeQueries(
+      stopWorkspaceData,
+      ...mergeQueriesLocal(
         "feedback_reports",
         [
           [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
@@ -1143,7 +1102,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
-                (snapshot) => {
+        (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
             (item) => ({ id: item.id, ...item.data() }) as CaptureAddress,
@@ -1161,7 +1120,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
-                (snapshot) => {
+        (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as CaptureAddress)
@@ -1176,28 +1135,43 @@ export function DelivereeWorkspace() {
     ];
 
     deferredSubscribeRef.current = (listenPacks) => {
-    const unsubscribers: Array<() => void> = [];
+    const packUnsubscribers: Array<() => void> = [];
 
     if (listenPacks.milestones) {
-      unsubscribers.push(makeQuery("milestones", setMilestones));
+      packUnsubscribers.push(
+        makeQueryLocal("milestones", (items) => {
+          setMilestones(items);
+          milestonesStore.replaceAll(items as any);
+        }),
+      );
     }
 
     if (listenPacks.financeOps) {
-      unsubscribers.push(
-        makeQuery("invoice_documents", (items) =>
-          setInvoiceDocuments(items as InvoiceDocument[]),
-        ),
-        makeQuery("support_cases", setSupportCases),
-        makeQuery("sprints", (items) => setSprints(items as SprintRecord[])),
-        makeQuery("boldr_risks", setRisks),
-        makeQuery("cost_templates", setCostTemplates),
+      packUnsubscribers.push(
+        makeQueryLocal("invoice_documents", (items) => {
+          setInvoiceDocuments(items as InvoiceDocument[]);
+          invoicesStore.replaceAll(items as any);
+        }),
+        makeQueryLocal("support_cases", setSupportCases),
+        makeQueryLocal("sprints", (items) => setSprints(items as SprintRecord[])),
+        makeQueryLocal("boldr_risks", (items) => {
+          setRisks(items);
+          risksStore.replaceAll(items as any);
+        }),
+        makeQueryLocal("cost_templates", (items) => {
+          setCostTemplates(items);
+          costTemplatesStore.replaceAll(items as any);
+        }),
       );
     }
 
     if (listenPacks.templatesCategories) {
-      unsubscribers.push(
-        makeQuery("categories", setCategories, false, true),
-        makeQuery("agent_templates", (items) =>
+      packUnsubscribers.push(
+        makeQueryLocal("categories", (items) => {
+          setCategories(items);
+          categoriesStore.replaceAll(items as any);
+        }, false, true),
+        makeQueryLocal("agent_templates", (items) =>
           setProjectTemplates(
             items.filter((item) => item.templateType === "project"),
           ),
@@ -1206,11 +1180,11 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.strategyKnowledge) {
-      unsubscribers.push(
-        makeQuery("strategic_goals", setStrategicGoals),
-        makeQuery("key_results", setStrategicMeasures),
-        makeQuery("strategic_initiatives", setStrategicRecords),
-        ...mergeQueries(
+      packUnsubscribers.push(
+        makeQueryLocal("strategic_goals", setStrategicGoals),
+        makeQueryLocal("key_results", setStrategicMeasures),
+        makeQueryLocal("strategic_initiatives", setStrategicRecords),
+        ...mergeQueriesLocal(
           "knowledge_items",
           [
             [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
@@ -1222,8 +1196,8 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.notes) {
-      unsubscribers.push(
-        makeQuery(
+      packUnsubscribers.push(
+        makeQueryLocal(
           "notebook_entries",
           (items) => setNotebookEntries(items as NotebookEntry[]),
           false,
@@ -1233,16 +1207,17 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.tables) {
-      unsubscribers.push(
-        makeQuery(
+      packUnsubscribers.push(
+        makeQueryLocal(
           TABLES,
-          (items) =>
-            setWorkspaceTables(
-              (items as TableDoc[]).map((row) => ({
-                ...row,
-                id: row.id,
-              })),
-            ),
+          (items) => {
+            const rows = (items as TableDoc[]).map((row) => ({
+              ...row,
+              id: row.id,
+            }));
+            setWorkspaceTables(rows);
+            tablesStore.replaceAll(rows as any);
+          },
           false,
           false,
         ),
@@ -1250,8 +1225,8 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.review) {
-      unsubscribers.push(
-        makeQuery(
+      packUnsubscribers.push(
+        makeQueryLocal(
           "review_candidates",
           (items) => {
             setReviewItems(
@@ -1268,9 +1243,9 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.odysseus) {
-      unsubscribers.push(
-        makeQuery("odiseus_memory", setOdysseusMemory, false, true),
-        makeQuery(
+      packUnsubscribers.push(
+        makeQueryLocal("odiseus_memory", setOdysseusMemory, false, true),
+        makeQueryLocal(
           "odiseus_activity",
           (items) =>
             setOdysseusActivity(
@@ -1282,22 +1257,27 @@ export function DelivereeWorkspace() {
           false,
           true,
         ),
-        makeQuery("skills", setWorkspaceSkills, false, true),
-        makeQuery("scheduled_tasks", setOdysseusSchedules, false, true),
+        makeQueryLocal("skills", setWorkspaceSkills, false, true),
+        makeQueryLocal("scheduled_tasks", setOdysseusSchedules, false, true),
       );
     }
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => packUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
 
     return () => {
-      cancelled = true;
       deferredSubscribeRef.current = null;
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
     // The core shell stays subscribed across route changes.
   }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
+
+  // Per-project closed/open tasks while viewing a project console.
+  useEffect(() => {
+    if (!workspace?.id || lens.kind !== "project" || !lens.projectId) return;
+    return subscribeProjectTasks(db, lens.projectId, reportDataSyncError);
+  }, [workspace?.id, lens, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     const subscribe = deferredSubscribeRef.current;
@@ -1672,10 +1652,11 @@ export function DelivereeWorkspace() {
   const openSystemTemplateGallery = () => {
     setSystemTemplateGalleryOpen(true);
   };
-  const openTasks = useMemo(
-    () => tasks.filter((task) => !isClosed(task.status)),
-    [tasks],
-  );
+  const openTasks = useMemo(() => {
+    const source =
+      tasks.length > 0 ? tasks : (getTasksSnapshot() as any[]);
+    return source.filter((task) => !isClosed(task.status));
+  }, [tasks]);
   const activeProject = useMemo(
     () =>
       lens.kind === "project"
@@ -1701,9 +1682,7 @@ export function DelivereeWorkspace() {
   const conversationContextTaskIds = conversationTaskIds(
     impliedConversationScope,
   );
-  const selectedWorkItem = selectedWorkItemId
-    ? tasks.find((task) => task.id === selectedWorkItemId) || null
-    : null;
+  const selectedWorkItem = useTask(selectedWorkItemId) as any;
   const contextTaskIds = [
     ...new Set([
       ...conversationContextTaskIds,
@@ -1748,6 +1727,10 @@ export function DelivereeWorkspace() {
       null,
     [projectConsoleId, projects, routeOrPrimaryProject],
   );
+  const storeProjectByLens = useProject(
+    lens.kind === "project" ? lens.projectId : projectConsoleId,
+  );
+  const resolvedConsoleProject = (storeProjectByLens as any) || consoleProject;
   const todayKey = localDateKey(new Date());
   const todayTasks = useMemo(
     () =>
@@ -4574,6 +4557,47 @@ export function DelivereeWorkspace() {
     }
   };
 
+  const restoreCreatorAssigneesOnDemand = async () => {
+    if (!user || !workspace) return;
+    const role = String(currentWorkspaceMember?.role || "").toLowerCase();
+    const allowed =
+      workspace.ownerId === user.uid || role === "owner" || role === "admin";
+    if (!allowed) {
+      setNotice("Only workspace owners or admins can restore creator assignees.");
+      return;
+    }
+    const confirmed = window.confirm(
+      getLocale() === "es"
+        ? "¿Restaurar al creador como assignee en ítems sin asignación?\n\nSolo afecta tareas con createdBy y sin assignee. Dry-run primero vía scripts/backfill-creator-assignees.mjs si prefieres revisar."
+        : "Restore creators as assignees on unassigned items?\n\nOnly tasks with createdBy and no assignee are patched. Prefer scripts/backfill-creator-assignees.mjs dry-run first if you want a preview.",
+    );
+    if (!confirmed) return;
+    setRestoreCreatorAssigneesBusy(true);
+    try {
+      const fn = httpsCallable(
+        getFunctions(app, "us-central1"),
+        "restoreCreatorAssignees",
+      );
+      const result = await fn({ workspaceId: workspace.id, dryRun: false });
+      const data = (result.data || {}) as {
+        matched?: number;
+        updated?: number;
+        scanned?: number;
+      };
+      setNotice(
+        `Creator assignees restored: ${data.updated ?? 0} updated / ${data.matched ?? 0} matched (scanned ${data.scanned ?? 0}).`,
+      );
+    } catch (reason) {
+      setNotice(
+        reason instanceof Error
+          ? `Could not restore creator assignees: ${reason.message}`
+          : "Could not restore creator assignees.",
+      );
+    } finally {
+      setRestoreCreatorAssigneesBusy(false);
+    }
+  };
+
   const syncPureAiPricingFromSheet = async () => {
     if (!user || !workspace) return;
     if (!isPureAiWorkspace(workspace)) {
@@ -7049,7 +7073,7 @@ export function DelivereeWorkspace() {
                 sidebarProjects.favorites.map((project) => {
                   const health = projectHealth(
                     project,
-                    openTasks.filter((task) => task.projectId === project.id),
+                    Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
                     risks.filter((risk) => risk.projectId === project.id),
                   );
                   const openCount = openTasks.filter(
@@ -7118,7 +7142,7 @@ export function DelivereeWorkspace() {
                 sidebarProjects.recent.map((project) => {
                   const health = projectHealth(
                     project,
-                    openTasks.filter((task) => task.projectId === project.id),
+                    Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
                     risks.filter((risk) => risk.projectId === project.id),
                   );
                   const openCount = openTasks.filter(
@@ -7868,15 +7892,15 @@ export function DelivereeWorkspace() {
           lens.kind === "home" && !isFocusedConversation ? (
             <>
               <div className="do-thread-viewport">
-                <HomeCockpit
+                <Suspense fallback={<div className="do-panel-empty">Loading home…</div>}>
+                <HomeRouteLazy
                   accessRequests={accessRequests}
                   activityItems={odiseusActivity}
                   actor={personalActor}
                   dayPlanItems={dayPlanScoreItems}
-                  members={workspaceMembers}
                   focusScore={dayPlan.score.value}
-                  userId={user?.uid}
-                  workspaceId={workspace?.id}
+                  userId={user?.uid || ""}
+                  workspaceId={workspace?.id || ""}
                   onApprove={(item) => {
                     if (item) void processReview(item, "approve");
                   }}
@@ -7909,19 +7933,18 @@ export function DelivereeWorkspace() {
                     }
                   }}
                   onOpenProject={(projectId) => {
-                    const project = projects.find((entry) => entry.id === projectId);
+                    const project =
+                      getProjectsSnapshot().find((entry) => entry.id === projectId) ||
+                      projects.find((entry) => entry.id === projectId);
                     if (project) openProjectRecord(project);
                   }}
                   onRespondRequest={() => setPanel("workspace")}
                   onReviewFriday={() => navigate("/my-work/reviews")}
                   onStartRitual={(session) => void openRitualSession(session)}
-                  projects={projects}
                   records={workspaceRecords}
                   reviewItems={reviewItems}
-                  risks={risks}
                   routineSessions={ritualSessions}
                   tables={visibleTables}
-                  tasks={tasks}
                   userName={
                     user?.displayName ||
                     workspaceMembers.find((member) => member.userId === user?.uid)
@@ -7931,6 +7954,7 @@ export function DelivereeWorkspace() {
                   }
                   weeklyPlanSession={weeklyPlanSession}
                 />
+                </Suspense>
                 {activeRitual && getManifest(activeRitual.recipeId) ? (
                   <RitualRunner
                     manifest={getManifest(activeRitual.recipeId)!}
@@ -8557,7 +8581,7 @@ export function DelivereeWorkspace() {
                     onCreateControlledOption: createControlledOption,
                     onCreateSprint: createSprint,
                     onInviteAssigneeEmail: canManageMembers
-                      ? async (email) => {
+                      ? async (email: any) => {
                           await inviteWorkspaceMember(email);
                         }
                       : undefined,
@@ -8611,30 +8635,32 @@ export function DelivereeWorkspace() {
               workspaceId={workspace?.id || ""}
             />
             ) : (
-            <MyWorkViewsSurface
+            <Suspense fallback={<div className="do-panel-empty">Loading My Work…</div>}>
+            <MyWorkRouteLazy
               actorEmail={user?.email || ""}
               actorId={user?.uid || ""}
               actorMemberId={personalActor.memberId || null}
               ctxExtras={{
-                navigate: (to) => navigate(to),
-                openOdysseus: (scope) => {
+                navigate: (to: string) => navigate(to),
+                openOdysseus: (scope: { entityType?: string; entityId: string }) => {
                   void openOdysseusPanel({
-                    kind: scope.entityType === "task" ? "item" : "item",
+                    kind: "item",
                     entityId: scope.entityId,
                     label: scope.entityId,
                   });
                 },
-                toast: (msg) => setNotice(msg),
+                toast: (msg: string) => setNotice(msg),
               }}
               listBody={{
-                hierarchyTasks: tasks,
+                hierarchyTasks: undefined,
                 notebookEntries,
-                onAddTask: async (...args) => addProjectTask(...args),
-                onAsk: (prompt) => {
+                onAddTask: async (...args: [any, any, any?, any?]) =>
+                  addProjectTask(...args),
+                onAsk: (prompt: string) => {
                   setComposer(prompt);
                   goCenterView("conversation");
                 },
-                onAskOdysseus: (item) => {
+                onAskOdysseus: (item: any) => {
                   void openOdysseusPanel({
                     kind: "item",
                     entityId: String((item as { id?: string }).id || ""),
@@ -8644,26 +8670,26 @@ export function DelivereeWorkspace() {
                 onCreateControlledOption: createControlledOption,
                 onCreateSprint: createSprint,
                 onInviteAssigneeEmail: canManageMembers
-                  ? async (email) => {
+                  ? async (email: any) => {
                       await inviteWorkspaceMember(email);
                     }
                   : undefined,
-                onOpenFinanceLine: (financeLineId) => {
+                onOpenFinanceLine: (financeLineId: string) => {
                   setHighlightFinanceLineId(financeLineId);
                   navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
                 },
-                onOpenNote: (noteId) => {
+                onOpenNote: (noteId: string) => {
                   setSelectedWorkItemId(null);
                   navigate(`/notes?note=${encodeURIComponent(noteId)}`);
                 },
                 onOpenProjectConsole: openProjectRecord,
-                onOpenRecord: (tableId, recordId) => {
+                onOpenRecord: (tableId: string, recordId: string) => {
                   setSelectedWorkItemId(null);
                   navigate(
                     `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
                   );
                 },
-                onSelectItem: (id) => {
+                onSelectItem: (id: string | null) => {
                   if (id) openWorkOrRecord(id);
                   else setSelectedWorkItemId(null);
                 },
@@ -8674,9 +8700,8 @@ export function DelivereeWorkspace() {
                 workspaceRecords,
                 workspaceTables: visibleTables,
               }}
-              members={workspaceMembers}
-              onOpenCollab={(projectId) => navigate(collabProjectPath(projectId))}
-              onOpenItem={(id) => openWorkOrRecord(id)}
+              onOpenCollab={(projectId: string) => navigate(collabProjectPath(projectId))}
+              onOpenItem={(id: string) => openWorkOrRecord(id)}
               onUpdateTask={updateProjectTask}
               preferredSystemViewId={
                 lens.kind === "my-work" && lens.section === "today"
@@ -8685,19 +8710,21 @@ export function DelivereeWorkspace() {
                     ? "system:my-work:week"
                     : null
               }
-              projects={projects}
-              tasks={myWorkTasks as Array<Record<string, unknown> & { id: string }>}
+              sectionTasks={myWorkTasks}
               workspaceId={workspace?.id || ""}
             />
+            </Suspense>
             )}
           </div>
         ) : centerView === "invoices" ? (
           billingEnabled ? (
-            <BillingScreen
+            <Suspense fallback={<div className="do-panel-empty">Loading billing…</div>}>
+            <BillingScreenLazy
               uid={user?.uid}
               workspaceId={workspace?.id || ""}
               workspaceName={workspace?.name || "Workspace"}
             />
+            </Suspense>
           ) : (
           <div data-testid="invoices-legacy">
             <div
@@ -8968,53 +8995,74 @@ export function DelivereeWorkspace() {
           />
           </Suspense>
         ) : centerView === "project" ? (
-          consoleProject ? (
-            <ProjectConsolePanel
+          (resolvedConsoleProject || projectConsoleId || (lens.kind === "project" ? lens.projectId : null)) ? (
+            <Suspense fallback={<div className="do-panel-empty">Loading project…</div>}>
+            <ProjectRouteLazy
+              projectId={String(
+                resolvedConsoleProject?.id ||
+                  projectConsoleId ||
+                  (lens.kind === "project" ? lens.projectId : ""),
+              )}
               conversationId={conversationId}
               costTemplates={costTemplates}
               currentUser={user}
               canViewFinance={canViewFinance}
-              documents={knowledgeItems.filter(
-                (item) =>
-                  item.projectId === consoleProject.id &&
-                  item.status !== "archived",
-              )}
               initialTab={projectConsoleInitialTab}
-              milestones={milestones.filter(
-                (item) => item.projectId === consoleProject.id,
-              )}
-              onAddDocument={(payload) => addProjectDocument(consoleProject.id, payload)}
-              onAddRisk={(title, patch) =>
-                addProjectRisk(consoleProject.id, title, patch)
+              knowledgeItems={knowledgeItems}
+              onAddDocument={(payload: any) =>
+                addProjectDocument(
+                  String(resolvedConsoleProject?.id || projectConsoleId),
+                  payload,
+                )
               }
-              onAddTask={async (title, status, patch) =>
-                addProjectTask(consoleProject.id, title, status, patch)
+              onAddRisk={(title: any, patch: any) =>
+                addProjectRisk(
+                  String(resolvedConsoleProject?.id || projectConsoleId),
+                  title,
+                  patch,
+                )
+              }
+              onAddTask={async (title: any, status: any, patch: any) =>
+                addProjectTask(
+                  String(resolvedConsoleProject?.id || projectConsoleId),
+                  title,
+                  status,
+                  patch,
+                )
               }
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onCreateControlledOption={createControlledOption}
               onInviteAssigneeEmail={
                 canManageMembers
-                  ? async (email) => {
+                  ? async (email: any) => {
                       await inviteWorkspaceMember(email);
                     }
                   : undefined
               }
               onCreateShareLink={async () => {
                 if (!user || !workspace) return;
+                const projectId = String(
+                  resolvedConsoleProject?.id || projectConsoleId || "",
+                );
+                const project =
+                  resolvedConsoleProject ||
+                  getProjectsSnapshot().find((row) => row.id === projectId);
+                if (!project) return;
+                const allTasks = getTasksSnapshot();
                 const token = createShareToken();
                 const snapshot = sanitizeStatusReportSnapshot(
                   buildProjectStatusReport(
-                    consoleProject,
-                    tasks.filter((item) => item.projectId === consoleProject.id),
-                    risks.filter((item) => item.projectId === consoleProject.id),
-                    milestones.filter((item) => item.projectId === consoleProject.id),
+                    project,
+                    allTasks.filter((item) => item.projectId === projectId),
+                    risks.filter((item) => item.projectId === projectId),
+                    milestones.filter((item) => item.projectId === projectId),
                   ),
                 );
                 await setDoc(doc(db, "project_status_shares", token), {
                   userId: user.uid,
                   workspaceId: workspace.id,
-                  projectId: consoleProject.id,
+                  projectId,
                   token,
                   snapshot,
                   revoked: false,
@@ -9025,7 +9073,9 @@ export function DelivereeWorkspace() {
                 return url;
               }}
               onConnectGoogleDrive={connectProjectDrive}
-              onCreateProjectFolder={() => createProjectDriveFolder(consoleProject)}
+              onCreateProjectFolder={() => {
+                if (resolvedConsoleProject) createProjectDriveFolder(resolvedConsoleProject);
+              }}
               onSelectDriveRoot={selectDriveRoot}
               driveFolders={driveFolders}
               driveRoot={driveRoot}
@@ -9035,11 +9085,11 @@ export function DelivereeWorkspace() {
               onDeleteProject={deleteProject}
               onRestoreProject={restoreProject}
               onPermanentlyDeleteProject={permanentlyDeleteProject}
-              onAsk={(prompt) => {
+              onAsk={(prompt: any) => {
                 setComposer(prompt);
                 goCenterView("conversation");
               }}
-              onAskOdysseus={(item) => {
+              onAskOdysseus={(item: any) => {
                 void openOdysseusPanel({
                   kind: "item",
                   entityId: String(item.id),
@@ -9050,25 +9100,21 @@ export function DelivereeWorkspace() {
               onUpdateCostTemplate={updateCostTemplate}
               onUpdateSprint={updateSprint}
               onUpdateTask={updateProjectTask}
-              project={consoleProject}
-              risks={risks.filter(
-                (item) => item.projectId === consoleProject.id,
+              sprints={sprints.filter(
+                (sprint) =>
+                  sprint.projectId ===
+                  (resolvedConsoleProject?.id || projectConsoleId),
               )}
-              sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
               tags={categories}
-              tasks={tasks.filter(
-                (item) => item.projectId === consoleProject.id,
-              )}
               workspace={workspace}
-              workspaceMembers={workspaceMembers}
               workspaceTeams={workspaceTeams}
-              projects={projects}
               workspaceTables={visibleTables}
-              onOpenTable={(tableId) => navigate(`/tables/${encodeURIComponent(tableId)}`)}
-              onCreateTableForProject={(projectId) => {
+              onOpenTable={(tableId: any) => navigate(`/tables/${encodeURIComponent(tableId)}`)}
+              onCreateTableForProject={(projectId: any) => {
                 openCreateTableWizard(projectId);
               }}
             />
+            </Suspense>
           ) : (
             <div className="do-panel-empty">
               <Folder size={20} />
@@ -9376,7 +9422,7 @@ export function DelivereeWorkspace() {
                       onCreateControlledOption: createControlledOption,
                       onCreateSprint: createSprint,
                       onInviteAssigneeEmail: canManageMembers
-                        ? async (email) => {
+                        ? async (email: any) => {
                             await inviteWorkspaceMember(email);
                           }
                         : undefined,
@@ -9657,30 +9703,34 @@ export function DelivereeWorkspace() {
             </nav>
           )}
           {panel === "project" &&
-            (consoleProject ? (
-              <ProjectConsolePanel
+            (resolvedConsoleProject || projectConsoleId ? (
+              <Suspense fallback={<div className="do-panel-empty">Loading project…</div>}>
+              <ProjectRouteLazy
+                projectId={String(resolvedConsoleProject?.id || projectConsoleId)}
                 conversationId={conversationId}
                 costTemplates={costTemplates}
-                documents={knowledgeItems.filter(
-                  (item) =>
-                    item.projectId === consoleProject.id &&
-                    item.status !== "archived",
-                )}
-                milestones={milestones.filter(
-                  (item) => item.projectId === consoleProject.id,
-                )}
-                onAddRisk={(title, patch) =>
-                  addProjectRisk(consoleProject.id, title, patch)
+                knowledgeItems={knowledgeItems}
+                onAddRisk={(title: any, patch: any) =>
+                  addProjectRisk(
+                    String(resolvedConsoleProject?.id || projectConsoleId),
+                    title,
+                    patch,
+                  )
                 }
-                onAddTask={async (title, status, patch) =>
-                  addProjectTask(consoleProject.id, title, status, patch)
+                onAddTask={async (title: any, status: any, patch: any) =>
+                  addProjectTask(
+                    String(resolvedConsoleProject?.id || projectConsoleId),
+                    title,
+                    status,
+                    patch,
+                  )
                 }
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onCreateControlledOption={createControlledOption}
                 onInviteAssigneeEmail={
                   canManageMembers
-                    ? async (email) => {
+                    ? async (email: any) => {
                         await inviteWorkspaceMember(email);
                       }
                     : undefined
@@ -9689,7 +9739,7 @@ export function DelivereeWorkspace() {
                 onRestoreProject={restoreProject}
                 onPermanentlyDeleteProject={permanentlyDeleteProject}
                 onAsk={setComposer}
-                onAskOdysseus={(item) => {
+                onAskOdysseus={(item: any) => {
                   void openOdysseusPanel({
                     kind: "item",
                     entityId: String(item.id),
@@ -9699,28 +9749,24 @@ export function DelivereeWorkspace() {
                 onUpdateProject={updateProject}
                 onUpdateCostTemplate={updateCostTemplate}
                 onUpdateTask={updateProjectTask}
-                project={consoleProject}
-                risks={risks.filter(
-                  (item) => item.projectId === consoleProject.id,
+                sprints={sprints.filter(
+                  (sprint) =>
+                    sprint.projectId ===
+                    (resolvedConsoleProject?.id || projectConsoleId),
                 )}
-                sprints={sprints.filter((sprint) => sprint.projectId === consoleProject.id)}
                 tags={categories}
-                tasks={tasks.filter(
-                  (item) => item.projectId === consoleProject.id,
-                )}
-                workspaceMembers={workspaceMembers}
                 workspaceTeams={workspaceTeams}
-                projects={projects}
                 workspaceTables={visibleTables}
-                onOpenTable={(tableId) => {
+                onOpenTable={(tableId: any) => {
                   setPanel(null);
                   navigate(`/tables/${encodeURIComponent(tableId)}`);
                 }}
-                onCreateTableForProject={(projectId) => {
+                onCreateTableForProject={(projectId: any) => {
                   setPanel(null);
                   openCreateTableWizard(projectId);
                 }}
               />
+              </Suspense>
             ) : (
               <div className="do-panel-empty">
                 <Folder size={20} />
@@ -10143,6 +10189,41 @@ export function DelivereeWorkspace() {
                       {clearPureAiBusy ? "Clearing…" : "Delete all Pure AI projects"}
                     </button>
                   </div>
+                </section>
+              ) : null}
+              {location.pathname === "/settings/data" &&
+              workspace &&
+              user &&
+              (workspace.ownerId === user.uid ||
+                ["owner", "admin"].includes(String(currentWorkspaceMember?.role || "").toLowerCase())) ? (
+                <section className="do-workspace-admin-card" data-testid="restore-creator-assignees">
+                  <div className="do-workspace-admin-head">
+                    <span className="do-kicker">Data repair</span>
+                    <strong>
+                      {getLocale() === "es" ? "Restaurar creators como assignees" : "Restore creator assignees"}
+                    </strong>
+                  </div>
+                  <p className="do-panel-intro">
+                    {getLocale() === "es"
+                      ? "Parchea tareas con createdBy pero sin assignee. Ya no corre en cada snapshot — solo on-demand."
+                      : "Patches tasks that have createdBy but no assignee. No longer runs on every snapshot — on-demand only."}
+                  </p>
+                  <button
+                    className="do-button"
+                    data-testid="restore-creator-assignees-btn"
+                    disabled={restoreCreatorAssigneesBusy}
+                    onClick={() => void restoreCreatorAssigneesOnDemand()}
+                    type="button"
+                  >
+                    <Users size={14} />
+                    {restoreCreatorAssigneesBusy
+                      ? getLocale() === "es"
+                        ? "Restaurando…"
+                        : "Restoring…"
+                      : getLocale() === "es"
+                        ? "Restaurar creators"
+                        : "Restore creators"}
+                  </button>
                 </section>
               ) : null}
               {location.pathname === "/settings" && <section className="do-workspace-admin-card">

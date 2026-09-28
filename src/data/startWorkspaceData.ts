@@ -4,6 +4,7 @@ import {
   query,
   where,
   type Firestore,
+  type QuerySnapshot,
 } from "firebase/firestore";
 import {
   createCompleteSnapshotMerge,
@@ -28,6 +29,29 @@ import {
   type ProjectDoc,
   type TaskDoc,
 } from "./collections";
+import type { DocStore, DocRow } from "./createDocStore";
+
+/** Apply Firestore docChanges() into a Map-backed store (added/modified/removed). */
+export function applyDocChanges<T extends DocRow>(
+  store: DocStore<T>,
+  snapshot: QuerySnapshot,
+) {
+  const changes = snapshot.docChanges();
+  if (!changes.length) {
+    // First snapshot often reports all as "added"; if empty changes, full replace.
+    store.replaceAll(
+      snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as T),
+    );
+    return;
+  }
+  for (const change of changes) {
+    if (change.type === "removed") {
+      store.remove(change.doc.id);
+      continue;
+    }
+    store.upsert({ id: change.doc.id, ...change.doc.data() } as T);
+  }
+}
 
 export type WorkspaceDataActor = {
   uid: string;
@@ -230,7 +254,37 @@ export function startWorkspaceData(args: StartArgs): () => void {
   const taskUnsubscribers =
     workspace.ownerId === user.uid
       ? [
-          makeQuery("tasks", (items) => tasksStore.replaceAll(items as TaskDoc[])),
+          // Open tasks only for owners — closed tasks load per project via subscribeProjectTasks.
+          onSnapshot(
+            query(
+              collection(db, "tasks"),
+              where("workspaceId", "==", workspace.id),
+              where("status", "in", [
+                "todo",
+                "in_progress",
+                "blocked",
+                "review",
+                "new",
+                "open",
+                "waiting",
+                "active",
+                "planned",
+                "doing",
+              ]),
+            ),
+            (snapshot) => {
+              if (!hasConfirmedSnapshotData(snapshot)) return;
+              applyDocChanges(tasksStore, snapshot);
+            },
+            (error) => {
+              // Fallback: full workspace tasks if composite index missing.
+              console.warn("Open-tasks query failed; falling back to full tasks", error);
+              report(error);
+              extraUnsubscribers.push(
+                makeQuery("tasks", (items) => tasksStore.replaceAll(items as TaskDoc[])),
+              );
+            },
+          ),
         ]
       : mergeQueries(
           "tasks",
@@ -289,3 +343,33 @@ export function startWorkspaceData(args: StartArgs): () => void {
 export function clearWorkspaceDataStores() {
   clearWorkspaceCollectionStores();
 }
+
+/** Subscribe to all tasks for one project (including completed) while a project page is open. */
+export function subscribeProjectTasks(
+  db: Firestore,
+  projectId: string,
+  onError?: (error: unknown) => void,
+): () => void {
+  return onSnapshot(
+    query(collection(db, "tasks"), where("projectId", "==", projectId)),
+    (snapshot) => {
+      if (!hasConfirmedSnapshotData(snapshot)) return;
+      for (const change of snapshot.docChanges()) {
+        if (change.type === "removed") {
+          // Only remove if it still belongs to this project in the store.
+          const existing = tasksStore.getMap().get(change.doc.id);
+          if (existing && String(existing.projectId) === projectId) {
+            tasksStore.remove(change.doc.id);
+          }
+          continue;
+        }
+        tasksStore.upsert({
+          id: change.doc.id,
+          ...change.doc.data(),
+        } as TaskDoc);
+      }
+    },
+    (error) => onError?.(error),
+  );
+}
+

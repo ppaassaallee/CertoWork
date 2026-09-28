@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Bookmark,
@@ -156,7 +156,7 @@ function EditorialLine({
   );
 }
 
-export function HomeCockpit({
+export const HomeCockpit = memo(function HomeCockpit({
   userName,
   actor,
   tasks,
@@ -764,4 +764,4 @@ export function HomeCockpit({
 
     </div>
   );
-}
+});
