@@ -92,16 +92,13 @@ import {
   selfHealPureAiFollowerMembership,
 } from "../lib/runPureAiPortfolioFollowers";
 import {
-  PURE_AI_PORTFOLIO_FOLLOWERS_KEY,
   emailMatchesPureAiFollower,
   isPersonalOrEmailNamedWorkspace,
-  pureAiFollowerEmailsMissingFromWorkspace,
 } from "../lib/pureAiPortfolioFollowers";
 import {
   pricingPortfolioProjectCount,
   syncPureAiPricingPortfolio,
 } from "../lib/runPricingPortfolioSync";
-import { PRICING_PORTFOLIO_IMPORT_KEY } from "../lib/pricingPortfolioSync";
 import {
   projectHealth,
   sidebarProjectGroups,
@@ -208,7 +205,7 @@ import {
   type ConversationScopeType,
 } from "../lib/conversationScope";
 import { isPersonalWorkItem } from "../lib/personalHomeContext";
-import { filterMyWorkTasks, needsCreatorAssigneeRestore, creatorAssigneePatch, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
+import { filterMyWorkTasks, withCreatorAssignee, unmatchedAssigneeLabels, actorEquivalentMemberIds } from "../lib/myWorkItems";
 import {
   applyInvoiceToFinancePeriods,
   canTransitionInvoice,
@@ -562,8 +559,6 @@ export function DelivereeWorkspace() {
   const [clearPureAiBusy, setClearPureAiBusy] = useState(false);
   const [pricingSyncBusy, setPricingSyncBusy] = useState(false);
   const [portfolioFollowersBusy, setPortfolioFollowersBusy] = useState(false);
-  const pricingAutoSyncRef = useRef(false);
-  const portfolioFollowersAutoRef = useRef(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
@@ -864,6 +859,13 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  // "create" = blank New project. "context" = update the project the current
+  // conversation/route is anchored to (Odysseus "update project" invocations only).
+  const [projectWizardIntent, setProjectWizardIntent] = useState<"create" | "context">("create");
+  const openProjectWizard = useCallback((intent: "create" | "context" = "create") => {
+    setProjectWizardIntent(intent);
+    setProjectWizardOpen(true);
+  }, []);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const [createTableProjectId, setCreateTableProjectId] = useState<string | null>(null);
@@ -891,7 +893,6 @@ export function DelivereeWorkspace() {
   const endRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const voiceSessionRef = useRef(false);
-  const restoredCreatorAssignees = useRef(new Set<string>());
 
   const dataAccessKey = useMemo(() => {
     if (!user || !workspace) return "";
@@ -963,8 +964,7 @@ export function DelivereeWorkspace() {
       return queryClauses.map((clauses, index) =>
         onSnapshot(
           query(collection(db, name), ...clauses),
-          { includeMetadataChanges: true },
-          (snapshot) => {
+                    (snapshot) => {
             if (!hasConfirmedSnapshotData(snapshot)) return;
             merge.update(
               index,
@@ -994,8 +994,7 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         },
@@ -1034,8 +1033,7 @@ export function DelivereeWorkspace() {
       ? [
           onSnapshot(
             query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
-            { includeMetadataChanges: true },
-            (snapshot) => {
+                        (snapshot) => {
               if (!hasConfirmedSnapshotData(snapshot)) return;
               setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
             },
@@ -1107,8 +1105,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
             (item) => ({ id: item.id, ...item.data() }) as CaptureAddress,
@@ -1126,8 +1123,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as CaptureAddress)
@@ -1275,8 +1271,7 @@ export function DelivereeWorkspace() {
     if (!user?.uid || !workspace?.id || !listenPacks.tableRecords) return;
     return onSnapshot(
       query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
       },
@@ -1296,118 +1291,6 @@ export function DelivereeWorkspace() {
       String(sidebarCollapsed),
     );
   }, [sidebarCollapsed]);
-
-  // Owner one-shot: apply Pricing 2026 portfolio as soon as Pure AI loads.
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!isPureAiWorkspace(workspace)) return;
-    if (workspace.ownerId !== user.uid) return;
-    if (workspace.portfolioImportKey === PRICING_PORTFOLIO_IMPORT_KEY) return;
-    // Wait until membership roster is live so share targets resolve.
-    if (!workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (pricingAutoSyncRef.current || pricingSyncBusy || clearPureAiBusy) return;
-    pricingAutoSyncRef.current = true;
-    setPricingSyncBusy(true);
-    void (async () => {
-      try {
-        const result = await syncPureAiPricingPortfolio({
-          db,
-          user,
-          workspace,
-          members: workspaceMembers,
-        });
-        if (result.skipped) {
-          pricingAutoSyncRef.current = false;
-          setNotice(
-            result.reason === "not-owner"
-              ? "Only the Pure AI workspace owner can sync pricing."
-              : "Could not auto-sync pricing portfolio.",
-          );
-          return;
-        }
-        goCenterView("portfolio");
-        setNotice(
-          `Pricing sync applied: updated ${result.updatedProjects}, created ${result.createdProjects}, marked X on ${result.markedUnmatched}.`,
-        );
-      } catch (reason) {
-        pricingAutoSyncRef.current = false;
-        setNotice(
-          reason instanceof Error
-            ? `Could not auto-sync pricing portfolio: ${reason.message}`
-            : "Could not auto-sync pricing portfolio.",
-        );
-      } finally {
-        setPricingSyncBusy(false);
-      }
-    })();
-  }, [
-    user,
-    workspace,
-    workspaceMembers,
-    pricingSyncBusy,
-    clearPureAiBusy,
-  ]);
-
-  // One-shot: grant Regina / César / Rafael / Edgar admin + all-project follow.
-  useEffect(() => {
-    if (!user || !workspace) return;
-    if (!isPureAiWorkspace(workspace)) return;
-    const actor = workspaceMembers.find((member) => {
-      if (member.userId === user.uid) return true;
-      const memberEmail = normalizeAccessEmail(member.email || member.emailLower);
-      return Boolean(user.email && memberEmail === normalizeAccessEmail(user.email));
-    });
-    const role = String(actor?.role || "").toLowerCase();
-    const canGrant =
-      workspace.ownerId === user.uid || ["owner", "admin"].includes(role);
-    if (!canGrant) return;
-    const missingSeats = pureAiFollowerEmailsMissingFromWorkspace(workspace, workspaceMembers);
-    const keyFresh = workspace.portfolioFollowersGrantedKey === PURE_AI_PORTFOLIO_FOLLOWERS_KEY;
-    if (keyFresh && missingSeats.length === 0) return;
-    if (!actor && !workspaceMembers.some((member) => member.userId === user.uid)) return;
-    if (
-      portfolioFollowersAutoRef.current ||
-      portfolioFollowersBusy ||
-      pricingSyncBusy ||
-      clearPureAiBusy
-    ) {
-      return;
-    }
-    portfolioFollowersAutoRef.current = true;
-    setPortfolioFollowersBusy(true);
-    void (async () => {
-      try {
-        const result = await grantPureAiPortfolioFollowers({
-          db,
-          user,
-          workspace,
-          members: workspaceMembers,
-        });
-        if (result.skipped) {
-          portfolioFollowersAutoRef.current = false;
-          return;
-        }
-        // Listeners already pick up project/member writes — do not re-run Auth bootstrap.
-        setNotice(result.message);
-      } catch (reason) {
-        portfolioFollowersAutoRef.current = false;
-        setNotice(
-          reason instanceof Error
-            ? `Could not auto-grant Pure AI followers: ${reason.message}`
-            : "Could not auto-grant Pure AI followers.",
-        );
-      } finally {
-        setPortfolioFollowersBusy(false);
-      }
-    })();
-  }, [
-    user,
-    workspace,
-    workspaceMembers,
-    portfolioFollowersBusy,
-    pricingSyncBusy,
-    clearPureAiBusy,
-  ]);
 
   // Move Pure AI followers off empty Personal / email-named workspaces.
   useEffect(() => {
@@ -1563,8 +1446,7 @@ export function DelivereeWorkspace() {
           collection(db, "workspace_members"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceMembers(
             snapshot.docs.map(
@@ -1579,8 +1461,7 @@ export function DelivereeWorkspace() {
           collection(db, "agent_groups"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceTeams(
             snapshot.docs
@@ -1608,8 +1489,7 @@ export function DelivereeWorkspace() {
     if (!workspace?.id || !listenPacks.invites) return;
     return onSnapshot(
       query(collection(db, "agent_invites"), where("workspaceId", "==", workspace.id)),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setWorkspaceInvites(snapshot.docs
           .map((item) => ({ id: item.id, ...item.data() }))
@@ -1651,8 +1531,7 @@ export function DelivereeWorkspace() {
         where("userId", "==", user.uid),
         where("workspaceId", "==", workspace.id),
       ),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setMessages(
           snapshot.docs
@@ -2006,39 +1885,6 @@ export function DelivereeWorkspace() {
     const created = refreshed.find((row) => row.id === id);
     if (created) setActiveRitual(applySessionExpiry(created, manifest));
   };
-
-  useEffect(() => {
-    if (!user || !workspace) return;
-    const pending = tasks
-      .filter(
-        (item) =>
-          needsCreatorAssigneeRestore(item, personalActor) &&
-          !restoredCreatorAssignees.current.has(item.id),
-      )
-      .slice(0, 40);
-    if (!pending.length) return;
-    const patch = creatorAssigneePatch(personalActor, workspaceMembers);
-    if (!patch.assigneeIds.length && !patch.assignees.length) return;
-    for (const item of pending) restoredCreatorAssignees.current.add(item.id);
-    // Additive restore only. My Work is a view: never delete records to change a filter.
-    void Promise.all(
-      pending.map((item) =>
-        updateDoc(doc(db, "tasks", item.id), {
-          ...patch,
-          ...buildTaskAccessPatch({
-            task: { ...item, ...patch },
-            workspaceId: workspace.id,
-            userId: user.uid,
-            email: user.email,
-            members: workspaceMembers,
-          }),
-          updatedAt: serverTimestamp(),
-        }),
-      ),
-    ).catch(() => {
-      for (const item of pending) restoredCreatorAssignees.current.delete(item.id);
-    });
-  }, [personalActor, tasks, user, workspace, workspaceMembers]);
 
   useEffect(() => {
     if (!user || !workspace) {
@@ -2562,7 +2408,7 @@ export function DelivereeWorkspace() {
     if (!voiceWrapUp && isProjectWizardInvocation(text)) {
       setInput("");
       setActionMenuOpen(false);
-      setProjectWizardOpen(true);
+      openProjectWizard("context");
       return null;
     }
     setInput("");
@@ -6656,7 +6502,7 @@ export function DelivereeWorkspace() {
         id: "new-project",
         label: "Create project",
         group: "Create",
-        onSelect: () => setProjectWizardOpen(true),
+        onSelect: () => openProjectWizard("create"),
       },
       {
         id: "report-bug",
@@ -6779,7 +6625,7 @@ export function DelivereeWorkspace() {
           // Seed via sessionStorage so the modal can pick it up on open
           if (query) sessionStorage.setItem("certo-quick-capture-seed", query);
         }}
-        onCreateProject={() => setProjectWizardOpen(true)}
+        onCreateProject={() => openProjectWizard("create")}
         open={commandPaletteOpen}
         scopeLabel={
           activeProject
@@ -7289,7 +7135,7 @@ export function DelivereeWorkspace() {
               {activeProjects.length === 0 && (
                 <button
                   className="do-empty-link"
-                  onClick={() => setProjectWizardOpen(true)}
+                  onClick={() => openProjectWizard("create")}
                   type="button"
                 >
                   Create your first project
@@ -7929,7 +7775,7 @@ export function DelivereeWorkspace() {
                     <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
                       {t("createTask")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                    <button onClick={() => { setCreateMenuOpen(false); openProjectWizard("create"); }} type="button">
                       {t("createProject")}
                     </button>
                     <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
@@ -8380,7 +8226,7 @@ export function DelivereeWorkspace() {
                   <button
                     onClick={() => {
                       setActionMenuOpen(false);
-                      setProjectWizardOpen(true);
+                      openProjectWizard("context");
                     }}
                     type="button"
                   >
@@ -9024,7 +8870,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
-            onNewProject={() => setProjectWizardOpen(true)}
+            onNewProject={() => openProjectWizard("create")}
             onAddFinanceTask={async (projectId, title, status, patch) =>
               addProjectTask(projectId, title, status, patch || {})
             }
@@ -9598,7 +9444,7 @@ export function DelivereeWorkspace() {
           }))}
           onCreate={async ({ kind, title }) => {
             if (kind === "project") {
-              setProjectWizardOpen(true);
+              openProjectWizard("create");
               return;
             }
             if (kind === "note") {
@@ -10053,7 +9899,7 @@ export function DelivereeWorkspace() {
                     key={skill.id}
                     onClick={() => {
                       setPanel(null);
-                      setProjectWizardOpen(true);
+                      openProjectWizard("create");
                     }}
                     type="button"
                   >
@@ -11087,7 +10933,7 @@ export function DelivereeWorkspace() {
       )}
 
       <ProjectWizardSkill
-        activeProject={routeOrPrimaryProject}
+        activeProject={projectWizardIntent === "context" ? routeOrPrimaryProject : null}
         isOpen={projectWizardOpen}
         onClose={() => setProjectWizardOpen(false)}
         onCreateProject={createProjectFromWizard}

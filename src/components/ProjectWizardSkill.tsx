@@ -56,14 +56,21 @@ export function ProjectWizardSkill({
     fieldRefs.current[field] = element;
   };
 
+  // Reset the form only when the wizard opens or is pointed at a different
+  // project. Re-running on every `activeProject` object identity (each Firestore
+  // snapshot creates new objects) wiped the draft while people were typing.
+  const activeProjectRef = useRef(activeProject);
+  activeProjectRef.current = activeProject;
+  const activeProjectId = activeProject?.id || "";
   useEffect(() => {
     if (!isOpen) return;
-    const nextMode = activeProject ? "update" : "create";
+    const project = activeProjectRef.current;
+    const nextMode = project ? "update" : "create";
     setMode(nextMode);
-    setProjectId(activeProject?.id || "");
-    setDraft(activeProject ? projectWizardDraftFromProject(activeProject) : EMPTY_PROJECT_WIZARD_DRAFT);
+    setProjectId(project?.id || "");
+    setDraft(project ? projectWizardDraftFromProject(project) : EMPTY_PROJECT_WIZARD_DRAFT);
     setError("");
-  }, [activeProject, isOpen]);
+  }, [activeProjectId, isOpen]);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === projectId) || null,

@@ -170,7 +170,8 @@ test("clear Pure AI projects helper is owner-gated and keeps My Work items", () 
   assert.match(workspace, /data-testid="pure-ai-grant-followers-workspace"/);
   assert.match(workspace, /data-testid="pure-ai-grant-followers-btn"/);
   assert.match(workspace, /grantPureAiAdminFollowers/);
-  assert.match(workspace, /PURE_AI_PORTFOLIO_FOLLOWERS_KEY/);
+  // Follower grants are explicit Settings actions — not auto-run on members snapshots.
+  assert.doesNotMatch(workspace, /portfolioFollowersAutoRef/);
   assert.match(css, /\.do-pure-ai-followers-callout/);
   assert.match(workspace, /clearPureAiProjects/);
   assert.doesNotMatch(workspace, /replacePureAiPortfolioFromMaster/);

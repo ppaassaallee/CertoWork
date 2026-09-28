@@ -60,17 +60,28 @@ export function resolveFirestoreListenPacks(lens: DelivereeLens): FirestoreListe
       packs.review = lens.kind === "my-work" && lens.section === "reviews";
       break;
     case "work":
+      // Portfolio / projects list: keep milestones + light metadata only.
+      // table_records, finance ops, and strategy fan-out wait for project / tables routes.
+      packs.tables = true;
+      packs.milestones = true;
+      packs.templatesCategories = true;
+      break;
     case "project":
+      packs.tables = true;
+      packs.milestones = true;
+      packs.templatesCategories = true;
+      // Records only when the project needs table-backed surfaces; finance/strategy by tab.
+      packs.tableRecords = lens.tab === "tasks" || lens.tab === "overview";
+      packs.financeOps = lens.tab === "overview";
+      packs.strategyKnowledge = lens.tab === "strategy" || lens.tab === "overview";
+      if (lens.tab === "notes") packs.notes = true;
+      break;
     case "workload":
     case "dashboard":
       packs.tables = true;
-      packs.tableRecords = true;
       packs.milestones = true;
       packs.financeOps = true;
-      packs.strategyKnowledge = true;
       packs.templatesCategories = true;
-      if (lens.kind === "project" && lens.tab === "notes") packs.notes = true;
-      if (lens.kind === "project" && lens.tab === "strategy") packs.strategyKnowledge = true;
       break;
     case "tables":
     case "tables-dashboard":
