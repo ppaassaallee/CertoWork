@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -750,7 +750,7 @@ function InlineText({
   );
 }
 
-export function WorkItemsCenter({
+export const WorkItemsCenter = memo(function WorkItemsCenter({
   activeProject,
   projects,
   tasks,
@@ -4979,4 +4979,4 @@ export function WorkItemsCenter({
       </div>
     </div>
   );
-}
+});

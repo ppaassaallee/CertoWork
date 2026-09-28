@@ -716,7 +716,7 @@ function _ProjectTitleCell({
   );
 }
 
-export function ProjectRecordModal({
+export const ProjectRecordModal = memo(function ProjectRecordModal({
   project,
   tasks,
   milestones,
@@ -1508,7 +1508,7 @@ export function ProjectRecordModal({
       </section>
     </div>
   );
-}
+});
 
 export type ProjectConsoleTab =
   | "brief"
@@ -1524,7 +1524,7 @@ export type ProjectConsoleTab =
   | "codex"
   | "portal";
 
-export function ProjectConsolePanel({
+export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   project,
   tasks,
   milestones,
@@ -3236,7 +3236,7 @@ export function ProjectConsolePanel({
       )}
     </section>
   );
-}
+});
 
 type PortfolioView = "dashboard" | "overview" | "economics";
 type ProjectSortKey =
