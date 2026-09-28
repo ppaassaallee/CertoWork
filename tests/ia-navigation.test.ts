@@ -201,10 +201,11 @@ test("opening a project record stays on the project URL, not Home", () => {
 });
 
 test("Home stays a personal conversation space", () => {
-  const source = readFileSync(
+  const shell = readFileSync(
     resolve("src/components/DelivereeWorkspace.tsx"),
     "utf8",
   );
-  assert.match(source, /selectHomeConversation\(sorted\)/);
-  assert.match(source, /privacyScope|personalActor/);
+  const data = readFileSync(resolve("src/data/startWorkspaceData.ts"), "utf8");
+  assert.match(data, /selectHomeConversation\(sorted\)/);
+  assert.match(shell, /privacyScope|personalActor/);
 });

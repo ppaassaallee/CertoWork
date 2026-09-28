@@ -13,7 +13,7 @@ test("tables listener is workspace-scoped (not personal userId-only)", () => {
   // TABLES subscription must use personal=false so docs with createdBy (no userId) appear.
   assert.match(
     source,
-    /makeQuery\(\s*TABLES,[\s\S]*?false,\s*false,\s*\)/,
+    /makeQueryLocal\(\s*TABLES,[\s\S]*?false,\s*false,\s*\)/,
   );
 });
 
