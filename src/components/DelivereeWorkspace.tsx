@@ -864,6 +864,13 @@ export function DelivereeWorkspace() {
   const [cleaning, setCleaning] = useState(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [projectWizardOpen, setProjectWizardOpen] = useState(false);
+  // "create" = blank New project. "context" = update the project the current
+  // conversation/route is anchored to (Odysseus "update project" invocations only).
+  const [projectWizardIntent, setProjectWizardIntent] = useState<"create" | "context">("create");
+  const openProjectWizard = useCallback((intent: "create" | "context" = "create") => {
+    setProjectWizardIntent(intent);
+    setProjectWizardOpen(true);
+  }, []);
   const [magicProjectOpen, setMagicProjectOpen] = useState(false);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const [createTableProjectId, setCreateTableProjectId] = useState<string | null>(null);
@@ -2562,7 +2569,7 @@ export function DelivereeWorkspace() {
     if (!voiceWrapUp && isProjectWizardInvocation(text)) {
       setInput("");
       setActionMenuOpen(false);
-      setProjectWizardOpen(true);
+      openProjectWizard("context");
       return null;
     }
     setInput("");
@@ -6656,7 +6663,7 @@ export function DelivereeWorkspace() {
         id: "new-project",
         label: "Create project",
         group: "Create",
-        onSelect: () => setProjectWizardOpen(true),
+        onSelect: () => openProjectWizard("create"),
       },
       {
         id: "report-bug",
@@ -6779,7 +6786,7 @@ export function DelivereeWorkspace() {
           // Seed via sessionStorage so the modal can pick it up on open
           if (query) sessionStorage.setItem("certo-quick-capture-seed", query);
         }}
-        onCreateProject={() => setProjectWizardOpen(true)}
+        onCreateProject={() => openProjectWizard("create")}
         open={commandPaletteOpen}
         scopeLabel={
           activeProject
@@ -7289,7 +7296,7 @@ export function DelivereeWorkspace() {
               {activeProjects.length === 0 && (
                 <button
                   className="do-empty-link"
-                  onClick={() => setProjectWizardOpen(true)}
+                  onClick={() => openProjectWizard("create")}
                   type="button"
                 >
                   Create your first project
@@ -7929,7 +7936,7 @@ export function DelivereeWorkspace() {
                     <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
                       {t("createTask")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); setProjectWizardOpen(true); }} type="button">
+                    <button onClick={() => { setCreateMenuOpen(false); openProjectWizard("create"); }} type="button">
                       {t("createProject")}
                     </button>
                     <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); setMagicProjectOpen(true); }} type="button">
@@ -8380,7 +8387,7 @@ export function DelivereeWorkspace() {
                   <button
                     onClick={() => {
                       setActionMenuOpen(false);
-                      setProjectWizardOpen(true);
+                      openProjectWizard("context");
                     }}
                     type="button"
                   >
@@ -9024,7 +9031,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
-            onNewProject={() => setProjectWizardOpen(true)}
+            onNewProject={() => openProjectWizard("create")}
             onAddFinanceTask={async (projectId, title, status, patch) =>
               addProjectTask(projectId, title, status, patch || {})
             }
@@ -9598,7 +9605,7 @@ export function DelivereeWorkspace() {
           }))}
           onCreate={async ({ kind, title }) => {
             if (kind === "project") {
-              setProjectWizardOpen(true);
+              openProjectWizard("create");
               return;
             }
             if (kind === "note") {
@@ -10053,7 +10060,7 @@ export function DelivereeWorkspace() {
                     key={skill.id}
                     onClick={() => {
                       setPanel(null);
-                      setProjectWizardOpen(true);
+                      openProjectWizard("create");
                     }}
                     type="button"
                   >
@@ -11087,7 +11094,7 @@ export function DelivereeWorkspace() {
       )}
 
       <ProjectWizardSkill
-        activeProject={routeOrPrimaryProject}
+        activeProject={projectWizardIntent === "context" ? routeOrPrimaryProject : null}
         isOpen={projectWizardOpen}
         onClose={() => setProjectWizardOpen(false)}
         onCreateProject={createProjectFromWizard}
