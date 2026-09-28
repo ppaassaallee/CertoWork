@@ -970,8 +970,7 @@ export function DelivereeWorkspace() {
       return queryClauses.map((clauses, index) =>
         onSnapshot(
           query(collection(db, name), ...clauses),
-          { includeMetadataChanges: true },
-          (snapshot) => {
+                    (snapshot) => {
             if (!hasConfirmedSnapshotData(snapshot)) return;
             merge.update(
               index,
@@ -1001,8 +1000,7 @@ export function DelivereeWorkspace() {
       if (activeOnly) clauses.push(where("status", "==", "active"));
       return onSnapshot(
         query(collection(db, name), ...clauses),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         },
@@ -1041,8 +1039,7 @@ export function DelivereeWorkspace() {
       ? [
           onSnapshot(
             query(collection(db, "projects"), where("workspaceId", "==", workspace.id)),
-            { includeMetadataChanges: true },
-            (snapshot) => {
+                        (snapshot) => {
               if (!hasConfirmedSnapshotData(snapshot)) return;
               setProjects(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
             },
@@ -1114,8 +1111,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "personal"),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs.map(
             (item) => ({ id: item.id, ...item.data() }) as CaptureAddress,
@@ -1133,8 +1129,7 @@ export function DelivereeWorkspace() {
           where("userId", "==", user.uid),
           where("kind", "==", "team"),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           const rows = snapshot.docs
             .map((item) => ({ id: item.id, ...item.data() }) as CaptureAddress)
@@ -1282,8 +1277,7 @@ export function DelivereeWorkspace() {
     if (!user?.uid || !workspace?.id || !listenPacks.tableRecords) return;
     return onSnapshot(
       query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
       },
@@ -1570,8 +1564,7 @@ export function DelivereeWorkspace() {
           collection(db, "workspace_members"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceMembers(
             snapshot.docs.map(
@@ -1586,8 +1579,7 @@ export function DelivereeWorkspace() {
           collection(db, "agent_groups"),
           where("workspaceId", "==", workspace.id),
         ),
-        { includeMetadataChanges: true },
-        (snapshot) => {
+                (snapshot) => {
           if (!hasConfirmedSnapshotData(snapshot)) return;
           setWorkspaceTeams(
             snapshot.docs
@@ -1615,8 +1607,7 @@ export function DelivereeWorkspace() {
     if (!workspace?.id || !listenPacks.invites) return;
     return onSnapshot(
       query(collection(db, "agent_invites"), where("workspaceId", "==", workspace.id)),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setWorkspaceInvites(snapshot.docs
           .map((item) => ({ id: item.id, ...item.data() }))
@@ -1658,8 +1649,7 @@ export function DelivereeWorkspace() {
         where("userId", "==", user.uid),
         where("workspaceId", "==", workspace.id),
       ),
-      { includeMetadataChanges: true },
-      (snapshot) => {
+            (snapshot) => {
         if (!hasConfirmedSnapshotData(snapshot)) return;
         setMessages(
           snapshot.docs
