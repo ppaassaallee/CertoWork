@@ -74,3 +74,32 @@ test("projects portfolio listen pack stays slim after store migration", () => {
   assert.equal(portfolio.tableRecords, false);
   assert.equal(portfolio.financeOps, false);
 });
+
+test("useTasksIndex equality is content-stable (ProjectRoute must not infinite-loop)", () => {
+  const root = resolve(import.meta.dirname, "..");
+  const collections = readFileSync(resolve(root, "src/data/collections.ts"), "utf8");
+  const route = readFileSync(resolve(root, "src/routes/ProjectRoute.tsx"), "utf8");
+  assert.match(route, /useTasksIndex\(\)/);
+  assert.match(collections, /function sameTaskIndex/);
+  assert.match(collections, /sameTaskIndex/);
+  // Reference-only Map equality is unsafe: selector always allocates a new Map.
+  assert.doesNotMatch(
+    collections,
+    /useTasksIndex\(\) \{[\s\S]*?\(a, b\) => a === b,/,
+  );
+});
+
+test("useProjectsWhen / useTasksWhen release sticky snapshots when disabled", () => {
+  const collections = readFileSync(
+    resolve(import.meta.dirname, "../src/data/collections.ts"),
+    "utf8",
+  );
+  assert.match(
+    collections,
+    /if \(!enabled\) return a === EMPTY_PROJECTS && b === EMPTY_PROJECTS/,
+  );
+  assert.match(
+    collections,
+    /if \(!enabled\) return a === EMPTY_TASKS && b === EMPTY_TASKS/,
+  );
+});

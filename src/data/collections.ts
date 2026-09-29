@@ -58,7 +58,7 @@ export function useTasksWhen(enabled: boolean) {
     tasksStore,
     (rows) => (enabled ? rows : EMPTY_TASKS),
     (a, b) => {
-      if (!enabled) return true;
+      if (!enabled) return a === EMPTY_TASKS && b === EMPTY_TASKS;
       return a === b;
     },
   );
@@ -75,7 +75,7 @@ export function useProjectsWhen(enabled: boolean) {
     projectsStore,
     (rows) => (enabled ? rows : EMPTY_PROJECTS),
     (a, b) => {
-      if (!enabled) return true;
+      if (!enabled) return a === EMPTY_PROJECTS && b === EMPTY_PROJECTS;
       return a === b;
     },
   );
@@ -105,6 +105,26 @@ export function useTasksByProject(projectId: string | null | undefined) {
 
 const EMPTY_TASK_INDEX = new Map<string, TaskDoc[]>();
 
+function sameTaskIndex(
+  a: Map<string, TaskDoc[]>,
+  b: Map<string, TaskDoc[]>,
+): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [projectId, list] of a) {
+    const other = b.get(projectId);
+    if (!other || other.length !== list.length) return false;
+    if (!other.every((row, i) => row === list[i])) return false;
+  }
+  return true;
+}
+
+/**
+ * ProjectId → tasks index for ProjectRoute.
+ * Equality must be content-based: the selector always builds a fresh Map, and
+ * useSyncExternalStore infinite-loops if getSnapshot returns a new ref each call
+ * (React: "The result of getSnapshot should be cached").
+ */
 export function useTasksIndex() {
   return useDocSelector(
     tasksStore,
@@ -119,7 +139,7 @@ export function useTasksIndex() {
       }
       return map.size ? map : EMPTY_TASK_INDEX;
     },
-    (a, b) => a === b,
+    sameTaskIndex,
   );
 }
 
