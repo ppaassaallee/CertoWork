@@ -88,7 +88,11 @@ test("projects portfolio defaults to Asana list and opens without delay", () => 
   assert.match(projectsSurface, /data-testid="projects-asana-row"/);
   assert.match(projectsSurface, /onClick=\{\(\) => onOpenProject\(project\)\}/);
   assert.match(projectsSurface, /event\.stopPropagation\(\);\s*toggleOne\(id\)/);
+  assert.doesNotMatch(projectsSurface, /role="button"/);
+  assert.doesNotMatch(projectsSurface, /Double-click to rename/);
   assert.doesNotMatch(projectsSurface, /setTimeout\(\(\) => \{[\s\S]*?onOpen\(\)/);
+  assert.doesNotMatch(projectSurfaces, /void updateColumnWidth/);
+  assert.doesNotMatch(projectSurfaces, /PortfolioColumnKey/);
   assert.match(workspace, /getProjectsSnapshot\(\)\.find/);
   assert.match(
     workspace,

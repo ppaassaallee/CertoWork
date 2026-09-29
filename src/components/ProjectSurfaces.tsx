@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
@@ -203,147 +203,6 @@ function portfolioMemberOptions(members: AssignmentMember[] = []): PortfolioMemb
       ];
     })
     .sort((left, right) => left.label.localeCompare(right.label));
-}
-
-type PortfolioColumnKey =
-  | "project"
-  | "delivery_entity"
-  | "client_entity"
-  | "tags"
-  | "work_category"
-  | "product_phase"
-  | "stage"
-  | "phase"
-  | "status"
-  | "source_status"
-  | "contact"
-  | "qa_plan"
-  | "days_to_prod"
-  | "june_usd"
-  | "july_usd"
-  | "total_usd"
-  | "health"
-  | "progress"
-  | "due"
-  | "solution_architect"
-  | "project_manager"
-  | "economics"
-  | "actions";
-
-const _portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
-  project: "Project",
-  delivery_entity: "Delivery Entity",
-  client_entity: "Client Entity",
-  tags: "Tags",
-  work_category: "Work Category",
-  product_phase: "Product Phase",
-  stage: "Stage",
-  phase: "Phase",
-  status: "Status",
-  source_status: "ESTADO",
-  contact: "OWNER / POC",
-  qa_plan: "QA PLAN",
-  days_to_prod: "DÍAS A PROD",
-  june_usd: "JUN USD",
-  july_usd: "JUL USD",
-  total_usd: "TOTAL USD",
-  health: "Health",
-  progress: "Progress",
-  due: "PROD PLAN",
-  solution_architect: "Solution Architect",
-  project_manager: "Project Manager",
-  economics: "Economics",
-  actions: "",
-};
-void _portfolioColumnLabels;
-
-const defaultPortfolioColumns: PortfolioColumnKey[] = [
-  "project",
-  "delivery_entity",
-  "client_entity",
-  "tags",
-  "work_category",
-  "product_phase",
-  "stage",
-  "phase",
-  "status",
-  "source_status",
-  "contact",
-  "qa_plan",
-  "days_to_prod",
-  "health",
-  "progress",
-  "due",
-  "june_usd",
-  "july_usd",
-  "total_usd",
-  "solution_architect",
-  "project_manager",
-  "economics",
-  "actions",
-];
-
-const portfolioColumnWidths: Record<PortfolioColumnKey, string> = {
-  project: "minmax(230px, 1.45fr)",
-  delivery_entity: "minmax(150px, .9fr)",
-  client_entity: "minmax(150px, .9fr)",
-  tags: "minmax(150px, .9fr)",
-  work_category: "minmax(160px, .9fr)",
-  product_phase: "125px",
-  stage: "105px",
-  phase: "120px",
-  status: "105px",
-  source_status: "140px",
-  contact: "150px",
-  qa_plan: "120px",
-  days_to_prod: "110px",
-  june_usd: "110px",
-  july_usd: "110px",
-  total_usd: "120px",
-  health: "120px",
-  progress: "100px",
-  due: "130px",
-  solution_architect: "155px",
-  project_manager: "155px",
-  economics: "120px",
-  actions: "135px",
-};
-
-function columnsStorageKey(scope: string) {
-  return `certo-${scope}-view-config`;
-}
-
-function columnWidthsStorageKey(scope: string) {
-  return `certo-${scope}-column-widths`;
-}
-
-function widthFromTemplate(value: string) {
-  const match = value.match(/(\d+)px/);
-  return match ? Number(match[1]) : 120;
-}
-
-function defaultColumnPixels<T extends string>(widths: Record<T, string>) {
-  return Object.fromEntries(
-    Object.entries(widths).map(([key, value]) => [
-      key,
-      widthFromTemplate(String(value)),
-    ]),
-  ) as Record<T, number>;
-}
-
-const defaultPortfolioColumnPixels =
-  defaultColumnPixels(portfolioColumnWidths);
-
-function clampColumnWidth(value: number) {
-  return Math.max(72, Math.min(420, Math.round(value)));
-}
-
-function selectedColumns<T extends string>(value: T[] | null, fallback: T[]) {
-  const current = value?.length ? [...value] : [...fallback];
-  (["work_category", "product_phase", "source_status", "contact", "qa_plan", "days_to_prod", "june_usd", "july_usd", "total_usd"] as T[]).forEach((column) => {
-    if (fallback.includes(column) && !current.includes(column)) current.push(column);
-  });
-  return fallback.filter((column) => current.includes(column));
 }
 
 type SharedProjectActions = {
@@ -613,106 +472,6 @@ function InlineEdit({
       placeholder={placeholder}
       value={draft}
     />
-  );
-}
-
-function projectMetaLine(project: any) {
-  return `${project.demo ? "DEMO · " : ""}${project.projectKey || "No key"} · ${
-    project.serviceLine || project.projectType || project.category || "Delivery"
-  }`;
-}
-
-function _ProjectTitleCell({
-  project,
-  onOpen,
-  onRename,
-}: {
-  project: any;
-  onOpen: () => void;
-  onRename: (title: string) => void;
-}) {
-  const name = projectTitle(project);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  const clickTimer = useRef<number | null>(null);
-  useEffect(() => setDraft(name), [name]);
-  useEffect(
-    () => () => {
-      if (clickTimer.current) window.clearTimeout(clickTimer.current);
-    },
-    [],
-  );
-
-  const beginRename = () => {
-    if (clickTimer.current) {
-      window.clearTimeout(clickTimer.current);
-      clickTimer.current = null;
-    }
-    if (project.demo) return;
-    setDraft(name);
-    setEditing(true);
-  };
-
-  if (editing) {
-    return (
-      <span className="do-command-project-title">
-        <input
-          aria-label={`Rename ${name}`}
-          autoFocus
-          data-testid="project-title-rename"
-          onBlur={() => {
-            const next = draft.trim();
-            setEditing(false);
-            if (next && next !== name) onRename(next);
-            else setDraft(name);
-          }}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              setDraft(name);
-              setEditing(false);
-            }
-          }}
-          value={draft}
-        />
-        <small>{projectMetaLine(project)}</small>
-      </span>
-    );
-  }
-
-  return (
-    <span className="do-command-project-title">
-      <button
-        aria-label={`Open ${name}`}
-        className="do-command-project-title-open"
-        data-testid="project-title-open"
-        onClick={(event) => {
-          if (event.detail > 1) return;
-          if (event.detail === 0) {
-            onOpen();
-            return;
-          }
-          if (clickTimer.current) window.clearTimeout(clickTimer.current);
-          clickTimer.current = window.setTimeout(() => {
-            clickTimer.current = null;
-            onOpen();
-          }, 280);
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          beginRename();
-        }}
-        title="Click to open · Double-click to rename"
-        type="button"
-      >
-        {name}
-      </button>
-      <small>{projectMetaLine(project)}</small>
-    </span>
   );
 }
 
@@ -3268,28 +3027,6 @@ type PortfolioDimension =
   | "health"
   | "service"
   | "owner";
-type PortfolioViewFilters = {
-  filter: string;
-  stageFilter: "all" | DeliveryStage;
-  phaseFilter: string;
-  healthFilter: string;
-  tagFilter: string;
-  workCategoryFilter: string;
-  productPhaseFilter: string;
-  taxonomyDimension: PortfolioDimension;
-  taxonomyValue: string | null;
-  search: string;
-  view: PortfolioView;
-  primarySort: ProjectSortKey;
-  secondarySort: ProjectSortKey;
-};
-type PortfolioSavedView = {
-  name: string;
-  columns: PortfolioColumnKey[];
-  widths?: Partial<Record<PortfolioColumnKey, number>>;
-  filters?: Partial<PortfolioViewFilters>;
-};
-
 const projectSortOptions: Array<{ value: ProjectSortKey; label: string }> = [
   { value: "project", label: "Project / taxonomy" },
   { value: "delivery_entity", label: "Delivery Entity" },
@@ -5450,13 +5187,6 @@ function projectDueDate(project: any) {
   );
 }
 
-function _projectMoney(value: unknown) {
-  if (value == null || value === "") return "—";
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "—";
-  return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 function projectSortValue(
   project: any,
   key: ProjectSortKey,
@@ -5587,7 +5317,7 @@ function ProjectCommandCenterInner({
   risks,
   workspaceMembers = [],
   tags = [],
-  costTemplates = [],
+  costTemplates: _costTemplates = [],
   projectTemplates = [],
   actorId = "",
   workspaceId = "",
@@ -5601,8 +5331,8 @@ function ProjectCommandCenterInner({
   onPermanentlyDeleteProject,
   onPermanentlyDeleteProjects,
   onOpenProject,
-  onCreateCostTemplate,
-  onUpdateCostTemplate,
+  onCreateCostTemplate: _onCreateCostTemplate,
+  onUpdateCostTemplate: _onUpdateCostTemplate,
   onCreateProjectTemplate,
   onDeleteProjectTemplate,
   onApplyProjectTemplate,
@@ -5720,49 +5450,6 @@ function ProjectCommandCenterInner({
   const [_archiveConfirmId, _setArchiveConfirmId] = useState<string | null>(null);
   const [_expandedId, _setExpandedId] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
-  const [viewName, setViewName] = useState("");
-  const [savedViews, setSavedViews] = useState<PortfolioSavedView[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(
-        window.localStorage.getItem(columnsStorageKey("portfolio")) || "[]",
-      );
-    } catch {
-      return [];
-    }
-  });
-  const [visibleColumns, setVisibleColumns] = useState<PortfolioColumnKey[]>(
-    () => {
-      if (typeof window === "undefined") return defaultPortfolioColumns;
-      try {
-        const stored = JSON.parse(
-          window.localStorage.getItem(columnsStorageKey("portfolio-current")) ||
-            "null",
-        );
-        return selectedColumns(stored, defaultPortfolioColumns);
-      } catch {
-        return defaultPortfolioColumns;
-      }
-    },
-  );
-  const [columnWidths, setColumnWidths] = useState<
-    Record<PortfolioColumnKey, number>
-  >(() => {
-    if (typeof window === "undefined") return defaultPortfolioColumnPixels;
-    try {
-      return {
-        ...defaultPortfolioColumnPixels,
-        ...JSON.parse(
-          window.localStorage.getItem(
-            columnWidthsStorageKey("portfolio-current"),
-          ) || "{}",
-        ),
-      };
-    } catch {
-      return defaultPortfolioColumnPixels;
-    }
-  });
-  const tableScrollRef = useRef<HTMLDivElement>(null);
   const tasksByProject = useMemo(() => groupByProjectId(tasks), [tasks]);
   const risksByProject = useMemo(() => groupByProjectId(risks), [risks]);
   const tasksFor = (projectId: string) =>
@@ -5852,143 +5539,6 @@ function ProjectCommandCenterInner({
       ? Object.values(DELIVERY_PHASES_BY_STAGE).flat()
       : phasesForStage(stageFilter)
   ) as DeliveryPhase[];
-  const _columnSet = new Set(visibleColumns);
-  void _columnSet;
-  const currentPortfolioViewFilters: PortfolioViewFilters = {
-    filter,
-    stageFilter,
-    phaseFilter,
-    healthFilter,
-    tagFilter,
-    workCategoryFilter,
-    productPhaseFilter,
-    taxonomyDimension,
-    taxonomyValue,
-    search,
-    view,
-    primarySort,
-    secondarySort,
-  };
-  const _portfolioGridStyle = {
-    gridTemplateColumns: visibleColumns
-      .map((column) => `${columnWidths[column] || defaultPortfolioColumnPixels[column]}px`)
-      .join(" "),
-  };
-  void _portfolioGridStyle;
-  const updateColumnWidth = (
-    column: PortfolioColumnKey,
-    value: number,
-  ) => {
-    setColumnWidths((current) => {
-      const next = { ...current, [column]: clampColumnWidth(value) };
-      window.localStorage.setItem(
-        columnWidthsStorageKey("portfolio-current"),
-        JSON.stringify(next),
-      );
-      return next;
-    });
-  };
-  const resetColumnWidths = () => {
-    setColumnWidths(defaultPortfolioColumnPixels);
-    window.localStorage.setItem(
-      columnWidthsStorageKey("portfolio-current"),
-      JSON.stringify(defaultPortfolioColumnPixels),
-    );
-  };
-  const toggleColumn = (column: PortfolioColumnKey) => {
-    setVisibleColumns((current) => {
-      const next = current.includes(column)
-        ? current.filter((candidate) => candidate !== column)
-        : defaultPortfolioColumns.filter((candidate) =>
-            [...current, column].includes(candidate),
-          );
-      window.localStorage.setItem(
-        columnsStorageKey("portfolio-current"),
-        JSON.stringify(next),
-      );
-      return next;
-    });
-  };
-  const saveCurrentView = () => {
-    const name = viewName.trim();
-    if (!name) return;
-    const next = [
-      ...savedViews.filter((candidate) => candidate.name !== name),
-      {
-        name,
-        columns: visibleColumns,
-        widths: columnWidths,
-        filters: currentPortfolioViewFilters,
-      },
-    ];
-    setSavedViews(next);
-    setViewName("");
-    window.localStorage.setItem(
-      columnsStorageKey("portfolio"),
-      JSON.stringify(next),
-    );
-  };
-  const applySavedView = (name: string) => {
-    const saved = savedViews.find((candidate) => candidate.name === name);
-    if (!saved) return;
-    setVisibleColumns(selectedColumns(saved.columns, defaultPortfolioColumns));
-    if (saved.widths) {
-      const nextWidths = {
-        ...defaultPortfolioColumnPixels,
-        ...saved.widths,
-      };
-      setColumnWidths(nextWidths);
-      window.localStorage.setItem(
-        columnWidthsStorageKey("portfolio-current"),
-        JSON.stringify(nextWidths),
-      );
-    }
-    window.localStorage.setItem(
-      columnsStorageKey("portfolio-current"),
-      JSON.stringify(selectedColumns(saved.columns, defaultPortfolioColumns)),
-    );
-    if (saved.filters) {
-      if (saved.filters.filter !== undefined) setFilter(saved.filters.filter);
-      if (saved.filters.stageFilter !== undefined)
-        setStageFilter(saved.filters.stageFilter);
-      if (saved.filters.phaseFilter !== undefined)
-        setPhaseFilter(saved.filters.phaseFilter);
-      if (saved.filters.healthFilter !== undefined)
-        setHealthFilter(saved.filters.healthFilter as HealthFilter);
-      if (saved.filters.tagFilter !== undefined)
-        setTagFilter(saved.filters.tagFilter);
-      if (saved.filters.workCategoryFilter !== undefined)
-        setWorkCategoryFilter(saved.filters.workCategoryFilter);
-      if (saved.filters.productPhaseFilter !== undefined)
-        setProductPhaseFilter(saved.filters.productPhaseFilter);
-      if (saved.filters.taxonomyDimension !== undefined)
-        setTaxonomyDimension(saved.filters.taxonomyDimension);
-      if (saved.filters.taxonomyValue !== undefined)
-        setTaxonomyValue(saved.filters.taxonomyValue);
-      if (saved.filters.search !== undefined) setSearch(saved.filters.search);
-      if (saved.filters.view !== undefined) setView(saved.filters.view);
-      if (saved.filters.primarySort !== undefined)
-        setPrimarySort(saved.filters.primarySort);
-      if (saved.filters.secondarySort !== undefined)
-        setSecondarySort(saved.filters.secondarySort);
-    }
-  };
-  const deleteSavedView = (name: string) => {
-    const next = savedViews.filter((candidate) => candidate.name !== name);
-    setSavedViews(next);
-    window.localStorage.setItem(
-      columnsStorageKey("portfolio"),
-      JSON.stringify(next),
-    );
-  };
-  // Legacy spreadsheet column chrome removed from List; keep helpers inert.
-  void updateColumnWidth;
-  void resetColumnWidths;
-  void toggleColumn;
-  void saveCurrentView;
-  void applySavedView;
-  void deleteSavedView;
-  void tableScrollRef;
   const filtered = useMemo(
     () =>
       portfolio.filter((project) => {
@@ -6388,83 +5938,6 @@ function ProjectCommandCenterInner({
     (project) => deliveryStage(project) === "operations",
   ).length;
 
-  const _renderEconomics = (project: any, projectTasks: any[]) => {
-    const summary = projectSummary(project, projectTasks);
-    const periods = normalizedFinancePeriods(project);
-    const ledgerSummary = financeSummary(periods);
-    const buildCount = periods.filter(
-      (period) => period.kind === "build",
-    ).length;
-    const monthCount = periods.filter(
-      (period) => period.kind === "monthly",
-    ).length;
-    return (
-      <div className="do-command-economics" key={`${project.id}-economics`}>
-        <div className="do-command-economics-head">
-          <div>
-            <span className="do-project-card-kicker">
-              PROJECT FINANCIAL LEDGER
-            </span>
-            <strong>{projectTitle(project)}</strong>
-            <small>
-              {project.client || "Internal"} · {buildCount} build/CR period
-              {buildCount === 1 ? "" : "s"} · {monthCount} operating month
-              {monthCount === 1 ? "" : "s"} · {summary.actualHours}h used of{" "}
-              {summary.plannedHours}h planned
-            </small>
-          </div>
-          <div className="do-command-economics-total">
-            <span>Cost</span>
-            <strong>${ledgerSummary.actualCost.toLocaleString()}</strong>
-            <span>Revenue</span>
-            <strong>${ledgerSummary.actualRevenue.toLocaleString()}</strong>
-            <span>Outstanding</span>
-            <strong>${ledgerSummary.outstanding.toLocaleString()}</strong>
-          </div>
-        </div>
-        <div className="do-cost-grid">
-          <label>
-            Delivery stage
-            <select
-              onChange={(event) =>
-                onUpdateProject(project.id, {
-                  deliveryStage: event.target.value,
-                })
-              }
-              value={deliveryStage(project)}
-            >
-              {DELIVERY_STAGES.map((stage) => (
-                <option key={stage} value={stage}>
-                  {deliveryStageLabels[stage]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Next step
-            <input
-              defaultValue={project.nextAction || ""}
-              onBlur={(event) =>
-                onUpdateProject(project.id, {
-                  nextAction: event.target.value.trim(),
-                })
-              }
-              placeholder="Next concrete step"
-            />
-          </label>
-        </div>
-        <ProjectFinanceLedger
-          compact
-          project={project}
-          templates={costTemplates}
-          onCreateCostTemplate={onCreateCostTemplate}
-          onUpdateCostTemplate={onUpdateCostTemplate}
-          onUpdateProject={onUpdateProject}
-        />
-      </div>
-    );
-  };
-
   const exportPortfolioPdf = () => {
     const printable = window.open("", "_blank", "width=1200,height=800");
     if (!printable) return;
@@ -6487,8 +5960,6 @@ function ProjectCommandCenterInner({
     );
     printable.document.close();
   }
-  void _renderEconomics;;
-
   return (
     <section
       aria-label="Projects"
@@ -7593,5 +7064,3 @@ function ProjectCommandCenterInner({
 
 export const ProjectCommandCenter = memo(ProjectCommandCenterInner);
 
-void _ProjectTitleCell;
-void _projectMoney;

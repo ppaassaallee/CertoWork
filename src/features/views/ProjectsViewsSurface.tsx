@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createView,
   getLastUsedViewId,
@@ -52,80 +52,9 @@ function isClosedStatus(status?: string) {
   );
 }
 
-const ProjectTitleOpen = memo(function ProjectTitleOpen({
-  project,
-  onOpen,
-  onRename,
-}: {
-  project: ProjectRow;
-  onOpen: () => void;
-  onRename: (title: string) => void;
-}) {
-  const name = projectTitle(project);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(name);
-  useEffect(() => setDraft(name), [name]);
-
-  if (editing) {
-    return (
-      <span className="do-command-project-title">
-        <input
-          aria-label={`Rename ${name}`}
-          autoFocus
-          data-testid="project-title-rename"
-          onBlur={() => {
-            const next = draft.trim();
-            setEditing(false);
-            if (next && next !== name) onRename(next);
-            else setDraft(name);
-          }}
-          onChange={(event) => setDraft(event.target.value)}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-            if (event.key === "Escape") {
-              event.preventDefault();
-              setDraft(name);
-              setEditing(false);
-            }
-          }}
-          value={draft}
-        />
-        <small>{projectMetaLine(project)}</small>
-      </span>
-    );
-  }
-
-  return (
-    <span className="do-command-project-title">
-      <button
-        aria-label={`Open ${name}`}
-        className="do-command-project-title-open"
-        data-testid="project-title-open"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpen();
-        }}
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (project.demo) return;
-          setDraft(name);
-          setEditing(true);
-        }}
-        title="Click to open · Double-click to rename"
-        type="button"
-      >
-        {name}
-      </button>
-      <small>{projectMetaLine(project)}</small>
-    </span>
-  );
-});
-
 /**
  * Projects portfolio list — Asana-style rows (like My Work), not the heavy
- * spreadsheet ViewGrid. Single-click opens; checkboxes drive bulk selection.
+ * spreadsheet ViewGrid. Row click opens; checkbox selects without opening.
  */
 export function ProjectsViewsSurface({
   projects,
@@ -359,6 +288,7 @@ export function ProjectsViewsSurface({
           ) : (
             applied.rows.map((project) => {
               const id = String(project.id);
+              const name = projectTitle(project);
               const projectTasks = tasksByProject.get(id) || [];
               const projectRisks = risksByProject.get(id) || [];
               const health =
@@ -378,14 +308,6 @@ export function ProjectsViewsSurface({
                   data-testid="projects-asana-row"
                   key={id}
                   onClick={() => onOpenProject(project)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onOpenProject(project);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
                 >
                   <button
                     aria-label={selectedRow ? "Deselect project" : "Select project"}
@@ -400,11 +322,22 @@ export function ProjectsViewsSurface({
                     {selectedRow ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                   </button>
                   <div className="do-command-project-name">
-                    <ProjectTitleOpen
-                      onOpen={() => onOpenProject(project)}
-                      onRename={(title) => void onUpdateProject(id, { title })}
-                      project={project}
-                    />
+                    <span className="do-command-project-title">
+                      <button
+                        aria-label={`Open ${name}`}
+                        className="do-command-project-title-open"
+                        data-testid="project-title-open"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenProject(project);
+                        }}
+                        title="Open project"
+                        type="button"
+                      >
+                        {name}
+                      </button>
+                      <small>{projectMetaLine(project)}</small>
+                    </span>
                   </div>
                   <span className="do-projects-asana-pill">
                     {projectStatusLabel(String(project.status || "active"))}
