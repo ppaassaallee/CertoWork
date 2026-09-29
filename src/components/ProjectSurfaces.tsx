@@ -37,7 +37,6 @@ import {
   Minus,
   Plus,
   Search,
-  SlidersHorizontal,
   Sparkles,
   Star,
   Target,
@@ -231,7 +230,7 @@ type PortfolioColumnKey =
   | "economics"
   | "actions";
 
-const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
+const _portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   project: "Project",
   delivery_entity: "Delivery Entity",
   client_entity: "Client Entity",
@@ -256,6 +255,7 @@ const portfolioColumnLabels: Record<PortfolioColumnKey, string> = {
   economics: "Economics",
   actions: "",
 };
+void _portfolioColumnLabels;
 
 const defaultPortfolioColumns: PortfolioColumnKey[] = [
   "project",
@@ -5696,7 +5696,7 @@ function ProjectCommandCenterInner({
     projectIds: string[];
   } | null>(null);
   const [view, setView] = useState<PortfolioView>(
-    initialPortfolioView || "dashboard",
+    initialPortfolioView || "overview",
   );
   const selectPortfolioView = (next: PortfolioView) => {
     if (next === "economics" && !canViewFinance) return;
@@ -5706,7 +5706,7 @@ function ProjectCommandCenterInner({
   useEffect(() => {
     if (initialPortfolioView) {
       if (initialPortfolioView === "economics" && !canViewFinance) {
-        setView("dashboard");
+        setView("overview");
         return;
       }
       setView(initialPortfolioView);
@@ -5922,47 +5922,73 @@ function ProjectCommandCenterInner({
       },
     ];
     setSavedViews(next);
-    window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
     setViewName("");
+    window.localStorage.setItem(
+      columnsStorageKey("portfolio"),
+      JSON.stringify(next),
+    );
   };
   const applySavedView = (name: string) => {
     const saved = savedViews.find((candidate) => candidate.name === name);
     if (!saved) return;
-    const nextColumns = selectedColumns(saved.columns, defaultPortfolioColumns);
-    setVisibleColumns(nextColumns);
+    setVisibleColumns(selectedColumns(saved.columns, defaultPortfolioColumns));
     if (saved.widths) {
-      const nextWidths = { ...defaultPortfolioColumnPixels, ...saved.widths };
+      const nextWidths = {
+        ...defaultPortfolioColumnPixels,
+        ...saved.widths,
+      };
       setColumnWidths(nextWidths);
       window.localStorage.setItem(
         columnWidthsStorageKey("portfolio-current"),
         JSON.stringify(nextWidths),
       );
     }
-    if (saved.filters) {
-      setFilter(saved.filters.filter || "active");
-      setStageFilter(saved.filters.stageFilter || "all");
-      setPhaseFilter(saved.filters.phaseFilter || "all");
-      setHealthFilter((saved.filters.healthFilter as HealthFilter) || "all");
-      setTagFilter(saved.filters.tagFilter || "all");
-      setWorkCategoryFilter(saved.filters.workCategoryFilter || "all");
-      setProductPhaseFilter(saved.filters.productPhaseFilter || "all");
-      setTaxonomyDimension(saved.filters.taxonomyDimension || "bpo");
-      setTaxonomyValue(saved.filters.taxonomyValue || null);
-      setSearch(saved.filters.search || "");
-      setView(saved.filters.view || "overview");
-      setPrimarySort(saved.filters.primarySort || "stage");
-      setSecondarySort(saved.filters.secondarySort || "due");
-    }
     window.localStorage.setItem(
       columnsStorageKey("portfolio-current"),
-      JSON.stringify(nextColumns),
+      JSON.stringify(selectedColumns(saved.columns, defaultPortfolioColumns)),
     );
+    if (saved.filters) {
+      if (saved.filters.filter !== undefined) setFilter(saved.filters.filter);
+      if (saved.filters.stageFilter !== undefined)
+        setStageFilter(saved.filters.stageFilter);
+      if (saved.filters.phaseFilter !== undefined)
+        setPhaseFilter(saved.filters.phaseFilter);
+      if (saved.filters.healthFilter !== undefined)
+        setHealthFilter(saved.filters.healthFilter as HealthFilter);
+      if (saved.filters.tagFilter !== undefined)
+        setTagFilter(saved.filters.tagFilter);
+      if (saved.filters.workCategoryFilter !== undefined)
+        setWorkCategoryFilter(saved.filters.workCategoryFilter);
+      if (saved.filters.productPhaseFilter !== undefined)
+        setProductPhaseFilter(saved.filters.productPhaseFilter);
+      if (saved.filters.taxonomyDimension !== undefined)
+        setTaxonomyDimension(saved.filters.taxonomyDimension);
+      if (saved.filters.taxonomyValue !== undefined)
+        setTaxonomyValue(saved.filters.taxonomyValue);
+      if (saved.filters.search !== undefined) setSearch(saved.filters.search);
+      if (saved.filters.view !== undefined) setView(saved.filters.view);
+      if (saved.filters.primarySort !== undefined)
+        setPrimarySort(saved.filters.primarySort);
+      if (saved.filters.secondarySort !== undefined)
+        setSecondarySort(saved.filters.secondarySort);
+    }
   };
   const deleteSavedView = (name: string) => {
     const next = savedViews.filter((candidate) => candidate.name !== name);
     setSavedViews(next);
-    window.localStorage.setItem(columnsStorageKey("portfolio"), JSON.stringify(next));
+    window.localStorage.setItem(
+      columnsStorageKey("portfolio"),
+      JSON.stringify(next),
+    );
   };
+  // Legacy spreadsheet column chrome removed from List; keep helpers inert.
+  void updateColumnWidth;
+  void resetColumnWidths;
+  void toggleColumn;
+  void saveCurrentView;
+  void applySavedView;
+  void deleteSavedView;
+  void tableScrollRef;
   const filtered = useMemo(
     () =>
       portfolio.filter((project) => {
@@ -6498,8 +6524,8 @@ function ProjectCommandCenterInner({
         </div>
       </header>
       <nav aria-label="Projects views" className="do-command-view-tabs do-projects-view-tabs">
-        <button aria-current={view === "dashboard" ? "page" : undefined} className={view === "dashboard" ? "is-active" : ""} onClick={() => selectPortfolioView("dashboard")} type="button">Overview</button>
-        <button aria-current={view === "overview" ? "page" : undefined} className={view === "overview" ? "is-active" : ""} onClick={() => selectPortfolioView("overview")} type="button">List</button>
+        <button aria-current={view === "overview" ? "page" : undefined} className={view === "overview" ? "is-active" : ""} data-testid="projects-view-list" onClick={() => selectPortfolioView("overview")} type="button">List</button>
+        <button aria-current={view === "dashboard" ? "page" : undefined} className={view === "dashboard" ? "is-active" : ""} data-testid="projects-view-dashboard" onClick={() => selectPortfolioView("dashboard")} type="button">Dashboard</button>
         {canViewFinance ? <button aria-current={view === "economics" ? "page" : undefined} className={view === "economics" ? "is-active" : ""} data-testid="projects-costs-tab" onClick={() => selectPortfolioView("economics")} type="button">Costs</button> : null}
       </nav>
       {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
@@ -6869,7 +6895,8 @@ function ProjectCommandCenterInner({
             </div>
           </section>
         )}
-        <section className="do-command-portfolio">
+        {view !== "dashboard" ? (
+        <section className="do-command-portfolio" data-testid="projects-list-panel">
           {activeFilterChips.length > 0 && (
             <div className="do-filter-chips" data-testid="projects-filter-chips">
               {activeFilterChips.map((chip) => (
@@ -6948,7 +6975,6 @@ function ProjectCommandCenterInner({
                 onChange={(event) => {
                   const next = event.target.value;
                   setSearch(next);
-                  if (next.trim() && view === "dashboard") setView("overview");
                   if (next.trim() && view === "economics") {
                     selectPortfolioView("overview");
                   }
@@ -7466,14 +7492,8 @@ function ProjectCommandCenterInner({
             >
               <FileText size={14} />
             </button>
-            {view === "overview" && (
-              <div className="do-table-scroll-buttons" aria-label="Move portfolio table horizontally">
-                <button aria-label="Move table left" onClick={() => tableScrollRef.current?.scrollBy({ left: -520, behavior: "smooth" })} type="button"><ArrowLeft size={12} /></button>
-                <button aria-label="Move table right" onClick={() => tableScrollRef.current?.scrollBy({ left: 520, behavior: "smooth" })} type="button"><ArrowRight size={12} /></button>
-              </div>
-            )}
-            <span className="do-command-taxonomy-note">
-              {taxonomyValue ? (
+            {taxonomyValue ? (
+              <span className="do-command-taxonomy-note">
                 <button
                   className="do-active-filter"
                   onClick={() => setTaxonomyValue(null)}
@@ -7486,113 +7506,9 @@ function ProjectCommandCenterInner({
                   }
                   : {taxonomyValue} <X size={11} />
                 </button>
-              ) : (
-                <>
-                  Edit cells directly · Stage is the Certo lifecycle; Phase is
-                  a controlled delivery checkpoint.{" "}
-                  <InfoTip
-                    label="Portfolio fields"
-                    text="Stage is fixed to Define, Onboarding, Build, Deploy and Operations. Each Stage has four standard Phases. Health is automatic unless overridden. Progress is completed executable work unless manually set."
-                  />
-                </>
-              )}
-            </span>
+              </span>
+            ) : null}
           </div>
-          {view === "overview" && (
-            <details className="do-view-manager">
-              <summary>
-                <SlidersHorizontal size={13} /> Views & columns
-              </summary>
-              <div className="do-view-manager-body">
-                <label>
-                  Saved views
-                  <select
-                    aria-label="Apply saved portfolio view"
-                    onChange={(event) => applySavedView(event.target.value)}
-                    value=""
-                  >
-                    <option value="">Choose saved view</option>
-                    {savedViews.map((saved) => (
-                      <option key={saved.name} value={saved.name}>
-                        {saved.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  New view name
-                  <input
-                    onChange={(event) => setViewName(event.target.value)}
-                    placeholder="PM weekly view"
-                    value={viewName}
-                  />
-                </label>
-                <button onClick={saveCurrentView} type="button">
-                  Save current view
-                </button>
-                <div className="do-column-picker">
-                  {defaultPortfolioColumns
-                    .filter((column) => column !== "project" && column !== "actions")
-                    .map((column) => (
-                      <label key={column}>
-                        <input
-                          checked={visibleColumns.includes(column)}
-                          onChange={() => toggleColumn(column)}
-                          type="checkbox"
-                        />
-                        {portfolioColumnLabels[column]}
-                      </label>
-                    ))}
-                </div>
-                <div className="do-column-widths">
-                  <div>
-                    <strong>Column widths</strong>
-                    <button onClick={resetColumnWidths} type="button">
-                      Reset
-                    </button>
-                  </div>
-                  {visibleColumns
-                    .filter((column) => column !== "actions")
-                    .map((column) => (
-                      <label key={`width-${column}`}>
-                        <span>{portfolioColumnLabels[column]}</span>
-                        <input
-                          aria-label={`${portfolioColumnLabels[column]} width`}
-                          max={420}
-                          min={72}
-                          onChange={(event) =>
-                            updateColumnWidth(column, Number(event.target.value))
-                          }
-                          type="range"
-                          value={
-                            columnWidths[column] ||
-                            defaultPortfolioColumnPixels[column]
-                          }
-                        />
-                        <small>
-                          {columnWidths[column] ||
-                            defaultPortfolioColumnPixels[column]}
-                          px
-                        </small>
-                      </label>
-                    ))}
-                </div>
-                {savedViews.length > 0 && (
-                  <div className="do-saved-view-list">
-                    {savedViews.map((saved) => (
-                      <button
-                        key={saved.name}
-                        onClick={() => deleteSavedView(saved.name)}
-                        type="button"
-                      >
-                        Delete {saved.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </details>
-          )}
           {view === "overview" ? (
             <ProjectsViewsSurface
               actorId={actorId}
@@ -7622,6 +7538,7 @@ function ProjectCommandCenterInner({
             />
           ) : null}
         </section>
+        ) : null}
       </div>
       {askPanel && (
         <aside

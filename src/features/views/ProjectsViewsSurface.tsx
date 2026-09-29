@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   createView,
   getLastUsedViewId,
@@ -64,14 +64,7 @@ const ProjectTitleOpen = memo(function ProjectTitleOpen({
   const name = projectTitle(project);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const clickTimer = useRef<number | null>(null);
   useEffect(() => setDraft(name), [name]);
-  useEffect(
-    () => () => {
-      if (clickTimer.current) window.clearTimeout(clickTimer.current);
-    },
-    [],
-  );
 
   if (editing) {
     return (
@@ -87,6 +80,7 @@ const ProjectTitleOpen = memo(function ProjectTitleOpen({
             else setDraft(name);
           }}
           onChange={(event) => setDraft(event.target.value)}
+          onClick={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
             if (event.key === "Escape") {
@@ -109,20 +103,12 @@ const ProjectTitleOpen = memo(function ProjectTitleOpen({
         className="do-command-project-title-open"
         data-testid="project-title-open"
         onClick={(event) => {
-          if (event.detail > 1) return;
-          if (clickTimer.current) window.clearTimeout(clickTimer.current);
-          clickTimer.current = window.setTimeout(() => {
-            clickTimer.current = null;
-            onOpen();
-          }, 220);
+          event.stopPropagation();
+          onOpen();
         }}
         onDoubleClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (clickTimer.current) {
-            window.clearTimeout(clickTimer.current);
-            clickTimer.current = null;
-          }
           if (project.demo) return;
           setDraft(name);
           setEditing(true);
@@ -391,12 +377,24 @@ export function ProjectsViewsSurface({
                   } ${project.demo ? "is-demo" : ""}`}
                   data-testid="projects-asana-row"
                   key={id}
+                  onClick={() => onOpenProject(project)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpenProject(project);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <button
                     aria-label={selectedRow ? "Deselect project" : "Select project"}
                     className={`do-command-select-all ${selectedRow ? "is-selected" : ""}`}
                     data-testid="projects-row-select"
-                    onClick={() => toggleOne(id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleOne(id);
+                    }}
                     type="button"
                   >
                     {selectedRow ? <CheckCircle2 size={14} /> : <Circle size={14} />}

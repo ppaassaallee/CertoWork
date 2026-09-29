@@ -69,9 +69,34 @@ test("login membership writes grant portfolio access to non-viewers", () => {
   assert.match(workspace, /for \(const project of activeProjects\)/);
 });
 
-test("project search opens the portfolio list instead of staying on the dashboard", () => {
+test("projects portfolio defaults to Asana list and opens without delay", () => {
   const projectSurfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
+  const projectsSurface = readFileSync(
+    resolve("src/features/views/ProjectsViewsSurface.tsx"),
+    "utf8",
+  );
+  const workspace = readFileSync(
+    resolve("src/components/DelivereeWorkspace.tsx"),
+    "utf8",
+  );
+  assert.match(projectSurfaces, /initialPortfolioView \|\| "overview"/);
+  assert.match(projectSurfaces, /data-testid="projects-view-list"/);
+  assert.match(projectSurfaces, /data-testid="projects-list-panel"/);
+  assert.doesNotMatch(projectSurfaces, /do-view-manager/);
+  assert.doesNotMatch(projectSurfaces, /Edit cells directly/);
+  assert.doesNotMatch(projectSurfaces, /do-table-scroll-buttons/);
+  assert.match(projectsSurface, /data-testid="projects-asana-row"/);
+  assert.match(projectsSurface, /onClick=\{\(\) => onOpenProject\(project\)\}/);
+  assert.match(projectsSurface, /event\.stopPropagation\(\);\s*toggleOne\(id\)/);
+  assert.doesNotMatch(projectsSurface, /setTimeout\(\(\) => \{[\s\S]*?onOpen\(\)/);
+  assert.match(workspace, /getProjectsSnapshot\(\)\.find/);
+  assert.match(
+    workspace,
+    /const current =\s*projects\.find[\s\S]*?getProjectsSnapshot\(\)\.find/,
+  );
+});
+
+test("command palette normalizes accented search", () => {
   const commandPalette = readFileSync(resolve("src/components/CommandPalette.tsx"), "utf8");
-  assert.match(projectSurfaces, /if \(next\.trim\(\) && view === "dashboard"\) setView\("overview"\)/);
   assert.match(commandPalette, /normalize\("NFD"\)/);
 });
