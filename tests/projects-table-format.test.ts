@@ -54,6 +54,8 @@ test("ProjectsViewsSurface uses Asana list (not spreadsheet ViewGrid)", () => {
   assert.match(surface, /onClick=\{\(\) => onOpenProject\(project\)\}/);
   assert.doesNotMatch(surface, /from ["']\.\/ViewGrid["']/);
   assert.doesNotMatch(surface, /<ViewGrid[\s>]/);
+  assert.doesNotMatch(surface, /role="button"/);
+  assert.doesNotMatch(surface, /Double-click to rename/);
   assert.doesNotMatch(surface, /setTimeout\(\(\) => \{[\s\S]*?onOpen\(\)/);
 });
 
