@@ -3395,7 +3395,10 @@ export function DelivereeWorkspace() {
     patch: Record<string, unknown>,
   ) => {
     try {
-      const current = projects.find((item) => item.id === projectId) || {};
+      const current =
+        projects.find((item) => item.id === projectId) ||
+        getProjectsSnapshot().find((item: any) => item.id === projectId) ||
+        {};
       const next = { ...current, ...patch };
       await updateDoc(doc(db, "projects", projectId), {
         ...patch,

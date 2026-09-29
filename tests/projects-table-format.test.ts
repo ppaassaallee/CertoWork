@@ -51,8 +51,10 @@ test("ProjectsViewsSurface uses Asana list (not spreadsheet ViewGrid)", () => {
   assert.match(surface, /data-testid="projects-asana-list"/);
   assert.match(surface, /is-asana-list/);
   assert.match(surface, /ensurePersisted/);
+  assert.match(surface, /onClick=\{\(\) => onOpenProject\(project\)\}/);
   assert.doesNotMatch(surface, /from ["']\.\/ViewGrid["']/);
   assert.doesNotMatch(surface, /<ViewGrid[\s>]/);
+  assert.doesNotMatch(surface, /setTimeout\(\(\) => \{[\s\S]*?onOpen\(\)/);
 });
 
 test("Progress and Date cells prefer compact single-value UX", () => {

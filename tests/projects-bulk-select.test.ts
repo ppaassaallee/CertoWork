@@ -18,8 +18,10 @@ test("projects list wires Asana selection into portfolio bulk actions", () => {
   assert.match(projectsSurface, /data-testid="projects-row-select"/);
   assert.match(projectsSurface, /data-testid="projects-select-all-header"/);
   assert.match(projectsSurface, /data-testid="projects-asana-list"/);
+  assert.match(projectsSurface, /event\.stopPropagation\(\);\s*toggleOne\(id\)/);
   assert.match(surfaces, /selectedIds=\{selectedProjectIds\}/);
   assert.match(surfaces, /onSelectionChange=\{setSelectedProjectIds\}/);
   assert.match(surfaces, /data-testid="project-bulk-actions"/);
   assert.match(surfaces, /label === "Archive"/);
+  assert.match(surfaces, /initialPortfolioView \|\| "overview"/);
 });
