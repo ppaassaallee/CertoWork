@@ -311,7 +311,7 @@ test("items and backlog can select all visible rows and bulk-edit assignee, date
   assert.match(css, /\.do-items-select-all-label/);
 });
 
-test("portfolio list opens a project from the title and renames on double-click", () => {
+test("portfolio list opens a project from the title or row click", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   const tokens = readFileSync(resolve("src/styles/certo-tokens.css"), "utf8");
   const projectsSurface = readFileSync(
@@ -326,7 +326,10 @@ test("portfolio list opens a project from the title and renames on double-click"
   assert.match(projectsSurface, /data-testid="projects-views-surface"/);
   assert.match(projectsSurface, /data-testid="projects-asana-list"/);
   assert.match(projectsSurface, /data-testid="project-title-open"/);
-  assert.match(projectsSurface, /Click to open · Double-click to rename/);
+  assert.match(projectsSurface, /title="Open project"/);
+  assert.match(projectsSurface, /onClick=\{\(\) => onOpenProject\(project\)\}/);
+  assert.doesNotMatch(projectsSurface, /Double-click to rename/);
+  assert.doesNotMatch(projectsSurface, /role="button"/);
   assert.match(projectsSurface, /is-asana-list/);
   assert.match(projectAdapter, /id: "title"/);
   assert.match(projectAdapter, /id: "open"/);
