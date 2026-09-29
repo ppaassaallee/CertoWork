@@ -88,3 +88,18 @@ test("useTasksIndex equality is content-stable (ProjectRoute must not infinite-l
     /useTasksIndex\(\) \{[\s\S]*?\(a, b\) => a === b,/,
   );
 });
+
+test("useProjectsWhen / useTasksWhen release sticky snapshots when disabled", () => {
+  const collections = readFileSync(
+    resolve(import.meta.dirname, "../src/data/collections.ts"),
+    "utf8",
+  );
+  assert.match(
+    collections,
+    /if \(!enabled\) return a === EMPTY_PROJECTS && b === EMPTY_PROJECTS/,
+  );
+  assert.match(
+    collections,
+    /if \(!enabled\) return a === EMPTY_TASKS && b === EMPTY_TASKS/,
+  );
+});

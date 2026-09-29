@@ -58,7 +58,7 @@ export function useTasksWhen(enabled: boolean) {
     tasksStore,
     (rows) => (enabled ? rows : EMPTY_TASKS),
     (a, b) => {
-      if (!enabled) return true;
+      if (!enabled) return a === EMPTY_TASKS && b === EMPTY_TASKS;
       return a === b;
     },
   );
@@ -75,7 +75,7 @@ export function useProjectsWhen(enabled: boolean) {
     projectsStore,
     (rows) => (enabled ? rows : EMPTY_PROJECTS),
     (a, b) => {
-      if (!enabled) return true;
+      if (!enabled) return a === EMPTY_PROJECTS && b === EMPTY_PROJECTS;
       return a === b;
     },
   );
