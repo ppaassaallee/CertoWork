@@ -6,6 +6,7 @@ type UiState = {
   projectWizardOpen: boolean;
   projectWizardIntent: ProjectWizardIntent;
   magicProjectOpen: boolean;
+  quickProjectOpen: boolean;
 };
 
 const listeners = new Set<() => void>();
@@ -13,6 +14,7 @@ let state: UiState = {
   projectWizardOpen: false,
   projectWizardIntent: "create",
   magicProjectOpen: false,
+  quickProjectOpen: false,
 };
 
 function emit() {
@@ -45,6 +47,12 @@ export const uiStore = {
   },
   closeMagicProject() {
     setState({ magicProjectOpen: false });
+  },
+  openQuickProject() {
+    setState({ quickProjectOpen: true, projectWizardOpen: false });
+  },
+  closeQuickProject() {
+    setState({ quickProjectOpen: false });
   },
 };
 

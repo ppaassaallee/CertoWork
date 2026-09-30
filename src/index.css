@@ -11467,6 +11467,27 @@ a {
   backdrop-filter: blur(6px);
   animation: do-project-fade 0.16s ease-out;
 }
+.do-skill-modal.do-quick-project-modal {
+  width: min(520px, calc(100vw - 44px));
+  height: auto;
+  max-height: calc(100dvh - 44px);
+}
+.do-quick-project-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 19px;
+}
+.do-quick-project-modal .do-skill-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.do-quick-project-modal .do-skill-foot > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .do-skill-modal {
   display: flex;
   width: min(1060px, calc(100vw - 44px));

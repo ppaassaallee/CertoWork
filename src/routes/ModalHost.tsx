@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { ProjectWizardSkill } from "../components/ProjectWizardSkill";
 import { MagicProjectModal } from "../components/MagicProjectModal";
+import { QuickProjectModal } from "../components/QuickProjectModal";
 import { uiStore, useUiStore } from "../data/uiStore";
 import type { MagicProjectBlueprint } from "../lib/magicProject";
 
@@ -9,6 +10,12 @@ type ModalHostProps = {
   contextProject: any | null;
   projects: any[];
   onCreateProject: (draft: any) => Promise<void>;
+  onCreateQuickProject: (input: {
+    title: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+  }) => Promise<void>;
   onUpdateProject: (projectId: string, draft: any) => Promise<void>;
   onCreateMagicProject: (blueprint: MagicProjectBlueprint) => Promise<void>;
 };
@@ -21,6 +28,7 @@ function ModalHostInner({
   contextProject,
   projects,
   onCreateProject,
+  onCreateQuickProject,
   onUpdateProject,
   onCreateMagicProject,
 }: ModalHostProps) {
@@ -41,6 +49,15 @@ function ModalHostInner({
         }}
         onUpdateProject={onUpdateProject}
         projects={projects}
+      />
+      <QuickProjectModal
+        isOpen={ui.quickProjectOpen}
+        onClose={() => uiStore.closeQuickProject()}
+        onCreate={onCreateQuickProject}
+        onUseWizard={() => {
+          uiStore.closeQuickProject();
+          uiStore.openProjectWizard("create");
+        }}
       />
       <MagicProjectModal
         isOpen={ui.magicProjectOpen}
