@@ -9,7 +9,11 @@ test("firestore rules allow Odysseus run and activity collections", () => {
   assert.match(rules, /match \/odiseus_activity\/\{id\}/);
   assert.match(
     rules,
-    /function canAccessBoldiRecord\(data\)[\s\S]*?isWorkspaceOwner\(data\.workspaceId\)/,
+    /function canAccessBoldiRecord\(data\)[\s\S]*?canCreateWorkspaceRecord\(data\.workspaceId\)/,
+  );
+  assert.match(
+    rules,
+    /function canCreateWorkspaceRecord\(workspaceId\)[\s\S]*?isWorkspaceOwner\(workspaceId\)/,
   );
 });
 
