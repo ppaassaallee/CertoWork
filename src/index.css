@@ -13415,6 +13415,43 @@ a {
   flex-direction: column;
   overflow: hidden;
 }
+/* The route sits under the plan banner and tabs. It has to take the
+   leftover height; otherwise the list stays content-sized, the shell
+   clips the rest, and the empty area below neither scrolls nor paints rows. */
+.do-my-work-shell > .do-my-work-route {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.do-my-work-shell .cw-views-surface {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.do-my-work-shell .cw-views-body.is-asana-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.do-my-work-shell .do-items-center {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.do-my-work-shell .do-items-layout {
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+}
+.do-my-work-shell .do-items-workspace {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .do-my-work-tabs {
   display: flex;
   flex: none;
