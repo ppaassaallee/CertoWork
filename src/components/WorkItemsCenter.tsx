@@ -2299,9 +2299,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             !wouldCreateHierarchyCycle(dragged, item, parentPool)
           ) {
             await onUpdateTask(draggedItemId, parentLinkPatch(item));
-            setExpandedTreeNodes((current) =>
-              current.includes(item.id) ? current : [...current, item.id],
-            );
+            setExpandedTreeNodes((current) => {
+              const key = `node:${item.id}`;
+              return current.includes(key) ? current : [...current, key];
+            });
           } else {
             await reorderItem(draggedItemId, item.id, peers);
           }

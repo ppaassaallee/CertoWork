@@ -160,6 +160,16 @@ test("epic section heads include a complete/reopen control like other rows", () 
   assert.match(workItems, /toggleDone\(item\)/);
 });
 
+test("My Work list fills the shell and scrolls expanded rows", () => {
+  const route = readFileSync(resolve("src/routes/MyWorkRoute.tsx"), "utf8");
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(route, /className="do-my-work-route"/);
+  assert.match(css, /\.do-my-work-shell > \.do-my-work-route \{[\s\S]*flex:\s*1 1 auto/);
+  assert.match(css, /\.do-my-work-shell > \.do-my-work-route \{[\s\S]*min-height:\s*0/);
+  assert.match(css, /\.do-my-work-shell \.do-items-workspace \{[\s\S]*overflow-y:\s*auto/);
+  assert.match(css, /\.do-my-work-shell \.do-items-layout \{[\s\S]*minmax\(0, 1fr\)/);
+});
+
 test("hierarchy remembers expanded epics and can expand or collapse a level", () => {
   assert.match(workItems, /expandedTreeNodes/);
   assert.match(workItems, /isTreeNodeCollapsedState/);
