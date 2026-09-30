@@ -7724,8 +7724,18 @@ export function DelivereeWorkspace() {
                 ...(activeProject
                   ? [
                       {
+                        label: "Projects",
+                        onClick: () => {
+                          setSelectedWorkItemId(null);
+                          navigate("/projects");
+                        },
+                      },
+                      {
                         label: entityTitle(activeProject),
-                        onClick: () => openProjectRecord(activeProject),
+                        onClick: () => {
+                          setSelectedWorkItemId(null);
+                          openProjectRecord(activeProject);
+                        },
                       },
                     ]
                   : lens.kind === "home"
