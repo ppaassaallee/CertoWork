@@ -84,6 +84,41 @@ test("task records keep createdBy immutable and restrict delete to the record ow
   assert.doesNotMatch(workspace, /needsCreatorAssigneeRestore/);
 });
 
+test("workspace participants can create projects, not only membership-row members", () => {
+  const canCreate = ruleFn("canCreateWorkspaceRecord");
+  assert.match(canCreate, /isWorkspaceMember\(workspaceId\)/);
+  assert.match(canCreate, /isWorkspaceOwner\(workspaceId\)/);
+  assert.match(canCreate, /workspaceMembersContainAuthEmail\(workspaceId\)/);
+
+  const projectStart = rules.indexOf("match /projects/{id} {");
+  const projectBlock = rules.slice(projectStart, rules.indexOf("\n    }", projectStart));
+  assert.match(projectBlock, /canCreateWorkspaceRecord\(incoming\(\)\.workspaceId\)/);
+  assert.match(projectBlock, /incoming\(\)\.userId == request\.auth\.uid/);
+
+  const milestoneStart = rules.indexOf("match /milestones/{id} {");
+  const milestoneBlock = rules.slice(milestoneStart, rules.indexOf("\n    }", milestoneStart));
+  assert.match(milestoneBlock, /canCreateWorkspaceRecord\(incoming\(\)\.workspaceId\)/);
+
+  const taskStart = rules.indexOf("match /tasks/{taskId} {");
+  const taskBlock = rules.slice(taskStart, rules.indexOf("\n    }", taskStart));
+  assert.match(taskBlock, /canCreateWorkspaceRecord\(incoming\(\)\.workspaceId\)/);
+
+  const conversations = ruleFn("canAccessBoldiRecord");
+  assert.match(conversations, /canCreateWorkspaceRecord\(data\.workspaceId\)/);
+  assert.match(conversations, /data\.userId == request\.auth\.uid/);
+});
+
+test("wizard project create still opens the project when a follow-up write is denied", () => {
+  const start = workspace.indexOf("const createProjectFromWizard");
+  const end = workspace.indexOf("const updateProjectFromWizard");
+  const block = workspace.slice(start, end);
+  assert.match(block, /await addDoc\(collection\(db, "projects"\)/);
+  assert.match(block, /followUpFailed/);
+  assert.match(block, /navigate\(`\/work\/projects\/\$\{projectRef\.id\}`\)/);
+  assert.ok(block.indexOf("await addDoc(collection(db, \"projects\")") < block.indexOf("followUpFailed"));
+  assert.ok(block.indexOf("followUpFailed = true") < block.indexOf("navigate(`/work/projects/${projectRef.id}`)"));
+});
+
 test("shared workspace members can update projects they can already see", () => {
   const canWrite = ruleFn("canWriteProject");
   assert.match(canWrite, /hasExplicitUserAccess\(data\)/);

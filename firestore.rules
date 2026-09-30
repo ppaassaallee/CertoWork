@@ -131,6 +131,17 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
     }
 
+    // People who can already open a workspace must be able to create projects
+    // in it: active members, the owner (even without a membership row), and
+    // emails an admin already listed on the workspace.
+    function canCreateWorkspaceRecord(workspaceId) {
+      return workspaceId != null && (
+        isWorkspaceMember(workspaceId)
+        || isWorkspaceOwner(workspaceId)
+        || (authEmailLower() != "" && workspaceMembersContainAuthEmail(workspaceId))
+      );
+    }
+
     function isFinanceOperator(workspaceId) {
       return isWorkspaceAdmin(workspaceId)
         || (
@@ -777,7 +788,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadProject(resource.data));
       allow delete: if isSignedIn() && isValidId(id) && canWriteProject(resource.data);
       allow list: if isSignedIn() && canReadProject(resource.data);
-      allow create: if isSignedIn() && isValidId(id) && isValidProject(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow create: if isSignedIn() && isValidId(id) && isValidProject(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
       allow update: if isSignedIn() && isValidId(id) && canWriteProject(resource.data) && isValidProject(incoming()) 
                      && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
     }
@@ -793,7 +804,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
       allow delete: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.email != null);
-      allow create: if isSignedIn() && isValidId(id) && isValidMilestone(incoming()) && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow create: if isSignedIn() && isValidId(id) && isValidMilestone(incoming()) && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
       allow update: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))) && isValidMilestone(incoming()) 
                      && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
     }
@@ -980,7 +991,7 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow get: if isSignedIn() && isValidId(taskId) && (resource == null || canReadTask(resource.data));
       allow list: if isSignedIn() && canReadTask(resource.data);
-      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+      allow create: if isSignedIn() && isValidId(taskId) && isValidTask(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
       allow update: if isValidId(taskId) && isValidTask(incoming()) && (
         (
           isSignedIn() && canWriteTask(resource.data)
@@ -1190,10 +1201,7 @@ service cloud.firestore {
       return isSignedIn()
         && data.userId == request.auth.uid
         && data.workspaceId is string
-        && (
-          isWorkspaceMember(data.workspaceId)
-          || isWorkspaceOwner(data.workspaceId)
-        );
+        && canCreateWorkspaceRecord(data.workspaceId);
     }
     match /boldi_conversations/{id} {
       allow create: if canAccessBoldiRecord(incoming());

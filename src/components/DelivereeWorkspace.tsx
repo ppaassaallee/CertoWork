@@ -6065,51 +6065,59 @@ export function DelivereeWorkspace() {
       updatedAt: serverTimestamp(),
     });
 
-    if (draft.firstMilestone.trim()) {
-      await addProjectMilestone(projectRef.id, draft.firstMilestone.trim());
-    }
-    await addProjectTask(
-      projectRef.id,
-      defaultProjectWizardFirstAction(draft).slice(0, 500),
-      "backlog",
-      {
-        source: "project_wizard",
-        priority: "1",
-        dueDate: targetDate || null,
-        workItemType: "task",
-        itemType: "task",
-        type: "task",
-        acceptanceCriteria: successCriteria.join("\n"),
-        definitionOfDone: draft.definitionOfDone.trim(),
-      },
-    );
+    let followUpFailed = false;
+    try {
+      if (draft.firstMilestone.trim()) {
+        await addProjectMilestone(projectRef.id, draft.firstMilestone.trim());
+      }
+      await addProjectTask(
+        projectRef.id,
+        defaultProjectWizardFirstAction(draft).slice(0, 500),
+        "backlog",
+        {
+          source: "project_wizard",
+          priority: "1",
+          dueDate: targetDate || null,
+          workItemType: "task",
+          itemType: "task",
+          type: "task",
+          acceptanceCriteria: successCriteria.join("\n"),
+          definitionOfDone: draft.definitionOfDone.trim(),
+        },
+      );
 
-    const conversationRef = await addDoc(
-      collection(db, "boldi_conversations"),
-      {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        title: draft.title.trim(),
-        status: "active",
-        sourceContext: "project",
-        contextEntityId: projectRef.id,
-        conversationType: "project",
-        linkedProjectIds: [projectRef.id],
-        linkedTaskIds: [],
-        isChiefOfStaff: false,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-    );
-    setConversationId(conversationRef.id);
-    setMessages([]);
+      const conversationRef = await addDoc(
+        collection(db, "boldi_conversations"),
+        {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          title: draft.title.trim(),
+          status: "active",
+          sourceContext: "project",
+          contextEntityId: projectRef.id,
+          conversationType: "project",
+          linkedProjectIds: [projectRef.id],
+          linkedTaskIds: [],
+          isChiefOfStaff: false,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+      );
+      setConversationId(conversationRef.id);
+      setMessages([]);
+    } catch (reason) {
+      followUpFailed = true;
+      console.error("Project was created; a follow-up write was denied.", reason);
+    }
     setProjectConsoleId(projectRef.id);
     setPanel("project");
     goCenterView("conversation");
     navigate(`/work/projects/${projectRef.id}`);
     setNotice(
-      `${draft.title.trim()} created with Project Wizard. Its console is open.`,
+      followUpFailed
+        ? `${draft.title.trim()} created.`
+        : `${draft.title.trim()} created with Project Wizard. Its console is open.`,
     );
   };
 
