@@ -202,18 +202,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await Promise.allSettled(fetchPromises);
       };
 
-      // Fast path: owner + membership in parallel (was serial; each had a 7s cap).
+      // Fast path: resume the last workspace by document id while the
+      // collection scans run. A hung owner/member query must not block the shell
+      // when we can still read the workspace the user was already in.
+      const ownerTask = withTimeout(
+        getDocs(query(collection(db, 'workspaces'), where('ownerId', '==', u.uid))),
+        7_000,
+        'Workspace owner lookup',
+      );
+      const memberTask = withTimeout(
+        getDocs(query(collection(db, 'workspace_members'), where('userId', '==', u.uid))),
+        7_000,
+        'Workspace membership lookup',
+      );
+      const storedTask = (async () => {
+        let storedId = "";
+        try {
+          storedId = localStorage.getItem('activeWorkspaceId') || "";
+        } catch {
+          return null;
+        }
+        if (!storedId) return null;
+        const [wsSnap, memberSnap] = await withTimeout(
+          Promise.all([
+            getDoc(doc(db, 'workspaces', storedId)),
+            getDoc(doc(db, 'workspace_members', `${storedId}_${u.uid}`)),
+          ]),
+          8_000,
+          'Stored workspace lookup',
+        );
+        if (!wsSnap.exists()) return null;
+        const workspaceDoc = { id: wsSnap.id, ...wsSnap.data() } as Workspace;
+        const memberData = memberSnap.exists() ? memberSnap.data() : null;
+        const memberOk = Boolean(memberData && memberData.status !== "removed");
+        if (!canSeeWorkspaceDocument(workspaceDoc, u, memberOk ? [storedId] : [])) return null;
+        return { workspace: workspaceDoc, memberOk };
+      })();
+
+      let openedFromStoredResume = false;
+      const storedResume = await storedTask.catch((error) => {
+        console.error("Stored workspace resume failed:", error);
+        return null;
+      });
+      if (storedResume) {
+        wsMap.set(storedResume.workspace.id, storedResume.workspace);
+        if (storedResume.memberOk || storedResume.workspace.ownerId === u.uid) {
+          memberWorkspaceIds.add(storedResume.workspace.id);
+        }
+        if (openWorkspaceList(visibleWorkspaces())) {
+          lookupSucceeded = true;
+          coreLookupsConfirmed = true;
+          ensureMembershipDocs(visibleWorkspaces());
+          openedFromStoredResume = true;
+          void Promise.allSettled([ownerTask, memberTask]).then(async ([ownerResult, memberResult]) => {
+            if (ownerResult.status === 'fulfilled') {
+              ownerResult.value.forEach((d) => wsMap.set(d.id, { id: d.id, ...d.data() } as Workspace));
+            }
+            if (memberResult.status === 'fulfilled') {
+              await ingestMembershipSnap(memberResult.value);
+            }
+            const refreshed = visibleWorkspaces();
+            if (refreshed.length) openWorkspaceList(refreshed);
+          });
+        }
+      }
+
+      let openedEarly = false;
+      if (!openedFromStoredResume) {
       const [ownerResult, memberResult] = await Promise.allSettled([
-        withTimeout(
-          getDocs(query(collection(db, 'workspaces'), where('ownerId', '==', u.uid))),
-          7_000,
-          'Workspace owner lookup',
-        ),
-        withTimeout(
-          getDocs(query(collection(db, 'workspace_members'), where('userId', '==', u.uid))),
-          7_000,
-          'Workspace membership lookup',
-        ),
+        ownerTask,
+        memberTask,
       ]);
 
       if (ownerResult.status === 'fulfilled') {
@@ -241,9 +299,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (quotaFailure) throw quotaFailure;
       }
 
-      const openedEarly = openWorkspaceList(visibleWorkspaces());
+      openedEarly = openWorkspaceList(visibleWorkspaces());
       if (openedEarly) {
         ensureMembershipDocs(visibleWorkspaces());
+      }
       }
 
       const acceptEmailAndPendingInvites = async () => {
@@ -383,7 +442,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       };
 
-      if (openedEarly) {
+      if (openedFromStoredResume || openedEarly) {
         // Shell is open — invite acceptance / remaps must not delay data paint.
         void acceptEmailAndPendingInvites().then(() => {
           const refreshed = visibleWorkspaces();
