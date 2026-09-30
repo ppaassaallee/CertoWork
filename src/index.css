@@ -7392,6 +7392,29 @@ a {
   border-radius: 999px;
   background: var(--surface-2);
 }
+.do-tree-level-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.do-tree-level-bar select,
+.do-tree-level-bar button {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-0);
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.do-tree-level-bar button:hover,
+.do-tree-level-bar select:hover {
+  color: var(--text-primary);
+  background: var(--surface-1);
+}
 .do-items-summary {
   display: flex;
   flex-wrap: wrap;

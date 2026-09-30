@@ -170,11 +170,105 @@ export function canNestUnder(
 
 /**
  * Tree expand defaults for list/hierarchy views.
- * All parents start collapsed so entering Items/My Work is compact.
- * Expansion lasts only for the current screen visit.
+ * A node is open only when its key is in the saved expanded set.
+ * First visit (or lost cache) seeds epic keys as expanded; after that the set is remembered.
  */
 export function treeNodeExpandedByDefault(_kind: HierarchyKind | string, _depth: number) {
   return false;
+}
+
+export type TreeExpandLevel = "epic" | "feature";
+
+export type TreeExpandMemory = {
+  expanded: string[];
+  collapsedGroups: string[];
+};
+
+export function treeExpandStorageKey(scope: string) {
+  return `certo-tree-expand:${scope || "default"}`;
+}
+
+export function treeNodeKey(itemId: string) {
+  return `node:${normalizeItemId(itemId)}`;
+}
+
+/** Epics start open when there is no saved memory. Features stay closed until expanded. */
+export function defaultExpandedTreeKeys(items: any[]): string[] {
+  const keys: string[] = [];
+  for (const item of items) {
+    if (hierarchyKind(item) !== "epic") continue;
+    const id = normalizeItemId(item?.id);
+    if (id) keys.push(treeNodeKey(id));
+  }
+  return keys;
+}
+
+export function readTreeExpandMemory(
+  storage: Pick<Storage, "getItem"> | null | undefined,
+  scope: string,
+): TreeExpandMemory | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(treeExpandStorageKey(scope));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { expanded?: unknown; collapsedGroups?: unknown };
+    if (!parsed || !Array.isArray(parsed.expanded)) return null;
+    return {
+      expanded: parsed.expanded.filter((key): key is string => typeof key === "string"),
+      collapsedGroups: Array.isArray(parsed.collapsedGroups)
+        ? parsed.collapsedGroups.filter((key): key is string => typeof key === "string")
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeTreeExpandMemory(
+  storage: Pick<Storage, "setItem"> | null | undefined,
+  scope: string,
+  memory: TreeExpandMemory,
+) {
+  if (!storage) return;
+  try {
+    storage.setItem(
+      treeExpandStorageKey(scope),
+      JSON.stringify({
+        expanded: memory.expanded,
+        collapsedGroups: memory.collapsedGroups,
+      }),
+    );
+  } catch {
+    /* Private mode or a full quota should not block the list. */
+  }
+}
+
+/** Expand or collapse every epic or feature. Expanding features also opens their epic parents. */
+export function applyTreeLevel(
+  items: any[],
+  current: Iterable<string>,
+  level: TreeExpandLevel,
+  action: "expand" | "collapse",
+): string[] {
+  const next = new Set(current);
+  for (const item of items) {
+    if (hierarchyKind(item) !== level) continue;
+    const id = normalizeItemId(item?.id);
+    if (!id) continue;
+    const key = treeNodeKey(id);
+    if (action === "collapse") {
+      next.delete(key);
+      continue;
+    }
+    next.add(key);
+    if (level !== "feature") continue;
+    for (const ancestor of hierarchyChain(item, items)) {
+      if (ancestor === item) continue;
+      const ancestorId = normalizeItemId(ancestor?.id);
+      if (ancestorId) next.add(treeNodeKey(ancestorId));
+    }
+  }
+  return [...next];
 }
 
 export function isTreeNodeCollapsedState(options: {
