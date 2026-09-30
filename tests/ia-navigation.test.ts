@@ -181,6 +181,27 @@ test("primary sidebar keeps essentials short; management is secondary", () => {
   );
 });
 
+test("project breadcrumb walks Workspace, Projects, then the project", () => {
+  const source = readFileSync(
+    resolve("src/components/DelivereeWorkspace.tsx"),
+    "utf8",
+  );
+  const crumbs = source.slice(
+    source.indexOf("<AppBreadcrumbs"),
+    source.indexOf("do-header-center"),
+  );
+  assert.match(crumbs, /label: workspace\?\.name \|\| "Workspace"/);
+  assert.match(crumbs, /onClick: \(\) => navigate\("\/home"\)/);
+  assert.match(
+    crumbs,
+    /activeProject[\s\S]*?label: "Projects"[\s\S]*?navigate\("\/projects"\)[\s\S]*?entityTitle\(activeProject\)[\s\S]*?openProjectRecord\(activeProject\)/,
+  );
+  const portfolio = crumbs.match(
+    /centerView === "portfolio"\s*\?\s*\[\{ label: "Projects" \}\]/,
+  );
+  assert.ok(portfolio, "project list keeps Projects as the current page");
+});
+
 test("opening a project record stays on the project URL, not Home", () => {
   const source = readFileSync(
     resolve("src/components/DelivereeWorkspace.tsx"),
