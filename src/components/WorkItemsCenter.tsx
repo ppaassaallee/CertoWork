@@ -135,11 +135,16 @@ import {
   compareHierarchySiblings,
   effectiveInheritedField,
   effectivePriority,
+  applyTreeLevel,
+  defaultExpandedTreeKeys,
   hierarchyChildren,
   hierarchyRoot,
   hierarchyRoots,
   isTreeNodeCollapsedState,
   normalizeItemId,
+  readTreeExpandMemory,
+  writeTreeExpandMemory,
+  type TreeExpandLevel,
   parentLinkPatch,
   sortHierarchyForest,
   sortHierarchySiblings,
@@ -848,8 +853,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [inlineAddOpen, setInlineAddOpen] = useState<Record<string, boolean>>({});
   const inlineAddRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
-  /** Parents the user expanded during this screen visit. Everything else stays collapsed. */
+  /** Open parents. Restored from local memory; epics start open only when that memory is missing. */
   const [expandedTreeNodes, setExpandedTreeNodes] = useState<string[]>([]);
+  const [treeLevel, setTreeLevel] = useState<TreeExpandLevel>("epic");
+  const treeScopeSeeded = useRef("");
+  const treeMemoryReady = useRef(false);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
@@ -1279,6 +1287,32 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   );
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentPool = hierarchyTasks?.length ? hierarchyTasks : tasks;
+  const treeScope = `${workspaceId || "local"}:${surface}`;
+  useEffect(() => {
+    if (treeScopeSeeded.current === treeScope) return;
+    const saved = typeof window === "undefined" ? null : readTreeExpandMemory(window.localStorage, treeScope);
+    if (!saved && parentPool.length === 0) return;
+    treeMemoryReady.current = false;
+    treeScopeSeeded.current = treeScope;
+    if (saved) {
+      setExpandedTreeNodes(saved.expanded);
+      setCollapsedGroups(saved.collapsedGroups);
+      return;
+    }
+    setExpandedTreeNodes(defaultExpandedTreeKeys(parentPool));
+    setCollapsedGroups([]);
+  }, [parentPool, treeScope]);
+  useEffect(() => {
+    if (treeScopeSeeded.current !== treeScope) return;
+    if (!treeMemoryReady.current) {
+      treeMemoryReady.current = true;
+      return;
+    }
+    writeTreeExpandMemory(window.localStorage, treeScope, {
+      expanded: expandedTreeNodes,
+      collapsedGroups,
+    });
+  }, [collapsedGroups, expandedTreeNodes, treeScope]);
   const findPoolItem = (id: string) => {
     const key = normalizeItemId(id);
     return parentPool.find((candidate) => normalizeItemId(candidate?.id) === key) || null;
@@ -2372,6 +2406,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       ? current.filter((key) => key !== groupKey)
       : current.includes(groupKey) ? current : [...current, groupKey]);
     if (collapsing) clearInlineAddForNode(groupKey);
+  };
+
+  const setTreeLevelOpen = (level: TreeExpandLevel, action: "expand" | "collapse") => {
+    setExpandedTreeNodes((current) => applyTreeLevel(parentPool, current, level, action));
   };
 
   const focusInlineAdd = (parentIdValue: string, groupKey: string, kind: WorkItemKind, depth: number) => {
@@ -4436,6 +4474,36 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               </span>
             )}
           </div>
+          )}
+          {mode === "list" && !notionSurface && (
+            <div className="do-tree-level-bar" data-testid="tree-level-bar">
+              <label>
+                <span className="sr-only">Hierarchy level</span>
+                <select
+                  aria-label="Hierarchy level"
+                  data-testid="tree-level-select"
+                  onChange={(event) => setTreeLevel(event.target.value as TreeExpandLevel)}
+                  value={treeLevel}
+                >
+                  <option value="epic">Epic</option>
+                  <option value="feature">Feature</option>
+                </select>
+              </label>
+              <button
+                data-testid="tree-expand-level"
+                onClick={() => setTreeLevelOpen(treeLevel, "expand")}
+                type="button"
+              >
+                Expand
+              </button>
+              <button
+                data-testid="tree-collapse-level"
+                onClick={() => setTreeLevelOpen(treeLevel, "collapse")}
+                type="button"
+              >
+                Collapse
+              </button>
+            </div>
           )}
           {mode === "list" && !notionSurface && renderColumnHeader()}
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (

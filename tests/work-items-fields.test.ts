@@ -160,9 +160,17 @@ test("epic section heads include a complete/reopen control like other rows", () 
   assert.match(workItems, /toggleDone\(item\)/);
 });
 
-test("hierarchy keeps parents collapsed until toggled for this visit", () => {
+test("hierarchy remembers expanded epics and can expand or collapse a level", () => {
   assert.match(workItems, /expandedTreeNodes/);
   assert.match(workItems, /isTreeNodeCollapsedState/);
+  assert.match(workItems, /readTreeExpandMemory/);
+  assert.match(workItems, /writeTreeExpandMemory/);
+  assert.match(workItems, /defaultExpandedTreeKeys/);
+  assert.match(workItems, /applyTreeLevel/);
+  assert.match(workItems, /data-testid="tree-level-bar"/);
+  assert.match(workItems, /data-testid="tree-level-select"/);
+  assert.match(workItems, /data-testid="tree-expand-level"/);
+  assert.match(workItems, /data-testid="tree-collapse-level"/);
   assert.match(workItems, /data-collapsed=\{collapsed \? "true" : "false"\}/);
   assert.match(workItems, /data-testid="item-tree-children"/);
 });

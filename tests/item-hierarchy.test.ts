@@ -5,7 +5,9 @@ import {
   allowedChildKinds,
   allowedParentKinds,
   allowedParentItems,
+  applyTreeLevel,
   canNestUnder,
+  defaultExpandedTreeKeys,
   effectiveInheritedField,
   effectivePriority,
   hierarchyChildren,
@@ -13,10 +15,12 @@ import {
   hierarchyRoots,
   isTreeNodeCollapsedState,
   parentLinkPatch,
+  readTreeExpandMemory,
   sortHierarchyForest,
   treeNodeExpandedByDefault,
   visibleParentId,
   wouldCreateHierarchyCycle,
+  writeTreeExpandMemory,
 } from "../src/lib/itemHierarchy";
 
 test("PBIs and tasks nest under an epic even without a feature in between", () => {
@@ -240,6 +244,54 @@ test("My Work-style filtered roots still resolve children from the full hierarch
   assert.deepEqual(hierarchyRoots(myWorkView).map((item) => item.id), ["p1"]);
   assert.deepEqual(hierarchyChildren(myWorkView, "p1").map((item) => item.id), ["t1"]);
   assert.deepEqual(hierarchyChildren(fullPool, "p1").map((item) => item.id), ["t1", "t2"]);
+});
+
+test("tree memory opens epics on first visit and remembers later choices", () => {
+  const storage = new Map<string, string>();
+  const fake = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+  };
+  const epic = { id: "e1", workItemType: "epic" };
+  const feature = { id: "f1", workItemType: "feature", parentId: "e1", epicId: "e1" };
+  const items = [epic, feature];
+
+  assert.equal(readTreeExpandMemory(fake, "ws:my-work"), null);
+  assert.deepEqual(defaultExpandedTreeKeys(items), ["node:e1"]);
+  assert.equal(
+    isTreeNodeCollapsedState({
+      kind: "epic",
+      depth: 0,
+      groupKey: "node:e1",
+      expandedKeys: defaultExpandedTreeKeys(items),
+    }),
+    false,
+  );
+  assert.equal(
+    isTreeNodeCollapsedState({
+      kind: "feature",
+      depth: 1,
+      groupKey: "node:f1",
+      expandedKeys: defaultExpandedTreeKeys(items),
+    }),
+    true,
+  );
+
+  const collapsedEpic = applyTreeLevel(items, defaultExpandedTreeKeys(items), "epic", "collapse");
+  assert.deepEqual(collapsedEpic, []);
+  writeTreeExpandMemory(fake, "ws:my-work", { expanded: collapsedEpic, collapsedGroups: ["No Project"] });
+  assert.deepEqual(readTreeExpandMemory(fake, "ws:my-work"), {
+    expanded: [],
+    collapsedGroups: ["No Project"],
+  });
+
+  const expandedFeatures = applyTreeLevel(items, [], "feature", "expand");
+  assert.ok(expandedFeatures.includes("node:f1"));
+  assert.ok(expandedFeatures.includes("node:e1"));
+  assert.deepEqual(applyTreeLevel(items, expandedFeatures, "feature", "collapse"), ["node:e1"]);
+  assert.equal(readTreeExpandMemory({ getItem: () => "{" }, "ws:my-work"), null);
 });
 
 test("tree nodes start collapsed until the user expands them this visit", () => {
