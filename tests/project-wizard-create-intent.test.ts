@@ -11,27 +11,44 @@ import { uiStore } from "../src/data/uiStore";
 
 const root = resolve(import.meta.dirname, "..");
 
-test("New project entry points open wizard in create mode without conversation project", () => {
+test("New project entry points open the short form; the wizard stays optional", () => {
   const shell = readFileSync(resolve(root, "src/components/DelivereeWorkspace.tsx"), "utf8");
   const host = readFileSync(resolve(root, "src/routes/ModalHost.tsx"), "utf8");
   const store = readFileSync(resolve(root, "src/data/uiStore.ts"), "utf8");
+  const quick = readFileSync(resolve(root, "src/components/QuickProjectModal.tsx"), "utf8");
 
-  assert.match(shell, /openProjectWizard/);
-  assert.match(shell, /uiStore\.openProjectWizard/);
+  assert.match(shell, /openQuickProject/);
+  assert.match(shell, /uiStore\.openQuickProject/);
+  assert.match(shell, /createQuickProject/);
   assert.match(shell, /ModalHost/);
   assert.match(host, /projectWizardIntent === "context"/);
   assert.match(host, /contextProject/);
+  assert.match(host, /QuickProjectModal/);
+  assert.match(host, /openProjectWizard\("create"\)/);
   assert.match(store, /projectWizardIntent/);
+  assert.match(store, /openQuickProject/);
 
-  // Create / New project surfaces must not reuse the conversation's project.
-  assert.match(shell, /onNewProject=\{\(\) => openProjectWizard\("create"\)\}/);
-  assert.match(shell, /onCreateProject=\{\(\) => openProjectWizard\("create"\)\}/);
-  assert.match(shell, /onSelect: \(\) => openProjectWizard\("create"\)/);
-  assert.match(shell, /onClick=\{\(\) => openProjectWizard\("create"\)\}/);
+  assert.match(shell, /onNewProject=\{\(\) => openQuickProject\(\)\}/);
+  assert.match(shell, /onCreateProject=\{\(\) => openQuickProject\(\)\}/);
+  assert.match(shell, /onSelect: \(\) => openQuickProject\(\)/);
+  assert.match(quick, /Project name/);
+  assert.match(quick, /Start date/);
+  assert.match(quick, /End date/);
+  assert.match(quick, /Description/);
+  assert.match(quick, /Use the wizard/);
+  assert.match(shell, /startDate/);
+  assert.match(shell, /endDate,/);
+  assert.match(shell, /dueDate: endDate/);
+  assert.match(shell, /createdFromSkill: "quick_project"/);
+  assert.doesNotMatch(
+    shell.slice(shell.indexOf("const createQuickProject"), shell.indexOf("const createProjectFromWizard")),
+    /addProjectTask|boldi_conversations/,
+  );
 
-  // Odysseus "update project" / action menu keep context mode.
+  // Odysseus "update project" / action menu, and the skills list, keep the wizard.
   assert.match(shell, /openProjectWizard\("context"\)/);
   assert.equal((shell.match(/openProjectWizard\("context"\)/g) || []).length, 2);
+  assert.match(shell, /openProjectWizard\("create"\)/);
 });
 
 test("uiStore openProjectWizard defaults to create intent", () => {

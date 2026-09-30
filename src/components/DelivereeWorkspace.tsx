@@ -941,6 +941,9 @@ export function DelivereeWorkspace() {
   const openProjectWizard = useCallback((intent: "create" | "context" = "create") => {
     uiStore.openProjectWizard(intent);
   }, []);
+  const openQuickProject = useCallback(() => {
+    uiStore.openQuickProject();
+  }, []);
   const [createTableWizardOpen, setCreateTableWizardOpen] = useState(false);
   const [createTableProjectId, setCreateTableProjectId] = useState<string | null>(null);
   const [systemTemplateGalleryOpen, setSystemTemplateGalleryOpen] = useState(false);
@@ -5985,6 +5988,53 @@ export function DelivereeWorkspace() {
     }
   };
 
+  const createQuickProject = async (input: {
+    title: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+  }) => {
+    if (!user || !workspace) {
+      throw new Error("Sign in to a workspace before creating a project.");
+    }
+    const title = input.title.trim();
+    const description = input.description.trim();
+    const startDate = input.startDate.trim();
+    const endDate = input.endDate.trim();
+    const projectRef = await addDoc(collection(db, "projects"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
+      title,
+      normalizedTitle: title.toLowerCase().replace(/\s+/g, " "),
+      description,
+      outcome: "",
+      objective: "",
+      status: "planning",
+      health: "on_track",
+      methodology: "Hybrid",
+      projectManager: String(user.displayName || user.email || "").trim(),
+      deliveryStage: "define",
+      deliveryPhase: "intake",
+      projectKey: projectWorkKey({ title }),
+      startDate,
+      plannedStartDate: startDate,
+      endDate,
+      targetDate: endDate,
+      dueDate: endDate,
+      successCriteria: [],
+      definitionOfDone: "",
+      createdFromSkill: "quick_project",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setProjectConsoleId(projectRef.id);
+    setPanel("project");
+    navigate(`/work/projects/${projectRef.id}`);
+    setNotice(`${title} created.`);
+  };
+
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
     if (!user || !workspace) return;
     const successCriteria = splitProjectWizardLines(draft.successCriteriaText);
@@ -6566,7 +6616,7 @@ export function DelivereeWorkspace() {
         id: "new-project",
         label: "Create project",
         group: "Create",
-        onSelect: () => openProjectWizard("create"),
+        onSelect: () => openQuickProject(),
       },
       {
         id: "report-bug",
@@ -6689,7 +6739,7 @@ export function DelivereeWorkspace() {
           // Seed via sessionStorage so the modal can pick it up on open
           if (query) sessionStorage.setItem("certo-quick-capture-seed", query);
         }}
-        onCreateProject={() => openProjectWizard("create")}
+        onCreateProject={() => openQuickProject()}
         open={commandPaletteOpen}
         scopeLabel={
           activeProject
@@ -7199,7 +7249,7 @@ export function DelivereeWorkspace() {
               {activeProjects.length === 0 && (
                 <button
                   className="do-empty-link"
-                  onClick={() => openProjectWizard("create")}
+                  onClick={() => openQuickProject()}
                   type="button"
                 >
                   Create your first project
@@ -7849,7 +7899,7 @@ export function DelivereeWorkspace() {
                     <button onClick={() => { setCreateMenuOpen(false); setQuickCaptureOpen(true); }} type="button">
                       {t("createTask")}
                     </button>
-                    <button onClick={() => { setCreateMenuOpen(false); openProjectWizard("create"); }} type="button">
+                    <button onClick={() => { setCreateMenuOpen(false); openQuickProject(); }} type="button">
                       {t("createProject")}
                     </button>
                     <button className="do-mobile-advanced" onClick={() => { setCreateMenuOpen(false); uiStore.openMagicProject(); }} type="button">
@@ -8954,7 +9004,7 @@ export function DelivereeWorkspace() {
               setComposer(prompt);
               goCenterView("conversation");
             }}
-            onNewProject={() => openProjectWizard("create")}
+            onNewProject={() => openQuickProject()}
             onAddFinanceTask={async (projectId, title, status, patch) =>
               addProjectTask(projectId, title, status, patch || {})
             }
@@ -9545,7 +9595,7 @@ export function DelivereeWorkspace() {
           }))}
           onCreate={async ({ kind, title }) => {
             if (kind === "project") {
-              openProjectWizard("create");
+              openQuickProject();
               return;
             }
             if (kind === "note") {
@@ -11072,6 +11122,7 @@ export function DelivereeWorkspace() {
         contextProject={routeOrPrimaryProject}
         projects={activeProjects}
         onCreateProject={createProjectFromWizard}
+        onCreateQuickProject={createQuickProject}
         onUpdateProject={updateProjectFromWizard}
         onCreateMagicProject={createMagicProject}
       />
