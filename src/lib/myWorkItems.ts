@@ -126,21 +126,19 @@ export function actorEquivalentMemberIds(actor: MyWorkActor, members: WorkspaceM
   return [...ids].filter(Boolean);
 }
 
-export function isAssignedToActor(
-  item: Record<string, unknown> | null | undefined,
+function actorMatchesIds(
+  ids: string[],
+  names: string[],
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  if (!item || !actor.userId) return false;
-  const ids = itemAssigneeIds(item);
-  const names = itemAssigneeLabels(item);
+  if (!actor.userId) return false;
   const member = actorMember(actor, members);
   if (member && memberMatchesSelection(member, ids, names)) return true;
 
   const equivalentIds = new Set(actorEquivalentMemberIds(actor, members));
   if (ids.some((value) => equivalentIds.has(value))) return true;
 
-  // Also match pending seats that share email with the actor even if not remapped yet.
   for (const candidate of members) {
     if (!ids.includes(String(candidate.id))) continue;
     if (
@@ -172,6 +170,43 @@ export function isAssignedToActor(
     const lowered = value.toLowerCase();
     return tokens.has(value) || tokens.has(lowered);
   });
+}
+
+export function isAssignedToActor(
+  item: Record<string, unknown> | null | undefined,
+  actor: MyWorkActor,
+  members: WorkspaceMember[] = [],
+) {
+  if (!item || !actor.userId) return false;
+  return actorMatchesIds(itemAssigneeIds(item), itemAssigneeLabels(item), actor, members);
+}
+
+export function itemFollowerIds(item: Record<string, unknown> | null | undefined) {
+  if (!item) return [];
+  return assignmentTokens([
+    ...asList(item.collaboratorMemberIds),
+    ...asList(item.collaboratorIds),
+    ...asList(item.followerIds),
+    ...asList(item.followers),
+  ]);
+}
+
+export function itemFollowerLabels(item: Record<string, unknown> | null | undefined) {
+  if (!item) return [];
+  return assignmentTokens([
+    ...asList(item.collaborators),
+    ...asList(item.followerNames),
+  ]);
+}
+
+/** People asked to follow a task, even when someone else is the assignee. */
+export function isFollowedByActor(
+  item: Record<string, unknown> | null | undefined,
+  actor: MyWorkActor,
+  members: WorkspaceMember[] = [],
+) {
+  if (!item || !actor.userId) return false;
+  return actorMatchesIds(itemFollowerIds(item), itemFollowerLabels(item), actor, members);
 }
 
 export function isCreatedByActor(
@@ -223,7 +258,11 @@ export function isMyWorkItem(
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  return isAssignedToActor(item, actor, members) || isCreatedByActor(item, actor);
+  return (
+    isAssignedToActor(item, actor, members) ||
+    isCreatedByActor(item, actor) ||
+    isFollowedByActor(item, actor, members)
+  );
 }
 
 export function isMyWorkInboxItem(

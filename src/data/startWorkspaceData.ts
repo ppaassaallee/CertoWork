@@ -260,8 +260,11 @@ export function startWorkspaceData(args: StartArgs): () => void {
               collection(db, "tasks"),
               where("workspaceId", "==", workspace.id),
               where("status", "in", [
+                "backlog",
+                "ready",
                 "todo",
                 "in_progress",
+                "in_review",
                 "blocked",
                 "review",
                 "new",
@@ -270,6 +273,7 @@ export function startWorkspaceData(args: StartArgs): () => void {
                 "active",
                 "planned",
                 "doing",
+                "not_started",
               ]),
             ),
             (snapshot) => {
@@ -294,8 +298,14 @@ export function startWorkspaceData(args: StartArgs): () => void {
             [where("visibleToUserIds", "array-contains", user.uid)],
             [where("visibleToEmails", "array-contains", emailLower)],
             [where("assigneeIds", "array-contains", memberId)],
+            [where("collaboratorMemberIds", "array-contains", memberId)],
+            [where("followerIds", "array-contains", memberId)],
             [where("accessMemberIds", "array-contains", memberId)],
             [where("sharedWithUserIds", "array-contains", user.uid)],
+            ...roleNames.slice(0, 4).flatMap((name) => [
+              [where("assignees", "array-contains", name)],
+              [where("owner", "==", name)],
+            ]),
           ],
           (items) => tasksStore.replaceAll(items as TaskDoc[]),
         );

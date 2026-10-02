@@ -41,7 +41,7 @@ function MyWorkRouteInner({
   const tasks = sectionTasks || allTasks;
 
   return (
-    <div data-testid="my-work-route">
+    <div className="do-my-work-route" data-testid="my-work-route">
       {overviewSlot}
       <MyWorkViewsSurface
         actorEmail={actorEmail || ""}
