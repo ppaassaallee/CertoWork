@@ -23,5 +23,5 @@ test("projects list wires Asana selection into portfolio bulk actions", () => {
   assert.match(surfaces, /onSelectionChange=\{setSelectedProjectIds\}/);
   assert.match(surfaces, /data-testid="project-bulk-actions"/);
   assert.match(surfaces, /label === "Archive"/);
-  assert.match(surfaces, /initialPortfolioView \|\| "overview"/);
+  assert.match(surfaces, /initialPortfolioView \|\| "dashboard"/);
 });

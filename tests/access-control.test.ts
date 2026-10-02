@@ -69,7 +69,7 @@ test("login membership writes grant portfolio access to non-viewers", () => {
   assert.match(workspace, /for \(const project of activeProjects\)/);
 });
 
-test("projects portfolio defaults to Asana list and opens without delay", () => {
+test("projects portfolio opens on the stage summary and keeps the Asana list", () => {
   const projectSurfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
   const projectsSurface = readFileSync(
     resolve("src/features/views/ProjectsViewsSurface.tsx"),
@@ -79,7 +79,9 @@ test("projects portfolio defaults to Asana list and opens without delay", () => 
     resolve("src/components/DelivereeWorkspace.tsx"),
     "utf8",
   );
-  assert.match(projectSurfaces, /initialPortfolioView \|\| "overview"/);
+  assert.match(projectSurfaces, /initialPortfolioView \|\| "dashboard"/);
+  assert.match(projectSurfaces, /data-testid="projects-view-dashboard"/);
+  assert.match(projectSurfaces, /By stage/);
   assert.match(projectSurfaces, /data-testid="projects-view-list"/);
   assert.match(projectSurfaces, /data-testid="projects-list-panel"/);
   assert.doesNotMatch(projectSurfaces, /do-view-manager/);

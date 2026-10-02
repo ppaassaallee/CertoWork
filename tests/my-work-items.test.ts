@@ -7,6 +7,7 @@ import {
   creatorAssigneePatch,
   filterMyWorkTasks,
   isAssignedToActor,
+  isFollowedByActor,
   needsCreatorAssigneeRestore,
   todayPlanGroups,
   withCreatorAssignee,
@@ -125,6 +126,31 @@ test("explicit assignees are preserved when someone else is picked", () => {
   );
   assert.deepEqual(patch.assigneeIds, ["ws_user-agustin"]);
   assert.equal(isAssignedToActor(patch, actor, [alejandro, agustin]), false);
+});
+
+test("My view keeps tasks the person follows even when someone else is the assignee", () => {
+  const followed = {
+    id: "follow",
+    assigneeIds: ["ws_user-agustin"],
+    collaboratorMemberIds: ["ws_user-alejandro"],
+    status: "backlog",
+  };
+  const byName = {
+    id: "by-name",
+    assignee: "Alejandro",
+    status: "backlog",
+  };
+  assert.equal(isFollowedByActor(followed, actor, [alejandro, agustin]), true);
+  assert.equal(isAssignedToActor(followed, actor, [alejandro, agustin]), false);
+  assert.deepEqual(
+    filterMyWorkTasks([followed, byName], "assigned", actor, [alejandro, agustin]).map((item) => item.id).sort(),
+    ["by-name", "follow"],
+  );
+  const loader = readFileSync(resolve("src/data/startWorkspaceData.ts"), "utf8");
+  assert.match(loader, /"backlog"/);
+  assert.match(loader, /collaboratorMemberIds", "array-contains", memberId/);
+  assert.match(loader, /followerIds", "array-contains", memberId/);
+  assert.match(loader, /assignees", "array-contains", name/);
 });
 
 test("waiting tab only shows assigned waiting-for items", () => {

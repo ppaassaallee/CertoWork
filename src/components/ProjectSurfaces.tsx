@@ -5426,7 +5426,7 @@ function ProjectCommandCenterInner({
     projectIds: string[];
   } | null>(null);
   const [view, setView] = useState<PortfolioView>(
-    initialPortfolioView || "overview",
+    initialPortfolioView || "dashboard",
   );
   const selectPortfolioView = (next: PortfolioView) => {
     if (next === "economics" && !canViewFinance) return;
@@ -5436,7 +5436,7 @@ function ProjectCommandCenterInner({
   useEffect(() => {
     if (initialPortfolioView) {
       if (initialPortfolioView === "economics" && !canViewFinance) {
-        setView("overview");
+        setView("dashboard");
         return;
       }
       setView(initialPortfolioView);
