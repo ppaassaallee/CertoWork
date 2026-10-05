@@ -415,6 +415,19 @@ test("toolbar views fields filter sort are icon-only with hover titles", () => {
 test("add item quick attributes use icon popovers like item attrs", () => {
   assert.match(workItems, /do-items-create-attrs/);
   assert.match(workItems, /data-testid="item-create-project"/);
+  assert.match(workItems, /data-testid="item-create-project-select"/);
+  assert.match(workItems, /No project/);
+  assert.match(workItems, /data-testid="quick-action-menu"/);
+  assert.match(workItems, /Quitar/);
+  assert.match(workItems, /Agregar/);
+  assert.match(workItems, /Mover/);
+  assert.match(workItems, /myWorkRowActions/);
+  assert.doesNotMatch(workItems, /do-item-type-trigger-label/);
+  assert.doesNotMatch(workItems, /Owner · Due · More/);
+  assert.match(workItems, /const projectId = activeProject\?\.id \|\| newProjectId \|\| ""/);
+  assert.match(workItems, /String\(project\.status \|\| ""\)\.toLowerCase\(\) !== "deleted"/);
+  assert.match(workItems, /setNewProjectId\(event\.target\.value\);\s*setNewParentId\(""\)/);
+  assert.match(workItems, /setNewProjectId\(\(current: string\) => current \|\| baseProjectId \|\| ""\)/);
   assert.match(workItems, /data-testid="item-create-type"/);
   assert.match(workItems, /data-testid="item-create-parent"/);
   assert.match(workItems, /createAttr/);
