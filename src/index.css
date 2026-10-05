@@ -7219,6 +7219,30 @@ a {
   justify-content: flex-start;
   gap: 2px;
 }
+.do-items-create-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 200px;
+  max-width: 320px;
+}
+.do-items-create-project span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.do-items-create-project select {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+}
 .do-items-create.is-quick-attrs .do-ai-create-field {
   flex: 1 1 220px;
   min-width: 180px;

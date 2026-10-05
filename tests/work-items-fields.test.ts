@@ -415,6 +415,13 @@ test("toolbar views fields filter sort are icon-only with hover titles", () => {
 test("add item quick attributes use icon popovers like item attrs", () => {
   assert.match(workItems, /do-items-create-attrs/);
   assert.match(workItems, /data-testid="item-create-project"/);
+  assert.match(workItems, /data-testid="item-create-project-select"/);
+  assert.match(workItems, /data-testid="item-create-project-field"/);
+  assert.match(workItems, /No project/);
+  assert.match(workItems, /const projectId = activeProject\?\.id \|\| newProjectId \|\| ""/);
+  assert.match(workItems, /String\(project\.status \|\| ""\)\.toLowerCase\(\) !== "deleted"/);
+  assert.match(workItems, /setNewProjectId\(event\.target\.value\);\s*setNewParentId\(""\)/);
+  assert.match(workItems, /setNewProjectId\(\(current\) => current \|\| baseProjectId \|\| ""\)/);
   assert.match(workItems, /data-testid="item-create-type"/);
   assert.match(workItems, /data-testid="item-create-parent"/);
   assert.match(workItems, /createAttr/);

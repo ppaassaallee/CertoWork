@@ -1454,8 +1454,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return () => window.removeEventListener("keydown", onKey);
   }, [onSelectItem, selectedItemId]);
 
+  const addFormWasOpen = useRef(false);
+  useEffect(() => {
+    if (addItemOpen && !addFormWasOpen.current && !activeProject) {
+      setNewProjectId((current) => current || baseProjectId || "");
+    }
+    addFormWasOpen.current = addItemOpen;
+  }, [addItemOpen, activeProject, baseProjectId]);
+
   const createItem = async () => {
-    const projectId = newProjectId || baseProjectId;
+    const projectId = activeProject?.id || newProjectId || "";
     if (!newTitle.trim()) return;
     if (projectCreateBlocked) return;
     const project = projects.find((candidate) => candidate.id === projectId);
@@ -4061,34 +4069,42 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               };
               return (
                 <>
+                  {activeProject ? (
                   <div className={`do-item-attr ${newProjectId || activeProject ? "is-on" : "is-off"} ${open("project") ? "is-open" : ""}`}>
                     <button
                       aria-expanded={open("project")}
                       aria-label={`Project: ${projectLabel}`}
                       className="do-item-attr-btn"
                       data-testid="item-create-project"
-                      disabled={Boolean(activeProject)}
+                      disabled
                       onClick={() => toggle("project")}
                       title={`Project: ${projectLabel}`}
                       type="button"
                     >
                       <Folder size={13} />
                     </button>
-                    {open("project") && (
-                      <div className="do-item-attr-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-                        <strong>Project</strong>
-                        <select
-                          aria-label="New item project"
-                          disabled={Boolean(activeProject)}
-                          onChange={(event) => { setNewProjectId(event.target.value); setCreateAttr(null); }}
-                          value={newProjectId}
-                        >
-                          <option value="">{activeProject ? projectTitle(activeProject) : "No project / errand"}</option>
-                          {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
-                        </select>
-                      </div>
-                    )}
                   </div>
+                  ) : (
+                  <label className="do-items-create-project" data-testid="item-create-project-field">
+                    <span>Project</span>
+                    <select
+                      aria-label="New item project"
+                      data-testid="item-create-project-select"
+                      onChange={(event) => {
+                        setNewProjectId(event.target.value);
+                        setNewParentId("");
+                      }}
+                      value={newProjectId}
+                    >
+                      <option value="">No project</option>
+                      {projects
+                        .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
+                        .map((project) => (
+                          <option key={project.id} value={project.id}>{projectTitle(project)}</option>
+                        ))}
+                    </select>
+                  </label>
+                  )}
                   <div className={`do-item-attr is-on is-type ${open("type") ? "is-open" : ""}`}>
                     <button
                       aria-expanded={open("type")}
