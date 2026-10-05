@@ -7219,29 +7219,59 @@ a {
   justify-content: flex-start;
   gap: 2px;
 }
-.do-items-create-project {
+.do-items-create.is-quick-attrs .do-item-attrs {
+  flex-wrap: nowrap;
+}
+.do-items-center.is-my-work .do-item-attrs {
+  max-width: min(560px, 52vw);
+  overflow-x: auto;
+}
+.do-items-center.is-my-work .do-item-attr.is-off .do-item-attr-btn,
+.do-items-create .do-item-attr.is-off .do-item-attr-btn {
+  opacity: 0.55;
+}
+.do-quick-action-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 168px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 200px;
-  max-width: 320px;
-}
-.do-items-create-project span {
-  flex: none;
-  color: var(--text-secondary);
-  font-size: var(--text-caption);
-  font-weight: 600;
-}
-.do-items-create-project select {
-  min-width: 0;
-  flex: 1;
-  height: 32px;
+  flex-direction: column;
+  gap: 2px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--surface-0);
-  padding: 0 8px;
-  color: var(--text-secondary);
-  font-size: var(--text-caption);
+  padding: 6px;
+  box-shadow: var(--shadow-lg);
+}
+.do-quick-action-menu > button,
+.do-quick-action-submenu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.do-quick-action-menu > button:hover,
+.do-quick-action-submenu button:hover {
+  background: var(--surface-2);
+}
+.do-quick-action-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 4px;
+  padding-left: 8px;
+}
+.do-quick-action-submenu span {
+  padding: 6px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 .do-items-create.is-quick-attrs .do-ai-create-field {
   flex: 1 1 220px;

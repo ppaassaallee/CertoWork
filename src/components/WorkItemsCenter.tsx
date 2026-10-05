@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -56,6 +56,22 @@ import { taskDueStatus } from "./ui/StatusLight";
 import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
+import {
+  CREATE_QUICK_ACTION_LABELS,
+  CREATE_QUICK_ACTIONS,
+  MY_WORK_CREATE_ACTIONS_KEY,
+  MY_WORK_ROW_ACTIONS_KEY,
+  ROW_QUICK_ACTION_LABELS,
+  ROW_QUICK_ACTIONS,
+  addQuickAction,
+  hiddenQuickActions,
+  moveQuickAction,
+  readQuickActions,
+  removeQuickAction,
+  writeQuickActions,
+  type CreateQuickAction,
+  type RowQuickAction,
+} from "../lib/quickActions";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
 import { AgentActivityChip } from "../features/agents/AgentActivityChip";
 import { isAgentsJobsEnabled } from "../features/agents/agentJobsFlag";
@@ -916,6 +932,52 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [boardViewers, setBoardViewers] = useState<KanbanPresence[]>([]);
   const [openAttr, setOpenAttr] = useState<string | null>(null);
   const [createAttr, setCreateAttr] = useState<string | null>(null);
+  const [myWorkRowActions, setMyWorkRowActions] = useState<RowQuickAction[]>(() =>
+    readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_ROW_ACTIONS_KEY, ROW_QUICK_ACTIONS),
+  );
+  const [createQuickActions, setCreateQuickActions] = useState<CreateQuickAction[]>(() =>
+    readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_CREATE_ACTIONS_KEY, CREATE_QUICK_ACTIONS),
+  );
+  const [actionMenu, setActionMenu] = useState<null | {
+    scope: "row" | "create";
+    key: string;
+    x: number;
+    y: number;
+    submenu: null | "add" | "move";
+  }>(null);
+  const hiddenRowActions = useMemo(
+    () => hiddenQuickActions(myWorkRowActions, ROW_QUICK_ACTIONS),
+    [myWorkRowActions],
+  );
+  const hiddenCreateActions = useMemo(
+    () => hiddenQuickActions(createQuickActions, CREATE_QUICK_ACTIONS),
+    [createQuickActions],
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    writeQuickActions(window.localStorage, MY_WORK_ROW_ACTIONS_KEY, myWorkRowActions);
+  }, [myWorkRowActions]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    writeQuickActions(window.localStorage, MY_WORK_CREATE_ACTIONS_KEY, createQuickActions);
+  }, [createQuickActions]);
+  useEffect(() => {
+    if (!actionMenu) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionMenu(null);
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest(".do-quick-action-menu")) return;
+      setActionMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer);
+    };
+  }, [actionMenu]);
   const [parentSearch, setParentSearch] = useState("");
   const itemColumnSet = new Set(
     mobileCore ? (["title", "status", "priority", "due"] as ItemColumnKey[]) : visibleItemColumns,
@@ -938,9 +1000,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     : [...itemColumnSet].filter((column): column is Exclude<ItemColumnKey, "title"> => column !== "title");
   const itemGridStyle = {
     gridTemplateColumns: isMyWork
-      ? "20px 20px 28px minmax(160px, 1fr) auto"
+      ? "20px 20px 28px minmax(160px, 1fr) auto 28px"
       : "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
+  const rowAttributeColumns = isMyWork
+    ? myWorkRowActions.filter((key): key is Exclude<ItemColumnKey, "title"> => key in ATTR_ICONS)
+    : attributeColumns;
   const currentItemViewFilters: ItemViewFilters = {
     mode,
     projectFilter,
@@ -2085,6 +2150,24 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
+  const openCreateMenu = (key: CreateQuickAction, event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setActionMenu({ scope: "create", key, x: event.clientX, y: event.clientY, submenu: null });
+  };
+
+  const rowMenu = (key: RowQuickAction): { onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void; style?: CSSProperties } => {
+    if (!isMyWork) return {};
+    return {
+      style: { order: Math.max(0, myWorkRowActions.indexOf(key)) },
+      onContextMenu: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setActionMenu({ scope: "row", key, x: event.clientX, y: event.clientY, submenu: null });
+      },
+    };
+  };
+
   const renderAttributeIcons = (item: any) => (
     <div className="do-item-attrs" data-testid="item-attr-icons">
       {Array.isArray(item?.linkedDocumentIds) && item.linkedDocumentIds.length > 0 ? (
@@ -2100,12 +2183,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </div>
       ) : null}
       {(() => {
+        if (isMyWork && !myWorkRowActions.includes("collab")) return null;
         const comments = Array.isArray(item?.comments) ? item.comments : [];
         const mentioned = itemMentionsViewer(item, viewerAliases);
         return (
           <div
             className={`do-item-attr is-collab ${comments.length || mentioned ? "is-on" : "is-off"} ${mentioned ? "is-mention" : ""}`}
             key="collab"
+            {...rowMenu("collab")}
           >
             <button
               aria-label={
@@ -2139,6 +2224,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         );
       })()}
       {(() => {
+        if (isMyWork && !myWorkRowActions.includes("parent")) return null;
         const filled = Boolean(parentId(item));
         const parentItem = parentId(item) ? findPoolItem(parentId(item)) : null;
         const caption = parentItem ? title(parentItem) : "No parent";
@@ -2147,7 +2233,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         const allowed = allowedParentKinds(workItemKind(item));
         if (allowed.length === 0) return null;
         return (
-          <div className={`do-item-attr is-parent ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key="parent">
+          <div className={`do-item-attr is-parent ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key="parent" {...rowMenu("parent")}>
             <button
               aria-expanded={open}
               aria-label={`Parent for ${title(item)}${filled ? `: ${caption}` : " (not set)"}`}
@@ -2176,7 +2262,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         );
       })()}
-      {attributeColumns.map((column) => {
+      {rowAttributeColumns.map((column) => {
         const filled = itemAttributePresent(item, column, projects, tags, parentPool);
         const caption = itemAttributeCaption(item, column, projects, tags, sprints, parentPool);
         const Icon = ATTR_ICONS[column];
@@ -2187,6 +2273,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <div
               className={`do-item-attr is-assignees ${filled ? "is-on" : "is-off"}`}
               key={column}
+              {...rowMenu(column)}
             >
               <MultiAssigneePicker
                 compact
@@ -2218,7 +2305,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           );
         }
         return (
-          <div className={`do-item-attr ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key={column}>
+          <div className={`do-item-attr ${filled ? "is-on" : "is-off"} ${open ? "is-open" : ""}`} key={column} {...rowMenu(column)}>
             <button
               aria-expanded={open}
               aria-label={`${itemColumnLabels[column]} for ${title(item)}${filled ? `: ${caption}` : " (not set)"}`}
@@ -2246,31 +2333,25 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         );
       })}
+      {isMyWork && hiddenRowActions.length > 0 ? (
+        <button
+          aria-label="Agregar"
+          className="do-item-attr-btn"
+          data-testid="my-work-quick-actions-add"
+          onClick={(event) => {
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            setActionMenu({ scope: "row", key: "", x: rect.left, y: rect.bottom + 4, submenu: "add" });
+          }}
+          style={{ order: 80 }}
+          title="Agregar"
+          type="button"
+        >
+          <Plus size={13} />
+        </button>
+      ) : null}
     </div>
   );
-
-  const renderCompactActions = (item: any) => {
-    const due = dateInputValue(item.dueDate || item.targetDate);
-    const assignee = Array.isArray(item.assignees) && item.assignees.length
-      ? item.assignees[0]
-      : item.owner || item.assignee || "";
-    return (
-      <div className="do-my-work-row-end">
-        {assignee ? <span className="do-my-work-row-owner" title={assignee}>{assignee}</span> : null}
-        {due ? <time dateTime={due}>{dateLabel(new Date(`${due}T00:00:00`))}</time> : null}
-        <details className="do-my-work-row-more" onClick={(event) => event.stopPropagation()}>
-          <summary aria-label={`More actions for ${title(item)}`} title="More fields and actions"><MoreHorizontal size={17} /></summary>
-          <div className="do-my-work-row-popover">
-            <strong>Fields and actions</strong>
-            {renderAttributeIcons(item)}
-            {renderTimingButtons(item)}
-            {renderRowExtra ? renderRowExtra(item) : null}
-            {renderDeleteButton(item)}
-          </div>
-        </details>
-      </div>
-    );
-  };
 
   const renderRow = (
     item: any,
@@ -2342,7 +2423,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <GripVertical size={14} />
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
-        {isMyWork ? renderCompactActions(item) : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderRowExtra ? renderRowExtra(item) : null}{renderDeleteButton(item)}</>}
+        {isMyWork ? <>{renderAttributeIcons(item)}{renderDeleteButton(item)}</> : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderRowExtra ? renderRowExtra(item) : null}{renderDeleteButton(item)}</>}
       </article>
     );
   };
@@ -2379,8 +2460,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       {renderSelectAll()}
       <span />
       <strong>Item</strong>
-      <span className="do-items-attr-head">{isMyWork ? "Owner · Due · More" : "Fields"}</span>
-      {!isMyWork && <><span /><span /></>}
+      <span className="do-items-attr-head">Fields</span>
+      {isMyWork ? <span /> : <><span /><span /></>}
     </div>
   );
 
@@ -2472,7 +2553,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           showToggle: false,
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
-        {isMyWork ? renderCompactActions(item) : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderDeleteButton(item)}</>}
+        {isMyWork ? <>{renderAttributeIcons(item)}{renderDeleteButton(item)}</> : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderDeleteButton(item)}</>}
       </header>
     );
   };
@@ -3471,6 +3552,98 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   return (
     <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+      {actionMenu && createPortal(
+        <div
+          className="do-quick-action-menu"
+          data-testid="quick-action-menu"
+          onClick={(event) => event.stopPropagation()}
+          role="menu"
+          style={{ top: actionMenu.y, left: actionMenu.x }}
+        >
+          {actionMenu.key ? (
+            <button
+              onClick={() => {
+                if (actionMenu.scope === "row") {
+                  setMyWorkRowActions((current) => removeQuickAction(current, actionMenu.key as RowQuickAction));
+                } else {
+                  setCreateQuickActions((current) => removeQuickAction(current, actionMenu.key as CreateQuickAction));
+                }
+                setActionMenu(null);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              Quitar
+            </button>
+          ) : null}
+          <button
+            data-testid="quick-action-add"
+            onClick={() => setActionMenu((current) => current ? { ...current, submenu: current.submenu === "add" ? null : "add" } : current)}
+            role="menuitem"
+            type="button"
+          >
+            Agregar
+          </button>
+          {actionMenu.submenu === "add" && (
+            <div className="do-quick-action-submenu">
+              {(actionMenu.scope === "row" ? hiddenRowActions : hiddenCreateActions).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (actionMenu.scope === "row") {
+                      setMyWorkRowActions((current) => addQuickAction(current, key as RowQuickAction, ROW_QUICK_ACTIONS, (actionMenu.key || undefined) as RowQuickAction | undefined));
+                    } else {
+                      setCreateQuickActions((current) => addQuickAction(current, key as CreateQuickAction, CREATE_QUICK_ACTIONS, (actionMenu.key || undefined) as CreateQuickAction | undefined));
+                    }
+                    setActionMenu(null);
+                  }}
+                  type="button"
+                >
+                  {actionMenu.scope === "row"
+                    ? ROW_QUICK_ACTION_LABELS[key as RowQuickAction]
+                    : CREATE_QUICK_ACTION_LABELS[key as CreateQuickAction]}
+                </button>
+              ))}
+              {(actionMenu.scope === "row" ? hiddenRowActions : hiddenCreateActions).length === 0 && <span>Todos visibles</span>}
+            </div>
+          )}
+          {actionMenu.key ? (
+            <button
+              data-testid="quick-action-move"
+              onClick={() => setActionMenu((current) => current ? { ...current, submenu: current.submenu === "move" ? null : "move" } : current)}
+              role="menuitem"
+              type="button"
+            >
+              Mover
+            </button>
+          ) : null}
+          {actionMenu.key && actionMenu.submenu === "move" && (
+            <div className="do-quick-action-submenu">
+              <button
+                onClick={() => {
+                  if (actionMenu.scope === "row") setMyWorkRowActions((current) => moveQuickAction(current, actionMenu.key as RowQuickAction, -1));
+                  else setCreateQuickActions((current) => moveQuickAction(current, actionMenu.key as CreateQuickAction, -1));
+                  setActionMenu(null);
+                }}
+                type="button"
+              >
+                A la izquierda
+              </button>
+              <button
+                onClick={() => {
+                  if (actionMenu.scope === "row") setMyWorkRowActions((current) => moveQuickAction(current, actionMenu.key as RowQuickAction, 1));
+                  else setCreateQuickActions((current) => moveQuickAction(current, actionMenu.key as CreateQuickAction, 1));
+                  setActionMenu(null);
+                }}
+                type="button"
+              >
+                A la derecha
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
       {!notionSurface && (
       <section className={`do-items-toolbar ${chromeCollapsed || timelineMode ? "is-compact" : ""}`}>
         {!chromeCollapsed && !timelineMode && (
@@ -3715,8 +3888,19 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     <label key={column} className="do-column-toggle">
                       <input
                         aria-label={`${visibleItemColumns.includes(column) ? "Hide" : "Show"} ${itemColumnLabels[column]} field`}
-                        checked={visibleItemColumns.includes(column)}
-                        onChange={() => toggleItemColumn(column)}
+                        checked={isMyWork ? myWorkRowActions.includes(column as RowQuickAction) : visibleItemColumns.includes(column)}
+                        onChange={() => {
+                          if (!isMyWork || column === "title") {
+                            toggleItemColumn(column);
+                            return;
+                          }
+                          const action = column as RowQuickAction;
+                          setMyWorkRowActions((current) => (
+                            current.includes(action)
+                              ? removeQuickAction(current, action)
+                              : addQuickAction(current, action, ROW_QUICK_ACTIONS)
+                          ));
+                        }}
                         type="checkbox"
                       />
                       {itemColumnLabels[column]}
@@ -4069,54 +4253,63 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               };
               return (
                 <>
-                  {activeProject ? (
-                  <div className={`do-item-attr ${newProjectId || activeProject ? "is-on" : "is-off"} ${open("project") ? "is-open" : ""}`}>
+                  {createQuickActions.includes("project") && (
+                  <div
+                    className={`do-item-attr ${newProjectId || activeProject ? "is-on" : "is-off"} ${open("project") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("project", event)}
+                    style={{ order: createQuickActions.indexOf("project") }}
+                  >
                     <button
                       aria-expanded={open("project")}
                       aria-label={`Project: ${projectLabel}`}
                       className="do-item-attr-btn"
                       data-testid="item-create-project"
-                      disabled
-                      onClick={() => toggle("project")}
+                      disabled={Boolean(activeProject)}
+                      onClick={() => { if (!activeProject) toggle("project"); }}
                       title={`Project: ${projectLabel}`}
                       type="button"
                     >
                       <Folder size={13} />
                     </button>
+                    {open("project") && !activeProject && (
+                      <div className="do-item-attr-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+                        <strong>Project</strong>
+                        <select
+                          aria-label="New item project"
+                          data-testid="item-create-project-select"
+                          onChange={(event) => {
+                            setNewProjectId(event.target.value);
+                            setNewParentId("");
+                          }}
+                          value={newProjectId}
+                        >
+                          <option value="">No project</option>
+                          {projects
+                            .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
+                            .map((project) => (
+                              <option key={project.id} value={project.id}>{projectTitle(project)}</option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
-                  ) : (
-                  <label className="do-items-create-project" data-testid="item-create-project-field">
-                    <span>Project</span>
-                    <select
-                      aria-label="New item project"
-                      data-testid="item-create-project-select"
-                      onChange={(event) => {
-                        setNewProjectId(event.target.value);
-                        setNewParentId("");
-                      }}
-                      value={newProjectId}
-                    >
-                      <option value="">No project</option>
-                      {projects
-                        .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
-                        .map((project) => (
-                          <option key={project.id} value={project.id}>{projectTitle(project)}</option>
-                        ))}
-                    </select>
-                  </label>
                   )}
-                  <div className={`do-item-attr is-on is-type ${open("type") ? "is-open" : ""}`}>
+                  {createQuickActions.includes("type") && (
+                  <div
+                    className={`do-item-attr is-on is-type ${open("type") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("type", event)}
+                    style={{ order: createQuickActions.indexOf("type") }}
+                  >
                     <button
                       aria-expanded={open("type")}
                       aria-label={`Type: ${workItemLabel(newType)}`}
-                      className="do-item-attr-btn do-item-type-trigger"
+                      className="do-item-attr-btn"
                       data-testid="item-create-type"
                       onClick={() => toggle("type")}
                       title={`Type: ${workItemLabel(newType)}`}
                       type="button"
                     >
                       <TypeIcon size={13} />
-                      <span className="do-item-type-trigger-label">{workItemLabel(newType)}</span>
                     </button>
                     {open("type") && (
                       <div className="do-item-attr-pop do-items-create-type-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
@@ -4144,7 +4337,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr is-parent ${newParentId ? "is-on" : "is-off"} ${open("parent") ? "is-open" : ""}`}>
+                  )}
+                  {createQuickActions.includes("parent") && (
+                  <div
+                    className={`do-item-attr is-parent ${newParentId ? "is-on" : "is-off"} ${open("parent") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("parent", event)}
+                    style={{ order: createQuickActions.indexOf("parent") }}
+                  >
                     <button
                       aria-expanded={open("parent")}
                       aria-label={`Parent: ${parentLabel}`}
@@ -4172,7 +4371,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr ${newDueDate ? "is-on" : "is-off"} ${open("due") ? "is-open" : ""}`}>
+                  )}
+                  {createQuickActions.includes("due") && (
+                  <div
+                    className={`do-item-attr ${newDueDate ? "is-on" : "is-off"} ${open("due") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("due", event)}
+                    style={{ order: createQuickActions.indexOf("due") }}
+                  >
                     <button
                       aria-expanded={open("due")}
                       aria-label={`Due date${newDueDate ? `: ${newDueDate}` : ""}`}
@@ -4197,7 +4402,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr is-assignees ${newAssigneeId ? "is-on" : "is-off"}`}>
+                  )}
+                  {createQuickActions.includes("assignee") && (
+                  <div
+                    className={`do-item-attr is-assignees ${newAssigneeId ? "is-on" : "is-off"}`}
+                    onContextMenu={(event) => openCreateMenu("assignee", event)}
+                    style={{ order: createQuickActions.indexOf("assignee") }}
+                  >
                     <MultiAssigneePicker
                       compact
                       label="Assignees"
@@ -4224,7 +4435,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       triggerTestId="item-create-assignee"
                     />
                   </div>
-                  <div className={`do-item-attr ${newPriority && newPriority !== "N/A" ? "is-on" : "is-off"} ${open("priority") ? "is-open" : ""}`}>
+                  )}
+                  {createQuickActions.includes("priority") && (
+                  <div
+                    className={`do-item-attr ${newPriority && newPriority !== "N/A" ? "is-on" : "is-off"} ${open("priority") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("priority", event)}
+                    style={{ order: createQuickActions.indexOf("priority") }}
+                  >
                     <button
                       aria-expanded={open("priority")}
                       aria-label={`Priority: ${newPriority}`}
@@ -4250,7 +4467,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       </div>
                     )}
                   </div>
-                  <div className={`do-item-attr ${newDeliveryEntity ? "is-on" : "is-off"} ${open("delivery") ? "is-open" : ""}`}>
+                  )}
+                  {createQuickActions.includes("delivery") && (
+                  <div
+                    className={`do-item-attr ${newDeliveryEntity ? "is-on" : "is-off"} ${open("delivery") ? "is-open" : ""}`}
+                    onContextMenu={(event) => openCreateMenu("delivery", event)}
+                    style={{ order: createQuickActions.indexOf("delivery") }}
+                  >
                     <button
                       aria-expanded={open("delivery")}
                       aria-label={`Delivery entity: ${deliveryLabel}`}
@@ -4277,6 +4500,24 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       </div>
                     )}
                   </div>
+                  )}
+                  {hiddenCreateActions.length > 0 && (
+                    <button
+                      aria-label="Agregar"
+                      className="do-item-attr-btn"
+                      data-testid="create-quick-actions-add"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setActionMenu({ scope: "create", key: "", x: rect.left, y: rect.bottom + 4, submenu: "add" });
+                      }}
+                      style={{ order: 80 }}
+                      title="Agregar"
+                      type="button"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  )}
                 </>
               );
             })()}
