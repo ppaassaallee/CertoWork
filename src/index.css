@@ -8961,6 +8961,37 @@ a {
   border-radius: 0;
   background: transparent;
 }
+.do-my-work-section-head {
+  cursor: default;
+}
+.do-my-work-section-head .do-items-section-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.do-my-work-section-head .do-items-drag-handle {
+  opacity: 0.45;
+}
+.do-items-group:hover > .do-my-work-section-head .do-items-drag-handle,
+.do-items-group.is-section-over > .do-my-work-section-head .do-items-drag-handle {
+  opacity: 1;
+}
+.do-items-group.is-section-over > .do-my-work-section-head {
+  background: color-mix(in srgb, var(--accent, #24513d) 10%, transparent);
+}
+.do-items-section-empty {
+  margin: 0 8px 8px 28px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
 .do-items-group > button,
 .do-items-group > .do-items-section-head {
   display: flex;

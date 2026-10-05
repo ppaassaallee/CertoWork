@@ -55,6 +55,17 @@ import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
+import {
+  NO_PROJECT_SECTION,
+  compareManualOrder,
+  orderSections,
+  placeItemBefore,
+  readMyWorkSectionOrder,
+  reorderIds,
+  sectionIdForProject,
+  subtreeIds,
+  writeMyWorkSectionOrder,
+} from "../lib/myWorkSectionOrder";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import {
   CREATE_QUICK_ACTION_LABELS,
@@ -925,6 +936,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const [sectionOrder, setSectionOrder] = useState<string[]>([]);
+  const dragRef = useRef<{ kind: "item" | "section"; id: string } | null>(null);
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
@@ -1402,6 +1416,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentPool = hierarchyTasks?.length ? hierarchyTasks : tasks;
   const treeScope = `${workspaceId || "local"}:${surface}`;
+  const sectionOrderScope = workspaceId || "local";
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSectionOrder(readMyWorkSectionOrder(window.localStorage, sectionOrderScope));
+  }, [sectionOrderScope]);
   useEffect(() => {
     if (treeScopeSeeded.current === treeScope) return;
     const saved = typeof window === "undefined" ? null : readTreeExpandMemory(window.localStorage, treeScope);
@@ -1742,9 +1761,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     draggedId: string | null,
     targetId: string,
     peers: any[],
+    compare: (left: any, right: any) => number = compareHierarchySiblings,
   ) => {
     if (!draggedId || draggedId === targetId) return;
-    const ordered = sortItems(peers, "rank", "priority", projects, parentPool);
+    const ordered = [...peers].sort(compare);
     const from = ordered.findIndex((candidate) => candidate.id === draggedId);
     const to = ordered.findIndex((candidate) => candidate.id === targetId);
     if (from === -1 || to === -1) return;
@@ -1757,6 +1777,63 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         return onUpdateTask(candidate.id, { order: index, rank: index });
       }),
     );
+  };
+
+  const clearItemDrag = () => {
+    dragRef.current = null;
+    setDraggedItemId(null);
+    setDragOverItemId(null);
+    setDragOverSectionId(null);
+  };
+
+  const endItemDrag = () => {
+    window.setTimeout(clearItemDrag, 0);
+  };
+
+  const dragFromEvent = (event: { dataTransfer: DataTransfer | null }) => {
+    const raw = event.dataTransfer?.getData("text/plain") || "";
+    if (raw.startsWith("item:")) return { kind: "item" as const, id: raw.slice(5) };
+    if (raw.startsWith("section:")) return { kind: "section" as const, id: raw.slice(8) };
+    return dragRef.current;
+  };
+
+  const relocateItemToProject = async (
+    draggedId: string,
+    projectId: string | null,
+    roots: any[],
+    beforeId: string | null,
+  ) => {
+    const moving = subtreeIds(draggedId, (id) => hierarchyChildren(parentPool, id).map((child) => String(child.id)));
+    const movingSet = new Set(moving);
+    const rootIds = roots.map((item) => String(item.id)).filter((id) => !movingSet.has(id));
+    const placed = placeItemBefore(rootIds, draggedId, beforeId && rootIds.includes(beforeId) ? beforeId : null);
+    const projectPatch = { projectId: projectId || null };
+    await Promise.all([
+      ...moving.map((id) => {
+        const order = placed.indexOf(id);
+        const patch: Record<string, unknown> = { ...projectPatch };
+        if (id === draggedId) {
+          Object.assign(patch, parentLinkPatch(null));
+          if (order >= 0) {
+            patch.order = order;
+            patch.rank = order;
+          }
+        }
+        return onUpdateTask(id, patch);
+      }),
+      ...placed.filter((id) => id !== draggedId).map((id) => {
+        const order = placed.indexOf(id);
+        const current = roots.find((item) => item.id === id);
+        if (current && itemOrder(current, order) === order) return Promise.resolve();
+        return onUpdateTask(id, { order, rank: order });
+      }),
+    ]);
+  };
+
+  const saveSectionOrder = (ids: string[]) => {
+    setSectionOrder(ids);
+    if (typeof window === "undefined") return;
+    writeMyWorkSectionOrder(window.localStorage, sectionOrderScope, ids);
   };
 
   const updateBulk = async (patch: Record<string, unknown>) => {
@@ -2529,6 +2606,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     item: any,
     peers: any[],
     tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; onEnterAddChild?: () => void },
+    section?: { id: string; projectId: string | null; roots: any[] },
   ) => {
     const kind = workItemKind(item);
     const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
@@ -2542,33 +2620,41 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
         onDragOver={(event) => {
-          if (!draggedItemId || draggedItemId === item.id) return;
+          if (dragRef.current?.kind !== "item" || dragRef.current.id === item.id) return;
           event.preventDefault();
+          event.stopPropagation();
           setDragOverItemId(item.id);
         }}
         onDrop={async (event) => {
+          const drag = dragFromEvent(event);
+          if (drag?.kind === "section") return;
           event.preventDefault();
-          if (!draggedItemId || draggedItemId === item.id) {
-            setDraggedItemId(null);
-            setDragOverItemId(null);
+          event.stopPropagation();
+          if (!drag || drag.kind !== "item" || drag.id === item.id) {
+            clearItemDrag();
             return;
           }
-          const dragged = findPoolItem(draggedItemId);
+          const dragged = findPoolItem(drag.id);
+          const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+          if (isMyWork && section && dragged && fromSection !== section.id) {
+            await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+            clearItemDrag();
+            return;
+          }
           if (
             dragged &&
             canNestUnder(workItemKind(dragged), workItemKind(item)) &&
             !wouldCreateHierarchyCycle(dragged, item, parentPool)
           ) {
-            await onUpdateTask(draggedItemId, parentLinkPatch(item));
+            await onUpdateTask(drag.id, parentLinkPatch(item));
             setExpandedTreeNodes((current) => {
               const key = `node:${item.id}`;
               return current.includes(key) ? current : [...current, key];
             });
           } else {
-            await reorderItem(draggedItemId, item.id, peers);
+            await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
           }
-          setDraggedItemId(null);
-          setDragOverItemId(null);
+          clearItemDrag();
         }}
         style={itemGridStyle}
       >
@@ -2577,19 +2663,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </button>
         {renderBulkSelect(item)}
         <button
-          aria-label={`Drag to nest or reorder ${title(item)}`}
+          aria-label={`Drag to move ${title(item)}`}
           className="do-items-drag-handle"
           draggable
-          onDragEnd={() => {
-            setDraggedItemId(null);
-            setDragOverItemId(null);
-          }}
+          onDragEnd={endItemDrag}
           onDragStart={(event) => {
+            dragRef.current = { kind: "item", id: item.id };
             setDraggedItemId(item.id);
             event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", item.id);
+            event.dataTransfer.setData("text/plain", `item:${item.id}`);
           }}
-          title="Drag onto a valid parent to nest, or onto a sibling to reorder"
+          title="Drag within a project to reorder. Drag into another project to move it there."
           type="button"
         >
           <GripVertical size={14} />
@@ -2684,7 +2768,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }, 0);
   };
 
-  const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
+  const renderSectionHead = (
+    item: any,
+    groupKey: string,
+    childCount: number,
+    siblings: any[] = [],
+    section?: { id: string; projectId: string | null; roots: any[] },
+  ) => {
     const kind = workItemKind(item);
     const depth = 0;
     const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
@@ -2692,8 +2782,32 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const canAddChild = allowedChildKinds(kind).length > 0;
     return (
       <header
-        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
+        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         data-testid="item-section-head"
+        onDragOver={(event) => {
+          if (dragRef.current?.kind !== "item" || dragRef.current.id === item.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          setDragOverItemId(item.id);
+        }}
+        onDrop={async (event) => {
+          const drag = dragFromEvent(event);
+          if (drag?.kind === "section") return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (!drag || drag.kind !== "item" || drag.id === item.id) {
+            clearItemDrag();
+            return;
+          }
+          const dragged = findPoolItem(drag.id);
+          const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+          if (isMyWork && section && dragged && fromSection !== section.id) {
+            await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+          } else {
+            await reorderItem(drag.id, item.id, siblings, isMyWork ? compareManualOrder : compareVisibleSiblings);
+          }
+          clearItemDrag();
+        }}
         style={itemGridStyle}
       >
         <button
@@ -2707,6 +2821,23 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           {isDone ? <Check size={12} /> : <Circle size={12} />}
         </button>
         {renderBulkSelect(item)}
+        <button
+          aria-label={`Drag to move ${title(item)}`}
+          className="do-items-drag-handle"
+          draggable
+          onDragEnd={endItemDrag}
+          onDragStart={(event) => {
+            dragRef.current = { kind: "item", id: item.id };
+            setDraggedItemId(item.id);
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", `item:${item.id}`);
+            event.stopPropagation();
+          }}
+          title="Drag within a project to reorder. Drag into another project to move it there."
+          type="button"
+        >
+          <GripVertical size={14} />
+        </button>
         <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
@@ -2802,7 +2933,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
-  const renderForest = (items: any[]) => {
+  const renderForest = (
+    items: any[],
+    section?: { id: string; projectId: string | null },
+    compare: (left: any, right: any) => number = compareVisibleSiblings,
+  ) => {
     // Roots stay scoped to the visible list (My Work / filters). Children resolve
     // from the full hierarchy pool so expand twisties work like Asana project
     // lists — and like the My Tasks request — even when subtasks are not
@@ -2810,11 +2945,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     // children so completed work stays hidden unless the filter asks for it.
     const childPool = parentPool;
     const visibleChildrenOf = (parentIdValue: string) =>
-      sortHierarchySiblings(
+        sortHierarchySiblings(
         hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
-        compareVisibleSiblings,
+        compare,
       );
-    const walk = (item: any, depth: number, ancestors: Set<string>) => {
+    const walk = (item: any, depth: number, ancestors: Set<string>, siblings: any[]) => {
       if (ancestors.has(item.id)) return null;
       const children = visibleChildrenOf(item.id);
       const groupKey = `node:${item.id}`;
@@ -2841,21 +2976,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           key={item.id}
         >
           {kind === "epic" && depth === 0
-            ? renderSectionHead(item, groupKey, children.length)
-            : renderRow(item, children, tree)}
+            ? renderSectionHead(item, groupKey, children.length, siblings, section ? { ...section, roots } : undefined)
+            : renderRow(item, siblings, tree, section ? { ...section, roots } : undefined)}
           {!collapsed ? (
             <div className="do-items-children" data-testid="item-tree-children">
-              {children.map((child) => walk(child, depth + 1, nextAncestors))}
+              {children.map((child) => walk(child, depth + 1, nextAncestors, children))}
               {canAddChild ? renderInlineAddChild(item, depth, groupKey) : null}
             </div>
           ) : null}
         </div>
       );
     };
-    const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
+    const roots = sortHierarchySiblings(hierarchyRoots(items), compare);
     return (
       <div className="do-items-tree" data-testid="item-hierarchy-forest">
-        {roots.map((item) => walk(item, 0, new Set()))}
+        {roots.map((item) => walk(item, 0, new Set(), roots))}
         {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI/Task, bug or issue for this context.</span></div>}
       </div>
     );
@@ -2884,6 +3019,27 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       return acc;
     }, {});
   }, [effectiveGroupBy, filtered, projects, tags, tasks]);
+
+  const myWorkSections = useMemo(() => {
+    if (!isMyWork || effectiveGroupBy !== "project") return [];
+    const sections = Object.entries(grouped).map(([label, items]) => {
+      const match = label === NO_PROJECT_LABEL
+        ? null
+        : projects.find((project) => projectTitle(project) === label && String(project.status || "").toLowerCase() !== "deleted");
+      const id = label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label);
+      return {
+        id,
+        label,
+        projectId: label === NO_PROJECT_LABEL ? null : match?.id ? String(match.id) : null,
+        canReceive: label === NO_PROJECT_LABEL || Boolean(match?.id),
+        items,
+      };
+    });
+    if (!sections.some((section) => section.id === NO_PROJECT_SECTION)) {
+      sections.push({ id: NO_PROJECT_SECTION, label: NO_PROJECT_LABEL, projectId: null, canReceive: true, items: [] });
+    }
+    return orderSections(sections, sectionOrder);
+  }, [effectiveGroupBy, grouped, isMyWork, projects, sectionOrder]);
 
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
@@ -3505,14 +3661,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         const label = itemProjectTitle(entry.item, projects);
         map.set(label, [...(map.get(label) || []), entry]);
       }
-      return [...map.entries()]
-        .sort(([left], [right]) => {
-          const leftIndex = groupSortIndex("project", left);
-          const rightIndex = groupSortIndex("project", right);
-          if (leftIndex !== rightIndex) return leftIndex - rightIndex;
-          return left.localeCompare(right);
-        })
-        .map(([label, entries]) => ({ key: `gantt-project:${label}`, label, entries }));
+      return orderSections(
+        [...map.entries()].map(([label, entries]) => {
+          const match = label === NO_PROJECT_LABEL
+            ? null
+            : projects.find((project) => projectTitle(project) === label);
+          return {
+            id: label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label),
+            key: `gantt-project:${label}`,
+            label,
+            entries,
+          };
+        }),
+        sectionOrder,
+      );
     })();
 
     const renderGanttRow = ({ item, start, end }: (typeof dated)[number]) => {
@@ -4951,7 +5113,76 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             />
           ) : effectiveGroupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
-              {Object.entries(grouped).sort(([left], [right]) => {
+              {(isMyWork && effectiveGroupBy === "project" ? myWorkSections.map((section) => {
+                const group = section.label;
+                const items = section.items;
+                const collapsed = collapsedGroups.includes(group);
+                return (
+                  <section
+                    className={`do-items-group${dragOverSectionId === section.id ? " is-section-over" : ""}`}
+                    data-section-id={section.id}
+                    data-testid="my-work-project-section"
+                    key={section.id}
+                    onDragOver={(event) => {
+                      if (!dragRef.current) return;
+                      event.preventDefault();
+                      setDragOverSectionId(section.id);
+                    }}
+                    onDragLeave={() => setDragOverSectionId((current) => current === section.id ? null : current)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const drag = dragFromEvent(event);
+                      setDragOverSectionId(null);
+                      if (!drag || drag.id === section.id) {
+                        clearItemDrag();
+                        return;
+                      }
+                      if (drag.kind === "section") {
+                        const visual = myWorkSections.map((entry) => entry.id);
+                        saveSectionOrder(reorderIds(visual, drag.id, section.id));
+                        clearItemDrag();
+                        return;
+                      }
+                      const dragged = findPoolItem(drag.id);
+                      const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+                      if (fromSection === section.id || !section.canReceive) {
+                        clearItemDrag();
+                        return;
+                      }
+                      const roots = sortHierarchySiblings(hierarchyRoots(items), compareManualOrder);
+                      void relocateItemToProject(drag.id, section.projectId, roots, null).finally(clearItemDrag);
+                    }}
+                  >
+                    <div className="do-items-section-head do-my-work-section-head">
+                      <button
+                        aria-label={`Drag to reorder ${group}`}
+                        className="do-items-drag-handle"
+                        data-testid="my-work-section-drag"
+                        draggable
+                        onDragEnd={endItemDrag}
+                        onDragStart={(event) => {
+                          dragRef.current = { kind: "section", id: section.id };
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", `section:${section.id}`);
+                        }}
+                        title="Drag to reorder this project"
+                        type="button"
+                      >
+                        <GripVertical size={14} />
+                      </button>
+                      <button className="do-items-section-toggle" onClick={() => toggleGroup(group)} type="button">
+                        <ChevronDown className={collapsed ? "is-collapsed" : ""} size={13} />
+                        <strong>{group}</strong>
+                        <span>{items.length}</span>
+                      </button>
+                    </div>
+                    {!collapsed && items.length > 0 && renderForest(items, { id: section.id, projectId: section.projectId }, compareManualOrder)}
+                    {!collapsed && items.length === 0 && (
+                      <p className="do-items-section-empty">Drop an item here to remove it from its project.</p>
+                    )}
+                  </section>
+                );
+              }) : Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(effectiveGroupBy, left);
                 const rightIndex = groupSortIndex(effectiveGroupBy, right);
                 if (leftIndex !== rightIndex) return leftIndex - rightIndex;
@@ -4961,7 +5192,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
                   {!collapsedGroups.includes(group) && renderForest(items)}
                 </section>
-              ))}
+              )))}
               {filtered.length === 0 && (
                 <div className="do-items-empty">
                   <ListChecks size={24} />
