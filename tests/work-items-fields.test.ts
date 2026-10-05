@@ -90,8 +90,8 @@ test("item field picker exposes every backlog field, including Project", () => {
   assert.match(workItems, /selectableItemColumns\(\)/);
   assert.match(itemViewMemory, /\| "project"/);
   assert.match(itemViewMemory, /\| "sprint"/);
-  assert.match(workItems, /aria-label=\{`Project for \$\{title\(item\)\}`\}/);
-  assert.match(workItems, /aria-label=\{`Sprint for \$\{title\(item\)\}`\}/);
+  assert.match(workItems, /ariaLabel=\{`Project for \$\{title\(item\)\}`\}/);
+  assert.match(workItems, /ariaLabel=\{`Sprint for \$\{title\(item\)\}`\}/);
   assert.match(workItems, /data-testid="item-attr-icons"/);
   assert.match(workItems, /itemAttributePresent/);
   assert.match(workItems, /const ATTR_ICONS/);
