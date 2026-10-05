@@ -236,6 +236,13 @@ type Props = {
   onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
+  onRenameControlledOption?: (
+    group: "delivery_entity" | "client_entity",
+    option: { id?: string; name: string },
+    name: string,
+  ) => Promise<void> | void;
+  onRenameWorkCategory?: (previous: string, name: string) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
   onOpenFinanceLine?: (financeLineId: string) => void;
   onOpenCollabProject?: (projectId: string) => void;
@@ -429,7 +436,8 @@ function itemAttributeCaption(
   }
   if (column === "tags") return tagLabels(item, tags).join(", ") || "No tags";
   if (column === "work_category") {
-    return String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects));
+    const raw = String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects));
+    return displayWorkCategory(raw, tags);
   }
   if (column === "product_phase") {
     return String(effectiveInheritedField(item, allItems, "productPhase") || itemProductPhase(item, projects));
@@ -541,6 +549,42 @@ function clientEntity(item: any, projects: any[]) {
 
 function itemWorkCategory(item: any, projects: any[]) {
   return workCategory(item, itemProject(item, projects));
+}
+
+function workCategoryAliases(tags: Array<{ group?: string; name?: string }>) {
+  const replaced = new Map<string, string>();
+  const custom: string[] = [];
+  for (const tag of tags) {
+    const group = String(tag.group || "");
+    const name = String(tag.name || "").trim();
+    if (!name) continue;
+    if (group.startsWith("work_category:")) replaced.set(group.slice("work_category:".length), name);
+    else if (group === "work_category") custom.push(name);
+  }
+  return { replaced, custom };
+}
+
+function displayWorkCategory(value: string, tags: Array<{ group?: string; name?: string }>) {
+  return workCategoryAliases(tags).replaced.get(value) || value;
+}
+
+function listedWorkCategories(
+  tags: Array<{ group?: string; name?: string }>,
+  tasks: any[],
+  projects: any[],
+) {
+  const { replaced, custom } = workCategoryAliases(tags);
+  const names = WORK_CATEGORIES.map((category) => replaced.get(category) || category);
+  for (const record of [...tasks, ...projects]) {
+    const value = String(record?.workCategory || "").trim();
+    if (!value) continue;
+    const shown = replaced.get(value) || value;
+    if (!names.includes(shown)) names.push(shown);
+  }
+  for (const name of custom) {
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
 }
 
 function itemProductPhase(item: any, projects: any[]) {
@@ -787,6 +831,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   onAddTask,
   onUpdateTask,
   onCreateControlledOption,
+  onRenameControlledOption,
+  onRenameWorkCategory,
+  onCreateProject,
   onOpenProjectConsole,
   onOpenFinanceLine,
   onOpenCollabProject,
@@ -863,7 +910,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [newParentId, setNewParentId] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
-  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
   const [newPriority, setNewPriority] = useState("N/A");
   const [newDeliveryEntity, setNewDeliveryEntity] = useState("");
   const [inlineAddDrafts, setInlineAddDrafts] = useState<Record<string, string>>({});
@@ -1544,7 +1591,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
     const parent = findPoolItem(newParentId);
     const links = parentLinkPatch(parent);
-    const assigneeMember = workspaceMembers.find((member) => member.id === newAssigneeId || member.userId === newAssigneeId);
+    const assigneeMembers = newAssigneeIds
+      .map((id) => workspaceMembers.find((member) => member.id === id || member.userId === id))
+      .filter((member): member is NonNullable<typeof member> => Boolean(member));
     await onAddTask(projectId, newTitle.trim(), "backlog", {
       workItemType: newType,
       itemType: newType,
@@ -1558,14 +1607,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       productPhase: project ? productPhase(project) : "Explore",
       priority: newPriority === "N/A" ? null : newPriority,
       dueDate: newDueDate || null,
-      ...(assigneeMember ? assignmentFieldsFromMembers([assigneeMember as any]) : {}),
+      ...(assigneeMembers.length ? assignmentFieldsFromMembers(assigneeMembers as any) : {}),
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
     });
     setNewTitle("");
     setNewParentId("");
     setNewDueDate("");
-    setNewAssigneeId("");
+    setNewAssigneeIds([]);
     setNewPriority("N/A");
     setNewDeliveryEntity("");
   };
@@ -1988,21 +2037,35 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     };
     if (column === "project") {
       return (
-        <QuickAttrChoices
-          ariaLabel={`Project for ${title(item)}`}
-          onPick={(id) => pick({ projectId: id || null })}
-          options={[
-            { id: "", label: "No project" },
-            ...projects
-              .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
-              .map((project) => ({ id: String(project.id), label: projectTitle(project) })),
-          ]}
-          value={item.projectId || ""}
-        />
+        <>
+          <QuickAttrChoices
+            ariaLabel={`Project for ${title(item)}`}
+            onPick={(id) => pick({ projectId: id || null })}
+            options={[
+              { id: "", label: "No project" },
+              ...projects
+                .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
+                .map((project) => ({ id: String(project.id), label: projectTitle(project) })),
+            ]}
+            value={item.projectId || ""}
+          />
+          {onCreateProject ? (
+            <QuickAttrCreate
+              onCreate={(name) => {
+                Promise.resolve(onCreateProject(name)).then((createdId) => {
+                  const id = String(createdId || "").trim();
+                  if (id) pick({ projectId: id });
+                });
+              }}
+              placeholder="Create project"
+            />
+          ) : null}
+        </>
       );
     }
     if (column === "delivery_entity" || column === "client_entity") {
       const delivery = column === "delivery_entity";
+      const group = delivery ? "delivery_entity" : "client_entity";
       const options = (delivery ? deliveryEntityOptions : clientEntityOptions).map((name) => ({ id: name, label: name }));
       const current = delivery ? deliveryEntity(item, projects) : clientEntity(item, projects);
       return (
@@ -2011,12 +2074,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             onPick={(id) => pick(delivery
               ? { deliveryEntity: id || "Internal", bpo: id || "Internal" }
               : { clientEntity: id || "Internal", client: id || "Internal" })}
+            onRename={onRenameControlledOption
+              ? (currentName, next) => {
+                  const match = tags.find(
+                    (tag) => String((tag as { group?: string }).group || "") === group && String(tag.name || "").trim() === currentName,
+                  );
+                  void onRenameControlledOption(group, { id: match?.id, name: currentName }, next);
+                }
+              : undefined}
             options={options}
             value={current}
           />
           <QuickAttrCreate
             onCreate={(name) => {
-              void onCreateControlledOption?.(delivery ? "delivery_entity" : "client_entity", name);
+              void onCreateControlledOption?.(group, name);
               pick(delivery
                 ? { deliveryEntity: name, bpo: name }
                 : { clientEntity: name, client: name });
@@ -2033,7 +2104,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             empty="No tags yet"
             multi
             onPick={(id) => pick(toggleTagId(item, id), true)}
-            options={tags.map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
+            options={tags
+              .filter((tag) => !String((tag as { group?: string }).group || "").startsWith("work_category"))
+              .map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
             value={tagIds(item)}
           />
           <QuickAttrCreate
@@ -2049,11 +2122,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       );
     }
     if (column === "work_category") {
+      const current = displayWorkCategory(itemWorkCategory(item, projects), tags);
       return (
         <QuickAttrChoices
           onPick={(id) => pick({ workCategory: id })}
-          options={WORK_CATEGORIES.map((category) => ({ id: category, label: category }))}
-          value={itemWorkCategory(item, projects)}
+          onRename={onRenameWorkCategory
+            ? (previous, next) => {
+                void onRenameWorkCategory(previous, next);
+              }
+            : undefined}
+          options={listedWorkCategories(tags, tasks, projects).map((category) => ({ id: category, label: category }))}
+          value={current}
         />
       );
     }
@@ -2207,7 +2286,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           ))}
         </div>
         {options.length === 0 && (
-          <small>No {labels} yet. Create one, then assign it here.</small>
+          <small>No {labels} yet. Add one below.</small>
         )}
         {options.length > 0 && visible.length === 0 && (
           <small>No matching {labels}. Try another name.</small>
@@ -2215,6 +2294,25 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         {options.length > visible.length && needle === "" && (
           <small>Showing {visible.length} of {options.length}. Type to find the rest.</small>
         )}
+        <QuickAttrCreate
+          onCreate={(name) => {
+            const kind = allowed[0];
+            Promise.resolve(onAddTask(String(item.projectId || ""), name, "backlog", {
+              workItemType: kind,
+              itemType: kind,
+              taskType: kind,
+              type: kind,
+            })).then((createdId) => {
+              const id = String(createdId || "").trim();
+              if (!id) return;
+              onUpdateTask(item.id, parentLinkPatch({ id, workItemType: kind }));
+              setOpenAttr(null);
+              setAttrAnchor(null);
+              setParentSearch("");
+            });
+          }}
+          placeholder={`Create ${workItemLabel(allowed[0])}`}
+        />
       </div>
     );
   };
@@ -2348,9 +2446,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
-                helperText="One person is accountable for finishing this work."
-                label="Assignee"
-                maxSelections={1}
+                helperText="Multi-select. The first person stays the owner."
+                label="Assignees"
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
@@ -2362,13 +2459,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     assigneeId: assigneeIds[0] || "",
                   })
                 }
-                selectedIds={
-                  Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []
-                }
+                selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
                 selectedNames={
-                  Array.isArray(item.assignees)
-                    ? item.assignees.slice(0, 1)
-                    : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+                  Array.isArray(item.assignees) && item.assignees.length
+                    ? item.assignees
+                    : [item.owner || item.assignee].filter(Boolean)
                 }
                 triggerTestId={`item-attr-assignees-${item.id}`}
               />
@@ -2851,9 +2946,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               agentMembers={agentMembers}
               compact
-              helperText="One person is accountable for finishing this work."
-              label="Assignee"
-              maxSelections={1}
+              helperText="Multi-select. The first person stays the owner."
+              label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => {
@@ -2874,11 +2968,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   });
                 }
               }}
-              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
+              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
               selectedNames={
-                Array.isArray(item.assignees)
-                  ? item.assignees.slice(0, 1)
-                  : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+                Array.isArray(item.assignees) && item.assignees.length
+                  ? item.assignees
+                  : [item.owner || item.assignee].filter(Boolean)
               }
             />
           </span>
@@ -4482,7 +4576,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   )}
                   {createQuickActions.includes("assignee") && (
                   <div
-                    className={`do-item-attr is-assignees ${newAssigneeId ? "is-on" : "is-off"}`}
+                    className={`do-item-attr is-assignees ${newAssigneeIds.length ? "is-on" : "is-off"}`}
                     onContextMenu={(event) => openCreateMenu("assignee", event)}
                     style={{ order: createQuickActions.indexOf("assignee") }}
                   >
@@ -4493,22 +4587,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         (member) => String(member.status || "active") !== "removed",
                       )}
                       onInviteEmail={onInviteAssigneeEmail}
+                      helperText="Multi-select. The first person stays the owner."
                       onChange={(assigneeIds) => {
-                        setNewAssigneeId(assigneeIds[0] || "");
-                        setCreateAttr(null);
+                        setNewAssigneeIds(assigneeIds);
                       }}
-                      selectedIds={newAssigneeId ? [newAssigneeId] : []}
-                      selectedNames={
-                        newAssigneeId
-                          ? [
-                              memberName(
-                                workspaceMembers.find((member) => member.id === newAssigneeId) || {
-                                  id: newAssigneeId,
-                                },
-                              ),
-                            ]
-                          : []
-                      }
+                      selectedIds={newAssigneeIds}
+                      selectedNames={newAssigneeIds.map((id) =>
+                        memberName(
+                          workspaceMembers.find((member) => member.id === id) || { id },
+                        ),
+                      )}
                       triggerTestId="item-create-assignee"
                     />
                   </div>
@@ -5096,16 +5184,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <label className="do-mobile-advanced">Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
             <label className="do-mobile-advanced">Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>
-              Assignee{" "}
+              Assignees{" "}
               <InfoTip
-                label="Assignee"
-                text="Exactly one person is accountable for finishing this work. Add others as Collaborators below if they need updates."
+                label="Assignees"
+                text="Select one or more people. The first person stays the owner. Add collaborators below if they only need updates."
               />
             </label>
             <MultiAssigneePicker
-              helperText="One person is accountable for finishing this work."
-              label="Assignee"
-              maxSelections={1}
+              helperText="Multi-select. The first person stays the owner."
+              label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) =>
@@ -5117,15 +5204,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   assigneeId: assigneeIds[0] || "",
                 })
               }
-              selectedIds={
-                Array.isArray(selectedItem.assigneeIds)
-                  ? selectedItem.assigneeIds.slice(0, 1)
-                  : []
-              }
+              selectedIds={Array.isArray(selectedItem.assigneeIds) ? selectedItem.assigneeIds : []}
               selectedNames={
-                Array.isArray(selectedItem.assignees)
-                  ? selectedItem.assignees.slice(0, 1)
-                  : [selectedItem.owner || selectedItem.assignee].filter(Boolean).slice(0, 1)
+                Array.isArray(selectedItem.assignees) && selectedItem.assignees.length
+                  ? selectedItem.assignees
+                  : [selectedItem.owner || selectedItem.assignee].filter(Boolean)
               }
             />
             <label>

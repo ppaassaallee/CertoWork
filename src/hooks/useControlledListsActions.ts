@@ -10,6 +10,7 @@ import type { User } from "firebase/auth";
 import { db } from "../lib/firebase";
 import type { Workspace } from "../lib/AuthContext";
 import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
+import { WORK_CATEGORIES } from "../lib/workClassification";
 import { recordClientException } from "../lib/clientExceptions";
 
 export type ControlledOptionGroup = "delivery_entity" | "client_entity" | "tag";
@@ -301,5 +302,117 @@ export function useControlledListsActions({
     }
   };
 
-  return { createControlledOption, renameControlledOption };
+  const matchesCategory = (record: any, previous: string) =>
+    [record?.workCategory, record?.portfolioCategory, record?.categoryGroup].some(
+      (value) => String(value || "").trim() === previous,
+    );
+
+  const renameWorkCategory = async (previousName: string, name: string) => {
+    if (!user || !workspace) return;
+    const previous = previousName.trim();
+    const next = name.trim();
+    if (!previous || !next || previous === next) return;
+    try {
+      const batch = writeBatch(db);
+      const alias = categories.find((category) => {
+        const group = String(category.group || "");
+        return group.startsWith("work_category:") && String(category.name || "").trim() === previous;
+      });
+      const custom = categories.find(
+        (category) =>
+          String(category.group || "") === "work_category" &&
+          String(category.name || "").trim() === previous,
+      );
+      const builtin = (WORK_CATEGORIES as readonly string[]).includes(previous);
+      if (alias?.id) {
+        batch.update(doc(db, "categories", alias.id), {
+          name: next,
+          updatedAt: serverTimestamp(),
+        });
+      } else if (custom?.id) {
+        batch.update(doc(db, "categories", custom.id), {
+          name: next,
+          updatedAt: serverTimestamp(),
+        });
+      } else if (builtin) {
+        const categoryRef = doc(collection(db, "categories"));
+        batch.set(categoryRef, {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          name: next,
+          group: `work_category:${previous}`,
+          color: "#5b6472",
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const categoryRef = doc(collection(db, "categories"));
+        batch.set(categoryRef, {
+          userId: user.uid,
+          workspaceId: workspace.id,
+          name: next,
+          group: "work_category",
+          color: "#5b6472",
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      projects
+        .filter((project) => matchesCategory(project, previous))
+        .forEach((project) =>
+          batch.update(doc(db, "projects", project.id), {
+            workCategory: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      tasks
+        .filter((task) => matchesCategory(task, previous))
+        .forEach((task) =>
+          batch.update(doc(db, "tasks", task.id), {
+            workCategory: next,
+            updatedAt: serverTimestamp(),
+          }),
+        );
+      await batch.commit();
+      setCategories((current) => {
+        const renamed = current.map((category) => {
+          const group = String(category.group || "");
+          const sameName = String(category.name || "").trim() === previous;
+          if (sameName && (group === "work_category" || group.startsWith("work_category:"))) {
+            return { ...category, name: next };
+          }
+          return category;
+        });
+        const visible = renamed.some(
+          (category) =>
+            String(category.group || "").startsWith("work_category") &&
+            String(category.name || "").trim() === next,
+        );
+        if (visible) return renamed;
+        return [
+          ...renamed,
+          {
+            id: `local-work-category-${next}`,
+            name: next,
+            group: builtin ? `work_category:${previous}` : "work_category",
+          },
+        ];
+      });
+      const apply = (record: any) =>
+        matchesCategory(record, previous) ? { ...record, workCategory: next } : record;
+      setProjects((current) => current.map(apply));
+      setTasks((current) => current.map(apply));
+      setNotice(`${previous} renamed to ${next}.`);
+    } catch (reason) {
+      recordClientException("controlled_lists", "rename_work_category", reason, {
+        previous,
+        next,
+      });
+      setNotice(`Could not rename ${previous}.`);
+    }
+  };
+
+  return { createControlledOption, renameControlledOption, renameWorkCategory };
 }

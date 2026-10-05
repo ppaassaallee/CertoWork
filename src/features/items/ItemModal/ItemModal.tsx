@@ -995,9 +995,8 @@ export function ItemModal({
               </PropRow>
               <PropRow label={copy("assignee", locale)}>
                 <MultiAssigneePicker
-                  helperText=""
+                  helperText="Multi-select. The first person stays the owner."
                   label={copy("assignee", locale)}
-                  maxSelections={1}
                   members={workspaceMembers}
                   onInviteEmail={onInviteAssigneeEmail}
                   onChange={(assigneeIds, assignees) =>
@@ -1009,13 +1008,11 @@ export function ItemModal({
                       assigneeId: assigneeIds[0] || "",
                     })
                   }
-                  selectedIds={
-                    Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []
-                  }
+                  selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
                   selectedNames={
-                    Array.isArray(item.assignees)
-                      ? item.assignees.slice(0, 1)
-                      : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+                    Array.isArray(item.assignees) && item.assignees.length
+                      ? item.assignees
+                      : [item.owner || item.assignee].filter(Boolean)
                   }
                 />
               </PropRow>

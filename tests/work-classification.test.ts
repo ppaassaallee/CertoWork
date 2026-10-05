@@ -41,6 +41,11 @@ test("work classification lets items inherit classification from their project",
   assert.equal(productPhase(item, project), "Shape");
 });
 
+test("work classification keeps a custom category name that was renamed in the workspace", () => {
+  assert.equal(workCategory({ workCategory: "Client Accounts" }), "Client Accounts");
+  assert.equal(workCategory({ workCategory: "client delivery" }), "Client Delivery");
+});
+
 test("work classification has stable explicit option sets for UI dropdowns", () => {
   assert.ok(WORK_CATEGORIES.includes("Client Delivery"));
   assert.ok(WORK_CATEGORIES.includes("Product Development"));

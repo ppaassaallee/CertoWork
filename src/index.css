@@ -7349,6 +7349,48 @@ a {
 .do-quick-attr-options button:hover {
   background: var(--surface-2);
 }
+.do-quick-attr-option {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+.do-quick-attr-option > button[role="option"] {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.do-quick-attr-options .do-quick-attr-edit {
+  width: auto;
+  flex: none;
+  padding: 7px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.do-quick-attr-rename {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+}
+.do-quick-attr-rename input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+}
+.do-quick-attr-rename button {
+  width: auto;
+  flex: none;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 650;
+}
 .do-quick-attr-options p {
   margin: 6px 8px;
   color: var(--text-muted);

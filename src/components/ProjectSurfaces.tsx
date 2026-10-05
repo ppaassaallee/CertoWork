@@ -1322,6 +1322,9 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   driveMessage = "",
   tags = [],
   onCreateControlledOption,
+  onRenameControlledOption,
+  onRenameWorkCategory,
+  onCreateProject,
   onInviteAssigneeEmail,
   workspaceTeams = [],
   projects: workspaceProjects,
@@ -1389,6 +1392,13 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
     group: "delivery_entity" | "client_entity" | "tag",
     name: string,
   ) => Promise<string | void> | string | void;
+  onRenameControlledOption?: (
+    group: "delivery_entity" | "client_entity",
+    option: { id?: string; name: string },
+    name: string,
+  ) => Promise<void> | void;
+  onRenameWorkCategory?: (previous: string, name: string) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | void> | string | void;
 }) {
   const navigate = useNavigate();
   const tablesEnabled = useTablesEnabled();
@@ -2177,7 +2187,10 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
               onAsk,
               onAskOdysseus,
               onCreateControlledOption,
+              onCreateProject,
               onCreateSprint,
+              onRenameControlledOption,
+              onRenameWorkCategory,
               onGanttFocusChange: setGanttFocus,
               onInviteAssigneeEmail,
               onModeChange: (mode) => {

@@ -52,6 +52,13 @@ export type MyWorkListBodyProps = {
     group: "delivery_entity" | "client_entity" | "tag",
     name: string,
   ) => Promise<string | void> | string | void;
+  onRenameControlledOption?: (
+    group: "delivery_entity" | "client_entity",
+    option: { id?: string; name: string },
+    name: string,
+  ) => Promise<void> | void;
+  onRenameWorkCategory?: (previous: string, name: string) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: unknown) => void;
   onOpenFinanceLine?: (financeLineId: string) => void;
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
@@ -347,6 +354,9 @@ export function MyWorkViewsSurface({
             onAsk={listBody.onAsk}
             onAskOdysseus={listBody.onAskOdysseus as any}
             onCreateControlledOption={listBody.onCreateControlledOption}
+            onCreateProject={listBody.onCreateProject}
+            onRenameControlledOption={listBody.onRenameControlledOption}
+            onRenameWorkCategory={listBody.onRenameWorkCategory}
             onCreateSprint={listBody.onCreateSprint}
             onInviteAssigneeEmail={listBody.onInviteAssigneeEmail}
             onOpenCollabProject={onOpenCollab}
