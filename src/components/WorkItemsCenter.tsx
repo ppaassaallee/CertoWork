@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -2768,6 +2768,45 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }, 0);
   };
 
+  const beginItemDrag = (itemId: string, event: ReactDragEvent) => {
+    dragRef.current = { kind: "item", id: itemId };
+    setDraggedItemId(itemId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `item:${itemId}`);
+    event.stopPropagation();
+  };
+
+  const previewItemDrag = (itemId: string, event: ReactDragEvent) => {
+    if (dragRef.current?.kind !== "item" || dragRef.current.id === itemId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverItemId(itemId);
+  };
+
+  const dropDraggedItem = async (
+    event: ReactDragEvent,
+    item: any,
+    peers: any[],
+    section?: { id: string; projectId: string | null; roots: any[] },
+  ) => {
+    const drag = dragFromEvent(event);
+    if (drag?.kind === "section") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!drag || drag.kind !== "item" || drag.id === item.id) {
+      clearItemDrag();
+      return;
+    }
+    const dragged = findPoolItem(drag.id);
+    const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+    if (isMyWork && section && dragged && fromSection !== section.id) {
+      await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+    } else {
+      await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
+    }
+    clearItemDrag();
+  };
+
   const renderSectionHead = (
     item: any,
     groupKey: string,
@@ -2784,30 +2823,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       <header
         className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         data-testid="item-section-head"
-        onDragOver={(event) => {
-          if (dragRef.current?.kind !== "item" || dragRef.current.id === item.id) return;
-          event.preventDefault();
-          event.stopPropagation();
-          setDragOverItemId(item.id);
-        }}
-        onDrop={async (event) => {
-          const drag = dragFromEvent(event);
-          if (drag?.kind === "section") return;
-          event.preventDefault();
-          event.stopPropagation();
-          if (!drag || drag.kind !== "item" || drag.id === item.id) {
-            clearItemDrag();
-            return;
-          }
-          const dragged = findPoolItem(drag.id);
-          const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
-          if (isMyWork && section && dragged && fromSection !== section.id) {
-            await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
-          } else {
-            await reorderItem(drag.id, item.id, siblings, isMyWork ? compareManualOrder : compareVisibleSiblings);
-          }
-          clearItemDrag();
-        }}
+        onDragOver={(event) => previewItemDrag(item.id, event)}
+        onDrop={(event) => void dropDraggedItem(event, item, siblings, section)}
         style={itemGridStyle}
       >
         <button
@@ -2826,13 +2843,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           className="do-items-drag-handle"
           draggable
           onDragEnd={endItemDrag}
-          onDragStart={(event) => {
-            dragRef.current = { kind: "item", id: item.id };
-            setDraggedItemId(item.id);
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", `item:${item.id}`);
-            event.stopPropagation();
-          }}
+          onDragStart={(event) => beginItemDrag(item.id, event)}
           title="Drag within a project to reorder. Drag into another project to move it there."
           type="button"
         >
