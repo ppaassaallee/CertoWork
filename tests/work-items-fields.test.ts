@@ -427,7 +427,7 @@ test("add item quick attributes use icon popovers like item attrs", () => {
   assert.match(workItems, /const projectId = activeProject\?\.id \|\| newProjectId \|\| ""/);
   assert.match(workItems, /String\(project\.status \|\| ""\)\.toLowerCase\(\) !== "deleted"/);
   assert.match(workItems, /setNewProjectId\(event\.target\.value\);\s*setNewParentId\(""\)/);
-  assert.match(workItems, /setNewProjectId\(\(current\) => current \|\| baseProjectId \|\| ""\)/);
+  assert.match(workItems, /setNewProjectId\(\(current: string\) => current \|\| baseProjectId \|\| ""\)/);
   assert.match(workItems, /data-testid="item-create-type"/);
   assert.match(workItems, /data-testid="item-create-parent"/);
   assert.match(workItems, /createAttr/);

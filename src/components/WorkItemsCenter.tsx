@@ -1522,7 +1522,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const addFormWasOpen = useRef(false);
   useEffect(() => {
     if (addItemOpen && !addFormWasOpen.current && !activeProject) {
-      setNewProjectId((current) => current || baseProjectId || "");
+      setNewProjectId((current: string) => current || baseProjectId || "");
     }
     addFormWasOpen.current = addItemOpen;
   }, [addItemOpen, activeProject, baseProjectId]);
@@ -3890,7 +3890,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         aria-label={`${visibleItemColumns.includes(column) ? "Hide" : "Show"} ${itemColumnLabels[column]} field`}
                         checked={isMyWork ? myWorkRowActions.includes(column as RowQuickAction) : visibleItemColumns.includes(column)}
                         onChange={() => {
-                          if (!isMyWork || column === "title") {
+                          if (!isMyWork) {
                             toggleItemColumn(column);
                             return;
                           }
