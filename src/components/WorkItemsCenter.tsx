@@ -53,7 +53,7 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
-import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
+import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import {
@@ -73,6 +73,7 @@ import {
   type RowQuickAction,
 } from "../lib/quickActions";
 import { InfoTip, MultiAssigneePicker, memberName } from "./ProjectControls";
+import { QuickAttrChoices, QuickAttrCreate, QuickAttrMenu } from "./QuickAttrMenu";
 import { AgentActivityChip } from "../features/agents/AgentActivityChip";
 import { isAgentsJobsEnabled } from "../features/agents/agentJobsFlag";
 import {
@@ -931,6 +932,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const bounceTimer = useRef<number | null>(null);
   const [boardViewers, setBoardViewers] = useState<KanbanPresence[]>([]);
   const [openAttr, setOpenAttr] = useState<string | null>(null);
+  const [attrAnchor, setAttrAnchor] = useState<{ top: number; right: number; bottom: number } | null>(null);
   const [createAttr, setCreateAttr] = useState<string | null>(null);
   const [myWorkRowActions, setMyWorkRowActions] = useState<RowQuickAction[]>(() =>
     readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_ROW_ACTIONS_KEY, ROW_QUICK_ACTIONS),
@@ -1442,13 +1444,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     if (!openAttr && !createAttr) return undefined;
     const onDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest(".do-item-attr")) return;
+      if (target?.closest(".do-item-attr, .do-quick-attr-menu, .cw-multi-assignee-menu")) return;
       setOpenAttr(null);
+      setAttrAnchor(null);
       setCreateAttr(null);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenAttr(null);
+        setAttrAnchor(null);
         setCreateAttr(null);
       }
     };
@@ -1971,110 +1975,175 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     ) : null
   );
 
-  const renderFieldEditor = (item: any, column: Exclude<ItemColumnKey, "title">) => {
+  const closeQuickAttr = (keepOpen = false) => {
+    if (keepOpen) return;
+    setOpenAttr(null);
+    setAttrAnchor(null);
+  };
+
+  const renderQuickAttrChoices = (item: any, column: Exclude<ItemColumnKey, "title">) => {
+    const pick = (patch: Record<string, unknown>, keepOpen = false) => {
+      onUpdateTask(item.id, patch);
+      closeQuickAttr(keepOpen);
+    };
     if (column === "project") {
       return (
-        <select
-          aria-label={`Project for ${title(item)}`}
-          onChange={(event) => onUpdateTask(item.id, { projectId: event.target.value || null })}
+        <QuickAttrChoices
+          ariaLabel={`Project for ${title(item)}`}
+          onPick={(id) => pick({ projectId: id || null })}
+          options={[
+            { id: "", label: "No project" },
+            ...projects
+              .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
+              .map((project) => ({ id: String(project.id), label: projectTitle(project) })),
+          ]}
           value={item.projectId || ""}
-        >
-          <option value="">No project / errand</option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>{projectTitle(project)}</option>
-          ))}
-        </select>
+        />
       );
     }
-    if (column === "delivery_entity") {
-      return <ControlledSelect ariaLabel={`Delivery Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("delivery_entity", name)} onChange={(next) => onUpdateTask(item.id, { deliveryEntity: next || "Internal", bpo: next || "Internal" })} options={deliveryEntityOptions} value={deliveryEntity(item, projects)} />;
-    }
-    if (column === "client_entity") {
-      return <ControlledSelect ariaLabel={`Client Entity for ${title(item)}`} onAddOption={(name) => onCreateControlledOption?.("client_entity", name)} onChange={(next) => onUpdateTask(item.id, { clientEntity: next || "Internal", client: next || "Internal" })} options={clientEntityOptions} value={clientEntity(item, projects)} />;
+    if (column === "delivery_entity" || column === "client_entity") {
+      const delivery = column === "delivery_entity";
+      const options = (delivery ? deliveryEntityOptions : clientEntityOptions).map((name) => ({ id: name, label: name }));
+      const current = delivery ? deliveryEntity(item, projects) : clientEntity(item, projects);
+      return (
+        <>
+          <QuickAttrChoices
+            onPick={(id) => pick(delivery
+              ? { deliveryEntity: id || "Internal", bpo: id || "Internal" }
+              : { clientEntity: id || "Internal", client: id || "Internal" })}
+            options={options}
+            value={current}
+          />
+          <QuickAttrCreate
+            onCreate={(name) => {
+              void onCreateControlledOption?.(delivery ? "delivery_entity" : "client_entity", name);
+              pick(delivery
+                ? { deliveryEntity: name, bpo: name }
+                : { clientEntity: name, client: name });
+            }}
+            placeholder={delivery ? "Add delivery entity" : "Add client entity"}
+          />
+        </>
+      );
     }
     if (column === "tags") {
-      return <CompactTagPicker label={`Tags for ${title(item)}`} onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(item.id, patch)} record={item} tags={tags} />;
+      return (
+        <>
+          <QuickAttrChoices
+            empty="No tags yet"
+            multi
+            onPick={(id) => pick(toggleTagId(item, id), true)}
+            options={tags.map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
+            value={tagIds(item)}
+          />
+          <QuickAttrCreate
+            onCreate={(name) => {
+              Promise.resolve(onCreateControlledOption?.("tag", name)).then((createdId) => {
+                const id = String(createdId || name).trim();
+                if (id) onUpdateTask(item.id, toggleTagId(item, id));
+              });
+            }}
+            placeholder="Create tag"
+          />
+        </>
+      );
     }
     if (column === "work_category") {
       return (
-        <select aria-label={`Work Category for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { workCategory: event.target.value })} value={itemWorkCategory(item, projects)}>
-          {WORK_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
-        </select>
+        <QuickAttrChoices
+          onPick={(id) => pick({ workCategory: id })}
+          options={WORK_CATEGORIES.map((category) => ({ id: category, label: category }))}
+          value={itemWorkCategory(item, projects)}
+        />
       );
     }
     if (column === "product_phase") {
       return (
-        <select aria-label={`Product Phase for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { productPhase: event.target.value })} value={itemProductPhase(item, projects)}>
-          {PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}
-        </select>
+        <QuickAttrChoices
+          onPick={(id) => pick({ productPhase: id })}
+          options={PRODUCT_PHASES.map((phase) => ({ id: phase, label: phase }))}
+          value={itemProductPhase(item, projects)}
+        />
       );
     }
     if (column === "status") {
       return (
-        <select aria-label={`Status for ${title(item)}`} className={`do-items-status-pill is-${canonicalStatus(item)}`} onChange={(event) => onUpdateTask(item.id, { status: event.target.value })} value={canonicalStatus(item)}>
-          {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
-        </select>
+        <QuickAttrChoices
+          onPick={(id) => pick({ status: id })}
+          options={workStatuses.map((status) => ({ id: status, label: displayStatus(status) }))}
+          value={canonicalStatus(item)}
+        />
       );
     }
     if (column === "priority") {
       return (
-        <select aria-label={`Priority for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(item.priority)}>
-          {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-        </select>
+        <QuickAttrChoices
+          onPick={(id) => pick({ priority: id === "N/A" ? null : id })}
+          options={priorities.map((priority) => ({ id: priority, label: priority }))}
+          value={priorityValue(item.priority)}
+        />
       );
     }
     if (column === "gtd") {
       return (
-        <select aria-label={`GTD action type for ${title(item)}`} onChange={(event) => onUpdateTask(item.id, gtdActionPatch(event.target.value))} value={gtdActionValue(item)}>
-          {gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}
-        </select>
-      );
-    }
-    if (column === "bucket") {
-      return <span className="do-items-when" aria-label={`Action Board bucket for ${title(item)}`}>{displayDueBucket(item)}</span>;
-    }
-    if (column === "assignees") {
-      return (
-        <MultiAssigneePicker
-          helperText="One person is accountable for finishing this work."
-          label="Assignee"
-          maxSelections={1}
-          members={workspaceMembers}
-          onInviteEmail={onInviteAssigneeEmail}
-          onChange={(assigneeIds, assignees) =>
-            onUpdateTask(item.id, {
-              assigneeIds,
-              assignees,
-              owner: assignees[0] || "",
-              assignee: assignees[0] || "",
-              assigneeId: assigneeIds[0] || "",
-            })
-          }
-          selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
-          selectedNames={
-            Array.isArray(item.assignees)
-              ? item.assignees.slice(0, 1)
-              : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
-          }
+        <QuickAttrChoices
+          onPick={(id) => pick(gtdActionPatch(id === "none" ? "" : id))}
+          options={gtdActionTypes.map((type) => ({ id: type.value || "none", label: type.label }))}
+          value={gtdActionValue(item) || "none"}
         />
       );
     }
-    if (column === "due") {
-      return <input aria-label={`Due date for ${title(item)}`} defaultValue={dateInputValue(item.dueDate || item.targetDate)} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />;
+    if (column === "bucket" || column === "due") {
+      return (
+        <>
+          <QuickAttrChoices
+            onPick={(id) => {
+              if (id === "clear") pick(dueDateTimingPatch(null));
+              else if (id === "today") pick(todayTimingPatch());
+              else pick(weekTimingPatch());
+            }}
+            options={[
+              { id: "today", label: "Today" },
+              { id: "week", label: "This week" },
+              { id: "clear", label: "No date" },
+            ]}
+            value={timingMarksForItem(item).markedToday ? "today" : timingMarksForItem(item).markedWeek ? "week" : ""}
+          />
+          <label className="do-quick-attr-date">
+            Due date
+            <input
+              aria-label={`Due date for ${title(item)}`}
+              defaultValue={dateInputValue(item.dueDate || item.targetDate)}
+              onChange={(event) => pick(dueDateTimingPatch(event.target.value || null))}
+              type="date"
+            />
+          </label>
+        </>
+      );
     }
+    const sprintOptions = [
+      { id: "", label: "No sprint" },
+      ...sprints
+        .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
+        .map((sprint) => ({ id: sprint.id, label: sprint.name || "Sprint" })),
+    ];
     return (
-      <select
-        aria-label={`Sprint for ${title(item)}`}
-        onChange={(event) => onUpdateTask(item.id, { sprintId: event.target.value || null })}
-        value={item.sprintId || ""}
-      >
-        <option value="">No sprint</option>
-        {sprints
-          .filter((sprint) => !item.projectId || sprint.projectId === item.projectId)
-          .map((sprint) => (
-            <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>
-          ))}
-      </select>
+      <>
+        <QuickAttrChoices
+          ariaLabel={`Sprint for ${title(item)}`}
+          onPick={(id) => pick({ sprintId: id || null })}
+          options={sprintOptions}
+          value={item.sprintId || ""}
+        />
+        {onCreateSprint && item.projectId ? (
+          <QuickAttrCreate
+            onCreate={(name) => {
+              void onCreateSprint({ name, projectId: item.projectId, status: "planning" });
+            }}
+            placeholder="Create sprint"
+          />
+        ) : null}
+      </>
     );
   };
 
@@ -2241,23 +2310,25 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               data-testid="item-attr-parent"
               onClick={(event) => {
                 event.stopPropagation();
+                if (open) {
+                  setOpenAttr(null);
+                  setAttrAnchor(null);
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                setAttrAnchor({ top: rect.top, right: rect.right, bottom: rect.bottom });
                 setParentSearch("");
-                setOpenAttr(open ? null : key);
+                setOpenAttr(key);
               }}
               title={allowed.length === 0 ? "Epics have no parent" : `Parent: ${caption}`}
               type="button"
             >
               <GitBranch size={13} />
             </button>
-            {open && (
-              <div
-                className="do-item-attr-pop"
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-              >
-                <strong>Parent</strong>
+            {open && attrAnchor && (
+              <QuickAttrMenu anchor={attrAnchor} mode="single" title="Parent">
                 {renderParentEditor(item)}
-              </div>
+              </QuickAttrMenu>
             )}
           </div>
         );
@@ -2313,22 +2384,28 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               data-testid={`item-attr-${column}`}
               onClick={(event) => {
                 event.stopPropagation();
-                setOpenAttr(open ? null : key);
+                if (open) {
+                  setOpenAttr(null);
+                  setAttrAnchor(null);
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                setAttrAnchor({ top: rect.top, right: rect.right, bottom: rect.bottom });
+                setOpenAttr(key);
               }}
               title={`${itemColumnLabels[column]}: ${caption}`}
               type="button"
             >
               <Icon size={13} />
             </button>
-            {open && (
-              <div
-                className="do-item-attr-pop"
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
+            {open && attrAnchor && column !== "assignees" && (
+              <QuickAttrMenu
+                anchor={attrAnchor}
+                mode={column === "tags" ? "multi" : "single"}
+                title={itemColumnLabels[column]}
               >
-                <strong>{itemColumnLabels[column]}</strong>
-                {renderFieldEditor(item, column)}
-              </div>
+                {renderQuickAttrChoices(item, column)}
+              </QuickAttrMenu>
             )}
           </div>
         );
