@@ -2398,7 +2398,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             >
               <Icon size={13} />
             </button>
-            {open && attrAnchor && column !== "assignees" && (
+            {open && attrAnchor && (
               <QuickAttrMenu
                 anchor={attrAnchor}
                 mode={column === "tags" ? "multi" : "single"}
