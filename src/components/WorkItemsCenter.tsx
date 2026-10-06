@@ -187,7 +187,9 @@ import {
 import {
   dateInputValue,
   dueBucket,
+  dueDateLabel,
   dueDateTimingPatch,
+  dueDateTone,
   timingMarksForItem,
   todayTimingPatch,
   weekTimingPatch,
@@ -336,7 +338,7 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
   { value: "work_category", label: "Work Category" },
   { value: "product_phase", label: "Product Phase" },
   { value: "priority", label: "Priority" },
-  { value: "due", label: "Due date" },
+  { value: "due", label: "Timeline (date)" },
   { value: "status", label: "Status" },
   { value: "owner", label: "Owner" },
   { value: "type", label: "Type" },
@@ -1066,9 +1068,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       ? "20px 20px 28px minmax(160px, 1fr) auto 28px"
       : "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
   };
-  const rowAttributeColumns = isMyWork
-    ? myWorkRowActions.filter((key): key is Exclude<ItemColumnKey, "title"> => key in ATTR_ICONS)
-    : attributeColumns;
+  const pinnedLabelColumns = new Set(["project", "due"]);
+  const projectItemRequired = new Set(["delivery_entity", "client_entity", "work_category", "assignees"]);
+  const rowAttributeColumns = (isMyWork ? myWorkRowActions : ROW_QUICK_ACTIONS).flatMap((key) => {
+    if (!(key in ATTR_ICONS) || pinnedLabelColumns.has(key)) return [];
+    const column = key as Exclude<ItemColumnKey, "title">;
+    if (isMyWork || attributeColumns.includes(column) || projectItemRequired.has(column)) return [column];
+    return [];
+  });
   const currentItemViewFilters: ItemViewFilters = {
     mode,
     projectFilter,
@@ -2117,7 +2124,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         <>
           <QuickAttrChoices
             ariaLabel={`Project for ${title(item)}`}
-            onPick={(id) => pick({ projectId: id || null })}
+            onPick={(id) => {
+              const next = id || null;
+              if (String(item.projectId || "") === String(next || "")) {
+                closeQuickAttr();
+                return;
+              }
+              const destinationRoots = hierarchyRoots(
+                parentPool.filter((candidate) => String(candidate.projectId || "") === String(next || "")),
+              );
+              void relocateItemToProject(item.id, next, destinationRoots, null).then(() => {
+                if (primarySort !== "rank") setPrimarySort("rank");
+              });
+              closeQuickAttr();
+            }}
             options={[
               { id: "", label: "No project" },
               ...projects
@@ -2412,8 +2432,73 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     };
   };
 
+  const openPinnedAttr = (item: any, column: "project" | "due", event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const key = `${item.id}:${column}`;
+    if (openAttr === key) {
+      setOpenAttr(null);
+      setAttrAnchor(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setAttrAnchor({ top: rect.top, right: rect.right, bottom: rect.bottom });
+    setOpenAttr(key);
+  };
+
+  const renderPinnedLabels = (item: any) => {
+    const projectKey = `${item.id}:project`;
+    const dueKey = `${item.id}:due`;
+    const projectCaption = itemAttributeCaption(item, "project", projects, tags, sprints, parentPool);
+    const dueRaw = item?.dueDate || item?.targetDate;
+    const dueCaption = dueDateLabel(dueRaw);
+    const dueTone = dueDateTone(dueRaw);
+    const projectOpen = openAttr === projectKey;
+    const dueOpen = openAttr === dueKey;
+    return (
+      <>
+        <div className={`do-item-attr is-meta ${item?.projectId ? "is-on" : "is-off"} ${projectOpen ? "is-open" : ""}`} {...rowMenu("project")}>
+          <button
+            aria-expanded={projectOpen}
+            aria-label={`Project for ${title(item)}: ${projectCaption}`}
+            className={`do-item-meta-label is-project ${item?.projectId ? "" : "is-empty"}`}
+            data-testid="item-project-label"
+            onClick={(event) => openPinnedAttr(item, "project", event)}
+            title={projectCaption}
+            type="button"
+          >
+            {projectCaption}
+          </button>
+          {projectOpen && attrAnchor && (
+            <QuickAttrMenu anchor={attrAnchor} mode="single" title="Project">
+              {renderQuickAttrChoices(item, "project")}
+            </QuickAttrMenu>
+          )}
+        </div>
+        <div className={`do-item-attr is-meta ${dueTone === "empty" ? "is-off" : "is-on"} ${dueOpen ? "is-open" : ""}`} {...rowMenu("due")}>
+          <button
+            aria-expanded={dueOpen}
+            aria-label={`Due date for ${title(item)}: ${dueCaption}`}
+            className={`do-item-meta-label is-due is-${dueTone}`}
+            data-testid="item-due-label"
+            onClick={(event) => openPinnedAttr(item, "due", event)}
+            title={dueCaption}
+            type="button"
+          >
+            {dueCaption}
+          </button>
+          {dueOpen && attrAnchor && (
+            <QuickAttrMenu anchor={attrAnchor} mode="single" title="Due">
+              {renderQuickAttrChoices(item, "due")}
+            </QuickAttrMenu>
+          )}
+        </div>
+      </>
+    );
+  };
+
   const renderAttributeIcons = (item: any) => (
     <div className="do-item-attrs" data-testid="item-attr-icons">
+      {renderPinnedLabels(item)}
       {Array.isArray(item?.linkedDocumentIds) && item.linkedDocumentIds.length > 0 ? (
         <div className="do-item-attr is-on" key="notes" title="Linked notes">
           <span
@@ -2636,8 +2721,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           }
           const dragged = findPoolItem(drag.id);
           const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
-          if (isMyWork && section && dragged && fromSection !== section.id) {
+          if (section && dragged && fromSection !== section.id) {
             await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+            if (primarySort !== "rank") setPrimarySort("rank");
             clearItemDrag();
             return;
           }
@@ -2652,7 +2738,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               return current.includes(key) ? current : [...current, key];
             });
           } else {
-            await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
+            await reorderItem(drag.id, item.id, peers, compareVisibleSiblings);
+            if (primarySort !== "rank") setPrimarySort("rank");
           }
           clearItemDrag();
         }}
@@ -2799,11 +2886,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }
     const dragged = findPoolItem(drag.id);
     const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
-    if (isMyWork && section && dragged && fromSection !== section.id) {
+    if (section && dragged && fromSection !== section.id) {
       await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
     } else {
-      await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
+      await reorderItem(drag.id, item.id, peers, compareVisibleSiblings);
     }
+    if (primarySort !== "rank") setPrimarySort("rank");
     clearItemDrag();
   };
 
@@ -2873,7 +2961,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   };
 
   const compareVisibleSiblings = (left: any, right: any) =>
-    compareItems(left, right, primarySort, secondarySort, projects, parentPool);
+    primarySort === "rank"
+      ? compareManualOrder(left, right)
+      : compareItems(left, right, primarySort, secondarySort, projects, parentPool);
 
   const renderInlineAddChild = (parent: any, depth: number, groupKey: string) => {
     const childKinds = allowedChildKinds(workItemKind(parent));
@@ -4352,10 +4442,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             )}
           </div>
           <div className="do-popover-anchor">
-            <button
+              <button
               aria-expanded={sortPanelOpen}
               aria-label="Sort"
-              className={`do-icon-tool do-mobile-advanced ${sortPanelOpen ? "is-active" : ""}`}
+              className={`do-icon-tool ${sortPanelOpen ? "is-active" : ""}`}
               data-testid="items-sort-button"
               onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
               title="Sort"
@@ -4366,8 +4456,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             </button>
             {sortPanelOpen && !notionSurface && (
               <div className="do-popover" data-testid="items-sort-popover">
+                <p className="do-items-views-label">Two-level sort keeps Epic → Feature → PBI/Task → Sub Task nested. Dragging a row switches to Manual order.</p>
                 {isMyWork ? (
-                  <p className="do-items-views-label">Grouped by project (Epic → PBI/Task → Sub Task inside each)</p>
+                  <p className="do-items-views-label">Grouped by project.</p>
                 ) : (
                   <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
                 )}
@@ -4532,6 +4623,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           )}
           {sortPanelOpen && (
             <div className="do-popover is-inline" data-testid="items-sort-popover">
+              <p className="do-items-views-label">Two-level sort keeps Epic → Feature → PBI/Task → Sub Task nested. Dragging a row switches to Manual order.</p>
               <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
               <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -4606,14 +4698,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     <button
                       aria-expanded={open("project")}
                       aria-label={`Project: ${projectLabel}`}
-                      className="do-item-attr-btn"
+                      className={`do-item-meta-label is-project ${newProjectId || activeProject ? "" : "is-empty"}`}
                       data-testid="item-create-project"
                       disabled={Boolean(activeProject)}
                       onClick={() => { if (!activeProject) toggle("project"); }}
                       title={`Project: ${projectLabel}`}
                       type="button"
                     >
-                      <Folder size={13} />
+                      {projectLabel}
                     </button>
                     {open("project") && !activeProject && (
                       <div className="do-item-attr-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
@@ -4725,13 +4817,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     <button
                       aria-expanded={open("due")}
                       aria-label={`Due date${newDueDate ? `: ${newDueDate}` : ""}`}
-                      className="do-item-attr-btn"
+                      className={`do-item-meta-label is-due ${newDueDate ? "" : "is-empty"}`}
                       data-testid="item-create-due-btn"
                       onClick={() => toggle("due")}
-                      title={newDueDate ? `Due: ${newDueDate}` : "Due date"}
+                      title={newDueDate ? `Due: ${dueDateLabel(newDueDate)}` : "Due date"}
                       type="button"
                     >
-                      <Calendar size={13} />
+                      {newDueDate ? dueDateLabel(newDueDate) : "No date"}
                     </button>
                     {open("due") && (
                       <div className="do-item-attr-pop" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
@@ -5160,7 +5252,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         clearItemDrag();
                         return;
                       }
-                      const roots = sortHierarchySiblings(hierarchyRoots(items), compareManualOrder);
+                      const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
                       void relocateItemToProject(drag.id, section.projectId, roots, null).finally(clearItemDrag);
                     }}
                   >
@@ -5187,7 +5279,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         <span>{items.length}</span>
                       </button>
                     </div>
-                    {!collapsed && items.length > 0 && renderForest(items, { id: section.id, projectId: section.projectId }, compareManualOrder)}
+                    {!collapsed && items.length > 0 && renderForest(items, { id: section.id, projectId: section.projectId })}
                     {!collapsed && items.length === 0 && (
                       <p className="do-items-section-empty">Drop an item here to remove it from its project.</p>
                     )}
@@ -5198,12 +5290,55 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 const rightIndex = groupSortIndex(effectiveGroupBy, right);
                 if (leftIndex !== rightIndex) return leftIndex - rightIndex;
                 return left.localeCompare(right);
-              }).map(([group, items]) => (
-                <section className="do-items-group" data-testid="my-work-project-section" key={group}>
+              }).map(([group, items]) => {
+                const projectMatch = effectiveGroupBy === "project"
+                  ? (group === NO_PROJECT_LABEL
+                    ? null
+                    : projects.find((project) => projectTitle(project) === group && String(project.status || "").toLowerCase() !== "deleted"))
+                  : null;
+                const section = effectiveGroupBy === "project"
+                  ? {
+                      id: group === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(projectMatch?.id || group),
+                      projectId: group === NO_PROJECT_LABEL ? null : projectMatch?.id ? String(projectMatch.id) : null,
+                    }
+                  : undefined;
+                return (
+                <section
+                  className={`do-items-group${section && dragOverSectionId === section.id ? " is-section-over" : ""}`}
+                  data-section-id={section?.id}
+                  data-testid="my-work-project-section"
+                  key={group}
+                  onDragOver={section ? (event) => {
+                    if (!dragRef.current) return;
+                    event.preventDefault();
+                    setDragOverSectionId(section.id);
+                  } : undefined}
+                  onDrop={section ? (event) => {
+                    event.preventDefault();
+                    const drag = dragFromEvent(event);
+                    setDragOverSectionId(null);
+                    if (!drag || drag.kind !== "item" || drag.id === section.id) {
+                      clearItemDrag();
+                      return;
+                    }
+                    const dragged = findPoolItem(drag.id);
+                    const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+                    if (fromSection === section.id) {
+                      clearItemDrag();
+                      return;
+                    }
+                    const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
+                    void relocateItemToProject(drag.id, section.projectId, roots, null).finally(() => {
+                      if (primarySort !== "rank") setPrimarySort("rank");
+                      clearItemDrag();
+                    });
+                  } : undefined}
+                >
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
-                  {!collapsedGroups.includes(group) && renderForest(items)}
+                  {!collapsedGroups.includes(group) && renderForest(items, section)}
                 </section>
-              )))}
+                );
+              }))}
               {filtered.length === 0 && (
                 <div className="do-items-empty">
                   <ListChecks size={24} />

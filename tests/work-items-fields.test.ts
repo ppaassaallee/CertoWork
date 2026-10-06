@@ -433,3 +433,16 @@ test("add item quick attributes use icon popovers like item attrs", () => {
   assert.match(workItems, /createAttr/);
   assert.match(workItems, /WORK_ITEM_TYPE_ICONS\[newType\]/);
 });
+
+test("two-level sort and project/date labels are on My Work and project items", () => {
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(workItems, /primarySort === "rank"/);
+  assert.match(workItems, /Timeline \(date\)/);
+  assert.match(workItems, /data-testid="item-project-label"/);
+  assert.match(workItems, /data-testid="item-due-label"/);
+  assert.match(workItems, /Two-level sort keeps Epic/);
+  assert.doesNotMatch(workItems, /renderForest\([\s\S]{0,180}compareManualOrder\)/);
+  assert.doesNotMatch(workItems, /isMyWork && section && dragged/);
+  assert.match(workItems, /projectItemRequired/);
+  assert.match(css, /\.do-item-meta-label/);
+});
