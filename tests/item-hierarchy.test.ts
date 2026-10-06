@@ -343,3 +343,21 @@ test("wouldCreateHierarchyCycle blocks dropping an ancestor under its descendant
   assert.equal(wouldCreateHierarchyCycle(feature, pbi, items), true);
   assert.equal(wouldCreateHierarchyCycle(pbi, feature, items), false);
 });
+
+test("timeline sort orders roots by date and keeps Epic → Feature → PBI → Sub Task nested", () => {
+  const items = [
+    { id: "sub", parentId: "pbi", title: "Sub Task", dueDate: "2026-01-01", workItemType: "subtask" },
+    { id: "pbi", parentId: "feature", title: "PBI", dueDate: "2026-03-01", workItemType: "pbi" },
+    { id: "feature", parentId: "epic", title: "Feature", dueDate: "2026-02-01", workItemType: "feature" },
+    { id: "epic", title: "Epic", dueDate: "2026-04-01", workItemType: "epic" },
+    { id: "later", title: "Later epic", dueDate: "2026-05-01", workItemType: "epic" },
+    { id: "early", title: "Early epic", dueDate: "2026-01-15", workItemType: "epic" },
+  ];
+  const ordered = sortHierarchyForest(items, (left, right) =>
+    String(left.dueDate).localeCompare(String(right.dueDate)),
+  );
+  assert.deepEqual(
+    ordered.map((item) => item.id),
+    ["early", "epic", "feature", "pbi", "sub", "later"],
+  );
+});

@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   dateInputValue,
+  dueDateLabel,
   dueDateTimingPatch,
+  dueDateTone,
   timingMarksForItem,
   todayTimingPatch,
   weekTimingPatch,
@@ -55,4 +57,15 @@ test("dateInputValue keeps local calendar days for timestamps", () => {
   const local = new Date(2026, 8, 30, 0, 30, 0);
   assert.equal(dateInputValue(local), "2026-09-30");
   assert.equal(dateInputValue("2026-09-30T15:00:00.000Z"), "2026-09-30");
+});
+
+test("due labels read like a calendar chip", () => {
+  const now = new Date(2026, 9, 6, 12, 0, 0);
+  assert.equal(dueDateLabel("", now), "No date");
+  assert.equal(dueDateLabel("2026-10-06", now), "Today");
+  assert.equal(dueDateLabel("2026-10-07", now), "Tomorrow");
+  assert.equal(dueDateLabel("2026-10-05", now), "Yesterday");
+  assert.equal(dueDateTone("2026-10-01", now), "overdue");
+  assert.equal(dueDateTone("2026-10-06", now), "today");
+  assert.equal(dueDateTone("", now), "empty");
 });

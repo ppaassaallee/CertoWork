@@ -39,6 +39,35 @@ function isExpired(value: any, now: Date) {
   return false;
 }
 
+/** Asana-style date label: Today, Tomorrow, Yesterday, or a short calendar date. */
+export function dueDateLabel(value: unknown, now = new Date()) {
+  const due = dateInputValue(value);
+  if (!due) return "No date";
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(`${due}T00:00:00`);
+  const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  if (days === -1) return "Yesterday";
+  const sameYear = date.getFullYear() === today.getFullYear();
+  return date.toLocaleDateString(undefined, sameYear
+    ? { month: "short", day: "numeric" }
+    : { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function dueDateTone(value: unknown, now = new Date()): "empty" | "today" | "overdue" | "future" {
+  const due = dateInputValue(value);
+  if (!due) return "empty";
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(`${due}T00:00:00`);
+  const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  if (days === 0) return "today";
+  if (days < 0) return "overdue";
+  return "future";
+}
+
 export function dueBucket(value: any, now = new Date()) {
   const date = dateInputValue(value);
   if (!date) return "unscheduled";
