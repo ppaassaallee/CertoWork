@@ -32,6 +32,7 @@ function priorityTone(p?: string) {
 
 export function GroupedItemsList({
   items,
+  groupedRows,
   density = "regular",
   onOpen,
   onComplete,
@@ -39,6 +40,7 @@ export function GroupedItemsList({
   onDueChange,
 }: {
   items: GroupedListItem[];
+  groupedRows?: Array<{ key: string; label: string; items: GroupedListItem[] }>;
   density?: "compact" | "regular";
   onOpen: (id: string) => void;
   onComplete?: (id: string) => void;
@@ -46,6 +48,7 @@ export function GroupedItemsList({
   onDueChange?: (id: string, due: string) => void;
 }) {
   const groups = useMemo(() => {
+    if (groupedRows) return groupedRows.map((group) => [group.label || "Items", group.items] as const);
     const map = new Map<string, GroupedListItem[]>();
     for (const it of items) {
       const key = it.status || "Backlog";
@@ -53,7 +56,7 @@ export function GroupedItemsList({
       map.get(key)!.push(it);
     }
     return [...map.entries()];
-  }, [items]);
+  }, [groupedRows, items]);
 
   const flat = useMemo(() => groups.flatMap(([, rows]) => rows), [groups]);
   const [focus, setFocus] = useState(0);
@@ -92,9 +95,7 @@ export function GroupedItemsList({
               <span className="dot" style={{ width: 8, height: 8, borderRadius: 99, background: "currentColor" }} />
               <span className="mono">{status}</span>
               <span className="cnt">{rows.length}</span>
-              <button aria-label={`Add in ${status}`} onClick={() => onAddInStatus?.(status)} type="button">
-                +
-              </button>
+              {onAddInStatus && <button aria-label={`Add in ${status}`} onClick={() => onAddInStatus(status)} type="button">+</button>}
             </div>
             <div className="grouped-cols" style={{ display: "grid", gridTemplateColumns: "1fr 90px 120px 100px 80px", padding: "4px 12px", fontSize: 11, color: "var(--c-ink-3)" }}>
               <span>Name</span>

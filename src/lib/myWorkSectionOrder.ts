@@ -6,6 +6,16 @@ export function sectionIdForProject(projectId: unknown) {
   return id || NO_PROJECT_SECTION;
 }
 
+/** Project ids, never display names, define a My Work drop section. */
+export function groupMyWorkSections<T>(items: T[], projectIdForItem: (item: T) => unknown) {
+  const grouped = new Map<string, T[]>();
+  for (const item of items) {
+    const id = sectionIdForProject(projectIdForItem(item));
+    grouped.set(id, [...(grouped.get(id) || []), item]);
+  }
+  return grouped;
+}
+
 export function readMyWorkSectionOrder(storage: Storage, scope: string) {
   try {
     const raw = JSON.parse(storage.getItem(myWorkSectionOrderKey(scope)) || "null");

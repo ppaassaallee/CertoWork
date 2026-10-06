@@ -35,12 +35,15 @@ test("ViewGrid enables mouse column resize with visible handles", () => {
   assert.match(css, /cursor:\s*col-resize/);
 });
 
-test("ViewsBar Filter Sort Group open the customizer", () => {
+test("ViewsBar Filter Sort Group open their own customizer sections", () => {
   const bar = readFileSync(resolve("src/features/views/ViewsBar.tsx"), "utf8");
   assert.match(bar, /data-testid="views-filter"/);
   assert.match(bar, /data-testid="views-sort"/);
   assert.match(bar, /data-testid="views-group"/);
-  assert.match(bar, /onClick=\{onOpenCustomizer\}/);
+  assert.match(bar, /onOpenCustomizer\("filter"\)/);
+  assert.match(bar, /onOpenCustomizer\("sort"\)/);
+  assert.match(bar, /onOpenCustomizer\("group"\)/);
+  assert.match(bar, /onOpenCustomizer\("customize"\)/);
 });
 
 test("ProjectsViewsSurface uses Asana list (not spreadsheet ViewGrid)", () => {

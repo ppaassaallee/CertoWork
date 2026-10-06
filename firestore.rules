@@ -1890,28 +1890,28 @@ service cloud.firestore {
     match /saved_views/{id} {
       allow get: if isSignedIn() && isValidId(id)
         && resource.data.workspaceId is string
-        && isWorkspaceMember(resource.data.workspaceId)
+        && (isWorkspaceMember(resource.data.workspaceId) || isWorkspaceOwner(resource.data.workspaceId))
         && (
           resource.data.scope == "team"
           || resource.data.ownerId == request.auth.uid
         );
       allow list: if isSignedIn()
         && resource.data.workspaceId is string
-        && isWorkspaceMember(resource.data.workspaceId)
+        && (isWorkspaceMember(resource.data.workspaceId) || isWorkspaceOwner(resource.data.workspaceId))
         && (
           resource.data.scope == "team"
           || resource.data.ownerId == request.auth.uid
         );
       allow create: if isSignedIn() && isValidId(id)
         && incoming().workspaceId is string
-        && isWorkspaceMember(incoming().workspaceId)
+        && (isWorkspaceMember(incoming().workspaceId) || isWorkspaceOwner(incoming().workspaceId))
         && incoming().ownerId == request.auth.uid
         && incoming().scope in ["personal", "team"]
         && incoming().surface is string
         && incoming().name is string;
       allow update: if isSignedIn() && isValidId(id)
         && resource.data.workspaceId is string
-        && isWorkspaceMember(resource.data.workspaceId)
+        && (isWorkspaceMember(resource.data.workspaceId) || isWorkspaceOwner(resource.data.workspaceId))
         && (
           resource.data.ownerId == request.auth.uid
           || (
@@ -1923,7 +1923,7 @@ service cloud.firestore {
         && incoming().workspaceId == resource.data.workspaceId;
       allow delete: if isSignedIn() && isValidId(id)
         && resource.data.workspaceId is string
-        && isWorkspaceMember(resource.data.workspaceId)
+        && (isWorkspaceMember(resource.data.workspaceId) || isWorkspaceOwner(resource.data.workspaceId))
         && (
           resource.data.ownerId == request.auth.uid
           || (

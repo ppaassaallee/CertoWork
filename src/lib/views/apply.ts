@@ -98,9 +98,13 @@ function matchesFilter<Row>(
 
   switch (rule.op) {
     case "eq":
-      return text === String(rule.value ?? "");
+      return Array.isArray(value)
+        ? value.some((entry) => String(entry) === String(rule.value ?? ""))
+        : text === String(rule.value ?? "");
     case "ne":
-      return text !== String(rule.value ?? "");
+      return Array.isArray(value)
+        ? value.every((entry) => String(entry) !== String(rule.value ?? ""))
+        : text !== String(rule.value ?? "");
     case "in": {
       const list = Array.isArray(rule.value) ? rule.value.map(String) : [String(rule.value ?? "")];
       if (Array.isArray(value)) return value.some((entry) => list.includes(String(entry)));

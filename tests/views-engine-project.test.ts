@@ -33,6 +33,6 @@ test("views engine flag and project items use Asana hybrid surface", () => {
   assert.match(projectItemsSurface, /project-items-asana-list/);
   assert.doesNotMatch(projectItemsSurface, /from ["'].\/ViewGrid["']/);
   assert.doesNotMatch(projectItemsSurface, /<ViewGrid[\s>]/);
-  assert.match(adapter, /groupBy: isProject \? "epic" : null/);
+  assert.match(adapter, /groupBy: isProject \? "epic" : surface === "my-work" \? "project" : null/);
   assert.match(adapter, /showSubtasks: true/);
 });

@@ -149,18 +149,28 @@ export function QuickAttrCreate({
   onCreate,
 }: {
   placeholder: string;
-  onCreate: (name: string) => void;
+  onCreate: (name: string) => Promise<unknown> | unknown;
 }) {
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   return (
     <form
       className="do-quick-attr-create"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
         const name = draft.trim();
-        if (!name) return;
-        onCreate(name);
-        setDraft("");
+        if (!name || saving) return;
+        setSaving(true);
+        setError("");
+        try {
+          await onCreate(name);
+          setDraft("");
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : "Could not create this option.");
+        } finally {
+          setSaving(false);
+        }
       }}
     >
       <input
@@ -169,7 +179,8 @@ export function QuickAttrCreate({
         placeholder={placeholder}
         value={draft}
       />
-      <button type="submit">Add</button>
+      <button disabled={saving} type="submit">{saving ? "Adding…" : "Add"}</button>
+      {error ? <small role="alert">{error}</small> : null}
     </form>
   );
 }

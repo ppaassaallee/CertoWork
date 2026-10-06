@@ -58,6 +58,7 @@ import { controlledOptionNames } from "../lib/controlledLists";
 import {
   NO_PROJECT_SECTION,
   compareManualOrder,
+  groupMyWorkSections,
   orderSections,
   placeItemBefore,
   readMyWorkSectionOrder,
@@ -66,6 +67,8 @@ import {
   subtreeIds,
   writeMyWorkSectionOrder,
 } from "../lib/myWorkSectionOrder";
+import { itemGroupForView, rowActionsForView } from "../lib/myWorkSavedView";
+import type { SavedView } from "../lib/views/types";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import {
   CREATE_QUICK_ACTION_LABELS,
@@ -156,10 +159,10 @@ import { emitDomainEvent } from "../lib/routines";
 import { NotionProjectTable } from "./NotionProjectTable";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
+  ancestorCandidateIds,
   allowedChildKinds,
   allowedParentItems,
   allowedParentKinds,
-  canNestUnder,
   compareHierarchySiblings,
   effectiveInheritedField,
   effectivePriority,
@@ -264,6 +267,8 @@ type Props = {
   onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
   compact?: boolean;
   forceMode?: WorkItemsViewMode;
+  /** Canonical My Work view; outer Filter/Sort/Group/Customize own these settings. */
+  savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks">;
   /** Notion-style project surface: dense table + parent owns chrome. */
   notionSurface?: boolean;
   notionMode?: WorkItemsViewMode;
@@ -738,6 +743,10 @@ const FAMILY_GROUP_BY = new Set<GroupBy>([
   "product_phase",
   "due",
   "tag",
+  "sprint",
+  "delivery_entity",
+  "client_entity",
+  "gtd",
 ]);
 
 function sortValue(item: any, sortBy: SortBy, projects: any[], allItems: any[] = []) {
@@ -855,6 +864,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   onInviteAssigneeEmail,
   compact = false,
   forceMode,
+  savedView,
   notionSurface = false,
   notionMode,
   onNotionModeChange: _onNotionModeChange,
@@ -900,7 +910,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   });
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [statusFilter, setStatusFilter] = useState(savedView ? "all" : "open");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -913,14 +923,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     setGroupByState((current) => {
       const resolved = typeof next === "function" ? next(current) : next;
       // My Work always sections by project; keep epic/PBI/subtask forest inside each section.
-      return isMyWork ? "project" : resolved;
+      return isMyWork && !savedView ? "project" : resolved;
     });
   };
-  const [primarySort, setPrimarySort] = useState<SortBy>("project");
+  const [primarySort, setPrimarySort] = useState<SortBy>(savedView ? "rank" : "project");
   const [secondarySort, setSecondarySort] = useState<SortBy>("priority");
   const [newType, setNewType] = useState<WorkItemKind>("pbi");
   const [newProjectId, setNewProjectId] = useState(activeProject?.id || "");
   const [newParentId, setNewParentId] = useState("");
+  const [createdParent, setCreatedParent] = useState<any | null>(null);
+  const [createdProject, setCreatedProject] = useState<{ id: string; title: string } | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
   const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
@@ -1000,6 +1012,26 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [myWorkRowActions, setMyWorkRowActions] = useState<RowQuickAction[]>(() =>
     readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_ROW_ACTIONS_KEY, ROW_QUICK_ACTIONS),
   );
+  const savedViewColumnIds = savedView?.columns.map((column) => column.id).join("|") || "";
+  useEffect(() => {
+    if (!isMyWork || !savedView) return;
+    setGroupByState(itemGroupForView(savedView.groupBy) as GroupBy);
+    setMyWorkRowActions((current) => rowActionsForView(savedView.columns, current));
+  }, [isMyWork, savedView?.id, savedView?.groupBy, savedViewColumnIds]);
+  useEffect(() => {
+    if (!isMyWork || !savedView) return;
+    setProjectFilter("all");
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setTypeFilter("all");
+    setOwnerFilter("all");
+    setDateFilter("all");
+    setTagFilter("all");
+    setWorkCategoryFilter("all");
+    setProductPhaseFilter("all");
+    setSprintFilter("all");
+    setPrimarySort("rank");
+  }, [isMyWork, savedView?.id]);
   const [createQuickActions, setCreateQuickActions] = useState<CreateQuickAction[]>(() =>
     readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_CREATE_ACTIONS_KEY, CREATE_QUICK_ACTIONS),
   );
@@ -1105,19 +1137,19 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     } else if (notionSurface && notionMode) {
       setLocalMode(notionMode);
     }
-    setProjectFilter(activeProject?.id || filters.projectFilter || "all");
-    setStatusFilter(filters.statusFilter);
-    setPriorityFilter(filters.priorityFilter);
-    setTypeFilter(filters.typeFilter);
-    setOwnerFilter(filters.ownerFilter);
-    setDateFilter(filters.dateFilter);
-    setTagFilter(filters.tagFilter);
-    setWorkCategoryFilter(filters.workCategoryFilter);
-    setProductPhaseFilter(filters.productPhaseFilter);
-    setGroupBy(filters.groupBy);
-    setPrimarySort(filters.primarySort);
+    setProjectFilter(savedView ? "all" : activeProject?.id || filters.projectFilter || "all");
+    setStatusFilter(savedView ? "all" : filters.statusFilter);
+    setPriorityFilter(savedView ? "all" : filters.priorityFilter);
+    setTypeFilter(savedView ? "all" : filters.typeFilter);
+    setOwnerFilter(savedView ? "all" : filters.ownerFilter);
+    setDateFilter(savedView ? "all" : filters.dateFilter);
+    setTagFilter(savedView ? "all" : filters.tagFilter);
+    setWorkCategoryFilter(savedView ? "all" : filters.workCategoryFilter);
+    setProductPhaseFilter(savedView ? "all" : filters.productPhaseFilter);
+    setGroupBy(savedView ? itemGroupForView(savedView.groupBy) as GroupBy : filters.groupBy);
+    setPrimarySort(savedView ? "rank" : filters.primarySort);
     setSecondarySort(filters.secondarySort);
-    setSprintFilter(filters.sprintFilter || "all");
+    setSprintFilter(savedView ? "all" : filters.sprintFilter || "all");
     setKanbanColumnPixels(session?.kanbanWidths || {});
     setKanbanSwimlane(session?.kanbanSwimlane || "none");
     setKanbanWipLimits(session?.kanbanWipLimits || {});
@@ -1392,7 +1424,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   const filterPanelOpen = notionSurface ? notionFilterOpen : filterOpen;
   const sortPanelOpen = notionSurface ? notionSortOpen : sortOpen;
-  const effectiveGroupBy: GroupBy = isMyWork ? "project" : groupBy;
+  const effectiveGroupBy: GroupBy = isMyWork && !savedView ? "project" : groupBy;
 
   const owners = useMemo(
     () => [...new Set([
@@ -1455,14 +1487,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   }, [collapsedGroups, expandedTreeNodes, treeScope]);
   const findPoolItem = (id: string) => {
     const key = normalizeItemId(id);
-    return parentPool.find((candidate) => normalizeItemId(candidate?.id) === key) || null;
+    return parentPool.find((candidate) => normalizeItemId(candidate?.id) === key)
+      || (normalizeItemId(createdParent?.id) === key ? createdParent : null);
   };
   const parentOptions = useMemo(() => {
     return allowedParentItems(
       { id: "__new__", workItemType: newType, projectId: newProjectId || baseProjectId },
-      parentPool,
+      createdParent && !parentPool.some((item) => item.id === createdParent.id)
+        ? [...parentPool, createdParent]
+        : parentPool,
     );
-  }, [baseProjectId, newProjectId, newType, parentPool]);
+  }, [baseProjectId, createdParent, newProjectId, newType, parentPool]);
 
   useEffect(() => {
     if (newParentId && !parentOptions.some((item) => item.id === newParentId)) {
@@ -1473,7 +1508,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const pool = hierarchyTasks?.length ? hierarchyTasks : tasks;
-    return sortItems(tasks.filter((item) => {
+    const visible = tasks.filter((item) => {
+      if (savedView?.showSubtasks === false && ancestorCandidateIds(item).length > 0) return false;
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
       const matchesStatus = matchesStatusFilter(item, statusFilter);
@@ -1488,8 +1524,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       const matchesSprint = itemMatchesSprint(item, sprintFilter);
       const searchable = `${title(item)} ${item.description || ""} ${item.key || ""} ${itemProjectTitle(item, projects)} ${deliveryEntity(item, projects)} ${clientEntity(item, projects)} ${itemWorkCategory(item, projects)} ${itemProductPhase(item, projects)} ${tagLabels(item, tags).join(" ")}`.toLowerCase();
       return matchesProject && matchesStatus && matchesPriority && matchesType && matchesOwner && matchesDate && matchesItemTag && matchesWorkCategory && matchesProductPhase && matchesSprint && (!needle || searchable.includes(needle));
-    }), primarySort, secondarySort, projects, pool);
-  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+    });
+    // applyView already sorted the incoming rows. A second project/priority sort
+    // previously erased the user's selected view sort before painting the list.
+    return savedView?.sort.length ? visible : sortItems(visible, primarySort, secondarySort, projects, pool);
+  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, savedView, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const columnCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1775,15 +1814,39 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const from = ordered.findIndex((candidate) => candidate.id === draggedId);
     const to = ordered.findIndex((candidate) => candidate.id === targetId);
     if (from === -1 || to === -1) return;
-    const [moved] = ordered.splice(from, 1);
-    ordered.splice(to, 0, moved);
+    const ids = placeItemBefore(ordered.map((candidate) => String(candidate.id)), draggedId, targetId);
     await Promise.all(
-      ordered.map((candidate, index) => {
-        const currentOrder = itemOrder(candidate, index);
-        if (currentOrder === index) return Promise.resolve();
+      ids.map((id, index) => {
+        const candidate = ordered.find((item) => String(item.id) === id);
+        if (!candidate) return Promise.resolve();
+        const hasSavedOrder = candidate.order != null || candidate.rank != null || candidate.position != null;
+        if (hasSavedOrder && itemOrder(candidate) === index) return Promise.resolve();
         return onUpdateTask(candidate.id, { order: index, rank: index });
       }),
     );
+  };
+
+  const moveItemBeforeSibling = async (draggedId: string, target: any, peers: any[]) => {
+    const dragged = findPoolItem(draggedId);
+    if (!dragged) throw new Error("That item is no longer available. Refresh My Work and try again.");
+    if (wouldCreateHierarchyCycle(dragged, target, parentPool)) {
+      throw new Error("A parent cannot be moved beneath one of its children.");
+    }
+    const nextParent = findPoolItem(parentId(target));
+    if (nextParent && wouldCreateHierarchyCycle(dragged, nextParent, parentPool)) {
+      throw new Error("A parent cannot be moved beneath one of its children.");
+    }
+    if (nextParent && !allowedParentKinds(workItemKind(dragged)).includes(workItemKind(nextParent))) {
+      throw new Error(`A ${workItemLabel(workItemKind(dragged))} cannot be placed under this parent. Drop it on the project heading instead.`);
+    }
+    const ordered = [...peers].sort(compareVisibleSiblings);
+    const ids = placeItemBefore(ordered.map((item) => String(item.id)), draggedId, String(target.id));
+    await Promise.all(ids.map((id, index) => {
+      if (id === draggedId) return onUpdateTask(id, { ...parentLinkPatch(nextParent), order: index, rank: index });
+      const candidate = ordered.find((item) => String(item.id) === id);
+      if (candidate && itemOrder(candidate, index) === index && candidate.order != null) return Promise.resolve();
+      return onUpdateTask(id, { order: index, rank: index });
+    }));
   };
 
   const clearItemDrag = () => {
@@ -2148,11 +2211,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           />
           {onCreateProject ? (
             <QuickAttrCreate
-              onCreate={(name) => {
-                Promise.resolve(onCreateProject(name)).then((createdId) => {
-                  const id = String(createdId || "").trim();
-                  if (id) pick({ projectId: id });
-                });
+              onCreate={async (name) => {
+                const id = String(await onCreateProject(name) || "").trim();
+                if (!id) throw new Error("Could not create the project.");
+                await relocateItemToProject(item.id, id, [], null);
+                if (primarySort !== "rank") setPrimarySort("rank");
+                closeQuickAttr();
               }}
               placeholder="Create project"
             />
@@ -2721,27 +2785,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           }
           const dragged = findPoolItem(drag.id);
           const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
-          if (section && dragged && fromSection !== section.id) {
-            await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+          try {
+            if (section && dragged && fromSection !== section.id) {
+              const targetRoot = hierarchyRoot(item, parentPool);
+              await relocateItemToProject(drag.id, section.projectId, section.roots, String(targetRoot?.id || item.id));
+            } else {
+              await moveItemBeforeSibling(drag.id, item, peers);
+            }
             if (primarySort !== "rank") setPrimarySort("rank");
+            setKanbanError("");
+          } catch (reason) {
+            setKanbanError(reason instanceof Error ? reason.message : "Could not move this item.");
+          } finally {
             clearItemDrag();
-            return;
           }
-          if (
-            dragged &&
-            canNestUnder(workItemKind(dragged), workItemKind(item)) &&
-            !wouldCreateHierarchyCycle(dragged, item, parentPool)
-          ) {
-            await onUpdateTask(drag.id, parentLinkPatch(item));
-            setExpandedTreeNodes((current) => {
-              const key = `node:${item.id}`;
-              return current.includes(key) ? current : [...current, key];
-            });
-          } else {
-            await reorderItem(drag.id, item.id, peers, compareVisibleSiblings);
-            if (primarySort !== "rank") setPrimarySort("rank");
-          }
-          clearItemDrag();
         }}
         style={itemGridStyle}
       >
@@ -2886,13 +2943,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }
     const dragged = findPoolItem(drag.id);
     const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
-    if (section && dragged && fromSection !== section.id) {
-      await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
-    } else {
-      await reorderItem(drag.id, item.id, peers, compareVisibleSiblings);
+    try {
+      if (section && dragged && fromSection !== section.id) {
+        const targetRoot = hierarchyRoot(item, parentPool);
+        await relocateItemToProject(drag.id, section.projectId, section.roots, String(targetRoot?.id || item.id));
+      } else {
+        await moveItemBeforeSibling(drag.id, item, peers);
+      }
+      if (primarySort !== "rank") setPrimarySort("rank");
+      setKanbanError("");
+    } catch (reason) {
+      setKanbanError(reason instanceof Error ? reason.message : "Could not move this item.");
+    } finally {
+      clearItemDrag();
     }
-    if (primarySort !== "rank") setPrimarySort("rank");
-    clearItemDrag();
   };
 
   const renderSectionHead = (
@@ -2949,8 +3013,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
+  const savedViewOrder = new Map(filtered.map((item, index) => [item.id, index]));
   const compareVisibleSiblings = (left: any, right: any) =>
-    primarySort === "rank"
+    savedView?.sort.length
+      ? (savedViewOrder.get(left.id) ?? 0) - (savedViewOrder.get(right.id) ?? 0)
+      : primarySort === "rank"
       ? compareManualOrder(left, right)
       : compareItems(left, right, primarySort, secondarySort, projects, parentPool);
 
@@ -3101,6 +3168,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (effectiveGroupBy === "product_phase") return String(effectiveInheritedField(target, tasks, "productPhase") || itemProductPhase(target, projects));
       if (effectiveGroupBy === "due") return dueBucketLabels[dueBucket(target.dueDate || target.targetDate)] || "No sector";
       if (effectiveGroupBy === "tag") return tagLabels(target, tags)[0] || "No tag";
+      if (effectiveGroupBy === "sprint") return String(target.sprintId || target.sprint || "No sprint");
+      if (effectiveGroupBy === "delivery_entity") return deliveryEntity(target, projects) || "No delivery entity";
+      if (effectiveGroupBy === "client_entity") return clientEntity(target, projects) || "No client entity";
+      if (effectiveGroupBy === "gtd") return String(target.gtdActionType || target.actionType || target.globalStageId || "No GTD");
       return "Items";
     };
     return filtered.reduce<Record<string, any[]>>((acc, item) => {
@@ -3112,16 +3183,19 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   const myWorkSections = useMemo(() => {
     if (!isMyWork || effectiveGroupBy !== "project") return [];
-    const sections = Object.entries(grouped).map(([label, items]) => {
-      const match = label === NO_PROJECT_LABEL
-        ? null
-        : projects.find((project) => projectTitle(project) === label && String(project.status || "").toLowerCase() !== "deleted");
-      const id = label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label);
+    // Titles are not unique. Group by immutable project id so two projects with
+    // the same name never share a drop target or move one another's items.
+    const byProject = groupMyWorkSections(filtered, (item) => {
+      const root = hierarchyRoot(item, parentPool);
+      return root?.projectId || item.projectId;
+    });
+    const sections = [...byProject].map(([id, items]) => {
+      const match = projects.find((project) => String(project.id) === id && String(project.status || "").toLowerCase() !== "deleted");
       return {
         id,
-        label,
-        projectId: label === NO_PROJECT_LABEL ? null : match?.id ? String(match.id) : null,
-        canReceive: label === NO_PROJECT_LABEL || Boolean(match?.id),
+        label: id === NO_PROJECT_SECTION ? NO_PROJECT_LABEL : match ? projectTitle(match) : "Unknown project",
+        projectId: id === NO_PROJECT_SECTION ? null : match ? id : null,
+        canReceive: id === NO_PROJECT_SECTION || Boolean(match),
         items,
       };
     });
@@ -3129,7 +3203,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       sections.push({ id: NO_PROJECT_SECTION, label: NO_PROJECT_LABEL, projectId: null, canReceive: true, items: [] });
     }
     return orderSections(sections, sectionOrder);
-  }, [effectiveGroupBy, grouped, isMyWork, projects, sectionOrder]);
+  }, [effectiveGroupBy, filtered, isMyWork, parentPool, projects, sectionOrder]);
 
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
@@ -3893,6 +3967,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   };
 
   const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
+  if (!savedView) {
   if (projectFilter !== "all" && !activeProject) {
     activeFilterChips.push({
       key: "project",
@@ -3965,6 +4040,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       clear: () => setSprintFilter("all"),
     });
   }
+  }
 
   const blockedCount = filtered.filter((item) => canonicalStatus(item) === "blocked").length;
   const priorityOneCount = filtered.filter((item) => priorityValue(effectivePriority(item, parentPool)) === "1").length;
@@ -3974,7 +4050,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const summaryHasSignal = blockedCount + priorityOneCount + overdueCount > 0;
 
   return (
-    <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+    <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${savedView?.density === "compact" ? "is-view-compact" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
       {actionMenu && createPortal(
         <div
           className="do-quick-action-menu"
@@ -4078,7 +4154,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         <datalist id="do-workspace-member-options">
           {owners.map((owner) => <option key={owner} value={owner} />)}
         </datalist>
-        {chromeCollapsed || compact || isMyWork ? (
+        {!forceMode && (chromeCollapsed || compact || isMyWork ? (
           <label className="do-items-mode-select">
             <span className="sr-only">Work item view</span>
             <select
@@ -4107,7 +4183,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           {!forceMode && <button aria-label="Gantt view" className={`do-mobile-advanced ${mode === "gantt" ? "is-active" : ""}`} onClick={() => setMode("gantt")} type="button"><CalendarRange size={14} /> Gantt</button>}
           {!forceMode && <button aria-label="Epics view" className={`do-mobile-advanced ${mode === "epics" ? "is-active" : ""}`} onClick={() => setMode("epics")} type="button">Epics</button>}
         </div>
-        )}
+        ))}
         {(mode === "kanban" || mode === "calendar") && (
           <div className="do-kanban-board-tools">
             <label>
@@ -4216,6 +4292,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         )}
         <div className="do-items-toolbar-actions">
+          {!savedView && <>
           <div className="do-popover-anchor">
             <button
               aria-expanded={viewsOpen}
@@ -4456,6 +4533,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               </div>
             )}
           </div>
+          </>}
           {timelineMode ? (
             <div className="do-popover-anchor">
               <button
@@ -4506,7 +4584,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               {moreActionsOpen && <div className="do-popover do-items-more-popover" role="menu">
                 <button onClick={() => { setPasteOpen(true); setPasteError(""); setMoreActionsOpen(false); }} type="button">Paste bulk items</button>
                 {onCreateSprint && <button onClick={() => { setAddSprintOpen(true); setMoreActionsOpen(false); }} type="button">New sprint</button>}
-                <button onClick={() => { setFieldsOpen(true); setMoreActionsOpen(false); }} type="button">Customize fields</button>
+                {!savedView && <button onClick={() => { setFieldsOpen(true); setMoreActionsOpen(false); }} type="button">Customize fields</button>}
                 <button onClick={() => { setChromeCollapsed((collapsed) => !collapsed); setMoreActionsOpen(false); }} type="button">{chromeCollapsed ? "Show controls" : "Focus list"}</button>
               </div>}
             </div>
@@ -4662,7 +4740,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               const projectLabel = activeProject
                 ? projectTitle(activeProject)
                 : newProjectId
-                  ? projectTitle(projects.find((project) => project.id === newProjectId) || { title: "Project" })
+                  ? projectTitle(projects.find((project) => project.id === newProjectId) || createdProject || { title: "Project" })
                   : "No project / errand";
               const TypeIcon = WORK_ITEM_TYPE_ICONS[newType] || Target;
               const parentLabel = newParentId
@@ -4714,7 +4792,22 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                             .map((project) => (
                               <option key={project.id} value={project.id}>{projectTitle(project)}</option>
                             ))}
+                          {createdProject && !projects.some((project) => project.id === createdProject.id) ? (
+                            <option value={createdProject.id}>{createdProject.title}</option>
+                          ) : null}
                         </select>
+                        {onCreateProject ? (
+                          <QuickAttrCreate
+                            onCreate={async (name) => {
+                              const id = String(await onCreateProject(name) || "").trim();
+                              if (!id) throw new Error("Could not create the project.");
+                              setCreatedProject({ id, title: name });
+                              setNewProjectId(id);
+                              setNewParentId("");
+                            }}
+                            placeholder="Create project"
+                          />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -4793,6 +4886,25 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                           <option value="">{newType === "epic" ? "No parent" : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`}</option>
                           {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
                         </select>
+                        {newType !== "epic" && allowedParentKinds(newType).length > 0 ? (
+                          <QuickAttrCreate
+                            onCreate={async (name) => {
+                              const kind = allowedParentKinds(newType)[0];
+                              const projectId = activeProject?.id || newProjectId || "";
+                              const id = String(await onAddTask(projectId, name, "backlog", {
+                                workItemType: kind,
+                                itemType: kind,
+                                taskType: kind,
+                                type: kind,
+                                ...parentLinkPatch(null),
+                              }) || "").trim();
+                              if (!id) throw new Error("Could not create the parent item.");
+                              setCreatedParent({ id, title: name, projectId, workItemType: kind });
+                              setNewParentId(id);
+                            }}
+                            placeholder={`Create ${workItemLabel(allowedParentKinds(newType)[0])}`}
+                          />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -5121,6 +5233,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </section>
       )}
 
+      {mode !== "kanban" && kanbanError ? <p className="do-signin-error" role="alert">{kanbanError}</p> : null}
       <div className="do-items-layout">
         <section className={`do-items-workspace is-${mode}`}>
           {!notionSurface && (
@@ -5208,7 +5321,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               {(isMyWork && effectiveGroupBy === "project" ? myWorkSections.map((section) => {
                 const group = section.label;
                 const items = section.items;
-                const collapsed = collapsedGroups.includes(group);
+                const collapsed = collapsedGroups.includes(section.id);
                 return (
                   <section
                     className={`do-items-group${dragOverSectionId === section.id ? " is-section-over" : ""}`}
@@ -5242,7 +5355,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         return;
                       }
                       const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
-                      void relocateItemToProject(drag.id, section.projectId, roots, null).finally(clearItemDrag);
+                      void relocateItemToProject(drag.id, section.projectId, roots, null)
+                        .then(() => setKanbanError(""))
+                        .catch((reason) => setKanbanError(reason instanceof Error ? reason.message : "Could not move this item."))
+                        .finally(clearItemDrag);
                     }}
                   >
                     <div className="do-items-section-head do-my-work-section-head">
@@ -5262,7 +5378,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       >
                         <GripVertical size={14} />
                       </button>
-                      <button className="do-items-section-toggle" onClick={() => toggleGroup(group)} type="button">
+                      <button className="do-items-section-toggle" onClick={() => toggleGroup(section.id)} type="button">
                         <ChevronDown className={collapsed ? "is-collapsed" : ""} size={13} />
                         <strong>{group}</strong>
                         <span>{items.length}</span>
@@ -5317,10 +5433,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       return;
                     }
                     const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
-                    void relocateItemToProject(drag.id, section.projectId, roots, null).finally(() => {
-                      if (primarySort !== "rank") setPrimarySort("rank");
-                      clearItemDrag();
-                    });
+                    void relocateItemToProject(drag.id, section.projectId, roots, null)
+                      .then(() => {
+                        if (primarySort !== "rank") setPrimarySort("rank");
+                        setKanbanError("");
+                      })
+                      .catch((reason) => setKanbanError(reason instanceof Error ? reason.message : "Could not move this item."))
+                      .finally(clearItemDrag);
                   } : undefined}
                 >
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>

@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { EntityAdapter, SavedView } from "../../lib/views/types";
+import { useEffect, useMemo, useState } from "react";
+import type { EntityAdapter, FilterRule, SavedView } from "../../lib/views/types";
 import { t } from "../../lib/i18n";
 
-function viewSignature(view: SavedView): string {
-  return JSON.stringify({
-    name: view.name,
-    columns: view.columns,
-    quickActions: view.quickActions,
-    density: view.density,
-    showSubtasks: view.showSubtasks,
-    filters: view.filters,
-    sort: view.sort,
-    groupBy: view.groupBy,
-  });
+export type CustomizerSection = "filter" | "sort" | "group" | "customize";
+
+const valueFreeOps: FilterRule["op"][] = ["empty", "notEmpty", "me", "overdue", "today", "week"];
+
+function filterOps(type: string): FilterRule["op"][] {
+  if (type === "date") return ["today", "overdue", "week", "before", "after", "empty", "notEmpty"];
+  if (type === "person") return ["me", "eq", "ne", "empty", "notEmpty"];
+  if (type === "text" || type === "tags") return ["contains", "eq", "ne", "empty", "notEmpty"];
+  return ["eq", "ne", "empty", "notEmpty"];
 }
 
 export function ViewCustomizer<Row>({
@@ -23,29 +21,39 @@ export function ViewCustomizer<Row>({
   onChange,
   onSaveAsTeam,
   onReset,
+  section = "customize",
+  columnIds,
+  customizeColumnIds,
+  showQuickActions = true,
 }: {
   open: boolean;
   view: SavedView;
   adapter: EntityAdapter<Row>;
   onClose(): void;
   onChange(next: SavedView): void;
-  onSaveAsTeam(): void;
+  onSaveAsTeam(next: SavedView): void;
   onReset(): void;
+  section?: CustomizerSection;
+  columnIds?: string[];
+  customizeColumnIds?: string[];
+  showQuickActions?: boolean;
 }) {
   const [draft, setDraft] = useState(view);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const availableColumns = useMemo(
+    () => adapter.columns.filter((column) => !columnIds || columnIds.includes(column.id)),
+    [adapter.columns, columnIds],
+  );
+  const filterColumns = availableColumns.filter((column) => column.filterable);
+  const sortColumns = availableColumns.filter((column) => column.sortable);
+  const groupColumns = availableColumns.filter((column) => column.groupable);
+  const displayColumns = availableColumns.filter((column) => !customizeColumnIds || customizeColumnIds.includes(column.id));
+  const [filterColumnId, setFilterColumnId] = useState("");
+  const [filterOp, setFilterOp] = useState<FilterRule["op"]>("contains");
+  const [filterValue, setFilterValue] = useState("");
 
   useEffect(() => {
-    setDraft(view);
-  }, [view]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (viewSignature(draft) === viewSignature(view)) return;
-    const timer = window.setTimeout(() => onChangeRef.current(draft), 500);
-    return () => window.clearTimeout(timer);
-  }, [draft, open, view]);
+    if (open) setDraft(view);
+  }, [open, view.id]);
 
   const visibleIds = useMemo(
     () => new Set(draft.columns.map((col) => col.id)),
@@ -53,6 +61,23 @@ export function ViewCustomizer<Row>({
   );
 
   if (!open) return null;
+
+  const selectedFilterColumn = filterColumns.find((column) => column.id === filterColumnId) || filterColumns[0];
+  const selectedFilterOp = filterOps(selectedFilterColumn?.type || "text").includes(filterOp)
+    ? filterOp
+    : filterOps(selectedFilterColumn?.type || "text")[0];
+  const addFilter = () => {
+    if (!selectedFilterColumn || (!valueFreeOps.includes(selectedFilterOp) && !filterValue.trim())) return;
+    setDraft((current) => ({
+      ...current,
+      filters: [...current.filters, {
+        columnId: selectedFilterColumn.id,
+        op: selectedFilterOp,
+        ...(!valueFreeOps.includes(selectedFilterOp) ? { value: filterValue.trim() } : {}),
+      }],
+    }));
+    setFilterValue("");
+  };
 
   const toggleColumn = (id: string, fixed?: boolean) => {
     if (fixed) return;
@@ -111,13 +136,50 @@ export function ViewCustomizer<Row>({
   };
 
   return (
-    <aside className="cw-views-customizer" data-testid="views-customizer">
+    <aside aria-label={t(`views.${section}`)} className="cw-views-customizer" data-testid="views-customizer">
       <header>
-        <strong>{t("views.customize")}</strong>
+        <strong>{t(`views.${section}`)}</strong>
         <button onClick={onClose} type="button">
           {t("views.close")}
         </button>
       </header>
+
+      {section === "filter" ? (
+        <section className="cw-views-editor-section">
+          <h3>{t("views.filter")}</h3>
+          {draft.filters.map((rule, index) => (
+            <div className="cw-views-rule" key={`${rule.columnId}-${index}`}>
+              <span>{availableColumns.find((column) => column.id === rule.columnId)?.label || rule.columnId} · {t(`views.op.${rule.op}`)}{rule.value == null ? "" : ` · ${String(rule.value)}`}</span>
+              <button aria-label={`${t("views.removeFilter")} ${index + 1}`} onClick={() => setDraft((current) => ({ ...current, filters: current.filters.filter((_, i) => i !== index) }))} type="button">×</button>
+            </div>
+          ))}
+          {filterColumns.length > 0 && (
+            <>
+              <label className="cw-views-field"><span>{t("views.field")}</span><select aria-label={t("views.field")} onChange={(event) => { setFilterColumnId(event.target.value); setFilterOp("eq"); setFilterValue(""); }} value={selectedFilterColumn?.id || ""}>{filterColumns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}</select></label>
+              <label className="cw-views-field"><span>{t("views.condition")}</span><select aria-label={t("views.condition")} onChange={(event) => setFilterOp(event.target.value as FilterRule["op"])} value={selectedFilterOp}>{filterOps(selectedFilterColumn?.type || "text").map((op) => <option key={op} value={op}>{t(`views.op.${op}`)}</option>)}</select></label>
+              {!valueFreeOps.includes(selectedFilterOp) && <label className="cw-views-field"><span>{t("views.value")}</span>{selectedFilterColumn?.options ? <select aria-label={t("views.value")} onChange={(event) => setFilterValue(event.target.value)} value={filterValue}><option value="">{t("views.chooseValue")}</option>{selectedFilterColumn.options().map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input aria-label={t("views.value")} onChange={(event) => setFilterValue(event.target.value)} type={selectedFilterColumn?.type === "date" ? "date" : "text"} value={filterValue} />}</label>}
+              <button className="cw-views-add-rule" onClick={addFilter} type="button">+ {t("views.addFilter")}</button>
+            </>
+          )}
+        </section>
+      ) : null}
+
+      {section === "sort" ? (
+        <section className="cw-views-editor-section">
+          <h3>{t("views.sort")}</h3>
+          <label className="cw-views-field"><span>{t("views.field")}</span><select aria-label={t("views.sortField")} onChange={(event) => setDraft((current) => ({ ...current, sort: event.target.value ? [{ columnId: event.target.value, dir: current.sort[0]?.dir || "asc" }] : [] }))} value={draft.sort[0]?.columnId || ""}><option value="">{t("views.manualOrder")}</option>{sortColumns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}</select></label>
+          {draft.sort.length > 0 && <label className="cw-views-field"><span>{t("views.direction")}</span><select aria-label={t("views.direction")} onChange={(event) => setDraft((current) => ({ ...current, sort: current.sort.map((rule, index) => index === 0 ? { ...rule, dir: event.target.value as "asc" | "desc" } : rule) }))} value={draft.sort[0].dir}><option value="asc">{t("views.ascending")}</option><option value="desc">{t("views.descending")}</option></select></label>}
+        </section>
+      ) : null}
+
+      {section === "group" ? (
+        <section className="cw-views-editor-section">
+          <h3>{t("views.group")}</h3>
+          <label className="cw-views-field"><span>{t("views.field")}</span><select aria-label={t("views.groupField")} onChange={(event) => setDraft((current) => ({ ...current, groupBy: event.target.value || null }))} value={draft.groupBy || ""}><option value="">{t("views.noGrouping")}</option>{groupColumns.map((column) => <option key={column.id} value={column.id}>{column.label}</option>)}</select></label>
+        </section>
+      ) : null}
+
+      {section === "customize" ? <>
 
       <label className="cw-views-field">
         <span>{t("views.name")}</span>
@@ -130,7 +192,7 @@ export function ViewCustomizer<Row>({
       <section>
         <h3>{t("views.columns")}</h3>
         <ul>
-          {adapter.columns.map((col) => {
+          {displayColumns.map((col) => {
             const visible = visibleIds.has(col.id);
             return (
               <li key={col.id}>
@@ -159,7 +221,7 @@ export function ViewCustomizer<Row>({
         </ul>
       </section>
 
-      <section>
+      {showQuickActions ? <section>
         <h3>
           {t("views.quickActions")}{" "}
           <em>
@@ -193,7 +255,7 @@ export function ViewCustomizer<Row>({
             );
           })}
         </ul>
-      </section>
+      </section> : null}
 
       <label className="cw-views-field">
         <span>{t("views.density")}</span>
@@ -226,11 +288,13 @@ export function ViewCustomizer<Row>({
           {t("views.showSubtasks")}
         </label>
       ) : null}
+      </> : null}
 
       <footer>
-        <button onClick={onSaveAsTeam} type="button">
+        {section === "customize" && <button onClick={() => { onSaveAsTeam(draft); onClose(); }} type="button">
           {t("views.saveAsTeam")}
-        </button>
+        </button>}
+        <button onClick={() => { onChange(draft); onClose(); }} type="button">{t("views.apply")}</button>
         <button onClick={onReset} type="button">
           {t("views.reset")}
         </button>

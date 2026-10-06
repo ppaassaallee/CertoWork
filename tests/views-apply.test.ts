@@ -211,6 +211,24 @@ test("filter me matches assigneeIds arrays from taskAdapter", () => {
   );
 });
 
+test("assignee equality filters match one member of a multi-assignee item", () => {
+  type Taskish = Row & { assigneeIds: string[] };
+  const taskAdapter: EntityAdapter<Taskish> = {
+    ...adapter,
+    columns: adapter.columns.map((column) => column.id === "assignee"
+      ? { ...column, read: (row: Taskish) => row.assigneeIds }
+      : column) as EntityAdapter<Taskish>["columns"],
+  };
+  const rows: Taskish[] = [{ ...ROWS[0], assigneeIds: ["u1", "u2"] }];
+  const context = { userId: "u1", now: NOW };
+  assert.deepEqual(applyView(rows, taskAdapter, baseView({
+    filters: [{ columnId: "assignee", op: "eq", value: "u2" }],
+  }), context).rows.map((row) => row.id), ["parent"]);
+  assert.deepEqual(applyView(rows, taskAdapter, baseView({
+    filters: [{ columnId: "assignee", op: "ne", value: "u2" }],
+  }), context).rows, []);
+});
+
 test("filter today includes timeSector / One Thing without dueDate", () => {
   type SectorRow = Row & { timeSector?: string; timeSectorDate?: string; isOneThing?: boolean };
   const sectorAdapter: EntityAdapter<SectorRow> = {

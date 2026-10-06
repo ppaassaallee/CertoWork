@@ -169,6 +169,11 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
         // Return all ids so filter op "me" / "in" can match any assignee.
         return ids.length ? ids : null;
       },
+      ...(deps.members?.length ? { options: () => deps.members!.map((member) => ({
+        id: member.id,
+        label: member.displayName || member.email || member.id,
+        tone: "neutral",
+      })) } : {}),
       write: async (row, value) => {
         const id = value == null || value === "" ? null : String(Array.isArray(value) ? value[0] : value);
         await deps.onUpdateTask(row.id, {
@@ -198,6 +203,7 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       label: t("views.col.due"),
       type: "date",
       sortable: true,
+      groupable: true,
       filterable: true,
       width: 120,
       read: (row) => readDate(row, ["dueDate", "targetDate"]),
@@ -267,6 +273,7 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       id: "tags",
       label: t("views.col.tags"),
       type: "tags",
+      groupable: true,
       filterable: true,
       read: (row) => {
         if (Array.isArray(row.tags)) return row.tags.map(String);
@@ -388,6 +395,7 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       id: "action_board",
       label: t("views.col.actionBoard"),
       type: "text",
+      groupable: true,
       read: (row) => readString(row, ["actionBoard", "board", "timeSector"]),
     },
     {
@@ -627,8 +635,8 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
           ? ["complete", "assign_me", "odysseus", "archive"]
           : ["complete", "key_today", "odysseus", "assign_me"],
         filters: [],
-        sort: [{ columnId: "due", dir: "asc" }],
-        groupBy: isProject ? "epic" : null,
+        sort: surface === "my-work" ? [] : [{ columnId: "due", dir: "asc" }],
+        groupBy: isProject ? "epic" : surface === "my-work" ? "project" : null,
         density: "comfortable",
         showSubtasks: true,
         isDefault: true,
@@ -652,8 +660,8 @@ export function buildMyWorkSystemViews(
     layout: "table" as const,
     columns: personalDefault.columns,
     quickActions: personalDefault.quickActions,
-    sort: personalDefault.sort,
-    groupBy: null as string | null,
+    sort: [{ columnId: "due", dir: "asc" as const }],
+    groupBy: "project" as string | null,
     density: personalDefault.density,
     showSubtasks: true,
     isDefault: true,

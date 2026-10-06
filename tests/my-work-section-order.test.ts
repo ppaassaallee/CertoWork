@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   NO_PROJECT_SECTION,
   compareManualOrder,
+  groupMyWorkSections,
   orderSections,
   placeItemBefore,
   reorderIds,
@@ -33,6 +34,18 @@ test("a saved section order can put No Project above every project", () => {
   assert.deepEqual(ordered.map((section) => section.id), [NO_PROJECT_SECTION, "b", "a"]);
 });
 
+test("projects with the same title remain separate drop sections", () => {
+  const items = [
+    { id: "one", projectId: "project-a", title: "First" },
+    { id: "two", projectId: "project-b", title: "Second" },
+    { id: "three", projectId: null, title: "Third" },
+  ];
+  const sections = groupMyWorkSections(items, (item) => item.projectId);
+  assert.deepEqual([...sections.keys()], ["project-a", "project-b", NO_PROJECT_SECTION]);
+  assert.deepEqual(sections.get("project-a")?.map((item) => item.id), ["one"]);
+  assert.deepEqual(sections.get("project-b")?.map((item) => item.id), ["two"]);
+});
+
 test("dragging a project section reorders the visible sections", () => {
   assert.deepEqual(reorderIds(["a", NO_PROJECT_SECTION, "b"], "b", "a"), ["b", "a", NO_PROJECT_SECTION]);
 });
@@ -40,6 +53,7 @@ test("dragging a project section reorders the visible sections", () => {
 test("placing an item before another keeps the rest of the project", () => {
   assert.deepEqual(placeItemBefore(["p1", "p2", "p3"], "moved", "p2"), ["p1", "moved", "p2", "p3"]);
   assert.deepEqual(placeItemBefore(["p1", "moved", "p2"], "moved", null), ["p1", "p2", "moved"]);
+  assert.deepEqual(placeItemBefore(["first", "middle", "last"], "first", "last"), ["middle", "first", "last"]);
 });
 
 test("manual order places a dragged row where it was dropped, ahead of item type", () => {

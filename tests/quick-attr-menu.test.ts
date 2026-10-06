@@ -27,3 +27,12 @@ test("quick action click opens a portaled single or multi select menu", () => {
   assert.match(menu, /Rename \$\{option.label\}/);
   assert.match(workItems, /\.do-quick-attr-menu/);
 });
+
+test("the create form can add and select a project or parent without waiting for the listener", () => {
+  assert.match(workItems, /placeholder="Create project"/);
+  assert.match(workItems, /setCreatedProject\(\{ id, title: name \}\)/);
+  assert.match(workItems, /setNewProjectId\(id\)/);
+  assert.match(workItems, /setCreatedParent\(\{ id, title: name, projectId, workItemType: kind \}\)/);
+  assert.match(workItems, /setNewParentId\(id\)/);
+  assert.match(menu, /setError\(reason instanceof Error/);
+});
