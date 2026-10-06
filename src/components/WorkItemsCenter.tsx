@@ -2131,7 +2131,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; showToggle?: boolean; onEnterAddChild?: () => void },
   ) => (
     itemColumnSet.has("title") ? (
-      <div className="do-items-title" style={tree?.depth ? { paddingLeft: tree.depth * 16 } : undefined}>
+      <div
+        className={`do-items-title${tree?.depth ? " is-nested" : ""}`}
+        style={tree ? { "--tree-indent": `${tree.depth * 24}px`, paddingLeft: tree.depth * 24 } as CSSProperties : undefined}
+      >
         {tree?.showToggle !== false && tree && (tree.childCount > 0 || Boolean(tree.onEnterAddChild)) ? (
           <button
             aria-expanded={!tree.collapsed}
@@ -3029,7 +3032,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const addLabel = `Add ${childLabel}`;
     const draft = inlineAddDrafts[parent.id] || "";
     const open = Boolean(inlineAddOpen[parent.id]);
-    const indent = Math.max(depth + 1, 1) * 16;
+    const indent = Math.max(depth + 1, 1) * 24;
     if (!open) {
       return (
         <button
