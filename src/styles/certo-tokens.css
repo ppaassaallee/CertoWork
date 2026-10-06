@@ -3965,12 +3965,12 @@
   cursor: not-allowed;
 }
 .cw-views-customizer {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 40;
-  width: min(260px, calc(100% - 16px));
-  max-height: calc(100% - 16px);
+  position: fixed;
+  top: 212px;
+  right: 20px;
+  z-index: 120;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100dvh - 228px);
   overflow: auto;
   display: grid;
   gap: 12px;
@@ -3985,6 +3985,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  padding: 5px 0;
+  background: var(--surface-0);
 }
 .cw-views-customizer header button,
 .cw-views-customizer footer button {
@@ -3996,6 +4001,12 @@
   font-size: 12px;
   padding: 5px 8px;
   cursor: pointer;
+}
+.cw-views-customizer footer button:nth-last-child(2) {
+  border-color: var(--c-blue, #2547c4);
+  background: var(--c-blue, #2547c4);
+  color: #fff;
+  font-weight: 600;
 }
 .cw-views-customizer h3 {
   margin: 0 0 6px;
@@ -4067,13 +4078,50 @@
 .cw-views-customizer footer {
   display: grid;
   gap: 6px;
+  position: sticky;
+  bottom: -12px;
+  z-index: 1;
+  padding: 10px 0 5px;
+  background: var(--surface-0);
+}
+.cw-views-editor-section {
+  display: grid;
+  gap: 10px;
+}
+.cw-views-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.cw-views-rule button,
+.cw-views-add-rule {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 5px 8px;
+}
+.cw-views-error {
+  color: var(--status-danger, #b42318);
+  padding: 8px 16px;
+  font-size: 13px;
+}
+.cw-views-surface .do-items-center.is-view-compact .do-items-row {
+  min-height: 32px;
 }
 @media (max-width: 720px) {
   .cw-views-customizer {
     position: fixed;
     inset: auto 0 0 0;
     width: 100%;
-    max-height: 70vh;
+    max-height: 75dvh;
     border-radius: 16px 16px 0 0;
     top: auto;
     right: 0;

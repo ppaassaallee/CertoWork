@@ -16,7 +16,7 @@ export function ViewsBar({
   activeViewId: string;
   onSelect(viewId: string): void;
   onCreate(): void;
-  onOpenCustomizer(): void;
+  onOpenCustomizer(section?: "filter" | "sort" | "group" | "customize"): void;
   filterCount?: number;
   sortLabel?: string;
   groupLabel?: string;
@@ -43,8 +43,8 @@ export function ViewsBar({
       <div className="cw-views-bar-tools">
         <button
           data-testid="views-filter"
-          onClick={onOpenCustomizer}
-          title={t("views.customize")}
+          onClick={() => onOpenCustomizer("filter")}
+          title={t("views.filter")}
           type="button"
         >
           <Filter size={13} />
@@ -53,8 +53,8 @@ export function ViewsBar({
         </button>
         <button
           data-testid="views-sort"
-          onClick={onOpenCustomizer}
-          title={t("views.customize")}
+          onClick={() => onOpenCustomizer("sort")}
+          title={t("views.sort")}
           type="button"
         >
           <Layers size={13} />
@@ -63,15 +63,15 @@ export function ViewsBar({
         </button>
         <button
           data-testid="views-group"
-          onClick={onOpenCustomizer}
-          title={t("views.customize")}
+          onClick={() => onOpenCustomizer("group")}
+          title={t("views.group")}
           type="button"
         >
           <LayoutGrid size={13} />
           {t("views.group")}
           {groupLabel ? ` ${groupLabel}` : ""}
         </button>
-        <button data-testid="views-customize" onClick={onOpenCustomizer} type="button">
+        <button data-testid="views-customize" onClick={() => onOpenCustomizer("customize")} type="button">
           <Settings2 size={13} />
           {t("views.customize")}
         </button>

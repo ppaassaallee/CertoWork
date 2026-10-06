@@ -49,6 +49,10 @@ export type ItemGroupBy =
   | "type"
   | "due"
   | "tag"
+  | "sprint"
+  | "delivery_entity"
+  | "client_entity"
+  | "gtd"
   | "work_category"
   | "product_phase";
 export type ItemSortBy =
@@ -137,6 +141,10 @@ const GROUP_BY: ItemGroupBy[] = [
   "type",
   "due",
   "tag",
+  "sprint",
+  "delivery_entity",
+  "client_entity",
+  "gtd",
   "work_category",
   "product_phase",
 ];

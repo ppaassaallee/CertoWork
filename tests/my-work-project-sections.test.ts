@@ -14,10 +14,10 @@ const chrome = readFileSync(
 );
 const memory = readFileSync(new URL("../src/lib/itemViewMemory.ts", import.meta.url), "utf8");
 
-test("My Work forces project sections and No Project label", () => {
+test("My Work defaults to project sections and supports saved grouping", () => {
   assert.match(workItems, /const NO_PROJECT_LABEL = "No Project"/);
   assert.match(workItems, /const isMyWork = !activeProject/);
-  assert.match(workItems, /const effectiveGroupBy: GroupBy = isMyWork \? "project" : groupBy/);
+  assert.match(workItems, /const effectiveGroupBy: GroupBy = isMyWork && !savedView \? "project" : groupBy/);
   assert.match(workItems, /data-testid="my-work-project-section"/);
   assert.match(workItems, /data-testid="gantt-project-section"/);
   assert.match(memory, /groupBy: projectId \? "hierarchy" : "project"/);

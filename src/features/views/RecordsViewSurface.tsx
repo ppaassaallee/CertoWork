@@ -11,7 +11,7 @@ import {
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewGrid } from "./ViewGrid";
 import { ViewsBar } from "./ViewsBar";
-import { ViewCustomizer } from "./ViewCustomizer";
+import { ViewCustomizer, type CustomizerSection } from "./ViewCustomizer";
 import { buildRecordAdapter } from "./adapters/recordAdapter";
 import type { TableMember } from "./cells/RecordCells";
 import { t } from "../../lib/i18n";
@@ -61,6 +61,7 @@ export function RecordsViewSurface({
   const [views, setViews] = useState<SavedView[]>([defaultView]);
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [customizerSection, setCustomizerSection] = useState<CustomizerSection>("customize");
 
   const refresh = useCallback(async () => {
     try {
@@ -126,7 +127,7 @@ export function RecordsViewSurface({
             await setLastUsedView(actorId, surface, created.id);
           })();
         }}
-        onOpenCustomizer={() => setCustomizerOpen(true)}
+        onOpenCustomizer={(section = "customize") => { setCustomizerSection(section); setCustomizerOpen(true); }}
         onSelect={(viewId) => {
           setActiveId(viewId);
           void setLastUsedView(actorId, surface, viewId);
@@ -164,14 +165,14 @@ export function RecordsViewSurface({
             setActiveId(defaultView.id);
             setCustomizerOpen(false);
           }}
-          onSaveAsTeam={() => {
+          onSaveAsTeam={(draft) => {
             void (async () => {
               const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } =
-                active;
+                draft;
               const created = await createView({
                 ...rest,
                 scope: "team",
-                name: `${active.name} · team`,
+                name: `${draft.name} · team`,
                 ownerId: actorId,
               });
               setViews((current) => [...current, created]);
@@ -179,6 +180,7 @@ export function RecordsViewSurface({
             })();
           }}
           open={customizerOpen}
+          section={customizerSection}
           view={active}
         />
       </div>

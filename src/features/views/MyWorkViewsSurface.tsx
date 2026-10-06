@@ -10,7 +10,7 @@ import {
 import { applyView } from "../../lib/views/apply";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewsBar } from "./ViewsBar";
-import { ViewCustomizer } from "./ViewCustomizer";
+import { ViewCustomizer, type CustomizerSection } from "./ViewCustomizer";
 import {
   buildMyWorkSystemViews,
   buildTaskAdapter,
@@ -144,9 +144,17 @@ export function MyWorkViewsSurface({
     [workspaceId, actorId, defaultView],
   );
   const [remoteViews, setRemoteViews] = useState<SavedView[]>([]);
+  const [previewView, setPreviewView] = useState<SavedView | null>(null);
   const [groupedLook, setGroupedLook] = useState(() => listLanguageOn());
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [customizerSection, setCustomizerSection] = useState<CustomizerSection>("customize");
+  const [viewError, setViewError] = useState("");
+  const openCustomizer = (section: CustomizerSection = "customize") => {
+    setCustomizerSection(section);
+    setCustomizerOpen(true);
+    setViewError("");
+  };
 
   const views = useMemo(() => {
     const remote = remoteViews.filter(
@@ -171,8 +179,9 @@ export function MyWorkViewsSurface({
       ) {
         setActiveId(last);
       }
-    } catch {
+    } catch (error) {
       setRemoteViews([]);
+      setViewError(error instanceof Error ? error.message : "Could not load saved views.");
     }
   }, [workspaceId, actorId, systemViews, preferredSystemViewId]);
 
@@ -186,16 +195,31 @@ export function MyWorkViewsSurface({
     }
   }, [preferredSystemViewId, systemViews]);
 
-  const active = views.find((view) => view.id === activeId) || defaultView;
+  const selectedView = views.find((view) => view.id === activeId) || defaultView;
+  const active = previewView?.id === selectedView.id ? previewView : selectedView;
 
-  const appliedRows = useMemo(
+  const appliedResult = useMemo(
     () =>
       applyView(tasks, adapter, active, {
         userId: actorId,
         memberIds: meMemberIds,
-      }).rows,
+      }),
     [tasks, adapter, active, actorId, meMemberIds],
   );
+  const appliedRows = appliedResult.rows;
+  const toGroupedItem = (row: TaskRow) => ({
+    id: row.id,
+    title: String(row.title || row.name || "Untitled"),
+    status: String(row.status || "Backlog"),
+    priority: row.priority != null ? String(row.priority) : undefined,
+    projectName: projects.find((project) => project.id === row.projectId)?.title ||
+      projects.find((project) => project.id === row.projectId)?.name,
+    due: row.dueDate ? String(row.dueDate) : row.due ? String(row.due) : null,
+    assignees: Array.isArray(row.assignees)
+      ? row.assignees.map((assignee: unknown) => String(assignee))
+      : row.assigneeId ? [String(row.assigneeId)] : [],
+    monoId: String(row.key || row.id).slice(0, 8),
+  });
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
@@ -214,11 +238,18 @@ export function MyWorkViewsSurface({
         ...active,
         filters: active.filters.filter((_, i) => i !== index),
       };
-      const saved = await ensurePersisted(next);
-      setRemoteViews((current) =>
-        current.map((view) => (view.id === saved.id ? saved : view)),
-      );
-      setActiveId(saved.id);
+      setPreviewView(next);
+      try {
+        const saved = await ensurePersisted(next);
+        setRemoteViews((current) =>
+          current.map((view) => (view.id === saved.id ? saved : view)),
+        );
+        setActiveId(saved.id);
+        setPreviewView(null);
+        setViewError("");
+      } catch (error) {
+        setViewError(`Filter active only for this session; it could not be saved: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     })();
   };
 
@@ -232,7 +263,7 @@ export function MyWorkViewsSurface({
           <button
             className="cw-views-compact-tool"
             data-testid="views-customize"
-            onClick={() => setCustomizerOpen(true)}
+            onClick={() => openCustomizer("filter")}
             type="button"
           >
             Filter · Sort
@@ -250,21 +281,28 @@ export function MyWorkViewsSurface({
         }
         onCreate={() => {
           void (async () => {
-            const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } =
-              defaultView;
-            const created = await createView({
-              ...rest,
-              name: t("views.myView"),
-              scope: "personal",
-              ownerId: actorId,
-            });
-            setRemoteViews((current) => [...current, created]);
-            setActiveId(created.id);
-            await setLastUsedView(actorId, surface, created.id);
+            try {
+              const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } =
+                defaultView;
+              const created = await createView({
+                ...rest,
+                name: t("views.myView"),
+                scope: "personal",
+                ownerId: actorId,
+              });
+              setRemoteViews((current) => [...current, created]);
+              setActiveId(created.id);
+              setViewError("");
+              await setLastUsedView(actorId, surface, created.id);
+            } catch (error) {
+              setViewError(error instanceof Error ? error.message : "Could not create the view.");
+            }
           })();
         }}
-        onOpenCustomizer={() => setCustomizerOpen(true)}
+        onOpenCustomizer={openCustomizer}
         onSelect={(viewId) => {
+          setPreviewView(null);
+          setCustomizerOpen(false);
           setActiveId(viewId);
           void setLastUsedView(actorId, surface, viewId);
         }}
@@ -276,6 +314,7 @@ export function MyWorkViewsSurface({
         views={views}
       />
       )}
+      {viewError ? <div className="cw-views-error" role="alert">{viewError}</div> : null}
       {active.filters.length ? (
         <div className="cw-views-filter-chips" data-testid="views-filter-chips">
           {active.filters.map((rule, index) => {
@@ -323,21 +362,9 @@ export function MyWorkViewsSurface({
         </div>
         {groupedLook && !listRenderer ? (
           <GroupedItemsList
-            items={appliedRows.map((row) => ({
-              id: row.id,
-              title: String(row.title || row.name || "Untitled"),
-              status: String(row.status || "Backlog"),
-              priority: row.priority != null ? String(row.priority) : undefined,
-              projectName: projects.find((p) => p.id === row.projectId)?.title ||
-                projects.find((p) => p.id === row.projectId)?.name,
-              due: row.dueDate ? String(row.dueDate) : row.due ? String(row.due) : null,
-              assignees: Array.isArray(row.assignees)
-                ? row.assignees.map((a: unknown) => String(a))
-                : row.assigneeId
-                  ? [String(row.assigneeId)]
-                  : [],
-              monoId: String(row.key || row.id).slice(0, 8),
-            }))}
+            density={active.density === "compact" ? "compact" : "regular"}
+            groupedRows={appliedResult.groups.map((group) => ({ key: group.key, label: group.label, items: group.rows.map(toGroupedItem) }))}
+            items={appliedRows.map(toGroupedItem)}
             onComplete={(id) => void onUpdateTask(id, { status: "done" })}
             onDueChange={(id, due) => void onUpdateTask(id, { dueDate: due })}
             onOpen={(id) => listBody.onSelectItem(id)}
@@ -348,6 +375,7 @@ export function MyWorkViewsSurface({
           <WorkItemsCenter
             activeProject={null}
             forceMode="list"
+            savedView={active}
             hierarchyTasks={listBody.hierarchyTasks}
             notebookEntries={listBody.notebookEntries as any[]}
             onAddTask={listBody.onAddTask as any}
@@ -381,35 +409,51 @@ export function MyWorkViewsSurface({
         <ViewCustomizer
           adapter={adapter}
           onChange={(next) => {
+            setPreviewView(next);
             void (async () => {
-              const saved = await ensurePersisted(next);
-              setRemoteViews((current) => {
-                const without = current.filter((view) => view.id !== saved.id);
-                return [...without, saved];
-              });
-              setActiveId(saved.id);
+              try {
+                const saved = await ensurePersisted(next);
+                setRemoteViews((current) => {
+                  const without = current.filter((view) => view.id !== saved.id);
+                  return [...without, saved];
+                });
+                setActiveId(saved.id);
+                setPreviewView(null);
+                setViewError("");
+              } catch (error) {
+                setViewError(`Changes active only for this session; they could not be saved: ${error instanceof Error ? error.message : "Unknown error"}`);
+              }
             })();
           }}
           onClose={() => setCustomizerOpen(false)}
           onReset={() => {
+            setPreviewView(null);
             setActiveId(defaultView.id);
             setCustomizerOpen(false);
           }}
-          onSaveAsTeam={() => {
+          onSaveAsTeam={(draft) => {
             void (async () => {
-              const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } =
-                active;
-              const created = await createView({
-                ...rest,
-                scope: "team",
-                name: `${active.name} · team`,
-                ownerId: actorId,
-              });
-              setRemoteViews((current) => [...current, created]);
-              setActiveId(created.id);
+              try {
+                const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } = draft;
+                const created = await createView({
+                  ...rest,
+                  scope: "team",
+                  name: `${draft.name} · team`,
+                  ownerId: actorId,
+                });
+                setRemoteViews((current) => [...current, created]);
+                setActiveId(created.id);
+                setViewError("");
+              } catch (error) {
+                setViewError(error instanceof Error ? error.message : "Could not create the team view.");
+              }
             })();
           }}
           open={customizerOpen}
+          section={customizerSection}
+          showQuickActions={false}
+          columnIds={["title", "type", "status", "priority", "assignee", "due", "sprint", "project", "tags", "delivery", "client", "category", "phase", "gtd", "action_board"]}
+          customizeColumnIds={["title", "status", "priority", "assignee", "due", "sprint", "project", "tags", "delivery", "client", "category", "phase", "gtd", "action_board"]}
           view={active}
         />
       </div>

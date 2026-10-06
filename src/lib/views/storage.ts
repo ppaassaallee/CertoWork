@@ -30,21 +30,18 @@ export async function listViews(
   surface: Surface,
   userId: string,
 ): Promise<SavedView[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, SAVED_VIEWS),
-      where("workspaceId", "==", workspaceId),
-      where("surface", "==", surface),
-    ),
-  );
-  return snap.docs
-    .map((row) => ({ id: row.id, ...(row.data() as Omit<SavedView, "id">) }))
-    .filter(
-      (view) =>
-        view.scope === "team" ||
-        view.ownerId === userId ||
-        String((view as { userId?: string }).userId || "") === userId,
-    )
+  // Rules only permit team views or the caller's own views. A workspace+surface
+  // query alone is rejected because it could return another user's private view.
+  const [team, personal] = await Promise.all([
+    getDocs(query(collection(db, SAVED_VIEWS), where("workspaceId", "==", workspaceId), where("scope", "==", "team"))),
+    getDocs(query(collection(db, SAVED_VIEWS), where("workspaceId", "==", workspaceId), where("ownerId", "==", userId))),
+  ]);
+  const byId = new Map<string, SavedView>();
+  for (const row of [...team.docs, ...personal.docs]) {
+    const view = { id: row.id, ...(row.data() as Omit<SavedView, "id">) };
+    if (view.surface === surface) byId.set(view.id, view);
+  }
+  return [...byId.values()]
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -58,7 +55,7 @@ export async function createView(
     workspaceId: input.workspaceId,
     surface: input.surface,
     name: input.name,
-    icon: input.icon,
+    ...(input.icon !== undefined ? { icon: input.icon } : {}),
     scope: input.scope,
     ownerId: input.ownerId,
     layout: input.layout,
@@ -68,7 +65,7 @@ export async function createView(
     sort: input.sort,
     groupBy: input.groupBy,
     density: input.density,
-    showSubtasks: input.showSubtasks,
+    ...(input.showSubtasks !== undefined ? { showSubtasks: input.showSubtasks } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -100,7 +97,10 @@ export async function updateView(
     updatedAt: nowIso(),
   };
   const { id: _id, isDefault: _default, ...data } = next;
-  await updateDoc(doc(db, SAVED_VIEWS, viewId), data);
+  await updateDoc(
+    doc(db, SAVED_VIEWS, viewId),
+    Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+  );
   return next;
 }
 

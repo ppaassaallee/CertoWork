@@ -10,7 +10,7 @@ import {
 import { applyView } from "../../lib/views/apply";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewsBar } from "./ViewsBar";
-import { ViewCustomizer } from "./ViewCustomizer";
+import { ViewCustomizer, type CustomizerSection } from "./ViewCustomizer";
 import {
   buildProjectAdapter,
   type ProjectRow,
@@ -130,6 +130,7 @@ export function ProjectsViewsSurface({
   const [views, setViews] = useState<SavedView[]>([defaultView]);
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [customizerSection, setCustomizerSection] = useState<CustomizerSection>("customize");
 
   const refresh = useCallback(async () => {
     try {
@@ -242,7 +243,7 @@ export function ProjectsViewsSurface({
             await setLastUsedView(actorId, surface, created.id);
           })();
         }}
-        onOpenCustomizer={() => setCustomizerOpen(true)}
+        onOpenCustomizer={(section = "customize") => { setCustomizerSection(section); setCustomizerOpen(true); }}
         onSelect={(viewId) => {
           setActiveId(viewId);
           void setLastUsedView(actorId, surface, viewId);
@@ -375,14 +376,14 @@ export function ProjectsViewsSurface({
           setActiveId(defaultView.id);
           setCustomizerOpen(false);
         }}
-        onSaveAsTeam={() => {
+        onSaveAsTeam={(draft) => {
           void (async () => {
             const { id: _id, isDefault: _d, createdAt: _c, updatedAt: _u, ...rest } =
-              listView;
+              draft;
             const created = await createView({
               ...rest,
               scope: "team",
-              name: `${listView.name} · team`,
+              name: `${draft.name} · team`,
               ownerId: actorId,
               layout: "list",
             });
@@ -391,6 +392,7 @@ export function ProjectsViewsSurface({
           })();
         }}
         open={customizerOpen}
+        section={customizerSection}
         view={listView}
       />
     </div>
