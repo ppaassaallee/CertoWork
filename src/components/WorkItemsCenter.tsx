@@ -2937,22 +2937,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         >
           <GripVertical size={14} />
         </button>
-        <button
-          aria-expanded={!collapsed}
-          aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
-          className={`do-items-section-toggle${collapsed ? " is-collapsed" : ""}`}
-          data-testid="item-tree-toggle"
-          onClick={() => toggleTreeNode(groupKey, kind, depth)}
-          type="button"
-        >
-          <ChevronDown size={14} />
-        </button>
         {renderTitleCell(item, kind, childCount, {
           depth: 0,
           childCount,
           collapsed,
           onToggle: () => toggleTreeNode(groupKey, kind, depth),
-          showToggle: false,
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
         {isMyWork ? <>{renderAttributeIcons(item)}{renderDeleteButton(item)}</> : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderDeleteButton(item)}</>}
