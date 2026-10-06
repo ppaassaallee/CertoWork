@@ -40,6 +40,13 @@ export type ProjectItemsListBodyProps = {
     group: "delivery_entity" | "client_entity" | "tag",
     name: string,
   ) => Promise<string | void> | string | void;
+  onRenameControlledOption?: (
+    group: "delivery_entity" | "client_entity",
+    option: { id?: string; name: string },
+    name: string,
+  ) => Promise<void> | void;
+  onRenameWorkCategory?: (previous: string, name: string) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | void> | string | void;
   onCreateSprint?: (patch: Record<string, unknown>) => Promise<void> | void;
   onUpdateSprint?: (sprintId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onInviteAssigneeEmail?: (email: string) => Promise<void> | void;
@@ -247,6 +254,9 @@ export function ProjectItemsViewsSurface({
           onAsk={listBody.onAsk || (() => undefined)}
           onAskOdysseus={listBody.onAskOdysseus as any}
           onCreateControlledOption={listBody.onCreateControlledOption}
+          onCreateProject={listBody.onCreateProject}
+          onRenameControlledOption={listBody.onRenameControlledOption}
+          onRenameWorkCategory={listBody.onRenameWorkCategory}
           onCreateSprint={listBody.onCreateSprint}
           onGanttFocusChange={listBody.onGanttFocusChange}
           onInviteAssigneeEmail={listBody.onInviteAssigneeEmail}

@@ -55,6 +55,7 @@ export function QuickAttrChoices({
   value,
   multi = false,
   onPick,
+  onRename,
   empty = "Nothing to choose yet",
   ariaLabel,
 }: {
@@ -62,10 +63,13 @@ export function QuickAttrChoices({
   value: string | string[];
   multi?: boolean;
   onPick: (id: string) => void;
+  onRename?: (id: string, next: string) => void;
   empty?: string;
   ariaLabel?: string;
 }) {
   const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState("");
+  const [draft, setDraft] = useState("");
   const selected = new Set(Array.isArray(value) ? value : value == null ? [] : [String(value)]);
   const needle = query.trim().toLowerCase();
   const visible = needle
@@ -85,18 +89,54 @@ export function QuickAttrChoices({
         {visible.length === 0 ? <p>{empty}</p> : null}
         {visible.map((option) => {
           const on = selected.has(option.id);
+          if (onRename && editing === option.id) {
+            return (
+              <form
+                className="do-quick-attr-rename"
+                key={option.id}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const next = draft.trim();
+                  if (next && next !== option.label) onRename(option.id, next);
+                  setEditing("");
+                }}
+              >
+                <input
+                  aria-label={`Rename ${option.label}`}
+                  autoFocus
+                  onChange={(event) => setDraft(event.target.value)}
+                  value={draft}
+                />
+                <button type="submit">Save</button>
+              </form>
+            );
+          }
           return (
-            <button
-              aria-selected={on}
-              className={on ? "is-active" : ""}
-              key={option.id}
-              onClick={() => onPick(option.id)}
-              role="option"
-              type="button"
-            >
-              <span aria-hidden="true">{on ? "✓" : ""}</span>
-              {option.label}
-            </button>
+            <div className="do-quick-attr-option" key={option.id}>
+              <button
+                aria-selected={on}
+                className={on ? "is-active" : ""}
+                onClick={() => onPick(option.id)}
+                role="option"
+                type="button"
+              >
+                <span aria-hidden="true">{on ? "✓" : ""}</span>
+                {option.label}
+              </button>
+              {onRename && option.id ? (
+                <button
+                  aria-label={`Rename ${option.label}`}
+                  className="do-quick-attr-edit"
+                  onClick={() => {
+                    setEditing(option.id);
+                    setDraft(option.label);
+                  }}
+                  type="button"
+                >
+                  Edit
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>

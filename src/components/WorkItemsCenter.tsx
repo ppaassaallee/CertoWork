@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, Fragment, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DragDropContext, Draggable, Droppable, type DragStart, type DropResult } from "@hello-pangea/dnd";
 import {
@@ -55,6 +55,17 @@ import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
 import { controlledOptionNames } from "../lib/controlledLists";
+import {
+  NO_PROJECT_SECTION,
+  compareManualOrder,
+  orderSections,
+  placeItemBefore,
+  readMyWorkSectionOrder,
+  reorderIds,
+  sectionIdForProject,
+  subtreeIds,
+  writeMyWorkSectionOrder,
+} from "../lib/myWorkSectionOrder";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import {
   CREATE_QUICK_ACTION_LABELS,
@@ -236,6 +247,13 @@ type Props = {
   onAddTask: (projectId: string, title: string, status: WorkLane, patch?: Record<string, unknown>) => Promise<string | void> | void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onCreateControlledOption?: (group: "delivery_entity" | "client_entity" | "tag", name: string) => Promise<string | void> | string | void;
+  onRenameControlledOption?: (
+    group: "delivery_entity" | "client_entity",
+    option: { id?: string; name: string },
+    name: string,
+  ) => Promise<void> | void;
+  onRenameWorkCategory?: (previous: string, name: string) => Promise<void> | void;
+  onCreateProject?: (name: string) => Promise<string | void> | string | void;
   onOpenProjectConsole: (project: any) => void;
   onOpenFinanceLine?: (financeLineId: string) => void;
   onOpenCollabProject?: (projectId: string) => void;
@@ -429,7 +447,8 @@ function itemAttributeCaption(
   }
   if (column === "tags") return tagLabels(item, tags).join(", ") || "No tags";
   if (column === "work_category") {
-    return String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects));
+    const raw = String(effectiveInheritedField(item, allItems, "workCategory") || itemWorkCategory(item, projects));
+    return displayWorkCategory(raw, tags);
   }
   if (column === "product_phase") {
     return String(effectiveInheritedField(item, allItems, "productPhase") || itemProductPhase(item, projects));
@@ -541,6 +560,42 @@ function clientEntity(item: any, projects: any[]) {
 
 function itemWorkCategory(item: any, projects: any[]) {
   return workCategory(item, itemProject(item, projects));
+}
+
+function workCategoryAliases(tags: Array<{ group?: string; name?: string }>) {
+  const replaced = new Map<string, string>();
+  const custom: string[] = [];
+  for (const tag of tags) {
+    const group = String(tag.group || "");
+    const name = String(tag.name || "").trim();
+    if (!name) continue;
+    if (group.startsWith("work_category:")) replaced.set(group.slice("work_category:".length), name);
+    else if (group === "work_category") custom.push(name);
+  }
+  return { replaced, custom };
+}
+
+function displayWorkCategory(value: string, tags: Array<{ group?: string; name?: string }>) {
+  return workCategoryAliases(tags).replaced.get(value) || value;
+}
+
+function listedWorkCategories(
+  tags: Array<{ group?: string; name?: string }>,
+  tasks: any[],
+  projects: any[],
+) {
+  const { replaced, custom } = workCategoryAliases(tags);
+  const names = WORK_CATEGORIES.map((category) => replaced.get(category) || category);
+  for (const record of [...tasks, ...projects]) {
+    const value = String(record?.workCategory || "").trim();
+    if (!value) continue;
+    const shown = replaced.get(value) || value;
+    if (!names.includes(shown)) names.push(shown);
+  }
+  for (const name of custom) {
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
 }
 
 function itemProductPhase(item: any, projects: any[]) {
@@ -787,6 +842,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   onAddTask,
   onUpdateTask,
   onCreateControlledOption,
+  onRenameControlledOption,
+  onRenameWorkCategory,
+  onCreateProject,
   onOpenProjectConsole,
   onOpenFinanceLine,
   onOpenCollabProject,
@@ -863,7 +921,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [newParentId, setNewParentId] = useState("");
   const [newTitle, setNewTitle] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
-  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [newAssigneeIds, setNewAssigneeIds] = useState<string[]>([]);
   const [newPriority, setNewPriority] = useState("N/A");
   const [newDeliveryEntity, setNewDeliveryEntity] = useState("");
   const [inlineAddDrafts, setInlineAddDrafts] = useState<Record<string, string>>({});
@@ -878,6 +936,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const [sectionOrder, setSectionOrder] = useState<string[]>([]);
+  const dragRef = useRef<{ kind: "item" | "section"; id: string } | null>(null);
   const [bulkStatus, setBulkStatus] = useState("in_progress");
   const [bulkPriority, setBulkPriority] = useState("2");
   const [bulkDueDate, setBulkDueDate] = useState("");
@@ -1355,6 +1416,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const baseProjectId = projectFilter !== "all" && projectFilter !== "no_project" ? projectFilter : activeProject?.id || "";
   const parentPool = hierarchyTasks?.length ? hierarchyTasks : tasks;
   const treeScope = `${workspaceId || "local"}:${surface}`;
+  const sectionOrderScope = workspaceId || "local";
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSectionOrder(readMyWorkSectionOrder(window.localStorage, sectionOrderScope));
+  }, [sectionOrderScope]);
   useEffect(() => {
     if (treeScopeSeeded.current === treeScope) return;
     const saved = typeof window === "undefined" ? null : readTreeExpandMemory(window.localStorage, treeScope);
@@ -1544,7 +1610,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
     const parent = findPoolItem(newParentId);
     const links = parentLinkPatch(parent);
-    const assigneeMember = workspaceMembers.find((member) => member.id === newAssigneeId || member.userId === newAssigneeId);
+    const assigneeMembers = newAssigneeIds
+      .map((id) => workspaceMembers.find((member) => member.id === id || member.userId === id))
+      .filter((member): member is NonNullable<typeof member> => Boolean(member));
     await onAddTask(projectId, newTitle.trim(), "backlog", {
       workItemType: newType,
       itemType: newType,
@@ -1558,14 +1626,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       productPhase: project ? productPhase(project) : "Explore",
       priority: newPriority === "N/A" ? null : newPriority,
       dueDate: newDueDate || null,
-      ...(assigneeMember ? assignmentFieldsFromMembers([assigneeMember as any]) : {}),
+      ...(assigneeMembers.length ? assignmentFieldsFromMembers(assigneeMembers as any) : {}),
       order: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
       rank: tasks.filter((item) => projectId ? item.projectId === projectId : !item.projectId).length,
     });
     setNewTitle("");
     setNewParentId("");
     setNewDueDate("");
-    setNewAssigneeId("");
+    setNewAssigneeIds([]);
     setNewPriority("N/A");
     setNewDeliveryEntity("");
   };
@@ -1693,9 +1761,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     draggedId: string | null,
     targetId: string,
     peers: any[],
+    compare: (left: any, right: any) => number = compareHierarchySiblings,
   ) => {
     if (!draggedId || draggedId === targetId) return;
-    const ordered = sortItems(peers, "rank", "priority", projects, parentPool);
+    const ordered = [...peers].sort(compare);
     const from = ordered.findIndex((candidate) => candidate.id === draggedId);
     const to = ordered.findIndex((candidate) => candidate.id === targetId);
     if (from === -1 || to === -1) return;
@@ -1708,6 +1777,63 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         return onUpdateTask(candidate.id, { order: index, rank: index });
       }),
     );
+  };
+
+  const clearItemDrag = () => {
+    dragRef.current = null;
+    setDraggedItemId(null);
+    setDragOverItemId(null);
+    setDragOverSectionId(null);
+  };
+
+  const endItemDrag = () => {
+    window.setTimeout(clearItemDrag, 0);
+  };
+
+  const dragFromEvent = (event: { dataTransfer: DataTransfer | null }) => {
+    const raw = event.dataTransfer?.getData("text/plain") || "";
+    if (raw.startsWith("item:")) return { kind: "item" as const, id: raw.slice(5) };
+    if (raw.startsWith("section:")) return { kind: "section" as const, id: raw.slice(8) };
+    return dragRef.current;
+  };
+
+  const relocateItemToProject = async (
+    draggedId: string,
+    projectId: string | null,
+    roots: any[],
+    beforeId: string | null,
+  ) => {
+    const moving = subtreeIds(draggedId, (id) => hierarchyChildren(parentPool, id).map((child) => String(child.id)));
+    const movingSet = new Set(moving);
+    const rootIds = roots.map((item) => String(item.id)).filter((id) => !movingSet.has(id));
+    const placed = placeItemBefore(rootIds, draggedId, beforeId && rootIds.includes(beforeId) ? beforeId : null);
+    const projectPatch = { projectId: projectId || null };
+    await Promise.all([
+      ...moving.map((id) => {
+        const order = placed.indexOf(id);
+        const patch: Record<string, unknown> = { ...projectPatch };
+        if (id === draggedId) {
+          Object.assign(patch, parentLinkPatch(null));
+          if (order >= 0) {
+            patch.order = order;
+            patch.rank = order;
+          }
+        }
+        return onUpdateTask(id, patch);
+      }),
+      ...placed.filter((id) => id !== draggedId).map((id) => {
+        const order = placed.indexOf(id);
+        const current = roots.find((item) => item.id === id);
+        if (current && itemOrder(current, order) === order) return Promise.resolve();
+        return onUpdateTask(id, { order, rank: order });
+      }),
+    ]);
+  };
+
+  const saveSectionOrder = (ids: string[]) => {
+    setSectionOrder(ids);
+    if (typeof window === "undefined") return;
+    writeMyWorkSectionOrder(window.localStorage, sectionOrderScope, ids);
   };
 
   const updateBulk = async (patch: Record<string, unknown>) => {
@@ -1988,21 +2114,35 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     };
     if (column === "project") {
       return (
-        <QuickAttrChoices
-          ariaLabel={`Project for ${title(item)}`}
-          onPick={(id) => pick({ projectId: id || null })}
-          options={[
-            { id: "", label: "No project" },
-            ...projects
-              .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
-              .map((project) => ({ id: String(project.id), label: projectTitle(project) })),
-          ]}
-          value={item.projectId || ""}
-        />
+        <>
+          <QuickAttrChoices
+            ariaLabel={`Project for ${title(item)}`}
+            onPick={(id) => pick({ projectId: id || null })}
+            options={[
+              { id: "", label: "No project" },
+              ...projects
+                .filter((project) => String(project.status || "").toLowerCase() !== "deleted")
+                .map((project) => ({ id: String(project.id), label: projectTitle(project) })),
+            ]}
+            value={item.projectId || ""}
+          />
+          {onCreateProject ? (
+            <QuickAttrCreate
+              onCreate={(name) => {
+                Promise.resolve(onCreateProject(name)).then((createdId) => {
+                  const id = String(createdId || "").trim();
+                  if (id) pick({ projectId: id });
+                });
+              }}
+              placeholder="Create project"
+            />
+          ) : null}
+        </>
       );
     }
     if (column === "delivery_entity" || column === "client_entity") {
       const delivery = column === "delivery_entity";
+      const group = delivery ? "delivery_entity" : "client_entity";
       const options = (delivery ? deliveryEntityOptions : clientEntityOptions).map((name) => ({ id: name, label: name }));
       const current = delivery ? deliveryEntity(item, projects) : clientEntity(item, projects);
       return (
@@ -2011,12 +2151,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             onPick={(id) => pick(delivery
               ? { deliveryEntity: id || "Internal", bpo: id || "Internal" }
               : { clientEntity: id || "Internal", client: id || "Internal" })}
+            onRename={onRenameControlledOption
+              ? (currentName, next) => {
+                  const match = tags.find(
+                    (tag) => String((tag as { group?: string }).group || "") === group && String(tag.name || "").trim() === currentName,
+                  );
+                  void onRenameControlledOption(group, { id: match?.id, name: currentName }, next);
+                }
+              : undefined}
             options={options}
             value={current}
           />
           <QuickAttrCreate
             onCreate={(name) => {
-              void onCreateControlledOption?.(delivery ? "delivery_entity" : "client_entity", name);
+              void onCreateControlledOption?.(group, name);
               pick(delivery
                 ? { deliveryEntity: name, bpo: name }
                 : { clientEntity: name, client: name });
@@ -2033,7 +2181,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             empty="No tags yet"
             multi
             onPick={(id) => pick(toggleTagId(item, id), true)}
-            options={tags.map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
+            options={tags
+              .filter((tag) => !String((tag as { group?: string }).group || "").startsWith("work_category"))
+              .map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
             value={tagIds(item)}
           />
           <QuickAttrCreate
@@ -2049,11 +2199,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       );
     }
     if (column === "work_category") {
+      const current = displayWorkCategory(itemWorkCategory(item, projects), tags);
       return (
         <QuickAttrChoices
           onPick={(id) => pick({ workCategory: id })}
-          options={WORK_CATEGORIES.map((category) => ({ id: category, label: category }))}
-          value={itemWorkCategory(item, projects)}
+          onRename={onRenameWorkCategory
+            ? (previous, next) => {
+                void onRenameWorkCategory(previous, next);
+              }
+            : undefined}
+          options={listedWorkCategories(tags, tasks, projects).map((category) => ({ id: category, label: category }))}
+          value={current}
         />
       );
     }
@@ -2207,7 +2363,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           ))}
         </div>
         {options.length === 0 && (
-          <small>No {labels} yet. Create one, then assign it here.</small>
+          <small>No {labels} yet. Add one below.</small>
         )}
         {options.length > 0 && visible.length === 0 && (
           <small>No matching {labels}. Try another name.</small>
@@ -2215,6 +2371,25 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         {options.length > visible.length && needle === "" && (
           <small>Showing {visible.length} of {options.length}. Type to find the rest.</small>
         )}
+        <QuickAttrCreate
+          onCreate={(name) => {
+            const kind = allowed[0];
+            Promise.resolve(onAddTask(String(item.projectId || ""), name, "backlog", {
+              workItemType: kind,
+              itemType: kind,
+              taskType: kind,
+              type: kind,
+            })).then((createdId) => {
+              const id = String(createdId || "").trim();
+              if (!id) return;
+              onUpdateTask(item.id, parentLinkPatch({ id, workItemType: kind }));
+              setOpenAttr(null);
+              setAttrAnchor(null);
+              setParentSearch("");
+            });
+          }}
+          placeholder={`Create ${workItemLabel(allowed[0])}`}
+        />
       </div>
     );
   };
@@ -2348,9 +2523,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
-                helperText="One person is accountable for finishing this work."
-                label="Assignee"
-                maxSelections={1}
+                helperText="Multi-select. The first person stays the owner."
+                label="Assignees"
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
@@ -2362,13 +2536,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     assigneeId: assigneeIds[0] || "",
                   })
                 }
-                selectedIds={
-                  Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []
-                }
+                selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
                 selectedNames={
-                  Array.isArray(item.assignees)
-                    ? item.assignees.slice(0, 1)
-                    : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+                  Array.isArray(item.assignees) && item.assignees.length
+                    ? item.assignees
+                    : [item.owner || item.assignee].filter(Boolean)
                 }
                 triggerTestId={`item-attr-assignees-${item.id}`}
               />
@@ -2434,6 +2606,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     item: any,
     peers: any[],
     tree?: { depth: number; childCount: number; collapsed: boolean; onToggle: () => void; onEnterAddChild?: () => void },
+    section?: { id: string; projectId: string | null; roots: any[] },
   ) => {
     const kind = workItemKind(item);
     const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
@@ -2447,33 +2620,41 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
         onDragOver={(event) => {
-          if (!draggedItemId || draggedItemId === item.id) return;
+          if (dragRef.current?.kind !== "item" || dragRef.current.id === item.id) return;
           event.preventDefault();
+          event.stopPropagation();
           setDragOverItemId(item.id);
         }}
         onDrop={async (event) => {
+          const drag = dragFromEvent(event);
+          if (drag?.kind === "section") return;
           event.preventDefault();
-          if (!draggedItemId || draggedItemId === item.id) {
-            setDraggedItemId(null);
-            setDragOverItemId(null);
+          event.stopPropagation();
+          if (!drag || drag.kind !== "item" || drag.id === item.id) {
+            clearItemDrag();
             return;
           }
-          const dragged = findPoolItem(draggedItemId);
+          const dragged = findPoolItem(drag.id);
+          const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+          if (isMyWork && section && dragged && fromSection !== section.id) {
+            await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+            clearItemDrag();
+            return;
+          }
           if (
             dragged &&
             canNestUnder(workItemKind(dragged), workItemKind(item)) &&
             !wouldCreateHierarchyCycle(dragged, item, parentPool)
           ) {
-            await onUpdateTask(draggedItemId, parentLinkPatch(item));
+            await onUpdateTask(drag.id, parentLinkPatch(item));
             setExpandedTreeNodes((current) => {
               const key = `node:${item.id}`;
               return current.includes(key) ? current : [...current, key];
             });
           } else {
-            await reorderItem(draggedItemId, item.id, peers);
+            await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
           }
-          setDraggedItemId(null);
-          setDragOverItemId(null);
+          clearItemDrag();
         }}
         style={itemGridStyle}
       >
@@ -2482,19 +2663,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </button>
         {renderBulkSelect(item)}
         <button
-          aria-label={`Drag to nest or reorder ${title(item)}`}
+          aria-label={`Drag to move ${title(item)}`}
           className="do-items-drag-handle"
           draggable
-          onDragEnd={() => {
-            setDraggedItemId(null);
-            setDragOverItemId(null);
-          }}
+          onDragEnd={endItemDrag}
           onDragStart={(event) => {
+            dragRef.current = { kind: "item", id: item.id };
             setDraggedItemId(item.id);
             event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", item.id);
+            event.dataTransfer.setData("text/plain", `item:${item.id}`);
           }}
-          title="Drag onto a valid parent to nest, or onto a sibling to reorder"
+          title="Drag within a project to reorder. Drag into another project to move it there."
           type="button"
         >
           <GripVertical size={14} />
@@ -2589,7 +2768,52 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }, 0);
   };
 
-  const renderSectionHead = (item: any, groupKey: string, childCount: number) => {
+  const beginItemDrag = (itemId: string, event: ReactDragEvent) => {
+    dragRef.current = { kind: "item", id: itemId };
+    setDraggedItemId(itemId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `item:${itemId}`);
+    event.stopPropagation();
+  };
+
+  const previewItemDrag = (itemId: string, event: ReactDragEvent) => {
+    if (dragRef.current?.kind !== "item" || dragRef.current.id === itemId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverItemId(itemId);
+  };
+
+  const dropDraggedItem = async (
+    event: ReactDragEvent,
+    item: any,
+    peers: any[],
+    section?: { id: string; projectId: string | null; roots: any[] },
+  ) => {
+    const drag = dragFromEvent(event);
+    if (drag?.kind === "section") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!drag || drag.kind !== "item" || drag.id === item.id) {
+      clearItemDrag();
+      return;
+    }
+    const dragged = findPoolItem(drag.id);
+    const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+    if (isMyWork && section && dragged && fromSection !== section.id) {
+      await relocateItemToProject(drag.id, section.projectId, section.roots, item.id);
+    } else {
+      await reorderItem(drag.id, item.id, peers, isMyWork ? compareManualOrder : compareVisibleSiblings);
+    }
+    clearItemDrag();
+  };
+
+  const renderSectionHead = (
+    item: any,
+    groupKey: string,
+    childCount: number,
+    siblings: any[] = [],
+    section?: { id: string; projectId: string | null; roots: any[] },
+  ) => {
     const kind = workItemKind(item);
     const depth = 0;
     const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
@@ -2597,8 +2821,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const canAddChild = allowedChildKinds(kind).length > 0;
     return (
       <header
-        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
+        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         data-testid="item-section-head"
+        onDragOver={(event) => previewItemDrag(item.id, event)}
+        onDrop={(event) => void dropDraggedItem(event, item, siblings, section)}
         style={itemGridStyle}
       >
         <button
@@ -2612,6 +2838,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           {isDone ? <Check size={12} /> : <Circle size={12} />}
         </button>
         {renderBulkSelect(item)}
+        <button
+          aria-label={`Drag to move ${title(item)}`}
+          className="do-items-drag-handle"
+          draggable
+          onDragEnd={endItemDrag}
+          onDragStart={(event) => beginItemDrag(item.id, event)}
+          title="Drag within a project to reorder. Drag into another project to move it there."
+          type="button"
+        >
+          <GripVertical size={14} />
+        </button>
         <button
           aria-expanded={!collapsed}
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title(item)}`}
@@ -2707,7 +2944,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
-  const renderForest = (items: any[]) => {
+  const renderForest = (
+    items: any[],
+    section?: { id: string; projectId: string | null },
+    compare: (left: any, right: any) => number = compareVisibleSiblings,
+  ) => {
     // Roots stay scoped to the visible list (My Work / filters). Children resolve
     // from the full hierarchy pool so expand twisties work like Asana project
     // lists — and like the My Tasks request — even when subtasks are not
@@ -2715,11 +2956,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     // children so completed work stays hidden unless the filter asks for it.
     const childPool = parentPool;
     const visibleChildrenOf = (parentIdValue: string) =>
-      sortHierarchySiblings(
+        sortHierarchySiblings(
         hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
-        compareVisibleSiblings,
+        compare,
       );
-    const walk = (item: any, depth: number, ancestors: Set<string>) => {
+    const walk = (item: any, depth: number, ancestors: Set<string>, siblings: any[]) => {
       if (ancestors.has(item.id)) return null;
       const children = visibleChildrenOf(item.id);
       const groupKey = `node:${item.id}`;
@@ -2746,21 +2987,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           key={item.id}
         >
           {kind === "epic" && depth === 0
-            ? renderSectionHead(item, groupKey, children.length)
-            : renderRow(item, children, tree)}
+            ? renderSectionHead(item, groupKey, children.length, siblings, section ? { ...section, roots } : undefined)
+            : renderRow(item, siblings, tree, section ? { ...section, roots } : undefined)}
           {!collapsed ? (
             <div className="do-items-children" data-testid="item-tree-children">
-              {children.map((child) => walk(child, depth + 1, nextAncestors))}
+              {children.map((child) => walk(child, depth + 1, nextAncestors, children))}
               {canAddChild ? renderInlineAddChild(item, depth, groupKey) : null}
             </div>
           ) : null}
         </div>
       );
     };
-    const roots = sortHierarchySiblings(hierarchyRoots(items), compareVisibleSiblings);
+    const roots = sortHierarchySiblings(hierarchyRoots(items), compare);
     return (
       <div className="do-items-tree" data-testid="item-hierarchy-forest">
-        {roots.map((item) => walk(item, 0, new Set()))}
+        {roots.map((item) => walk(item, 0, new Set(), roots))}
         {items.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items here yet.</strong><span>Create the first Epic, Feature, PBI/Task, bug or issue for this context.</span></div>}
       </div>
     );
@@ -2789,6 +3030,27 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       return acc;
     }, {});
   }, [effectiveGroupBy, filtered, projects, tags, tasks]);
+
+  const myWorkSections = useMemo(() => {
+    if (!isMyWork || effectiveGroupBy !== "project") return [];
+    const sections = Object.entries(grouped).map(([label, items]) => {
+      const match = label === NO_PROJECT_LABEL
+        ? null
+        : projects.find((project) => projectTitle(project) === label && String(project.status || "").toLowerCase() !== "deleted");
+      const id = label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label);
+      return {
+        id,
+        label,
+        projectId: label === NO_PROJECT_LABEL ? null : match?.id ? String(match.id) : null,
+        canReceive: label === NO_PROJECT_LABEL || Boolean(match?.id),
+        items,
+      };
+    });
+    if (!sections.some((section) => section.id === NO_PROJECT_SECTION)) {
+      sections.push({ id: NO_PROJECT_SECTION, label: NO_PROJECT_LABEL, projectId: null, canReceive: true, items: [] });
+    }
+    return orderSections(sections, sectionOrder);
+  }, [effectiveGroupBy, grouped, isMyWork, projects, sectionOrder]);
 
   const renderBoardCard = (item: any) => {
     const kind = workItemKind(item);
@@ -2851,9 +3113,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               agentMembers={agentMembers}
               compact
-              helperText="One person is accountable for finishing this work."
-              label="Assignee"
-              maxSelections={1}
+              helperText="Multi-select. The first person stays the owner."
+              label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => {
@@ -2874,11 +3135,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   });
                 }
               }}
-              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds.slice(0, 1) : []}
+              selectedIds={Array.isArray(item.assigneeIds) ? item.assigneeIds : []}
               selectedNames={
-                Array.isArray(item.assignees)
-                  ? item.assignees.slice(0, 1)
-                  : [item.owner || item.assignee].filter(Boolean).slice(0, 1)
+                Array.isArray(item.assignees) && item.assignees.length
+                  ? item.assignees
+                  : [item.owner || item.assignee].filter(Boolean)
               }
             />
           </span>
@@ -3411,14 +3672,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         const label = itemProjectTitle(entry.item, projects);
         map.set(label, [...(map.get(label) || []), entry]);
       }
-      return [...map.entries()]
-        .sort(([left], [right]) => {
-          const leftIndex = groupSortIndex("project", left);
-          const rightIndex = groupSortIndex("project", right);
-          if (leftIndex !== rightIndex) return leftIndex - rightIndex;
-          return left.localeCompare(right);
-        })
-        .map(([label, entries]) => ({ key: `gantt-project:${label}`, label, entries }));
+      return orderSections(
+        [...map.entries()].map(([label, entries]) => {
+          const match = label === NO_PROJECT_LABEL
+            ? null
+            : projects.find((project) => projectTitle(project) === label);
+          return {
+            id: label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label),
+            key: `gantt-project:${label}`,
+            label,
+            entries,
+          };
+        }),
+        sectionOrder,
+      );
     })();
 
     const renderGanttRow = ({ item, start, end }: (typeof dated)[number]) => {
@@ -4482,7 +4749,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   )}
                   {createQuickActions.includes("assignee") && (
                   <div
-                    className={`do-item-attr is-assignees ${newAssigneeId ? "is-on" : "is-off"}`}
+                    className={`do-item-attr is-assignees ${newAssigneeIds.length ? "is-on" : "is-off"}`}
                     onContextMenu={(event) => openCreateMenu("assignee", event)}
                     style={{ order: createQuickActions.indexOf("assignee") }}
                   >
@@ -4493,22 +4760,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         (member) => String(member.status || "active") !== "removed",
                       )}
                       onInviteEmail={onInviteAssigneeEmail}
+                      helperText="Multi-select. The first person stays the owner."
                       onChange={(assigneeIds) => {
-                        setNewAssigneeId(assigneeIds[0] || "");
-                        setCreateAttr(null);
+                        setNewAssigneeIds(assigneeIds);
                       }}
-                      selectedIds={newAssigneeId ? [newAssigneeId] : []}
-                      selectedNames={
-                        newAssigneeId
-                          ? [
-                              memberName(
-                                workspaceMembers.find((member) => member.id === newAssigneeId) || {
-                                  id: newAssigneeId,
-                                },
-                              ),
-                            ]
-                          : []
-                      }
+                      selectedIds={newAssigneeIds}
+                      selectedNames={newAssigneeIds.map((id) =>
+                        memberName(
+                          workspaceMembers.find((member) => member.id === id) || { id },
+                        ),
+                      )}
                       triggerTestId="item-create-assignee"
                     />
                   </div>
@@ -4863,7 +5124,76 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             />
           ) : effectiveGroupBy === "hierarchy" ? renderHierarchy() : (
             <div className="do-items-groups">
-              {Object.entries(grouped).sort(([left], [right]) => {
+              {(isMyWork && effectiveGroupBy === "project" ? myWorkSections.map((section) => {
+                const group = section.label;
+                const items = section.items;
+                const collapsed = collapsedGroups.includes(group);
+                return (
+                  <section
+                    className={`do-items-group${dragOverSectionId === section.id ? " is-section-over" : ""}`}
+                    data-section-id={section.id}
+                    data-testid="my-work-project-section"
+                    key={section.id}
+                    onDragOver={(event) => {
+                      if (!dragRef.current) return;
+                      event.preventDefault();
+                      setDragOverSectionId(section.id);
+                    }}
+                    onDragLeave={() => setDragOverSectionId((current) => current === section.id ? null : current)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const drag = dragFromEvent(event);
+                      setDragOverSectionId(null);
+                      if (!drag || drag.id === section.id) {
+                        clearItemDrag();
+                        return;
+                      }
+                      if (drag.kind === "section") {
+                        const visual = myWorkSections.map((entry) => entry.id);
+                        saveSectionOrder(reorderIds(visual, drag.id, section.id));
+                        clearItemDrag();
+                        return;
+                      }
+                      const dragged = findPoolItem(drag.id);
+                      const fromSection = sectionIdForProject(hierarchyRoot(dragged, parentPool)?.projectId);
+                      if (fromSection === section.id || !section.canReceive) {
+                        clearItemDrag();
+                        return;
+                      }
+                      const roots = sortHierarchySiblings(hierarchyRoots(items), compareManualOrder);
+                      void relocateItemToProject(drag.id, section.projectId, roots, null).finally(clearItemDrag);
+                    }}
+                  >
+                    <div className="do-items-section-head do-my-work-section-head">
+                      <button
+                        aria-label={`Drag to reorder ${group}`}
+                        className="do-items-drag-handle"
+                        data-testid="my-work-section-drag"
+                        draggable
+                        onDragEnd={endItemDrag}
+                        onDragStart={(event) => {
+                          dragRef.current = { kind: "section", id: section.id };
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", `section:${section.id}`);
+                        }}
+                        title="Drag to reorder this project"
+                        type="button"
+                      >
+                        <GripVertical size={14} />
+                      </button>
+                      <button className="do-items-section-toggle" onClick={() => toggleGroup(group)} type="button">
+                        <ChevronDown className={collapsed ? "is-collapsed" : ""} size={13} />
+                        <strong>{group}</strong>
+                        <span>{items.length}</span>
+                      </button>
+                    </div>
+                    {!collapsed && items.length > 0 && renderForest(items, { id: section.id, projectId: section.projectId }, compareManualOrder)}
+                    {!collapsed && items.length === 0 && (
+                      <p className="do-items-section-empty">Drop an item here to remove it from its project.</p>
+                    )}
+                  </section>
+                );
+              }) : Object.entries(grouped).sort(([left], [right]) => {
                 const leftIndex = groupSortIndex(effectiveGroupBy, left);
                 const rightIndex = groupSortIndex(effectiveGroupBy, right);
                 if (leftIndex !== rightIndex) return leftIndex - rightIndex;
@@ -4873,7 +5203,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   <button className="do-items-section-head" onClick={() => toggleGroup(group)} type="button"><ChevronDown className={collapsedGroups.includes(group) ? "is-collapsed" : ""} size={13} /><strong>{group}</strong><span>{items.length}</span></button>
                   {!collapsedGroups.includes(group) && renderForest(items)}
                 </section>
-              ))}
+              )))}
               {filtered.length === 0 && (
                 <div className="do-items-empty">
                   <ListChecks size={24} />
@@ -5096,16 +5426,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <label className="do-mobile-advanced">Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
             <label className="do-mobile-advanced">Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>
-              Assignee{" "}
+              Assignees{" "}
               <InfoTip
-                label="Assignee"
-                text="Exactly one person is accountable for finishing this work. Add others as Collaborators below if they need updates."
+                label="Assignees"
+                text="Select one or more people. The first person stays the owner. Add collaborators below if they only need updates."
               />
             </label>
             <MultiAssigneePicker
-              helperText="One person is accountable for finishing this work."
-              label="Assignee"
-              maxSelections={1}
+              helperText="Multi-select. The first person stays the owner."
+              label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) =>
@@ -5117,15 +5446,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   assigneeId: assigneeIds[0] || "",
                 })
               }
-              selectedIds={
-                Array.isArray(selectedItem.assigneeIds)
-                  ? selectedItem.assigneeIds.slice(0, 1)
-                  : []
-              }
+              selectedIds={Array.isArray(selectedItem.assigneeIds) ? selectedItem.assigneeIds : []}
               selectedNames={
-                Array.isArray(selectedItem.assignees)
-                  ? selectedItem.assignees.slice(0, 1)
-                  : [selectedItem.owner || selectedItem.assignee].filter(Boolean).slice(0, 1)
+                Array.isArray(selectedItem.assignees) && selectedItem.assignees.length
+                  ? selectedItem.assignees
+                  : [selectedItem.owner || selectedItem.assignee].filter(Boolean)
               }
             />
             <label>

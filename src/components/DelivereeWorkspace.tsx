@@ -3548,7 +3548,7 @@ export function DelivereeWorkspace() {
     });
   };
 
-  const { createControlledOption, renameControlledOption } =
+  const { createControlledOption, renameControlledOption, renameWorkCategory } =
     useControlledListsActions({
       user,
       workspace,
@@ -6033,6 +6033,42 @@ export function DelivereeWorkspace() {
     setPanel("project");
     navigate(`/work/projects/${projectRef.id}`);
     setNotice(`${title} created.`);
+  };
+
+  const createNamedProject = async (name: string) => {
+    if (!user || !workspace) return "";
+    const title = name.trim();
+    if (!title) return "";
+    const projectRef = await addDoc(collection(db, "projects"), {
+      userId: user.uid,
+      workspaceId: workspace.id,
+      ...buildOwnedAccessPatch({ userId: user.uid, email: user.email }),
+      title,
+      normalizedTitle: title.toLowerCase().replace(/\s+/g, " "),
+      description: "",
+      outcome: "",
+      objective: "",
+      status: "planning",
+      health: "on_track",
+      methodology: "Hybrid",
+      projectManager: String(user.displayName || user.email || "").trim(),
+      deliveryStage: "define",
+      deliveryPhase: "intake",
+      projectKey: projectWorkKey({ title }),
+      startDate: "",
+      plannedStartDate: "",
+      endDate: "",
+      targetDate: "",
+      dueDate: "",
+      successCriteria: [],
+      definitionOfDone: "",
+      createdFromSkill: "quick_action",
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    setNotice(`${title} created.`);
+    return projectRef.id;
   };
 
   const createProjectFromWizard = async (draft: ProjectWizardDraft) => {
@@ -8650,6 +8686,10 @@ export function DelivereeWorkspace() {
                       });
                     },
                     onCreateControlledOption: createControlledOption,
+                onCreateProject: createNamedProject,
+                onRenameControlledOption: (group, option, name) =>
+                  renameControlledOption(group, { id: option.id, name: option.name, group }, name),
+                onRenameWorkCategory: renameWorkCategory,
                     onCreateSprint: createSprint,
                     onInviteAssigneeEmail: canManageMembers
                       ? async (email: any) => {
@@ -8739,6 +8779,10 @@ export function DelivereeWorkspace() {
                   });
                 },
                 onCreateControlledOption: createControlledOption,
+                onCreateProject: createNamedProject,
+                onRenameControlledOption: (group, option, name) =>
+                  renameControlledOption(group, { id: option.id, name: option.name, group }, name),
+                onRenameWorkCategory: renameWorkCategory,
                 onCreateSprint: createSprint,
                 onInviteAssigneeEmail: canManageMembers
                   ? async (email: any) => {
@@ -9104,6 +9148,9 @@ export function DelivereeWorkspace() {
               onArchiveProject={archiveProject}
               onCreateCostTemplate={createCostTemplate}
               onCreateControlledOption={createControlledOption}
+              onCreateProject={createNamedProject}
+              onRenameControlledOption={renameControlledOption}
+              onRenameWorkCategory={renameWorkCategory}
               onInviteAssigneeEmail={
                 canManageMembers
                   ? async (email: any) => {
@@ -9491,6 +9538,10 @@ export function DelivereeWorkspace() {
                         });
                       },
                       onCreateControlledOption: createControlledOption,
+                onCreateProject: createNamedProject,
+                onRenameControlledOption: (group, option, name) =>
+                  renameControlledOption(group, { id: option.id, name: option.name, group }, name),
+                onRenameWorkCategory: renameWorkCategory,
                       onCreateSprint: createSprint,
                       onInviteAssigneeEmail: canManageMembers
                         ? async (email: any) => {
@@ -9799,6 +9850,9 @@ export function DelivereeWorkspace() {
                 onArchiveProject={archiveProject}
                 onCreateCostTemplate={createCostTemplate}
                 onCreateControlledOption={createControlledOption}
+                onCreateProject={createNamedProject}
+                onRenameControlledOption={renameControlledOption}
+                onRenameWorkCategory={renameWorkCategory}
                 onInviteAssigneeEmail={
                   canManageMembers
                     ? async (email: any) => {

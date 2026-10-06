@@ -44,8 +44,8 @@ export function normalizeProductPhase(value: unknown): ProductPhase | "" {
   );
 }
 
-export function workCategory(record: any, fallbackProject?: any): WorkCategory {
-  const explicit = normalizeWorkCategory(
+export function workCategory(record: any, fallbackProject?: any): string {
+  const raw = clean(
     record?.workCategory ||
       record?.portfolioCategory ||
       record?.categoryGroup ||
@@ -53,7 +53,7 @@ export function workCategory(record: any, fallbackProject?: any): WorkCategory {
       fallbackProject?.portfolioCategory ||
       fallbackProject?.categoryGroup,
   );
-  if (explicit) return explicit;
+  if (raw) return normalizeWorkCategory(raw) || raw;
 
   const typeSignal = [
     record?.projectType,

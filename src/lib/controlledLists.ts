@@ -13,7 +13,8 @@ export type ControlledListGroup =
   | "project_phase"
   | "project_status"
   | "project_health"
-  | "gtd_action";
+  | "gtd_action"
+  | "work_category";
 
 export type ControlledListOption = {
   id?: string;
@@ -32,6 +33,7 @@ export const controlledListLabels: Record<ControlledListGroup, string> = {
   project_status: "Status",
   project_health: "Health",
   gtd_action: "GTD",
+  work_category: "Work Category",
 };
 
 export const editableControlledGroups: ControlledListGroup[] = [
@@ -75,6 +77,7 @@ export function categoryGroup(category: any): ControlledListGroup {
   if (group === "tags" || group === "category") return "tag";
   if (group === "bpo") return "delivery_entity";
   if (group === "client") return "client_entity";
+  if (group === "work_category" || group.startsWith("work_category:")) return "work_category";
   if (
     [
       "delivery_entity",
@@ -85,6 +88,7 @@ export function categoryGroup(category: any): ControlledListGroup {
       "project_status",
       "project_health",
       "gtd_action",
+      "work_category",
     ].includes(group)
   )
     return group as ControlledListGroup;
