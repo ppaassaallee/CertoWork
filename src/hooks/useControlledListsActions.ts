@@ -25,6 +25,8 @@ export type UseControlledListsActionsDeps = {
   setProjects: Dispatch<SetStateAction<any[]>>;
   setTasks: Dispatch<SetStateAction<any[]>>;
   setNotice: (notice: string) => void;
+  /** False until the tag catalog snapshot has arrived. Defaults to ready. */
+  categoriesReady?: boolean;
 };
 
 export function useControlledListsActions({
@@ -37,6 +39,7 @@ export function useControlledListsActions({
   setProjects,
   setTasks,
   setNotice,
+  categoriesReady = true,
 }: UseControlledListsActionsDeps) {
   const createControlledOption = async (
     group: ControlledOptionGroup,
@@ -45,6 +48,10 @@ export function useControlledListsActions({
     if (!user || !workspace) return name;
     const cleaned = name.trim();
     if (!cleaned) return "";
+    if (group === "tag" && !categoriesReady) {
+      setNotice("Tags are still loading. Try again in a moment.");
+      return "";
+    }
     const exists = categories.some(
       (category) =>
         categoryGroup(category) === group &&

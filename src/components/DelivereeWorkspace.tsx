@@ -341,6 +341,9 @@ import {
 } from "../lib/notes";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
+import { categoriesVisibleInWorkspace } from "../lib/controlledLists";
+import { isAssistantAccessUiEnabled } from "../lib/assistantAccessFlag";
+import { AssistantAccessPanel } from "./AssistantAccessPanel";
 import { useControlledListsActions } from "../hooks/useControlledListsActions";
 import { useControlledListDeletion } from "../hooks/useControlledListDeletion";
 import { useProjectTemplates } from "../hooks/useProjectTemplates";
@@ -604,6 +607,7 @@ export function DelivereeWorkspace() {
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [categoriesReady, setCategoriesReady] = useState(false);
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
   const [workspaceRecords, setWorkspaceRecords] = useState<RecordDoc[]>([]);
@@ -1170,10 +1174,6 @@ export function DelivereeWorkspace() {
 
     if (listenPacks.templatesCategories) {
       packUnsubscribers.push(
-        makeQueryLocal("categories", (items) => {
-          setCategories(items);
-          categoriesStore.replaceAll(items as any);
-        }, false, true),
         makeQueryLocal("agent_templates", (items) =>
           setProjectTemplates(
             items.filter((item) => item.templateType === "project"),
@@ -1275,6 +1275,33 @@ export function DelivereeWorkspace() {
     };
     // The core shell stays subscribed across route changes.
   }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
+
+  // Tags are shown on Home and My Work, which do not load the templates pack.
+  // A user-scoped query also picks up legacy category docs that have no workspaceId.
+  useEffect(() => {
+    if (!user?.uid || !workspace?.id) {
+      setCategoriesReady(false);
+      return;
+    }
+    setCategoriesReady(false);
+    return onSnapshot(
+      query(collection(db, "categories"), where("userId", "==", user.uid)),
+      (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
+        const visible = categoriesVisibleInWorkspace(
+          snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+          workspace.id,
+        );
+        setCategories(visible);
+        categoriesStore.replaceAll(visible as any);
+        setCategoriesReady(true);
+      },
+      (error) => {
+        console.error("Firestore categories query failed", error);
+        reportDataSyncError(error);
+      },
+    );
+  }, [user?.uid, workspace?.id, dataRetryVersion, reportDataSyncError]);
 
   // Per-project closed/open tasks while viewing a project console.
   useEffect(() => {
@@ -3559,6 +3586,7 @@ export function DelivereeWorkspace() {
       setProjects,
       setTasks,
       setNotice,
+      categoriesReady,
     });
 
   const { deleteControlledOption } = useControlledListDeletion({
@@ -5240,10 +5268,9 @@ export function DelivereeWorkspace() {
     taskId: string,
     patch: Record<string, unknown>,
   ) => {
-    const current = (tasks.find((item) => item.id === taskId) || {}) as Record<
-      string,
-      unknown
-    >;
+    const current = (getTasksSnapshot().find((item) => item.id === taskId) ||
+      tasks.find((item) => item.id === taskId) ||
+      {}) as Record<string, unknown>;
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     let nextPatch = { ...patch };
@@ -10384,6 +10411,13 @@ export function DelivereeWorkspace() {
                 </div>
                 <TextSizeControl />
               </section>}
+              {location.pathname === "/settings/preferences" && isAssistantAccessUiEnabled() && user && workspace ? (
+                <AssistantAccessPanel
+                  getIdToken={() => user.getIdToken()}
+                  workspaceId={workspace.id}
+                  workspaceName={workspace.name || "Workspace"}
+                />
+              ) : null}
               {location.pathname === "/settings/preferences" && <AppleWidgetSettings
                 busy={widgetBusy}
                 enabled={Boolean(widgetToken)}

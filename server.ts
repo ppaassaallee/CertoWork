@@ -24,6 +24,7 @@ import { createAiRateLimit } from "./server/middleware/rateLimit";
 import { registerCaptureRoutes } from "./server/routes/capture";
 import { registerDomainAiRoutes } from "./server/routes/domainAi";
 import { registerDataManagementRoutes } from "./server/routes/dataManagement";
+import { registerAssistantAccessRoutes } from "./server/routes/assistantAccess";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3354,6 +3355,10 @@ Respond STRICTLY in a valid JSON schema:
   });
 
   registerDataManagementRoutes(app, { getDb: () => dbAdmin });
+  registerAssistantAccessRoutes(app, {
+    getDb: () => dbAdmin,
+    loadWorkspaceAccess,
+  });
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true });

@@ -50,3 +50,40 @@ export function toggleTagId(record: any, tagId: string) {
     : [...ids, tagId];
   return { tagIds: next, tags: next, labels: next };
 }
+
+/** One chip per name. Keeps the first id so duplicate category docs are not offered again. */
+export function dedupeTagsByName(tags: TagLike[]): TagLike[] {
+  const seen = new Set<string>();
+  const out: TagLike[] = [];
+  for (const tag of tags || []) {
+    const key = tagName(tag).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
+function equivalentTagIds(catalog: TagLike[], tagId: string): Set<string> {
+  const match = catalog.find((tag) => tag.id === tagId);
+  const name = (match ? tagName(match) : tagId).toLowerCase();
+  const ids = catalog
+    .filter((tag) => tag.id === tagId || tagName(tag).toLowerCase() === name)
+    .map((tag) => tag.id)
+    .filter(Boolean);
+  return new Set(ids.length ? ids : [tagId]);
+}
+
+/**
+ * Toggle a tag and also clear duplicate catalog ids that share its name.
+ * Does not delete category documents.
+ */
+export function toggleTagWithCatalog(record: any, tagId: string, catalog: TagLike[]) {
+  const equivalents = equivalentTagIds(catalog, tagId);
+  const ids = tagIds(record);
+  const has = ids.some((id) => equivalents.has(id));
+  const next = has
+    ? ids.filter((id) => !equivalents.has(id))
+    : [...ids, tagId];
+  return { tagIds: next, tags: next, labels: next };
+}

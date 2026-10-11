@@ -6,6 +6,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ChevronDown, GripVertical, Plus } from "./ui/Icon";
+import { retainFocusForOpen } from "../lib/openWorkItem";
 import {
   HierarchyChevron,
   WorkItemTypeGlyph,
@@ -275,6 +276,7 @@ export function NotionProjectTable({
               <button
                 className="do-notion-title-cell"
                 onClick={() => onSelectItem(row.id)}
+                onMouseDown={retainFocusForOpen}
                 type="button"
               >
                 {info.getValue()}

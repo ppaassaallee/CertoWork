@@ -53,7 +53,8 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
-import { matchesTag, tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { controlledOptionNames } from "../lib/controlledLists";
 import {
   NO_PROJECT_SECTION,
@@ -1612,7 +1613,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     };
   }, [surface, viewerId, workspaceId, workspaceMembers]);
 
-  const selectedItem = tasks.find((item) => item.id === selectedItemId) || null;
+  const selectedItem = findWorkItemById([tasks, hierarchyTasks], selectedItemId);
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
   const projectCreateBlocked =
     String(activeProject?.status || "").toLowerCase() === "deleted";
@@ -2156,6 +2157,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           data-testid="item-type-flag"
           data-tip={workItemLabel(kind)}
           onClick={() => onSelectItem(item.id)}
+          onMouseDown={retainFocusForOpen}
           type="button"
         >
           {(() => {
@@ -2267,8 +2269,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <QuickAttrChoices
             empty="No tags yet"
             multi
-            onPick={(id) => pick(toggleTagId(item, id), true)}
-            options={tags
+            onPick={(id) => pick(toggleTagWithCatalog(item, id, tags), true)}
+            options={dedupeTagsByName(tags)
               .filter((tag) => !String((tag as { group?: string }).group || "").startsWith("work_category"))
               .map((tag) => ({ id: tag.id, label: tag.name || tag.id }))}
             value={tagIds(item)}
@@ -2277,7 +2279,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             onCreate={(name) => {
               Promise.resolve(onCreateControlledOption?.("tag", name)).then((createdId) => {
                 const id = String(createdId || name).trim();
-                if (id) onUpdateTask(item.id, toggleTagId(item, id));
+                if (id) onUpdateTask(item.id, toggleTagWithCatalog(item, id, tags));
               });
             }}
             placeholder="Create tag"
@@ -3250,7 +3252,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </div>
         <div className="do-kanban-card-head">
           <span onPointerDown={stopCardDrag}>{renderBulkSelect(item)}</span>
-          <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} type="button">
+          <button className="do-kanban-card-title" onClick={() => onSelectItem(item.id)} onMouseDown={retainFocusForOpen} type="button">
             <strong>{title(item)}</strong>
           </button>
           {renderDeleteButton(item)}
@@ -3513,6 +3515,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         className={`do-kanban-calendar-chip is-${kind} is-p${priority === "N/A" ? "none" : priority} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""}`}
         data-testid="kanban-calendar-chip"
         onClick={() => onSelectItem(item.id)}
+        onMouseDown={retainFocusForOpen}
         title={title(item)}
         type="button"
       >
@@ -3857,7 +3860,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           data-depth={Math.min(depth, 3)}
           key={item.id}
         >
-          <button onClick={() => onSelectItem(item.id)} type="button">
+          <button onClick={() => onSelectItem(item.id)} onMouseDown={retainFocusForOpen} type="button">
             <span>{workItemLabel(kind)}</span>
             <strong>{title(item)}</strong>
             {!isMyWork ? <small>{itemProjectTitle(item, projects)}</small> : null}
