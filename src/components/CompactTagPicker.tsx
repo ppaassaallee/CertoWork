@@ -1,4 +1,4 @@
-import { tagIds, tagLabels, toggleTagId, type TagLike } from "../lib/tagging";
+import { dedupeTagsByName, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 
 export function compactTagSummary(labels: string[]): string {
   if (labels.length === 0) return "No tags";
@@ -21,6 +21,7 @@ export function CompactTagPicker({
 }) {
   const ids = tagIds(record);
   const labels = tagLabels(record, tags);
+  const options = dedupeTagsByName(tags);
   const summary = compactTagSummary(labels);
 
   return (
@@ -37,16 +38,16 @@ export function CompactTagPicker({
             if (!cleaned) return;
             Promise.resolve(onCreateTag?.(cleaned)).then((createdId) => {
               const id = String(createdId || cleaned).trim();
-              if (id) onChange(toggleTagId(record, id));
+              if (id) onChange(toggleTagWithCatalog(record, id, tags));
             });
             return;
           }
-          onChange(toggleTagId(record, value));
+          onChange(toggleTagWithCatalog(record, value, tags));
         }}
         value=""
       >
         <option value="">{summary}</option>
-        {tags.map((tag) => (
+        {options.map((tag) => (
           <option key={tag.id} value={tag.id}>
             {ids.includes(tag.id) ? "Remove " : "Add "}
             {tag.name || tag.id}

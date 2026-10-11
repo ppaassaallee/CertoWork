@@ -150,7 +150,9 @@ test("personal notes stay owner-scoped; project documents are workspace-readable
   assert.match(workspace, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeBase, /where\("userId", "==", user\.uid\), where\("workspaceId", "==", workspace\.id\)/);
   assert.match(knowledgeService, /where\("userId", "==", request\.userId\)/);
-  assert.match(workspace, /makeQueryLocal\("categories",[\s\S]*?false,\s*true\)/);
+  assert.match(workspace, /query\(collection\(db, "categories"\), where\("userId", "==", user\.uid\)\)/);
+  assert.match(workspace, /categoriesVisibleInWorkspace/);
+  assert.doesNotMatch(workspace, /makeQueryLocal\("categories"/);
 });
 
 test("conversations stay personal; Home and project scopes stay distinct", () => {

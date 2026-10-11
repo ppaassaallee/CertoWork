@@ -105,6 +105,23 @@ function unique(values: string[]) {
   );
 }
 
+/** Firestore auto-ids are not human tag names. Showing them as list entries corrupted the catalog. */
+export function isOpaqueCatalogId(value: string) {
+  return value.length >= 16 && /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+/**
+ * Categories are owned by the signed-in user. Include this workspace and legacy
+ * rows that were saved before workspaceId existed. Other workspaces stay out.
+ */
+export function categoriesVisibleInWorkspace(rows: any[], workspaceId: string) {
+  const workspace = String(workspaceId || "").trim();
+  return (rows || []).filter((row) => {
+    const rowWorkspace = String(row?.workspaceId || "").trim();
+    return !rowWorkspace || rowWorkspace === workspace;
+  });
+}
+
 export function controlledOptions(
   categories: any[],
   group: ControlledListGroup,
@@ -119,17 +136,29 @@ export function controlledOptions(
       source: "master" as const,
     }))
     .filter((option) => option.name);
-  const masterKeys = new Set(
-    master.flatMap((option) => [option.name, option.id || ""]),
+  const dedupedMaster: ControlledListOption[] = [];
+  const seenNames = new Set<string>();
+  for (const option of master) {
+    const key = option.name.toLowerCase();
+    if (seenNames.has(key)) continue;
+    seenNames.add(key);
+    dedupedMaster.push(option);
+  }
+  const masterIds = new Set(
+    master.map((option) => String(option.id || "")).filter(Boolean),
   );
   const discovered = unique(discoveredValues)
-    .filter((name) => !masterKeys.has(name))
+    .filter((name) => {
+      if (masterIds.has(name) || seenNames.has(name.toLowerCase())) return false;
+      if (group === "tag" && isOpaqueCatalogId(name)) return false;
+      return true;
+    })
     .map((name) => ({
       name,
       group,
       source: "discovered" as const,
     }));
-  return [...master, ...discovered];
+  return [...dedupedMaster, ...discovered];
 }
 
 export function controlledOptionNames(

@@ -25,6 +25,7 @@ import {
   syncAccount,
   syncCalendar,
 } from "./calendarSync.js";
+import { handleAssistantWorkerRequest } from "./assistantAccess.js";
 import {
   firestoreAdminConfigured,
   firestoreCreateDocument,
@@ -2415,6 +2416,10 @@ const worker = {
         aiProvider: health.providerConfigured ? "openai" : "offline-safe",
         ai: health,
       });
+    }
+    if (url.pathname === "/api/assistant" || url.pathname.startsWith("/api/assistant/")) {
+      const assistant = await handleAssistantWorkerRequest(request, env, url);
+      return json(assistant.body, assistant.status);
     }
     if (request.method === "GET" && url.pathname === "/api/ai/health") {
       const health = aiHealth(env);
