@@ -15,7 +15,7 @@ import {
 } from "../src/lib/projectPortfolio";
 import { projectWorkCounts } from "../src/lib/projectWorkCounts";
 import { toDateKey } from "../src/shared/formatDate";
-import { passesStatusView, WORK_STATUS_KEYS } from "../src/lib/workStatuses";
+import { canonicalWorkStatus, passesStatusView, resetUnknownWorkStatusLogForTests, WORK_STATUS_KEYS } from "../src/lib/workStatuses";
 import { uniqueWorkItemKey, workItemChipLabel } from "../src/lib/workItemKey";
 
 const october = new Date(2026, 9, 12, 18, 0, 0);
@@ -122,6 +122,25 @@ test("status filters use the eight statuses and the completed toggle", () => {
   assert.equal(passesStatusView({ status: "todo" }, "open", false), true);
   assert.equal(passesStatusView({ status: "archived" }, "all", true), true);
   assert.equal(passesStatusView({ status: "deleted" }, "done", true), false);
+  resetUnknownWorkStatusLogForTests();
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(" "));
+  };
+  try {
+    assert.equal(canonicalWorkStatus({ status: "open" }), "backlog");
+    assert.equal(canonicalWorkStatus({ status: "" }), "backlog");
+    assert.equal(canonicalWorkStatus({ status: "todo", deletedAt: "2026-10-01" }), "deleted");
+    assert.equal(canonicalWorkStatus({ status: "made_up" }), "made_up");
+    assert.equal(canonicalWorkStatus({ status: "made_up" }), "made_up");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /made_up/);
+    assert.equal(kanbanColumnForStatus("made_up"), "backlog");
+    assert.equal(warnings.length, 1);
+  } finally {
+    console.warn = original;
+  }
   assert.deepEqual(
     visibleBoardColumns(false).map((column) => column.key),
     ["backlog", "ready", "todo", "in_progress", "in_review", "blocked"],

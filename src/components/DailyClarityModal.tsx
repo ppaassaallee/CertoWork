@@ -172,6 +172,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
         // Filter by completed/archived flags
         if (d.status === "done" && !includeCompleted) return;
         if (d.status === "archived" && !includeArchived) return;
+        if (d.status === "deleted" || d.deletedAt) return;
 
         // Matches normalized title contains query or tags/project contain query
         const titleMatch = d.title?.toLowerCase().includes(normalizedQuery);
@@ -460,7 +461,7 @@ export function DailyClarityModal({ isOpen, onClose, workspaceId }: DailyClarity
         let foundExisting: any = null;
         checkSnap.forEach(snap => {
           const t = snap.data();
-          if (t.status !== "done" && t.status !== "archived" && t.title?.toLowerCase() === text.toLowerCase()) {
+          if (t.status !== "done" && t.status !== "archived" && t.status !== "deleted" && !t.deletedAt && t.title?.toLowerCase() === text.toLowerCase()) {
             foundExisting = { id: snap.id, ...t };
           }
         });

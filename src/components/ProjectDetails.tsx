@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import { motion } from "motion/react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -14,6 +15,7 @@ import {
   updateDoc, deleteDoc, setDoc
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { toggleTaskStatus } from "../lib/tasks";
 import { useUndo } from "../lib/UndoContext";
 import { GanttView } from "./GanttView";
@@ -109,7 +111,7 @@ export function ProjectDetails() {
       snapshot.forEach(doc => {
         items.push({ id: doc.id, ...doc.data() });
       });
-      setTasks(items);
+      setTasks(visibleWorkItems(items));
       setLoading(false);
     }, (err) => console.error(err));
 
@@ -226,9 +228,9 @@ export function ProjectDetails() {
         const isCurrentlyDone = task.status === 'done';
         if (isCurrentlyDone) {
            await toggleTaskStatus({ ...task, userId: user?.uid });
-           await updateDoc(doc(db, "tasks", task.id), {
+           await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({
              stageId: task.previousStageId || projectStages[0]?.id || "todo"
-           });
+           }));
         } else {
            const doneStage = projectStages.find((s: any) => s.name.toLowerCase() === 'done');
            await toggleTaskStatus({ ...task, userId: user?.uid });
@@ -241,7 +243,7 @@ export function ProjectDetails() {
              updateData.previousStageId = task.stageId || projectStages[0]?.id;
            }
            if (Object.keys(updateData).length > 0) {
-             await updateDoc(doc(db, "tasks", task.id), updateData);
+             await updateDoc(doc(db, "tasks", task.id), prepareItemWrite(updateData));
            }
         }
       }
@@ -1052,10 +1054,10 @@ Give me 3 concrete productivity strategies based on Carl Pullein's principles (p
                         type="date"
                         onChange={async (e) => {
                           if (e.target.value) {
-                            await updateDoc(doc(db, "tasks", task.id), {
+                            await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({
                               startDate: e.target.value,
                               dueDate: e.target.value
-                            });
+                            }));
                           }
                         }}
                         className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-[10px] text-gray-600 focus:outline-none focus:ring-0 cursor-pointer"

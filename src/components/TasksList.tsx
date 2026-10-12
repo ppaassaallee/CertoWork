@@ -3,6 +3,8 @@ import { useAuth } from "../lib/AuthContext";
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, setDoc, deleteField } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { setTaskStatus } from "../lib/tasks";
 import { CheckSquare, ArrowLeft, Plus, Loader2, Tag, Repeat, Zap, X, Kanban, ChevronDown, ChevronRight, ChevronLeft, Search, Lightbulb, Scale, Book, Briefcase, Calendar, Inbox, RefreshCw, Timer, Users, Brain, ArrowUp, ArrowDown, SlidersHorizontal, Sparkles, Eye, MoreHorizontal, Sliders, Star, Trash2, Bot } from "./ui/Icon";
 import { Link, useNavigate } from "react-router-dom";
@@ -357,7 +359,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                       e.stopPropagation();
                       if (editingTitleText.trim() && editingTitleText.trim() !== task.title) {
                         try {
-                          await updateDoc(doc(db, "tasks", task.id), { title: editingTitleText.trim() });
+                          await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ title: editingTitleText.trim() }));
                         } catch (err) {
                           console.error("Failed to update task title", err);
                         }
@@ -374,7 +376,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                     e.stopPropagation();
                     if (editingTitleText.trim() && editingTitleText.trim() !== task.title) {
                       try {
-                        await updateDoc(doc(db, "tasks", task.id), { title: editingTitleText.trim() });
+                        await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ title: editingTitleText.trim() }));
                       } catch (err) {
                         console.error("Failed to update task title", err);
                       }
@@ -665,7 +667,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                    if (task.projectId) subtaskData.projectId = task.projectId;
                    if (task.milestoneId) subtaskData.milestoneId = task.milestoneId;
 
-                   await addDoc(collection(db, "tasks"), subtaskData);
+                   await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(subtaskData));
                    input.value = "";
                  } catch (err) {
                    console.error("Failed to add subtask", err);
@@ -715,7 +717,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
         if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
         return 0; // maintain relative order for now
       });
-      setTasks(items);
+      setTasks(visibleWorkItems(items));
     }, (error) => console.error('Tasks error:', error.message));
 
     // Fetch Review Candidates
@@ -777,12 +779,12 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
         // Only unset One Thing from other OPEN tasks to preserve history
         const previousOneThings = tasks.filter(t => t.isOneThing && t.id !== id && t.status !== 'done');
         for (const pt of previousOneThings) {
-          await updateDoc(doc(db, "tasks", pt.id), { isOneThing: false });
+          await updateDoc(doc(db, "tasks", pt.id), prepareItemWrite({ isOneThing: false }));
         }
       }
-      await updateDoc(doc(db, "tasks", id), { 
+      await updateDoc(doc(db, "tasks", id), prepareItemWrite({ 
         isOneThing: !currentlyOneThing 
-      });
+      }));
     } catch(e) {
       console.error("Failed to set one thing", e);
     }
@@ -817,13 +819,13 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
       if (newTaskRecurrence) taskData.recurrence = newTaskRecurrence;
       if (newTaskIsOneThing) taskData.isOneThing = true;
 
-      await addDoc(collection(db, "tasks"), taskData);
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(taskData));
       
       // Also potentially clear one thing from others if we set it
       if (newTaskIsOneThing) {
         const previousOneThings = tasks.filter(t => t.isOneThing);
         for (const pt of previousOneThings) {
-          await updateDoc(doc(db, "tasks", pt.id), { isOneThing: false });
+          await updateDoc(doc(db, "tasks", pt.id), prepareItemWrite({ isOneThing: false }));
         }
       }
 
@@ -847,7 +849,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
 
   async function handleUpdatePriority(id: string, newPriority: number | null) {
     try {
-       await updateDoc(doc(db, "tasks", id), { priority: newPriority === null ? deleteField() : newPriority });
+       await updateDoc(doc(db, "tasks", id), prepareItemWrite({ priority: newPriority === null ? deleteField() : newPriority }));
     } catch (err) {
        console.error("Failed to update priority", err);
     }
@@ -882,8 +884,8 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
 
     // Save both positions to Firestore
     try {
-      await updateDoc(doc(db, "tasks", updatedPositions[idx].id), { position: updatedPositions[idx].position });
-      await updateDoc(doc(db, "tasks", updatedPositions[targetIdx].id), { position: updatedPositions[targetIdx].position });
+      await updateDoc(doc(db, "tasks", updatedPositions[idx].id), prepareItemWrite({ position: updatedPositions[idx].position }));
+      await updateDoc(doc(db, "tasks", updatedPositions[targetIdx].id), prepareItemWrite({ position: updatedPositions[targetIdx].position }));
     } catch (err) {
       console.error("Failed to update task positions:", err);
     }
@@ -942,7 +944,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
         }
 
         try {
-          await updateDoc(doc(db, "tasks", item.id), payload);
+          await updateDoc(doc(db, "tasks", item.id), prepareItemWrite(payload));
         } catch (e) {
           console.error("Failed to update position on drop:", e);
         }
@@ -959,7 +961,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
     else next = [...current, stakeholderId];
     
     try {
-      await updateDoc(doc(db, "tasks", taskId), { stakeholderIds: next });
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ stakeholderIds: next }));
     } catch (e) { console.error(e); }
   };
 
@@ -979,7 +981,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
           targetStatus = "open";
        }
        
-       await updateDoc(doc(db, "tasks", id), updateData);
+       await updateDoc(doc(db, "tasks", id), prepareItemWrite(updateData));
        
        if (targetStatus !== task.status) {
           await setTaskStatus(task, targetStatus);
@@ -991,13 +993,13 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
 
   const handleChangeContext = async (id: string, context: string) => {
     try {
-      await updateDoc(doc(db, "tasks", id), { gtdContext: context === 'none' ? "" : context });
+      await updateDoc(doc(db, "tasks", id), prepareItemWrite({ gtdContext: context === 'none' ? "" : context }));
     } catch (e) { console.error(e); }
   };
 
   const handleChangeFolder = async (id: string, folderId: string) => {
     try {
-      await updateDoc(doc(db, "tasks", id), { globalStageId: folderId });
+      await updateDoc(doc(db, "tasks", id), prepareItemWrite({ globalStageId: folderId }));
     } catch (err) {
       console.error("Failed to move GTD stage", err);
     }
@@ -1074,7 +1076,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
         id: `delete-task-${taskId}`,
         description: `Delete task "${taskItem.title}"`,
         undo: async () => {
-          await setDoc(doc(db, "tasks", taskId), taskData);
+          await setDoc(doc(db, "tasks", taskId), prepareItemWrite(taskData));
         },
         redo: async () => {
           await deleteDoc(doc(db, "tasks", taskId));
@@ -1180,10 +1182,10 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
             for (const dupId of merge.duplicateTaskIds) {
               // Instead of permanently deleting, set status to 'merged' and record primary ID (safe undo/history preservation)
               const ref = doc(db, "tasks", dupId);
-              await updateDoc(ref, {
+              await updateDoc(ref, prepareItemWrite({
                 status: "merged",
                 mergedIntoTaskId: merge.primaryTaskId
-              });
+              }));
               mergeCount++;
             }
           }
@@ -1204,7 +1206,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
           if (update.enrichedTitle) dataToUpdate.title = update.enrichedTitle;
           if (update.enrichedDescription) dataToUpdate.description = update.enrichedDescription;
 
-          await updateDoc(ref, dataToUpdate);
+          await updateDoc(ref, prepareItemWrite(dataToUpdate));
           updateCount++;
         }
       }
@@ -1225,7 +1227,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
     try {
       for (const item of organizeUndoBackup) {
         const ref = doc(db, "tasks", item.id);
-        await updateDoc(ref, {
+        await updateDoc(ref, prepareItemWrite({
           title: item.title,
           description: item.description,
           priority: item.priority,
@@ -1233,7 +1235,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
           stageId: item.stageId,
           status: item.status,
           mergedIntoTaskId: item.mergedIntoTaskId
-        });
+        }));
       }
       setOrganizeUndoBackup([]);
       setOrganizeResults(null);
@@ -1280,7 +1282,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                   e.preventDefault();
                   const taskId = e.dataTransfer.getData("taskId");
                   const today = new Date().toISOString().split('T')[0];
-                  if (taskId) await updateDoc(doc(db, "tasks", taskId), { dueDate: today });
+                  if (taskId) await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ dueDate: today }));
                 }}
               >
                   <div className="mb-4">
@@ -1314,7 +1316,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                               e.preventDefault();
                               const taskId = e.dataTransfer.getData("taskId");
                               if (taskId) {
-                                await updateDoc(doc(db, "tasks", taskId), { dueDate: dateStr });
+                                await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ dueDate: dateStr }));
                               }
                           }}
                       >
@@ -1342,7 +1344,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                 onDrop={async (e) => {
                   e.preventDefault();
                   const taskId = e.dataTransfer.getData("taskId");
-                  if (taskId) await updateDoc(doc(db, "tasks", taskId), { dueDate: deleteField() });
+                  if (taskId) await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ dueDate: deleteField() }));
                 }}
               >
                   <div className="mb-4">
@@ -2592,20 +2594,20 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                      
                      if (groupBy === 'stage' || groupBy === 'none') await handleChangeStage(taskId, col.key);
                      else if (groupBy === 'priority' && col.key.startsWith('p')) await handleUpdatePriority(taskId, parseInt(col.key.replace('p', '')) || 4);
-                     else if (groupBy === 'project') await updateDoc(doc(db, "tasks", taskId), { projectId: col.key === 'proj-none' ? deleteField() : col.key });
+                     else if (groupBy === 'project') await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ projectId: col.key === 'proj-none' ? deleteField() : col.key }));
                      else if (groupBy === 'stakeholder') {
                         const task = tasks.find(t => t.id === taskId);
                         if (task) {
                           const current = task.stakeholderIds || [];
-                          if (col.key === 'stake-none') await updateDoc(doc(db, "tasks", taskId), { stakeholderIds: [] });
-                          else if (!current.includes(col.key)) await updateDoc(doc(db, "tasks", taskId), { stakeholderIds: [...current, col.key] });
+                          if (col.key === 'stake-none') await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ stakeholderIds: [] }));
+                          else if (!current.includes(col.key)) await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ stakeholderIds: [...current, col.key] }));
                         }
                      }
-                     else if (groupBy === 'timeSector') await updateDoc(doc(db, "tasks", taskId), { timeSector: col.key === 'none' ? deleteField() : col.key });
+                     else if (groupBy === 'timeSector') await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ timeSector: col.key === 'none' ? deleteField() : col.key }));
                      else if (groupBy === 'gtd') await handleChangeFolder(taskId, col.key);
                      else if (groupBy === 'category') {
-                       if (col.key === 'c-none') await updateDoc(doc(db, "tasks", taskId), { categoryIds: [] });
-                       else await updateDoc(doc(db, "tasks", taskId), { categoryIds: [col.key] });
+                       if (col.key === 'c-none') await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ categoryIds: [] }));
+                       else await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ categoryIds: [col.key] }));
                      }
                    }}
                  >
@@ -2811,7 +2813,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                             e.stopPropagation();
                                             if (editingTitleText.trim() && editingTitleText.trim() !== task.title) {
                                               try {
-                                                await updateDoc(doc(db, "tasks", task.id), { title: editingTitleText.trim() });
+                                                await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ title: editingTitleText.trim() }));
                                               } catch (err) {
                                                 console.error("Failed to update task title", err);
                                               }
@@ -2828,7 +2830,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                           e.stopPropagation();
                                           if (editingTitleText.trim() && editingTitleText.trim() !== task.title) {
                                             try {
-                                              await updateDoc(doc(db, "tasks", task.id), { title: editingTitleText.trim() });
+                                              await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ title: editingTitleText.trim() }));
                                             } catch (err) {
                                               console.error("Failed to update task title", err);
                                             }
@@ -2942,7 +2944,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                           <input
                                             type="date"
                                             value={task.dueDate && /^\d{4}-\d{2}-\d{2}/.test(task.dueDate) ? task.dueDate.substring(0, 10) : ""}
-                                            onChange={(e) => updateDoc(doc(db, "tasks", task.id), { dueDate: e.target.value || deleteField() })}
+                                            onChange={(e) => updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ dueDate: e.target.value || deleteField() }))}
                                             className="absolute inset-0 w-[200%] h-[200%] -top-[50%] -left-[50%] opacity-0 cursor-pointer [color-scheme:light]"
                                           />
                                        </div>
@@ -2951,7 +2953,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                        <EntityPicker
                                          entityType="project_deal"
                                          selectedIds={task.projectId || ""}
-                                         onSelect={(id) => updateDoc(doc(db, "tasks", task.id), { projectId: id ? String(id) : deleteField() })}
+                                         onSelect={(id) => updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ projectId: id ? String(id) : deleteField() }))}
                                          workspaceId={workspace?.id || ""}
                                          userId={user?.uid || ""}
                                          placeholder="Project / Deal"
@@ -2965,7 +2967,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                          entityType="tag"
                                          allowMultiple={true}
                                          selectedIds={getCategoryIds(task)}
-                                         onSelect={(ids) => updateDoc(doc(db, "tasks", task.id), { categoryIds: ids as string[], categoryId: deleteField() })}
+                                         onSelect={(ids) => updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ categoryIds: ids as string[], categoryId: deleteField() }))}
                                          workspaceId={workspace?.id || ""}
                                          userId={user?.uid || ""}
                                          placeholder="Tag"
@@ -2980,7 +2982,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                           {task.recurrence && <span className="text-[10px] font-bold capitalize whitespace-nowrap">{task.recurrence}</span>}
                                           <select
                                             value={task.recurrence || ""}
-                                            onChange={(e) => updateDoc(doc(db, "tasks", task.id), { recurrence: e.target.value || deleteField() })}
+                                            onChange={(e) => updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ recurrence: e.target.value || deleteField() }))}
                                             className="absolute inset-0 w-full mb-0 opacity-0 cursor-pointer"
                                           >
                                             <option value="">No Recurrence</option>
@@ -3057,7 +3059,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                          entityType="stakeholder"
                                          allowMultiple={true}
                                          selectedIds={task.stakeholderIds || []}
-                                         onSelect={(ids) => updateDoc(doc(db, "tasks", task.id), { stakeholderIds: ids as string[] })}
+                                         onSelect={(ids) => updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ stakeholderIds: ids as string[] }))}
                                          workspaceId={workspace?.id || ""}
                                          userId={user?.uid || ""}
                                          customTrigger={
@@ -3153,7 +3155,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                         e.stopPropagation();
                                         if (editingTitleText.trim() && editingTitleText.trim() !== st.title) {
                                           try {
-                                            await updateDoc(doc(db, "tasks", st.id), { title: editingTitleText.trim() });
+                                            await updateDoc(doc(db, "tasks", st.id), prepareItemWrite({ title: editingTitleText.trim() }));
                                           } catch (err) {
                                             console.error("Failed to update task title", err);
                                           }
@@ -3170,7 +3172,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                                       e.stopPropagation();
                                       if (editingTitleText.trim() && editingTitleText.trim() !== st.title) {
                                         try {
-                                          await updateDoc(doc(db, "tasks", st.id), { title: editingTitleText.trim() });
+                                          await updateDoc(doc(db, "tasks", st.id), prepareItemWrite({ title: editingTitleText.trim() }));
                                         } catch (err) {
                                           console.error("Failed to update task title", err);
                                         }

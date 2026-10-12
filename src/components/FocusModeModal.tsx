@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Pause, Square, X, CheckSquare, Target } from "./ui/Icon";
@@ -60,11 +61,11 @@ export function FocusModeModal({ isOpen, onClose, selectedTaskIds, tasks }: Focu
 
   const handleMarkDone = async (taskId: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), { 
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({ 
         status: 'done', 
         stageId: 'done',
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }

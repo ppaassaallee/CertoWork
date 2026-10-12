@@ -3,6 +3,8 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, serverTimestamp, deleteDoc, setDoc, deleteField, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { toggleTaskStatus } from "../lib/tasks";
 import { ArrowLeft, CheckCircle, Loader2, Calendar, Folder, AlignLeft, CornerDownRight, Plus, Target, Trash2, Lightbulb, Scale, Briefcase, Book, CheckSquare, Zap, RefreshCw, Timer, Sparkles, Link as LucideLink, Search, BookOpen, Bot } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
@@ -144,7 +146,7 @@ export function TaskDetails() {
     const unsubSub = onSnapshot(qSub, (snap) => {
       const items: any[] = [];
       snap.forEach(d => items.push({ id: d.id, ...d.data() }));
-      setSubtasks(items);
+      setSubtasks(visibleWorkItems(items));
     });
 
     // Fetch Projects
@@ -169,7 +171,7 @@ export function TaskDetails() {
   const handleUpdate = async (field: string, value: any) => {
     if (!task) return;
     try {
-      await updateDoc(doc(db, "tasks", task.id), { [field]: value });
+      await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ [field]: value }));
     } catch (err) {
       console.error(err);
     }
@@ -191,7 +193,7 @@ export function TaskDetails() {
       if (task.projectId) subtaskData.projectId = task.projectId;
       if (task.milestoneId) subtaskData.milestoneId = task.milestoneId;
 
-      await addDoc(collection(db, "tasks"), subtaskData);
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(subtaskData));
       setNewSubtaskTitle("");
     } catch (err) {
       console.error(err);
@@ -224,7 +226,7 @@ export function TaskDetails() {
         id: `delete-task-${task.id}`,
         description: `Delete task "${task.title}"`,
         undo: async () => {
-          await setDoc(doc(db, "tasks", task.id), taskData);
+          await setDoc(doc(db, "tasks", task.id), prepareItemWrite(taskData));
         },
         redo: async () => {
           await deleteDoc(doc(db, "tasks", task.id));
@@ -410,7 +412,7 @@ export function TaskDetails() {
                            <button 
                              onClick={() => {
                                if (!task.isRoutineTask) {
-                                 updateDoc(doc(db, "tasks", task.id), { 
+                                 updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ 
                                    isRoutineTask: true, 
                                    recurrenceStatus: 'active',
                                    recurrenceType: 'daily',
@@ -419,13 +421,13 @@ export function TaskDetails() {
                                    recurrenceAnchorDate: task.dueDate || new Date().toISOString().split('T')[0],
                                    recurringSeriesId: task.id,
                                    updatedAt: serverTimestamp()
-                                 });
+                                 }));
                                } else {
-                                 updateDoc(doc(db, "tasks", task.id), { 
+                                 updateDoc(doc(db, "tasks", task.id), prepareItemWrite({ 
                                    isRoutineTask: false,
                                    recurrenceStatus: deleteField(),
                                    updatedAt: serverTimestamp()
-                                 });
+                                 }));
                                }
                              }}
                              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${task.isRoutineTask ? 'bg-indigo-600' : 'bg-gray-300'}`}

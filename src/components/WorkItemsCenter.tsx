@@ -54,7 +54,7 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
-import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { dedupeTagsByName, matchesTag, tagFilterOptions, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
 import { pushUndo } from "../lib/undoToast";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
@@ -1644,7 +1644,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       const matchesType = typeFilter === "all" || itemKind === typeFilter;
       const matchesOwner = ownerFilter === "all" || String(effectiveInheritedField(item, pool, "owner") || item.owner || item.assignee || "") === ownerFilter;
       const matchesDate = dateFilter === "all" || dueBucket(item.dueDate || item.targetDate) === dateFilter;
-      const matchesItemTag = matchesTag(item, tagFilter);
+      const matchesItemTag = matchesTag(item, tagFilter, tags);
       const matchesWorkCategory = workCategoryFilter === "all" || String(effectiveInheritedField(item, pool, "workCategory") || itemWorkCategory(item, projects)) === workCategoryFilter;
       const matchesProductPhase = productPhaseFilter === "all" || String(effectiveInheritedField(item, pool, "productPhase") || itemProductPhase(item, projects)) === productPhaseFilter;
       const matchesSprint = itemMatchesSprint(item, sprintFilter);
@@ -4729,7 +4729,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 {filterDraft === "tag" && (
                   <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
                     <option value="all">Any tag</option>
-                    {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+                    {tagFilterOptions(tags).map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
                   </select>
                 )}
                 {filterDraft === "category" && (
@@ -4917,7 +4917,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               {filterDraft === "tag" && (
                 <select aria-label="Tag filter" onChange={(event) => setTagFilter(event.target.value)} value={tagFilter}>
                   <option value="all">Any tag</option>
-                  {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
+                  {tagFilterOptions(tags).map((tag) => <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>)}
                 </select>
               )}
               {filterDraft === "category" && (

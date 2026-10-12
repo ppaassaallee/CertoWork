@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import React, { useState } from "react";
 import { 
   ShieldAlert, 
@@ -161,7 +162,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
       else if (field === "actionType") updateData.itemType = firestoreValue;
       else if (field === "projectId") updateData.projectId = firestoreValue;
 
-      await updateDoc(docRef, updateData);
+      await updateDoc(docRef, prepareItemWrite(updateData));
     } catch (e) {
       console.error("Failed to update task field", e);
     }
@@ -295,7 +296,7 @@ export const MetadataAuditor: React.FC<MetadataAuditorProps> = ({
       if (sugg.actionType !== null) updateData.itemType = sugg.actionType;
       if (sugg.projectId !== null) updateData.projectId = sugg.projectId;
 
-      await updateDoc(docRef, updateData);
+      await updateDoc(docRef, prepareItemWrite(updateData));
 
       // Clean up suggestion
       setAiSuggestions(prev => {

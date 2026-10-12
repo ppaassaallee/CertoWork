@@ -5,6 +5,7 @@ import {
 } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { z } from "zod";
+import { isWorkspaceOwnerOrAdmin } from "./workspaceAdmin";
 
 const inputZ = z.object({
   workspaceId: z.string().min(1),
@@ -54,18 +55,17 @@ export const restoreCreatorAssignees = onCall(
     }
     const workspace = workspaceSnap.data() || {};
     const isOwner = workspace.ownerId === uid;
-    let isAdmin = isOwner;
-    if (!isAdmin) {
+    let role = "";
+    if (!isOwner) {
       const memberSnap = await db
         .collection("workspace_members")
         .where("workspaceId", "==", workspaceId)
         .where("userId", "==", uid)
         .limit(1)
         .get();
-      const role = String(memberSnap.docs[0]?.data()?.role || "").toLowerCase();
-      isAdmin = role === "owner" || role === "admin";
+      role = String(memberSnap.docs[0]?.data()?.role || "");
     }
-    if (!isAdmin) {
+    if (!isWorkspaceOwnerOrAdmin({ isOwner, role })) {
       throw new HttpsError("permission-denied", "Owner or admin required");
     }
 

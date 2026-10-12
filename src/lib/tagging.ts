@@ -39,8 +39,12 @@ export function tagLabels(record: any, tags: TagLike[]): string[] {
   });
 }
 
-export function matchesTag(record: any, tagId: string) {
-  return tagId === "all" || tagIds(record).includes(tagId);
+export function matchesTag(record: any, tagId: string, catalog: TagLike[] = []) {
+  if (tagId === "all") return true;
+  const ids = tagIds(record);
+  if (!catalog.length) return ids.includes(tagId);
+  const equivalents = equivalentTagIds(catalog, tagId);
+  return ids.some((id) => equivalents.has(id));
 }
 
 const NON_TAG_GROUPS = new Set([
@@ -121,6 +125,11 @@ export function toggleTagId(record: any, tagId: string) {
   return { tagIds: next, tags: next, labels: next };
 }
 
+/** Options for a tag filter: real tags only, one row per normalized name. */
+export function tagFilterOptions(tags: TagLike[]): TagLike[] {
+  return dedupeTagsByName((tags || []).filter(isTagCategory));
+}
+
 /** One chip per name. Keeps the first id so duplicate category docs are not offered again. */
 export function dedupeTagsByName(tags: TagLike[]): TagLike[] {
   const seen = new Set<string>();
@@ -156,4 +165,18 @@ export function toggleTagWithCatalog(record: any, tagId: string, catalog: TagLik
     ? ids.filter((id) => !equivalents.has(id))
     : [...ids, tagId];
   return { tagIds: next, tags: next, labels: next };
+}
+
+function csvCell(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
+/** Review file for the dry-run. One row per item that would change. */
+export function tagCleanupCsv(plan: TagCleanupPlan[]) {
+  const lines = ["id,before,after"];
+  for (const row of plan) {
+    lines.push([row.id, row.before.join("|"), row.after.join("|")].map(csvCell).join(","));
+  }
+  return `${lines.join("\n")}\n`;
 }
