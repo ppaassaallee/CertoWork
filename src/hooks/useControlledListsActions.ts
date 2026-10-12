@@ -10,6 +10,7 @@ import type { User } from "firebase/auth";
 import { db } from "../lib/firebase";
 import type { Workspace } from "../lib/AuthContext";
 import { categoryGroup, type ControlledListOption } from "../lib/controlledLists";
+import { normalizeTagKey } from "../lib/tagging";
 import { WORK_CATEGORIES } from "../lib/workClassification";
 import { recordClientException } from "../lib/clientExceptions";
 
@@ -52,17 +53,16 @@ export function useControlledListsActions({
       setNotice("Tags are still loading. Try again in a moment.");
       return "";
     }
+    const wanted = group === "tag" ? normalizeTagKey(cleaned) : cleaned.toLowerCase();
+    const sameName = (category: { name?: string }) =>
+      group === "tag"
+        ? normalizeTagKey(category.name) === wanted
+        : String(category.name || "").trim().toLowerCase() === wanted;
     const exists = categories.some(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
+      (category) => categoryGroup(category) === group && sameName(category),
     );
     const existing = categories.find(
-      (category) =>
-        categoryGroup(category) === group &&
-        String(category.name || "").trim().toLowerCase() ===
-          cleaned.toLowerCase(),
+      (category) => categoryGroup(category) === group && sameName(category),
     );
     if (exists) return group === "tag" ? existing?.id || cleaned : cleaned;
     try {

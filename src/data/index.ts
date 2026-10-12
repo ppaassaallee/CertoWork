@@ -51,6 +51,8 @@ export {
 } from "./packStores";
 export {
   useSidebarProjects,
+  usePaletteProjects,
+  usePaletteTasks,
   useFavoriteProjects,
   useConversation,
   useTask,

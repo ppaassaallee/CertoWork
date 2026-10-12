@@ -74,7 +74,10 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { app, db, storage } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
-import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
+import { isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
+import { buildWorkItemPaletteEntries, readRecentItemIds, rememberRecentItem, type PaletteTaskRow } from "../lib/commandSearch";
+import { itemIdFromSearch, searchWithItem } from "../lib/projectViewUrl";
+import { isDeveloperToolsEnabled } from "../lib/devTools";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -131,7 +134,6 @@ import {
   timestamp,
   projectWorkKey,
 } from "../lib/workspaceDisplay";
-import { productPhase, workCategory } from "../lib/workClassification";
 import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, dueInviteEmailRetry, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
 import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/emailClient";
 import { usePlatformCapabilities } from "../lib/capabilities";
@@ -223,6 +225,11 @@ import {
   type PendingInvoiceLine,
 } from "../lib/invoiceDocuments";
 import { stripUndefinedValues } from "../lib/projectFinance";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
+import { canonicalTagIds } from "../lib/tagging";
+import { pushUndo } from "../lib/undoToast";
+import { UndoToast } from "./UndoToast";
+import { ProjectRowMenu } from "./ProjectRowMenu";
 import { InvoiceCenter } from "./InvoiceCenter";
 import { CaptureSettingsPanel, CaptureIngestForm } from "./CaptureSettingsPanel";
 import { RequestsCenter } from "./RequestsCenter";
@@ -272,9 +279,12 @@ import {
   uiStore,
   useConversations,
   useMembers,
+  usePaletteProjects,
+  usePaletteTasks,
   useTasksGroupedByProject,
   useProject,
   useProjectsWhen,
+  useSidebarProjects,
   useTask,
   useTasksWhen,
   getProjectsSnapshot,
@@ -591,6 +601,9 @@ export function DelivereeWorkspace() {
     lens.kind !== "settings" &&
     lens.kind !== "more";
   const projects = useProjectsWhen(shellNeedsProjectArray) as any[];
+  const sidebarProjectRows = useSidebarProjects();
+  const paletteTasks = usePaletteTasks();
+  const paletteProjects = usePaletteProjects();
   const setProjects = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(projectsStore, update as any);
@@ -879,9 +892,10 @@ export function DelivereeWorkspace() {
     else navigate("/home");
   };
   const projectConsoleInitialTab = "items";
-  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
-    null,
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(() =>
+    itemIdFromSearch(typeof window === "undefined" ? "" : window.location.search),
   );
+  const [recentItemIds, setRecentItemIds] = useState<string[]>(() => readRecentItemIds());
   const portfolioViewFromUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("view") === "economics" || params.has("financeLine")) {
@@ -1052,7 +1066,7 @@ export function DelivereeWorkspace() {
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         },
         (error) => {
-          console.error(`Firestore ${name} query failed`, error);
+          logFirestoreListenError(name, error);
           reportDataSyncError(error);
         },
       );
@@ -1078,7 +1092,7 @@ export function DelivereeWorkspace() {
             );
           },
           (error) => {
-            console.error(`Firestore ${name} query ${index} failed`, error);
+            logFirestoreListenError(`${name} ${index}`, error);
             merge.fail(index);
             reportDataSyncError(error);
           },
@@ -1299,7 +1313,7 @@ export function DelivereeWorkspace() {
         setCategoriesReady(true);
       },
       (error) => {
-        console.error("Firestore categories query failed", error);
+        logFirestoreListenError("categories", error);
         reportDataSyncError(error);
       },
     );
@@ -1632,8 +1646,8 @@ export function DelivereeWorkspace() {
     [projects],
   );
   const sidebarProjects = useMemo(
-    () => sidebarProjectGroups(projects),
-    [projects],
+    () => sidebarProjectGroups(sidebarProjectRows),
+    [sidebarProjectRows],
   );
   const viewerProjectIds = useMemo(
     () => projects.map((project) => String(project.id)),
@@ -1826,8 +1840,15 @@ export function DelivereeWorkspace() {
   }, [personalActor, tasks, visibleTables, workspaceMembers, workspaceRecords]);
   const openWorkOrRecord = useCallback(
     (id: string | null) => {
+      const writeItemQuery = (itemId: string | null) => {
+        const next = searchWithItem(location.search, itemId);
+        if (next !== (location.search || "")) {
+          navigate(`${location.pathname}${next}`, { replace: true });
+        }
+      };
       if (!id) {
         setSelectedWorkItemId(null);
+        writeItemQuery(null);
         return;
       }
       const recordHit =
@@ -1847,8 +1868,10 @@ export function DelivereeWorkspace() {
         }
       }
       setSelectedWorkItemId(id);
+      setRecentItemIds(rememberRecentItem(id));
+      writeItemQuery(id);
     },
-    [myWorkTasks, navigate, workspaceRecords],
+    [location.pathname, location.search, myWorkTasks, navigate, workspaceRecords],
   );
   const dayPlanScoreItems = useMemo(
     () =>
@@ -2168,10 +2191,18 @@ export function DelivereeWorkspace() {
   }, [createMenuOpen]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const itemId = params.get("item");
-    if (itemId) setSelectedWorkItemId(itemId);
+    const itemId = itemIdFromSearch(location.search);
+    setSelectedWorkItemId(itemId);
+    if (itemId) setRecentItemIds(rememberRecentItem(itemId));
   }, [location.search]);
+  useEffect(() => {
+    if (!workspaceOpen) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setWorkspaceOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspaceOpen]);
 
   const openOdysseusPanel = useCallback(
     async (nextScope?: OdysseusPanelScope) => {
@@ -3263,7 +3294,7 @@ export function DelivereeWorkspace() {
             memberId: accessMemberId(workspace.id, user.uid),
             email: user.email,
           }, workspaceMembers);
-          await addDoc(collection(db, "tasks"), {
+          await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
             userId: user.uid,
             workspaceId: workspace.id,
             ...(projectId ? { projectId } : {}),
@@ -3287,7 +3318,7 @@ export function DelivereeWorkspace() {
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+          }));
           applied += 1;
           continue;
         }
@@ -3675,7 +3706,7 @@ export function DelivereeWorkspace() {
     );
     setNewWorkspaceName("");
     await reloadWorkspaces();
-    setWorkspace({ id: workspaceRef.id, ...workspacePayload });
+    setWorkspace({ id: workspaceRef.id, ...workspacePayload }, { reload: true });
   };
 
   const inviteWorkspaceMember = async (emailOverride?: string) => {
@@ -4422,11 +4453,16 @@ export function DelivereeWorkspace() {
   };
 
   const archiveProject = async (project: any) => {
+    const previous = project.status || "active";
     await updateProject(project.id, {
       status: "archived",
-      previousStatus: project.status || "active",
+      previousStatus: previous,
       archivedAt: serverTimestamp(),
     });
+    pushUndo(`Archived ${entityTitle(project)}`, () => updateProject(project.id, {
+      status: previous,
+      archivedAt: null,
+    }));
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
@@ -4469,6 +4505,12 @@ export function DelivereeWorkspace() {
             purgeAfter,
             archivedAt: null,
           });
+          const previous = project.status || "active";
+          pushUndo(`Deleted ${entityTitle(project)}`, () => updateProject(project.id, {
+            status: previous,
+            deletedAt: null,
+            purgeAfter: null,
+          }));
           if (projectConsoleId === project.id) {
             setProjectConsoleId(null);
             setPanel(null);
@@ -5052,7 +5094,7 @@ export function DelivereeWorkspace() {
       email: user.email,
     };
     const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
-    const created = await addDoc(collection(db, "tasks"), {
+    const created = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
       ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -5076,7 +5118,7 @@ export function DelivereeWorkspace() {
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
     const createdDiff = assignmentDiff({}, assigned);
     if (createdDiff.added.length) {
       const notifications = buildAssignmentNotificationDocs({
@@ -5276,6 +5318,19 @@ export function DelivereeWorkspace() {
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     let nextPatch = { ...patch };
+    if (
+      Array.isArray(nextPatch.tagIds) || Array.isArray(nextPatch.tags) || Array.isArray(nextPatch.labels)
+    ) {
+      const cleaned = canonicalTagIds(
+        {
+          tagIds: nextPatch.tagIds || current.tagIds,
+          tags: nextPatch.tags || current.tags,
+          labels: nextPatch.labels || current.labels,
+        },
+        categories,
+      );
+      nextPatch = { ...nextPatch, tagIds: cleaned, tags: cleaned, labels: cleaned };
+    }
     if (touchesAssignment) {
       nextPatch = normalizeAssignmentPatch(current, nextPatch, workspaceMembers);
     }
@@ -6631,11 +6686,11 @@ export function DelivereeWorkspace() {
         keywords: "chat messages collab inbox mentions dm",
         onSelect: () => navigate("/collab"),
       },
-      ...activeProjects.map((project) => ({
+      ...paletteProjects.map((project) => ({
         id: `nav-collab-room-${project.id}`,
-        label: `Open room · ${entityTitle(project)}`,
+        label: `Open room · ${project.title}`,
         group: "Navigate",
-        keywords: `chat collab room messages ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
+        keywords: `chat collab room messages ${project.title} ${project.client} ${project.projectKey} ${projectWorkKey(project)}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -6713,26 +6768,41 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/workspace/supportops"),
       },
     ];
-    for (const project of activeProjects) {
+    for (const project of paletteProjects) {
       items.push({
         id: `project-${project.id}`,
-        label: entityTitle(project),
+        label: project.title,
         group: "Projects",
-        keywords: [
-          entityTitle(project),
-          project.clientEntity || project.client || "",
-          project.deliveryEntity || project.bpo || "",
-          project.projectKey || "",
-          projectWorkKey(project),
-          project.serviceLine || "",
-          workCategory(project),
-          productPhase(project),
-        ]
+        keywords: [project.title, project.client, project.delivery, project.projectKey, projectWorkKey(project), project.serviceLine, project.category, project.phase]
           .filter(Boolean)
           .join(" "),
-        onSelect: () => openProjectRecord(project),
+        onSelect: () => openProjectRecord({ id: project.id, title: project.title }),
       });
     }
+    const projectNameById = new Map(paletteProjects.map((project) => [project.id, project.title]));
+    const workItemEntries = buildWorkItemPaletteEntries({
+      tasks: paletteTasks.map((task): PaletteTaskRow => ({
+        id: task.id,
+        title: task.title,
+        key: task.key,
+        projectId: task.projectId,
+        projectName: projectNameById.get(task.projectId) || "",
+      })),
+      recentIds: recentItemIds,
+    });
+    const workItemPalette = workItemEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      group: entry.group,
+      mode: "items" as const,
+      keywords: entry.keywords,
+      hint: entry.hint || undefined,
+      onSelect: () => openWorkOrRecord(entry.taskId),
+    }));
+    const recentPalette = workItemPalette.filter((entry) => entry.group === "Recent");
+    const catalogPalette = workItemPalette.filter((entry) => entry.group === "Items");
+    items.unshift(...recentPalette);
+    items.push(...catalogPalette);
     for (const routine of agentRoutines.filter((row) => row.status === "active").slice(0, 24)) {
       items.push({
         id: `routine-flow-${routine.id}`,
@@ -6787,11 +6857,12 @@ export function DelivereeWorkspace() {
       (item) =>
         mobileIds.has(item.id) ||
         item.id.startsWith("project-") ||
-        item.id.startsWith("nav-collab-room-"),
+        item.id.startsWith("nav-collab-room-") ||
+        item.id.startsWith("item-") ||
+        item.id.startsWith("recent-item-"),
     );
   }, [
     activeProject,
-    activeProjects,
     agentRoutines,
     canViewFinance,
     createConversation,
@@ -6799,6 +6870,10 @@ export function DelivereeWorkspace() {
     navigate,
     openChiefOfStaff,
     openProjectRecord,
+    openWorkOrRecord,
+    paletteProjects,
+    paletteTasks,
+    recentItemIds,
     startVoiceCall,
     visibleTables,
     workspaceRecords,
@@ -6834,12 +6909,7 @@ export function DelivereeWorkspace() {
           ),
         }))}
         onClose={() => setOdysseusPanelOpen(false)}
-        onOpenItem={(itemId) => {
-          setSelectedWorkItemId(itemId);
-          if (lens.kind === "home") {
-            navigate(`/home?item=${encodeURIComponent(itemId)}`, { replace: true });
-          }
-        }}
+        onOpenItem={(itemId) => openWorkOrRecord(itemId)}
         onScopeChange={setOdysseusPanelScope}
         open={odysseusPanelOpen}
         scope={odysseusPanelScope}
@@ -7228,26 +7298,11 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </span>
+                  <ProjectRowMenu
+                    name={entityTitle(project)}
+                    onArchive={() => void archiveProject(project)}
+                    onDelete={() => void deleteProject(project)}
+                  />
                 </div>
                   );
                 })}
@@ -7296,26 +7351,11 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </span>
+                  <ProjectRowMenu
+                    name={entityTitle(project)}
+                    onArchive={() => void archiveProject(project)}
+                    onDelete={() => void deleteProject(project)}
+                  />
                 </div>
                   );
                 })}
@@ -7710,6 +7750,9 @@ export function DelivereeWorkspace() {
 
         <div className="do-account">
           <button
+            aria-expanded={workspaceOpen}
+            aria-haspopup="menu"
+            aria-label="Workspace and account"
             onClick={() => setWorkspaceOpen((open) => !open)}
             type="button"
           >
@@ -7723,7 +7766,22 @@ export function DelivereeWorkspace() {
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
-            <div className="do-account-menu">
+            <div className="do-account-menu" data-testid="workspace-switcher-menu" role="menu">
+              <span className="do-account-menu-label">Workspaces</span>
+              {workspaces.map((item) => (
+                <button
+                  className={item.id === workspace?.id ? "is-current" : ""}
+                  data-testid={`switch-workspace-${item.id}`}
+                  key={item.id}
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    if (item.id !== workspace?.id) setWorkspace(item);
+                  }}
+                  type="button"
+                >
+                  {item.name}
+                </button>
+              ))}
               <button onClick={() => { toggleSidebarSection("conversations"); setWorkspaceOpen(false); }} type="button">
                 <MessageSquare size={14} /> Conversations
               </button>
@@ -7735,6 +7793,7 @@ export function DelivereeWorkspace() {
                 onClick={() => {
                   setPanel("settings");
                   setWorkspaceOpen(false);
+                  navigate("/settings");
                 }}
                 type="button"
               >
@@ -7742,16 +7801,6 @@ export function DelivereeWorkspace() {
                 {accessRequests.length > 0 && (
                   <em className="do-menu-badge">{accessRequests.length}</em>
                 )}
-              </button>
-              <button
-                className="do-mobile-advanced"
-                onClick={() => {
-                  setCleanSlateOpen(true);
-                  setWorkspaceOpen(false);
-                }}
-                type="button"
-              >
-                Start clean
               </button>
               <button onClick={logOut} type="button">
                 Sign out
@@ -8015,6 +8064,7 @@ export function DelivereeWorkspace() {
           </div>
         )}
 
+        <UndoToast />
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>
             {notice}
@@ -8043,12 +8093,7 @@ export function DelivereeWorkspace() {
                   onOpenApprovals={() => navigate("/approvals")}
                   onOpenToday={() => navigate("/my-work/today")}
                   onOpenMyWork={(filter) => navigate(filter === "today" ? "/my-work/today" : filter === "week" ? "/my-work/this-week" : "/my-work")}
-                  onOpenItem={(itemId) => {
-                    setSelectedWorkItemId(itemId);
-                    navigate(`${location.pathname}?item=${encodeURIComponent(itemId)}`, {
-                      replace: true,
-                    });
-                  }}
+                  onOpenItem={(itemId) => openWorkOrRecord(itemId)}
                   onOpenRecord={(tableId, recordId) => {
                     navigate(
                       `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
@@ -8130,15 +8175,21 @@ export function DelivereeWorkspace() {
                       itemType: kind,
                     })
                   }
-                  onClose={() => {
-                    setSelectedWorkItemId(null);
-                    const params = new URLSearchParams(location.search);
-                    params.delete("item");
-                    const next = params.toString();
-                    navigate(
-                      `${location.pathname}${next ? `?${next}` : ""}`,
-                      { replace: true },
-                    );
+                  onClose={() => openWorkOrRecord(null)}
+                  onDuplicate={() => {
+                    void addProjectTask(
+                      String(selectedWorkItem.projectId || ""),
+                      `Copy of ${entityTitle(selectedWorkItem)}`,
+                      "backlog",
+                      {
+                        workItemType: selectedWorkItem.workItemType || selectedWorkItem.itemType || "task",
+                        description: selectedWorkItem.description || "",
+                        priority: selectedWorkItem.priority ?? null,
+                        parentId: selectedWorkItem.parentId || null,
+                      },
+                    ).then((createdId) => {
+                      if (createdId) openWorkOrRecord(createdId);
+                    });
                   }}
                   onCreateControlledOption={createControlledOption}
                   onLayoutChange={setHomeItemLayout}
@@ -10348,6 +10399,7 @@ export function DelivereeWorkspace() {
               {location.pathname === "/settings/data" &&
               workspace &&
               user &&
+              isDeveloperToolsEnabled() &&
               (workspace.ownerId === user.uid ||
                 ["owner", "admin"].includes(String(currentWorkspaceMember?.role || "").toLowerCase())) ? (
                 <section className="do-workspace-admin-card" data-testid="restore-creator-assignees">
@@ -10518,6 +10570,15 @@ export function DelivereeWorkspace() {
                     </button>
                   ))}
                 </div>
+                {canManageMembers ? (
+                  <button
+                    data-testid="settings-start-clean"
+                    onClick={() => setCleanSlateOpen(true)}
+                    type="button"
+                  >
+                    Start clean
+                  </button>
+                ) : null}
                 <div className="do-workspace-create-row">
                   <input
                     disabled={!canCreateWorkspace(workspaces.length)}
