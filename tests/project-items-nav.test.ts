@@ -47,7 +47,7 @@ test("project console uses an Asana-style Items list, not Tasks + Backlog tabs",
   assert.match(chromeSource, /label: "Docs"/);
   assert.doesNotMatch(consoleSource, /\["backlog", "Backlog"\]/);
   assert.match(consoleSource, /Overview/);
-  assert.match(consoleSource, /Volver a la tabla/);
+  assert.match(consoleSource, /t\("project.backToTable"\)/);
 
   // Dual Overview/Notes/Strategy chrome is gone — the project page is the table.
   assert.doesNotMatch(

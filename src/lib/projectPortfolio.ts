@@ -1,3 +1,6 @@
+import { projectWorkCounts } from "./projectWorkCounts";
+import { isCompletedWorkStatus } from "./workStatuses";
+
 export const PROJECT_STATUSES = [
   "idea",
   "planning",
@@ -111,6 +114,54 @@ export function upcomingProjectCheckpoints(
     .slice(0, Math.max(0, limit));
 }
 
+export type WorkCheckpoint = {
+  id: string;
+  kind: "project" | "item";
+  title: string;
+  date: string;
+  projectId: string;
+};
+
+/** Projects with a future delivery date, plus open items with an upcoming due date. */
+export function upcomingWorkCheckpoints(
+  projects: Array<{ id?: string; title?: string; name?: string; status?: string; dueDate?: string; targetDate?: string; revisedDueDate?: string; originalDueDate?: string }> = [],
+  tasks: Array<{ id?: string; title?: string; name?: string; status?: string | null; deletedAt?: unknown; projectId?: string; dueDate?: unknown; targetDate?: unknown }> = [],
+  limit = 8,
+  now = new Date(),
+): WorkCheckpoint[] {
+  const today = todayIsoDate(now);
+  const rows: WorkCheckpoint[] = [];
+  for (const project of projects) {
+    if (isProjectClosed(project)) continue;
+    const date = projectCheckpointDate(project);
+    if (!date || date < today) continue;
+    rows.push({
+      id: String(project.id || date),
+      kind: "project",
+      title: String(project.title || project.name || "Project"),
+      date,
+      projectId: String(project.id || ""),
+    });
+  }
+  for (const task of tasks) {
+    if (isCompletedWorkStatus(task?.status)) continue;
+    const status = String(task?.status || "").toLowerCase();
+    if (status === "archived" || status === "deleted" || task?.deletedAt) continue;
+    const date = String(task?.dueDate || task?.targetDate || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today) continue;
+    rows.push({
+      id: String(task.id || date),
+      kind: "item",
+      title: String(task.title || task.name || "Item"),
+      date,
+      projectId: String(task.projectId || ""),
+    });
+  }
+  return rows
+    .sort((left, right) => left.date.localeCompare(right.date) || left.title.localeCompare(right.title))
+    .slice(0, Math.max(0, limit));
+}
+
 export function sidebarProjectGroups(projects: any[]) {
   const sorted = sortProjectsByRecency(projects).filter((project) => !isProjectClosed(project));
   const favorites = sorted.filter(isProjectFavorite).slice(0, 4);
@@ -134,20 +185,43 @@ export function projectStatusLabel(status: string | undefined) {
   return labels[String(status || "planning").toLowerCase()] || "Planning";
 }
 
-export function projectHealth(project: any, projectTasks: any[] = [], projectRisks: any[] = []): ProjectHealth {
-  const explicit = String(project?.healthOverride || (!project?.importedFrom ? project?.health || project?.healthStatus : "") || "").toLowerCase();
-  if (explicit === "blocked") return "blocked";
-  if (["at_risk", "at risk", "risk"].includes(explicit)) return "at_risk";
-  if (["on_track", "on track", "healthy"].includes(explicit)) return "on_track";
-  if (projectTasks.some((task) => String(task.status || "").toLowerCase() === "blocked")) return "blocked";
+function liveTasks(projectTasks: Array<{ status?: string | null; deletedAt?: unknown }>) {
+  return projectTasks.filter((task) => {
+    const status = String(task?.status || "").toLowerCase();
+    return status !== "archived" && status !== "deleted" && !task?.deletedAt;
+  });
+}
+
+/**
+ * Health is computed from the work.
+ * healthOverride is the only manual pin. A stored health of "on_track" cannot hide
+ * blocked items, overdue items, or a delivery date that has already passed.
+ */
+export function projectHealth(
+  project: any,
+  projectTasks: any[] = [],
+  projectRisks: any[] = [],
+  now = new Date(),
+): ProjectHealth {
+  const override = String(project?.healthOverride || "").toLowerCase();
+  if (override === "blocked") return "blocked";
+  if (["at_risk", "at risk", "risk", "off_track", "off track"].includes(override)) return "at_risk";
+  if (["on_track", "on track", "healthy"].includes(override)) return "on_track";
+
+  const tasks = liveTasks(projectTasks);
+  const openTasks = tasks.filter((task) => !isCompletedWorkStatus(task?.status));
+  if (openTasks.some((task) => String(task.status || "").toLowerCase() === "blocked")) return "blocked";
+  const counts = projectWorkCounts(tasks, now);
+  if (counts.overdueItems > 0) return "at_risk";
   const openRisks = projectRisks.filter((risk) => !["closed", "resolved", "accepted"].includes(String(risk.status || "open").toLowerCase()));
   if (openRisks.some((risk) => String(risk.severity || "medium").toLowerCase() === "critical")) return "blocked";
-  if (openRisks.length) {
-    return "at_risk";
-  }
-  const dueValue = project?.revisedDueDate || project?.dueDate || project?.targetDate || project?.originalDueDate;
-  const dueTime = typeof dueValue === "string" ? Date.parse(dueValue) : dueValue?.toMillis?.() || (dueValue?.seconds ? dueValue.seconds * 1000 : 0);
-  if (dueTime && dueTime < Date.now() && !["completed", "done", "closed", "archived", "cancelled", "deleted"].includes(String(project?.status || "").toLowerCase())) return "at_risk";
+  if (openRisks.length) return "at_risk";
+  const due = projectCheckpointDate(project);
+  if (due && due < todayIsoDate(now) && !isProjectClosed(project)) return "at_risk";
+
+  const stored = String(project?.health || project?.healthStatus || "").toLowerCase();
+  if (!project?.importedFrom && stored === "blocked") return "blocked";
+  if (!project?.importedFrom && ["at_risk", "at risk", "risk", "off_track", "off track"].includes(stored)) return "at_risk";
   return "on_track";
 }
 
@@ -169,12 +243,14 @@ export function projectAttentionReason(
   project: any,
   projectTasks: any[] = [],
   projectRisks: any[] = [],
+  now = new Date(),
 ) {
-  const blockedCount = projectTasks.filter(
-    (task) => String(task.status || "").toLowerCase() === "blocked",
-  ).length;
-  if (blockedCount) {
-    return `${blockedCount} blocked item${blockedCount === 1 ? "" : "s"}`;
+  const counts = projectWorkCounts(liveTasks(projectTasks), now);
+  if (counts.blockedItems) {
+    return `${counts.blockedItems} blocked item${counts.blockedItems === 1 ? "" : "s"}`;
+  }
+  if (counts.overdueItems) {
+    return `${counts.overdueItems} overdue item${counts.overdueItems === 1 ? "" : "s"}`;
   }
   const openRisks = projectRisks.filter(
     (risk) =>
@@ -192,11 +268,7 @@ export function projectAttentionReason(
   if (date && date < todayIsoDate()) {
     return "Overdue checkpoint";
   }
-  const explicit = String(
-    project?.healthOverride ||
-      (!project?.importedFrom ? project?.health || project?.healthStatus : "") ||
-      "",
-  ).toLowerCase();
+  const explicit = String(project?.healthOverride || "").toLowerCase();
   if (explicit === "blocked") return "Marked blocked";
   if (["at_risk", "at risk", "risk"].includes(explicit)) return "Marked at risk";
   return projectHealthLabel(projectHealth(project, projectTasks, projectRisks));

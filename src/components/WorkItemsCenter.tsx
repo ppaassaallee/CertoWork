@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   Minimize2,
   Minus,
+  PenLine,
   Plus,
   Search,
   Settings2,
@@ -51,9 +52,11 @@ import {
   X,
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
-import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
+import { type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
+import { pushUndo } from "../lib/undoToast";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { controlledOptionNames } from "../lib/controlledLists";
 import {
@@ -110,7 +113,9 @@ import {
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
-import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn } from "../lib/kanbanBoard";
+import { KANBAN_COLUMNS, clampKanbanColumnWidth, columnOrderAfterDrop, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn, visibleBoardColumns } from "../lib/kanbanBoard";
+import { WORK_STATUS_KEYS, canonicalWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
+import { workItemChipLabel } from "../lib/workItemKey";
 import {
   KANBAN_SWIMLANES,
   activityThread,
@@ -191,6 +196,7 @@ import {
 import {
   dateInputValue,
   dueBucket,
+  dateRangeError,
   dueDateLabel,
   dueDateTimingPatch,
   dueDateTone,
@@ -270,6 +276,8 @@ type Props = {
   forceMode?: WorkItemsViewMode;
   /** Canonical My Work view; outer Filter/Sort/Group/Customize own these settings. */
   savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks">;
+  /** The saved-views bar already owns filter, sort, and group. */
+  externalFilterBar?: boolean;
   /** Notion-style project surface: dense table + parent owns chrome. */
   notionSurface?: boolean;
   notionMode?: WorkItemsViewMode;
@@ -312,7 +320,6 @@ const pickerWorkTypes = (current?: WorkItemKind | string | null): WorkItemKind[]
   }
   return base;
 };
-const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
 const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Next action", "Waiting", "Someday", "Reference", "No sector"];
 const gtdActionTypes = [
@@ -654,17 +661,14 @@ function priorityValue(value: any) {
 }
 
 function canonicalStatus(item: any) {
-  const status = String(item?.status || "").toLowerCase();
-  if (workStatuses.includes(status)) return status;
-  return taskWorkLane(item);
+  if (isRemovedWorkItem(item)) return String(item?.status || "deleted").toLowerCase() || "deleted";
+  return canonicalWorkStatus(item);
 }
 
-const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
-
-function matchesStatusFilter(item: any, statusFilter: string) {
-  if (statusFilter === "all") return true;
-  if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
-  return canonicalStatus(item) === statusFilter;
+function matchesStatusFilter(item: any, statusFilter: string, showCompleted = false) {
+  if (!removedItemMatchesStatus(item, statusFilter)) return false;
+  if (statusFilter === "archived" || statusFilter === "deleted") return true;
+  return passesStatusView(item, statusFilter, showCompleted);
 }
 
 function actionBoardBucket(item: any) {
@@ -716,7 +720,7 @@ function groupSortIndex(groupBy: GroupBy, label: string) {
     return index === -1 ? 999 : index;
   }
   if (groupBy === "status") {
-    const index = workStatuses.indexOf(label);
+    const index = WORK_STATUS_KEYS.indexOf(label as (typeof WORK_STATUS_KEYS)[number]);
     return index === -1 ? 999 : index;
   }
   if (groupBy === "due") {
@@ -793,7 +797,7 @@ function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: a
 }
 
 function displayStatus(status: string) {
-  return status === "in_progress" ? "In progress" : status === "in_review" ? "In review" : status.replace(/_/g, " ");
+  return workStatusLabel(status);
 }
 
 function ganttDate(item: any, fallbackDays = 0) {
@@ -814,17 +818,24 @@ function InlineText({
   value,
   onCommit,
   onEnter,
+  autoFocus = false,
 }: {
   ariaLabel: string;
   value?: string;
   onCommit: (value: string) => void;
   onEnter?: () => void;
+  autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(value || "");
   useEffect(() => setDraft(value || ""), [value]);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
   return (
     <input
       aria-label={ariaLabel}
+      autoFocus={autoFocus}
       onBlur={() => draft.trim() !== String(value || "").trim() && onCommit(draft.trim())}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={(event) => {
@@ -834,8 +845,78 @@ function InlineText({
         if (onEnter) onEnter();
         else event.currentTarget.blur();
       }}
+      ref={inputRef}
       value={draft}
     />
+  );
+}
+
+function ItemTitleField({
+  label,
+  onOpen,
+  onRename,
+  onEnter,
+}: {
+  label: string;
+  onOpen: () => void;
+  onRename: (next: string) => void;
+  onEnter?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+  if (editing) {
+    return (
+      <InlineText
+        ariaLabel={`Title for ${label}`}
+        autoFocus
+        onCommit={(next) => {
+          setEditing(false);
+          if (next && next !== label) onRename(next);
+        }}
+        onEnter={onEnter}
+        value={label}
+      />
+    );
+  }
+  return (
+    <>
+      <button
+        className="do-items-title-open"
+        data-testid="item-title-open"
+        onClick={() => {
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => onOpen(), 220);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          if (timer.current) window.clearTimeout(timer.current);
+          setEditing(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "F2") {
+            event.preventDefault();
+            setEditing(true);
+          }
+        }}
+        type="button"
+      >
+        {label}
+      </button>
+      <button
+        aria-label={`Rename ${label}`}
+        className="do-items-title-rename"
+        onClick={(event) => {
+          event.stopPropagation();
+          setEditing(true);
+        }}
+        type="button"
+      >
+        <PenLine size={12} />
+      </button>
+    </>
   );
 }
 
@@ -866,6 +947,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   compact = false,
   forceMode,
   savedView,
+  externalFilterBar = false,
   notionSurface = false,
   notionMode,
   onNotionModeChange: _onNotionModeChange,
@@ -912,6 +994,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
   const [statusFilter, setStatusFilter] = useState(savedView ? "all" : "open");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -1393,6 +1476,48 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   }, [forceMode, mobileCore, localMode, notionSurface]);
 
   useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== "j" && event.key !== "k" && event.key !== "Enter") return;
+      const rows = [...document.querySelectorAll<HTMLElement>("[data-item-id]")];
+      if (!rows.length) return;
+      const current = rows.findIndex((row) => row.classList.contains("is-kbd-current"));
+      if (event.key === "Enter") {
+        if (current < 0) return;
+        event.preventDefault();
+        rows[current].querySelector<HTMLButtonElement>("[data-testid='item-type-flag']")?.click();
+        return;
+      }
+      event.preventDefault();
+      const next = event.key === "j"
+        ? Math.min(rows.length - 1, current < 0 ? 0 : current + 1)
+        : Math.max(0, current < 0 ? 0 : current - 1);
+      rows.forEach((row) => row.classList.remove("is-kbd-current"));
+      rows[next]?.classList.add("is-kbd-current");
+      rows[next]?.scrollIntoView({ block: "nearest" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!filterOpen && !sortOpen && !notionFilterOpen && !notionSortOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      setFilterOpen(false);
+      setSortOpen(false);
+      onNotionFilterOpenChange?.(false);
+      onNotionSortOpenChange?.(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filterOpen, sortOpen, notionFilterOpen, notionSortOpen, onNotionFilterOpenChange, onNotionSortOpenChange]);
+
+  useEffect(() => {
     if (!notionSurface) return undefined;
     if (!notionFilterOpen && !notionSortOpen && !notionSearchOpen) return undefined;
     const onDown = (event: MouseEvent) => {
@@ -1513,7 +1638,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (savedView?.showSubtasks === false && ancestorCandidateIds(item).length > 0) return false;
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
-      const matchesStatus = matchesStatusFilter(item, statusFilter);
+      const matchesStatus = matchesStatusFilter(item, statusFilter, showCompleted);
       const matchesPriority = priorityFilter === "all" || priorityValue(effectivePriority(item, pool)) === priorityFilter;
       const itemKind = workItemKind(item);
       const matchesType = typeFilter === "all" || itemKind === typeFilter;
@@ -1529,7 +1654,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     // applyView already sorted the incoming rows. A second project/priority sort
     // previously erased the user's selected view sort before painting the list.
     return savedView?.sort.length ? visible : sortItems(visible, primarySort, secondarySort, projects, pool);
-  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, savedView, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, savedView, showCompleted, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const columnCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1907,7 +2032,34 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     writeMyWorkSectionOrder(window.localStorage, sectionOrderScope, ids);
   };
 
+  const commitTaskPatch = (
+    item: { id: string; startDate?: unknown; dueDate?: unknown; targetDate?: unknown },
+    patch: Record<string, unknown>,
+  ) => {
+    const start = "startDate" in patch ? patch.startDate : item?.startDate;
+    const end = "dueDate" in patch ? patch.dueDate : item?.dueDate || item?.targetDate;
+    const error = dateRangeError(start, end);
+    if (error) {
+      setKanbanError(error);
+      return;
+    }
+    setKanbanError("");
+    void onUpdateTask(item.id, patch);
+  };
+
   const updateBulk = async (patch: Record<string, unknown>) => {
+    if ("dueDate" in patch || "startDate" in patch) {
+      const invalid = tasks.some((item) => {
+        if (!selectedBulkIds.includes(item.id)) return false;
+        const start = "startDate" in patch ? patch.startDate : item.startDate;
+        const end = "dueDate" in patch ? patch.dueDate : item.dueDate || item.targetDate;
+        return Boolean(dateRangeError(start, end));
+      });
+      if (invalid) {
+        setKanbanError("End date must be on or after the start date.");
+        return;
+      }
+    }
     try {
       await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
       setSelectedBulkIds([]);
@@ -1965,8 +2117,30 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         swimlaneMovePatch(kanbanSwimlane, parsed.swimlaneKey, projects, workspaceMembers),
       );
     }
+    const destKey = deliveryColumn?.key || "";
+    const orders = destKey
+      ? columnOrderAfterDrop(
+          tasks.filter(
+            (candidate) =>
+              candidate.id !== item.id &&
+              kanbanColumnForStatus(canonicalStatus(candidate)) === destKey,
+          ),
+          item.id,
+          result.destination.index,
+        )
+      : [];
+    const moved = orders.find((row) => row.id === item.id);
+    if (moved) {
+      patch.order = moved.order;
+      patch.rank = moved.rank;
+    }
     try {
       await onUpdateTask(item.id, patch);
+      await Promise.all(
+        orders
+          .filter((row) => row.id !== item.id)
+          .map((row) => onUpdateTask(row.id, { order: row.order, rank: row.rank })),
+      );
       setKanbanError("");
     } catch (reason) {
       await onUpdateTask(item.id, previous);
@@ -2063,14 +2237,63 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     });
   };
 
+  const [pendingRemoval, setPendingRemoval] = useState<any | null>(null);
+
+  const childItemsOf = (item: any) => {
+    const id = String(item?.id || "");
+    if (!id) return [];
+    return tasks.filter((candidate) => String(candidate?.parentId || candidate?.featureId || candidate?.epicId || "") === id);
+  };
+
+  const softDeleteItems = (items: any[]) => {
+    const unique = items.filter((item, index, list) => item?.id && list.findIndex((candidate) => candidate.id === item.id) === index);
+    for (const item of unique) {
+      if (selectedItemId === item.id) onSelectItem(null);
+    }
+    setSelectedBulkIds((current) => current.filter((id) => !unique.some((item) => item.id === id)));
+    const snapshots = unique.map((item) => ({
+      id: item.id,
+      previous: item.previousStatus || item.status,
+    }));
+    void Promise.all(unique.map((item) => onUpdateTask(item.id, softDeletePatch(item.status))));
+    pushUndo(
+      unique.length === 1 ? `Deleted ${title(unique[0])}` : `Deleted ${unique.length} items`,
+      () => Promise.all(snapshots.map((row) => onUpdateTask(row.id, restoreItemPatch(row.previous)))).then(() => undefined),
+    );
+  };
+
+  const requestDelete = (item: any) => {
+    if (!consumeDeleteGesture()) return;
+    const children = childItemsOf(item).filter((child) => !isRemovedWorkItem(child));
+    if (children.length) {
+      setPendingRemoval(item);
+      return;
+    }
+    softDeleteItems([item]);
+  };
+
   const archiveItem = (item: any) => {
-    // Product delete archives the record. Do not hard-delete task documents.
-    if (selectedItemId === item.id) onSelectItem(null);
-    setSelectedBulkIds((current) => current.filter((id) => id !== item.id));
-    return onUpdateTask(item.id, {
-      status: "archived",
-      archivedAt: new Date().toISOString(),
+    requestDelete(item);
+  };
+
+  const duplicateItem = async (item: {
+    projectId?: string;
+    itemType?: string;
+    workItemType?: string;
+    description?: string;
+    priority?: string | number | null;
+    parentId?: string | null;
+    title?: string;
+    name?: string;
+  }) => {
+    const createdId = await onAddTask(String(item.projectId || ""), `Copy of ${title(item)}`, "backlog", {
+      workItemType: workItemKind(item),
+      itemType: item.itemType,
+      description: item.description || "",
+      priority: item.priority ?? null,
+      parentId: item.parentId || null,
     });
+    if (createdId) onSelectItem(String(createdId));
   };
 
   const renderDeleteButton = (item: any) => (
@@ -2080,7 +2303,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       data-testid="item-delete"
       onClick={(event) => {
         event.stopPropagation();
-        void archiveItem(item);
+        requestDelete(item);
       }}
       onPointerDown={(event) => event.stopPropagation()}
       title={`Delete ${title(item)}`}
@@ -2165,11 +2388,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             return <TypeIcon aria-hidden="true" size={13} />;
           })()}
         </button>
-        <InlineText
-          ariaLabel={`Title for ${title(item)}`}
-          onCommit={(next) => next && onUpdateTask(item.id, { title: next })}
+        <ItemTitleField
+          label={title(item)}
           onEnter={tree?.onEnterAddChild}
-          value={title(item)}
+          onOpen={() => onSelectItem(item.id)}
+          onRename={(next) => onUpdateTask(item.id, { title: next })}
         />
         {childCount ? <small>{childCount}</small> : null}
       </div>
@@ -2315,7 +2538,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       return (
         <QuickAttrChoices
           onPick={(id) => pick({ status: id })}
-          options={workStatuses.map((status) => ({ id: status, label: displayStatus(status) }))}
+          options={WORK_STATUS_KEYS.map((status) => ({ id: status, label: displayStatus(status) }))}
           value={canonicalStatus(item)}
         />
       );
@@ -2770,6 +2993,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return (
       <article
         className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""} ${edgeClass}`.trim()}
+        data-item-id={item.id}
         data-due-edge={edgeTone || undefined}
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
@@ -2979,6 +3203,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return (
       <header
         className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        data-item-id={item.id}
         data-testid="item-section-head"
         onDragOver={(event) => previewItemDrag(item.id, event)}
         onDrop={(event) => void dropDraggedItem(event, item, siblings, section)}
@@ -3108,7 +3333,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const childPool = parentPool;
     const visibleChildrenOf = (parentIdValue: string) =>
         sortHierarchySiblings(
-        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
+        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter, showCompleted)),
         compare,
       );
     const walk = (item: any, depth: number, ancestors: Set<string>, siblings: any[]) => {
@@ -3231,8 +3456,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
         <div className="do-kanban-card-idrow">
           <span className={`do-kanban-type-tile is-${kind}`} aria-hidden="true" />
-          <code className="do-kanban-item-id">
-            {String(item.key || item.projectKey || item.id || "").slice(0, 12) || "ITEM"}
+          <code className="do-kanban-item-id" title={String(item.key || item.id || "")}>
+            {workItemChipLabel(item)}
           </code>
           <span
             className="c-pri"
@@ -3329,7 +3554,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
             <Calendar size={12} aria-hidden="true" />
             <time>{dueText || "Date"}</time>
-            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />
+            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => commitTaskPatch(item, dueDateTimingPatch(event.target.value || null))} type="date" />
           </label>
         </div>
       </article>
@@ -3439,10 +3664,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       isMyWork ||
       effectiveGroupBy === "hierarchy" ||
       effectiveGroupBy === "status";
+    const deliveryColumns = visibleBoardColumns(showCompleted, statusFilter);
     const columns = useDeliveryBoard && effectiveGroupBy !== "actionBoard"
-      ? KANBAN_COLUMNS.map((column) => ({
+      ? deliveryColumns.map((column) => ({
           key: column.key,
-          title: column.label,
+          title: kanbanColumnLabels[column.key] || column.label,
           items: filtered.filter((item) => kanbanColumnForStatus(canonicalStatus(item)) === column.key),
         }))
       : Object.entries(grouped)
@@ -4057,6 +4283,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   return (
     <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${savedView?.density === "compact" ? "is-view-compact" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+      {pendingRemoval ? (
+        <div className="cw-remove-dialog" role="dialog" aria-modal="true" aria-labelledby="cw-remove-title">
+          <div>
+            <h2 id="cw-remove-title">Delete {title(pendingRemoval)} and its subtasks?</h2>
+            <p>{childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child)).length} subtasks will be deleted with it. Undo restores all of them.</p>
+            <button type="button" onClick={() => setPendingRemoval(null)}>Cancel</button>
+            <button type="button" onClick={() => {
+              const children = childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child));
+              const target = pendingRemoval;
+              setPendingRemoval(null);
+              softDeleteItems([target, ...children]);
+            }}>Delete with subtasks</button>
+          </div>
+        </div>
+      ) : null}
       {actionMenu && createPortal(
         <div
           className="do-quick-action-menu"
@@ -4279,7 +4520,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   ))}
                   <button
                     data-testid="kanban-add-rule"
-                    onClick={() => setKanbanAutomations((current) => [...current, { id: `rule-${Date.now()}`, whenColumn: "doing" }])}
+                    onClick={() => setKanbanAutomations((current) => [...current, { id: `rule-${Date.now()}`, whenColumn: "in_progress" }])}
                     type="button"
                   >
                     Add rule
@@ -4298,7 +4539,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         )}
         <div className="do-items-toolbar-actions">
-          {!savedView && <>
+          {!savedView && !externalFilterBar && <>
           <div className="do-popover-anchor">
             <button
               aria-expanded={viewsOpen}
@@ -4458,7 +4699,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
                     <option value="open">Open · hide done</option>
                     <option value="all">All statuses</option>
-                    {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                    {WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
                   </select>
                 )}
                 {filterDraft === "priority" && (
@@ -4510,6 +4751,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
                   </select>
                 )}
+                <button
+                  onClick={() => setFilterOpen(false)}
+                  type="button"
+                >
+                  Close
+                </button>
               </div>
             )}
           </div>
@@ -4640,7 +4887,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
                   <option value="open">Open · hide done</option>
                   <option value="all">All statuses</option>
-                  {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                  {WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
                 </select>
               )}
               {filterDraft === "priority" && (
@@ -4692,6 +4939,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
                 </select>
               )}
+              <button
+                onClick={() => {
+                  setFilterOpen(false);
+                  onNotionFilterOpenChange?.(false);
+                }}
+                type="button"
+              >
+                Close
+              </button>
             </div>
           )}
           {sortPanelOpen && (
@@ -5158,7 +5414,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
           {renderSelectAll("items-select-all-bulk")}
           <button onClick={() => setSelectedBulkIds([])} type="button">Clear</button>
-          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
+          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
@@ -5302,6 +5558,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             </div>
           )}
           {mode === "list" && !notionSurface && renderColumnHeader()}
+          <button
+            aria-pressed={showCompleted}
+            className={`do-button-secondary${showCompleted ? " is-active" : ""}`}
+            data-testid="show-completed-toggle"
+            onClick={() => setShowCompleted((current) => !current)}
+            type="button"
+          >
+            {showCompleted ? "Hide completed" : "Show completed"}
+          </button>
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
               createDisabled={projectCreateBlocked}
@@ -5486,6 +5751,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             item={selectedItem}
             itemKey={String(selectedItem.projectKey || selectedItem.key || selectedItem.id || "").slice(0, 24)}
             onArchive={() => void archiveItem(selectedItem)}
+            onDuplicate={() => void duplicateItem(selectedItem)}
             onAskOdysseus={() =>
               onAskOdysseus
                 ? onAskOdysseus(selectedItem)
@@ -5665,7 +5931,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   meta: { status: nextStatus },
                 });
               }
-            }} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
+            }} value={canonicalStatus(selectedItem)}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label className="do-mobile-advanced">Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
@@ -5732,8 +5998,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   : []
               }
             />
-            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
-            <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
+            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => commitTaskPatch(selectedItem, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
+            <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => commitTaskPatch(selectedItem, { startDate: event.target.value || null })} type="date" /></label>
             <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
             <div className="do-item-parent-field">

@@ -22,13 +22,16 @@ test("standalone conversations exclude project-linked chats", () => {
   assert.equal(isProjectConversation({ linkedProjectIds: ["p1"] }), true);
 });
 
-test("kanban maps statuses to delivery columns without duplicating items", () => {
-  assert.equal(kanbanColumnForStatus("todo"), "backlog");
-  assert.equal(kanbanColumnForStatus("in_progress"), "doing");
+test("kanban maps each status to its own column", () => {
+  assert.equal(kanbanColumnForStatus("todo"), "todo");
+  assert.equal(kanbanColumnForStatus("ready"), "ready");
+  assert.equal(kanbanColumnForStatus("in_progress"), "in_progress");
+  assert.equal(kanbanColumnForStatus("in_review"), "in_review");
   assert.equal(kanbanColumnForStatus("blocked"), "blocked");
   assert.equal(kanbanColumnForStatus("done"), "done");
-  assert.equal(statusForKanbanColumn("doing", "in_review"), "in_review");
+  assert.equal(statusForKanbanColumn("in_progress", "in_review"), "in_progress");
   assert.equal(statusForKanbanColumn("doing"), "in_progress");
+  assert.equal(statusForKanbanColumn("in_review"), "in_review");
 });
 
 test("project delete is limited to manager or workspace owner", () => {

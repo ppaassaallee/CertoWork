@@ -3,6 +3,7 @@ import {
   createView,
   getLastUsedViewId,
   listViews,
+  nextPersonalViewName,
   persistDefaultCopy,
   setLastUsedView,
   updateView,
@@ -18,6 +19,7 @@ import {
 } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
 import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
+import { isRemovedWorkItem } from "../../lib/itemRemoval";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { WorkItemsCenter } from "../../components/WorkItemsCenter";
 import type { WorkLane } from "../../lib/projectPortfolio";
@@ -199,11 +201,16 @@ export function MyWorkViewsSurface({
   const active = previewView?.id === selectedView.id ? previewView : selectedView;
 
   const appliedResult = useMemo(
-    () =>
-      applyView(tasks, adapter, active, {
+    () => {
+      const wantsRemoved = active.filters.some(
+        (rule) => rule.columnId === "status" && (rule.value === "deleted" || rule.value === "archived"),
+      );
+      const source = wantsRemoved ? tasks : tasks.filter((task) => !isRemovedWorkItem(task));
+      return applyView(source, adapter, active, {
         userId: actorId,
         memberIds: meMemberIds,
-      }),
+      });
+    },
     [tasks, adapter, active, actorId, meMemberIds],
   );
   const appliedRows = appliedResult.rows;
@@ -223,7 +230,11 @@ export function MyWorkViewsSurface({
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
-      const created = await persistDefaultCopy(next, actorId, t("views.myView"));
+      const created = await persistDefaultCopy(
+        next,
+        actorId,
+        nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
+      );
       setRemoteViews((current) => [...current.filter((v) => v.id !== created.id), created]);
       setActiveId(created.id);
       await setLastUsedView(actorId, surface, created.id);
@@ -286,7 +297,7 @@ export function MyWorkViewsSurface({
                 defaultView;
               const created = await createView({
                 ...rest,
-                name: t("views.myView"),
+                name: nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
                 scope: "personal",
                 ownerId: actorId,
               });

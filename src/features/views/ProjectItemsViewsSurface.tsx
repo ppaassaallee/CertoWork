@@ -3,6 +3,7 @@ import {
   createView,
   getLastUsedViewId,
   listViews,
+  nextPersonalViewName,
   persistDefaultCopy,
   setLastUsedView,
   updateView,
@@ -151,7 +152,11 @@ export function ProjectItemsViewsSurface({
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
-      const created = await persistDefaultCopy(next, actorId, t("views.myView"));
+      const created = await persistDefaultCopy(
+        next,
+        actorId,
+        nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
+      );
       setViews((current) => [
         ...current.filter((view) => view.id !== defaultView.id && view.id !== created.id),
         defaultView,
@@ -200,7 +205,7 @@ export function ProjectItemsViewsSurface({
                   defaultView;
                 const created = await createView({
                   ...rest,
-                  name: t("views.myView"),
+                  name: nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
                   scope: "personal",
                   ownerId: actorId,
                 });
@@ -247,6 +252,7 @@ export function ProjectItemsViewsSurface({
         <WorkItemsCenter
           activeProject={listBody.project}
           compact
+          externalFilterBar={isList}
           forceMode={mode}
           hierarchyTasks={listBody.hierarchyTasks || tasks}
           onAddTask={(pid, title, status, patch) =>

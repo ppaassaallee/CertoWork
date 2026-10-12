@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { t } from "../lib/i18n";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
@@ -57,7 +58,7 @@ import {
   projectStatusLabel,
   sortProjectsByRecency,
   taskWorkLane,
-  upcomingProjectCheckpoints,
+  upcomingWorkCheckpoints,
   type ProjectHealth,
   type WorkLane,
 } from "../lib/projectPortfolio";
@@ -138,6 +139,15 @@ import { WorkItemsCenter } from "./WorkItemsCenter";
 import { useRoutineHost } from "./routines/RoutineHost";
 import { RoutinesStrip } from "./routines/RoutinesStrip";
 import type { WorkItemsViewMode } from "../lib/itemViewMemory";
+import {
+  chromeViewFromSearch,
+  isProjectChromeView,
+  itemIdFromSearch,
+  searchWithItem,
+  searchWithProjectView,
+  tabForProjectView,
+  workItemsModeForProjectView,
+} from "../lib/projectViewUrl";
 import { canDeleteProject } from "../lib/projectPermissions";
 import { projectWorkKey } from "../lib/workspaceDisplay";
 import {
@@ -1414,48 +1424,91 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   const openFinanceLine = (financeLineId: string) => {
     navigate(`/projects?financeLine=${encodeURIComponent(financeLineId)}`);
   };
+  const location = useLocation();
   const mobileCore = useMobileCore();
-  const [tab, setTab] = useState<ProjectConsoleTab>(initialTab);
+  const [tab, setTab] = useState<ProjectConsoleTab>(() => {
+    const fromUrl = tabForProjectView(
+      chromeViewFromSearch(typeof window === "undefined" ? "" : window.location.search),
+    );
+    return fromUrl || initialTab;
+  });
   const [moreOpen, setMoreOpen] = useState(false);
-  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(() =>
+    itemIdFromSearch(typeof window === "undefined" ? "" : window.location.search),
+  );
   const [timelineMode, setTimelineMode] = useState(false);
   const [ganttFocus, setGanttFocus] = useState(false);
-  const [notionMode, setNotionMode] = useState<WorkItemsViewMode>("list");
+  const [notionMode, setNotionMode] = useState<WorkItemsViewMode>(() => {
+    const mode = workItemsModeForProjectView(
+      chromeViewFromSearch(typeof window === "undefined" ? "" : window.location.search),
+    );
+    return (mode as WorkItemsViewMode) || "list";
+  });
   const workspaceIdForViews = String(
     (workspace as { id?: string } | null | undefined)?.id ||
       project.workspaceId ||
       "",
   );
   const [chromeView, setChromeView] = useState<ProjectViewId>(() => {
+    const fromUrl = chromeViewFromSearch(typeof window === "undefined" ? "" : window.location.search);
+    if (fromUrl && isProjectChromeView(fromUrl)) return fromUrl as ProjectViewId;
     if (!isOverviewEnabled()) return "list";
     const saved = readProjectSurfaceView(String(project?.id || ""));
-    if (
-      saved &&
-      ["overview", "list", "kanban", "gantt", "calendar", "docs", "tables", "flow", "epics"].includes(saved)
-    ) {
-      return saved as ProjectViewId;
-    }
+    if (saved && isProjectChromeView(saved)) return saved as ProjectViewId;
     return "overview";
   });
+  const applyChromeView = useCallback((view: ProjectViewId) => {
+    if (view === "costs") {
+      setTab("costs");
+      setChromeView("costs");
+      return;
+    }
+    if (view === "tables") {
+      setTab("tables");
+      setChromeView("tables");
+      return;
+    }
+    if (view === "docs") {
+      setTab("docs");
+      setChromeView("docs");
+      return;
+    }
+    setChromeView(view);
+    setTab("items");
+    if (view !== "overview") setNotionMode(view as WorkItemsViewMode);
+  }, []);
+  const publishChromeView = useCallback((view: ProjectViewId) => {
+    writeProjectSurfaceView(String(project.id), view);
+    applyChromeView(view);
+    const next = searchWithProjectView(location.search, view);
+    if (next !== (location.search || "")) {
+      navigate(`${location.pathname}${next}`, { replace: true });
+    }
+  }, [applyChromeView, location.pathname, location.search, navigate, project.id]);
+  const selectProjectItem = useCallback((id: string | null) => {
+    setSelectedWorkItemId(id);
+    const next = searchWithItem(location.search, id);
+    if (next !== (location.search || "")) {
+      navigate(`${location.pathname}${next}`, { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
   useEffect(() => {
+    setSelectedWorkItemId(itemIdFromSearch(location.search));
+  }, [location.search]);
+  useEffect(() => {
+    const fromUrl = chromeViewFromSearch(location.search);
+    if (fromUrl && isProjectChromeView(fromUrl)) {
+      applyChromeView(fromUrl as ProjectViewId);
+      return;
+    }
     if (!isOverviewEnabled()) return;
     const saved = readProjectSurfaceView(String(project?.id || ""));
     if (!saved) {
-      setChromeView("overview");
+      applyChromeView("overview");
       return;
     }
-    if (
-      ["overview", "list", "kanban", "gantt", "calendar", "docs", "tables", "flow", "epics"].includes(saved)
-    ) {
-      setChromeView(saved as ProjectViewId);
-      if (saved === "docs") setTab("docs");
-      else if (saved === "tables") setTab("tables");
-      else {
-        setTab("items");
-        if (saved !== "overview") setNotionMode(saved as WorkItemsViewMode);
-      }
-    }
-  }, [project?.id]);
+    if (isProjectChromeView(saved)) applyChromeView(saved as ProjectViewId);
+  }, [applyChromeView, location.search, project?.id]);
 
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [notionSortOpen, setNotionSortOpen] = useState(false);
@@ -1808,9 +1861,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 <button
                   onClick={() => {
                     setMoreOpen(false);
-                    setTab("tables");
-                    setChromeView("tables");
-                    writeProjectSurfaceView(String(project.id), "tables");
+                    publishChromeView("tables");
                   }}
                   role="menuitem"
                   type="button"
@@ -1979,53 +2030,38 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 : notionMode) as ProjectViewId
           }
           filterOpen={notionFilterOpen}
+          showFilterSort={tab !== "items"}
           onAddTask={() => {
-            setTab("items");
-            setChromeView("list");
-            setNotionMode("list");
-            writeProjectSurfaceView(String(project.id), "list");
+            publishChromeView("list");
             window.setTimeout(() => {
               const input = document.querySelector(
-                ".do-notion-add-row input",
+                ".cw-views-add-form input, .do-notion-add-row input",
               ) as HTMLInputElement | null;
               input?.focus();
-            }, 0);
+            }, 50);
           }}
           onChangeView={(view) => {
-            if (view === "costs") {
-              if (!canViewFinance) return;
-              setTab("costs");
-              return;
-            }
-            if (view === "tables") {
-              if (!tablesEnabled) return;
-              setTab("tables");
-              setChromeView("tables");
-              writeProjectSurfaceView(String(project.id), "tables");
-              return;
-            }
-            writeProjectSurfaceView(String(project.id), view);
-            setChromeView(view);
-            if (view === "docs") {
-              setTab("docs");
-              return;
-            }
-            setTab("items");
-            if (view !== "overview") {
-              setNotionMode(view as WorkItemsViewMode);
-            }
+            if (view === "costs" && !canViewFinance) return;
+            if (view === "tables" && !tablesEnabled) return;
+            publishChromeView(view);
           }}
           onToggleFilter={() => {
-            setTab("items");
-            setChromeView(notionMode);
-            writeProjectSurfaceView(String(project.id), notionMode);
+            const viewsFilter = document.querySelector("[data-testid='views-filter']") as HTMLButtonElement | null;
+            if (viewsFilter) {
+              viewsFilter.click();
+              return;
+            }
+            publishChromeView(notionMode);
             setNotionFilterOpen((open) => !open);
             setNotionSortOpen(false);
           }}
           onToggleSort={() => {
-            setTab("items");
-            setChromeView(notionMode);
-            writeProjectSurfaceView(String(project.id), notionMode);
+            const viewsSort = document.querySelector("[data-testid='views-sort']") as HTMLButtonElement | null;
+            if (viewsSort) {
+              viewsSort.click();
+              return;
+            }
+            publishChromeView(notionMode);
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
           }}
@@ -2046,7 +2082,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           style={{ margin: "8px 24px 0" }}
           type="button"
         >
-          <ArrowLeft size={14} /> Volver a la tabla
+          <ArrowLeft size={14} /> {t("project.backToTable")}
         </button>
       )}
 
@@ -2160,16 +2196,8 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           <ProjectOverview
             members={workspaceMembers as any}
             milestones={milestones}
-            onOpenGantt={() => {
-              setChromeView("gantt");
-              setNotionMode("gantt");
-              writeProjectSurfaceView(String(project.id), "gantt");
-            }}
-            onOpenList={() => {
-              setChromeView("list");
-              setNotionMode("list");
-              writeProjectSurfaceView(String(project.id), "list");
-            }}
+            onOpenGantt={() => publishChromeView("gantt")}
+            onOpenList={() => publishChromeView("list")}
             project={project}
             tasks={tasks}
           />
@@ -2193,13 +2221,9 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
               onRenameWorkCategory,
               onGanttFocusChange: setGanttFocus,
               onInviteAssigneeEmail,
-              onModeChange: (mode) => {
-                setNotionMode(mode);
-                setChromeView(mode);
-                writeProjectSurfaceView(String(project.id), mode);
-              },
+              onModeChange: (mode) => publishChromeView(mode),
               onOpenFinanceLine: openFinanceLine,
-              onSelectItem: setSelectedWorkItemId,
+              onSelectItem: selectProjectItem,
               onTimelineModeChange: setTimelineMode,
               onUpdateSprint,
               project: project as Record<string, unknown> & { id: string },
@@ -2209,7 +2233,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             }}
             members={workspaceMembers as WorkspaceMember[]}
             onOpenCollab={openCollabProject}
-            onOpenItem={(id) => setSelectedWorkItemId(id)}
+            onOpenItem={(id) => selectProjectItem(id)}
             onUpdateTask={onUpdateTask}
             projectId={String(project.id)}
             projects={workspaceProjects?.length ? workspaceProjects : [project]}
@@ -5776,8 +5800,8 @@ function ProjectCommandCenterInner({
     [openProjects, tasksByProject, risksByProject],
   );
   const upcomingProjects = useMemo(
-    () => upcomingProjectCheckpoints(openProjects, 8),
-    [openProjects],
+    () => upcomingWorkCheckpoints(openProjects, tasks, 8),
+    [openProjects, tasks],
   );
   const taxonomyBreakdown = useMemo(() => {
     return [
@@ -5822,11 +5846,6 @@ function ProjectCommandCenterInner({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [askPanel, templatesOpen]);
 
-  const checkpointLabel = (project: any) =>
-    formatCheckpointLabel(
-      projectDueDate(project) === "No date" ? "" : projectDueDate(project),
-    );
-
   const openListWith = (patch: {
     filter?: string;
     stageFilter?: "all" | DeliveryStage;
@@ -5869,7 +5888,7 @@ function ProjectCommandCenterInner({
       upcomingProjects.length
         ? `Upcoming checkpoints: ${upcomingProjects
             .slice(0, 5)
-            .map((project) => `${projectTitle(project)} (${checkpointLabel(project).text})`)
+            .map((entry) => `${entry.title} (${formatCheckpointLabel(entry.date).text})`)
             .join("; ")}`
         : "No upcoming checkpoints on the calendar.",
       "",
@@ -5880,7 +5899,7 @@ function ProjectCommandCenterInner({
       answer: lines.join("\n"),
       projectIds: [
         ...allAttention.slice(0, 8).map((project) => project.id),
-        ...upcomingProjects.slice(0, 3).map((project) => project.id),
+        ...upcomingProjects.slice(0, 3).map((entry) => entry.projectId || entry.id),
       ].filter((id, index, list) => list.indexOf(id) === index),
     });
     setAskDraft("");
@@ -6257,7 +6276,7 @@ function ProjectCommandCenterInner({
                   <button
                     aria-label="How health is calculated"
                     className="do-icon-tip"
-                    title="Health is calculated from overdue dates, blocked work, open risks, and any explicit override."
+                    title="Health is calculated from overdue items, blocked work, a past delivery date, open risks, and an explicit override."
                     type="button"
                   >
                     <AlertTriangle size={14} />
@@ -6296,17 +6315,19 @@ function ProjectCommandCenterInner({
                   </button>
                 </div>
                 <div className="do-upcoming-list">
-                  {upcomingProjects.map((project) => {
-                    const health = projectHealth(
-                      project,
-                      tasksFor(project.id),
-                      risksFor(project.id),
-                    );
-                    const label = checkpointLabel(project);
+                  {upcomingProjects.map((entry) => {
+                    const project = projects.find((candidate) => candidate.id === entry.projectId);
+                    const health = project
+                      ? projectHealth(project, tasksFor(project.id), risksFor(project.id))
+                      : "on_track";
+                    const label = formatCheckpointLabel(entry.date);
                     return (
                       <button
-                        key={project.id}
-                        onClick={() => onOpenProject(project)}
+                        key={`${entry.kind}-${entry.id}`}
+                        onClick={() => {
+                          if (entry.kind === "item") onOpenWorkItem?.(entry.id);
+                          else if (project) onOpenProject(project);
+                        }}
                         type="button"
                       >
                         <StatusLight
@@ -6315,10 +6336,12 @@ function ProjectCommandCenterInner({
                           size="sm"
                         />
                         <span>
-                          <strong>{projectTitle(project)}</strong>
+                          <strong>{entry.title}</strong>
                           <small>
-                            {project.client || "Internal"} ·{" "}
-                            {deliveryPhaseLabel(project)}
+                            {entry.kind === "item" ? "Item" : project?.client || "Internal"}
+                            {entry.kind === "project" && project
+                              ? ` · ${deliveryPhaseLabel(project)}`
+                              : ""}
                           </small>
                         </span>
                         <time className={label.overdue ? "is-overdue" : ""}>
@@ -6334,7 +6357,7 @@ function ProjectCommandCenterInner({
                     <EmptyState
                       icon={<CalendarDays size={18} />}
                       title="No upcoming checkpoints"
-                      text="Add a future due date from the project console."
+                      text="Add a future due date on a project or an open item."
                     />
                   )}
                 </div>

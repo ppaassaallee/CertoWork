@@ -10,7 +10,7 @@ test("auth bootstrap opens workspace before invite waterfall", () => {
   assert.match(source, /Promise\.allSettled\(\[/);
   assert.match(source, /openedEarly/);
   assert.match(source, /acceptEmailAndPendingInvites/);
-  assert.match(source, /options\?\.reload !== false/);
+  assert.match(source, /shouldReloadWorkspace\(options\)/);
 });
 
 test("workspace data listeners use a stable access key", () => {
@@ -19,7 +19,7 @@ test("workspace data listeners use a stable access key", () => {
     "utf8",
   );
   assert.match(source, /dataAccessKey/);
-  assert.match(source, /\[dataAccessKey, dataRetryVersion, reportDataSyncError\]/);
+  assert.match(source, /\[dataAccessKey, dataRetryVersion, reportDataSyncError, reportTablesSyncError\]/);
   assert.match(source, /setWorkspace\(pureAi, \{ reload: false \}\)/);
   // Pricing / follower grants are explicit Settings actions — not on every load.
   assert.doesNotMatch(source, /pricingAutoSyncRef/);

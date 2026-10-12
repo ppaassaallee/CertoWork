@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { useMembers, useProjects, useTasksIndex } from "../data";
 import { useMilestonesByProject, useRisksByProject } from "../data/packStores";
 import { ProjectConsolePanel } from "../components/ProjectSurfaces";
+import { projectRouteState } from "../lib/projectViewUrl";
 
 /**
  * Thin store-backed wrapper around ProjectConsolePanel.
@@ -31,10 +32,18 @@ function ProjectRouteInner(props: {
     [knowledgeItems, projectId],
   );
 
-  if (!project) {
+  const routePhase = projectRouteState(projects.length, Boolean(project));
+  if (!project || routePhase !== "ready") {
+    if (routePhase === "missing") {
+      return (
+        <div className="do-panel-empty" data-testid="project-route-missing">
+          <strong>Project not found</strong>
+        </div>
+      );
+    }
     return (
-      <div className="do-panel-empty" data-testid="project-route-missing">
-        <strong>Project not found</strong>
+      <div className="do-panel-empty" data-testid="project-route-loading">
+        <span>Loading project…</span>
       </div>
     );
   }

@@ -32,6 +32,8 @@ import { MultiAssigneePicker } from "../../../components/ProjectControls";
 import { ControlledSelect } from "../../../components/ControlledSelect";
 import { RoutineLaunchButton } from "../../../components/routines/RoutineHost";
 import { dueDateTimingPatch } from "../../../lib/itemTiming";
+import { calendarDateKey, dueDateChipLabel } from "../../../lib/itemDateLabel";
+import { formatStatusActivity } from "../../../lib/activityText";
 import {
   checklistCaption,
   checklistItems,
@@ -89,6 +91,7 @@ export type ItemModalProps = {
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onChangeType: (kind: WorkItemKind) => void;
   onArchive: () => void | Promise<void>;
+  onDuplicate?: () => void | Promise<void>;
   onAskOdysseus?: () => void;
   onOpenCollab?: () => void;
   onOpenProjectConsole?: () => void;
@@ -216,15 +219,8 @@ function canonicalStatus(item: any) {
   return "backlog";
 }
 
-function dateInputValue(value: any) {
-  if (!value) return "";
-  try {
-    const date = value?.toDate ? value.toDate() : new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toISOString().slice(0, 10);
-  } catch {
-    return String(value).slice(0, 10);
-  }
+function dateInputValue(value: unknown) {
+  return calendarDateKey(value);
 }
 
 function relativeDateLabel(value: any, locale: "en" | "es") {
@@ -280,7 +276,7 @@ function activityEntries(item: any) {
   for (const entry of history.slice(-5)) {
     rows.push({
       id: `hist-${entry.at || entry.status}-${rows.length}`,
-      text: `${entry.from || "—"} → ${entry.to || entry.status || "—"}`,
+      text: formatStatusActivity(entry),
       at: String(entry.at || ""),
       author: String(entry.by || "System"),
     });
@@ -319,6 +315,7 @@ export function ItemModal({
   onUpdateTask,
   onChangeType,
   onArchive,
+  onDuplicate,
   onAskOdysseus,
   onOpenCollab,
   onCreateControlledOption,
@@ -624,6 +621,17 @@ export function ItemModal({
                   <button onClick={copyLink} type="button">
                     <Copy size={13} /> {copy("copyLink", locale)}
                   </button>
+                  {onDuplicate ? (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void onDuplicate();
+                      }}
+                      type="button"
+                    >
+                      <Copy size={13} /> Duplicate
+                    </button>
+                  ) : null}
                   <button
                     className="is-danger"
                     onClick={() => {
@@ -706,7 +714,7 @@ export function ItemModal({
                 onClick={() => setActivePicker(activePicker === "dates" ? null : "dates")}
                 type="button"
               >
-                {relativeDateLabel(item.dueDate || item.targetDate, locale)}
+                {dueDateChipLabel(item.dueDate || item.targetDate)}
               </button>
             </div>
 

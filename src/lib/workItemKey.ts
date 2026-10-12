@@ -40,3 +40,38 @@ export function nextWorkItemKey(
 export function isModernWorkItemKey(key: string): boolean {
   return MODERN_KEY.test(String(key || "").trim().toUpperCase());
 }
+
+/** Keep issuing keys until the string is not already in the catalog. */
+export function uniqueWorkItemKey(
+  existingKeys: Array<string | null | undefined> = [],
+  options: { now?: Date; random?: () => number } = {},
+): string {
+  const seen = new Set(
+    existingKeys.map((key) => String(key || "").trim().toUpperCase()).filter(Boolean),
+  );
+  let key = nextWorkItemKey([...seen], options);
+  let guard = 0;
+  while (seen.has(key) && guard < 40) {
+    guard += 1;
+    seen.add(key);
+    key = nextWorkItemKey([...seen], options);
+  }
+  return key;
+}
+
+/**
+ * Chip text is unique per item. A missing item key must not fall back to the
+ * shared project key, and a long document id keeps its tail so two ids that
+ * share a prefix do not look the same.
+ */
+export function workItemChipLabel(item?: {
+  key?: string | null;
+  workItemKey?: string | null;
+  id?: string | null;
+} | null) {
+  const key = String(item?.key || item?.workItemKey || "").trim();
+  if (key) return key;
+  const id = String(item?.id || "").trim();
+  if (!id) return "ITEM";
+  return id.length <= 14 ? id : id.slice(-8);
+}

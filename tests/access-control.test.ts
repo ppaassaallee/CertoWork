@@ -66,7 +66,7 @@ test("login membership writes grant portfolio access to non-viewers", () => {
   assert.match(workspace, /canSeeMemberEmails/);
   assert.match(workspace, /data-testid="member-directory-name"/);
   assert.match(workspace, /Invite link copied/);
-  assert.match(workspace, /for \(const project of activeProjects\)/);
+  assert.match(workspace, /for \(const project of paletteProjects\)/);
 });
 
 test("projects portfolio opens on the stage summary and keeps the Asana list", () => {

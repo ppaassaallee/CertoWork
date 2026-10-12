@@ -188,7 +188,7 @@ test("hierarchy remembers expanded epics and can expand or collapse a level", ()
 test("expanded parents hide completed children unless status filter includes them", () => {
   assert.match(workItems, /matchesStatusFilter/);
   assert.match(workItems, /visibleChildrenOf/);
-  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter\)\)/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter, showCompleted\)\)/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {
@@ -267,8 +267,9 @@ test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
 test("any item including epics can be deleted with a grey-to-red bin", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(workItems, /data-testid="item-delete"/);
-  assert.match(workItems, /status: "archived"/);
-  assert.match(workItems, /archivedAt:/);
+  assert.match(workItems, /softDeletePatch/);
+  assert.match(workItems, /restoreItemPatch/);
+  assert.match(workItems, /Delete with subtasks/);
   assert.match(workItems, /renderDeleteButton\(item\)/);
   assert.match(workItems, /renderDeleteButton\(selectedItem\)/);
   assert.match(workItems, /renderAttributeIcons\(item\)/);

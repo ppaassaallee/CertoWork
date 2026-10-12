@@ -51,10 +51,13 @@ export {
 } from "./packStores";
 export {
   useSidebarProjects,
+  usePaletteProjects,
+  usePaletteTasks,
   useFavoriteProjects,
   useConversation,
   useTask,
   useOpenTaskCountByProject,
+  useTasksGroupedByProject,
   getProjectsSnapshot,
   getTasksSnapshot,
 } from "./selectors";
