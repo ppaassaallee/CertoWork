@@ -28,17 +28,19 @@ function walkFiles(dir, extensions, out = []) {
   return out;
 }
 
-/** Node walk used when rg is missing. A missing counter must not look like zero debt. */
+/**
+ * Node walk used when rg is missing. A missing counter must not look like zero debt.
+ * Patterns are one alternation, the same way rg ORs `-e` flags, so `any[]`
+ * is one match rather than both `: any` and `any[`.
+ */
 function nodeCount(patterns, extensions) {
-  const regexes = patterns.map((pattern) => new RegExp(pattern, "g"));
+  const combined = new RegExp(patterns.map((pattern) => `(?:${pattern})`).join("|"), "g");
   let total = 0;
   for (const file of walkFiles(resolve(ROOT, "src"), extensions)) {
     const text = readFileSync(file, "utf8");
-    for (const regex of regexes) {
-      const matches = text.match(regex);
-      if (matches) total += matches.length;
-      regex.lastIndex = 0;
-    }
+    const matches = text.match(combined);
+    if (matches) total += matches.length;
+    combined.lastIndex = 0;
   }
   return total;
 }

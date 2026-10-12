@@ -24,6 +24,7 @@ test("CI runs the lint budget and a missing counter cannot pass as zero", () => 
   assert.match(ci, /npm run lint:budget/);
   const script = read("scripts/lint-budget.mjs");
   assert.match(script, /missing tool cannot report zero/);
+  assert.match(script, /join\("\|"\)/);
   assert.match(script, /process\.exit\(1\)/);
   const budget = JSON.parse(read("lint-budget.json"));
   assert.match(String(budget.ceilingNote), /43dea50/);
