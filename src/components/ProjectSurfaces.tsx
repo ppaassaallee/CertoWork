@@ -38,6 +38,7 @@ import {
   Minus,
   Plus,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Target,
@@ -5436,6 +5437,7 @@ function ProjectCommandCenterInner({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -5849,7 +5851,11 @@ function ProjectCommandCenterInner({
     setFilter(patch.filter ?? "all");
     setStatusFilters([]);
     setStageFilter(patch.stageFilter ?? "all");
+    setPhaseFilter("all");
     setHealthFilter(patch.healthFilter ?? "all");
+    setTagFilter("all");
+    setWorkCategoryFilter("all");
+    setProductPhaseFilter("all");
     setTaxonomyValue(
       patch.taxonomyValue === undefined ? null : patch.taxonomyValue,
     );
@@ -5920,12 +5926,47 @@ function ProjectCommandCenterInner({
       clear: () => setStageFilter("all"),
     });
   }
+  if (filter !== "all" && statusFilters.length === 0) {
+    activeFilterChips.push({
+      key: `status-default-${filter}`,
+      label: filter === "active" ? "Open projects" : `Status: ${projectStatusLabel(filter)}`,
+      clear: () => setFilter("all"),
+    });
+  }
   for (const value of statusFilters) {
     activeFilterChips.push({
       key: `status-${value}`,
       label: `Status: ${projectStatusLabel(value)}`,
       clear: () =>
         setStatusFilters((current) => current.filter((item) => item !== value)),
+    });
+  }
+  if (phaseFilter !== "all") {
+    activeFilterChips.push({
+      key: `phase-${phaseFilter}`,
+      label: `Phase: ${(deliveryPhaseLabels as Record<string, string>)[phaseFilter] || phaseFilter}`,
+      clear: () => setPhaseFilter("all"),
+    });
+  }
+  if (tagFilter !== "all") {
+    activeFilterChips.push({
+      key: `tag-${tagFilter}`,
+      label: `Tag: ${tags.find((tag) => tag.id === tagFilter)?.name || tagFilter}`,
+      clear: () => setTagFilter("all"),
+    });
+  }
+  if (workCategoryFilter !== "all") {
+    activeFilterChips.push({
+      key: `category-${workCategoryFilter}`,
+      label: `Category: ${workCategoryFilter}`,
+      clear: () => setWorkCategoryFilter("all"),
+    });
+  }
+  if (productPhaseFilter !== "all") {
+    activeFilterChips.push({
+      key: `product-phase-${productPhaseFilter}`,
+      label: `Product phase: ${productPhaseFilter}`,
+      clear: () => setProductPhaseFilter("all"),
     });
   }
   if (taxonomyValue) {
@@ -6426,6 +6467,38 @@ function ProjectCommandCenterInner({
           )}
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
+              <span className="do-command-visible-count" role="status">
+                {sortedFiltered.length} project{sortedFiltered.length === 1 ? "" : "s"}
+              </span>
+              <button
+                aria-controls="projects-advanced-filters projects-advanced-options"
+                aria-expanded={advancedFiltersOpen}
+                className="do-command-more-filters"
+                data-testid="projects-more-filters"
+                onClick={() => setAdvancedFiltersOpen((current) => !current)}
+                type="button"
+              >
+                <SlidersHorizontal size={14} /> Filters{activeFilterChips.length ? ` (${activeFilterChips.length})` : ""}
+              </button>
+            </div>
+            <label>
+              <Search size={14} />
+              <input
+                aria-label="Search projects"
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSearch(next);
+                  if (next.trim() && view === "economics") {
+                    selectPortfolioView("overview");
+                  }
+                }}
+                placeholder="Search project, client or service"
+                value={search}
+              />
+            </label>
+          </div>
+          {advancedFiltersOpen && (
+            <div className="do-command-advanced-filters" data-testid="projects-advanced-filters" id="projects-advanced-filters">
               <div className="do-command-filters">
                 {["planning", "active", "paused", "completed", "archived", "deleted"].map((value) => (
                   <button
@@ -6465,22 +6538,7 @@ function ProjectCommandCenterInner({
                 </button>
               </div>
             </div>
-            <label>
-              <Search size={14} />
-              <input
-                aria-label="Search projects"
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setSearch(next);
-                  if (next.trim() && view === "economics") {
-                    selectPortfolioView("overview");
-                  }
-                }}
-                placeholder="Search project, client or service"
-                value={search}
-              />
-            </label>
-          </div>
+          )}
           {selectedProjectIds.length > 0 && (
             <div
               className="do-items-bulk do-command-bulk"
@@ -6843,7 +6901,7 @@ function ProjectCommandCenterInner({
               </button>
             </div>
           ) : null}
-          <div className="do-command-subtoolbar">
+          {advancedFiltersOpen && <div className="do-command-subtoolbar" data-testid="projects-advanced-options" id="projects-advanced-options">
             <label>
               Stage
               <select
@@ -7005,7 +7063,7 @@ function ProjectCommandCenterInner({
                 </button>
               </span>
             ) : null}
-          </div>
+          </div>}
           {view === "overview" ? (
             <ProjectsViewsSurface
               actorId={actorId}
@@ -7089,4 +7147,3 @@ function ProjectCommandCenterInner({
 }
 
 export const ProjectCommandCenter = memo(ProjectCommandCenterInner);
-
