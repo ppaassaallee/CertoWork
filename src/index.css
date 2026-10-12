@@ -14385,17 +14385,24 @@ a {
 .do-command-body-overview {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .do-command-body-overview > .do-command-portfolio {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  min-height: auto;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 .do-command-body-overview .cw-views-surface {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  height: auto;
+  min-height: auto;
+}
+.do-command-body-overview .cw-views-surface.is-asana-list .cw-views-body.is-asana-list {
+  flex: none;
+  overflow: visible;
 }
 .do-command-center-embedded .do-items-bulk.do-command-bulk {
   position: sticky;
@@ -14416,6 +14423,33 @@ a {
   min-width: 0;
   align-items: center;
   gap: 9px;
+}
+.do-command-visible-count {
+  color: var(--text-secondary);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.do-command-more-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-command-more-filters[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.do-command-advanced-filters {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 13px;
 }
 .do-command-filters {
   display: flex;
