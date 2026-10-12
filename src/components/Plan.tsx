@@ -4,6 +4,7 @@ import { Layers, Calendar, Target, TrendingUp, Sparkles, BookOpen, Clock, Chevro
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { isRemovedWorkItem } from "../lib/itemRemoval";
 import { Link, useNavigate } from "react-router-dom";
 
 export function Plan() {
@@ -55,6 +56,7 @@ export function Plan() {
       let count = 0;
       snap.forEach(d => {
         const data = d.data();
+        if (isRemovedWorkItem({ id: d.id, ...data })) return;
         if (data.timeSector === "This Week" || data.priority === 1 || data.priority === 2) {
           count++;
         }

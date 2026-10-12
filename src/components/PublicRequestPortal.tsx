@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import { useEffect, useState } from "react";
 import {
   doc,
@@ -89,14 +90,14 @@ export function PublicRequestPortal({ token }: { token: string }) {
         updatedAt: serverTimestamp(),
       });
       try {
-        await updateDoc(doc(db, "tasks", ticketId), {
+        await updateDoc(doc(db, "tasks", ticketId), prepareItemWrite({
           ticketStatus: "in_progress",
           waitingReason: null,
           customerStatus: "Waiting on our side",
           lastPublicUpdate: body.slice(0, 240),
           status: "in_progress",
           updatedAt: serverTimestamp(),
-        });
+        }));
       } catch {
         // Rules may not be deployed yet; message + portal snapshot still landed.
       }

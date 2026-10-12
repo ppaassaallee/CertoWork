@@ -267,3 +267,19 @@ test("unmatched assignee labels catch free-text names that were never invited", 
   );
   assert.deepEqual(labels, ["Jose Miranda", "Luis Ordonez", "Werlyn Giron"]);
 });
+
+test("deleted items stay out of My Work", () => {
+  const live = {
+    id: "mine",
+    title: "TASK-1",
+    assigneeIds: ["ws_user-alejandro"],
+    createdBy: "user-alejandro",
+    status: "todo",
+  };
+  const deleted = { ...live, id: "gone", status: "deleted" };
+  const stamped = { ...live, id: "stamped", deletedAt: "2026-10-01T00:00:00.000Z" };
+  assert.deepEqual(
+    filterMyWorkTasks([live, deleted, stamped], "assigned", actor, [alejandro]).map((item) => item.id),
+    ["mine"],
+  );
+});

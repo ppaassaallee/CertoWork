@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Sparkles, Loader2, Check } from "./ui/Icon";
 import { addDoc, collection, serverTimestamp, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { motion } from "motion/react";
 
 import { generateProjectDraft } from "../lib/gemini";
@@ -121,13 +122,13 @@ export function AIProjectBuilder({ user, workspace, onClose, onSuccess }: { user
                     createdAt: serverTimestamp()
                   };
                   if (t.recurrence) tData.recurrence = t.recurrence;
-                  const tRef = await addDoc(collection(db, "tasks"), tData);
+                  const tRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(tData));
 
                   if (t.subtasks && Array.isArray(t.subtasks)) {
                     for (let k = 0; k < t.subtasks.length; k++) {
                        const st = t.subtasks[k];
                        try {
-                         await addDoc(collection(db, "tasks"), {
+                         await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
                            userId: user.uid,
                            workspaceId: workspace.id,
                            projectId: projectRef.id,
@@ -137,7 +138,7 @@ export function AIProjectBuilder({ user, workspace, onClose, onSuccess }: { user
                            status: "open",
                            priority: 4,
                            createdAt: serverTimestamp()
-                         });
+                         }));
                        } catch (e: any) {
                          console.error("Subtask error", e);
                        }

@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../firestorePayload";
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { DAY_PLANS_COLLECTION, dayPlanId, type DayPlan, type DayFeel, type EnergyTag } from "./types";
@@ -31,10 +32,10 @@ export async function setKeyItem(userId: string, workspaceId: string, date: stri
   const plan = await ensureDayPlan(userId, workspaceId, date);
   const batch = writeBatch(db);
   if (plan.keyItemId && plan.keyItemId !== itemId) {
-    batch.update(doc(db, "tasks", plan.keyItemId), { isOneThing: false });
+    batch.update(doc(db, "tasks", plan.keyItemId), prepareItemWrite({ isOneThing: false }));
   }
   if (itemId) {
-    batch.update(doc(db, "tasks", itemId), { isOneThing: true });
+    batch.update(doc(db, "tasks", itemId), prepareItemWrite({ isOneThing: true }));
   }
   batch.update(doc(db, DAY_PLANS_COLLECTION, plan.id), {
     keyItemId: itemId,

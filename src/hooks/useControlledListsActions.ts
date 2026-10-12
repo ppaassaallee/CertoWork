@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import type { Dispatch, SetStateAction } from "react";
 import {
   addDoc,
@@ -179,11 +180,11 @@ export function useControlledListsActions({
               String(task.bpo || "").trim() === previous,
           )
           .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
+            batch.update(doc(db, "tasks", task.id), prepareItemWrite({
               deliveryEntity: next,
               bpo: next,
               updatedAt: serverTimestamp(),
-            }),
+            })),
           );
       }
       if (group === "client_entity") {
@@ -207,11 +208,11 @@ export function useControlledListsActions({
               String(task.client || "").trim() === previous,
           )
           .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
+            batch.update(doc(db, "tasks", task.id), prepareItemWrite({
               clientEntity: next,
               client: next,
               updatedAt: serverTimestamp(),
-            }),
+            })),
           );
       }
       if (group === "tag") {
@@ -377,10 +378,10 @@ export function useControlledListsActions({
       tasks
         .filter((task) => matchesCategory(task, previous))
         .forEach((task) =>
-          batch.update(doc(db, "tasks", task.id), {
+          batch.update(doc(db, "tasks", task.id), prepareItemWrite({
             workCategory: next,
             updatedAt: serverTimestamp(),
-          }),
+          })),
         );
       await batch.commit();
       setCategories((current) => {

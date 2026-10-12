@@ -1,4 +1,4 @@
-import { WORK_STATUSES, type WorkStatusKey } from "./workStatuses";
+import { noteUnknownWorkStatus, WORK_STATUSES, type WorkStatusKey } from "./workStatuses";
 
 export const KANBAN_COLUMNS = WORK_STATUSES.map((status) => ({
   key: status.key,
@@ -30,10 +30,13 @@ export function normalizeKanbanColumn(column?: string | null): KanbanColumnKey {
 }
 
 export function kanbanColumnForStatus(status?: string | null): KanbanColumnKey {
-  const value = String(status || "backlog").toLowerCase();
+  const value = String(status || "").toLowerCase();
+  if (!value) return "backlog";
   if (COLUMN_ALIASES[value]) return COLUMN_ALIASES[value];
   const column = KANBAN_COLUMNS.find((item) => item.key === value || item.statuses.includes(value as WorkStatusKey));
-  return column?.key || "backlog";
+  if (column) return column.key;
+  noteUnknownWorkStatus(value);
+  return "backlog";
 }
 
 export function statusForKanbanColumn(column: string, previousStatus?: string | null) {

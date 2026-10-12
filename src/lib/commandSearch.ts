@@ -1,3 +1,7 @@
+import { isRemovedWorkItem } from "./itemRemoval";
+
+export { isRemovedWorkItem };
+
 export const RECENT_ITEMS_KEY = "certo-recent-items";
 export const RECENT_ITEMS_LIMIT = 8;
 
@@ -12,6 +16,10 @@ export type PaletteTaskRow = {
   key: string;
   projectId: string;
   projectName: string;
+  status?: string;
+  deletedAt?: unknown;
+  archived?: unknown;
+  deleted?: unknown;
 };
 
 export type WorkItemPaletteEntry = {
@@ -22,17 +30,6 @@ export type WorkItemPaletteEntry = {
   hint: string;
   group: "Recent" | "Items";
 };
-
-export function isRemovedWorkItem(row: {
-  status?: unknown;
-  archived?: unknown;
-  deleted?: unknown;
-  deletedAt?: unknown;
-}) {
-  if (row.archived || row.deleted || row.deletedAt) return true;
-  const status = String(row.status || "").toLowerCase();
-  return status === "archived" || status === "deleted";
-}
 
 export function paletteTaskSearchText(task: PaletteTaskRow) {
   return [task.title, task.key, task.id, task.projectName].filter(Boolean).join(" ").toLowerCase();
@@ -75,7 +72,8 @@ export function buildWorkItemPaletteEntries(input: {
   tasks: PaletteTaskRow[];
   recentIds: string[];
 }): WorkItemPaletteEntry[] {
-  const byId = new Map(input.tasks.map((task) => [task.id, task]));
+  const liveTasks = input.tasks.filter((task) => !isRemovedWorkItem(task));
+  const byId = new Map(liveTasks.map((task) => [task.id, task]));
   const recent: WorkItemPaletteEntry[] = [];
   for (const id of input.recentIds) {
     const task = byId.get(id);
@@ -90,7 +88,7 @@ export function buildWorkItemPaletteEntries(input: {
     });
   }
   const recentIds = new Set(recent.map((entry) => entry.taskId));
-  const items = input.tasks
+  const items = liveTasks
     .filter((task) => !recentIds.has(task.id))
     .map((task) => ({
       id: `item-${task.id}`,

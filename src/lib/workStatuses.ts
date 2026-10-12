@@ -17,6 +17,20 @@ export const WORK_STATUS_KEYS: WorkStatusKey[] = WORK_STATUSES.map((status) => s
 
 const COMPLETED_ALIASES = new Set(["done", "completed", "closed", "cancelled", "canceled"]);
 const REMOVED_STATUSES = new Set(["archived", "deleted"]);
+const BACKLOG_ALIASES = new Set(["open", "new", "planned", "not_started", "to_do", "to do"]);
+const unknownStatusSeen = new Set<string>();
+
+/** Known legacy words stay mapped. Anything else is logged once and left as stored. */
+export function noteUnknownWorkStatus(status: string) {
+  const value = String(status || "").toLowerCase();
+  if (!value || unknownStatusSeen.has(value)) return;
+  unknownStatusSeen.add(value);
+  console.warn(`[work-status] unknown status "${value}" was not remapped to Backlog`);
+}
+
+export function resetUnknownWorkStatusLogForTests() {
+  unknownStatusSeen.clear();
+}
 
 export function isCompletedWorkStatus(status?: string | null) {
   const value = String(status || "").toLowerCase();
@@ -33,18 +47,25 @@ export function workStatusLabel(status?: string | null) {
   return WORK_STATUSES.find((entry) => entry.key === value)?.label || value.replace(/_/g, " ");
 }
 
-export function canonicalWorkStatus(item?: { status?: string | null } | null): string {
+export function canonicalWorkStatus(item?: { status?: string | null; deletedAt?: unknown } | null): string {
+  if (item && typeof item === "object" && item.deletedAt) {
+    const removed = String(item.status || "").toLowerCase();
+    return isRemovedWorkStatus(removed) ? removed : "deleted";
+  }
   const status = String(item?.status || "").toLowerCase();
+  if (!status) return "backlog";
   if ((WORK_STATUS_KEYS as readonly string[]).includes(status)) return status;
   if (status === "completed" || status === "closed") return "done";
   if (status === "canceled") return "cancelled";
   if (status === "blocked" || status === "waiting") return "blocked";
-  if (status === "in_review") return "in_review";
+  if (status === "in_review" || status === "review") return "in_review";
   if (status === "in_progress" || status === "active" || status === "doing") return "in_progress";
   if (status === "ready") return "ready";
   if (status === "todo" || status === "to_do" || status === "to do") return "todo";
+  if (BACKLOG_ALIASES.has(status)) return "backlog";
   if (isRemovedWorkStatus(status)) return status;
-  return "backlog";
+  noteUnknownWorkStatus(status);
+  return status;
 }
 
 /**

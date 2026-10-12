@@ -57,6 +57,7 @@ import {
   projectOwnerLabel,
   projectStatusLabel,
   sortProjectsByRecency,
+  isActiveWorkLane,
   taskWorkLane,
   upcomingWorkCheckpoints,
   type ProjectHealth,
@@ -132,7 +133,8 @@ import {
   ProjectTemplatesPanel,
   type TemplateApplication,
 } from "./ProjectTemplatesPanel";
-import { matchesTag, tagLabels, type TagLike } from "../lib/tagging";
+import { matchesTag, tagFilterOptions, tagLabels, type TagLike } from "../lib/tagging";
+import { canonicalWorkStatus as catalogWorkStatus } from "../lib/workStatuses";
 import { controlledOptionNames } from "../lib/controlledLists";
 import { PRODUCT_PHASES, WORK_CATEGORIES, productPhase, workCategory } from "../lib/workClassification";
 import { WorkItemsCenter } from "./WorkItemsCenter";
@@ -439,21 +441,7 @@ function priorityValue(value: any) {
 }
 
 function canonicalWorkStatus(item: any) {
-  const status = String(item?.status || "").toLowerCase();
-  if (
-    [
-      "backlog",
-      "ready",
-      "todo",
-      "in_progress",
-      "in_review",
-      "blocked",
-      "done",
-      "cancelled",
-    ].includes(status)
-  )
-    return status;
-  return taskWorkLane(item);
+  return catalogWorkStatus(item);
 }
 
 function InlineEdit({
@@ -535,7 +523,7 @@ export const ProjectRecordModal = memo(function ProjectRecordModal({
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(null);
   const methodology = String(project.methodology || "scrum").toLowerCase();
   const currentHealth = projectHealth(project, tasks, risks);
-  const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
+  const openTasks = tasks.filter((task) => isActiveWorkLane(task));
   const lanes = useMemo(
     () => ({
       backlog: tasks.filter((task) => taskWorkLane(task) === "backlog"),
@@ -1542,7 +1530,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   );
   const methodology = String(project.methodology || "scrum").toLowerCase();
   const currentHealth = projectHealth(project, tasks, risks);
-  const openTasks = tasks.filter((task) => taskWorkLane(task) !== "done");
+  const openTasks = tasks.filter((task) => isActiveWorkLane(task));
   const openMilestones = milestones.filter(
     (item) => String(item.status || "").toLowerCase() !== "completed",
   );
@@ -1640,7 +1628,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
   const datedEpics = hierarchy.epics
-    .filter((epic) => taskWorkLane(epic) !== "done")
+    .filter((epic) => isActiveWorkLane(epic))
     .sort((left, right) =>
       String(left.dueDate || left.targetDate || "9999-12-31").localeCompare(
         String(right.dueDate || right.targetDate || "9999-12-31"),
@@ -1783,7 +1771,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                         if (!due) return false;
                         return (
                           due < new Date().toISOString().slice(0, 10) &&
-                          taskWorkLane(task) !== "done"
+                          isActiveWorkLane(task)
                         );
                       }).length,
                     },
@@ -1964,7 +1952,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
               overdueCount: tasks.filter((task) => {
                 const due = String(task?.dueDate || task?.targetDate || "").slice(0, 10);
                 if (!due) return false;
-                return due < new Date().toISOString().slice(0, 10) && taskWorkLane(task) !== "done";
+                return due < new Date().toISOString().slice(0, 10) && isActiveWorkLane(task);
               }).length,
             },
           })
@@ -5161,7 +5149,7 @@ function projectSummary(project: any, projectTasks: any[]) {
         ),
       openItems: Number.isFinite(Number(project.openItems))
         ? Number(project.openItems)
-        : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
+        : projectTasks.filter((task) => isActiveWorkLane(task)).length,
       progress: projectProgress(project, projectTasks),
     };
   }
@@ -5207,7 +5195,7 @@ function projectSummary(project: any, projectTasks: any[]) {
     recurring: explicitRecurring || rowRecurring,
     openItems: Number.isFinite(Number(project.openItems))
       ? Number(project.openItems)
-      : projectTasks.filter((task) => taskWorkLane(task) !== "done").length,
+      : projectTasks.filter((task) => isActiveWorkLane(task)).length,
     progress: projectProgress(project, projectTasks),
   };
 }
@@ -5613,7 +5601,7 @@ function ProjectCommandCenterInner({
             : healthFilter === "needs_attention"
               ? health !== "on_track"
               : health === healthFilter;
-        const matchesProjectTag = matchesTag(project, tagFilter);
+        const matchesProjectTag = matchesTag(project, tagFilter, tags);
         const matchesWorkCategory =
           workCategoryFilter === "all" ||
           workCategory(project) === workCategoryFilter;
@@ -6921,7 +6909,7 @@ function ProjectCommandCenterInner({
                 value={tagFilter}
               >
                 <option value="all">All tags</option>
-                {tags.map((tag) => (
+                {tagFilterOptions(tags).map((tag) => (
                   <option key={tag.id} value={tag.id}>
                     {tag.name || tag.id}
                   </option>

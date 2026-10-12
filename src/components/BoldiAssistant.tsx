@@ -55,6 +55,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { sanitizeFirestorePayload } from "../lib/firestorePayload";
 import { useAuth } from "../lib/AuthContext";
 import { useUndo } from "../lib/UndoContext";
 import {
@@ -589,7 +590,7 @@ export function BoldiAssistant({
       const remaining = [];
       for (const item of queue) {
         try {
-          await addDoc(collection(db, "inbox_items"), {
+          await addDoc(collection(db, "inbox_items"), sanitizeFirestorePayload({
             userId: user.uid,
             workspaceId: workspace.id,
             createdBy: user.uid,
@@ -599,7 +600,7 @@ export function BoldiAssistant({
             timeSector: "inbox",
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+          }));
         } catch {
           remaining.push(item);
         }

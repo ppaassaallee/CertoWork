@@ -1,5 +1,6 @@
+import { isRemovedWorkItem } from "./itemRemoval";
 import { projectWorkCounts } from "./projectWorkCounts";
-import { isCompletedWorkStatus } from "./workStatuses";
+import { isCompletedWorkStatus, noteUnknownWorkStatus } from "./workStatuses";
 
 export const PROJECT_STATUSES = [
   "idea",
@@ -285,12 +286,23 @@ export function projectOwnerLabel(project: any) {
   );
 }
 
-export type WorkLane = "backlog" | "in_progress" | "blocked" | "done";
+export type WorkLane = "backlog" | "in_progress" | "blocked" | "done" | "removed" | "other";
+
+const BACKLOG_LANES = new Set(["", "open", "new", "planned", "not_started", "todo", "to_do", "to do", "ready", "backlog"]);
 
 export function taskWorkLane(task: any): WorkLane {
-  const status = String(task?.status || "open").toLowerCase();
-  if (["done", "completed", "closed", "cancelled"].includes(status)) return "done";
+  if (isRemovedWorkItem(task)) return "removed";
+  const status = String(task?.status || "").toLowerCase();
+  if (["done", "completed", "closed", "cancelled", "canceled"].includes(status)) return "done";
   if (["blocked", "waiting"].includes(status)) return "blocked";
-  if (["in_progress", "in_review", "active", "doing"].includes(status)) return "in_progress";
-  return "backlog";
+  if (["in_progress", "in_review", "review", "active", "doing"].includes(status)) return "in_progress";
+  if (BACKLOG_LANES.has(status)) return "backlog";
+  noteUnknownWorkStatus(status);
+  return "other";
+}
+
+/** Open portfolio counts skip trash and finished work. Unknown statuses stay out of Backlog. */
+export function isActiveWorkLane(task: unknown) {
+  const lane = taskWorkLane(task);
+  return lane !== "done" && lane !== "removed";
 }

@@ -84,7 +84,6 @@ import {
   readableRecordQueryPlans,
   readableTableQueryPlans,
 } from "../lib/tables/readableQueries";
-import { isDeveloperToolsEnabled } from "../lib/devTools";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -233,7 +232,7 @@ import {
   type PendingInvoiceLine,
 } from "../lib/invoiceDocuments";
 import { stripUndefinedValues } from "../lib/projectFinance";
-import { prepareTaskCreatePayload } from "../lib/firestorePayload";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
 import { canonicalTagIds } from "../lib/tagging";
 import { pushUndo } from "../lib/undoToast";
 import { UndoToast } from "./UndoToast";
@@ -3419,10 +3418,10 @@ export function DelivereeWorkspace() {
               .filter((field) => proposed[field] !== undefined)
               .map((field) => [field, proposed[field]]),
           );
-          await updateDoc(doc(db, "tasks", targetId), {
+          await updateDoc(doc(db, "tasks", targetId), prepareItemWrite({
             ...patch,
             updatedAt: serverTimestamp(),
-          });
+          }));
           applied += 1;
           continue;
         }
@@ -4351,11 +4350,11 @@ export function DelivereeWorkspace() {
                 String(task.assignee || "").toLowerCase() ===
                   String(member.alias || member.email || "").toLowerCase();
               if (!matches) continue;
-              batch.update(doc(db, "tasks", task.id), {
+              batch.update(doc(db, "tasks", task.id), prepareItemWrite({
                 assigneeId: null,
                 assignee: null,
                 updatedAt: serverTimestamp(),
-              });
+              }));
             }
             await batch.commit();
           }
@@ -5468,7 +5467,7 @@ export function DelivereeWorkspace() {
     );
 
     try {
-      await updateDoc(doc(db, "tasks", taskId), write as any);
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
     } catch (reason) {
       setTasks((prev) =>
         prev.map((item) => (item.id === taskId ? { ...item, ...current } : item)),
@@ -5797,14 +5796,14 @@ export function DelivereeWorkspace() {
     });
     if (visibility === "public") {
       const sla = markTicketFirstResponseSla(ticket);
-      await updateDoc(doc(db, "tasks", ticketId), {
+      await updateDoc(doc(db, "tasks", ticketId), prepareItemWrite({
         lastPublicUpdate: body.slice(0, 240),
         customerStatus: "In progress",
         ticketStatus: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.ticketStatus || "in_progress",
         status: ticket?.ticketStatus === "new" ? "in_progress" : ticket?.status || "in_progress",
         sla,
         updatedAt: serverTimestamp(),
-      });
+      }));
       await syncRequestPortal(ticketId, [
         {
           id: `local_${Date.now()}`,
@@ -5880,10 +5879,10 @@ export function DelivereeWorkspace() {
     if (!relatedId) return;
     const related = Array.isArray(ticket.relatedWorkIds) ? [...ticket.relatedWorkIds] : [];
     related.push(relatedId);
-    await updateDoc(doc(db, "tasks", ticketId), {
+    await updateDoc(doc(db, "tasks", ticketId), prepareItemWrite({
       relatedWorkIds: related,
       updatedAt: serverTimestamp(),
-    });
+    }));
     setNotice(`Created related ${kind.toUpperCase()}.`);
   };
 
@@ -5911,10 +5910,10 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    await updateDoc(doc(db, "tasks", ticket.id), {
+    await updateDoc(doc(db, "tasks", ticket.id), prepareItemWrite({
       portalToken,
       updatedAt: serverTimestamp(),
-    });
+    }));
     void navigator.clipboard?.writeText(requestPortalAbsoluteUrl(portalToken));
     setNotice("Requester portal created and copied.");
   };
@@ -6041,14 +6040,14 @@ export function DelivereeWorkspace() {
       const waiting =
         String(ticket.ticketStatus || "") === "waiting" || Boolean(ticket.waitingReason);
       if (!waiting) continue;
-      void updateDoc(doc(db, "tasks", ticket.id), {
+      void updateDoc(doc(db, "tasks", ticket.id), prepareItemWrite({
         ticketStatus: "in_progress",
         waitingReason: null,
         customerStatus: "Waiting on our side",
         lastPublicUpdate: String(message.body || "").slice(0, 240),
         status: "in_progress",
         updatedAt: serverTimestamp(),
-      }).catch(() => {
+      })).catch(() => {
         portalRequesterSyncRef.current.delete(messageId);
       });
     }
@@ -6546,6 +6545,10 @@ export function DelivereeWorkspace() {
       cleaning
     )
       return;
+    if (!canManageMembers) {
+      setNotice("Only a workspace owner or admin can start clean.");
+      return;
+    }
     setCleaning(true);
     setNotice("");
     const collectionsToClear = [
@@ -6595,6 +6598,8 @@ export function DelivereeWorkspace() {
       "performance_analyses",
     ];
     try {
+      const assertAdmin = httpsCallable(getFunctions(app, "us-central1"), "assertWorkspaceAdmin");
+      await assertAdmin({ workspaceId: workspace.id });
       for (const collectionName of collectionsToClear) {
         const snapshot = await getDocs(
           query(
@@ -6629,9 +6634,12 @@ export function DelivereeWorkspace() {
       setNotice(
         "Clean Certo Work is ready. No projects, items, tags, or pending changes remain in this workspace.",
       );
-    } catch {
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "";
       setNotice(
-        "I could not finish the clean reset. Please try again after the workspace finishes syncing.",
+        /permission|unauth|owner or admin|not found/i.test(message)
+          ? "Only a workspace owner or admin can start clean. The server did not confirm that role."
+          : "I could not finish the clean reset. The server check must succeed before any records are removed.",
       );
     } finally {
       setCleaning(false);
@@ -6877,6 +6885,7 @@ export function DelivereeWorkspace() {
         key: task.key,
         projectId: task.projectId,
         projectName: projectNameById.get(task.projectId) || "",
+        status: task.status,
       })),
       recentIds: recentItemIds,
     });
@@ -10509,12 +10518,7 @@ export function DelivereeWorkspace() {
                   </div>
                 </section>
               ) : null}
-              {location.pathname === "/settings/data" &&
-              workspace &&
-              user &&
-              isDeveloperToolsEnabled() &&
-              (workspace.ownerId === user.uid ||
-                ["owner", "admin"].includes(String(currentWorkspaceMember?.role || "").toLowerCase())) ? (
+              {location.pathname === "/settings/data" && canManageMembers ? (
                 <section className="do-workspace-admin-card" data-testid="restore-creator-assignees">
                   <div className="do-workspace-admin-head">
                     <span className="do-kicker">Data repair</span>

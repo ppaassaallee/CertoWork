@@ -12,6 +12,7 @@ import {
   doc, serverTimestamp, getDocs, setDoc 
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
 import { handleFirestoreError, OperationType } from "../lib/firestore-error-helper";
 import { MetadataReportViewer } from "./MetadataReportViewer";
 
@@ -531,7 +532,7 @@ export function BoldiFloatingWidget() {
         // Secure dry-run mapping and execution
         if (action.type === "create_task") {
           const linkedProjId = action.proposedChange.projectId || (createdProjectIds.length > 0 ? createdProjectIds[createdProjectIds.length - 1] : null);
-          const docRef = await addDoc(collection(db, "tasks"), {
+          const docRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
             userId: user.uid,
             workspaceId: workspace.id,
             title: action.proposedChange.title || "Untitled Task",
@@ -543,7 +544,7 @@ export function BoldiFloatingWidget() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             createdBy: user.uid
-          });
+          }));
           targetId = docRef.id;
           setToolLogs(prev => [...prev, `[Action Execute] Created task: "${action.proposedChange.title}"`]);
 
@@ -588,10 +589,10 @@ export function BoldiFloatingWidget() {
           const exactDoc = taskDoc.docs.find(d => d.id === targetId);
           if (exactDoc) {
             beforeState = { dueDate: exactDoc.data().dueDate || null };
-            await updateDoc(doc(db, "tasks", targetId), {
+            await updateDoc(doc(db, "tasks", targetId), prepareItemWrite({
               dueDate: action.proposedChange.dueDate,
               updatedAt: serverTimestamp()
-            });
+            }));
             setToolLogs(prev => [...prev, `[Action Execute] Rescheduled task: "${exactDoc.data().title}" to ${action.proposedChange.dueDate}`]);
           }
 
@@ -600,10 +601,10 @@ export function BoldiFloatingWidget() {
           const exactDoc = taskDoc.docs.find(d => d.id === targetId);
           if (exactDoc) {
             beforeState = exactDoc.data();
-            await updateDoc(doc(db, "tasks", targetId), {
+            await updateDoc(doc(db, "tasks", targetId), prepareItemWrite({
               ...action.proposedChange,
               updatedAt: serverTimestamp()
-            });
+            }));
             setToolLogs(prev => [...prev, `[Action Execute] Updated task: "${exactDoc.data().title}"`]);
           }
 
@@ -639,10 +640,10 @@ export function BoldiFloatingWidget() {
           const exactDoc = taskDoc.docs.find(d => d.id === targetId);
           if (exactDoc) {
             beforeState = { status: exactDoc.data().status };
-            await updateDoc(doc(db, "tasks", targetId), {
+            await updateDoc(doc(db, "tasks", targetId), prepareItemWrite({
               status: "archived",
               updatedAt: serverTimestamp()
-            });
+            }));
             setToolLogs(prev => [...prev, `[Action Execute] Archived task: "${exactDoc.data().title}"`]);
           }
         }
@@ -703,16 +704,16 @@ export function BoldiFloatingWidget() {
         await deleteDoc(doc(db, "waiting_for", action.targetEntityId));
         setToolLogs(prev => [...prev, `[Rollback Success] Deleted follow-up item.`]);
       } else if ((action.type === "reschedule_task" || action.type === "update_task") && action.beforeState) {
-        await updateDoc(doc(db, "tasks", action.targetEntityId), {
+        await updateDoc(doc(db, "tasks", action.targetEntityId), prepareItemWrite({
           ...action.beforeState,
           updatedAt: serverTimestamp()
-        });
+        }));
         setToolLogs(prev => [...prev, `[Rollback Success] Restored task fields.`]);
       } else if (action.type === "kill_or_archive" && action.beforeState) {
-        await updateDoc(doc(db, "tasks", action.targetEntityId), {
+        await updateDoc(doc(db, "tasks", action.targetEntityId), prepareItemWrite({
           status: action.beforeState.status,
           updatedAt: serverTimestamp()
-        });
+        }));
         setToolLogs(prev => [...prev, `[Rollback Success] Restored archived task.`]);
       }
 

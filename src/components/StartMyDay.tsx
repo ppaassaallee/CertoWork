@@ -76,7 +76,9 @@ export function StartMyDay({ onComplete }: { onComplete?: () => void }) {
         getDocs(query(collection(db, "strategic_alerts"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id), where("status", "==", "active")))
       ]);
 
-      const tasksList = tasksSnap.docs.map(t => ({ id: t.id, title: t.data().title, priority: t.data().priority, dueDate: t.data().dueDate }));
+      const tasksList = tasksSnap.docs
+        .filter((t) => t.data().status !== "deleted" && t.data().status !== "archived" && !t.data().deletedAt)
+        .map(t => ({ id: t.id, title: t.data().title, priority: t.data().priority, dueDate: t.data().dueDate }));
       const projectsList = projectsSnap.docs.map(p => ({ id: p.id, title: p.data().title, status: p.data().status }));
       const goalsList = goalsSnap.docs.map(g => ({ id: g.id, title: g.data().title, type: g.data().type }));
       const stakeholdersList = stakeholdersSnap.docs.map(s => ({ id: s.id, name: s.data().name }));

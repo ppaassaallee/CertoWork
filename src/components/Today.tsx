@@ -5,6 +5,7 @@ import { useAuth } from "../lib/AuthContext";
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { isRemovedWorkItem } from "../lib/itemRemoval";
 import { toggleTaskStatus, setTaskStatus } from "../lib/tasks";
 import { triageInputWithAI } from "../lib/gemini";
 import { StartMyDay } from "./StartMyDay";
@@ -39,6 +40,7 @@ export function Today() {
       const items: {id: string, title: string, priority?: number}[] = [];
       snapshot.forEach(doc => {
         const data = doc.data();
+        if (isRemovedWorkItem({ id: doc.id, ...data })) return;
         let pNum = 4;
         const rawPriority = data.priority;
         if (rawPriority !== undefined && rawPriority !== null) {
@@ -59,8 +61,9 @@ export function Today() {
     const qOneThing = query(collection(db, "tasks"), where("userId", "==", user.uid), where("workspaceId", "==", workspace.id), where("isOneThing", "==", true));
     const unsubscribeOneThing = onSnapshot(qOneThing, (snapshot) => {
       let foundOneThing = null;
-      if (!snapshot.empty) {
-        foundOneThing = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+      const live = snapshot.docs.find((item) => !isRemovedWorkItem({ id: item.id, ...item.data() }));
+      if (live) {
+        foundOneThing = { id: live.id, ...live.data() };
       }
       setOneThing(foundOneThing);
     }, (err) => console.error(err));

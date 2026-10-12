@@ -4,6 +4,7 @@ import { Send, Inbox as InboxIcon, Sparkles, RefreshCw, Trash2, Zap } from "./ui
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, serverTimestamp, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { sanitizeFirestorePayload } from "../lib/firestorePayload";
 import { triageInputWithAI } from "../lib/gemini";
 import { AudioCaptureZone } from "./AudioCaptureZone";
 import { ReviewCandidateCard } from "./ReviewCandidateCard";
@@ -73,7 +74,7 @@ export function Capture() {
     setSuccessMsg("");
 
     try {
-      const docRef = await addDoc(collection(db, "inbox_items"), {
+      const docRef = await addDoc(collection(db, "inbox_items"), sanitizeFirestorePayload({
         userId: user.uid,
         createdBy: user.uid,
         workspaceId: workspace.id,
@@ -83,7 +84,7 @@ export function Capture() {
         status: "processing",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
 
       try {
         const triaged = await triageInputWithAI(input.trim());
