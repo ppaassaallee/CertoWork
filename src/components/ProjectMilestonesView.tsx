@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, ChevronDown, ChevronRight, CornerDownRight } from "./ui/Icon";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { setTaskStatus } from "../lib/tasks";
 import { Link } from "react-router-dom";
 
@@ -156,7 +157,7 @@ export function ProjectMilestonesView({
                           }
                           const el = e.currentTarget.elements.namedItem("newTaskTitle") as HTMLInputElement;
                           if (el.value.trim()) {
-                            await addDoc(collection(db, "tasks"), {
+                            await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
                               userId: user.uid,
                               workspaceId: workspace.id,
                               projectId: project.id,
@@ -164,7 +165,7 @@ export function ProjectMilestonesView({
                               title: el.value.trim(),
                               status: "open",
                               createdAt: serverTimestamp()
-                            });
+                            }));
                             el.value = "";
                           }
                         }}

@@ -3,6 +3,7 @@ import { useAuth } from "../lib/AuthContext";
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, setDoc, deleteField } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { setTaskStatus } from "../lib/tasks";
 import { CheckSquare, ArrowLeft, Plus, Loader2, Tag, Repeat, Zap, X, Kanban, ChevronDown, ChevronRight, ChevronLeft, Search, Lightbulb, Scale, Book, Briefcase, Calendar, Inbox, RefreshCw, Timer, Users, Brain, ArrowUp, ArrowDown, SlidersHorizontal, Sparkles, Eye, MoreHorizontal, Sliders, Star, Trash2, Bot } from "./ui/Icon";
 import { Link, useNavigate } from "react-router-dom";
@@ -665,7 +666,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
                    if (task.projectId) subtaskData.projectId = task.projectId;
                    if (task.milestoneId) subtaskData.milestoneId = task.milestoneId;
 
-                   await addDoc(collection(db, "tasks"), subtaskData);
+                   await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(subtaskData));
                    input.value = "";
                  } catch (err) {
                    console.error("Failed to add subtask", err);
@@ -817,7 +818,7 @@ export function TasksList({ hideCockpit = false, projectId: filterProjectId }: {
       if (newTaskRecurrence) taskData.recurrence = newTaskRecurrence;
       if (newTaskIsOneThing) taskData.isOneThing = true;
 
-      await addDoc(collection(db, "tasks"), taskData);
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(taskData));
       
       // Also potentially clear one thing from others if we set it
       if (newTaskIsOneThing) {

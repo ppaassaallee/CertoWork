@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, serverTimestamp, deleteDoc, setDoc, deleteField, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { toggleTaskStatus } from "../lib/tasks";
 import { ArrowLeft, CheckCircle, Loader2, Calendar, Folder, AlignLeft, CornerDownRight, Plus, Target, Trash2, Lightbulb, Scale, Briefcase, Book, CheckSquare, Zap, RefreshCw, Timer, Sparkles, Link as LucideLink, Search, BookOpen, Bot } from "./ui/Icon";
 import { useAuth } from "../lib/AuthContext";
@@ -191,7 +192,7 @@ export function TaskDetails() {
       if (task.projectId) subtaskData.projectId = task.projectId;
       if (task.milestoneId) subtaskData.milestoneId = task.milestoneId;
 
-      await addDoc(collection(db, "tasks"), subtaskData);
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(subtaskData));
       setNewSubtaskTitle("");
     } catch (err) {
       console.error(err);

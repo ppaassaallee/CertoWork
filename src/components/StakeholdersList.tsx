@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { useAuth } from "../lib/AuthContext";
 import { Users, Plus, X, Trash2, Mail, Briefcase, Search, Loader2, Sparkles, AlertTriangle, Send, CheckSquare, Square, Calendar } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
@@ -147,7 +148,7 @@ export function StakeholdersList() {
     e.preventDefault();
     if (!quickTaskTitle.trim() || !user || !workspace || !selectedStakeholder) return;
     try {
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title: quickTaskTitle.trim(),
@@ -156,7 +157,7 @@ export function StakeholdersList() {
         stakeholderIds: [selectedStakeholder.id],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setQuickTaskTitle("");
     } catch (e) {
       console.error(e);
@@ -211,7 +212,7 @@ export function StakeholdersList() {
 
     try {
       // Direct insertion as an active Task in this workspace assigned to them!
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title: `Follow-up: ${actionItem.title}`,
@@ -222,7 +223,7 @@ export function StakeholdersList() {
         dueDate: actionItem.proposedDueDate || new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setDispatchStatus(prev => ({ ...prev, [blockKey]: 'dispatched' }));
     } catch (err) {
       console.error(err);

@@ -12,6 +12,7 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { 
   Clock, 
   Calendar as CalendarIcon, 
@@ -341,7 +342,7 @@ export function NotebookPlanner() {
 
     try {
       setSaveStatus("saving");
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title: quickTaskText.trim(),
@@ -354,7 +355,7 @@ export function NotebookPlanner() {
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setQuickTaskText("");
       setQuickTaskBlock("");
       setSaveStatus("saved");

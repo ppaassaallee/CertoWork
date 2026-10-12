@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -108,7 +109,7 @@ export function TimeBlocksPlanner() {
     if (!title || !user || !workspace) return;
 
     try {
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title,
@@ -118,7 +119,7 @@ export function TimeBlocksPlanner() {
         timeBlockDate: selectedDate,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setQuickInputs(prev => ({ ...prev, [blockId]: "" }));
     } catch (err) {
       console.error(err);

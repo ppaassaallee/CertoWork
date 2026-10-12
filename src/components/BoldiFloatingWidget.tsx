@@ -12,6 +12,7 @@ import {
   doc, serverTimestamp, getDocs, setDoc 
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { handleFirestoreError, OperationType } from "../lib/firestore-error-helper";
 import { MetadataReportViewer } from "./MetadataReportViewer";
 
@@ -531,7 +532,7 @@ export function BoldiFloatingWidget() {
         // Secure dry-run mapping and execution
         if (action.type === "create_task") {
           const linkedProjId = action.proposedChange.projectId || (createdProjectIds.length > 0 ? createdProjectIds[createdProjectIds.length - 1] : null);
-          const docRef = await addDoc(collection(db, "tasks"), {
+          const docRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
             userId: user.uid,
             workspaceId: workspace.id,
             title: action.proposedChange.title || "Untitled Task",
@@ -543,7 +544,7 @@ export function BoldiFloatingWidget() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
             createdBy: user.uid
-          });
+          }));
           targetId = docRef.id;
           setToolLogs(prev => [...prev, `[Action Execute] Created task: "${action.proposedChange.title}"`]);
 

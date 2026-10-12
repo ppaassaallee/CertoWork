@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { prepareTaskCreatePayload, sanitizeFirestorePayload } from "../src/lib/firestorePayload";
 import {
   consumeDeleteGesture,
@@ -29,6 +31,34 @@ test("task create drops undefined and stores acceptance criteria as a string", (
   assert.equal(payload.priority, null);
   assert.deepEqual(payload.nested, { keep: "yes" });
   assert.equal(sanitizeFirestorePayload({ acceptanceCriteria: undefined }).acceptanceCriteria, undefined);
+});
+
+test("every tasks create goes through the payload sanitizer", () => {
+  const files = [
+    "src/components/TaskDetails.tsx",
+    "src/components/TasksList.tsx",
+    "src/components/TimeBlocksPlanner.tsx",
+    "src/components/NotebookPlanner.tsx",
+    "src/components/StakeholdersList.tsx",
+    "src/components/AIProjectBuilder.tsx",
+    "src/components/ReviewCandidateCard.tsx",
+    "src/components/ProjectMilestonesView.tsx",
+    "src/components/BoldiFloatingWidget.tsx",
+    "src/features/collab/ConversationThread.tsx",
+    "src/components/DelivereeWorkspace.tsx",
+    "src/components/Capture.tsx",
+    "src/components/BoldiAssistant.tsx",
+  ];
+  for (const file of files) {
+    const source = readFileSync(resolve(file), "utf8");
+    const creates = source.match(/addDoc\(collection\(db, "tasks"\)/g) || [];
+    if (file.endsWith("Capture.tsx") || file.endsWith("BoldiAssistant.tsx")) {
+      assert.match(source, /addDoc\(collection\(db, "inbox_items"\), sanitizeFirestorePayload\(/);
+      continue;
+    }
+    assert.ok(creates.length > 0, file);
+    assert.equal(source.split("prepareTaskCreatePayload(").length - 1 >= creates.length, true, file);
+  }
 });
 
 test("a class instance such as a timestamp is not stripped", () => {

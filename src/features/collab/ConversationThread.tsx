@@ -224,7 +224,8 @@ export function ConversationThread({
         const title = parsed.rest || "New item from Collab";
         const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
         const { db } = await import("../../lib/firebase");
-        const taskRef = await addDoc(collection(db, "tasks"), {
+        const { prepareTaskCreatePayload } = await import("../../lib/firestorePayload");
+        const taskRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
           workspaceId,
           title,
           status: "todo",
@@ -233,7 +234,7 @@ export function ConversationThread({
           sourceConversationId: resolvedId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        });
+        }));
         await messageService.send({
           workspaceId,
           conversationId: resolvedId,
@@ -405,7 +406,8 @@ export function ConversationThread({
                         const title = String(item.title || item.text || "Action item");
                         const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
                         const { db } = await import("../../lib/firebase");
-                        const taskRef = await addDoc(collection(db, "tasks"), {
+                        const { prepareTaskCreatePayload } = await import("../../lib/firestorePayload");
+                        const taskRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
                           workspaceId,
                           title,
                           status: "todo",
@@ -414,7 +416,7 @@ export function ConversationThread({
                           sourceConversationId: resolvedId,
                           createdAt: serverTimestamp(),
                           updatedAt: serverTimestamp(),
-                        });
+                        }));
                         await messageService.send({
                           workspaceId,
                           conversationId: resolvedId!,
