@@ -10,7 +10,7 @@ import {
   createCompleteSnapshotMerge,
   hasConfirmedSnapshotData,
 } from "../lib/firestoreSnapshotSafety";
-import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
+import { isFirestorePermissionDenied, isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
 import {
   shouldTryWorkspacePortfolioQuery,
   projectAccessEmails,
@@ -164,8 +164,8 @@ export function startWorkspaceData(args: StartArgs): () => void {
             snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
           );
         },
-        (error) => {
-          console.error(`Firestore ${name} query ${index} failed`, error);
+          (error) => {
+          logFirestoreListenError(`${name} ${index}`, error);
           merge.fail(index);
           report(error);
         },
@@ -193,7 +193,7 @@ export function startWorkspaceData(args: StartArgs): () => void {
         publish(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
       (error) => {
-        console.error(`Firestore ${name} query failed`, error);
+        logFirestoreListenError(name, error);
         report(error);
       },
     );
@@ -241,7 +241,9 @@ export function startWorkspaceData(args: StartArgs): () => void {
             );
           },
           (error) => {
-            console.error("Workspace projects query failed; falling back to role queries", error);
+            if (!isFirestorePermissionDenied(error)) {
+              console.error("Workspace projects query failed; falling back to role queries", error);
+            }
             report(error);
             if (!isFirestoreQuotaError(error)) startRoleProjectQueries();
           },
@@ -282,7 +284,9 @@ export function startWorkspaceData(args: StartArgs): () => void {
             },
             (error) => {
               // Fallback: full workspace tasks if composite index missing.
-              console.warn("Open-tasks query failed; falling back to full tasks", error);
+              if (!isFirestorePermissionDenied(error)) {
+                console.warn("Open-tasks query failed; falling back to full tasks", error);
+              }
               report(error);
               extraUnsubscribers.push(
                 makeQuery("tasks", (items) => tasksStore.replaceAll(items as TaskDoc[])),

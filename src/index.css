@@ -1263,6 +1263,16 @@ a {
 .do-account-menu button:hover {
   background: var(--surface-1);
 }
+.do-account-menu-label {
+  padding: 6px 8px 2px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.do-account-menu button.is-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
 .do-account-menu-preference {
   display: grid;
   gap: 6px;
@@ -8952,7 +8962,8 @@ a {
   background: var(--status-success-soft);
   color: var(--status-success);
 }
-.do-items-title input {
+.do-items-title input,
+.do-items-title-open {
   width: 100%;
   min-width: 0;
   flex: 1;
@@ -8962,6 +8973,28 @@ a {
   color: var(--text-primary);
   font-size: var(--text-body-sm);
   font-weight: 500;
+}
+.do-items-title-open {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.do-items-title-rename {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+.do-items-title:hover .do-items-title-rename,
+.do-items-title-rename:focus-visible {
+  opacity: 1;
 }
 .do-items-title small {
   overflow: hidden;

@@ -74,7 +74,10 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { app, db, storage } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
-import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
+import { isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
+import { buildWorkItemPaletteEntries, readRecentItemIds, rememberRecentItem, type PaletteTaskRow } from "../lib/commandSearch";
+import { itemIdFromSearch, searchWithItem } from "../lib/projectViewUrl";
+import { isDeveloperToolsEnabled } from "../lib/devTools";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -129,7 +132,6 @@ import {
   timestamp,
   projectWorkKey,
 } from "../lib/workspaceDisplay";
-import { productPhase, workCategory } from "../lib/workClassification";
 import { inviteDirectoryUrl, inviteIsExpired, inviteIsUsable, inviteDeliveryLabel, inviteExpiresAt, inviteExpiresLabel, dueInviteReminder, dueInviteEmailRetry, reminderScheduleAfterSend, type InviteEmailKind } from "../lib/inviteLifecycle";
 import { checkWorkspaceInviteDelivery, sendWorkspaceInviteEmail } from "../lib/emailClient";
 import { usePlatformCapabilities } from "../lib/capabilities";
@@ -276,8 +278,11 @@ import {
   useConversations,
   useMembers,
   useOpenTaskCountByProject,
+  usePaletteProjects,
+  usePaletteTasks,
   useProject,
   useProjectsWhen,
+  useSidebarProjects,
   useTask,
   useTasksWhen,
   getProjectsSnapshot,
@@ -594,6 +599,9 @@ export function DelivereeWorkspace() {
     lens.kind !== "settings" &&
     lens.kind !== "more";
   const projects = useProjectsWhen(shellNeedsProjectArray) as any[];
+  const sidebarProjectRows = useSidebarProjects();
+  const paletteTasks = usePaletteTasks();
+  const paletteProjects = usePaletteProjects();
   const setProjects = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(projectsStore, update as any);
@@ -882,9 +890,10 @@ export function DelivereeWorkspace() {
     else navigate("/home");
   };
   const projectConsoleInitialTab = "items";
-  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(
-    null,
+  const [selectedWorkItemId, setSelectedWorkItemId] = useState<string | null>(() =>
+    itemIdFromSearch(typeof window === "undefined" ? "" : window.location.search),
   );
+  const [recentItemIds, setRecentItemIds] = useState<string[]>(() => readRecentItemIds());
   const portfolioViewFromUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("view") === "economics" || params.has("financeLine")) {
@@ -1055,7 +1064,7 @@ export function DelivereeWorkspace() {
           callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
         },
         (error) => {
-          console.error(`Firestore ${name} query failed`, error);
+          logFirestoreListenError(name, error);
           reportDataSyncError(error);
         },
       );
@@ -1081,7 +1090,7 @@ export function DelivereeWorkspace() {
             );
           },
           (error) => {
-            console.error(`Firestore ${name} query ${index} failed`, error);
+            logFirestoreListenError(`${name} ${index}`, error);
             merge.fail(index);
             reportDataSyncError(error);
           },
@@ -1302,7 +1311,7 @@ export function DelivereeWorkspace() {
         setCategoriesReady(true);
       },
       (error) => {
-        console.error("Firestore categories query failed", error);
+        logFirestoreListenError("categories", error);
         reportDataSyncError(error);
       },
     );
@@ -1635,8 +1644,8 @@ export function DelivereeWorkspace() {
     [projects],
   );
   const sidebarProjects = useMemo(
-    () => sidebarProjectGroups(projects),
-    [projects],
+    () => sidebarProjectGroups(sidebarProjectRows),
+    [sidebarProjectRows],
   );
   const viewerProjectIds = useMemo(
     () => projects.map((project) => String(project.id)),
@@ -1829,8 +1838,15 @@ export function DelivereeWorkspace() {
   }, [personalActor, tasks, visibleTables, workspaceMembers, workspaceRecords]);
   const openWorkOrRecord = useCallback(
     (id: string | null) => {
+      const writeItemQuery = (itemId: string | null) => {
+        const next = searchWithItem(location.search, itemId);
+        if (next !== (location.search || "")) {
+          navigate(`${location.pathname}${next}`, { replace: true });
+        }
+      };
       if (!id) {
         setSelectedWorkItemId(null);
+        writeItemQuery(null);
         return;
       }
       const recordHit =
@@ -1850,8 +1866,10 @@ export function DelivereeWorkspace() {
         }
       }
       setSelectedWorkItemId(id);
+      setRecentItemIds(rememberRecentItem(id));
+      writeItemQuery(id);
     },
-    [myWorkTasks, navigate, workspaceRecords],
+    [location.pathname, location.search, myWorkTasks, navigate, workspaceRecords],
   );
   const dayPlanScoreItems = useMemo(
     () =>
@@ -2171,10 +2189,18 @@ export function DelivereeWorkspace() {
   }, [createMenuOpen]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const itemId = params.get("item");
-    if (itemId) setSelectedWorkItemId(itemId);
+    const itemId = itemIdFromSearch(location.search);
+    setSelectedWorkItemId(itemId);
+    if (itemId) setRecentItemIds(rememberRecentItem(itemId));
   }, [location.search]);
+  useEffect(() => {
+    if (!workspaceOpen) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setWorkspaceOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspaceOpen]);
 
   const openOdysseusPanel = useCallback(
     async (nextScope?: OdysseusPanelScope) => {
@@ -3678,7 +3704,7 @@ export function DelivereeWorkspace() {
     );
     setNewWorkspaceName("");
     await reloadWorkspaces();
-    setWorkspace({ id: workspaceRef.id, ...workspacePayload });
+    setWorkspace({ id: workspaceRef.id, ...workspacePayload }, { reload: true });
   };
 
   const inviteWorkspaceMember = async (emailOverride?: string) => {
@@ -6656,11 +6682,11 @@ export function DelivereeWorkspace() {
         keywords: "chat messages collab inbox mentions dm",
         onSelect: () => navigate("/collab"),
       },
-      ...activeProjects.map((project) => ({
+      ...paletteProjects.map((project) => ({
         id: `nav-collab-room-${project.id}`,
-        label: `Open room · ${entityTitle(project)}`,
+        label: `Open room · ${project.title}`,
         group: "Navigate",
-        keywords: `chat collab room messages ${entityTitle(project)} ${project.clientEntity || project.client || ""} ${project.projectKey || ""} ${projectWorkKey(project)}`,
+        keywords: `chat collab room messages ${project.title} ${project.client} ${project.projectKey}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -6738,26 +6764,41 @@ export function DelivereeWorkspace() {
         onSelect: () => navigate("/workspace/supportops"),
       },
     ];
-    for (const project of activeProjects) {
+    for (const project of paletteProjects) {
       items.push({
         id: `project-${project.id}`,
-        label: entityTitle(project),
+        label: project.title,
         group: "Projects",
-        keywords: [
-          entityTitle(project),
-          project.clientEntity || project.client || "",
-          project.deliveryEntity || project.bpo || "",
-          project.projectKey || "",
-          projectWorkKey(project),
-          project.serviceLine || "",
-          workCategory(project),
-          productPhase(project),
-        ]
+        keywords: [project.title, project.client, project.delivery, project.projectKey, project.serviceLine, project.category, project.phase]
           .filter(Boolean)
           .join(" "),
-        onSelect: () => openProjectRecord(project),
+        onSelect: () => openProjectRecord({ id: project.id, title: project.title }),
       });
     }
+    const projectNameById = new Map(paletteProjects.map((project) => [project.id, project.title]));
+    const workItemEntries = buildWorkItemPaletteEntries({
+      tasks: paletteTasks.map((task): PaletteTaskRow => ({
+        id: task.id,
+        title: task.title,
+        key: task.key,
+        projectId: task.projectId,
+        projectName: projectNameById.get(task.projectId) || "",
+      })),
+      recentIds: recentItemIds,
+    });
+    const workItemPalette = workItemEntries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      group: entry.group,
+      mode: "items" as const,
+      keywords: entry.keywords,
+      hint: entry.hint || undefined,
+      onSelect: () => openWorkOrRecord(entry.taskId),
+    }));
+    const recentPalette = workItemPalette.filter((entry) => entry.group === "Recent");
+    const catalogPalette = workItemPalette.filter((entry) => entry.group === "Items");
+    items.unshift(...recentPalette);
+    items.push(...catalogPalette);
     for (const routine of agentRoutines.filter((row) => row.status === "active").slice(0, 24)) {
       items.push({
         id: `routine-flow-${routine.id}`,
@@ -6812,11 +6853,12 @@ export function DelivereeWorkspace() {
       (item) =>
         mobileIds.has(item.id) ||
         item.id.startsWith("project-") ||
-        item.id.startsWith("nav-collab-room-"),
+        item.id.startsWith("nav-collab-room-") ||
+        item.id.startsWith("item-") ||
+        item.id.startsWith("recent-item-"),
     );
   }, [
     activeProject,
-    activeProjects,
     agentRoutines,
     canViewFinance,
     createConversation,
@@ -6824,6 +6866,10 @@ export function DelivereeWorkspace() {
     navigate,
     openChiefOfStaff,
     openProjectRecord,
+    openWorkOrRecord,
+    paletteProjects,
+    paletteTasks,
+    recentItemIds,
     startVoiceCall,
     visibleTables,
     workspaceRecords,
@@ -6859,12 +6905,7 @@ export function DelivereeWorkspace() {
           ),
         }))}
         onClose={() => setOdysseusPanelOpen(false)}
-        onOpenItem={(itemId) => {
-          setSelectedWorkItemId(itemId);
-          if (lens.kind === "home") {
-            navigate(`/home?item=${encodeURIComponent(itemId)}`, { replace: true });
-          }
-        }}
+        onOpenItem={(itemId) => openWorkOrRecord(itemId)}
         onScopeChange={setOdysseusPanelScope}
         open={odysseusPanelOpen}
         scope={odysseusPanelScope}
@@ -7229,9 +7270,7 @@ export function DelivereeWorkspace() {
                     Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
                     risks.filter((risk) => risk.projectId === project.id),
                   );
-                  const openCount = openTasks.filter(
-                    (task) => task.projectId === project.id,
-                  ).length;
+                  const openCount = openTaskCounts.get(String(project.id)) || 0;
                   return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
@@ -7283,9 +7322,7 @@ export function DelivereeWorkspace() {
                     Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
                     risks.filter((risk) => risk.projectId === project.id),
                   );
-                  const openCount = openTasks.filter(
-                    (task) => task.projectId === project.id,
-                  ).length;
+                  const openCount = openTaskCounts.get(String(project.id)) || 0;
                   return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
@@ -7707,6 +7744,9 @@ export function DelivereeWorkspace() {
 
         <div className="do-account">
           <button
+            aria-expanded={workspaceOpen}
+            aria-haspopup="menu"
+            aria-label="Workspace and account"
             onClick={() => setWorkspaceOpen((open) => !open)}
             type="button"
           >
@@ -7720,7 +7760,22 @@ export function DelivereeWorkspace() {
             <MoreHorizontal size={15} />
           </button>
           {workspaceOpen && (
-            <div className="do-account-menu">
+            <div className="do-account-menu" data-testid="workspace-switcher-menu" role="menu">
+              <span className="do-account-menu-label">Workspaces</span>
+              {workspaces.map((item) => (
+                <button
+                  className={item.id === workspace?.id ? "is-current" : ""}
+                  data-testid={`switch-workspace-${item.id}`}
+                  key={item.id}
+                  onClick={() => {
+                    setWorkspaceOpen(false);
+                    if (item.id !== workspace?.id) setWorkspace(item);
+                  }}
+                  type="button"
+                >
+                  {item.name}
+                </button>
+              ))}
               <button onClick={() => { toggleSidebarSection("conversations"); setWorkspaceOpen(false); }} type="button">
                 <MessageSquare size={14} /> Conversations
               </button>
@@ -7732,6 +7787,7 @@ export function DelivereeWorkspace() {
                 onClick={() => {
                   setPanel("settings");
                   setWorkspaceOpen(false);
+                  navigate("/settings");
                 }}
                 type="button"
               >
@@ -7739,16 +7795,6 @@ export function DelivereeWorkspace() {
                 {accessRequests.length > 0 && (
                   <em className="do-menu-badge">{accessRequests.length}</em>
                 )}
-              </button>
-              <button
-                className="do-mobile-advanced"
-                onClick={() => {
-                  setCleanSlateOpen(true);
-                  setWorkspaceOpen(false);
-                }}
-                type="button"
-              >
-                Start clean
               </button>
               <button onClick={logOut} type="button">
                 Sign out
@@ -8041,12 +8087,7 @@ export function DelivereeWorkspace() {
                   onOpenApprovals={() => navigate("/approvals")}
                   onOpenToday={() => navigate("/my-work/today")}
                   onOpenMyWork={(filter) => navigate(filter === "today" ? "/my-work/today" : filter === "week" ? "/my-work/this-week" : "/my-work")}
-                  onOpenItem={(itemId) => {
-                    setSelectedWorkItemId(itemId);
-                    navigate(`${location.pathname}?item=${encodeURIComponent(itemId)}`, {
-                      replace: true,
-                    });
-                  }}
+                  onOpenItem={(itemId) => openWorkOrRecord(itemId)}
                   onOpenRecord={(tableId, recordId) => {
                     navigate(
                       `/tables/${encodeURIComponent(tableId)}?record=${encodeURIComponent(recordId)}`,
@@ -8128,15 +8169,21 @@ export function DelivereeWorkspace() {
                       itemType: kind,
                     })
                   }
-                  onClose={() => {
-                    setSelectedWorkItemId(null);
-                    const params = new URLSearchParams(location.search);
-                    params.delete("item");
-                    const next = params.toString();
-                    navigate(
-                      `${location.pathname}${next ? `?${next}` : ""}`,
-                      { replace: true },
-                    );
+                  onClose={() => openWorkOrRecord(null)}
+                  onDuplicate={() => {
+                    void addProjectTask(
+                      String(selectedWorkItem.projectId || ""),
+                      `Copy of ${entityTitle(selectedWorkItem)}`,
+                      "backlog",
+                      {
+                        workItemType: selectedWorkItem.workItemType || selectedWorkItem.itemType || "task",
+                        description: selectedWorkItem.description || "",
+                        priority: selectedWorkItem.priority ?? null,
+                        parentId: selectedWorkItem.parentId || null,
+                      },
+                    ).then((createdId) => {
+                      if (createdId) openWorkOrRecord(createdId);
+                    });
                   }}
                   onCreateControlledOption={createControlledOption}
                   onLayoutChange={setHomeItemLayout}
@@ -10346,6 +10393,7 @@ export function DelivereeWorkspace() {
               {location.pathname === "/settings/data" &&
               workspace &&
               user &&
+              isDeveloperToolsEnabled() &&
               (workspace.ownerId === user.uid ||
                 ["owner", "admin"].includes(String(currentWorkspaceMember?.role || "").toLowerCase())) ? (
                 <section className="do-workspace-admin-card" data-testid="restore-creator-assignees">
@@ -10516,6 +10564,15 @@ export function DelivereeWorkspace() {
                     </button>
                   ))}
                 </div>
+                {canManageMembers ? (
+                  <button
+                    data-testid="settings-start-clean"
+                    onClick={() => setCleanSlateOpen(true)}
+                    type="button"
+                  >
+                    Start clean
+                  </button>
+                ) : null}
                 <div className="do-workspace-create-row">
                   <input
                     disabled={!canCreateWorkspace(workspaces.length)}

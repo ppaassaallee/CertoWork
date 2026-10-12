@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   Minimize2,
   Minus,
+  PenLine,
   Plus,
   Search,
   Settings2,
@@ -819,17 +820,24 @@ function InlineText({
   value,
   onCommit,
   onEnter,
+  autoFocus = false,
 }: {
   ariaLabel: string;
   value?: string;
   onCommit: (value: string) => void;
   onEnter?: () => void;
+  autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(value || "");
   useEffect(() => setDraft(value || ""), [value]);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
   return (
     <input
       aria-label={ariaLabel}
+      autoFocus={autoFocus}
       onBlur={() => draft.trim() !== String(value || "").trim() && onCommit(draft.trim())}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={(event) => {
@@ -839,8 +847,78 @@ function InlineText({
         if (onEnter) onEnter();
         else event.currentTarget.blur();
       }}
+      ref={inputRef}
       value={draft}
     />
+  );
+}
+
+function ItemTitleField({
+  label,
+  onOpen,
+  onRename,
+  onEnter,
+}: {
+  label: string;
+  onOpen: () => void;
+  onRename: (next: string) => void;
+  onEnter?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+  if (editing) {
+    return (
+      <InlineText
+        ariaLabel={`Title for ${label}`}
+        autoFocus
+        onCommit={(next) => {
+          setEditing(false);
+          if (next && next !== label) onRename(next);
+        }}
+        onEnter={onEnter}
+        value={label}
+      />
+    );
+  }
+  return (
+    <>
+      <button
+        className="do-items-title-open"
+        data-testid="item-title-open"
+        onClick={() => {
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => onOpen(), 220);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          if (timer.current) window.clearTimeout(timer.current);
+          setEditing(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "F2") {
+            event.preventDefault();
+            setEditing(true);
+          }
+        }}
+        type="button"
+      >
+        {label}
+      </button>
+      <button
+        aria-label={`Rename ${label}`}
+        className="do-items-title-rename"
+        onClick={(event) => {
+          event.stopPropagation();
+          setEditing(true);
+        }}
+        type="button"
+      >
+        <PenLine size={12} />
+      </button>
+    </>
   );
 }
 
@@ -2107,6 +2185,26 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     requestDelete(item);
   };
 
+  const duplicateItem = async (item: {
+    projectId?: string;
+    itemType?: string;
+    workItemType?: string;
+    description?: string;
+    priority?: string | number | null;
+    parentId?: string | null;
+    title?: string;
+    name?: string;
+  }) => {
+    const createdId = await onAddTask(String(item.projectId || ""), `Copy of ${title(item)}`, "backlog", {
+      workItemType: workItemKind(item),
+      itemType: item.itemType,
+      description: item.description || "",
+      priority: item.priority ?? null,
+      parentId: item.parentId || null,
+    });
+    if (createdId) onSelectItem(String(createdId));
+  };
+
   const renderDeleteButton = (item: any) => (
     <button
       aria-label={`Delete ${title(item)}`}
@@ -2199,11 +2297,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             return <TypeIcon aria-hidden="true" size={13} />;
           })()}
         </button>
-        <InlineText
-          ariaLabel={`Title for ${title(item)}`}
-          onCommit={(next) => next && onUpdateTask(item.id, { title: next })}
+        <ItemTitleField
+          label={title(item)}
           onEnter={tree?.onEnterAddChild}
-          value={title(item)}
+          onOpen={() => onSelectItem(item.id)}
+          onRename={(next) => onUpdateTask(item.id, { title: next })}
         />
         {childCount ? <small>{childCount}</small> : null}
       </div>
@@ -5535,6 +5633,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             item={selectedItem}
             itemKey={String(selectedItem.projectKey || selectedItem.key || selectedItem.id || "").slice(0, 24)}
             onArchive={() => void archiveItem(selectedItem)}
+            onDuplicate={() => void duplicateItem(selectedItem)}
             onAskOdysseus={() =>
               onAskOdysseus
                 ? onAskOdysseus(selectedItem)
