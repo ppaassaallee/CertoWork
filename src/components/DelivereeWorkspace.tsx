@@ -221,6 +221,11 @@ import {
   type PendingInvoiceLine,
 } from "../lib/invoiceDocuments";
 import { stripUndefinedValues } from "../lib/projectFinance";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
+import { canonicalTagIds } from "../lib/tagging";
+import { pushUndo } from "../lib/undoToast";
+import { UndoToast } from "./UndoToast";
+import { ProjectRowMenu } from "./ProjectRowMenu";
 import { InvoiceCenter } from "./InvoiceCenter";
 import { CaptureSettingsPanel, CaptureIngestForm } from "./CaptureSettingsPanel";
 import { RequestsCenter } from "./RequestsCenter";
@@ -3261,7 +3266,7 @@ export function DelivereeWorkspace() {
             memberId: accessMemberId(workspace.id, user.uid),
             email: user.email,
           }, workspaceMembers);
-          await addDoc(collection(db, "tasks"), {
+          await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
             userId: user.uid,
             workspaceId: workspace.id,
             ...(projectId ? { projectId } : {}),
@@ -3285,7 +3290,7 @@ export function DelivereeWorkspace() {
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+          }));
           applied += 1;
           continue;
         }
@@ -4420,11 +4425,16 @@ export function DelivereeWorkspace() {
   };
 
   const archiveProject = async (project: any) => {
+    const previous = project.status || "active";
     await updateProject(project.id, {
       status: "archived",
-      previousStatus: project.status || "active",
+      previousStatus: previous,
       archivedAt: serverTimestamp(),
     });
+    pushUndo(`Archived ${entityTitle(project)}`, () => updateProject(project.id, {
+      status: previous,
+      archivedAt: null,
+    }));
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
@@ -4467,6 +4477,12 @@ export function DelivereeWorkspace() {
             purgeAfter,
             archivedAt: null,
           });
+          const previous = project.status || "active";
+          pushUndo(`Deleted ${entityTitle(project)}`, () => updateProject(project.id, {
+            status: previous,
+            deletedAt: null,
+            purgeAfter: null,
+          }));
           if (projectConsoleId === project.id) {
             setProjectConsoleId(null);
             setPanel(null);
@@ -5050,7 +5066,7 @@ export function DelivereeWorkspace() {
       email: user.email,
     };
     const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
-    const created = await addDoc(collection(db, "tasks"), {
+    const created = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
       ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -5074,7 +5090,7 @@ export function DelivereeWorkspace() {
       createdBy: user.uid,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }));
     const createdDiff = assignmentDiff({}, assigned);
     if (createdDiff.added.length) {
       const notifications = buildAssignmentNotificationDocs({
@@ -5274,6 +5290,19 @@ export function DelivereeWorkspace() {
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     let nextPatch = { ...patch };
+    if (
+      Array.isArray(nextPatch.tagIds) || Array.isArray(nextPatch.tags) || Array.isArray(nextPatch.labels)
+    ) {
+      const cleaned = canonicalTagIds(
+        {
+          tagIds: nextPatch.tagIds || current.tagIds,
+          tags: nextPatch.tags || current.tags,
+          labels: nextPatch.labels || current.labels,
+        },
+        categories,
+      );
+      nextPatch = { ...nextPatch, tagIds: cleaned, tags: cleaned, labels: cleaned };
+    }
     if (touchesAssignment) {
       nextPatch = normalizeAssignmentPatch(current, nextPatch, workspaceMembers);
     }
@@ -7225,26 +7254,11 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </span>
+                  <ProjectRowMenu
+                    name={entityTitle(project)}
+                    onArchive={() => void archiveProject(project)}
+                    onDelete={() => void deleteProject(project)}
+                  />
                 </div>
                   );
                 })}
@@ -7294,26 +7308,11 @@ export function DelivereeWorkspace() {
                     <span className="do-project-title">{entityTitle(project)}</span>
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
-                  <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </span>
+                  <ProjectRowMenu
+                    name={entityTitle(project)}
+                    onArchive={() => void archiveProject(project)}
+                    onDelete={() => void deleteProject(project)}
+                  />
                 </div>
                   );
                 })}
@@ -8013,6 +8012,7 @@ export function DelivereeWorkspace() {
           </div>
         )}
 
+        <UndoToast />
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>
             {notice}

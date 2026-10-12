@@ -54,6 +54,8 @@ import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
+import { pushUndo } from "../lib/undoToast";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { controlledOptionNames } from "../lib/controlledLists";
 import {
@@ -655,6 +657,7 @@ function priorityValue(value: any) {
 
 function canonicalStatus(item: any) {
   const status = String(item?.status || "").toLowerCase();
+  if (isRemovedWorkItem(item)) return status || "deleted";
   if (workStatuses.includes(status)) return status;
   return taskWorkLane(item);
 }
@@ -662,6 +665,8 @@ function canonicalStatus(item: any) {
 const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
 
 function matchesStatusFilter(item: any, statusFilter: string) {
+  if (!removedItemMatchesStatus(item, statusFilter)) return false;
+  if (statusFilter === "archived" || statusFilter === "deleted") return true;
   if (statusFilter === "all") return true;
   if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
   return canonicalStatus(item) === statusFilter;
@@ -2063,14 +2068,43 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     });
   };
 
+  const [pendingRemoval, setPendingRemoval] = useState<any | null>(null);
+
+  const childItemsOf = (item: any) => {
+    const id = String(item?.id || "");
+    if (!id) return [];
+    return tasks.filter((candidate) => String(candidate?.parentId || candidate?.featureId || candidate?.epicId || "") === id);
+  };
+
+  const softDeleteItems = (items: any[]) => {
+    const unique = items.filter((item, index, list) => item?.id && list.findIndex((candidate) => candidate.id === item.id) === index);
+    for (const item of unique) {
+      if (selectedItemId === item.id) onSelectItem(null);
+    }
+    setSelectedBulkIds((current) => current.filter((id) => !unique.some((item) => item.id === id)));
+    const snapshots = unique.map((item) => ({
+      id: item.id,
+      previous: item.previousStatus || item.status,
+    }));
+    void Promise.all(unique.map((item) => onUpdateTask(item.id, softDeletePatch(item.status))));
+    pushUndo(
+      unique.length === 1 ? `Deleted ${title(unique[0])}` : `Deleted ${unique.length} items`,
+      () => Promise.all(snapshots.map((row) => onUpdateTask(row.id, restoreItemPatch(row.previous)))).then(() => undefined),
+    );
+  };
+
+  const requestDelete = (item: any) => {
+    if (!consumeDeleteGesture()) return;
+    const children = childItemsOf(item).filter((child) => !isRemovedWorkItem(child));
+    if (children.length) {
+      setPendingRemoval(item);
+      return;
+    }
+    softDeleteItems([item]);
+  };
+
   const archiveItem = (item: any) => {
-    // Product delete archives the record. Do not hard-delete task documents.
-    if (selectedItemId === item.id) onSelectItem(null);
-    setSelectedBulkIds((current) => current.filter((id) => id !== item.id));
-    return onUpdateTask(item.id, {
-      status: "archived",
-      archivedAt: new Date().toISOString(),
-    });
+    requestDelete(item);
   };
 
   const renderDeleteButton = (item: any) => (
@@ -2080,7 +2114,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       data-testid="item-delete"
       onClick={(event) => {
         event.stopPropagation();
-        void archiveItem(item);
+        requestDelete(item);
       }}
       onPointerDown={(event) => event.stopPropagation()}
       title={`Delete ${title(item)}`}
@@ -4057,6 +4091,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   return (
     <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${savedView?.density === "compact" ? "is-view-compact" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+      {pendingRemoval ? (
+        <div className="cw-remove-dialog" role="dialog" aria-modal="true" aria-labelledby="cw-remove-title">
+          <div>
+            <h2 id="cw-remove-title">Delete {title(pendingRemoval)} and its subtasks?</h2>
+            <p>{childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child)).length} subtasks will be deleted with it. Undo restores all of them.</p>
+            <button type="button" onClick={() => setPendingRemoval(null)}>Cancel</button>
+            <button type="button" onClick={() => {
+              const children = childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child));
+              const target = pendingRemoval;
+              setPendingRemoval(null);
+              softDeleteItems([target, ...children]);
+            }}>Delete with subtasks</button>
+          </div>
+        </div>
+      ) : null}
       {actionMenu && createPortal(
         <div
           className="do-quick-action-menu"
