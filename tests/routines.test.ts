@@ -106,10 +106,10 @@ test("project and portfolio surfaces expose the Rutina entry points", () => {
     "utf8",
   );
   assert.match(chrome, /project-routine-button/);
-  assert.match(chrome, /Rutina/);
+  assert.match(chrome, /t\("project\.routine"\)/);
   assert.match(surfaces, /useRoutineHost/);
   assert.match(surfaces, /portfolio-routine-button/);
-  assert.match(surfaces, /✦ Rutina/);
+  assert.match(surfaces, /t\("project\.routine"\)/);
   assert.match(composer, /routine-compiled-card/);
   assert.match(composer, /Probar ahora/);
   assert.match(composer, /Activar/);
@@ -141,7 +141,9 @@ test("Phase 2+ surfaces: /rutinas, Agents Rutinas, event outbox, everywhere entr
   assert.match(agents, /agents-routines/);
   assert.match(agents, /Rutinas/);
   assert.match(css, /overflow: visible/);
-  assert.match(chrome, /<span>Rutina<\/span>/);
+  assert.match(chrome, /t\("project\.routine"\)/);
+  const i18n = readFileSync(new URL("../src/lib/i18n.ts", import.meta.url), "utf8");
+  assert.match(i18n, /"project\.routine": "Rutina"/);
   assert.match(items, /item-routine-button/);
   assert.match(events, /emitDomainEvent/);
   assert.match(scheduler, /processEventOutbox/);

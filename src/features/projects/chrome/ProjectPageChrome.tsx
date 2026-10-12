@@ -1,4 +1,5 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { t, type MessageKey } from "../../../lib/i18n";
 import {
   ArrowUpDown,
@@ -255,6 +256,29 @@ export function ProjectPageHeader({
   onOpenRoutine,
 }: ProjectPageHeaderProps) {
   const [descExpanded, setDescExpanded] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!moreOpen) {
+      setMenuPos(null);
+      return undefined;
+    }
+    const place = () => {
+      const rect = moreButtonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [moreOpen, moreMenu]);
   const initial = projectDisplayName(project).charAt(0).toUpperCase() || "P";
   const key = projectKeyBadge(project);
   const desc = String(description || "").trim();
@@ -281,7 +305,7 @@ export function ProjectPageHeader({
                     onClick={() => setDescExpanded(true)}
                     type="button"
                   >
-                    más
+                    {t("project.more")}
                   </button>
                 </>
               ) : null}
@@ -293,7 +317,7 @@ export function ProjectPageHeader({
                     onClick={() => setDescExpanded(false)}
                     type="button"
                   >
-                    menos
+                    {t("project.less")}
                   </button>
                 </>
               ) : null}
@@ -308,15 +332,15 @@ export function ProjectPageHeader({
         <span className={`do-project-health-chip is-${healthTone}`}>{healthLabel}</span>
         {onOpenRoutine ? (
           <button
-            aria-label="Rutina"
+            aria-label={t("project.routine")}
             className="do-project-routine-btn"
             data-testid="project-routine-button"
             onClick={onOpenRoutine}
-            title="Rutina"
+            title={t("project.routine")}
             type="button"
           >
             <Sparkles size={14} />
-            <span>Rutina</span>
+            <span>{t("project.routine")}</span>
           </button>
         ) : null}
         <div className="do-console-more">
@@ -327,12 +351,20 @@ export function ProjectPageHeader({
             className="do-project-icon-btn"
             data-testid="notion-more-button"
             onClick={onToggleMore}
+            ref={moreButtonRef}
             title="More"
             type="button"
           >
             <MoreHorizontal size={16} />
           </button>
-          {moreMenu}
+          {moreOpen && menuPos && moreMenu && typeof document !== "undefined"
+            ? createPortal(
+                <div className="do-project-menu-portal" style={{ top: menuPos.top, right: menuPos.right }}>
+                  {moreMenu}
+                </div>,
+                document.body,
+              )
+            : null}
         </div>
       </div>
     </header>
@@ -428,7 +460,7 @@ export function ProjectViewTabs({
   onToggleSort,
   onAddTask,
   showActions = true,
-  showFilterSort = true,
+  showFilterSort = false,
   showCosts = false,
   showTables = false,
 }: ProjectViewTabsProps) {

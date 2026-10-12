@@ -419,8 +419,8 @@ test("add item quick attributes use icon popovers like item attrs", () => {
   assert.match(workItems, /data-testid="item-create-project-select"/);
   assert.match(workItems, /No project/);
   assert.match(workItems, /data-testid="quick-action-menu"/);
-  assert.match(workItems, /Quitar/);
-  assert.match(workItems, /Agregar/);
+  assert.match(workItems, /t\("items\.remove"\)/);
+  assert.match(workItems, /t\("items\.add"\)/);
   assert.match(workItems, /Mover/);
   assert.match(workItems, /myWorkRowActions/);
   assert.doesNotMatch(workItems, /do-item-type-trigger-label/);

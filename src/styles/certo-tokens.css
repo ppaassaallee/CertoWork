@@ -11,7 +11,9 @@
   --border-strong: color-mix(in srgb, var(--c-ink) 16%, transparent);
   --text-primary: var(--c-ink);
   --text-secondary: var(--c-ink-2);
-  --text-muted: var(--c-ink-3);
+  /* ink-3 (#9ca3af) is about 2.5:1 on white and fails WCAG AA for text.
+     Decorative borders keep ink-3. Readable muted copy uses ink-2 (~4.6:1). */
+  --text-muted: var(--c-ink-2);
   --hover-overlay: rgba(31, 36, 48, 0.06);
   --active-overlay: rgba(31, 36, 48, 0.1);
 

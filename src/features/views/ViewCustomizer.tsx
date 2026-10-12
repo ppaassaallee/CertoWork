@@ -218,10 +218,10 @@ export function ViewCustomizer<Row>({
                 </label>
                 {visible && !col.fixed ? (
                   <span className="cw-views-move">
-                    <button onClick={() => moveColumn(col.id, -1)} type="button">
+                    <button aria-label={t("views.moveUp")} onClick={() => moveColumn(col.id, -1)} type="button">
                       ↑
                     </button>
-                    <button onClick={() => moveColumn(col.id, 1)} type="button">
+                    <button aria-label={t("views.moveDown")} onClick={() => moveColumn(col.id, 1)} type="button">
                       ↓
                     </button>
                   </span>
@@ -254,10 +254,10 @@ export function ViewCustomizer<Row>({
                 </label>
                 {on ? (
                   <span className="cw-views-move">
-                    <button onClick={() => moveAction(action.id, -1)} type="button">
+                    <button aria-label={t("views.moveUp")} onClick={() => moveAction(action.id, -1)} type="button">
                       ↑
                     </button>
-                    <button onClick={() => moveAction(action.id, 1)} type="button">
+                    <button aria-label={t("views.moveDown")} onClick={() => moveAction(action.id, 1)} type="button">
                       ↓
                     </button>
                   </span>

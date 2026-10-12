@@ -18,6 +18,7 @@ import {
 } from "./agentsMapFlag";
 import type { RunLike } from "./mapHealth";
 import "./agentsMap.css";
+import { t } from "../../lib/i18n";
 
 const TABS: Array<{ id: AgentsAreaTab; label: string }> = [
   { id: "map", label: "Mapa" },
@@ -39,7 +40,7 @@ export function AgentsArea({
   routines = [],
   workspaceName,
   onRoutinesChanged,
-  areaTitle = "Rutinas",
+  areaTitle,
   initialTab,
   flagOffFallback = "routines",
 }: {
@@ -133,12 +134,12 @@ export function AgentsArea({
     <div className="cw-agents-area" data-testid="agents-area">
       <div className="cw-agents-area-head">
         <div className="cw-agents-area-titles">
-          <strong>{areaTitle}</strong>
+          <strong>{areaTitle || t("navRutinas")}</strong>
           <p>
-            Agentes, corridas y analítica. El flujo de cada rutina vive en Rutinas.
+            {t("agents.areaLead")}
           </p>
         </div>
-        <div className="cw-agents-area-tabs" role="tablist" aria-label={`${areaTitle} views`}>
+        <div className="cw-agents-area-tabs" role="tablist" aria-label={`${areaTitle || t("navRutinas")} views`}>
           {visibleTabs.map((item) => (
             <button
               aria-selected={tab === item.id}
@@ -149,7 +150,7 @@ export function AgentsArea({
               role="tab"
               type="button"
             >
-              {item.label}
+              {item.id === "routines" ? t("navRutinas") : item.label}
             </button>
           ))}
         </div>

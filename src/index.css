@@ -2478,7 +2478,7 @@ a {
   border-radius: 4px;
   background: var(--c-panel);
   padding: 1px 6px;
-  color: var(--c-ink-3);
+  color: var(--c-ink-2);
   font-size: var(--t-xs);
   font-family: var(--f-mono);
 }
@@ -3857,11 +3857,20 @@ a {
   color: var(--text-secondary);
   cursor: pointer;
 }
+.do-project-menu-portal {
+  position: fixed;
+  z-index: 220;
+  width: 0;
+  height: 0;
+}
+.do-project-menu-portal .do-console-more-menu {
+  z-index: 220;
+}
 .do-project-page-header .do-console-more-menu {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 40;
+  z-index: 220;
   display: grid;
   min-width: 180px;
   border: 1px solid var(--border);
@@ -4079,7 +4088,7 @@ a {
   gap: 6px;
 }
 .do-project-group-label {
-  color: var(--c-ink-3);
+  color: var(--c-ink-2);
   font-size: var(--t-sm);
   padding: 0 4px;
 }
@@ -4624,7 +4633,15 @@ a {
   background: transparent;
   padding: 0;
 }
-.do-notion-add-label { font-size: 12px; }
+.do-notion-add-label {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: text;
+}
 .do-notion-type-chip {
   position: relative;
   display: inline-flex;
@@ -9213,7 +9230,7 @@ a {
 .do-kanban-item-id {
   min-width: 0;
   overflow: hidden;
-  color: var(--c-ink-3);
+  color: var(--c-ink-2);
   font-family: var(--f-mono);
   font-size: 12px;
   font-weight: 500;
@@ -9247,7 +9264,7 @@ a {
   justify-content: space-between;
   gap: 8px;
   padding-left: 0;
-  color: var(--c-ink-3);
+  color: var(--c-ink-2);
   font-size: var(--t-xs);
 }
 .do-kanban-card-due {
@@ -11875,6 +11892,13 @@ a {
   flex: 1;
   grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.55fr);
   overflow: hidden;
+}
+/* Magic Project and paste are a single column. The shared skill grid
+   would leave an empty second column and push the box off centre. */
+.do-skill-modal.do-magic-modal .do-skill-body,
+.do-skill-modal.do-paste-modal .do-skill-body {
+  display: block;
+  grid-template-columns: none;
 }
 .do-skill-readiness {
   display: flex;
@@ -22268,7 +22292,7 @@ a {
 }
 .cw-multi-assignee-group {
   margin: 8px 10px 4px;
-  color: var(--c-ink-3);
+  color: var(--c-ink-2);
   font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -22285,7 +22309,7 @@ a {
 }
 .do-row-menu {
   position: absolute;
-  z-index: 20;
+  z-index: 80;
   right: 8px;
   top: 28px;
   display: grid;

@@ -246,7 +246,7 @@ export function AgentsLibrary({
 
         <section className="do-agents-section do-agents-routines-section" data-testid="agents-routines">
           <h3>
-            <span>Rutinas</span>
+            <span>{t("navRutinas")}</span>
             <button
               className="cw-btn cw-btn-ghost cw-btn-sm"
               onClick={() =>
@@ -258,7 +258,7 @@ export function AgentsLibrary({
               }
               type="button"
             >
-              <Sparkles size={13} /> Nueva
+              <Sparkles size={13} /> {t("project.view.new")}
             </button>
           </h3>
           <p className="do-agents-routines-lead">
@@ -278,14 +278,14 @@ export function AgentsLibrary({
                   </span>
                   <span className="do-agents-row-main">
                     <span className="do-agents-row-title">
-                      <strong>Abrir Rutinas</strong>
+                      <strong>{t("routines.open")}</strong>
                       <StatusLight status="blue" label="Recetas" size="sm" />
                     </span>
                     <small>Brief matutino, vigía de fechas, cazador de bloqueos…</small>
                   </span>
                 </button>
                 <button
-                  aria-label="Open Rutinas"
+                  aria-label={t("palette.goRoutines")}
                   className="do-agents-row-chev"
                   onClick={onOpenAutomations}
                   type="button"
@@ -379,7 +379,7 @@ export function AgentsLibrary({
 
         <nav className="do-agents-foot" aria-label="Agent platform">
           <button onClick={onOpenAutomations} type="button">
-            <Sparkles size={13} /> Rutinas
+            <Sparkles size={13} /> {t("navRutinas")}
           </button>
           <button onClick={onOpenActivity} type="button">
             <Activity size={13} /> {t("agentsActivity")}

@@ -20,6 +20,7 @@ import {
   type FlowRunOverlay,
 } from "./flow";
 import "./flow/flow.css";
+import { t } from "../../lib/i18n";
 
 function scopeLabel(routine: RoutineSpec) {
   if (routine.scope?.entityType === "portfolio") return "Mi trabajo";
@@ -299,7 +300,7 @@ export function RoutineDetail({
           }}
           type="button"
         >
-          Rutinas
+          {t("navRutinas")}
         </button>
         {" › "}Mis rutinas
       </div>

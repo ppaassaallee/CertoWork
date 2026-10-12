@@ -1571,7 +1571,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
     if (!moreOpen) return undefined;
     const onDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest(".do-console-more")) return;
+      if (target?.closest(".do-console-more, .do-project-menu-portal, .do-console-more-menu")) return;
       setMoreOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
@@ -1739,7 +1739,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             onClick={() => setGanttFocus(false)}
             type="button"
           >
-            Salir focus
+            {t("project.exitFocus")}
           </button>
         </div>
       )}
@@ -1780,7 +1780,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 role="menuitem"
                 type="button"
               >
-                ✦ Rutina
+                ✦ {t("project.routine")}
               </button>
               <button
                 onClick={() => {
@@ -2018,15 +2018,17 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 : notionMode) as ProjectViewId
           }
           filterOpen={notionFilterOpen}
-          showFilterSort={tab !== "items"}
+          showFilterSort={false}
           onAddTask={() => {
             publishChromeView("list");
-            window.setTimeout(() => {
+            const focusAdd = () => {
               const input = document.querySelector(
-                ".cw-views-add-form input, .do-notion-add-row input",
+                "[data-testid='notion-new-item'], .cw-views-add-form input, .do-notion-add-row input",
               ) as HTMLInputElement | null;
               input?.focus();
-            }, 50);
+              return Boolean(input);
+            };
+            if (!focusAdd()) window.setTimeout(focusAdd, 120);
           }}
           onChangeView={(view) => {
             if (view === "costs" && !canViewFinance) return;

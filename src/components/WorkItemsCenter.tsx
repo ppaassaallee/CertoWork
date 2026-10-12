@@ -206,6 +206,8 @@ import {
   weekTimingPatch,
 } from "../lib/itemTiming";
 import { dueEdgeTone } from "../lib/dueEdgeTone";
+import { filterPointerKeepsOpen, shouldDismissFilterOnEscape } from "../lib/filterPopover";
+import { t } from "../lib/i18n";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -1510,9 +1512,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   useEffect(() => {
     if (!filterOpen && !sortOpen && !notionFilterOpen && !notionSortOpen) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (!shouldDismissFilterOnEscape(event.key)) return;
       setFilterOpen(false);
       setSortOpen(false);
       onNotionFilterOpenChange?.(false);
@@ -1529,6 +1529,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       const target = event.target as HTMLElement | null;
       if (target?.closest("[data-testid='notion-tools-panel']")) return;
       if (target?.closest(".do-notion-views")) return;
+      if (target?.closest("select")) return;
+      if (filterPointerKeepsOpen(target?.tagName || "", document.activeElement?.tagName || "")) return;
       onNotionFilterOpenChange?.(false);
       onNotionSortOpenChange?.(false);
     };
@@ -2966,7 +2968,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       })}
       {isMyWork && hiddenRowActions.length > 0 ? (
         <button
-          aria-label="Agregar"
+          aria-label={t("items.add")}
           className="do-item-attr-btn"
           data-testid="my-work-quick-actions-add"
           onClick={(event) => {
@@ -2975,7 +2977,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             setActionMenu({ scope: "row", key: "", x: rect.left, y: rect.bottom + 4, submenu: "add" });
           }}
           style={{ order: 80 }}
-          title="Agregar"
+          title={t("items.add")}
           type="button"
         >
           <Plus size={13} />
@@ -4114,10 +4116,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <div className="do-gantt-scale" aria-label="Gantt zoom">
             {(
               [
-                ["day", "Día"],
-                ["week", "Sem"],
-                ["month", "Mes"],
-                ["quarter", "Trim"],
+                ["day", t("gantt.day")],
+                ["week", t("gantt.week")],
+                ["month", t("gantt.month")],
+                ["quarter", t("gantt.quarter")],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -4131,7 +4133,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             ))}
           </div>
           <button className="do-button-secondary" onClick={fitToScreen} type="button">
-            Ajustar
+            {t("gantt.fit")}
           </button>
           <span className="spacer" style={{ flex: 1 }} />
           <button
@@ -4324,7 +4326,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               role="menuitem"
               type="button"
             >
-              Quitar
+              {t("items.remove")}
             </button>
           ) : null}
           <button
@@ -4333,7 +4335,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             role="menuitem"
             type="button"
           >
-            Agregar
+            {t("items.add")}
           </button>
           {actionMenu.submenu === "add" && (
             <div className="do-quick-action-submenu">
@@ -5301,7 +5303,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   )}
                   {hiddenCreateActions.length > 0 && (
                     <button
-                      aria-label="Agregar"
+                      aria-label={t("items.add")}
                       className="do-item-attr-btn"
                       data-testid="create-quick-actions-add"
                       onClick={(event) => {
@@ -5310,7 +5312,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         setActionMenu({ scope: "create", key: "", x: rect.left, y: rect.bottom + 4, submenu: "add" });
                       }}
                       style={{ order: 80 }}
-                      title="Agregar"
+                      title={t("items.add")}
                       type="button"
                     >
                       <Plus size={13} />

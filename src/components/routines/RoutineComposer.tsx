@@ -12,6 +12,7 @@ import {
   type RoutinePermissionMode,
   type RoutineSpec,
 } from "../../lib/routines";
+import { t } from "../../lib/i18n";
 
 type ScopeInput = {
   entityType: RoutineEntityType;
@@ -235,7 +236,7 @@ export function RoutineComposer({
   return (
     <div className="do-routine-overlay" data-testid="routine-composer">
       <button aria-label="Cerrar" className="do-routine-backdrop" onClick={onClose} type="button" />
-      <div className="do-routine-popover" role="dialog" aria-label="Nueva rutina">
+      <div className="do-routine-popover" role="dialog" aria-label={t("routinesNew")}>
         <header className="do-routine-popover-head">
           <div>
             <span className="do-routine-kicker">
