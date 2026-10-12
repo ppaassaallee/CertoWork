@@ -12,16 +12,16 @@ import { classifyDataSyncError } from "../src/lib/workspaceLoadError";
 
 test("table list plans never ask for every table in the workspace", () => {
   const plans = readableTableQueryPlans("ws-1", "user-1");
-  assert.equal(plans.length, 2);
+  assert.equal(plans.length, 1 + SHARED_TABLE_VISIBILITIES.length);
   for (const plan of plans) {
     assert.equal(planIsWorkspaceWideOnly(plan), false);
     assert.equal(plan.some((clause) => clause.field === "workspaceId" && clause.value === "ws-1"), true);
+    assert.equal(plan.some((clause) => clause.op === "in"), false);
   }
-  const visibility = plans[1].find((clause) => clause.field === "visibility");
-  assert.ok(visibility);
-  assert.equal(visibility.op, "in");
-  assert.equal((visibility.value as readonly string[]).includes("private"), false);
-  assert.deepEqual(visibility.value, SHARED_TABLE_VISIBILITIES);
+  for (const visibility of SHARED_TABLE_VISIBILITIES) {
+    assert.ok(plans.some((plan) => plan.some((clause) => clause.field === "visibility" && clause.value === visibility)));
+  }
+  assert.equal(plans.some((plan) => plan.some((clause) => clause.value === "private")), false);
   assert.deepEqual(readableTableQueryPlans("", "user-1"), []);
   assert.deepEqual(readableTableQueryPlans("ws-1", ""), []);
 });
@@ -61,6 +61,8 @@ test("rules and listeners keep private tables out of the workspace list", () => 
   assert.match(rules, /workspaceMembersContainAuthEmail\(resource\.data\.workspaceId\)/);
   assert.match(shell, /readableTableQueryPlans\(workspace\.id, user\.uid\)/);
   assert.match(shell, /readableRecordQueryPlans/);
+  assert.match(shell, /setTablesSyncIssue/);
+  assert.match(shell, /onTables \? tablesSyncIssue/);
   assert.match(loader, /isFirestorePermissionError\(error\)/);
   assert.match(indexes, /"collectionGroup": "tables"/);
   assert.match(indexes, /"fieldPath": "createdBy"/);

@@ -913,16 +913,27 @@ export function DelivereeWorkspace() {
   }, [highlightFinanceLineIdFromUrl]);
   const [notice, setNotice] = useState("");
   const [dataSyncIssue, setDataSyncIssue] = useState<"quota" | "unavailable" | "permission" | null>(null);
+  const [tablesSyncIssue, setTablesSyncIssue] = useState<"quota" | "unavailable" | "permission" | null>(null);
   const [dataRetryVersion, setDataRetryVersion] = useState(0);
   const reportDataSyncError = useCallback((error: unknown) => {
     const issue = classifyDataSyncError(error);
-    if (!issue) return;
+    // Permission denials on background listeners are common during role fallback.
+    // They must not cover Home. Table screens report those separately.
+    if (!issue || issue === "permission") return;
     setDataSyncIssue((current) => {
       if (issue === "quota" || !current) return issue;
       if (current === "quota") return current;
-      if (issue === "permission") return "permission";
       return current;
     });
+  }, []);
+  const reportTablesSyncError = useCallback((error: unknown) => {
+    const issue = classifyDataSyncError(error);
+    if (!issue) return;
+    if (issue === "quota") {
+      setDataSyncIssue("quota");
+      return;
+    }
+    setTablesSyncIssue(issue);
   }, []);
   const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error" | "info">(
     "success",
@@ -1221,15 +1232,33 @@ export function DelivereeWorkspace() {
         tablesStore.replaceAll(rows as any);
       };
       if (isProductFlagEnabled("readableTableQueries")) {
-        packUnsubscribers.push(
-          ...mergeQueriesLocal(
-            TABLES,
-            readableTableQueryPlans(workspace.id, user.uid).map((plan) =>
-              plan.map((clause) => where(clause.field, clause.op, clause.value as any)),
-            ),
-            publishTables,
-          ),
+        const plans = readableTableQueryPlans(workspace.id, user.uid).map((plan) =>
+          plan.map((clause) => where(clause.field, clause.op, clause.value as any)),
         );
+        const merge = createCompleteSnapshotMerge<any>(
+          plans.length,
+          publishTables,
+          (item) => item?.workspaceId === workspace.id,
+        );
+        plans.forEach((clauses, index) => {
+          packUnsubscribers.push(
+            onSnapshot(
+              query(collection(db, TABLES), ...clauses),
+              (snapshot) => {
+                if (!hasConfirmedSnapshotData(snapshot)) return;
+                merge.update(
+                  index,
+                  snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+                );
+              },
+              (error) => {
+                console.error(`Firestore ${TABLES} query ${index} failed`, error);
+                merge.fail(index);
+                reportTablesSyncError(error);
+              },
+            ),
+          );
+        });
       } else {
         packUnsubscribers.push(
           makeQueryLocal(TABLES, publishTables, false, false),
@@ -1284,7 +1313,7 @@ export function DelivereeWorkspace() {
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
     };
     // The core shell stays subscribed across route changes.
-  }, [dataAccessKey, dataRetryVersion, reportDataSyncError]);
+  }, [dataAccessKey, dataRetryVersion, reportDataSyncError, reportTablesSyncError]);
 
   // Tags are shown on Home and My Work, which do not load the templates pack.
   // A user-scoped query also picks up legacy category docs that have no workspaceId.
@@ -1368,12 +1397,12 @@ export function DelivereeWorkspace() {
         (error) => {
           console.error("Firestore table_records query failed", error);
           merge.fail(index);
-          reportDataSyncError(error);
+          reportTablesSyncError(error);
         },
       ),
     );
     return () => stops.forEach((stop) => stop());
-  }, [user?.uid, workspace?.id, listenPacks.tableRecords, readableTableIdKey, dataRetryVersion, reportDataSyncError]);
+  }, [user?.uid, workspace?.id, listenPacks.tableRecords, readableTableIdKey, dataRetryVersion, reportTablesSyncError]);
 
   useEffect(() => {
     if (lens.kind !== "requests" || !selectedRequestId) return;
@@ -8042,18 +8071,23 @@ export function DelivereeWorkspace() {
           </div>
         </header>
 
-        {dataSyncIssue && (
+        {(() => {
+          const onTables = tablesEnabled && (lens.kind === "tables" || lens.kind === "tables-dashboard");
+          const syncBanner = dataSyncIssue || (onTables ? tablesSyncIssue : null);
+          if (!syncBanner) return null;
+          return (
           <div className="do-data-sync-banner" data-testid="data-sync-warning" role="alert">
             <span>
-              {dataSyncIssue === "quota"
+              {syncBanner === "quota"
                 ? "Certo Work has reached its data usage limit. This error does not delete records; the last loaded view may be incomplete until Firebase is available again."
-                : dataSyncIssue === "permission"
+                : syncBanner === "permission"
                   ? "Some records could not be loaded. Nothing was deleted. Retry, or ask an admin to confirm your workspace membership."
                   : "Certo Work cannot refresh data right now. This error does not delete records; the last loaded view may be incomplete."}
             </span>
             <button
               onClick={() => {
                 setDataSyncIssue(null);
+                setTablesSyncIssue(null);
                 setDataRetryVersion((version) => version + 1);
               }}
               type="button"
@@ -8061,7 +8095,8 @@ export function DelivereeWorkspace() {
               Retry sync
             </button>
           </div>
-        )}
+          );
+        })()}
 
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>

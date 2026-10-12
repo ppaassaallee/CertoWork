@@ -31,10 +31,12 @@ export function readableTableQueryPlans(workspaceId: string, uid: string): Reada
       { field: "workspaceId", op: "==", value: workspace },
       { field: "createdBy", op: "==", value: userId },
     ],
-    [
-      { field: "workspaceId", op: "==", value: workspace },
-      { field: "visibility", op: "in", value: SHARED_TABLE_VISIBILITIES },
-    ],
+    // One equality per visibility. A single denied value must not hide the rest,
+    // which is what an `in` query does when any matched document fails the rule.
+    ...SHARED_TABLE_VISIBILITIES.map((visibility) => [
+      { field: "workspaceId" as const, op: "==" as const, value: workspace },
+      { field: "visibility" as const, op: "==" as const, value: visibility },
+    ]),
   ];
 }
 
