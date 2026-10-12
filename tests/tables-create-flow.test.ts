@@ -74,10 +74,8 @@ test("TABLES and on-demand TABLE_RECORDS listeners are workspace-scoped", () => 
     resolve(root, "src/components/DelivereeWorkspace.tsx"),
     "utf8",
   );
-  assert.match(
-    shell,
-    /makeQueryLocal\(\s*TABLES,\s*\(items\)\s*=>[\s\S]*?false,\s*false,\s*\)/,
-  );
+  assert.match(shell, /readableTableQueryPlans\(workspace\.id, user\.uid\)/);
+  assert.match(shell, /makeQueryLocal\(TABLES, publishTables, false, false\)/);
   assert.match(
     shell,
     /!listenPacks\.tableRecords[\s\S]*?collection\(db, TABLE_RECORDS\),\s*where\("workspaceId", "==", workspace\.id\)/,

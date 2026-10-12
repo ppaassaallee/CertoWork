@@ -10,7 +10,7 @@ import {
   createCompleteSnapshotMerge,
   hasConfirmedSnapshotData,
 } from "../lib/firestoreSnapshotSafety";
-import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
+import { isFirestorePermissionError, isFirestoreQuotaError } from "../lib/workspaceLoadError";
 import {
   shouldTryWorkspacePortfolioQuery,
   projectAccessEmails,
@@ -242,7 +242,9 @@ export function startWorkspaceData(args: StartArgs): () => void {
           },
           (error) => {
             console.error("Workspace projects query failed; falling back to role queries", error);
-            report(error);
+            // Invited members often fail this broad query, then the role queries succeed.
+            // That recovery is not a data-loss error, so it does not raise the banner.
+            if (!isFirestorePermissionError(error)) report(error);
             if (!isFirestoreQuotaError(error)) startRoleProjectQueries();
           },
         ),

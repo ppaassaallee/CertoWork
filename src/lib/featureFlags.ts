@@ -4,7 +4,8 @@ export type FeatureFlagKey =
   | "openAIProvider"
   | "semanticMemory"
   | "safeActionReview"
-  | "offlineCapture";
+  | "offlineCapture"
+  | "readableTableQueries";
 
 export type FeatureFlagLevel = "environment" | "tenant" | "workspace" | "user";
 
@@ -29,7 +30,18 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureFlagKey, boolean> = {
   semanticMemory: true,
   safeActionReview: true,
   offlineCapture: true,
+  readableTableQueries: true,
 };
+
+/** Local override: `certo-flag:<key>` = "0" or "1". */
+export function isProductFlagEnabled(key: FeatureFlagKey): boolean {
+  if (typeof localStorage !== "undefined") {
+    const raw = localStorage.getItem(`certo-flag:${key}`);
+    if (raw === "0" || raw === "false") return false;
+    if (raw === "1" || raw === "true") return true;
+  }
+  return DEFAULT_FEATURE_FLAGS[key];
+}
 
 const LEVEL_PRECEDENCE: FeatureFlagLevel[] = [
   "environment",

@@ -74,7 +74,7 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { app, db, storage } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
-import { isFirestoreQuotaError } from "../lib/workspaceLoadError";
+import { classifyDataSyncError } from "../lib/workspaceLoadError";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -318,6 +318,8 @@ import { WorkloadView } from "../features/workload/WorkloadView";
 import {
   postAssignmentNotify,
 } from "../lib/itemUpdateChannels";
+import { isProductFlagEnabled } from "../lib/featureFlags";
+import { readableRecordQueryPlans, readableTableQueryPlans } from "../lib/tables/readableQueries";
 import {
   TABLES,
   TABLE_RECORDS,
@@ -910,17 +912,17 @@ export function DelivereeWorkspace() {
     }
   }, [highlightFinanceLineIdFromUrl]);
   const [notice, setNotice] = useState("");
-  const [dataSyncIssue, setDataSyncIssue] = useState<"quota" | "unavailable" | null>(null);
+  const [dataSyncIssue, setDataSyncIssue] = useState<"quota" | "unavailable" | "permission" | null>(null);
   const [dataRetryVersion, setDataRetryVersion] = useState(0);
   const reportDataSyncError = useCallback((error: unknown) => {
-    if (isFirestoreQuotaError(error)) {
-      setDataSyncIssue("quota");
-    } else if (
-      error && typeof error === "object" && "code" in error &&
-      ["unavailable", "deadline-exceeded"].includes(String(error.code))
-    ) {
-      setDataSyncIssue((current) => current || "unavailable");
-    }
+    const issue = classifyDataSyncError(error);
+    if (!issue) return;
+    setDataSyncIssue((current) => {
+      if (issue === "quota" || !current) return issue;
+      if (current === "quota") return current;
+      if (issue === "permission") return "permission";
+      return current;
+    });
   }, []);
   const [noticeKind, setNoticeKind] = useState<"success" | "warning" | "error" | "info">(
     "success",
@@ -1210,21 +1212,29 @@ export function DelivereeWorkspace() {
     }
 
     if (listenPacks.tables) {
-      packUnsubscribers.push(
-        makeQueryLocal(
-          TABLES,
-          (items) => {
-            const rows = (items as TableDoc[]).map((row) => ({
-              ...row,
-              id: row.id,
-            }));
-            setWorkspaceTables(rows);
-            tablesStore.replaceAll(rows as any);
-          },
-          false,
-          false,
-        ),
-      );
+      const publishTables = (items: any[]) => {
+        const rows = (items as TableDoc[]).map((row) => ({
+          ...row,
+          id: row.id,
+        }));
+        setWorkspaceTables(rows);
+        tablesStore.replaceAll(rows as any);
+      };
+      if (isProductFlagEnabled("readableTableQueries")) {
+        packUnsubscribers.push(
+          ...mergeQueriesLocal(
+            TABLES,
+            readableTableQueryPlans(workspace.id, user.uid).map((plan) =>
+              plan.map((clause) => where(clause.field, clause.op, clause.value as any)),
+            ),
+            publishTables,
+          ),
+        );
+      } else {
+        packUnsubscribers.push(
+          makeQueryLocal(TABLES, publishTables, false, false),
+        );
+      }
     }
 
     if (listenPacks.review) {
@@ -1315,17 +1325,55 @@ export function DelivereeWorkspace() {
     return subscribe(listenPacks);
   }, [dataAccessKey, dataRetryVersion, listenPacks.key]);
 
+  const readableTableIdKey = workspaceTables
+    .map((table) => String(table.id || ""))
+    .filter(Boolean)
+    .sort()
+    .join("\n");
   useEffect(() => {
     if (!user?.uid || !workspace?.id || !listenPacks.tableRecords) return;
-    return onSnapshot(
-      query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
-            (snapshot) => {
-        if (!hasConfirmedSnapshotData(snapshot)) return;
-        setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
-      },
-      reportDataSyncError,
+    if (!isProductFlagEnabled("readableTableQueries")) {
+      return onSnapshot(
+        query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
+          setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
+        },
+        reportDataSyncError,
+      );
+    }
+    const plans = readableRecordQueryPlans(workspace.id, readableTableIdKey ? readableTableIdKey.split("\n") : []);
+    if (plans.length === 0) {
+      setWorkspaceRecords([]);
+      return;
+    }
+    const merge = createCompleteSnapshotMerge<RecordDoc>(
+      plans.length,
+      setWorkspaceRecords,
+      (item) => item.workspaceId === workspace.id,
     );
-  }, [user?.uid, workspace?.id, listenPacks.tableRecords, dataRetryVersion, reportDataSyncError]);
+    const stops = plans.map((plan, index) =>
+      onSnapshot(
+        query(
+          collection(db, TABLE_RECORDS),
+          ...plan.map((clause) => where(clause.field, clause.op, clause.value as any)),
+        ),
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
+          merge.update(
+            index,
+            snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc),
+          );
+        },
+        (error) => {
+          console.error("Firestore table_records query failed", error);
+          merge.fail(index);
+          reportDataSyncError(error);
+        },
+      ),
+    );
+    return () => stops.forEach((stop) => stop());
+  }, [user?.uid, workspace?.id, listenPacks.tableRecords, readableTableIdKey, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     if (lens.kind !== "requests" || !selectedRequestId) return;
@@ -7999,7 +8047,9 @@ export function DelivereeWorkspace() {
             <span>
               {dataSyncIssue === "quota"
                 ? "Certo Work has reached its data usage limit. This error does not delete records; the last loaded view may be incomplete until Firebase is available again."
-                : "Certo Work cannot refresh data right now. This error does not delete records; the last loaded view may be incomplete."}
+                : dataSyncIssue === "permission"
+                  ? "Some records could not be loaded. Nothing was deleted. Retry, or ask an admin to confirm your workspace membership."
+                  : "Certo Work cannot refresh data right now. This error does not delete records; the last loaded view may be incomplete."}
             </span>
             <button
               onClick={() => {
