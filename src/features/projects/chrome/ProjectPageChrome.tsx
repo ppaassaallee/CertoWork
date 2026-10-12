@@ -1,4 +1,5 @@
 import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { t, type MessageKey } from "../../../lib/i18n";
 import {
   ArrowUpDown,
   Bookmark,
@@ -66,15 +67,33 @@ const OVERVIEW_TAB: { id: ProjectViewId; label: string; Icon: IconType } = {
   Icon: LayoutDashboard,
 };
 
+const VIEW_LABEL_KEYS: Record<string, MessageKey> = {
+  overview: "project.view.overview",
+  list: "project.view.table",
+  kanban: "project.view.board",
+  gantt: "project.view.gantt",
+  calendar: "project.view.calendar",
+  docs: "project.view.docs",
+  tables: "project.view.tables",
+  costs: "project.view.costs",
+};
+
 function viewTabs(includeCosts = false, includeTables = false) {
   let base = isOverviewEnabled() ? [OVERVIEW_TAB, ...BASE_VIEW_TABS] : [...BASE_VIEW_TABS];
   if (!includeTables) {
     base = base.filter((tab) => tab.id !== "tables");
   }
-  if (!includeCosts) return base;
-  const docsIndex = base.findIndex((tab) => tab.id === "docs");
-  if (docsIndex < 0) return [...base, COSTS_TAB];
-  return [...base.slice(0, docsIndex), COSTS_TAB, ...base.slice(docsIndex)];
+  const withCosts = !includeCosts
+    ? base
+    : (() => {
+        const docsIndex = base.findIndex((tab) => tab.id === "docs");
+        if (docsIndex < 0) return [...base, COSTS_TAB];
+        return [...base.slice(0, docsIndex), COSTS_TAB, ...base.slice(docsIndex)];
+      })();
+  return withCosts.map((tab) => ({
+    ...tab,
+    label: t(VIEW_LABEL_KEYS[tab.id] || "project.view.table"),
+  }));
 }
 
 function shortDate(value: unknown) {
@@ -395,6 +414,7 @@ type ProjectViewTabsProps = {
   onToggleSort: () => void;
   onAddTask: () => void;
   showActions?: boolean;
+  showFilterSort?: boolean;
   showCosts?: boolean;
   showTables?: boolean;
 };
@@ -408,6 +428,7 @@ export function ProjectViewTabs({
   onToggleSort,
   onAddTask,
   showActions = true,
+  showFilterSort = true,
   showCosts = false,
   showTables = false,
 }: ProjectViewTabsProps) {
@@ -438,7 +459,9 @@ export function ProjectViewTabs({
       </div>
       {showActions && activeView !== "costs" && activeView !== "tables" ? (
       <div className="do-project-page-tab-actions">
-        <span className="do-project-group-label">Agrupar: Épica</span>
+        <span className="do-project-group-label">{t("project.view.groupEpic")}</span>
+        {showFilterSort ? (
+        <>
         <button
           aria-label="Filter"
           className={`do-project-quiet-btn${filterOpen ? " is-active" : ""}`}
@@ -457,9 +480,11 @@ export function ProjectViewTabs({
         >
           <ArrowUpDown size={15} />
         </button>
+        </>
+        ) : null}
         <button className="do-project-primary-btn" onClick={onAddTask} type="button">
           <Plus size={15} />
-          Nueva
+          {t("project.view.new")}
         </button>
       </div>
       ) : null}

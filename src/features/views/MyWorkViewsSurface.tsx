@@ -3,6 +3,7 @@ import {
   createView,
   getLastUsedViewId,
   listViews,
+  nextPersonalViewName,
   persistDefaultCopy,
   setLastUsedView,
   updateView,
@@ -229,7 +230,11 @@ export function MyWorkViewsSurface({
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
-      const created = await persistDefaultCopy(next, actorId, t("views.myView"));
+      const created = await persistDefaultCopy(
+        next,
+        actorId,
+        nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
+      );
       setRemoteViews((current) => [...current.filter((v) => v.id !== created.id), created]);
       setActiveId(created.id);
       await setLastUsedView(actorId, surface, created.id);
@@ -292,7 +297,7 @@ export function MyWorkViewsSurface({
                 defaultView;
               const created = await createView({
                 ...rest,
-                name: t("views.myView"),
+                name: nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
                 scope: "personal",
                 ownerId: actorId,
               });

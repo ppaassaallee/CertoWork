@@ -276,6 +276,8 @@ type Props = {
   forceMode?: WorkItemsViewMode;
   /** Canonical My Work view; outer Filter/Sort/Group/Customize own these settings. */
   savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks">;
+  /** The saved-views bar already owns filter, sort, and group. */
+  externalFilterBar?: boolean;
   /** Notion-style project surface: dense table + parent owns chrome. */
   notionSurface?: boolean;
   notionMode?: WorkItemsViewMode;
@@ -945,6 +947,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   compact = false,
   forceMode,
   savedView,
+  externalFilterBar = false,
   notionSurface = false,
   notionMode,
   onNotionModeChange: _onNotionModeChange,
@@ -1471,6 +1474,48 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     if (forceMode && localMode !== forceMode) setLocalMode(forceMode);
     else if (!forceMode && !notionSurface && mobileCore && localMode !== "list") setLocalMode("list");
   }, [forceMode, mobileCore, localMode, notionSurface]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== "j" && event.key !== "k" && event.key !== "Enter") return;
+      const rows = [...document.querySelectorAll<HTMLElement>("[data-item-id]")];
+      if (!rows.length) return;
+      const current = rows.findIndex((row) => row.classList.contains("is-kbd-current"));
+      if (event.key === "Enter") {
+        if (current < 0) return;
+        event.preventDefault();
+        rows[current].querySelector<HTMLButtonElement>("[data-testid='item-type-flag']")?.click();
+        return;
+      }
+      event.preventDefault();
+      const next = event.key === "j"
+        ? Math.min(rows.length - 1, current < 0 ? 0 : current + 1)
+        : Math.max(0, current < 0 ? 0 : current - 1);
+      rows.forEach((row) => row.classList.remove("is-kbd-current"));
+      rows[next]?.classList.add("is-kbd-current");
+      rows[next]?.scrollIntoView({ block: "nearest" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!filterOpen && !sortOpen && !notionFilterOpen && !notionSortOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      setFilterOpen(false);
+      setSortOpen(false);
+      onNotionFilterOpenChange?.(false);
+      onNotionSortOpenChange?.(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filterOpen, sortOpen, notionFilterOpen, notionSortOpen, onNotionFilterOpenChange, onNotionSortOpenChange]);
 
   useEffect(() => {
     if (!notionSurface) return undefined;
@@ -2948,6 +2993,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return (
       <article
         className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""} ${edgeClass}`.trim()}
+        data-item-id={item.id}
         data-due-edge={edgeTone || undefined}
         key={item.id}
         onDragLeave={() => setDragOverItemId((current) => current === item.id ? null : current)}
@@ -3157,6 +3203,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return (
       <header
         className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        data-item-id={item.id}
         data-testid="item-section-head"
         onDragOver={(event) => previewItemDrag(item.id, event)}
         onDrop={(event) => void dropDraggedItem(event, item, siblings, section)}
@@ -4492,7 +4539,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         )}
         <div className="do-items-toolbar-actions">
-          {!savedView && <>
+          {!savedView && !externalFilterBar && <>
           <div className="do-popover-anchor">
             <button
               aria-expanded={viewsOpen}
@@ -4704,6 +4751,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
                   </select>
                 )}
+                <button
+                  onClick={() => setFilterOpen(false)}
+                  type="button"
+                >
+                  Close
+                </button>
               </div>
             )}
           </div>
@@ -4886,6 +4939,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
                 </select>
               )}
+              <button
+                onClick={() => {
+                  setFilterOpen(false);
+                  onNotionFilterOpenChange?.(false);
+                }}
+                type="button"
+              >
+                Close
+              </button>
             </div>
           )}
           {sortPanelOpen && (

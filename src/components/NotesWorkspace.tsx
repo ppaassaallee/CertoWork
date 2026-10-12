@@ -20,6 +20,7 @@ import { NoteRichEditor } from "./NoteRichEditor";
 import { EntityPeek } from "./EntityPeek";
 import { isProductFlagEnabled } from "../lib/featureFlags";
 import { getLocale, t } from "../lib/i18n";
+import { noteDraftChanged } from "../lib/noteDraft";
 import { mayAutosaveNote } from "../lib/noteAutosave";
 import { NOTES_AUTOSAVE_DEBOUNCE_MS } from "../lib/firestoreListenDiet";
 import {
@@ -269,11 +270,7 @@ export function NotesWorkspace({
       return;
     }
     const tags = parseTags(editor.tagsText);
-    const unchanged =
-      editor.title === (selectedNote.title || "") &&
-      editor.content === (selectedNote.content || "") &&
-      editor.projectId === (selectedNote.projectId || "") &&
-      tags.join(",") === (selectedNote.tags || []).join(",");
+    const unchanged = !noteDraftChanged(editor, selectedNote);
     if (unchanged) {
       if (pendingSaveRef.current?.noteId === selectedNote.id) pendingSaveRef.current = null;
       return;
@@ -443,6 +440,7 @@ export function NotesWorkspace({
                       : ""}
                 </span>
                 <button
+                  aria-label={t("notes.ask")}
                   className="cw-notes-icon-btn"
                   onClick={() =>
                     onOpenOdysseus
@@ -451,17 +449,15 @@ export function NotesWorkspace({
                           entityId: selectedNote.id,
                           label: editor.title || t("notes.untitled"),
                         })
-                      : onAsk(
-                          locale === "es"
-                            ? `Ayudame con esta nota: ${editor.title}`
-                            : `Help with this note: ${editor.title}`,
-                        )
+                      : onAsk(`${t("notes.ask")}: ${editor.title}`)
                   }
                   type="button"
                 >
                   <Sparkles size={13} />
                 </button>
                 <button
+                  aria-label={t("notes.focus")}
+                  aria-pressed={focusMode}
                   className="cw-notes-icon-btn"
                   onClick={() => {
                     setFocusMode((v) => !v);
@@ -472,7 +468,7 @@ export function NotesWorkspace({
                   <Maximize2 size={13} />
                 </button>
                 <details style={{ position: "relative" }}>
-                  <summary className="cw-notes-icon-btn" style={{ listStyle: "none" }}>
+                  <summary aria-label={t("notes.more")} className="cw-notes-icon-btn" style={{ listStyle: "none" }}>
                     <MoreHorizontal size={13} />
                   </summary>
                   <div className="cw-notes-popover">
@@ -486,11 +482,12 @@ export function NotesWorkspace({
                       style={{ color: "var(--status-danger)" }}
                       type="button"
                     >
-                      <Archive size={12} /> {locale === "es" ? "Archivar" : "Archive"}
+                      <Archive size={12} /> {t("notes.archive")}
                     </button>
                   </div>
                 </details>
                 <button
+                  aria-label={t("notes.sidebar")}
                   className="cw-notes-icon-btn"
                   onClick={() => setSidebarCollapsed((v) => !v)}
                   type="button"
@@ -643,9 +640,9 @@ export function NotesWorkspace({
         ) : (
           <div className="cw-notes-empty cw-notes-empty-editor">
             <BookOpen size={28} aria-hidden="true" />
-            <strong>{locale === "es" ? "Tu espacio para pensar" : "A place for your thinking"}</strong>
-            <p>{locale === "es" ? "Captura una idea, una reunión o una decisión. Empieza con una nota." : "Capture an idea, meeting, or decision. Start with a note."}</p>
-            <button onClick={() => void createTypedNote("note")} type="button">{locale === "es" ? "Crear nota" : "Create note"}</button>
+            <strong>{t("notes.emptyTitle")}</strong>
+            <p>{t("notes.emptyBody")}</p>
+            <button onClick={() => void createTypedNote("note")} type="button">{t("notes.create")}</button>
           </div>
         )}
       </div>

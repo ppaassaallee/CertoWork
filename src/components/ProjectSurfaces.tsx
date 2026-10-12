@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { t } from "../lib/i18n";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
@@ -2029,14 +2030,15 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 : notionMode) as ProjectViewId
           }
           filterOpen={notionFilterOpen}
+          showFilterSort={tab !== "items"}
           onAddTask={() => {
             publishChromeView("list");
             window.setTimeout(() => {
               const input = document.querySelector(
-                ".do-notion-add-row input",
+                ".cw-views-add-form input, .do-notion-add-row input",
               ) as HTMLInputElement | null;
               input?.focus();
-            }, 0);
+            }, 50);
           }}
           onChangeView={(view) => {
             if (view === "costs" && !canViewFinance) return;
@@ -2044,11 +2046,21 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             publishChromeView(view);
           }}
           onToggleFilter={() => {
+            const viewsFilter = document.querySelector("[data-testid='views-filter']") as HTMLButtonElement | null;
+            if (viewsFilter) {
+              viewsFilter.click();
+              return;
+            }
             publishChromeView(notionMode);
             setNotionFilterOpen((open) => !open);
             setNotionSortOpen(false);
           }}
           onToggleSort={() => {
+            const viewsSort = document.querySelector("[data-testid='views-sort']") as HTMLButtonElement | null;
+            if (viewsSort) {
+              viewsSort.click();
+              return;
+            }
             publishChromeView(notionMode);
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
@@ -2070,7 +2082,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           style={{ margin: "8px 24px 0" }}
           type="button"
         >
-          <ArrowLeft size={14} /> Volver a la tabla
+          <ArrowLeft size={14} /> {t("project.backToTable")}
         </button>
       )}
 

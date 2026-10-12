@@ -98,6 +98,27 @@ function inlineHtml(text: string): string {
     .join("");
 }
 
+function isTableSeparator(line: string) {
+  return /^\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|$/.test(line.trim());
+}
+
+function tableCells(line: string) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+}
+
+function markdownTableHtml(block: string) {
+  const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2 || !lines.some(isTableSeparator)) return "";
+  const rows = lines.filter((line) => !isTableSeparator(line)).map(tableCells);
+  if (!rows.length) return "";
+  const [head, ...body] = rows;
+  const header = head.map((cell) => `<th>${inlineHtml(cell)}</th>`).join("");
+  const bodyRows = body
+    .map((row) => `<tr>${row.map((cell) => `<td>${inlineHtml(cell)}</td>`).join("")}</tr>`)
+    .join("");
+  return `<table class="cw-notes-table"><thead><tr>${header}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
 export function markdownToHtml(text: string) {
   const source = String(text || "");
   // Protect semantic fences so they round-trip as block cards.
@@ -117,7 +138,15 @@ export function markdownToHtml(text: string) {
     },
   );
 
-  const lines = withPlaceholders.split(/\n/);
+  const withTables = withPlaceholders.replace(/(?:^|\n)((?:\|.*\|\n?)+)/g, (match, block: string) => {
+    const html = markdownTableHtml(String(block || ""));
+    if (!html) return match;
+    const index = fences.length;
+    fences.push(html);
+    return `\n%%SEM_BLOCK_${index}%%\n`;
+  });
+
+  const lines = withTables.split(/\n/);
   const blocks: string[] = [];
   let list: string[] = [];
 
@@ -148,7 +177,7 @@ export function markdownToHtml(text: string) {
     }
     flushList();
     if (!line.trim()) {
-      blocks.push("<p><br></p>");
+      if (blocks[blocks.length - 1] !== "<p><br></p>") blocks.push("<p><br></p>");
       return;
     }
     blocks.push(`<p>${inlineHtml(line)}</p>`);
@@ -195,6 +224,25 @@ export function htmlToMarkdown(html: string) {
       `\n:::${type}\n${unwrapInlineHtml(bodyHtml).trim()}\n:::\n`,
   );
 
+  value = value.replace(/<table\b[^>]*>[\s\S]*?<\/table>/gi, (table) => {
+    const rows = [...table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)]
+      .map((row) =>
+        [...row[1].matchAll(/<t[hd]\b[^>]*>([\s\S]*?)<\/t[hd]>/gi)].map((cell) =>
+          unwrapInlineHtml(cell[1]).replace(/\n+/g, " ").trim().replace(/\|/g, "\\|"),
+        ),
+      )
+      .filter((cells) => cells.length);
+    if (!rows.length) return "";
+    const width = Math.max(...rows.map((row) => row.length));
+    const pad = (row: string[]) =>
+      `| ${Array.from({ length: width }, (_, index) => row[index] || "").join(" | ")} |`;
+    const lines = [
+      pad(rows[0]),
+      `| ${Array.from({ length: width }, () => "---").join(" | ")} |`,
+      ...rows.slice(1).map(pad),
+    ];
+    return `\n${lines.join("\n")}\n`;
+  });
   value = value.replace(/<h1(?:\s[^>]*)?>([\s\S]*?)<\/h1>/gi, (_, inner) => `\n# ${unwrapInlineHtml(inner).replace(/\n+/g, " ").trim()}\n`);
   value = value.replace(/<h2(?:\s[^>]*)?>([\s\S]*?)<\/h2>/gi, (_, inner) => `\n## ${unwrapInlineHtml(inner).replace(/\n+/g, " ").trim()}\n`);
   value = value.replace(/<h3(?:\s[^>]*)?>([\s\S]*?)<\/h3>/gi, (_, inner) => `\n### ${unwrapInlineHtml(inner).replace(/\n+/g, " ").trim()}\n`);
