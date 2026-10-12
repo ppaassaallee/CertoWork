@@ -43,6 +43,76 @@ export function matchesTag(record: any, tagId: string) {
   return tagId === "all" || tagIds(record).includes(tagId);
 }
 
+const NON_TAG_GROUPS = new Set([
+  "delivery_entity",
+  "client_entity",
+  "bpo",
+  "client",
+  "project_stage",
+  "project_phase",
+  "project_status",
+  "project_health",
+  "gtd_action",
+]);
+
+/** Client Entity and Delivery Entity never count as tags. */
+export function isTagCategory(tag: TagLike) {
+  const group = String(tag.group || "tag").toLowerCase();
+  return !NON_TAG_GROUPS.has(group);
+}
+
+/** Case, accents, and extra spaces collapse to one catalog key. */
+export function normalizeTagKey(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function canonicalTagIds(record: any, catalog: TagLike[] = []) {
+  const tags = catalog.filter(isTagCategory);
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const id of tagIds(record)) {
+    const match = tags.find(
+      (tag) => tag.id === id || normalizeTagKey(tagName(tag)) === normalizeTagKey(id),
+    );
+    const canonical = match?.id || id;
+    const key = normalizeTagKey(match ? tagName(match) : canonical);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    next.push(canonical);
+  }
+  return next;
+}
+
+export type TagCleanupPlan = { id: string; before: string[]; after: string[] };
+
+/**
+ * Dry-run. A second pass on `after` is empty.
+ * Rollback: write each `before` array back to tagIds, tags, and labels.
+ */
+export function planTagCleanup(records: any[], catalog: TagLike[] = []): TagCleanupPlan[] {
+  const plans: TagCleanupPlan[] = [];
+  for (const record of records || []) {
+    const raw = Array.isArray(record?.tagIds)
+      ? record.tagIds
+      : Array.isArray(record?.tags)
+        ? record.tags
+        : Array.isArray(record?.labels)
+          ? record.labels
+          : [];
+    const before = raw.map((value: unknown) => String(value || "").trim()).filter(Boolean);
+    const after = canonicalTagIds(record, catalog);
+    const changed = before.length !== after.length || before.some((id: string, index: number) => id !== after[index]);
+    if (!changed || !record?.id) continue;
+    plans.push({ id: String(record.id), before, after });
+  }
+  return plans;
+}
+
 export function toggleTagId(record: any, tagId: string) {
   const ids = tagIds(record);
   const next = ids.includes(tagId)
@@ -56,7 +126,7 @@ export function dedupeTagsByName(tags: TagLike[]): TagLike[] {
   const seen = new Set<string>();
   const out: TagLike[] = [];
   for (const tag of tags || []) {
-    const key = tagName(tag).toLowerCase();
+    const key = normalizeTagKey(tagName(tag));
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(tag);
@@ -66,9 +136,9 @@ export function dedupeTagsByName(tags: TagLike[]): TagLike[] {
 
 function equivalentTagIds(catalog: TagLike[], tagId: string): Set<string> {
   const match = catalog.find((tag) => tag.id === tagId);
-  const name = (match ? tagName(match) : tagId).toLowerCase();
+  const name = normalizeTagKey(match ? tagName(match) : tagId);
   const ids = catalog
-    .filter((tag) => tag.id === tagId || tagName(tag).toLowerCase() === name)
+    .filter((tag) => tag.id === tagId || normalizeTagKey(tagName(tag)) === name)
     .map((tag) => tag.id)
     .filter(Boolean);
   return new Set(ids.length ? ids : [tagId]);
