@@ -47,7 +47,10 @@ export function priorityRank(value: unknown, isOneThing = false) {
 export function isTodayTask(task: any, today = localDateKey(new Date())) {
   if (isClosed(task?.status)) return false;
   if (task?.isOneThing) return true;
-  if (dateKey(task?.dueDate) === today) return true;
+  // A stored due date decides the day. A leftover Today pin must not pull tomorrow in.
+  // dateKey slices YYYY-MM-DD, so UTC midnight is not read as the previous local day.
+  const due = dateKey(task?.dueDate);
+  if (due) return due === today;
   if (normalizeTimeSector(task?.timeSector) !== "today") return false;
   const pinnedDate = dateKey(task?.timeSectorDate || task?.plannedForDate);
   return Boolean(pinnedDate) && pinnedDate === today;

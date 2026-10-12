@@ -91,6 +91,31 @@ test("if there is no P1, the first two today tasks become must-dos", () => {
   assert.match(snapshot.odysseusLine, /Protect the two must-dos/);
 });
 
+test("a stored due date decides Today, including a UTC-6 reading of the next midnight", () => {
+  assert.equal(
+    isTodayTask(
+      { dueDate: "2026-08-26", timeSector: "today", timeSectorDate: "2026-08-25" },
+      "2026-08-25",
+    ),
+    false,
+  );
+  assert.equal(
+    isTodayTask({ dueDate: "2026-08-25", timeSector: "this_week" }, "2026-08-25"),
+    true,
+  );
+  assert.equal(isTodayTask({ isOneThing: true, dueDate: "2026-08-26" }, "2026-08-25"), true);
+  const utcMidnight = new Date("2026-08-26T00:00:00.000Z");
+  const westOfUtc = new Date(utcMidnight.getTime() - 6 * 60 * 60 * 1000);
+  const shifted = [
+    westOfUtc.getUTCFullYear(),
+    String(westOfUtc.getUTCMonth() + 1).padStart(2, "0"),
+    String(westOfUtc.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+  assert.equal(shifted, "2026-08-25");
+  assert.equal(isTodayTask({ dueDate: "2026-08-26" }, "2026-08-25"), false);
+  assert.equal(isTodayTask({ dueDate: "2026-08-26" }, shifted), false);
+});
+
 test("closed and non-today tasks stay out of the widget", () => {
   assert.equal(isTodayTask({ dueDate: "2026-08-25", status: "done" }, "2026-08-25"), false);
   assert.equal(isTodayTask({ timeSector: "this-week" }, "2026-08-25"), false);

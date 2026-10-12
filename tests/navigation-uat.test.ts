@@ -16,6 +16,8 @@ import {
   projectRouteState,
   searchWithItem,
   searchWithProjectView,
+  shouldCloseItemOnProjectChange,
+  staysOnProjectPath,
   tabForProjectView,
   workItemsModeForProjectView,
 } from "../src/lib/projectViewUrl";
@@ -97,6 +99,17 @@ test("item query helpers read and write without dropping the view", () => {
   const cleared = new URLSearchParams(searchWithItem("?item=abc&view=board", null).slice(1));
   assert.equal(cleared.get("item"), null);
   assert.equal(cleared.get("view"), "board");
+});
+
+test("opening or closing an item stays on the same project path", () => {
+  assert.equal(staysOnProjectPath("/work/projects/abc", "abc"), true);
+  assert.equal(staysOnProjectPath("/work/projects/abc/tasks", "abc"), true);
+  assert.equal(staysOnProjectPath("/work/projects/abc/", "abc"), true);
+  assert.equal(staysOnProjectPath("/projects", "abc"), false);
+  assert.equal(staysOnProjectPath("/work/projects/other", "abc"), false);
+  assert.equal(shouldCloseItemOnProjectChange("", "abc"), false);
+  assert.equal(shouldCloseItemOnProjectChange("abc", "abc"), false);
+  assert.equal(shouldCloseItemOnProjectChange("abc", "def"), true);
 });
 
 test("project route stays quiet until the project list has hydrated", () => {

@@ -215,7 +215,11 @@ test("opening a project record stays on the project URL, not Home", () => {
   );
   assert.ok(openMatch, "openProjectRecord missing");
   assert.ok(selectMatch, "selectProjectContext missing");
-  assert.match(selectMatch[0], /navigate\(`\/work\/projects\/\$\{project\.id\}`\)/);
+  assert.match(selectMatch[0], /staysOnProjectPath\(location\.pathname, project\.id\)/);
+  assert.match(
+    selectMatch[0],
+    /navigate\(`\/work\/projects\/\$\{encodeURIComponent\(project\.id\)\}`\)/,
+  );
   assert.doesNotMatch(selectMatch[0], /setPanel\(null\)/);
   assert.doesNotMatch(openMatch[0], /setPanel\(null\)/);
   assert.doesNotMatch(openMatch[0], /goCenterView\("project"\)/);

@@ -90,3 +90,19 @@ export function projectRouteState(projectCount: number, found: boolean): Project
   if (projectCount === 0) return "loading";
   return "missing";
 }
+
+/** Already viewing this project, including its notes/tasks/strategy tabs. */
+export function staysOnProjectPath(pathname: string, projectId: string) {
+  const id = encodeURIComponent(String(projectId || "").trim());
+  if (!id) return false;
+  const path = (pathname || "/").replace(/\/+$/, "") || "/";
+  const target = `/work/projects/${id}`;
+  return path === target || path.startsWith(`${target}/`);
+}
+
+/** Close the open item only when the user moves from one project to another. */
+export function shouldCloseItemOnProjectChange(previousId: string, nextId: string) {
+  const previous = String(previousId || "");
+  const next = String(nextId || "");
+  return Boolean(previous) && Boolean(next) && previous !== next;
+}

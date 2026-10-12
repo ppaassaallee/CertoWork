@@ -58,6 +58,7 @@ import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, 
 import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
 import { pushUndo } from "../lib/undoToast";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
+import { shouldCloseItemOnProjectChange } from "../lib/projectViewUrl";
 import { controlledOptionNames } from "../lib/controlledLists";
 import {
   NO_PROJECT_SECTION,
@@ -1337,10 +1338,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }
   };
 
+  const openItemProjectId = useRef(String(activeProject?.id || ""));
   useEffect(() => {
-    setNewProjectId(activeProject?.id || "");
-    onSelectItem(null);
-  }, [activeProject?.id]);
+    const next = String(activeProject?.id || "");
+    const previous = openItemProjectId.current;
+    openItemProjectId.current = next;
+    setNewProjectId(next);
+    if (shouldCloseItemOnProjectChange(previous, next)) onSelectItem(null);
+  }, [activeProject?.id, onSelectItem]);
 
   useEffect(() => {
     skipPersist.current = true;

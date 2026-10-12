@@ -10,11 +10,10 @@ test("tables listener is workspace-scoped (not personal userId-only)", () => {
     resolve(root, "src/components/DelivereeWorkspace.tsx"),
     "utf8",
   );
-  // TABLES subscription must use personal=false so docs with createdBy (no userId) appear.
-  assert.match(
-    source,
-    /makeQueryLocal\(\s*TABLES,[\s\S]*?false,\s*false,\s*\)/,
-  );
+  // A workspace-wide tables list is denied when any private table exists.
+  // Creator and shared-visibility queries still return tables the member can read.
+  assert.match(source, /readableTableQueryPlans\(workspace\.id, user\.uid\)/);
+  assert.doesNotMatch(source, /makeQueryLocal\(\s*TABLES/);
 });
 
 test("createTable writes userId alongside createdBy", () => {

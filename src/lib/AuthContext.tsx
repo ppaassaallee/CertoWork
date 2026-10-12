@@ -310,39 +310,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!u.email) return;
         const emailLower = u.email.toLowerCase();
 
-        try {
-          const snapEmailWorkspaces = await withTimeout(
-            getDocs(query(collection(db, 'workspaces'), where('members', 'array-contains', emailLower))),
-            7_000,
-            'Workspace email invite lookup',
-          );
-          lookupSucceeded ||= !snapEmailWorkspaces.metadata.fromCache;
-          await Promise.allSettled(
-            snapEmailWorkspaces.docs.map(async (wsDoc) => {
-              const ws = { id: wsDoc.id, ...wsDoc.data() } as Workspace;
-              wsMap.set(wsDoc.id, ws);
-              const memberId = `${wsDoc.id}_${u.uid}`;
-              await withTimeout(setDoc(doc(db, 'workspace_members', memberId), {
-                id: memberId,
-                workspaceId: wsDoc.id,
-                userId: u.uid,
-                email: u.email || "",
-                emailLower,
-                ...membershipPublicPatch({ displayName: publicAuthName(u.displayName), email: u.email }),
-                role: (ws as any).roles?.[emailLower] || "member",
-                status: "active",
-                portfolioViewer: grantsWorkspacePortfolioAccess((ws as any).roles?.[emailLower] || "member"),
-                acceptedAt: serverTimestamp(),
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-              }, { merge: true }), 5_000, `Accept email invite ${wsDoc.id}`);
-            }),
-          );
-        } catch (eEmailInvite) {
-          lookupFailures.push(eEmailInvite);
-          console.error("Failed to load email-invited workspaces:", eEmailInvite instanceof Error ? eEmailInvite.message : eEmailInvite);
-        }
-
+        // Do not list workspaces by members array-contains email. Rules cannot
+        // prove that query, so it permission-denies. Owned workspaces, membership
+        // docs, and agent invites below are the reads the rules allow.
         try {
           const snapInvited = await withTimeout(
             getDocs(query(collection(db, 'workspace_members'), where('emailLower', '==', emailLower))),
