@@ -110,6 +110,8 @@ import {
   sortProjectsByRecency,
   type WorkLane,
 } from "../lib/projectPortfolio";
+import { projectWorkCounts } from "../lib/projectWorkCounts";
+import { dateRangeError } from "../lib/itemTiming";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
@@ -270,7 +272,7 @@ import {
   uiStore,
   useConversations,
   useMembers,
-  useOpenTaskCountByProject,
+  useTasksGroupedByProject,
   useProject,
   useProjectsWhen,
   useTask,
@@ -397,7 +399,7 @@ import {
   projectResourceSizeLimitMessage,
 } from "../lib/projectResources";
 import { canDeleteProject } from "../lib/projectPermissions";
-import { isModernWorkItemKey, nextWorkItemKey } from "../lib/workItemKey";
+import { isModernWorkItemKey, uniqueWorkItemKey } from "../lib/workItemKey";
 import type { SprintRecord } from "../lib/sprints";
 import { createShareToken, buildProjectStatusReport, sanitizeStatusReportSnapshot } from "../lib/projectStatusReport";
 import {
@@ -602,7 +604,7 @@ export function DelivereeWorkspace() {
     },
     [],
   );
-  const openTaskCounts = useOpenTaskCountByProject();
+  const tasksByProject = useTasksGroupedByProject();
   const [milestones, setMilestones] = useState<any[]>([]);
   const [risks, setRisks] = useState<any[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
@@ -5040,7 +5042,7 @@ export function DelivereeWorkspace() {
     const requestedKey = String(patch.key || "").trim().toUpperCase();
     const key = isModernWorkItemKey(requestedKey)
       ? requestedKey
-      : nextWorkItemKey(tasks.map((item) => item.key || item.workItemKey));
+      : uniqueWorkItemKey(tasks.map((item) => item.key || item.workItemKey));
     const canonicalType = String(
       patch.workItemType || patch.type || patch.itemType || "task",
     ).toLowerCase();
@@ -6028,6 +6030,8 @@ export function DelivereeWorkspace() {
     const description = input.description.trim();
     const startDate = input.startDate.trim();
     const endDate = input.endDate.trim();
+    const rangeError = dateRangeError(startDate, endDate);
+    if (rangeError) throw new Error(rangeError);
     const projectRef = await addDoc(collection(db, "projects"), {
       userId: user.uid,
       workspaceId: workspace.id,
@@ -7195,14 +7199,13 @@ export function DelivereeWorkspace() {
               )}
               {sidebarSections.favorites &&
                 sidebarProjects.favorites.map((project) => {
+                  const projectTasks = tasksByProject.get(String(project.id)) || [];
                   const health = projectHealth(
                     project,
-                    Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
+                    projectTasks,
                     risks.filter((risk) => risk.projectId === project.id),
                   );
-                  const openCount = openTasks.filter(
-                    (task) => task.projectId === project.id,
-                  ).length;
+                  const openCount = projectWorkCounts(projectTasks).openItems;
                   return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${
@@ -7264,14 +7267,13 @@ export function DelivereeWorkspace() {
               )}
               {sidebarSections.recent &&
                 sidebarProjects.recent.map((project) => {
+                  const projectTasks = tasksByProject.get(String(project.id)) || [];
                   const health = projectHealth(
                     project,
-                    Array.from({ length: openTaskCounts.get(String(project.id)) || 0 }),
+                    projectTasks,
                     risks.filter((risk) => risk.projectId === project.id),
                   );
-                  const openCount = openTasks.filter(
-                    (task) => task.projectId === project.id,
-                  ).length;
+                  const openCount = projectWorkCounts(projectTasks).openItems;
                   return (
                 <div
                   className={`do-project-row ${activeProject?.id === project.id ? "is-active" : ""} ${

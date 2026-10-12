@@ -55,6 +55,7 @@ export {
   useConversation,
   useTask,
   useOpenTaskCountByProject,
+  useTasksGroupedByProject,
   getProjectsSnapshot,
   getTasksSnapshot,
 } from "./selectors";

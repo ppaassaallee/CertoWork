@@ -57,7 +57,7 @@ import {
   projectStatusLabel,
   sortProjectsByRecency,
   taskWorkLane,
-  upcomingProjectCheckpoints,
+  upcomingWorkCheckpoints,
   type ProjectHealth,
   type WorkLane,
 } from "../lib/projectPortfolio";
@@ -5776,8 +5776,8 @@ function ProjectCommandCenterInner({
     [openProjects, tasksByProject, risksByProject],
   );
   const upcomingProjects = useMemo(
-    () => upcomingProjectCheckpoints(openProjects, 8),
-    [openProjects],
+    () => upcomingWorkCheckpoints(openProjects, tasks, 8),
+    [openProjects, tasks],
   );
   const taxonomyBreakdown = useMemo(() => {
     return [
@@ -5822,11 +5822,6 @@ function ProjectCommandCenterInner({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [askPanel, templatesOpen]);
 
-  const checkpointLabel = (project: any) =>
-    formatCheckpointLabel(
-      projectDueDate(project) === "No date" ? "" : projectDueDate(project),
-    );
-
   const openListWith = (patch: {
     filter?: string;
     stageFilter?: "all" | DeliveryStage;
@@ -5869,7 +5864,7 @@ function ProjectCommandCenterInner({
       upcomingProjects.length
         ? `Upcoming checkpoints: ${upcomingProjects
             .slice(0, 5)
-            .map((project) => `${projectTitle(project)} (${checkpointLabel(project).text})`)
+            .map((entry) => `${entry.title} (${formatCheckpointLabel(entry.date).text})`)
             .join("; ")}`
         : "No upcoming checkpoints on the calendar.",
       "",
@@ -5880,7 +5875,7 @@ function ProjectCommandCenterInner({
       answer: lines.join("\n"),
       projectIds: [
         ...allAttention.slice(0, 8).map((project) => project.id),
-        ...upcomingProjects.slice(0, 3).map((project) => project.id),
+        ...upcomingProjects.slice(0, 3).map((entry) => entry.projectId || entry.id),
       ].filter((id, index, list) => list.indexOf(id) === index),
     });
     setAskDraft("");
@@ -6257,7 +6252,7 @@ function ProjectCommandCenterInner({
                   <button
                     aria-label="How health is calculated"
                     className="do-icon-tip"
-                    title="Health is calculated from overdue dates, blocked work, open risks, and any explicit override."
+                    title="Health is calculated from overdue items, blocked work, a past delivery date, open risks, and an explicit override."
                     type="button"
                   >
                     <AlertTriangle size={14} />
@@ -6296,17 +6291,19 @@ function ProjectCommandCenterInner({
                   </button>
                 </div>
                 <div className="do-upcoming-list">
-                  {upcomingProjects.map((project) => {
-                    const health = projectHealth(
-                      project,
-                      tasksFor(project.id),
-                      risksFor(project.id),
-                    );
-                    const label = checkpointLabel(project);
+                  {upcomingProjects.map((entry) => {
+                    const project = projects.find((candidate) => candidate.id === entry.projectId);
+                    const health = project
+                      ? projectHealth(project, tasksFor(project.id), risksFor(project.id))
+                      : "on_track";
+                    const label = formatCheckpointLabel(entry.date);
                     return (
                       <button
-                        key={project.id}
-                        onClick={() => onOpenProject(project)}
+                        key={`${entry.kind}-${entry.id}`}
+                        onClick={() => {
+                          if (entry.kind === "item") onOpenWorkItem?.(entry.id);
+                          else if (project) onOpenProject(project);
+                        }}
                         type="button"
                       >
                         <StatusLight
@@ -6315,10 +6312,12 @@ function ProjectCommandCenterInner({
                           size="sm"
                         />
                         <span>
-                          <strong>{projectTitle(project)}</strong>
+                          <strong>{entry.title}</strong>
                           <small>
-                            {project.client || "Internal"} ·{" "}
-                            {deliveryPhaseLabel(project)}
+                            {entry.kind === "item" ? "Item" : project?.client || "Internal"}
+                            {entry.kind === "project" && project
+                              ? ` · ${deliveryPhaseLabel(project)}`
+                              : ""}
                           </small>
                         </span>
                         <time className={label.overdue ? "is-overdue" : ""}>
@@ -6334,7 +6333,7 @@ function ProjectCommandCenterInner({
                     <EmptyState
                       icon={<CalendarDays size={18} />}
                       title="No upcoming checkpoints"
-                      text="Add a future due date from the project console."
+                      text="Add a future due date on a project or an open item."
                     />
                   )}
                 </div>

@@ -17,6 +17,11 @@ function toDate(value: Dateish): Date | null {
     return Number.isNaN(d.getTime()) ? null : d;
   }
   if (typeof value === "string") {
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) {
+      const local = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? null : d;
   }
@@ -40,6 +45,7 @@ function toDate(value: Dateish): Date | null {
 
 /** ISO calendar key `YYYY-MM-DD` (local), or "" when unparseable. */
 export function toDateKey(value: Dateish): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const d = toDate(value);
   if (!d) return "";
   const y = d.getFullYear();

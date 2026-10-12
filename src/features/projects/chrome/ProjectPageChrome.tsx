@@ -29,6 +29,7 @@ import {
   formatCheckpointLabel,
   taskWorkLane,
 } from "../../../lib/projectPortfolio";
+import { projectWorkCounts } from "../../../lib/projectWorkCounts";
 import { hierarchyKind, type HierarchyKind } from "../../../lib/itemHierarchy";
 import { workItemTypeLabel } from "../../../lib/workItemTypeLabels";
 import { checklistItems, checklistProgress } from "../../../lib/kanbanFeatures";
@@ -152,9 +153,11 @@ export function projectDueIso(project: any) {
 
 export function projectSummaryStats(project: any, tasks: any[]) {
   const items = Array.isArray(tasks) ? tasks : [];
-  const blocked = items.filter((task) => taskWorkLane(task) === "blocked").length;
-  const done = items.filter((task) => taskWorkLane(task) === "done").length;
-  let progress = items.length ? Math.round((done / items.length) * 100) : 0;
+  const counts = projectWorkCounts(items);
+  const blocked = counts.blockedItems;
+  const liveCount = counts.items + counts.subtasks;
+  const done = counts.doneItems + counts.doneSubtasks;
+  let progress = liveCount ? Math.round((done / liveCount) * 100) : 0;
   if (items.length) {
     const checklistPercents = items.map(
       (task) => checklistProgress(checklistItems(task)).percent,
@@ -185,7 +188,10 @@ export function projectSummaryStats(project: any, tasks: any[]) {
       planned > 0 || used > 0
         ? `${Math.round(used)} / ${planned > 0 ? Math.round(planned) : "—"} h`
         : "— / —",
-    itemCount: items.length,
+    itemCount: counts.items + counts.subtasks,
+    openItems: counts.openItems,
+    doneItems: counts.doneItems,
+    subtasks: counts.subtasks,
     blockedCount: blocked,
   };
 }
@@ -360,7 +366,14 @@ export function ProjectSummaryStrip({
       <div className="do-project-summary-stat">
         <span>Ítems</span>
         <b>
-          {stats.itemCount}
+          {stats.openItems}
+          <span className="do-project-summary-muted"> open</span>
+          {stats.doneItems > 0 ? (
+            <span className="do-project-summary-muted"> · {stats.doneItems} done</span>
+          ) : null}
+          {stats.subtasks > 0 ? (
+            <span className="do-project-summary-muted"> · {stats.subtasks} subtasks</span>
+          ) : null}
           {stats.blockedCount > 0 ? (
             <span className="do-project-summary-muted">
               {" "}

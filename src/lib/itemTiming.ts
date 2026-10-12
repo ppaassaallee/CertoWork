@@ -119,6 +119,15 @@ export function timingMarksForItem(
   return { today, due, weekEnd, weekEndDate, markedToday, markedWeek, sector };
 }
 
+/** Empty string when the range is valid or incomplete. */
+export function dateRangeError(start: unknown, end: unknown) {
+  const startDay = dateInputValue(start);
+  const endDay = dateInputValue(end);
+  if (!startDay || !endDay) return "";
+  if (endDay < startDay) return "End date must be on or after the start date.";
+  return "";
+}
+
 export function dueDateTimingPatch(dueDate: string | null | undefined, now = new Date()) {
   const raw = typeof dueDate === "string" ? dueDate.trim() : "";
   const due = dateInputValue(raw) || (/^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : "");
