@@ -26,6 +26,29 @@ export function isFirestoreQuotaError(error: unknown) {
     || /quota exceeded|daily quota/.test(errorMessage(error));
 }
 
+export function isFirestorePermissionError(error: unknown) {
+  const code = errorCode(error);
+  return code === "permission-denied" || code.endsWith("/permission-denied")
+    || /missing or insufficient permissions/.test(errorMessage(error));
+}
+
+export type DataSyncIssue = "quota" | "unavailable" | "permission";
+
+/** Maps a listener failure to a banner. Unknown errors stay quiet. */
+export function classifyDataSyncError(error: unknown): DataSyncIssue | null {
+  if (isFirestoreQuotaError(error)) return "quota";
+  if (isFirestorePermissionError(error)) return "permission";
+  const code = errorCode(error);
+  if (
+    code === "unavailable" || code.endsWith("/unavailable")
+    || code === "deadline-exceeded" || code.endsWith("/deadline-exceeded")
+    || code === "failed-precondition" || code.endsWith("/failed-precondition")
+  ) {
+    return "unavailable";
+  }
+  return null;
+}
+
 export function isFirestoreQuotaMessage(message: string) {
   return /data service has reached its usage limit|quota exceeded|daily quota|resource-exhausted/i.test(
     String(message || ""),

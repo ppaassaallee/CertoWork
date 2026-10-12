@@ -1454,7 +1454,8 @@ service cloud.firestore {
         resource == null ||
         resource.data.userId == request.auth.uid ||
         exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)) ||
-        (authEmailLower() != "" && resource.data.emailLower == authEmailLower())
+        (authEmailLower() != "" && resource.data.emailLower == authEmailLower()) ||
+        (resource.data.workspaceId is string && workspaceMembersContainAuthEmail(resource.data.workspaceId))
       );
       allow create: if isSignedIn() && (
         incoming().userId == request.auth.uid && (
@@ -1762,9 +1763,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Email-invited people are listed on the workspace before their member row
+    // uses workspaceId_uid. Reads may use that list. Writes stay member-doc only.
+    function canReadWorkspaceContent(workspaceId) {
+      return workspaceId is string && (
+        isWorkspaceMember(workspaceId) ||
+        workspaceMembersContainAuthEmail(workspaceId)
+      );
+    }
     function canReadTable(data) {
       return data.workspaceId is string
-        && isWorkspaceMember(data.workspaceId)
+        && canReadWorkspaceContent(data.workspaceId)
         && (
           data.createdBy == request.auth.uid
           || !('visibility' in data)
@@ -1798,7 +1807,7 @@ service cloud.firestore {
     function canReadTableChild(data) {
       return data.tableId is string
         && data.workspaceId is string
-        && isWorkspaceMember(data.workspaceId)
+        && canReadWorkspaceContent(data.workspaceId)
         && canReadTable(tableDoc(data.tableId));
     }
     function canWriteTableChild(data) {

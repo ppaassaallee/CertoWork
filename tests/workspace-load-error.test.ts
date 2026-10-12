@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  classifyDataSyncError,
   firestoreUsageConsoleUrl,
   isFirestoreQuotaError,
   isFirestoreQuotaMessage,
@@ -15,6 +16,11 @@ test("quota failures are identified and explained without blaming the user", () 
   assert.match(workspaceLoadErrorMessage(error), /data service has reached its usage limit/);
   assert.match(workspaceLoadErrorMessage(error), /not the problem/);
   assert.equal(isFirestoreQuotaMessage(workspaceLoadErrorMessage(error)), true);
+});
+
+test("listener failures classify quota, permission, and outage separately", () => {
+  assert.equal(classifyDataSyncError({ message: "Missing or insufficient permissions." }), "permission");
+  assert.equal(classifyDataSyncError({ code: "unavailable" }), "unavailable");
 });
 
 test("other workspace failures keep an appropriate recovery message", () => {

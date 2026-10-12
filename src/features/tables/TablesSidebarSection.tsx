@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { hasConfirmedSnapshotData } from "../../lib/firestoreSnapshotSafety";
 import type { TableDoc } from "../../lib/tables";
+import { readableTableQueryPlans } from "../../lib/tables/readableQueries";
 import { useTablesEnabled } from "../flags/featureUserFlags";
 
 /** Desktop Workspace › Tables list (flag-gated). */
 export function TablesSidebarSection(props: {
   workspaceId: string;
+  userId: string;
   onOpenTable(id: string): void;
   onNewTable(): void;
 }) {
@@ -15,26 +17,39 @@ export function TablesSidebarSection(props: {
   const [tables, setTables] = useState<TableDoc[]>([]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !props.userId) return;
     setTables([]);
-    const q = query(
-      collection(db, "tables"),
-      where("workspaceId", "==", props.workspaceId),
-      orderBy("updatedAt", "desc"),
+    const plans = readableTableQueryPlans(props.workspaceId, props.userId);
+    const buckets = new Map<number, TableDoc[]>();
+    const stops = plans.map((plan, index) =>
+      onSnapshot(
+        query(
+          collection(db, "tables"),
+          ...plan.map((clause) => where(clause.field, clause.op, clause.value as never)),
+        ),
+        (snap) => {
+          if (!hasConfirmedSnapshotData(snap)) return;
+          buckets.set(
+            index,
+            snap.docs
+              .map((d) => ({ id: d.id, ...(d.data() as Omit<TableDoc, "id">) }))
+              .filter((t) => t.status !== "deleted"),
+          );
+          const merged = new Map<string, TableDoc>();
+          for (const rows of buckets.values()) {
+            for (const row of rows) merged.set(row.id, row);
+          }
+          setTables(
+            [...merged.values()].sort((left, right) =>
+              String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")),
+            ),
+          );
+        },
+        (error) => console.error(`Workspace ${props.workspaceId} tables could not be refreshed`, error),
+      ),
     );
-    return onSnapshot(
-      q,
-      (snap) => {
-        if (!hasConfirmedSnapshotData(snap)) return;
-        setTables(
-          snap.docs
-            .map((d) => ({ id: d.id, ...(d.data() as Omit<TableDoc, "id">) }))
-            .filter((t) => t.status !== "deleted"),
-        );
-      },
-      (error) => console.error(`Workspace ${props.workspaceId} tables could not be refreshed`, error),
-    );
-  }, [enabled, props.workspaceId]);
+    return () => stops.forEach((stop) => stop());
+  }, [enabled, props.workspaceId, props.userId]);
 
   if (!enabled) return null;
 

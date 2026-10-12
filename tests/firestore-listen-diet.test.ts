@@ -80,7 +80,7 @@ test("write cadences are slower than the previous always-on defaults", () => {
 
 test("route changes do not restart core listeners or read every ticket message", () => {
   const shell = readFileSync(resolve(import.meta.dirname, "../src/components/DelivereeWorkspace.tsx"), "utf8");
-  assert.match(shell, /The core shell stays subscribed across route changes\.[\s\S]*?\[dataAccessKey, dataRetryVersion, reportDataSyncError\]/);
+  assert.match(shell, /The core shell stays subscribed across route changes\.[\s\S]*?\[dataAccessKey, dataRetryVersion, reportDataSyncError, reportTablesSyncError\]/);
   assert.doesNotMatch(shell, /subscribeWorkspaceItemMessages/);
   assert.match(shell, /subscribeItemMessages\(selectedRequestId/);
 });

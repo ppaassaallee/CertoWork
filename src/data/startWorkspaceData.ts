@@ -10,7 +10,12 @@ import {
   createCompleteSnapshotMerge,
   hasConfirmedSnapshotData,
 } from "../lib/firestoreSnapshotSafety";
-import { isFirestorePermissionDenied, isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
+import {
+  isFirestorePermissionDenied,
+  isFirestorePermissionError,
+  isFirestoreQuotaError,
+  logFirestoreListenError,
+} from "../lib/workspaceLoadError";
 import {
   shouldTryWorkspacePortfolioQuery,
   projectAccessEmails,
@@ -241,9 +246,11 @@ export function startWorkspaceData(args: StartArgs): () => void {
             );
           },
           (error) => {
-            if (!isFirestorePermissionDenied(error)) {
+            if (!isFirestorePermissionError(error)) {
               console.error("Workspace projects query failed; falling back to role queries", error);
             }
+            // Invited members often fail this broad query, then the role queries succeed.
+            // report() ignores permission denials, so that recovery does not cover Home.
             report(error);
             if (!isFirestoreQuotaError(error)) startRoleProjectQueries();
           },

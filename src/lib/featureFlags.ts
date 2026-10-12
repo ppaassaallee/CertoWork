@@ -5,7 +5,8 @@ export type FeatureFlagKey =
   | "semanticMemory"
   | "safeActionReview"
   | "offlineCapture"
-  | "noteOpenSaveGuard";
+  | "noteOpenSaveGuard"
+  | "readableTableQueries";
 
 export type FeatureFlagLevel = "environment" | "tenant" | "workspace" | "user";
 
@@ -31,6 +32,7 @@ export const DEFAULT_FEATURE_FLAGS: Record<FeatureFlagKey, boolean> = {
   safeActionReview: true,
   offlineCapture: true,
   noteOpenSaveGuard: true,
+  readableTableQueries: true,
 };
 
 /** Local override: `certo-flag:<key>` = "0" or "1". Defaults stay on so the safety fix ships, and can be turned off without a deploy. */
