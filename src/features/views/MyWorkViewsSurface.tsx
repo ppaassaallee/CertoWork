@@ -19,6 +19,7 @@ import {
 } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
 import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
+import { isRemovedWorkItem } from "../../lib/itemRemoval";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { WorkItemsCenter } from "../../components/WorkItemsCenter";
 import type { WorkLane } from "../../lib/projectPortfolio";
@@ -200,11 +201,16 @@ export function MyWorkViewsSurface({
   const active = previewView?.id === selectedView.id ? previewView : selectedView;
 
   const appliedResult = useMemo(
-    () =>
-      applyView(tasks, adapter, active, {
+    () => {
+      const wantsRemoved = active.filters.some(
+        (rule) => rule.columnId === "status" && (rule.value === "deleted" || rule.value === "archived"),
+      );
+      const source = wantsRemoved ? tasks : tasks.filter((task) => !isRemovedWorkItem(task));
+      return applyView(source, adapter, active, {
         userId: actorId,
         memberIds: meMemberIds,
-      }),
+      });
+    },
     [tasks, adapter, active, actorId, meMemberIds],
   );
   const appliedRows = appliedResult.rows;

@@ -37,6 +37,7 @@ import {
   MoreHorizontal,
   Minimize2,
   Minus,
+  PenLine,
   Plus,
   Search,
   Settings2,
@@ -54,6 +55,8 @@ import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
+import { pushUndo } from "../lib/undoToast";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { controlledOptionNames } from "../lib/controlledLists";
 import {
@@ -655,6 +658,7 @@ function priorityValue(value: any) {
 
 function canonicalStatus(item: any) {
   const status = String(item?.status || "").toLowerCase();
+  if (isRemovedWorkItem(item)) return status || "deleted";
   if (workStatuses.includes(status)) return status;
   return taskWorkLane(item);
 }
@@ -662,6 +666,8 @@ function canonicalStatus(item: any) {
 const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
 
 function matchesStatusFilter(item: any, statusFilter: string) {
+  if (!removedItemMatchesStatus(item, statusFilter)) return false;
+  if (statusFilter === "archived" || statusFilter === "deleted") return true;
   if (statusFilter === "all") return true;
   if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
   return canonicalStatus(item) === statusFilter;
@@ -814,17 +820,24 @@ function InlineText({
   value,
   onCommit,
   onEnter,
+  autoFocus = false,
 }: {
   ariaLabel: string;
   value?: string;
   onCommit: (value: string) => void;
   onEnter?: () => void;
+  autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState(value || "");
   useEffect(() => setDraft(value || ""), [value]);
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
   return (
     <input
       aria-label={ariaLabel}
+      autoFocus={autoFocus}
       onBlur={() => draft.trim() !== String(value || "").trim() && onCommit(draft.trim())}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={(event) => {
@@ -834,8 +847,78 @@ function InlineText({
         if (onEnter) onEnter();
         else event.currentTarget.blur();
       }}
+      ref={inputRef}
       value={draft}
     />
+  );
+}
+
+function ItemTitleField({
+  label,
+  onOpen,
+  onRename,
+  onEnter,
+}: {
+  label: string;
+  onOpen: () => void;
+  onRename: (next: string) => void;
+  onEnter?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+  if (editing) {
+    return (
+      <InlineText
+        ariaLabel={`Title for ${label}`}
+        autoFocus
+        onCommit={(next) => {
+          setEditing(false);
+          if (next && next !== label) onRename(next);
+        }}
+        onEnter={onEnter}
+        value={label}
+      />
+    );
+  }
+  return (
+    <>
+      <button
+        className="do-items-title-open"
+        data-testid="item-title-open"
+        onClick={() => {
+          if (timer.current) window.clearTimeout(timer.current);
+          timer.current = window.setTimeout(() => onOpen(), 220);
+        }}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          if (timer.current) window.clearTimeout(timer.current);
+          setEditing(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "F2") {
+            event.preventDefault();
+            setEditing(true);
+          }
+        }}
+        type="button"
+      >
+        {label}
+      </button>
+      <button
+        aria-label={`Rename ${label}`}
+        className="do-items-title-rename"
+        onClick={(event) => {
+          event.stopPropagation();
+          setEditing(true);
+        }}
+        type="button"
+      >
+        <PenLine size={12} />
+      </button>
+    </>
   );
 }
 
@@ -2105,14 +2188,63 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     });
   };
 
+  const [pendingRemoval, setPendingRemoval] = useState<any | null>(null);
+
+  const childItemsOf = (item: any) => {
+    const id = String(item?.id || "");
+    if (!id) return [];
+    return tasks.filter((candidate) => String(candidate?.parentId || candidate?.featureId || candidate?.epicId || "") === id);
+  };
+
+  const softDeleteItems = (items: any[]) => {
+    const unique = items.filter((item, index, list) => item?.id && list.findIndex((candidate) => candidate.id === item.id) === index);
+    for (const item of unique) {
+      if (selectedItemId === item.id) onSelectItem(null);
+    }
+    setSelectedBulkIds((current) => current.filter((id) => !unique.some((item) => item.id === id)));
+    const snapshots = unique.map((item) => ({
+      id: item.id,
+      previous: item.previousStatus || item.status,
+    }));
+    void Promise.all(unique.map((item) => onUpdateTask(item.id, softDeletePatch(item.status))));
+    pushUndo(
+      unique.length === 1 ? `Deleted ${title(unique[0])}` : `Deleted ${unique.length} items`,
+      () => Promise.all(snapshots.map((row) => onUpdateTask(row.id, restoreItemPatch(row.previous)))).then(() => undefined),
+    );
+  };
+
+  const requestDelete = (item: any) => {
+    if (!consumeDeleteGesture()) return;
+    const children = childItemsOf(item).filter((child) => !isRemovedWorkItem(child));
+    if (children.length) {
+      setPendingRemoval(item);
+      return;
+    }
+    softDeleteItems([item]);
+  };
+
   const archiveItem = (item: any) => {
-    // Product delete archives the record. Do not hard-delete task documents.
-    if (selectedItemId === item.id) onSelectItem(null);
-    setSelectedBulkIds((current) => current.filter((id) => id !== item.id));
-    return onUpdateTask(item.id, {
-      status: "archived",
-      archivedAt: new Date().toISOString(),
+    requestDelete(item);
+  };
+
+  const duplicateItem = async (item: {
+    projectId?: string;
+    itemType?: string;
+    workItemType?: string;
+    description?: string;
+    priority?: string | number | null;
+    parentId?: string | null;
+    title?: string;
+    name?: string;
+  }) => {
+    const createdId = await onAddTask(String(item.projectId || ""), `Copy of ${title(item)}`, "backlog", {
+      workItemType: workItemKind(item),
+      itemType: item.itemType,
+      description: item.description || "",
+      priority: item.priority ?? null,
+      parentId: item.parentId || null,
     });
+    if (createdId) onSelectItem(String(createdId));
   };
 
   const renderDeleteButton = (item: any) => (
@@ -2122,7 +2254,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       data-testid="item-delete"
       onClick={(event) => {
         event.stopPropagation();
-        void archiveItem(item);
+        requestDelete(item);
       }}
       onPointerDown={(event) => event.stopPropagation()}
       title={`Delete ${title(item)}`}
@@ -2207,11 +2339,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             return <TypeIcon aria-hidden="true" size={13} />;
           })()}
         </button>
-        <InlineText
-          ariaLabel={`Title for ${title(item)}`}
-          onCommit={(next) => next && onUpdateTask(item.id, { title: next })}
+        <ItemTitleField
+          label={title(item)}
           onEnter={tree?.onEnterAddChild}
-          value={title(item)}
+          onOpen={() => onSelectItem(item.id)}
+          onRename={(next) => onUpdateTask(item.id, { title: next })}
         />
         {childCount ? <small>{childCount}</small> : null}
       </div>
@@ -4101,6 +4233,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   return (
     <div className={`do-items-center ${isMyWork ? "is-my-work" : ""} ${savedView?.density === "compact" ? "is-view-compact" : ""} ${chromeCollapsed ? "is-focus" : ""} ${compact ? "is-compact" : ""} ${timelineMode ? "is-gantt-mode" : ""} ${ganttFocus ? "is-gantt-focus" : ""} ${notionSurface ? "is-notion-surface" : ""}`} data-testid="work-items-center">
+      {pendingRemoval ? (
+        <div className="cw-remove-dialog" role="dialog" aria-modal="true" aria-labelledby="cw-remove-title">
+          <div>
+            <h2 id="cw-remove-title">Delete {title(pendingRemoval)} and its subtasks?</h2>
+            <p>{childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child)).length} subtasks will be deleted with it. Undo restores all of them.</p>
+            <button type="button" onClick={() => setPendingRemoval(null)}>Cancel</button>
+            <button type="button" onClick={() => {
+              const children = childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child));
+              const target = pendingRemoval;
+              setPendingRemoval(null);
+              softDeleteItems([target, ...children]);
+            }}>Delete with subtasks</button>
+          </div>
+        </div>
+      ) : null}
       {actionMenu && createPortal(
         <div
           className="do-quick-action-menu"
@@ -5545,6 +5692,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             item={selectedItem}
             itemKey={String(selectedItem.projectKey || selectedItem.key || selectedItem.id || "").slice(0, 24)}
             onArchive={() => void archiveItem(selectedItem)}
+            onDuplicate={() => void duplicateItem(selectedItem)}
             onAskOdysseus={() =>
               onAskOdysseus
                 ? onAskOdysseus(selectedItem)

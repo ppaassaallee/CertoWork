@@ -267,8 +267,9 @@ test("kanban board uses compact cards, WIP bounce, rules, and flow", () => {
 test("any item including epics can be deleted with a grey-to-red bin", () => {
   const css = readFileSync(resolve("src/index.css"), "utf8");
   assert.match(workItems, /data-testid="item-delete"/);
-  assert.match(workItems, /status: "archived"/);
-  assert.match(workItems, /archivedAt:/);
+  assert.match(workItems, /softDeletePatch/);
+  assert.match(workItems, /restoreItemPatch/);
+  assert.match(workItems, /Delete with subtasks/);
   assert.match(workItems, /renderDeleteButton\(item\)/);
   assert.match(workItems, /renderDeleteButton\(selectedItem\)/);
   assert.match(workItems, /renderAttributeIcons\(item\)/);

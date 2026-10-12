@@ -1,4 +1,4 @@
-import { dedupeTagsByName, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
+import { dedupeTagsByName, isTagCategory, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 
 export function compactTagSummary(labels: string[]): string {
   if (labels.length === 0) return "No tags";
@@ -21,7 +21,7 @@ export function CompactTagPicker({
 }) {
   const ids = tagIds(record);
   const labels = tagLabels(record, tags);
-  const options = dedupeTagsByName(tags);
+  const options = dedupeTagsByName((tags || []).filter(isTagCategory));
   const summary = compactTagSummary(labels);
 
   return (

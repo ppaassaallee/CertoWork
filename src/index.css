@@ -1263,6 +1263,16 @@ a {
 .do-account-menu button:hover {
   background: var(--surface-1);
 }
+.do-account-menu-label {
+  padding: 6px 8px 2px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.do-account-menu button.is-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
 .do-account-menu-preference {
   display: grid;
   gap: 6px;
@@ -8108,6 +8118,19 @@ a {
 .do-items-delete:focus-visible {
   color: var(--status-danger);
 }
+.do-items-row .do-items-delete,
+.do-kanban-card .do-items-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+.do-items-row:hover .do-items-delete,
+.do-items-row:focus-within .do-items-delete,
+.do-kanban-card:hover .do-items-delete,
+.do-kanban-card:focus-within .do-items-delete,
+.do-items-delete:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 .do-items-row.is-icon-list,
 .do-items-column-head.is-icon-list {
   grid-template-columns: 20px 20px 28px minmax(160px, 1fr) auto auto 28px;
@@ -8955,7 +8978,8 @@ a {
   text-align: left;
   vertical-align: top;
 }
-.do-items-title input {
+.do-items-title input,
+.do-items-title-open {
   width: 100%;
   min-width: 0;
   flex: 1;
@@ -8965,6 +8989,28 @@ a {
   color: var(--text-primary);
   font-size: var(--text-body-sm);
   font-weight: 500;
+}
+.do-items-title-open {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.do-items-title-rename {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+.do-items-title:hover .do-items-title-rename,
+.do-items-title-rename:focus-visible {
+  opacity: 1;
 }
 .do-items-title small {
   overflow: hidden;
@@ -22237,3 +22283,74 @@ a {
     grid-template-columns: 1fr;
   }
 }
+.do-row-menu {
+  position: absolute;
+  z-index: 20;
+  right: 8px;
+  top: 28px;
+  display: grid;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+}
+.do-row-menu button {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+.do-row-menu button:hover { background: var(--surface-2); }
+.do-row-menu button:focus-visible { box-shadow: var(--focus-ring); }
+.cw-undo-toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--text-primary);
+  color: var(--surface-0);
+}
+.cw-undo-toast button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.cw-remove-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  background: rgba(26, 31, 28, 0.4);
+}
+.cw-remove-dialog > div {
+  width: min(420px, calc(100% - 32px));
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+}
+.cw-remove-dialog h2 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
+.cw-remove-dialog p { margin: 0 0 12px; color: var(--text-secondary); }
+.cw-remove-dialog button {
+  margin-right: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.do-project-actions { position: relative; }
