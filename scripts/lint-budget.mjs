@@ -5,8 +5,8 @@
  * Metrics (runbook Paso 0): any · select · gray · localeTernaries · confirm
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { extname, join, resolve } from "node:path";
 
 const ROOT = resolve(process.cwd());
 const BUDGET_PATH = resolve(ROOT, "lint-budget.json");
@@ -17,6 +17,34 @@ const WRITE = process.argv.includes("--write") || process.argv.includes("--init"
  * @param {string[]} globs  e.g. ["*.ts", "*.tsx"]
  * @param {string[]} paths  e.g. ["src"]
  */
+function walkFiles(dir, extensions, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist") continue;
+    const path = join(dir, name);
+    const stat = statSync(path);
+    if (stat.isDirectory()) walkFiles(path, extensions, out);
+    else if (extensions.has(extname(name))) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * Node walk used when rg is missing. A missing counter must not look like zero debt.
+ * Patterns are one alternation, the same way rg ORs `-e` flags, so `any[]`
+ * is one match rather than both `: any` and `any[`.
+ */
+function nodeCount(patterns, extensions) {
+  const combined = new RegExp(patterns.map((pattern) => `(?:${pattern})`).join("|"), "g");
+  let total = 0;
+  for (const file of walkFiles(resolve(ROOT, "src"), extensions)) {
+    const text = readFileSync(file, "utf8");
+    const matches = text.match(combined);
+    if (matches) total += matches.length;
+    combined.lastIndex = 0;
+  }
+  return total;
+}
+
 function rgCount(patterns, globs, paths = ["src"]) {
   const args = ["-n", "--no-heading", "--count-matches"];
   for (const g of globs) args.push("-g", g);
@@ -27,9 +55,17 @@ function rgCount(patterns, globs, paths = ["src"]) {
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
   });
-  if (result.status === 2) {
-    console.error(result.stderr || "rg failed");
-    return 0;
+  const rgOk = !result.error && (result.status === 0 || result.status === 1);
+  if (!rgOk) {
+    const extensions = new Set(
+      globs.map((glob) => glob.replace("*", "")).filter((ext) => ext.startsWith(".")),
+    );
+    if (!extensions.size) {
+      console.error(result.stderr || result.error?.message || "rg failed and no file types were given");
+      process.exit(1);
+    }
+    console.error("rg is not usable; counting with a file walk so a missing tool cannot report zero.");
+    return nodeCount(patterns, extensions);
   }
   let total = 0;
   for (const line of (result.stdout || "").split("\n")) {
