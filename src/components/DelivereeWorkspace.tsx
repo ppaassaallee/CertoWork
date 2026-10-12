@@ -76,7 +76,14 @@ import { app, db, storage } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
 import { isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
 import { buildWorkItemPaletteEntries, readRecentItemIds, rememberRecentItem, type PaletteTaskRow } from "../lib/commandSearch";
-import { itemIdFromSearch, searchWithItem } from "../lib/projectViewUrl";
+import { itemIdFromSearch, searchWithItem, staysOnProjectPath } from "../lib/projectViewUrl";
+import { isJoinedWorkspaceMember } from "../lib/memberListenAccess";
+import {
+  readableEquality,
+  readableInList,
+  readableRecordQueryPlans,
+  readableTableQueryPlans,
+} from "../lib/tables/readableQueries";
 import { AliasProfileEditor } from "./ProjectControls";
 import { CollabArea } from "../features/collab/CollabArea";
 import { CertoMark } from "./CertoMark";
@@ -118,6 +125,7 @@ import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
 import {
+  dateKey,
   entityTitle,
   findMatchingProject,
   inviteMessage,
@@ -634,6 +642,10 @@ export function DelivereeWorkspace() {
   const [invoiceDocuments, setInvoiceDocuments] = useState<InvoiceDocument[]>([]);
   const [invoiceBusyId, setInvoiceBusyId] = useState("");
   const workspaceMembers = useMembers() as WorkspaceMember[];
+  const joinedWorkspace = useMemo(
+    () => isJoinedWorkspaceMember(user?.uid, workspaceMembers),
+    [user?.uid, workspaceMembers],
+  );
   const setWorkspaceMembers = useCallback(
     (update: WorkspaceMember[] | ((prev: WorkspaceMember[]) => WorkspaceMember[])) => {
       applyStoreUpdate(membersStore, update as any);
@@ -1014,6 +1026,7 @@ export function DelivereeWorkspace() {
       workspace.id,
       canSeeWorkspacePortfolio ? "portfolio" : "role",
       canTriageFeedback ? "triage" : "self",
+      isJoinedWorkspaceMember(user.uid, workspaceMembers) ? "joined" : "guest",
     ].join("|");
   }, [user, workspace, workspaceMembers]);
 
@@ -1157,6 +1170,7 @@ export function DelivereeWorkspace() {
       ),
     ];
 
+    const memberCanList = isJoinedWorkspaceMember(user.uid, workspaceMembers);
     deferredSubscribeRef.current = (listenPacks) => {
     const packUnsubscribers: Array<() => void> = [];
 
@@ -1171,21 +1185,33 @@ export function DelivereeWorkspace() {
 
     if (listenPacks.financeOps) {
       packUnsubscribers.push(
-        makeQueryLocal("invoice_documents", (items) => {
-          setInvoiceDocuments(items as InvoiceDocument[]);
-          invoicesStore.replaceAll(items as any);
-        }),
-        makeQueryLocal("support_cases", setSupportCases),
-        makeQueryLocal("sprints", (items) => setSprints(items as SprintRecord[])),
+        makeQueryLocal("support_cases", setSupportCases, false, true),
         makeQueryLocal("boldr_risks", (items) => {
           setRisks(items);
           risksStore.replaceAll(items as any);
         }),
-        makeQueryLocal("cost_templates", (items) => {
-          setCostTemplates(items);
-          costTemplatesStore.replaceAll(items as any);
-        }),
       );
+      if (memberCanList) {
+        packUnsubscribers.push(
+          makeQueryLocal("invoice_documents", (items) => {
+            setInvoiceDocuments(items as InvoiceDocument[]);
+            invoicesStore.replaceAll(items as any);
+          }),
+          makeQueryLocal("sprints", (items) => setSprints(items as SprintRecord[])),
+          makeQueryLocal("cost_templates", (items) => {
+            setCostTemplates(items);
+            costTemplatesStore.replaceAll(items as any);
+          }),
+        );
+      } else {
+        packUnsubscribers.push(
+          makeQueryLocal("sprints", (items) => setSprints(items as SprintRecord[]), false, true),
+          makeQueryLocal("cost_templates", (items) => {
+            setCostTemplates(items);
+            costTemplatesStore.replaceAll(items as any);
+          }, false, true),
+        );
+      }
     }
 
     if (listenPacks.templatesCategories) {
@@ -1207,7 +1233,9 @@ export function DelivereeWorkspace() {
           "knowledge_items",
           [
             [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-            [where("workspaceId", "==", workspace.id), where("projectId", "!=", "")],
+            ...(memberCanList
+              ? [[where("workspaceId", "==", workspace.id), where("projectId", "!=", "")]]
+              : []),
           ],
           setKnowledgeItems,
         ),
@@ -1225,22 +1253,30 @@ export function DelivereeWorkspace() {
       );
     }
 
-    if (listenPacks.tables) {
-      packUnsubscribers.push(
-        makeQueryLocal(
-          TABLES,
-          (items) => {
-            const rows = (items as TableDoc[]).map((row) => ({
-              ...row,
-              id: row.id,
-            }));
-            setWorkspaceTables(rows);
-            tablesStore.replaceAll(rows as any);
-          },
-          false,
-          false,
-        ),
-      );
+    if (listenPacks.tables && memberCanList) {
+      const tablePlans = readableTableQueryPlans(workspace.id, user.uid);
+      if (tablePlans.length > 0) {
+        packUnsubscribers.push(
+          ...mergeQueriesLocal(
+            TABLES,
+            tablePlans.map((plan) =>
+              plan.map((filter) =>
+                filter.op === "in"
+                  ? where(filter.field, "in", readableInList(filter))
+                  : where(filter.field, "==", readableEquality(filter)),
+              ),
+            ),
+            (items) => {
+              const rows = (items as TableDoc[]).map((row) => ({
+                ...row,
+                id: row.id,
+              }));
+              setWorkspaceTables(rows);
+              tablesStore.replaceAll(rows as any);
+            },
+          ),
+        );
+      }
     }
 
     if (listenPacks.review) {
@@ -1330,18 +1366,6 @@ export function DelivereeWorkspace() {
     if (!subscribe) return;
     return subscribe(listenPacks);
   }, [dataAccessKey, dataRetryVersion, listenPacks.key]);
-
-  useEffect(() => {
-    if (!user?.uid || !workspace?.id || !listenPacks.tableRecords) return;
-    return onSnapshot(
-      query(collection(db, TABLE_RECORDS), where("workspaceId", "==", workspace.id)),
-            (snapshot) => {
-        if (!hasConfirmedSnapshotData(snapshot)) return;
-        setWorkspaceRecords(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc));
-      },
-      reportDataSyncError,
-    );
-  }, [user?.uid, workspace?.id, listenPacks.tableRecords, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     if (lens.kind !== "requests" || !selectedRequestId) return;
@@ -1649,10 +1673,13 @@ export function DelivereeWorkspace() {
     () => sidebarProjectGroups(sidebarProjectRows),
     [sidebarProjectRows],
   );
-  const viewerProjectIds = useMemo(
-    () => projects.map((project) => String(project.id)),
-    [projects],
-  );
+  const viewerProjectIds = useMemo(() => {
+    const ids = projects.map((project) => String(project.id)).filter(Boolean);
+    if (ids.length > 0) return ids;
+    // Portfolio and Settings gate the shell project array. Sidebar rows still
+    // know which projects exist, so project-scoped tables stay visible.
+    return sidebarProjectRows.map((row) => String(row.id)).filter(Boolean);
+  }, [projects, sidebarProjectRows]);
   const visibleTables = useMemo(() => {
     if (!user?.uid) return [];
     return workspaceTables
@@ -1663,6 +1690,58 @@ export function DelivereeWorkspace() {
         return String(a.name || "").localeCompare(String(b.name || ""));
       });
   }, [user?.uid, viewerProjectIds, workspaceTables]);
+  useEffect(() => {
+    if (!user?.uid || !workspace?.id || !listenPacks.tableRecords || !joinedWorkspace) {
+      setWorkspaceRecords([]);
+      return;
+    }
+    const plans = readableRecordQueryPlans(
+      workspace.id,
+      visibleTables.map((table) => String(table.id || "")),
+    );
+    if (plans.length === 0) {
+      setWorkspaceRecords([]);
+      return;
+    }
+    const merge = createCompleteSnapshotMerge<RecordDoc>(
+      plans.length,
+      setWorkspaceRecords,
+      (item) => item?.workspaceId === workspace.id,
+    );
+    const stops = plans.map((plan, index) =>
+      onSnapshot(
+        query(
+          collection(db, TABLE_RECORDS),
+          ...plan.map((filter) =>
+            filter.op === "in"
+              ? where(filter.field, "in", readableInList(filter))
+              : where(filter.field, "==", readableEquality(filter)),
+          ),
+        ),
+        (snapshot) => {
+          if (!hasConfirmedSnapshotData(snapshot)) return;
+          merge.update(
+            index,
+            snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as RecordDoc),
+          );
+        },
+        (error) => {
+          logFirestoreListenError(`table_records ${index}`, error);
+          merge.fail(index);
+          reportDataSyncError(error);
+        },
+      ),
+    );
+    return () => stops.forEach((stop) => stop());
+  }, [
+    user?.uid,
+    workspace?.id,
+    listenPacks.tableRecords,
+    dataRetryVersion,
+    reportDataSyncError,
+    joinedWorkspace,
+    visibleTables,
+  ]);
   const archivedTables = useMemo(() => {
     if (!user?.uid) return [];
     return workspaceTables
@@ -1907,13 +1986,9 @@ export function DelivereeWorkspace() {
         if (status === "done" || status === "completed" || status === "closed" || status === "archived") {
           return false;
         }
-        const due = String(task.dueDate || task.targetDate || "").slice(0, 10);
+        const due = dateKey(task.dueDate || task.targetDate);
         const overdue = Boolean(due && due < todayIso);
-        const isToday =
-          due === todayIso ||
-          Boolean(task.isOneThing) ||
-          String(task.timeSector || "").toLowerCase() === "today";
-        return isToday || overdue;
+        return isTodayTask(task, todayIso) || overdue;
       })
       .slice(0, 12)
       .map((task) => {
@@ -2564,10 +2639,13 @@ export function DelivereeWorkspace() {
           ]);
           for (const [name, rows] of requested) aiRows[name] = rows;
           if (needKnowledge) {
+            const projectKnowledge = joinedWorkspace
+              ? getDocsFromServer(query(collection(db, "knowledge_items"), where("workspaceId", "==", workspace.id), where("projectId", "!=", "")))
+                .then((snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+              : Promise.resolve([]);
             const [personal, project] = await Promise.all([
               fetchRows("knowledge_items", true),
-              getDocsFromServer(query(collection(db, "knowledge_items"), where("workspaceId", "==", workspace.id), where("projectId", "!=", "")))
-                .then((snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))),
+              projectKnowledge,
             ]);
             const knowledge = new Map<string, any>();
             for (const item of [...personal, ...project]) knowledge.set(item.id, item);
@@ -3456,7 +3534,8 @@ export function DelivereeWorkspace() {
     setConversationId(projectConversation?.id || null);
     setProjectConsoleId(project.id);
     setSidebarOpen(false);
-    navigate(`/work/projects/${project.id}`);
+    if (staysOnProjectPath(location.pathname, project.id)) return;
+    navigate(`/work/projects/${encodeURIComponent(project.id)}`);
   };
 
   const openProjectRecord = (project: any) => {
@@ -7402,7 +7481,7 @@ export function DelivereeWorkspace() {
                 </div>
                   );
                 })}
-              {activeProjects.length === 0 && (
+              {sidebarProjects.favorites.length === 0 && sidebarProjects.recent.length === 0 && (
                 <button
                   className="do-empty-link"
                   onClick={() => openQuickProject()}
@@ -7887,6 +7966,10 @@ export function DelivereeWorkspace() {
                           ? [{ label: "Waiting" }]
                           : lens.section === "today"
                             ? [{ label: "Today" }]
+                            : lens.section === "this_week"
+                              ? [{ label: "This week" }]
+                              : lens.section === "week"
+                                ? [{ label: "Events" }]
                             : lens.section === "captured"
                               ? [{ label: "Captured" }]
                             : [{ label: "Assigned" }]),
@@ -7969,21 +8052,17 @@ export function DelivereeWorkspace() {
             />
           </div>
           <div className="do-header-center">
-            {centerView !== "portfolio" ? (
-              <button
-                aria-label="Open command palette"
-                className="do-top-search"
-                onClick={() => setCommandPaletteOpen(true)}
-                title="Command palette (⌘K)"
-                type="button"
-              >
-                <Search size={15} />
-                <span>{t("headerSearch")}</span>
-                <kbd>⌘K</kbd>
-              </button>
-            ) : (
-              <div className="do-top-search-spacer" aria-hidden="true" />
-            )}
+            <button
+              aria-label="Open command palette"
+              className="do-top-search"
+              onClick={() => setCommandPaletteOpen(true)}
+              title="Command palette (⌘K)"
+              type="button"
+            >
+              <Search size={15} />
+              <span>{t("headerSearch")}</span>
+              <kbd>⌘K</kbd>
+            </button>
           </div>
           <div className="do-header-actions">
             <AssignmentNotificationsBell
@@ -8034,7 +8113,6 @@ export function DelivereeWorkspace() {
                 </button>
               </>
             )}
-            {centerView !== "portfolio" && (
             <div className="do-create-menu" ref={createMenuRef}>
               <button
                 aria-expanded={createMenuOpen}
@@ -8084,7 +8162,6 @@ export function DelivereeWorkspace() {
                 document.body,
               )}
             </div>
-            )}
           </div>
         </header>
 
@@ -8686,6 +8763,8 @@ export function DelivereeWorkspace() {
                   className={lens.section === "this_week" ? "is-active" : ""}
                   data-testid="my-work-this-week-tab"
                   onClick={() => navigate("/my-work/this-week")}
+                  role="tab"
+                  aria-selected={lens.section === "this_week"}
                   type="button"
                 >
                   {t("myWorkThisWeek")}

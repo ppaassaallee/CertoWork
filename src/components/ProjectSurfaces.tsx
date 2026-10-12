@@ -1483,10 +1483,10 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   useEffect(() => {
     setSelectedWorkItemId(itemIdFromSearch(location.search));
   }, [location.search]);
+  const projectViewToken = chromeViewFromSearch(location.search);
   useEffect(() => {
-    const fromUrl = chromeViewFromSearch(location.search);
-    if (fromUrl && isProjectChromeView(fromUrl)) {
-      applyChromeView(fromUrl as ProjectViewId);
+    if (projectViewToken && isProjectChromeView(projectViewToken)) {
+      applyChromeView(projectViewToken as ProjectViewId);
       return;
     }
     if (!isOverviewEnabled()) return;
@@ -1496,7 +1496,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
       return;
     }
     if (isProjectChromeView(saved)) applyChromeView(saved as ProjectViewId);
-  }, [applyChromeView, location.search, project?.id]);
+  }, [applyChromeView, projectViewToken, project?.id]);
 
   const [notionFilterOpen, setNotionFilterOpen] = useState(false);
   const [notionSortOpen, setNotionSortOpen] = useState(false);
