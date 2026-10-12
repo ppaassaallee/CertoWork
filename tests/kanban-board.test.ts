@@ -7,14 +7,15 @@ import {
   laneForKanbanColumn,
 } from "../src/lib/kanbanBoard";
 
-test("kanban delivery columns use Asana-like names", () => {
+test("kanban board has one column per item status", () => {
   assert.deepEqual(
     KANBAN_COLUMNS.map((column) => column.label),
-    ["Backlog", "In progress", "Blocked", "Completed"],
+    ["Backlog", "Ready", "To do", "Doing", "In review", "Blocked", "Done", "Cancelled"],
   );
 });
 
 test("adding a card to a kanban column maps to the matching work lane", () => {
+  assert.equal(laneForKanbanColumn("in_progress"), "in_progress");
   assert.equal(laneForKanbanColumn("doing"), "in_progress");
   assert.equal(laneForKanbanColumn("done"), "done");
   assert.equal(laneForKanbanColumn("blocked"), "blocked");

@@ -1,4 +1,4 @@
-import { kanbanColumnForStatus, type KanbanColumnKey } from "./kanbanBoard";
+import { cumulativeFlowBucket, kanbanColumnForStatus, normalizeKanbanColumn, type KanbanColumnKey } from "./kanbanBoard";
 import {
   resolveAssigneeNamePatch,
   resolveAssigneeSwimlanePatch,
@@ -256,7 +256,7 @@ export function applyKanbanAutomations(
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const rule of rules) {
-    if (rule.whenColumn !== columnKey) continue;
+    if (normalizeKanbanColumn(rule.whenColumn) !== normalizeKanbanColumn(columnKey)) continue;
     if (rule.setPriority) patch.priority = rule.setPriority === "none" ? null : rule.setPriority;
     if (rule.setAssignee) {
       Object.assign(
@@ -279,6 +279,13 @@ function toDate(value: unknown): Date | null {
     const next = (value as { toDate: () => Date }).toDate();
     return Number.isNaN(next.getTime()) ? null : next;
   }
+  if (typeof value === "string") {
+    const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnly) {
+      const local = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+  }
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -289,7 +296,7 @@ export function cycleTimeMs(item: any) {
   const history = Array.isArray(item?.statusHistory) ? item.statusHistory : [];
   const startedEvent = history.find((entry: KanbanStatusEvent) => {
     const column = entry.column || kanbanColumnForStatus(entry.status);
-    return column === "doing" || entry.status === "in_progress" || entry.status === "in_review";
+    return column === "doing" || column === "in_progress" || column === "in_review" || entry.status === "in_progress" || entry.status === "in_review";
   });
   const started = toDate(startedEvent?.at) || toDate(item?.startDate) || toDate(item?.createdAt);
   if (!started || completed.getTime() < started.getTime()) return null;
@@ -349,15 +356,15 @@ function columnOnDay(item: any, dayEnd: Date): KanbanColumnKey | null {
   const started = toDate(item?.startDate);
   const current = String(item?.status || "").toLowerCase();
   if (current === "done" || current === "cancelled") {
-    if (started && started.getTime() <= dayEnd.getTime()) return "doing";
+    if (started && started.getTime() <= dayEnd.getTime()) return "in_progress";
     return "backlog";
   }
   if (started && started.getTime() <= dayEnd.getTime()) {
     if (current === "blocked") return "blocked";
-    return "doing";
+    return "in_progress";
   }
   if (current === "blocked") return "blocked";
-  if (current === "in_progress" || current === "in_review") return "doing";
+  if (current === "in_progress" || current === "in_review") return "in_progress";
   return kanbanColumnForStatus(current);
 }
 
@@ -385,7 +392,7 @@ export function cumulativeFlowSeries(items: any[], days = 14, now = new Date()):
     for (const item of items) {
       const column = columnOnDay(item, day);
       if (!column) continue;
-      point[column] += 1;
+      point[cumulativeFlowBucket(column)] += 1;
     }
     points.push(point);
   }
@@ -454,6 +461,7 @@ export const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 export function itemDueKey(item: any) {
   const raw = item?.dueDate || item?.targetDate || item?.occurrenceDate;
   if (!raw) return "";
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const parsed = toDate(raw);
   return parsed ? dateKey(parsed) : String(raw).slice(0, 10);
 }

@@ -210,6 +210,36 @@ export function useTask(id: string | null | undefined) {
   );
 }
 
+/** Live tasks per project for sidebar counts and health. Same row objects until the store changes. */
+export function useTasksGroupedByProject() {
+  return useDocSelector(
+    tasksStore,
+    (rows) => {
+      const map = new Map<string, TaskDoc[]>();
+      for (const row of rows) {
+        const pid = String(row.projectId || "");
+        if (!pid) continue;
+        const list = map.get(pid);
+        if (list) list.push(row);
+        else map.set(pid, [row]);
+      }
+      return map;
+    },
+    (left, right) => {
+      if (left === right) return true;
+      if (left.size !== right.size) return false;
+      for (const [key, rows] of left) {
+        const other = right.get(key);
+        if (!other || other.length !== rows.length) return false;
+        for (let index = 0; index < rows.length; index += 1) {
+          if (rows[index] !== other[index]) return false;
+        }
+      }
+      return true;
+    },
+  );
+}
+
 /** Open-task counts per project for sidebar badges — ignores unrelated task field churn when counts stable. */
 export function useOpenTaskCountByProject() {
   return useDocSelector(

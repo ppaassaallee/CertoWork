@@ -52,7 +52,7 @@ import {
   X,
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
-import { taskWorkLane, type WorkLane } from "../lib/projectPortfolio";
+import { type WorkLane } from "../lib/projectPortfolio";
 import { taskDueStatus } from "./ui/StatusLight";
 import { dedupeTagsByName, matchesTag, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
@@ -113,7 +113,9 @@ import {
 import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
-import { KANBAN_COLUMNS, clampKanbanColumnWidth, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn } from "../lib/kanbanBoard";
+import { KANBAN_COLUMNS, clampKanbanColumnWidth, columnOrderAfterDrop, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn, visibleBoardColumns } from "../lib/kanbanBoard";
+import { WORK_STATUS_KEYS, canonicalWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
+import { workItemChipLabel } from "../lib/workItemKey";
 import {
   KANBAN_SWIMLANES,
   activityThread,
@@ -194,6 +196,7 @@ import {
 import {
   dateInputValue,
   dueBucket,
+  dateRangeError,
   dueDateLabel,
   dueDateTimingPatch,
   dueDateTone,
@@ -315,7 +318,6 @@ const pickerWorkTypes = (current?: WorkItemKind | string | null): WorkItemKind[]
   }
   return base;
 };
-const workStatuses = ["backlog", "ready", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"];
 const priorities = ["1", "2", "3", "N/A"];
 const actionBoardBuckets = ["Overdue", "Today", "This week", "Next week", "This month", "Next month", "Later", "Next action", "Waiting", "Someday", "Reference", "No sector"];
 const gtdActionTypes = [
@@ -657,20 +659,14 @@ function priorityValue(value: any) {
 }
 
 function canonicalStatus(item: any) {
-  const status = String(item?.status || "").toLowerCase();
-  if (isRemovedWorkItem(item)) return status || "deleted";
-  if (workStatuses.includes(status)) return status;
-  return taskWorkLane(item);
+  if (isRemovedWorkItem(item)) return String(item?.status || "deleted").toLowerCase() || "deleted";
+  return canonicalWorkStatus(item);
 }
 
-const CLOSED_STATUSES = new Set(["done", "completed", "closed", "cancelled", "archived", "deleted"]);
-
-function matchesStatusFilter(item: any, statusFilter: string) {
+function matchesStatusFilter(item: any, statusFilter: string, showCompleted = false) {
   if (!removedItemMatchesStatus(item, statusFilter)) return false;
   if (statusFilter === "archived" || statusFilter === "deleted") return true;
-  if (statusFilter === "all") return true;
-  if (statusFilter === "open") return !CLOSED_STATUSES.has(String(item?.status || "").toLowerCase());
-  return canonicalStatus(item) === statusFilter;
+  return passesStatusView(item, statusFilter, showCompleted);
 }
 
 function actionBoardBucket(item: any) {
@@ -722,7 +718,7 @@ function groupSortIndex(groupBy: GroupBy, label: string) {
     return index === -1 ? 999 : index;
   }
   if (groupBy === "status") {
-    const index = workStatuses.indexOf(label);
+    const index = WORK_STATUS_KEYS.indexOf(label as (typeof WORK_STATUS_KEYS)[number]);
     return index === -1 ? 999 : index;
   }
   if (groupBy === "due") {
@@ -799,7 +795,7 @@ function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: a
 }
 
 function displayStatus(status: string) {
-  return status === "in_progress" ? "In progress" : status === "in_review" ? "In review" : status.replace(/_/g, " ");
+  return workStatusLabel(status);
 }
 
 function ganttDate(item: any, fallbackDays = 0) {
@@ -995,6 +991,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
   const [statusFilter, setStatusFilter] = useState(savedView ? "all" : "open");
+  const [showCompleted, setShowCompleted] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -1596,7 +1593,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (savedView?.showSubtasks === false && ancestorCandidateIds(item).length > 0) return false;
       const matchesProject = projectFilter === "all" ||
         (projectFilter === "no_project" ? !item.projectId : item.projectId === projectFilter);
-      const matchesStatus = matchesStatusFilter(item, statusFilter);
+      const matchesStatus = matchesStatusFilter(item, statusFilter, showCompleted);
       const matchesPriority = priorityFilter === "all" || priorityValue(effectivePriority(item, pool)) === priorityFilter;
       const itemKind = workItemKind(item);
       const matchesType = typeFilter === "all" || itemKind === typeFilter;
@@ -1612,7 +1609,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     // applyView already sorted the incoming rows. A second project/priority sort
     // previously erased the user's selected view sort before painting the list.
     return savedView?.sort.length ? visible : sortItems(visible, primarySort, secondarySort, projects, pool);
-  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, savedView, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
+  }, [dateFilter, hierarchyTasks, ownerFilter, priorityFilter, productPhaseFilter, projectFilter, projects, query, primarySort, secondarySort, savedView, showCompleted, sprintFilter, statusFilter, tagFilter, tags, tasks, typeFilter, workCategoryFilter]);
 
   const columnCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1990,7 +1987,34 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     writeMyWorkSectionOrder(window.localStorage, sectionOrderScope, ids);
   };
 
+  const commitTaskPatch = (
+    item: { id: string; startDate?: unknown; dueDate?: unknown; targetDate?: unknown },
+    patch: Record<string, unknown>,
+  ) => {
+    const start = "startDate" in patch ? patch.startDate : item?.startDate;
+    const end = "dueDate" in patch ? patch.dueDate : item?.dueDate || item?.targetDate;
+    const error = dateRangeError(start, end);
+    if (error) {
+      setKanbanError(error);
+      return;
+    }
+    setKanbanError("");
+    void onUpdateTask(item.id, patch);
+  };
+
   const updateBulk = async (patch: Record<string, unknown>) => {
+    if ("dueDate" in patch || "startDate" in patch) {
+      const invalid = tasks.some((item) => {
+        if (!selectedBulkIds.includes(item.id)) return false;
+        const start = "startDate" in patch ? patch.startDate : item.startDate;
+        const end = "dueDate" in patch ? patch.dueDate : item.dueDate || item.targetDate;
+        return Boolean(dateRangeError(start, end));
+      });
+      if (invalid) {
+        setKanbanError("End date must be on or after the start date.");
+        return;
+      }
+    }
     try {
       await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
       setSelectedBulkIds([]);
@@ -2048,8 +2072,30 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         swimlaneMovePatch(kanbanSwimlane, parsed.swimlaneKey, projects, workspaceMembers),
       );
     }
+    const destKey = deliveryColumn?.key || "";
+    const orders = destKey
+      ? columnOrderAfterDrop(
+          tasks.filter(
+            (candidate) =>
+              candidate.id !== item.id &&
+              kanbanColumnForStatus(canonicalStatus(candidate)) === destKey,
+          ),
+          item.id,
+          result.destination.index,
+        )
+      : [];
+    const moved = orders.find((row) => row.id === item.id);
+    if (moved) {
+      patch.order = moved.order;
+      patch.rank = moved.rank;
+    }
     try {
       await onUpdateTask(item.id, patch);
+      await Promise.all(
+        orders
+          .filter((row) => row.id !== item.id)
+          .map((row) => onUpdateTask(row.id, { order: row.order, rank: row.rank })),
+      );
       setKanbanError("");
     } catch (reason) {
       await onUpdateTask(item.id, previous);
@@ -2447,7 +2493,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       return (
         <QuickAttrChoices
           onPick={(id) => pick({ status: id })}
-          options={workStatuses.map((status) => ({ id: status, label: displayStatus(status) }))}
+          options={WORK_STATUS_KEYS.map((status) => ({ id: status, label: displayStatus(status) }))}
           value={canonicalStatus(item)}
         />
       );
@@ -3240,7 +3286,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const childPool = parentPool;
     const visibleChildrenOf = (parentIdValue: string) =>
         sortHierarchySiblings(
-        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter)),
+        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter, showCompleted)),
         compare,
       );
     const walk = (item: any, depth: number, ancestors: Set<string>, siblings: any[]) => {
@@ -3363,8 +3409,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         <span className={`do-kanban-priority-stripe is-${priority === "N/A" ? "none" : priority}`} />
         <div className="do-kanban-card-idrow">
           <span className={`do-kanban-type-tile is-${kind}`} aria-hidden="true" />
-          <code className="do-kanban-item-id">
-            {String(item.key || item.projectKey || item.id || "").slice(0, 12) || "ITEM"}
+          <code className="do-kanban-item-id" title={String(item.key || item.id || "")}>
+            {workItemChipLabel(item)}
           </code>
           <span
             className="c-pri"
@@ -3461,7 +3507,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
             <Calendar size={12} aria-hidden="true" />
             <time>{dueText || "Date"}</time>
-            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => onUpdateTask(item.id, dueDateTimingPatch(event.target.value || null))} type="date" />
+            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => commitTaskPatch(item, dueDateTimingPatch(event.target.value || null))} type="date" />
           </label>
         </div>
       </article>
@@ -3571,10 +3617,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       isMyWork ||
       effectiveGroupBy === "hierarchy" ||
       effectiveGroupBy === "status";
+    const deliveryColumns = visibleBoardColumns(showCompleted, statusFilter);
     const columns = useDeliveryBoard && effectiveGroupBy !== "actionBoard"
-      ? KANBAN_COLUMNS.map((column) => ({
+      ? deliveryColumns.map((column) => ({
           key: column.key,
-          title: column.label,
+          title: kanbanColumnLabels[column.key] || column.label,
           items: filtered.filter((item) => kanbanColumnForStatus(canonicalStatus(item)) === column.key),
         }))
       : Object.entries(grouped)
@@ -4426,7 +4473,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   ))}
                   <button
                     data-testid="kanban-add-rule"
-                    onClick={() => setKanbanAutomations((current) => [...current, { id: `rule-${Date.now()}`, whenColumn: "doing" }])}
+                    onClick={() => setKanbanAutomations((current) => [...current, { id: `rule-${Date.now()}`, whenColumn: "in_progress" }])}
                     type="button"
                   >
                     Add rule
@@ -4605,7 +4652,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
                     <option value="open">Open · hide done</option>
                     <option value="all">All statuses</option>
-                    {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                    {WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
                   </select>
                 )}
                 {filterDraft === "priority" && (
@@ -4787,7 +4834,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
                   <option value="open">Open · hide done</option>
                   <option value="all">All statuses</option>
-                  {workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
+                  {WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
                 </select>
               )}
               {filterDraft === "priority" && (
@@ -5305,7 +5352,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
           {renderSelectAll("items-select-all-bulk")}
           <button onClick={() => setSelectedBulkIds([])} type="button">Clear</button>
-          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
+          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
           <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
           <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
           <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
@@ -5449,6 +5496,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             </div>
           )}
           {mode === "list" && !notionSurface && renderColumnHeader()}
+          <button
+            aria-pressed={showCompleted}
+            className={`do-button-secondary${showCompleted ? " is-active" : ""}`}
+            data-testid="show-completed-toggle"
+            onClick={() => setShowCompleted((current) => !current)}
+            type="button"
+          >
+            {showCompleted ? "Hide completed" : "Show completed"}
+          </button>
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
               createDisabled={projectCreateBlocked}
@@ -5813,7 +5869,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   meta: { status: nextStatus },
                 });
               }
-            }} value={canonicalStatus(selectedItem)}>{workStatuses.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
+            }} value={canonicalStatus(selectedItem)}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select></label>
             <label>Priority<select onChange={(event) => onUpdateTask(selectedItem.id, { priority: event.target.value === "N/A" ? null : event.target.value })} value={priorityValue(selectedItem.priority)}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></label>
             <label className="do-mobile-advanced">GTD type<select onChange={(event) => onUpdateTask(selectedItem.id, gtdActionPatch(event.target.value))} value={gtdActionValue(selectedItem)}>{gtdActionTypes.map((type) => <option key={type.value || "none"} value={type.value}>{type.label}</option>)}</select></label>
             <label className="do-mobile-advanced">Action Board bucket<span className="do-item-computed-field">{displayDueBucket(selectedItem)}</span></label>
@@ -5880,8 +5936,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   : []
               }
             />
-            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => onUpdateTask(selectedItem.id, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
-            <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => onUpdateTask(selectedItem.id, { startDate: event.target.value || null })} type="date" /></label>
+            <label>Due date<input defaultValue={dateInputValue(selectedItem.dueDate || selectedItem.targetDate)} onBlur={(event) => commitTaskPatch(selectedItem, dueDateTimingPatch(event.target.value || null))} type="date" /></label>
+            <label className="do-mobile-advanced">Start date<input defaultValue={dateInputValue(selectedItem.startDate)} onBlur={(event) => commitTaskPatch(selectedItem, { startDate: event.target.value || null })} type="date" /></label>
             <label className="do-mobile-advanced">Sprint<select onChange={(event) => onUpdateTask(selectedItem.id, { sprintId: event.target.value || null })} value={selectedItem.sprintId || ""}><option value="">No sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select></label>
             <label>Project<select onChange={(event) => onUpdateTask(selectedItem.id, { projectId: event.target.value || null })} value={selectedItem.projectId || ""}><option value="">No project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select></label>
             <div className="do-item-parent-field">

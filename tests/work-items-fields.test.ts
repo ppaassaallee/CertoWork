@@ -188,7 +188,7 @@ test("hierarchy remembers expanded epics and can expand or collapse a level", ()
 test("expanded parents hide completed children unless status filter includes them", () => {
   assert.match(workItems, /matchesStatusFilter/);
   assert.match(workItems, /visibleChildrenOf/);
-  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter\)\)/);
+  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter, showCompleted\)\)/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {
