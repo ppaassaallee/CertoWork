@@ -112,6 +112,11 @@ import {
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
+import { DestructiveOverflow } from "./DestructiveOverflow";
+import { UndoToast } from "./UndoToast";
+import { isProductFlagEnabled } from "../lib/featureFlags";
+import { restorePatch, softDeletePatch } from "../lib/softDelete";
+import { pushUndo } from "../lib/undoToast";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
 import {
   entityTitle,
@@ -4387,7 +4392,38 @@ export function DelivereeWorkspace() {
       setMessages([]);
       navigate("/");
     }
+    const label = conversation.title || "Conversation";
+    if (isProductFlagEnabled("calmDestructive")) {
+      pushUndo(`Archived ${label}`, () => {
+        void updateDoc(doc(db, "boldi_conversations", conversation.id), {
+          ...restorePatch(String(conversation.status || "active")),
+          updatedAt: serverTimestamp(),
+        });
+      });
+    }
     setNotice("Conversation archived. Its history is preserved.");
+  };
+
+  const softDeleteConversation = async (conversation: Conversation) => {
+    if (!user || !workspace) return;
+    const previous = String(conversation.status || "active");
+    await updateDoc(doc(db, "boldi_conversations", conversation.id), {
+      ...softDeletePatch(previous),
+      updatedAt: serverTimestamp(),
+    });
+    if (conversationId === conversation.id) {
+      setConversationId(null);
+      setMessages([]);
+      navigate("/");
+    }
+    const label = conversation.title || "Conversation";
+    pushUndo(`Moved ${label} to Deleted`, () => {
+      void updateDoc(doc(db, "boldi_conversations", conversation.id), {
+        ...restorePatch(previous),
+        updatedAt: serverTimestamp(),
+      });
+    });
+    setNotice(`${label} moved to Deleted. You can undo for 10 seconds, and restore it for 30 days.`);
   };
 
   const deleteConversation = async (conversation: Conversation) => {
@@ -4430,7 +4466,14 @@ export function DelivereeWorkspace() {
       setPanel(null);
     }
     if (activeProject?.id === project.id) navigate("/");
-    setNotice(`${entityTitle(project)} archived. Its history is preserved.`);
+    const label = entityTitle(project);
+    if (isProductFlagEnabled("calmDestructive")) {
+      const previous = String(project.status || "active");
+      pushUndo(`Archived ${label}`, () => {
+        void updateProject(project.id, restorePatch(previous));
+      });
+    }
+    setNotice(`${label} archived. Its history is preserved.`);
   };
 
   const deleteProject = async (project: any) => {
@@ -4473,8 +4516,15 @@ export function DelivereeWorkspace() {
             goCenterView("portfolio");
           }
           if (activeProject?.id === project.id) navigate("/");
+          const label = entityTitle(project);
+          if (isProductFlagEnabled("calmDestructive")) {
+            const previous = String(project.status || "active");
+            pushUndo(`Moved ${label} to Deleted`, () => {
+              void updateProject(project.id, restorePatch(previous));
+            });
+          }
           setNotice(
-            `${entityTitle(project)} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
+            `${label} moved to Deleted. It can be restored until ${purgeAfter.toLocaleDateString()}.`,
           );
           setDestructiveDialog(null);
         } finally {
@@ -7226,24 +7276,35 @@ export function DelivereeWorkspace() {
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
                   <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
+                    {isProductFlagEnabled("calmDestructive") ? (
+                      <DestructiveOverflow
+                        confirmDelete={false}
+                        name={entityTitle(project)}
+                        onArchive={() => void archiveProject(project)}
+                        onDelete={() => void deleteProject(project)}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          aria-label={`Archive ${entityTitle(project)}`}
+                          className="do-project-icon"
+                          onClick={() => void archiveProject(project)}
+                          title={`Archive ${entityTitle(project)}`}
+                          type="button"
+                        >
+                          <Archive size={11} />
+                        </button>
+                        <button
+                          aria-label={`Delete ${entityTitle(project)}`}
+                          className="do-project-icon is-danger"
+                          onClick={() => void deleteProject(project)}
+                          title={`Delete ${entityTitle(project)}`}
+                          type="button"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </>
+                    )}
                   </span>
                 </div>
                   );
@@ -7295,24 +7356,35 @@ export function DelivereeWorkspace() {
                     {openCount > 0 && <small>{openCount}</small>}
                   </button>
                   <span className="do-project-actions do-mobile-advanced is-quiet">
-                    <button
-                      aria-label={`Archive ${entityTitle(project)}`}
-                      className="do-project-icon"
-                      onClick={() => void archiveProject(project)}
-                      title={`Archive ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Archive size={11} />
-                    </button>
-                    <button
-                      aria-label={`Delete ${entityTitle(project)}`}
-                      className="do-project-icon is-danger"
-                      onClick={() => void deleteProject(project)}
-                      title={`Delete ${entityTitle(project)}`}
-                      type="button"
-                    >
-                      <Trash2 size={11} />
-                    </button>
+                    {isProductFlagEnabled("calmDestructive") ? (
+                      <DestructiveOverflow
+                        confirmDelete={false}
+                        name={entityTitle(project)}
+                        onArchive={() => void archiveProject(project)}
+                        onDelete={() => void deleteProject(project)}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          aria-label={`Archive ${entityTitle(project)}`}
+                          className="do-project-icon"
+                          onClick={() => void archiveProject(project)}
+                          title={`Archive ${entityTitle(project)}`}
+                          type="button"
+                        >
+                          <Archive size={11} />
+                        </button>
+                        <button
+                          aria-label={`Delete ${entityTitle(project)}`}
+                          className="do-project-icon is-danger"
+                          onClick={() => void deleteProject(project)}
+                          title={`Delete ${entityTitle(project)}`}
+                          type="button"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </>
+                    )}
                   </span>
                 </div>
                   );
@@ -7631,23 +7703,37 @@ export function DelivereeWorkspace() {
                       )}
                     </small>
                     <span className="do-conversation-actions">
-                      <button
-                        aria-label={`Archive ${conversation.title || "conversation"}`}
-                        className="do-conversation-action"
-                        onClick={() => void archiveConversation(conversation)}
-                        type="button"
-                      >
-                        <Archive size={11} />
-                      </button>
-                      {!conversation.isChiefOfStaff && (
-                        <button
-                          aria-label={`Delete ${conversation.title || "conversation"}`}
-                          className="do-conversation-action is-danger"
-                          onClick={() => void deleteConversation(conversation)}
-                          type="button"
-                        >
-                          <Trash2 size={11} />
-                        </button>
+                      {isProductFlagEnabled("calmDestructive") ? (
+                        <DestructiveOverflow
+                          name={conversation.title || "conversation"}
+                          onArchive={() => void archiveConversation(conversation)}
+                          onDelete={
+                            conversation.isChiefOfStaff
+                              ? undefined
+                              : () => void softDeleteConversation(conversation)
+                          }
+                        />
+                      ) : (
+                        <>
+                          <button
+                            aria-label={`Archive ${conversation.title || "conversation"}`}
+                            className="do-conversation-action"
+                            onClick={() => void archiveConversation(conversation)}
+                            type="button"
+                          >
+                            <Archive size={11} />
+                          </button>
+                          {!conversation.isChiefOfStaff && (
+                            <button
+                              aria-label={`Delete ${conversation.title || "conversation"}`}
+                              className="do-conversation-action is-danger"
+                              onClick={() => void deleteConversation(conversation)}
+                              type="button"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </span>
                   </div>
@@ -8018,6 +8104,7 @@ export function DelivereeWorkspace() {
             {notice}
           </Toast>
         )}
+        <UndoToast />
 
         {location.pathname.replace(/\/+$/, "") === "/admin/members" ||
         location.pathname.replace(/\/+$/, "") === "/workspace/members" ? (

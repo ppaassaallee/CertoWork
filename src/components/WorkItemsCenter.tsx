@@ -155,6 +155,10 @@ import { getNextOccurrence } from "../lib/recurrence-utils";
 import type { RecurrenceType } from "../types";
 import { itemMatchesSprint, type SprintRecord } from "../lib/sprints";
 import { CompactTagPicker } from "./CompactTagPicker";
+import { DestructiveOverflow } from "./DestructiveOverflow";
+import { isProductFlagEnabled } from "../lib/featureFlags";
+import { archivePatch, restorePatch, softDeletePatch } from "../lib/softDelete";
+import { pushUndo } from "../lib/undoToast";
 import { RoutineLaunchButton } from "./routines/RoutineHost";
 import { emitDomainEvent } from "../lib/routines";
 import { NotionProjectTable } from "./NotionProjectTable";
@@ -2073,22 +2077,54 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     });
   };
 
-  const renderDeleteButton = (item: any) => (
-    <button
-      aria-label={`Delete ${title(item)}`}
-      className="do-items-delete"
-      data-testid="item-delete"
-      onClick={(event) => {
-        event.stopPropagation();
-        void archiveItem(item);
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-      title={`Delete ${title(item)}`}
-      type="button"
-    >
-      <Trash size={14} />
-    </button>
-  );
+  const calmDestructive = isProductFlagEnabled("calmDestructive");
+
+  const hideItem = (item: any) => {
+    if (selectedItemId === item.id) onSelectItem(null);
+    setSelectedBulkIds((current) => current.filter((id) => id !== item.id));
+  };
+
+  const archiveItemSafely = (item: any) => {
+    const previous = String(item.status || "active");
+    hideItem(item);
+    void onUpdateTask(item.id, archivePatch(previous));
+    pushUndo(`Archived ${title(item)}`, () => {
+      void onUpdateTask(item.id, restorePatch(previous));
+    });
+  };
+
+  const deleteItemSafely = (item: any) => {
+    const previous = String(item.status || "active");
+    hideItem(item);
+    void onUpdateTask(item.id, softDeletePatch(previous));
+    pushUndo(`Moved ${title(item)} to Deleted`, () => {
+      void onUpdateTask(item.id, restorePatch(previous));
+    });
+  };
+
+  const renderDeleteButton = (item: any) =>
+    calmDestructive ? (
+      <DestructiveOverflow
+        name={title(item)}
+        onArchive={() => archiveItemSafely(item)}
+        onDelete={() => deleteItemSafely(item)}
+      />
+    ) : (
+      <button
+        aria-label={`Delete ${title(item)}`}
+        className="do-items-delete"
+        data-testid="item-delete"
+        onClick={(event) => {
+          event.stopPropagation();
+          void archiveItem(item);
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        title={`Delete ${title(item)}`}
+        type="button"
+      >
+        <Trash size={14} />
+      </button>
+    );
 
   const renderTimingButtons = (item: any) => {
     if (canonicalStatus(item) === "done") return <span className="do-item-timing-actions is-empty" aria-hidden="true" />;

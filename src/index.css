@@ -22214,3 +22214,70 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.cw-overflow { position: relative; display: inline-flex; }
+.cw-overflow > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.cw-overflow > button:focus-visible { box-shadow: var(--focus-ring); }
+.cw-overflow-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  box-shadow: var(--sh-pop, 0 12px 40px rgba(20, 24, 40, 0.14));
+}
+.cw-overflow-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 7px 8px;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-overflow-menu button:hover,
+.cw-overflow-menu button:focus-visible { background: var(--hover-overlay, rgba(31, 36, 48, 0.06)); }
+.cw-overflow-menu button.is-danger { color: var(--status-danger); }
+.cw-undo-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateX(-50%);
+  border-radius: 12px;
+  background: var(--c-ink, #1f2430);
+  color: #fff;
+  padding: 10px 12px 10px 16px;
+  box-shadow: var(--sh-pop, 0 12px 40px rgba(20, 24, 40, 0.14));
+  font-size: 13px;
+}
+.cw-undo-toast button {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.cw-undo-toast button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
