@@ -18,7 +18,9 @@ import {
 } from "../lib/notebookContext";
 import { NoteRichEditor } from "./NoteRichEditor";
 import { EntityPeek } from "./EntityPeek";
+import { isProductFlagEnabled } from "../lib/featureFlags";
 import { getLocale, t } from "../lib/i18n";
+import { mayAutosaveNote } from "../lib/noteAutosave";
 import { NOTES_AUTOSAVE_DEBOUNCE_MS } from "../lib/firestoreListenDiet";
 import {
   createNote as createNoteDoc,
@@ -105,6 +107,8 @@ export function NotesWorkspace({
   const [editor, setEditor] = useState({ title: "", content: "", tagsText: "", projectId: "" });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const pendingSaveRef = useRef<{ noteId: string; patch: UpdateData<DocumentData>; revision: number } | null>(null);
+  const hydratedNoteIdRef = useRef<string | null>(null);
+  const userEditedRef = useRef(false);
   const saveRevisionRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const activeNoteIdRef = useRef<string | null>(null);
@@ -236,17 +240,34 @@ export function NotesWorkspace({
   }, [notes, selectedNoteId, allNotes]);
 
   useEffect(() => {
+    hydratedNoteIdRef.current = selectedNote?.id || null;
+    userEditedRef.current = false;
     setEditor({
       title: selectedNote?.title || "",
       content: selectedNote?.content || "",
       tagsText: (selectedNote?.tags || []).join(", "),
-      projectId: selectedNote?.projectId || activeProject?.id || "",
+      projectId: selectedNote?.projectId || "",
     });
     setSaveState("idle");
-  }, [activeProject?.id, selectedNote?.id]);
+  }, [selectedNote?.id]);
+
+  const markNoteEdited = () => {
+    userEditedRef.current = true;
+  };
 
   useEffect(() => {
     if (!selectedNote || !user || !workspace) return;
+    if (
+      isProductFlagEnabled("noteOpenSaveGuard") &&
+      !mayAutosaveNote({
+        hydratedNoteId: hydratedNoteIdRef.current,
+        noteId: selectedNote.id,
+        userEdited: userEditedRef.current,
+      })
+    ) {
+      if (pendingSaveRef.current?.noteId === selectedNote.id) pendingSaveRef.current = null;
+      return;
+    }
     const tags = parseTags(editor.tagsText);
     const unchanged =
       editor.title === (selectedNote.title || "") &&
@@ -480,7 +501,10 @@ export function NotesWorkspace({
             </div>
             <input
               className="cw-notes-title"
-              onChange={(e) => setEditor((cur) => ({ ...cur, title: e.target.value }))}
+              onChange={(e) => {
+                markNoteEdited();
+                setEditor((cur) => ({ ...cur, title: e.target.value }));
+              }}
               placeholder={t("notes.untitled")}
               value={editor.title}
             />
@@ -489,7 +513,10 @@ export function NotesWorkspace({
               note={withDefaults(selectedNote)}
               onAiVisible={(value) => void setNoteAiVisible(selectedNote.id, value)}
               onOpenLinks={() => setLinksOpen(true)}
-              onTags={(tags) => setEditor((cur) => ({ ...cur, tagsText: tags.join(", ") }))}
+              onTags={(tags) => {
+                markNoteEdited();
+                setEditor((cur) => ({ ...cur, tagsText: tags.join(", ") }));
+              }}
               onType={(type) => {
                 const empty = !String(selectedNote.content || "").trim();
                 const tpl = noteTemplate(type, {
@@ -553,7 +580,10 @@ export function NotesWorkspace({
                 }))}
                 records={records}
                 noteId={selectedNote.id}
-                onChange={(content) => setEditor((cur) => ({ ...cur, content }))}
+                onChange={(content) => {
+                  markNoteEdited();
+                  setEditor((cur) => ({ ...cur, content }));
+                }}
                 onLinkTask={(taskId) => {
                   if (!user || !workspace) return;
                   void linkNote({
@@ -647,6 +677,7 @@ export function NotesWorkspace({
             }
           }
           const nextContent = upsertProximosPasosBlock(editor.content, chipLines);
+          markNoteEdited();
           setEditor((cur) => ({ ...cur, content: nextContent }));
           await updateDoc(doc(db, "notebook_entries", selectedNote.id), {
             content: nextContent,
