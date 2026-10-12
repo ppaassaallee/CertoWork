@@ -89,6 +89,7 @@ export type ItemModalProps = {
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
   onChangeType: (kind: WorkItemKind) => void;
   onArchive: () => void | Promise<void>;
+  onDuplicate?: () => void | Promise<void>;
   onAskOdysseus?: () => void;
   onOpenCollab?: () => void;
   onOpenProjectConsole?: () => void;
@@ -319,6 +320,7 @@ export function ItemModal({
   onUpdateTask,
   onChangeType,
   onArchive,
+  onDuplicate,
   onAskOdysseus,
   onOpenCollab,
   onCreateControlledOption,
@@ -624,6 +626,17 @@ export function ItemModal({
                   <button onClick={copyLink} type="button">
                     <Copy size={13} /> {copy("copyLink", locale)}
                   </button>
+                  {onDuplicate ? (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void onDuplicate();
+                      }}
+                      type="button"
+                    >
+                      <Copy size={13} /> Duplicate
+                    </button>
+                  ) : null}
                   <button
                     className="is-danger"
                     onClick={() => {

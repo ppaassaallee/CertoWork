@@ -35,6 +35,7 @@ import {
 } from './pureAiPortfolioFollowers';
 import { remapWorkspaceAccessAfterInviteAccept } from './inviteAcceptRemap';
 import { isFirestoreQuotaError, workspaceLoadErrorMessage } from './workspaceLoadError';
+import { shouldReloadWorkspace } from './workspaceSwitch';
 
 function publicAuthName(displayName?: string | null) {
   const name = String(displayName || "").trim();
@@ -621,9 +622,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('activeWorkspaceName');
     }
     setWorkspaceState(ws);
-    // Full reload only when the caller asks for it (workspace switcher).
-    // Soft switches (follower redirect) remount data effects via workspace.id.
-    if (options?.reload !== false && ws) {
+    // Full reload is opt-in. Switches remount data effects via workspace.id.
+    if (shouldReloadWorkspace(options) && ws) {
       window.location.reload();
     }
   };

@@ -8,6 +8,18 @@ function errorMessage(error: unknown) {
   return String(error.message || "").toLowerCase();
 }
 
+export function isFirestorePermissionDenied(error: unknown) {
+  const code = errorCode(error);
+  return code === "permission-denied" || code === "firestore/permission-denied"
+    || /missing or insufficient permissions/.test(errorMessage(error));
+}
+
+/** Permission denials are expected for collections the member cannot read. Keep them out of the console. */
+export function logFirestoreListenError(name: string, error: unknown) {
+  if (isFirestorePermissionDenied(error)) return;
+  console.error(`Firestore ${name} query failed`, error);
+}
+
 export function isFirestoreQuotaError(error: unknown) {
   const code = errorCode(error);
   return code === "resource-exhausted" || code === "firestore/resource-exhausted"
