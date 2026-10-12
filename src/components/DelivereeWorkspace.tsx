@@ -341,7 +341,14 @@ import {
 } from "../lib/notes";
 import { StrategyCenter } from "./StrategyCenter";
 import { ControlledListsSettings } from "./ControlledListsSettings";
-import { categoriesVisibleInWorkspace } from "../lib/controlledLists";
+import { categoriesVisibleInWorkspace, categoryGroup } from "../lib/controlledLists";
+import { isProductFlagEnabled } from "../lib/featureFlags";
+import {
+  readRecentItemIds,
+  rememberRecentItem,
+  workItemKeywords,
+} from "../lib/commandSearch";
+import { tagLabels } from "../lib/tagging";
 import { isAssistantAccessUiEnabled } from "../lib/assistantAccessFlag";
 import { AssistantAccessPanel } from "./AssistantAccessPanel";
 import { useControlledListsActions } from "../hooks/useControlledListsActions";
@@ -6767,6 +6774,98 @@ export function DelivereeWorkspace() {
         });
       }
     }
+    if (isProductFlagEnabled("paletteItemActions")) {
+      const tagCatalog = categories.filter((category) => categoryGroup(category) === "tag");
+      const searchable = tasks
+        .filter((task) => !["deleted"].includes(String(task.status || "").toLowerCase()))
+        .slice()
+        .sort((left, right) => timestamp(right.updatedAt || right.createdAt) - timestamp(left.updatedAt || left.createdAt))
+        .slice(0, 300);
+      const byId = new Map(searchable.map((task) => [String(task.id), task]));
+      const openItem = (task: any) => {
+        rememberRecentItem(String(task.id));
+        setSelectedWorkItemId(String(task.id));
+        navigate("/my-work");
+      };
+      const dayOffset = (days: number) => {
+        const date = new Date();
+        date.setDate(date.getDate() + days);
+        return date.toISOString().slice(0, 10);
+      };
+      const me = workspaceMembers.find((member) => member.userId === user?.uid);
+      const meName = me?.alias || me?.displayName || me?.email || "Me";
+      const describe = (task: any) => {
+        const project = projects.find((row) => row.id === task.projectId);
+        return {
+          id: String(task.id),
+          title: entityTitle(task),
+          key: String(task.key || task.projectKey || ""),
+          description: String(task.description || task.notes || ""),
+          client: String(task.clientEntity || task.client || project?.clientEntity || project?.client || ""),
+          tags: tagLabels(task, tagCatalog),
+        };
+      };
+      const actionsFor = (task: any) => {
+        const missingTags = tagCatalog.filter((tag) => !tagLabels(task, tagCatalog).includes(String(tag.name || ""))).slice(0, 4);
+        return [
+          { id: `${task.id}-todo`, label: "Set status · To do", run: () => void updateProjectTask(task.id, { status: "todo" }) },
+          { id: `${task.id}-doing`, label: "Set status · In progress", run: () => void updateProjectTask(task.id, { status: "in_progress" }) },
+          { id: `${task.id}-done`, label: "Set status · Done", run: () => void updateProjectTask(task.id, { status: "done" }) },
+          { id: `${task.id}-today`, label: "Set date · Today", run: () => void updateProjectTask(task.id, { dueDate: dayOffset(0) }) },
+          { id: `${task.id}-tomorrow`, label: "Set date · Tomorrow", run: () => void updateProjectTask(task.id, { dueDate: dayOffset(1) }) },
+          ...(me
+            ? [{
+                id: `${task.id}-me`,
+                label: `Assign · ${meName}`,
+                run: () => void updateProjectTask(task.id, {
+                  assigneeIds: [me.id],
+                  assignees: [meName],
+                  owner: meName,
+                  assignee: meName,
+                }),
+              }]
+            : []),
+          ...missingTags.map((tag) => ({
+            id: `${task.id}-tag-${tag.id}`,
+            label: `Add tag · ${tag.name || tag.id}`,
+            run: () => void updateProjectTask(task.id, {
+              tagIds: [...new Set([...(Array.isArray(task.tagIds) ? task.tagIds : []), tag.id])],
+              tags: [...new Set([...(Array.isArray(task.tags) ? task.tags : []), tag.id])],
+              labels: [...new Set([...(Array.isArray(task.labels) ? task.labels : []), tag.id])],
+            }),
+          })),
+        ];
+      };
+      for (const id of readRecentItemIds()) {
+        const task = byId.get(id);
+        if (!task) continue;
+        const described = describe(task);
+        items.push({
+          id: `recent-item-${task.id}`,
+          label: described.title,
+          group: "Recent",
+          recentOnly: true,
+          mode: "items",
+          hint: described.client || described.key || undefined,
+          keywords: workItemKeywords(described),
+          quickActions: actionsFor(task),
+          onSelect: () => openItem(task),
+        });
+      }
+      for (const task of searchable) {
+        const described = describe(task);
+        items.push({
+          id: `item-${task.id}`,
+          label: described.title,
+          group: "Items",
+          mode: "items",
+          hint: described.client || described.key || undefined,
+          keywords: workItemKeywords(described),
+          quickActions: actionsFor(task),
+          onSelect: () => openItem(task),
+        });
+      }
+    }
     if (!mobileCore) return items;
     const mobileIds = new Set([
       "nav-home",
@@ -6783,6 +6882,8 @@ export function DelivereeWorkspace() {
       (item) =>
         mobileIds.has(item.id) ||
         item.id.startsWith("project-") ||
+        item.id.startsWith("item-") ||
+        item.id.startsWith("recent-item-") ||
         item.id.startsWith("nav-collab-room-"),
     );
   }, [
@@ -6796,7 +6897,14 @@ export function DelivereeWorkspace() {
     openChiefOfStaff,
     openProjectRecord,
     startVoiceCall,
+    categories,
+    projects,
+    setSelectedWorkItemId,
+    tasks,
+    updateProjectTask,
+    user?.uid,
     visibleTables,
+    workspaceMembers,
     workspaceRecords,
   ]);
 

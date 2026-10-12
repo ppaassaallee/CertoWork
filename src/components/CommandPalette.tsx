@@ -11,6 +11,7 @@ import {
 } from "./ui/Icon";
 import { Kbd } from "./ui/Kbd";
 import { EmptyState } from "./ui/EmptyState";
+import { orderPaletteItems } from "../lib/commandSearch";
 
 export type CommandPaletteMode = "all" | "actions" | "items" | "people" | "docs";
 
@@ -23,6 +24,8 @@ export type CommandPaletteItem = {
   hint?: string;
   icon?: ReactNode;
   mode?: CommandPaletteMode;
+  recentOnly?: boolean;
+  quickActions?: Array<{ id: string; label: string; run: () => void }>;
   onSelect: () => void;
 };
 
@@ -111,9 +114,10 @@ export function CommandPalette({
       mode === "all"
         ? items
         : items.filter((item) => !item.mode || item.mode === mode || item.mode === "all");
-    if (!needle) return pool.slice(0, 40);
+    const ordered = orderPaletteItems(pool, needle);
+    if (!needle) return ordered.slice(0, 40);
     const n = normalize(needle);
-    return pool
+    return ordered
       .filter((item) =>
         normalize(`${item.label} ${item.group} ${item.keywords || ""} ${item.hint || ""}`).includes(
           n,
@@ -236,6 +240,22 @@ export function CommandPalette({
             </li>
           )}
         </ul>
+        {rows[active]?.quickActions?.length ? (
+          <div className="do-cmdk-actions" aria-label={`Actions for ${rows[active].label}`}>
+            {rows[active].quickActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => {
+                  action.run();
+                  onClose();
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <footer className="do-cmdk-footer">
           <span>
             <Kbd>↑</Kbd>

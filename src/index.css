@@ -5141,6 +5141,30 @@ a {
 .do-cmdk-empty .cw-empty {
   padding: var(--space-5) var(--space-3);
 }
+.do-cmdk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+}
+.do-cmdk-actions button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.do-cmdk-actions button:hover,
+.do-cmdk-actions button:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 .do-cmdk-footer {
   display: flex;
   flex-wrap: wrap;
