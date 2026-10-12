@@ -1986,10 +1986,10 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             writeProjectSurfaceView(String(project.id), "list");
             window.setTimeout(() => {
               const input = document.querySelector(
-                ".do-notion-add-row input",
+                ".cw-views-add-form input, .do-notion-add-row input",
               ) as HTMLInputElement | null;
               input?.focus();
-            }, 0);
+            }, 50);
           }}
           onChangeView={(view) => {
             if (view === "costs") {
@@ -2016,6 +2016,11 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             }
           }}
           onToggleFilter={() => {
+            const viewsFilter = document.querySelector("[data-testid='views-filter']") as HTMLButtonElement | null;
+            if (viewsFilter) {
+              viewsFilter.click();
+              return;
+            }
             setTab("items");
             setChromeView(notionMode);
             writeProjectSurfaceView(String(project.id), notionMode);
@@ -2023,6 +2028,11 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             setNotionSortOpen(false);
           }}
           onToggleSort={() => {
+            const viewsSort = document.querySelector("[data-testid='views-sort']") as HTMLButtonElement | null;
+            if (viewsSort) {
+              viewsSort.click();
+              return;
+            }
             setTab("items");
             setChromeView(notionMode);
             writeProjectSurfaceView(String(project.id), notionMode);

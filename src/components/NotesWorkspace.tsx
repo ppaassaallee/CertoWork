@@ -19,6 +19,7 @@ import {
 import { NoteRichEditor } from "./NoteRichEditor";
 import { EntityPeek } from "./EntityPeek";
 import { getLocale, t } from "../lib/i18n";
+import { noteDraftChanged } from "../lib/noteDraft";
 import { NOTES_AUTOSAVE_DEBOUNCE_MS } from "../lib/firestoreListenDiet";
 import {
   createNote as createNoteDoc,
@@ -240,19 +241,15 @@ export function NotesWorkspace({
       title: selectedNote?.title || "",
       content: selectedNote?.content || "",
       tagsText: (selectedNote?.tags || []).join(", "),
-      projectId: selectedNote?.projectId || activeProject?.id || "",
+      projectId: selectedNote?.projectId || "",
     });
     setSaveState("idle");
-  }, [activeProject?.id, selectedNote?.id]);
+  }, [selectedNote?.id]);
 
   useEffect(() => {
     if (!selectedNote || !user || !workspace) return;
     const tags = parseTags(editor.tagsText);
-    const unchanged =
-      editor.title === (selectedNote.title || "") &&
-      editor.content === (selectedNote.content || "") &&
-      editor.projectId === (selectedNote.projectId || "") &&
-      tags.join(",") === (selectedNote.tags || []).join(",");
+    const unchanged = !noteDraftChanged(editor, selectedNote);
     if (unchanged) {
       if (pendingSaveRef.current?.noteId === selectedNote.id) pendingSaveRef.current = null;
       return;

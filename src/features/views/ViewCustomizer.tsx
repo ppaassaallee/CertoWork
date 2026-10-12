@@ -55,6 +55,17 @@ export function ViewCustomizer<Row>({
     if (open) setDraft(view);
   }, [open, view.id]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   const visibleIds = useMemo(
     () => new Set(draft.columns.map((col) => col.id)),
     [draft.columns],

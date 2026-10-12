@@ -3,6 +3,7 @@ import {
   createView,
   getLastUsedViewId,
   listViews,
+  nextPersonalViewName,
   persistDefaultCopy,
   setLastUsedView,
   updateView,
@@ -193,7 +194,11 @@ export function ProjectsViewsSurface({
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     const withList = { ...next, layout: "list" as const };
     if (withList.isDefault || withList.id.startsWith("default:") || withList.id.startsWith("system:")) {
-      const created = await persistDefaultCopy(withList, actorId, t("views.myView"));
+      const created = await persistDefaultCopy(
+        withList,
+        actorId,
+        nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
+      );
       setViews((current) => [
         ...current.filter((view) => view.id !== defaultView.id && view.id !== created.id),
         defaultView,
@@ -233,7 +238,7 @@ export function ProjectsViewsSurface({
               defaultView;
             const created = await createView({
               ...rest,
-              name: t("views.myView"),
+              name: nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
               scope: "personal",
               ownerId: actorId,
               layout: "list",

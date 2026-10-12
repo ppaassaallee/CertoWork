@@ -755,6 +755,7 @@ export function DelivereeWorkspace() {
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [odysseusPanelOpen, setOdysseusPanelOpen] = useState(false);
   const [odysseusPanelToken, setOdysseusPanelToken] = useState<string | null>(null);
   const [odysseusPanelScope, setOdysseusPanelScope] = useState<OdysseusPanelScope>({
@@ -2231,6 +2232,10 @@ export function DelivereeWorkspace() {
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
+      if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && event.key === "?") {
+        event.preventDefault();
+        setShortcutHelpOpen(true);
+      }
       if (
         !typing &&
         !event.metaKey &&
@@ -2243,6 +2248,11 @@ export function DelivereeWorkspace() {
         setQuickCaptureOpen(true);
       }
       if (event.key === "Escape") {
+        if (shortcutHelpOpen) {
+          event.preventDefault();
+          setShortcutHelpOpen(false);
+          return;
+        }
         if (quickCaptureOpen) {
           event.preventDefault();
           setQuickCaptureOpen(false);
@@ -2289,6 +2299,7 @@ export function DelivereeWorkspace() {
     panel,
     quickCaptureOpen,
     noteQuickCaptureOpen,
+    shortcutHelpOpen,
     sidebarOpen,
     toggleOdysseusPanel,
   ]);
@@ -6802,6 +6813,29 @@ export function DelivereeWorkspace() {
 
   const workPane = (
     <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+      {shortcutHelpOpen ? (
+        <div aria-label={t("shortcuts.title")} aria-modal="true" className="do-skill-layer" role="dialog">
+          <section className="do-skill-modal do-quick-project-modal">
+            <header className="do-skill-head">
+              <h2>{t("shortcuts.title")}</h2>
+              <button aria-label={t("shortcuts.close")} onClick={() => setShortcutHelpOpen(false)} type="button">
+                <X size={16} />
+              </button>
+            </header>
+            <div className="do-skill-body">
+              <ul>
+                <li>Ctrl or Cmd K — command palette</li>
+                <li>Ctrl or Cmd J — Odysseus</li>
+                <li>N — quick capture</li>
+                <li>J / K — move through a list</li>
+                <li>Enter — open the highlighted item</li>
+                <li>? — this list</li>
+                <li>Escape — close</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <CommandPalette
         items={commandPaletteItems}
         onClose={() => setCommandPaletteOpen(false)}

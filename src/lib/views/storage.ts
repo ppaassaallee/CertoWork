@@ -112,6 +112,16 @@ export async function deleteView(viewId: string): Promise<void> {
  * Copy-on-write: persist a default (virtual) view as a personal "Mi vista"
  * the first time the user customizes it.
  */
+/** "My view", then "My view 2", so saved tabs stay distinguishable. */
+export function nextPersonalViewName(existingNames: string[], base = "My view") {
+  const used = new Set(existingNames.map((name) => name.trim().toLowerCase()).filter(Boolean));
+  const root = base.trim() || "My view";
+  if (!used.has(root.toLowerCase())) return root;
+  let index = 2;
+  while (used.has(`${root} ${index}`.toLowerCase())) index += 1;
+  return `${root} ${index}`;
+}
+
 export async function persistDefaultCopy(
   defaultView: SavedView,
   userId: string,

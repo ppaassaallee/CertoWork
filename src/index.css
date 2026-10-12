@@ -3671,7 +3671,7 @@ a {
   border-bottom: 0;
   overflow: visible;
   position: relative;
-  z-index: 5;
+  z-index: 40;
   background: var(--c-panel);
 }
 .do-project-page-header-main {
@@ -8939,6 +8939,22 @@ a {
   background: var(--status-success-soft);
   color: var(--status-success);
 }
+.do-items-row.is-kbd-current {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.cw-notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.cw-notes-table th,
+.cw-notes-table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
 .do-items-title input {
   width: 100%;
   min-width: 0;
@@ -11712,6 +11728,13 @@ a {
   width: min(520px, calc(100vw - 44px));
   height: auto;
   max-height: calc(100dvh - 44px);
+}
+.do-skill-modal.do-magic-modal,
+.do-skill-modal.do-paste-modal {
+  width: min(640px, calc(100vw - 44px));
+  height: auto;
+  max-height: calc(100dvh - 44px);
+  margin-inline: auto;
 }
 .do-quick-project-body {
   display: grid;

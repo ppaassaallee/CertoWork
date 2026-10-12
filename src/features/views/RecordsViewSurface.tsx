@@ -4,6 +4,7 @@ import {
   createView,
   getLastUsedViewId,
   listViews,
+  nextPersonalViewName,
   persistDefaultCopy,
   setLastUsedView,
   updateView,
@@ -95,7 +96,11 @@ export function RecordsViewSurface({
     if (!next.isDefault && !next.id.startsWith("default:")) {
       return updateView(next.id, next, { userId: actorId }, next);
     }
-    const created = await persistDefaultCopy(next, actorId, t("views.myView"));
+    const created = await persistDefaultCopy(
+      next,
+      actorId,
+      nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
+    );
     setViews((current) => [...current.filter((v) => v.id !== defaultView.id), defaultView, created]);
     setActiveId(created.id);
     await setLastUsedView(actorId, surface, created.id);
@@ -118,7 +123,7 @@ export function RecordsViewSurface({
               defaultView;
             const created = await createView({
               ...rest,
-              name: t("views.myView"),
+              name: nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
               scope: "personal",
               ownerId: actorId,
             });

@@ -391,8 +391,10 @@
   background: var(--text-primary);
 }
 .cw-item-props {
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-left: 1px solid var(--border);
   background: var(--surface-0);
   padding: 12px 12px 24px;
