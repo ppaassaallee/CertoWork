@@ -6697,7 +6697,7 @@ export function DelivereeWorkspace() {
         id: `nav-collab-room-${project.id}`,
         label: `Open room · ${project.title}`,
         group: "Navigate",
-        keywords: `chat collab room messages ${project.title} ${project.client} ${project.projectKey}`,
+        keywords: `chat collab room messages ${project.title} ${project.client} ${project.projectKey} ${projectWorkKey(project)}`,
         onSelect: () => navigate(collabProjectPath(String(project.id))),
       })),
       {
@@ -6780,7 +6780,7 @@ export function DelivereeWorkspace() {
         id: `project-${project.id}`,
         label: project.title,
         group: "Projects",
-        keywords: [project.title, project.client, project.delivery, project.projectKey, project.serviceLine, project.category, project.phase]
+        keywords: [project.title, project.client, project.delivery, project.projectKey, projectWorkKey(project), project.serviceLine, project.category, project.phase]
           .filter(Boolean)
           .join(" "),
         onSelect: () => openProjectRecord({ id: project.id, title: project.title }),
