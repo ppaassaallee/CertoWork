@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Bug, Lock, Plus, Settings2, X } from "./ui/Icon";
+import { planTagCleanup, isTagCategory } from "../lib/tagging";
 import {
   controlledListLabels,
   controlledOptions,
@@ -123,6 +124,7 @@ export function ControlledListsSettings({
   onCreateOption,
   onRenameOption,
   onDeleteOption,
+  onRewriteItemTags,
 }: {
   categories: any[];
   projects: any[];
@@ -141,10 +143,20 @@ export function ControlledListsSettings({
     group: "delivery_entity" | "client_entity" | "tag",
     option: ControlledListOption,
   ) => Promise<void> | void;
+  onRewriteItemTags?: (
+    updates: Array<{ id: string; tagIds: string[] }>,
+  ) => Promise<void> | void;
 }) {
   const [newValues, setNewValues] = useState<Record<string, string>>({});
   const [traces, setTraces] = useState<ClientExceptionTrace[]>(() =>
     readClientExceptionTraces(),
+  );
+  const [mergeFrom, setMergeFrom] = useState("");
+  const [mergeInto, setMergeInto] = useState("");
+  const [mergeNote, setMergeNote] = useState("");
+  const tagOptions = useMemo(
+    () => categories.filter((category) => isTagCategory(category)),
+    [categories],
   );
   useEffect(() => {
     const refresh = () => setTraces(readClientExceptionTraces());
@@ -253,6 +265,76 @@ export function ControlledListsSettings({
           </section>
         ))}
       </div>
+
+      <section className="do-controlled-card" aria-label="Merge tags">
+        <div>
+          <span>Merge tags</span>
+          <small>
+            Moves every use of one tag onto another. Copy the dry-run first.
+            Applying again is safe. To undo, write each item’s previous tag list
+            from that dry-run back onto the item.
+          </small>
+        </div>
+        <div className="do-controlled-add">
+          <select aria-label="Tag to merge from" value={mergeFrom} onChange={(event) => setMergeFrom(event.target.value)}>
+            <option value="">From</option>
+            {tagOptions.map((tag) => (
+              <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>
+            ))}
+          </select>
+          <select aria-label="Tag to merge into" value={mergeInto} onChange={(event) => setMergeInto(event.target.value)}>
+            <option value="">Into</option>
+            {tagOptions.map((tag) => (
+              <option key={tag.id} value={tag.id}>{tag.name || tag.id}</option>
+            ))}
+          </select>
+        </div>
+        <div className="do-controlled-add">
+          <button
+            type="button"
+            onClick={async () => {
+              if (!mergeFrom || !mergeInto || mergeFrom === mergeInto) {
+                setMergeNote("Choose two different tags.");
+                return;
+              }
+              const rewritten = tasks.map((task) => {
+                const raw = Array.isArray(task.tagIds) ? task.tagIds : task.tags || task.labels || [];
+                const next = raw.map((value: unknown) => (String(value) === mergeFrom ? mergeInto : value));
+                return { ...task, tagIds: next };
+              });
+              const plan = planTagCleanup(rewritten, tagOptions);
+              const payload = JSON.stringify(plan, null, 2);
+              try {
+                await navigator.clipboard.writeText(payload);
+                setMergeNote(`Dry-run copied. ${plan.length} item${plan.length === 1 ? "" : "s"} would change.`);
+              } catch {
+                setMergeNote(`Dry-run: ${plan.length} item${plan.length === 1 ? "" : "s"} would change.`);
+              }
+            }}
+          >
+            Copy dry-run
+          </button>
+          <button
+            type="button"
+            disabled={!onRewriteItemTags}
+            onClick={() => {
+              if (!mergeFrom || !mergeInto || mergeFrom === mergeInto || !onRewriteItemTags) return;
+              const rewritten = tasks.map((task) => {
+                const raw = Array.isArray(task.tagIds) ? task.tagIds : task.tags || task.labels || [];
+                const next = raw.map((value: unknown) => (String(value) === mergeFrom ? mergeInto : value));
+                return { ...task, tagIds: next };
+              });
+              const plan = planTagCleanup(rewritten, tagOptions);
+              void Promise.resolve(onRewriteItemTags(plan.map((row) => ({ id: row.id, tagIds: row.after })))).then(() => {
+                setMergeNote(`Merged ${plan.length} item${plan.length === 1 ? "" : "s"}.`);
+              });
+            }}
+          >
+            Merge
+          </button>
+        </div>
+        {mergeNote ? <p>{mergeNote}</p> : null}
+      </section>
 
       <section className="do-controlled-locked">
         <div>

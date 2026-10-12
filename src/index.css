@@ -22214,3 +22214,53 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+.do-tag-picker { position: relative; }
+.do-tag-picker > button {
+  max-width: 160px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.do-tag-picker > button:focus-visible { box-shadow: var(--focus-ring); }
+.do-tag-picker-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  box-shadow: var(--sh-pop, 0 12px 40px rgba(20, 24, 40, 0.14));
+}
+.do-tag-picker-menu input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.do-tag-picker-menu input:focus { outline: none; box-shadow: var(--focus-ring); }
+.do-tag-picker-menu ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 180px; overflow: auto; }
+.do-tag-picker-menu li button,
+.do-tag-picker-menu > button {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.do-tag-picker-menu li button:hover,
+.do-tag-picker-menu > button:hover { background: var(--hover-overlay, rgba(31, 36, 48, 0.06)); }

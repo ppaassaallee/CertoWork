@@ -112,7 +112,9 @@ import {
 } from "../lib/projectPortfolio";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
+import { isProductFlagEnabled } from "../lib/featureFlags";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
+import { canonicalTagIds } from "../lib/tagging";
 import {
   entityTitle,
   findMatchingProject,
@@ -5274,6 +5276,20 @@ export function DelivereeWorkspace() {
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     let nextPatch = { ...patch };
+    if (
+      isProductFlagEnabled("tagDedupe") &&
+      (Array.isArray(nextPatch.tagIds) || Array.isArray(nextPatch.tags) || Array.isArray(nextPatch.labels))
+    ) {
+      const cleaned = canonicalTagIds(
+        {
+          tagIds: nextPatch.tagIds || current.tagIds,
+          tags: nextPatch.tags || current.tags,
+          labels: nextPatch.labels || current.labels,
+        },
+        categories,
+      );
+      nextPatch = { ...nextPatch, tagIds: cleaned, tags: cleaned, labels: cleaned };
+    }
     if (touchesAssignment) {
       nextPatch = normalizeAssignmentPatch(current, nextPatch, workspaceMembers);
     }
@@ -10432,6 +10448,15 @@ export function DelivereeWorkspace() {
                 onCreateOption={createControlledOption}
                 onDeleteOption={deleteControlledOption}
                 onRenameOption={renameControlledOption}
+                onRewriteItemTags={async (updates) => {
+                  for (const update of updates) {
+                    await updateProjectTask(update.id, {
+                      tagIds: update.tagIds,
+                      tags: update.tagIds,
+                      labels: update.tagIds,
+                    });
+                  }
+                }}
                 projects={projects}
                 tasks={tasks}
               />}
