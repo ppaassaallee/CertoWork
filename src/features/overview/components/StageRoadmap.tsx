@@ -5,6 +5,7 @@ import {
   type OverviewRoadmapRow,
 } from "../useOverviewData";
 import type { DeliveryStage } from "../../../lib/projectDelivery";
+import { t } from "../../../lib/i18n";
 
 function pctAlong(iso: string, startIso: string, endIso: string) {
   const start = new Date(`${startIso}T12:00:00`).getTime();
@@ -86,7 +87,7 @@ export function StageRoadmap({
             <>
               {" · "}
               <button className="cw-overview-link" onClick={onOpenList} type="button">
-                Ir a Tabla
+                {t("overview.goToTable")}
               </button>
             </>
           ) : null}

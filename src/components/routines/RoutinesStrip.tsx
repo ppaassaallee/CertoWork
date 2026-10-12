@@ -8,6 +8,7 @@ import {
   type RoutineSpec,
 } from "../../lib/routines";
 import { useRoutineHost } from "./RoutineHost";
+import { t } from "../../lib/i18n";
 
 /** Cockpit right-panel strip: Rutinas (N) for the current project/item. */
 export function RoutinesStrip({
@@ -36,7 +37,7 @@ export function RoutinesStrip({
     <section className="do-routines-strip" data-testid="routines-strip">
       <header>
         <strong>
-          <Sparkles size={13} /> Rutinas ({routines.length})
+          <Sparkles size={13} /> {t("routines.strip")} ({routines.length})
         </strong>
         <button
           onClick={() =>
@@ -48,7 +49,7 @@ export function RoutinesStrip({
           }
           type="button"
         >
-          Nueva
+          {t("project.view.new")}
         </button>
       </header>
       <ul>

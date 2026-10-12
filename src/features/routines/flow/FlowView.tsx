@@ -7,6 +7,7 @@ import {
   type FlowRunOverlay,
 } from "./flowModel";
 import "./flow.css";
+import { t } from "../../../lib/i18n";
 
 function iconFor(type: FlowNode["type"]) {
   switch (type) {
@@ -136,7 +137,7 @@ export function FlowView({
                     }
                     type="button"
                   >
-                    + Agregar paso
+                    + {t("routines.addStep")}
                   </button>
                   {addAfter === node.id ? (
                     <div className="cw-flow-add-menu" role="menu">
@@ -169,7 +170,7 @@ export function FlowView({
             style={{ marginTop: 8 }}
             type="button"
           >
-            + Agregar paso (enviar también por WhatsApp · pedir aprobación · esperar…)
+            + {t("routines.addStepHint")}
           </button>
         ) : null}
       </div>

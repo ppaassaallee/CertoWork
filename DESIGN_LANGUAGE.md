@@ -19,7 +19,7 @@ Quiet, editorial, ops-grade UI. Deep green means **decide / act**. Everything el
 | `--border` | `#E3E6E3` | Dividers, card edges |
 | `--text-primary` | `#1A1F1C` | Body / titles |
 | `--text-secondary` | `#5B645F` | Supporting copy |
-| `--text-muted` | `#8A938D` | Eyebrows, hints |
+| `--text-muted` | `#6b7280` | Eyebrows, hints. Meets WCAG AA (~4.6:1 on white). |
 
 ### Accent (links / focus / soft chrome — not primary fill)
 

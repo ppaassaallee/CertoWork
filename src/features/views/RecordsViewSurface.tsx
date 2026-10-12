@@ -9,6 +9,7 @@ import {
   setLastUsedView,
   updateView,
 } from "../../lib/views/storage";
+import { copyOnWritePlan, dedupeViewsForDisplay } from "../../lib/views/displayViews";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewGrid } from "./ViewGrid";
 import { ViewsBar } from "./ViewsBar";
@@ -93,13 +94,29 @@ export function RecordsViewSurface({
   };
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
-    if (!next.isDefault && !next.id.startsWith("default:")) {
+    if (!next.isDefault && !next.id.startsWith("default:") && !next.id.startsWith("system:")) {
       return updateView(next.id, next, { userId: actorId }, next);
+    }
+    const plan = copyOnWritePlan(views, t("views.myView"));
+    if (plan.action === "update") {
+      const existing = views.find((view) => view.id === plan.id);
+      if (existing) {
+        const saved = await updateView(
+          existing.id,
+          { ...next, name: existing.name, scope: "personal", ownerId: actorId },
+          { userId: actorId },
+          existing,
+        );
+        setViews((current) => current.map((view) => (view.id === saved.id ? saved : view)));
+        setActiveId(saved.id);
+        await setLastUsedView(actorId, surface, saved.id);
+        return saved;
+      }
     }
     const created = await persistDefaultCopy(
       next,
       actorId,
-      nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
+      plan.action === "create" ? plan.name : t("views.myView"),
     );
     setViews((current) => [...current.filter((v) => v.id !== defaultView.id), defaultView, created]);
     setActiveId(created.id);
@@ -138,7 +155,7 @@ export function RecordsViewSurface({
           void setLastUsedView(actorId, surface, viewId);
         }}
         sortLabel={active.sort[0]?.columnId}
-        views={views}
+        views={dedupeViewsForDisplay(views, active.id)}
       />
       <div className="cw-views-body">
         <ViewGrid

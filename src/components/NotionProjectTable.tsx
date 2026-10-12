@@ -37,6 +37,7 @@ import {
 } from "../lib/itemHierarchy";
 import { type SprintRecord } from "../lib/sprints";
 import { taskWorkLane } from "../lib/projectPortfolio";
+import { t } from "../lib/i18n";
 
 type NotionRow = {
   id: string;
@@ -456,12 +457,21 @@ export function NotionProjectTable({
                   submitNew(false);
                 }}
               >
-                <Plus size={13} />
-                <span className="do-notion-add-label">Nueva</span>
+                <Plus size={13} aria-hidden="true" />
+                <button
+                  className="do-notion-add-label"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.currentTarget.closest("form")?.querySelector("input")?.focus();
+                  }}
+                  type="button"
+                >
+                  {t("project.view.new")}
+                </button>
                 <label className="do-notion-type-chip">
-                  <span className="sr-only">Tipo</span>
+                  <span className="sr-only">{t("notion.type")}</span>
                   <select
-                    aria-label="Tipo de ítem"
+                    aria-label={t("notion.itemType")}
                     onChange={(event) => setCreateKind(event.target.value)}
                     value={createKind}
                   >
@@ -475,7 +485,8 @@ export function NotionProjectTable({
                   <ChevronDown size={10} aria-hidden="true" />
                 </label>
                 <input
-                  aria-label="Nueva"
+                  aria-label={t("project.view.new")}
+                  data-testid="notion-new-item"
                   onChange={(event) => setDraft(event.target.value)}
                   onFocus={() => setCreateKind((current) => current || "pbi")}
                   onKeyDown={(event) => {
@@ -490,7 +501,7 @@ export function NotionProjectTable({
                   placeholder=""
                   value={draft}
                 />
-                <span className="do-notion-add-hint">Tab = hijo del seleccionado · Arrastrá para anidar</span>
+                <span className="do-notion-add-hint">{t("notion.addHint")}</span>
               </form>
               )}
             </td>
@@ -511,7 +522,7 @@ export function NotionProjectTable({
         ) : null}
       </table>
       {rows.length === 0 && (
-        <p className="do-notion-empty">Todavía no hay ítems. Escribí el primero en Nueva.</p>
+        <p className="do-notion-empty">{t("notion.empty")}</p>
       )}
     </div>
   );

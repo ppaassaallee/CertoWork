@@ -42,6 +42,7 @@ export function ViewsBar({
       </div>
       <div className="cw-views-bar-tools">
         <button
+          aria-label={t("views.filter")}
           data-testid="views-filter"
           onClick={() => onOpenCustomizer("filter")}
           title={t("views.filter")}
@@ -52,6 +53,7 @@ export function ViewsBar({
           {filterCount > 0 ? ` ${filterCount}` : ""}
         </button>
         <button
+          aria-label={t("views.sort")}
           data-testid="views-sort"
           onClick={() => onOpenCustomizer("sort")}
           title={t("views.sort")}
@@ -62,6 +64,7 @@ export function ViewsBar({
           {sortLabel ? ` ${sortLabel}` : ""}
         </button>
         <button
+          aria-label={t("views.group")}
           data-testid="views-group"
           onClick={() => onOpenCustomizer("group")}
           title={t("views.group")}
@@ -71,7 +74,7 @@ export function ViewsBar({
           {t("views.group")}
           {groupLabel ? ` ${groupLabel}` : ""}
         </button>
-        <button data-testid="views-customize" onClick={() => onOpenCustomizer("customize")} type="button">
+        <button aria-label={t("views.customize")} data-testid="views-customize" onClick={() => onOpenCustomizer("customize")} type="button">
           <Settings2 size={13} />
           {t("views.customize")}
         </button>

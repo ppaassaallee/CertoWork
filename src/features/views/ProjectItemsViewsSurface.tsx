@@ -8,6 +8,7 @@ import {
   setLastUsedView,
   updateView,
 } from "../../lib/views/storage";
+import { copyOnWritePlan, dedupeViewsForDisplay } from "../../lib/views/displayViews";
 import { applyView, viewToQuery } from "../../lib/views/apply";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewsBar } from "./ViewsBar";
@@ -152,10 +153,26 @@ export function ProjectItemsViewsSurface({
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
+      const plan = copyOnWritePlan(views, t("views.myView"));
+      if (plan.action === "update") {
+        const existing = views.find((view) => view.id === plan.id);
+        if (existing) {
+          const saved = await updateView(
+            existing.id,
+            { ...next, name: existing.name, scope: "personal", ownerId: actorId },
+            { userId: actorId },
+            existing,
+          );
+          setViews((current) => current.map((view) => (view.id === saved.id ? saved : view)));
+          setActiveId(saved.id);
+          await setLastUsedView(actorId, surface, saved.id);
+          return saved;
+        }
+      }
       const created = await persistDefaultCopy(
         next,
         actorId,
-        nextPersonalViewName(views.map((view) => view.name), t("views.myView")),
+        plan.action === "create" ? plan.name : t("views.myView"),
       );
       setViews((current) => [
         ...current.filter((view) => view.id !== defaultView.id && view.id !== created.id),
@@ -224,7 +241,7 @@ export function ProjectItemsViewsSurface({
                 ? adapter.columns.find((col) => col.id === active.sort[0].columnId)?.label
                 : undefined
             }
-            views={views}
+            views={dedupeViewsForDisplay(views, active.id)}
           />
           {active.filters.length ? (
             <div className="cw-views-filter-chips" data-testid="views-filter-chips">

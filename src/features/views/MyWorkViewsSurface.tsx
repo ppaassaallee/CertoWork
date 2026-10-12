@@ -8,6 +8,7 @@ import {
   setLastUsedView,
   updateView,
 } from "../../lib/views/storage";
+import { copyOnWritePlan, dedupeViewsForDisplay } from "../../lib/views/displayViews";
 import { applyView } from "../../lib/views/apply";
 import type { ActionContext, SavedView, Surface } from "../../lib/views/types";
 import { ViewsBar } from "./ViewsBar";
@@ -230,10 +231,26 @@ export function MyWorkViewsSurface({
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
+      const plan = copyOnWritePlan(views, t("views.myView"));
+      if (plan.action === "update") {
+        const existing = views.find((view) => view.id === plan.id);
+        if (existing) {
+          const saved = await updateView(
+            existing.id,
+            { ...next, name: existing.name, scope: "personal", ownerId: actorId },
+            { userId: actorId },
+            existing,
+          );
+          setRemoteViews((current) => current.map((view) => (view.id === saved.id ? saved : view)));
+          setActiveId(saved.id);
+          await setLastUsedView(actorId, surface, saved.id);
+          return saved;
+        }
+      }
       const created = await persistDefaultCopy(
         next,
         actorId,
-        nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
+        plan.action === "create" ? plan.name : nextPersonalViewName(remoteViews.map((view) => view.name), t("views.myView")),
       );
       setRemoteViews((current) => [...current.filter((v) => v.id !== created.id), created]);
       setActiveId(created.id);
@@ -322,7 +339,7 @@ export function MyWorkViewsSurface({
             ? adapter.columns.find((col) => col.id === active.sort[0].columnId)?.label
             : undefined
         }
-        views={views}
+        views={dedupeViewsForDisplay(views, active.id)}
       />
       )}
       {viewError ? <div className="cw-views-error" role="alert">{viewError}</div> : null}
