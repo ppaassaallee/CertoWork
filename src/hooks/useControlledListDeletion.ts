@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import type { Dispatch, SetStateAction } from "react";
 import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import type { User } from "firebase/auth";
@@ -79,11 +80,11 @@ export function useControlledListDeletion({
               String(task.bpo || "").trim() === previous,
           )
           .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
+            batch.update(doc(db, "tasks", task.id), prepareItemWrite({
               deliveryEntity: "Internal",
               bpo: "Internal",
               updatedAt: serverTimestamp(),
-            }),
+            })),
           );
       }
       if (group === "client_entity") {
@@ -107,11 +108,11 @@ export function useControlledListDeletion({
               String(task.client || "").trim() === previous,
           )
           .forEach((task) =>
-            batch.update(doc(db, "tasks", task.id), {
+            batch.update(doc(db, "tasks", task.id), prepareItemWrite({
               clientEntity: "Internal",
               client: "Internal",
               updatedAt: serverTimestamp(),
-            }),
+            })),
           );
       }
       if (group === "tag") {
@@ -157,12 +158,12 @@ export function useControlledListDeletion({
         });
         tasks.filter(hasRemovedTag).forEach((task) => {
           const next = withoutRemoved(task);
-          batch.update(doc(db, "tasks", task.id), {
+          batch.update(doc(db, "tasks", task.id), prepareItemWrite({
             tagIds: next,
             tags: next,
             labels: next,
             updatedAt: serverTimestamp(),
-          });
+          }));
         });
       }
       await batch.commit();

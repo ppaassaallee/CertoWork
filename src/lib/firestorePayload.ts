@@ -27,3 +27,8 @@ export function prepareTaskCreatePayload(data: Record<string, unknown>) {
   clean.acceptanceCriteria = criteria == null ? "" : String(criteria);
   return clean;
 }
+
+/** Updates and merges drop undefined and keep FieldValue, Date, and null. */
+export function prepareItemWrite<T>(data: T): T {
+  return sanitizeFirestorePayload(data);
+}

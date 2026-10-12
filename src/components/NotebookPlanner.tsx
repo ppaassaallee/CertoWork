@@ -12,6 +12,8 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
+import { isRemovedWorkItem } from "../lib/itemRemoval";
 import { 
   Clock, 
   Calendar as CalendarIcon, 
@@ -207,6 +209,7 @@ export function NotebookPlanner() {
       const list: any[] = [];
       snap.forEach((d) => {
         const t = d.data();
+        if (isRemovedWorkItem({ id: d.id, ...t })) return;
         // Filters: Include if status is 'open' and (dueDate is today OR overdue OR timeBlockDate is today) OR status is done but completed today
         const isToday = t.dueDate === selectedDate || t.timeBlockDate === selectedDate || (t.dueDate === "" && t.status === "open");
         const isOverdue = t.dueDate && t.dueDate < selectedDate && t.status === "open";
@@ -341,7 +344,7 @@ export function NotebookPlanner() {
 
     try {
       setSaveStatus("saving");
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title: quickTaskText.trim(),
@@ -354,7 +357,7 @@ export function NotebookPlanner() {
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setQuickTaskText("");
       setQuickTaskBlock("");
       setSaveStatus("saved");
@@ -367,11 +370,11 @@ export function NotebookPlanner() {
   // Mark task status
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({
         status: currentStatus === "open" ? "done" : "open",
         completedAt: currentStatus === "open" ? serverTimestamp() : null,
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -383,11 +386,11 @@ export function NotebookPlanner() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({
         dueDate: tomorrowStr,
         timeBlockDate: tomorrowStr,
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -396,11 +399,11 @@ export function NotebookPlanner() {
   // Assign time block to task
   const handleAssignToBlock = async (taskId: string, blockId: string | null) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({
         timeBlock: blockId,
         timeBlockDate: blockId ? selectedDate : null,
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -867,7 +870,7 @@ export function NotebookPlanner() {
                 </div>
                 <button
                   onClick={async () => {
-                    await updateDoc(doc(db, "tasks", oneThingTask.id), { isOneThing: false });
+                    await updateDoc(doc(db, "tasks", oneThingTask.id), prepareItemWrite({ isOneThing: false }));
                     setOneThingTaskId("");
                   }}
                   className="text-[10px] text-gray-400 hover:text-red-500 font-bold uppercase transition-colors"
@@ -883,7 +886,7 @@ export function NotebookPlanner() {
                   onChange={async (e) => {
                     const id = e.target.value;
                     if (!id) return;
-                    await updateDoc(doc(db, "tasks", id), { isOneThing: true });
+                    await updateDoc(doc(db, "tasks", id), prepareItemWrite({ isOneThing: true }));
                     setOneThingTaskId(id);
                   }}
                   className="w-full bg-white border border-[var(--status-warning-soft)] p-2 text-xs font-bold rounded-xl text-amber-900 outline-none shadow-sm cursor-pointer"

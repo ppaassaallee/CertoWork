@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, CheckCircle2, Zap, Dumbbell, Plus, X, Check, ShieldMinus, Ban } from "../ui/Icon";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
+import { visibleWorkItems } from "../../lib/itemRemoval";
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
 import { handleFirestoreError, OperationType } from "../../lib/firestore-errors";
 import { logHabit, deleteHabitLog } from "../../lib/habits";
@@ -43,7 +44,7 @@ export function UnifiedCalendar() {
     const unsubTasks = onSnapshot(qTasks, (snap) => {
         const list: any[] = [];
         snap.forEach(d => list.push({ id: d.id, ...d.data(), dataType: 'task' }));
-        setTasks(list);
+        setTasks(visibleWorkItems(list));
     }, (error) => {
         handleFirestoreError(error, OperationType.LIST, "tasks");
     });

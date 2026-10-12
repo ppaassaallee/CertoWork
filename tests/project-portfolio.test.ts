@@ -67,6 +67,8 @@ test("derives project health and Jira-like work lanes from real records", () => 
   );
   assert.equal(taskWorkLane({ status: "in_progress" }), "in_progress");
   assert.equal(taskWorkLane({ status: "open" }), "backlog");
+  assert.equal(taskWorkLane({ status: "deleted" }), "removed");
+  assert.equal(taskWorkLane({ status: "todo", deletedAt: "2026-10-01" }), "removed");
 });
 
 test("upcoming checkpoints skip closed projects and past dates", () => {

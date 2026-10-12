@@ -5,14 +5,27 @@ export const UNDO_WINDOW_MS = 10_000;
 export const SOFT_DELETE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function removalRecord(item: unknown) {
-  if (!item || typeof item !== "object") return { status: "", deletedAt: undefined as unknown };
-  const record = item as { status?: unknown; deletedAt?: unknown };
-  return { status: String(record.status || "").toLowerCase(), deletedAt: record.deletedAt };
+  if (!item || typeof item !== "object") return { status: "", deletedAt: undefined as unknown, archived: false, deleted: false };
+  const record = item as { status?: unknown; deletedAt?: unknown; archived?: unknown; deleted?: unknown };
+  return {
+    status: String(record.status || "").toLowerCase(),
+    deletedAt: record.deletedAt,
+    archived: Boolean(record.archived),
+    deleted: Boolean(record.deleted),
+  };
 }
 
 export function isRemovedWorkItem(item: unknown) {
   const record = removalRecord(item);
-  return REMOVED_WORK_STATUSES.includes(record.status as (typeof REMOVED_WORK_STATUSES)[number]) || Boolean(record.deletedAt);
+  return REMOVED_WORK_STATUSES.includes(record.status as (typeof REMOVED_WORK_STATUSES)[number])
+    || Boolean(record.deletedAt)
+    || record.archived
+    || record.deleted;
+}
+
+/** Live lists, search, and calendars omit soft-deleted rows. Trash asks for them explicitly. */
+export function visibleWorkItems<T>(items: readonly T[]): T[] {
+  return items.filter((item) => !isRemovedWorkItem(item));
 }
 
 /**

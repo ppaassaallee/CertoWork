@@ -1,6 +1,8 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { useAuth } from "../lib/AuthContext";
 import { Task, RecurrenceStatus } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -26,6 +28,7 @@ export function RoutineTasksView() {
     const unsub = onSnapshot(q, (snap) => {
       const items: Task[] = [];
       snap.forEach(d => items.push({ id: d.id, ...d.data() } as Task));
+      const liveItems = visibleWorkItems(items);
       
       // We only want to show the current/series overview? 
       // The prompt says "Routine Tasks view/section". 
@@ -35,7 +38,7 @@ export function RoutineTasksView() {
       // and represents the next occurrence for that series.
       
       const seriesMap = new Map<string, Task>();
-      items.forEach(task => {
+      liveItems.forEach(task => {
         const sid = task.recurringSeriesId || task.id;
         const existing = seriesMap.get(sid);
         
@@ -58,10 +61,10 @@ export function RoutineTasksView() {
 
   const handleUpdateStatus = async (task: Task, status: RecurrenceStatus) => {
     try {
-      await updateDoc(doc(db, "tasks", task.id), {
+      await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({
         recurrenceStatus: status,
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `tasks/${task.id}`);
     }
@@ -70,11 +73,11 @@ export function RoutineTasksView() {
   const handleStop = async (task: Task) => {
     if (!confirm("Are you sure you want to stop this routine? Future occurrences will not be created.")) return;
     try {
-      await updateDoc(doc(db, "tasks", task.id), {
+      await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({
         recurrenceStatus: 'ended',
         isRoutineTask: false, // effectively stop it
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `tasks/${task.id}`);
     }

@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../firestorePayload";
 import {
   addDoc,
   arrayRemove,
@@ -266,9 +267,9 @@ export async function linkNote(input: {
     });
   }
   if (input.target.type === "task") {
-    await updateDoc(doc(db, "tasks", input.target.id), {
+    await updateDoc(doc(db, "tasks", input.target.id), prepareItemWrite({
       linkedDocumentIds: arrayUnion(input.noteId),
-    });
+    }));
   }
 }
 
@@ -286,9 +287,9 @@ export async function unlinkNote(input: {
     });
   }
   if (input.target.type === "task") {
-    await updateDoc(doc(db, "tasks", input.target.id), {
+    await updateDoc(doc(db, "tasks", input.target.id), prepareItemWrite({
       linkedDocumentIds: arrayRemove(input.noteId),
-    });
+    }));
   }
 }
 

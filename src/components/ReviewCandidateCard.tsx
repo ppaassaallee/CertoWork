@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, X, Calendar, AlertCircle, Bookmark, HelpCircle, FileText, Sparkles, Cpu, Clipboard, Briefcase, Link as LinkIcon } from "./ui/Icon";
 import { doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload } from "../lib/firestorePayload";
 import { useAuth } from "../lib/AuthContext";
 import { EntityLinksManager } from "./EntityLinksManager";
 
@@ -101,7 +102,7 @@ export function ReviewCandidateCard({ candidate, onProcessed }: ReviewCandidateC
           description: notes.trim(),
           timeSector: timeSector,
         };
-        createdRef = await addDoc(collection(db, "tasks"), taskPayload);
+        createdRef = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload(taskPayload));
       } else if (type === "someday") {
         const somedayPayload = {
           ...basePayload,

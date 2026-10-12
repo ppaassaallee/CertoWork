@@ -15,6 +15,7 @@ import {
   type DeliveryStage,
 } from "../../lib/projectDelivery";
 import { hierarchyKind } from "../../lib/itemHierarchy";
+import { isRemovedWorkItem } from "../../lib/itemRemoval";
 import { taskWorkLane } from "../../lib/projectPortfolio";
 import {
   isAssignedToActor,
@@ -597,7 +598,7 @@ export function buildMyWorkOverview(input: {
   const rangeStartIso = todayIso;
   const rangeEndIso = horizonEndIso;
 
-  const mine = tasks.filter((task) => isAssignedToActor(task, actor, members));
+  const mine = tasks.filter((task) => !isRemovedWorkItem(task) && isAssignedToActor(task, actor, members));
 
   let assigned = mine.length;
   let dueToday = 0;

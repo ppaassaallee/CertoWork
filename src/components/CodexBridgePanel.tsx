@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "../lib/firestorePayload";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -370,13 +371,13 @@ export function CodexBridgePanel({
       if (["work_item_progress", "work_item_completed", "work_item_claimed"].includes(event.kind)) {
         if (!workItem || workItem.projectId !== project.id) throw new Error("The linked work item is no longer in this project");
         const patch = codexEventTaskPatch(event);
-        await updateDoc(doc(db, "tasks", workItem.id), {
+        await updateDoc(doc(db, "tasks", workItem.id), prepareItemWrite({
           ...patch,
           ...(event.kind === "work_item_completed" ? { completedAt: serverTimestamp() } : {}),
           lastCodexSyncAt: serverTimestamp(),
           updatedBy: user.uid,
           updatedAt: serverTimestamp(),
-        });
+        }));
 
         const payload = event.payload || {};
         const hasEvidence = event.kind === "work_item_completed" || payload.summary || payload.knowledgeNotes?.length;

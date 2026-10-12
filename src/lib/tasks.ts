@@ -1,3 +1,4 @@
+import { prepareItemWrite } from "./firestorePayload";
 import { doc, runTransaction, serverTimestamp, deleteField } from "firebase/firestore";
 import { db } from "./firebase";
 import { getNextOccurrence } from "./recurrence-utils";
@@ -13,11 +14,11 @@ export async function setTaskStatus(task: any, newStatus: string) {
   }
 
   // Regular task completion/reopening
-  await updateDoc(doc(db, "tasks", task.id), {
+  await updateDoc(doc(db, "tasks", task.id), prepareItemWrite({
     status: newStatus,
     completedAt: newStatus === "done" ? serverTimestamp() : deleteField(),
     updatedAt: serverTimestamp()
-  });
+  }));
 }
 
 // Helper to handle completion with transactions to ensure idempotency and next occurrence creation
@@ -33,11 +34,11 @@ export async function completeRecurringTask(taskId: string) {
     if (task.status === 'done') return;
 
     // 1. Mark current task completed
-    transaction.update(taskRef, {
+    transaction.update(taskRef, prepareItemWrite({
       status: 'done',
       completedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    }));
 
     // 2. Determine if we should create a next occurrence
     // We support both the old "recurrence" string and the new Routine Task structure
@@ -75,7 +76,7 @@ export async function completeRecurringTask(taskId: string) {
     const nextTaskSnap = await transaction.get(nextTaskRef);
     
     if (nextTaskSnap.exists()) {
-       transaction.update(taskRef, { nextOccurrenceAt: N });
+       transaction.update(taskRef, prepareItemWrite({ nextOccurrenceAt: N }));
        return;
     }
 
@@ -118,10 +119,10 @@ export async function completeRecurringTask(taskId: string) {
 
     if (task.recurrence) newTaskData.recurrence = task.recurrence;
 
-    transaction.set(nextTaskRef, newTaskData);
+    transaction.set(nextTaskRef, prepareItemWrite(newTaskData));
     
     // 6. Update current task with next occurrence info
-    transaction.update(taskRef, { nextOccurrenceAt: N });
+    transaction.update(taskRef, prepareItemWrite({ nextOccurrenceAt: N }));
   });
 }
 

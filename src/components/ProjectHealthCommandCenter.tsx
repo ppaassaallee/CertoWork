@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { Activity, ArrowLeft, CheckCircle2, AlertTriangle, AlertCircle, Sparkles, Send, Calendar, Folder, Loader2 } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
@@ -44,7 +45,7 @@ export function ProjectHealthCommandCenter() {
     const unsubTasks = onSnapshot(qTasks, (snap) => {
       const list: any[] = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-      setTasks(list);
+      setTasks(visibleWorkItems(list));
     });
 
     return () => { unsubProjects(); unsubMilestones(); unsubTasks(); };

@@ -1,4 +1,5 @@
 import { isTodayTask, priorityRank } from "./appleWidget";
+import { isRemovedWorkItem } from "./itemRemoval";
 import type { MyWorkSection } from "./delivereeRoutes";
 import { isCapturedWorkItem, needsCaptureReview } from "./captureRequests";
 import { dateKey, isClosed, localDateKey } from "./workspaceDisplay";
@@ -287,7 +288,7 @@ export function filterMyWorkTasks(
   actor: MyWorkActor,
   members: WorkspaceMember[] = [],
 ) {
-  const mine = tasks.filter((item) => isMyWorkItem(item, actor, members));
+  const mine = tasks.filter((item) => !isRemovedWorkItem(item) && isMyWorkItem(item, actor, members));
   if (section === "waiting") {
     return mine.filter((item) => isWaitingWorkItem(item));
   }

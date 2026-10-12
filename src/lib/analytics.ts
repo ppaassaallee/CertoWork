@@ -1,5 +1,6 @@
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
+import { visibleWorkItems } from "./itemRemoval";
 
 export const computeAnalytics = async (userId: string, workspaceId: string, days: number = 30) => {
     const end = new Date();
@@ -21,13 +22,15 @@ export const computeAnalytics = async (userId: string, workspaceId: string, days
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     };
 
-    const [tasks, habits, workoutLogs, reviewItems, projects] = await Promise.all([
+    const [taskRows, habits, workoutLogs, reviewItems, projects] = await Promise.all([
         fetchCollection("tasks"),
         fetchCollection("habit_logs", [where("date", ">=", start.toISOString().split('T')[0])]),
         fetchCollection("workout_logs", [where("date", ">=", start.toISOString().split('T')[0])]),
         fetchCollection("review_candidates"),
         fetchCollection("projects"),
     ]);
+
+    const tasks = visibleWorkItems(taskRows);
 
     //--- Metrics Logic ---
     

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../lib/AuthContext";
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
+import { visibleWorkItems } from "../lib/itemRemoval";
 import { Clock, Plus, Sparkles, CheckSquare, Square, ChevronLeft, ChevronRight, Activity, Loader2, X } from "./ui/Icon";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -51,7 +53,7 @@ export function TimeBlocksPlanner() {
     const unsubTasks = onSnapshot(qTasks, (snap) => {
       const list: any[] = [];
       snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-      setTasks(list);
+      setTasks(visibleWorkItems(list));
       setLoading(false);
     }, (err) => console.error(err));
 
@@ -81,11 +83,11 @@ export function TimeBlocksPlanner() {
 
   const handleUpdateTaskBlock = async (taskId: string, blockId: string | null) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({
         timeBlock: blockId,
         timeBlockDate: blockId ? selectedDate : null,
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -93,10 +95,10 @@ export function TimeBlocksPlanner() {
 
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
     try {
-      await updateDoc(doc(db, "tasks", taskId), {
+      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite({
         status: currentStatus === "open" ? "done" : "open",
         updatedAt: serverTimestamp()
-      });
+      }));
     } catch (err) {
       console.error(err);
     }
@@ -108,7 +110,7 @@ export function TimeBlocksPlanner() {
     if (!title || !user || !workspace) return;
 
     try {
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
         userId: user.uid,
         workspaceId: workspace.id,
         title,
@@ -118,7 +120,7 @@ export function TimeBlocksPlanner() {
         timeBlockDate: selectedDate,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }));
       setQuickInputs(prev => ({ ...prev, [blockId]: "" }));
     } catch (err) {
       console.error(err);
@@ -162,12 +164,12 @@ export function TimeBlocksPlanner() {
 
         for (const planItem of block.allocatedTasks) {
           if (planItem.taskId) {
-            await updateDoc(doc(db, "tasks", planItem.taskId), {
+            await updateDoc(doc(db, "tasks", planItem.taskId), prepareItemWrite({
               timeBlock: blockId,
               timeBlockDate: selectedDate,
               plannerStrategyNotes: block.blockStrategy || "",
               updatedAt: serverTimestamp()
-            });
+            }));
           }
         }
       }
