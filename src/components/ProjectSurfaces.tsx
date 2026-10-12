@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { t } from "../lib/i18n";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
@@ -2029,6 +2030,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 : notionMode) as ProjectViewId
           }
           filterOpen={notionFilterOpen}
+          showFilterSort={tab !== "items"}
           onAddTask={() => {
             publishChromeView("list");
             window.setTimeout(() => {
@@ -2080,7 +2082,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           style={{ margin: "8px 24px 0" }}
           type="button"
         >
-          <ArrowLeft size={14} /> Volver a la tabla
+          <ArrowLeft size={14} /> {t("project.backToTable")}
         </button>
       )}
 

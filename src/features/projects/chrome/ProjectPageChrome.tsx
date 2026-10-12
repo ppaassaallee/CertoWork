@@ -401,6 +401,7 @@ type ProjectViewTabsProps = {
   onToggleSort: () => void;
   onAddTask: () => void;
   showActions?: boolean;
+  showFilterSort?: boolean;
   showCosts?: boolean;
   showTables?: boolean;
 };
@@ -414,6 +415,7 @@ export function ProjectViewTabs({
   onToggleSort,
   onAddTask,
   showActions = true,
+  showFilterSort = true,
   showCosts = false,
   showTables = false,
 }: ProjectViewTabsProps) {
@@ -445,6 +447,8 @@ export function ProjectViewTabs({
       {showActions && activeView !== "costs" && activeView !== "tables" ? (
       <div className="do-project-page-tab-actions">
         <span className="do-project-group-label">{t("project.view.groupEpic")}</span>
+        {showFilterSort ? (
+        <>
         <button
           aria-label="Filter"
           className={`do-project-quiet-btn${filterOpen ? " is-active" : ""}`}
@@ -463,6 +467,8 @@ export function ProjectViewTabs({
         >
           <ArrowUpDown size={15} />
         </button>
+        </>
+        ) : null}
         <button className="do-project-primary-btn" onClick={onAddTask} type="button">
           <Plus size={15} />
           {t("project.view.new")}

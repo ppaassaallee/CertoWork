@@ -252,6 +252,7 @@ export function ProjectItemsViewsSurface({
         <WorkItemsCenter
           activeProject={listBody.project}
           compact
+          externalFilterBar={isList}
           forceMode={mode}
           hierarchyTasks={listBody.hierarchyTasks || tasks}
           onAddTask={(pid, title, status, patch) =>

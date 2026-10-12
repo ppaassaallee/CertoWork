@@ -273,6 +273,8 @@ type Props = {
   forceMode?: WorkItemsViewMode;
   /** Canonical My Work view; outer Filter/Sort/Group/Customize own these settings. */
   savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks">;
+  /** The saved-views bar already owns filter, sort, and group. */
+  externalFilterBar?: boolean;
   /** Notion-style project surface: dense table + parent owns chrome. */
   notionSurface?: boolean;
   notionMode?: WorkItemsViewMode;
@@ -949,6 +951,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   compact = false,
   forceMode,
   savedView,
+  externalFilterBar = false,
   notionSurface = false,
   notionMode,
   onNotionModeChange: _onNotionModeChange,
@@ -4489,7 +4492,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </div>
         )}
         <div className="do-items-toolbar-actions">
-          {!savedView && <>
+          {!savedView && !externalFilterBar && <>
           <div className="do-popover-anchor">
             <button
               aria-expanded={viewsOpen}

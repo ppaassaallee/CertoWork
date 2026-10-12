@@ -6637,7 +6637,7 @@ export function DelivereeWorkspace() {
       },
       {
         id: "nav-routines",
-        label: "Go to Rutinas",
+        label: t("palette.goRoutines"),
         group: "Navigate",
         keywords: "routines automation schedule recipe brief flujo wrap",
         onSelect: () => navigate("/rutinas"),
@@ -6813,8 +6813,8 @@ export function DelivereeWorkspace() {
     for (const routine of agentRoutines.filter((row) => row.status === "active").slice(0, 24)) {
       items.push({
         id: `routine-flow-${routine.id}`,
-        label: `Ver flujo de ${routine.title}`,
-        group: "Rutinas",
+        label: `${t("palette.viewRoutineFlow")} ${routine.title}`,
+        group: t("palette.routinesGroup"),
         keywords: `${routine.title} ${routine.sentence || ""} flujo wrap ritual`,
         onSelect: () => navigate(`/rutinas/${routine.id}`),
       });
@@ -7898,7 +7898,7 @@ export function DelivereeWorkspace() {
                   ? [{ label: "Notes" }]
                   : []),
                 ...(lens.kind === "routines"
-                  ? [{ label: "Rutinas" }]
+                  ? [{ label: t("navRutinas") }]
                   : []),
                 ...(lens.kind === "agents"
                   ? [
