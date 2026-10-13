@@ -489,7 +489,7 @@ export function ProjectViewTabs({
           </button>
         ))}
       </div>
-      {showActions && activeView !== "costs" && activeView !== "tables" ? (
+      {showActions && activeView !== "costs" && activeView !== "tables" && activeView !== "gantt" ? (
       <div className="do-project-page-tab-actions">
         <span className="do-project-group-label">{t("project.view.groupEpic")}</span>
         {showFilterSort ? (

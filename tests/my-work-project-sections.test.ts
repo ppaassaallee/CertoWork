@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const workItems = readFileSync(new URL("../src/components/WorkItemsCenter.tsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("../src/components/ProjectTimeline.tsx", import.meta.url), "utf8");
 const surfaces = readFileSync(new URL("../src/components/ProjectSurfaces.tsx", import.meta.url), "utf8");
 const projectItemsSurface = readFileSync(
   new URL("../src/features/views/ProjectItemsViewsSurface.tsx", import.meta.url),
@@ -19,7 +20,8 @@ test("My Work defaults to project sections and supports saved grouping", () => {
   assert.match(workItems, /const isMyWork = !activeProject/);
   assert.match(workItems, /const effectiveGroupBy: GroupBy = isMyWork && !savedView \? "project" : groupBy/);
   assert.match(workItems, /data-testid="my-work-project-section"/);
-  assert.match(workItems, /data-testid="gantt-project-section"/);
+  assert.match(workItems, /ProjectTimeline/);
+  assert.match(timeline, /"gantt-project-section"/);
   assert.match(memory, /groupBy: projectId \? "hierarchy" : "project"/);
   assert.match(memory, /groupBy: projectId \? asGroup\(value\.groupBy, fallback\.groupBy\) : "project"/);
 });
