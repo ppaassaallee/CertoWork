@@ -22,6 +22,27 @@ export function projectResourceSizeLimitMessage() {
   return `Files must be ${PROJECT_RESOURCE_MAX_MB} MB or smaller.`;
 }
 
+export type ProjectDocumentSaveStage = "upload" | "download-url" | "metadata";
+
+/** Keep Storage failures separate from Firestore access failures. */
+export function projectDocumentSaveError(reason: unknown, stage: ProjectDocumentSaveStage) {
+  const code = reason && typeof reason === "object" && "code" in reason ? String(reason.code) : "";
+  const detail = reason instanceof Error ? reason.message : "The document could not be saved.";
+  if (code === "permission-denied" && stage === "metadata") {
+    return "Workspace access was denied while saving the document record (permission-denied). Ask a workspace administrator to check your membership. Signing out alone may not fix this.";
+  }
+  if (code === "storage/unauthorized") {
+    return "File storage denied access (storage/unauthorized). An administrator must check Storage rules and permitted upload limits.";
+  }
+  if (code === "storage/unauthenticated" || code === "unauthenticated") {
+    return "Your session has expired. Sign in again and retry saving the document.";
+  }
+  if (code === "storage/quota-exceeded") {
+    return "File storage quota was exceeded. An administrator must check Firebase usage and billing.";
+  }
+  return `${detail}${code ? ` [${stage}: ${code}]` : ""}`;
+}
+
 export function looksLikeExternalUrl(value: string) {
   try {
     const url = new URL(value);

@@ -414,6 +414,8 @@ import {
 import {
   isAllowedProjectResourceSize,
   projectResourceSizeLimitMessage,
+  projectDocumentSaveError,
+  type ProjectDocumentSaveStage,
 } from "../lib/projectResources";
 import { canDeleteProject } from "../lib/projectPermissions";
 import { isModernWorkItemKey, uniqueWorkItemKey } from "../lib/workItemKey";
@@ -6079,6 +6081,7 @@ export function DelivereeWorkspace() {
     }
     let url = String(payload.url || "");
     const file = payload.file as File | undefined;
+    let saveStage: ProjectDocumentSaveStage = "metadata";
     try {
       if (file) {
         if (!isAllowedProjectResourceSize(file.size)) {
@@ -6086,9 +6089,12 @@ export function DelivereeWorkspace() {
         }
         const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
         const fileRef = ref(storage, path);
+        saveStage = "upload";
         await uploadBytes(fileRef, file);
+        saveStage = "download-url";
         url = await getDownloadURL(fileRef);
       }
+      saveStage = "metadata";
       await addDoc(collection(db, "knowledge_items"), {
         userId: user.uid,
         workspaceId: workspace.id,
@@ -6103,12 +6109,7 @@ export function DelivereeWorkspace() {
       });
       setNotice("Document saved.");
     } catch (reason) {
-      const message =
-        reason instanceof Error && /permission/i.test(reason.message)
-          ? "This account cannot save documents in this workspace yet. Sign out and sign back in, then try again."
-          : reason instanceof Error
-            ? reason.message
-            : "The document could not be saved.";
+      const message = projectDocumentSaveError(reason, saveStage);
       setNotice(message);
       throw new Error(message);
     }

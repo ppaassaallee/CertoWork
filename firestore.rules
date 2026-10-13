@@ -292,13 +292,13 @@ service cloud.firestore {
           data.projectId is string &&
           data.projectId.size() > 0 &&
           ('workspaceId' in data) &&
-          isWorkspaceMember(data.workspaceId)
+          canCreateWorkspaceRecord(data.workspaceId)
         )
       );
     }
     match /knowledge_items/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid
-        && (!('workspaceId' in incoming()) || isWorkspaceMember(incoming().workspaceId));
+        && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
       allow get: if isSignedIn() && isValidId(id) && (resource == null || canReadKnowledgeItem(resource.data));
       allow update, delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid
         && (!('userId' in incoming()) || incoming().userId == request.auth.uid);
