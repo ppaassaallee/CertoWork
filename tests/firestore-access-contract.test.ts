@@ -143,7 +143,7 @@ test("personal notes stay owner-scoped; project documents are workspace-readable
   assert.ok(start >= 0, "canReadKnowledgeItem missing");
   const canRead = ruleFn("canReadKnowledgeItem");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);
-  assert.match(canRead, /isWorkspaceMember\(data\.workspaceId\)/);
+  assert.match(canRead, /canCreateWorkspaceRecord\(data\.workspaceId\)/);
   assert.match(canRead, /projectId/);
 
   assert.match(workspace, /where\("projectId", "!=", ""\)/);

@@ -20,7 +20,7 @@ test("firestore rules allow Odysseus run and activity collections", () => {
 test("personal knowledge stays owner-only; project documents can be read by workspace members", () => {
   const rules = readFileSync(resolve("firestore.rules"), "utf8");
   assert.match(rules, /function canReadKnowledgeItem\(data\)/);
-  assert.match(rules, /isWorkspaceMember\(data\.workspaceId\)/);
+  assert.match(rules, /function canReadKnowledgeItem\(data\)[\s\S]*?canCreateWorkspaceRecord\(data\.workspaceId\)/);
   const start = rules.indexOf("match /knowledge_items/{id} {");
   const end = rules.indexOf("\n    }", start);
   const block = start >= 0 && end > start ? rules.slice(start, end) : "";
