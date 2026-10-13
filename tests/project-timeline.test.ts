@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTimelineEntries, timelineDay, timelineMonths, timelinePosition, timelineRange, timelineSections, type TimelineItem } from "../src/lib/projectTimeline";
+import { buildTimelineEntries, timelineDay, timelineGeometry, timelineMonths, timelinePosition, timelineRange, timelineSections, type TimelineItem } from "../src/lib/projectTimeline";
 
 const item = (id: string, patch: Partial<TimelineItem> = {}): TimelineItem => ({
   id, title: id, kind: "pbi", parentId: "", projectId: "project", projectLabel: "Project", status: "backlog", ...patch,
@@ -79,4 +79,18 @@ test("Timeline aligns weeks to Monday and splits month headers at actual month b
   assert.deepEqual(months.map((month) => month.days), [6, 8]);
   assert.equal(months.reduce((sum, month) => sum + month.days, 0), 14);
   assert.equal(timelineDay("2026-03-08")! - timelineDay("2026-03-07")!, 1);
+});
+
+test("Extreme stored dates do not generate thousands of month headers", () => {
+  const periods = timelineMonths(timelineDay("1000-01-01")!, timelineDay("9999-12-31")!);
+  assert.ok(periods.length < 100);
+  assert.equal(periods[0].unit, "years");
+  const days = timelineDay("9999-12-31")! - timelineDay("1000-01-01")!;
+  for (const scale of ["day", "week", "month", "quarter"] as const) {
+    const geometry = timelineGeometry(days, 1024, scale, false);
+    assert.ok(geometry.dayWidth * days <= 24_000);
+    assert.ok(Math.ceil(days / geometry.tickStep) < 1000);
+    const fit = timelineGeometry(days, 1024, scale, true);
+    assert.ok(Math.abs(fit.dayWidth * days - 1024) < 1);
+  }
 });

@@ -5,11 +5,10 @@ import { retainFocusForOpen } from "../lib/openWorkItem";
 import { getLocale, t } from "../lib/i18n";
 import { workItemTypeLabel } from "../lib/workItemTypeLabels";
 import { workStatusLabel } from "../lib/workStatuses";
-import { buildTimelineEntries, timelineDate, timelineMonths, timelinePosition, timelineRange, timelineSections, timelineToday, type TimelineEntry, type TimelineGrouping, type TimelineItem, type TimelineScale } from "../lib/projectTimeline";
+import { buildTimelineEntries, timelineDate, timelineGeometry, timelineMonths, timelinePosition, timelineRange, timelineSections, timelineToday, type TimelineEntry, type TimelineGrouping, type TimelineItem, type TimelineScale } from "../lib/projectTimeline";
 import "./ProjectTimeline.css";
 
 type Member = { id: string; userId?: string; alias?: string; displayName?: string; email?: string; status?: string };
-const dayWidths: Record<TimelineScale, number> = { day: 56, week: 24, month: 10, quarter: 4 };
 const typeIcons = { epic: Gem, feature: Layers, story: Bookmark, pbi: Target, task: CheckSquare, subtask: CornerDownRight, bug: Bug, ticket: Inbox, issue: AlertCircle };
 const closed = new Set(["done", "completed", "closed", "archived", "cancelled", "canceled"]);
 
@@ -79,10 +78,9 @@ export function ProjectTimeline({ items, members = [], projectMode, sectionOrder
     return map;
   }, [members]);
   const railWidth = viewportWidth < 650 ? 200 : 244;
-  const dayWidth = fit ? Math.max(0.1, (viewportWidth - railWidth) / range.days) : dayWidths[scale];
+  const { dayWidth, tickStep } = timelineGeometry(range.days, Math.max(1, viewportWidth - railWidth), scale, fit);
   const canvasWidth = Math.max(viewportWidth - railWidth, range.days * dayWidth);
   const months = useMemo(() => timelineMonths(range.start, range.end), [range.start, range.end]);
-  const tickStep = scale === "day" && !fit ? 1 : dayWidth < 7 ? Math.ceil(70 / dayWidth / 28) * 28 : 7;
   const ticks = useMemo(() => Array.from({ length: Math.ceil(range.days / tickStep) }, (_, i) => range.start + i * tickStep), [range.start, range.days, tickStep]);
   const scheduled = entries.filter((entry) => entry.start !== null);
   const undated = entries.filter((entry) => entry.start === null);
@@ -167,7 +165,7 @@ export function ProjectTimeline({ items, members = [], projectMode, sectionOrder
       </div>
     </div>;
   };
-  return <section className="do-gantt cw-project-timeline" data-testid="work-items-gantt" aria-label={t("timeline.title")} style={{ "--timeline-rail-width": `${railWidth}px` } as CSSProperties}>
+  return <section className={`do-gantt cw-project-timeline${dayWidth < 4 ? " is-overview-scale" : ""}`} data-testid="work-items-gantt" aria-label={t("timeline.title")} style={{ "--timeline-rail-width": `${railWidth}px` } as CSSProperties}>
     <div className="cw-timeline-toolbar">
       <button className="cw-timeline-add" onClick={onAddItem} type="button"><Plus size={14} />{t("timeline.add")}</button>
       <div className="cw-timeline-navigation"><button aria-label={t("timeline.previous")} onClick={() => scrollRef.current?.scrollBy({ left: -Math.max(280, viewportWidth - railWidth), behavior: "smooth" })} type="button"><ChevronLeft size={16} /></button><button onClick={() => scrollToDay(today)} type="button">{t("timeline.today")}</button><button aria-label={t("timeline.next")} onClick={() => scrollRef.current?.scrollBy({ left: Math.max(280, viewportWidth - railWidth), behavior: "smooth" })} type="button"><ChevronRight size={16} /></button></div>
@@ -179,11 +177,11 @@ export function ProjectTimeline({ items, members = [], projectMode, sectionOrder
       <button aria-label={focused ? t("timeline.exitFocus") : t("timeline.focus")} title={focused ? t("timeline.exitFocus") : t("timeline.focus")} onClick={() => onFocusChange(!focused)} type="button">{focused ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
     </div>
     <div className="cw-timeline-scroll" ref={scrollRef} data-testid="timeline-scroll" onScroll={(event) => { focusDay.current = range.start + (event.currentTarget.scrollLeft + (event.currentTarget.clientWidth - railWidth) / 3) / dayWidth; }}>
-      <div className="cw-timeline-canvas" style={{ width: canvasWidth + railWidth, "--timeline-day-width": `${dayWidth}px`, "--timeline-week-width": `${dayWidth * 7}px` } as CSSProperties}>
+      <div className="cw-timeline-canvas" style={{ width: canvasWidth + railWidth, "--timeline-day-width": `${dayWidth}px`, "--timeline-week-width": `${dayWidth * (dayWidth < 4 ? tickStep : 7)}px` } as CSSProperties}>
         <div className="cw-timeline-axis">
           <div className="cw-timeline-rail cw-timeline-axis-label"><strong>{t("timeline.title")}</strong><span>{t("timeline.items")}</span></div>
           <div className="cw-timeline-calendar-head">
-            <div className="cw-timeline-months">{months.map((month) => <span key={month.start} style={{ left: (month.start - range.start) * dayWidth, width: month.days * dayWidth }}>{month.date.toLocaleDateString(dateLocale, { timeZone: "UTC", month: "long", year: "numeric" })}</span>)}</div>
+            <div className="cw-timeline-months">{months.map((month) => <span key={month.start} style={{ left: (month.start - range.start) * dayWidth, width: month.days * dayWidth }}>{month.unit === "month" ? month.date.toLocaleDateString(dateLocale, { timeZone: "UTC", month: "long", year: "numeric" }) : month.unit === "year" ? month.date.getUTCFullYear() : `${month.date.getUTCFullYear()} – ${timelineDate(month.start + month.days - 1).getUTCFullYear()}`}</span>)}</div>
             <div className="cw-timeline-ticks">{ticks.map((day) => <span key={day} style={{ left: (day - range.start) * dayWidth, width: Math.min(tickStep, range.end - day + 1) * dayWidth }}>{tickStep === 1 ? timelineDate(day).toLocaleDateString(dateLocale, { timeZone: "UTC", weekday: "short", day: "numeric" }) : `${formatDay(day)} – ${timelineDate(Math.min(day + tickStep - 1, range.end)).getUTCDate()}`}</span>)}</div>
             <span className="cw-timeline-today-marker" title={t("timeline.today")} style={{ left: (today - range.start + 0.5) * dayWidth }} />
           </div>

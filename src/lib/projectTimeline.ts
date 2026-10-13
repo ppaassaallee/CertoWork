@@ -138,13 +138,18 @@ export function timelineRange(entries: TimelineEntry[], today: number) {
 }
 
 export function timelineMonths(start: number, end: number) {
-  const segments: Array<{ start: number; days: number; date: Date }> = [];
+  const spanYears = (end - start + 1) / 365.25;
+  const yearsPerSegment = spanYears > 500 ? 100 : spanYears > 50 ? 10 : spanYears > 5 ? 1 : 0;
+  const segments: Array<{ start: number; days: number; date: Date; unit: "month" | "year" | "years" }> = [];
   let cursor = start;
   while (cursor <= end) {
     const date = timelineDate(cursor);
-    const next = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1) / DAY_MS;
+    const nextDate = timelineDate(cursor);
+    if (yearsPerSegment) nextDate.setUTCFullYear(date.getUTCFullYear() + yearsPerSegment, 0, 1);
+    else nextDate.setUTCMonth(date.getUTCMonth() + 1, 1);
+    const next = nextDate.getTime() / DAY_MS;
     const limit = Math.min(next, end + 1);
-    segments.push({ start: cursor, days: limit - cursor, date });
+    segments.push({ start: cursor, days: limit - cursor, date, unit: yearsPerSegment > 1 ? "years" : yearsPerSegment ? "year" : "month" });
     cursor = limit;
   }
   return segments;
@@ -153,4 +158,12 @@ export function timelineMonths(start: number, end: number) {
 export function timelinePosition(entry: TimelineEntry, start: number, dayWidth: number) {
   if (entry.start === null || entry.end === null) return null;
   return { left: (entry.start - start) * dayWidth, width: (entry.end - entry.start + 1) * dayWidth };
+}
+
+/** Bound canvas size and axis density so a distant stored date cannot freeze the view. */
+export function timelineGeometry(days: number, availableWidth: number, scale: TimelineScale, fit: boolean) {
+  const dayWidths: Record<TimelineScale, number> = { day: 56, week: 24, month: 10, quarter: 4 };
+  const dayWidth = fit ? Math.max(0.00001, availableWidth / days) : Math.min(dayWidths[scale], 24_000 / days);
+  const tickStep = scale === "day" && !fit && dayWidth >= 32 ? 1 : dayWidth < 7 ? Math.ceil(70 / dayWidth / 28) * 28 : 7;
+  return { dayWidth, tickStep };
 }
