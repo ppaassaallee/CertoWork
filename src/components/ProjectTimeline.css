@@ -162,7 +162,7 @@
 .cw-timeline-undated-heading { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: var(--surface-1); padding: 12px 16px; color: var(--text-secondary); text-align: left; cursor: pointer; }
 .cw-timeline-undated-heading strong { font-size: 12px; font-weight: 600; }
 .cw-timeline-undated-heading > span { font-size: 10px; color: var(--text-muted); }
-.cw-timeline-undated-item { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 10px; padding: 8px 20px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent); background: transparent; text-align: left; cursor: pointer; }
+.cw-timeline-undated-item { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 10px; padding: 8px 20px 8px calc(20px + var(--timeline-depth, 0) * 16px); border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent); background: transparent; text-align: left; cursor: pointer; }
 .cw-timeline-undated-item:hover { background: var(--surface-1); }
 .cw-timeline-undated-item strong { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-primary); font-size: 11px; font-weight: 500; }
 .cw-timeline-undated-item > span:last-child { color: var(--text-muted); font-size: 10px; }

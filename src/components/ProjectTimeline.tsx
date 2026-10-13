@@ -207,7 +207,7 @@ export function ProjectTimeline({ items, members = [], projectMode, sectionOrder
         {scheduled.length === 0 && <div className="cw-timeline-empty"><strong>{t("timeline.empty")}</strong><span>{t("timeline.emptyHint")}</span></div>}
         {undated.length > 0 && <div className="cw-timeline-undated">
           <button className="cw-timeline-undated-heading" aria-expanded={!collapsed.has("undated")} onClick={() => toggle("undated")} type="button"><ChevronDown className={collapsed.has("undated") ? "is-collapsed" : ""} size={14} /><strong>{t("timeline.noDate")}</strong><span>{undated.length}</span></button>
-          {!collapsed.has("undated") && undated.map((entry) => <button className="cw-timeline-undated-item" onClick={() => onOpenItem(entry.id)} onMouseDown={retainFocusForOpen} key={entry.id} type="button">{icon(entry)}<strong>{entry.title}</strong>{avatar(entry)}<span>{t("timeline.setDates")}</span></button>)}
+          {!collapsed.has("undated") && undated.map((entry) => <button className="cw-timeline-undated-item" data-depth={entry.depth} style={{ "--timeline-depth": Math.min(entry.depth, 6) } as CSSProperties} onClick={() => onOpenItem(entry.id)} onMouseDown={retainFocusForOpen} key={entry.id} type="button">{icon(entry)}<strong>{entry.title}</strong>{avatar(entry)}<span>{t("timeline.setDates")}</span></button>)}
         </div>}
       </div>
     </div>
