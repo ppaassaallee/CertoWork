@@ -3999,8 +3999,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
+  const renderItemEditor = (editor: ReactNode) => mode === "gantt" ? editor : createPortal(editor, document.body);
+
   const renderGantt = (items = filtered) => (
     <ProjectTimeline
+      selectedItemId={selectedItemId}
       items={items.map((item) => ({
         ...item,
         id: String(item.id),
@@ -5321,7 +5324,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       )}
 
       {mode !== "kanban" && kanbanError ? <p className="do-signin-error" role="alert">{kanbanError}</p> : null}
-      <div className="do-items-layout">
+      <div className={`do-items-layout${mode === "gantt" && selectedItem ? " has-timeline-detail" : ""}`}>
         <section className={`do-items-workspace is-${mode}`}>
           {!notionSurface && (
           <div className="do-items-summary">
@@ -5561,8 +5564,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           )}
         </section>
 
-        {selectedItem && isItemModalV2Enabled() && createPortal(
+        {selectedItem && (isItemModalV2Enabled() || mode === "gantt") && renderItemEditor(
           <ItemModal
+            key={selectedItem.id}
+            docked={mode === "gantt"}
+            layout={mode === "gantt" ? "panel" : undefined}
             actionBoardBucketLabel={displayDueBucket(selectedItem)}
             clientEntityOptions={clientEntityOptions}
             clientEntityValue={clientEntity(selectedItem, projects)}
@@ -5642,10 +5648,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             workspaceRecords={workspaceRecords}
             onOpenRecord={onOpenRecord}
           />,
-          document.body,
         )}
 
-        {selectedItem && !isItemModalV2Enabled() && createPortal(
+        {selectedItem && !isItemModalV2Enabled() && mode !== "gantt" && createPortal(
           <div
             className="do-item-modal-backdrop"
             data-testid="item-expanded-modal"

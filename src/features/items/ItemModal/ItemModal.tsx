@@ -86,6 +86,8 @@ export type ItemModalProps = {
   workspaceMembers: Member[];
   sprints: SprintRecord[];
   layout?: "panel" | "expanded";
+  /** Keep the timeline interactive beside this editor. */
+  docked?: boolean;
   onLayoutChange?: (layout: "panel" | "expanded") => void;
   onClose: () => void;
   onUpdateTask: (taskId: string, patch: Record<string, unknown>) => Promise<void> | void;
@@ -310,6 +312,7 @@ export function ItemModal({
   workspaceMembers,
   sprints,
   layout: layoutProp,
+  docked = false,
   onLayoutChange,
   onClose,
   onUpdateTask,
@@ -443,7 +446,7 @@ export function ItemModal({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [deleteOpen, menuOpen, onClose]);
+  }, [deleteOpen, typeMenuOpen, menuOpen, onClose]);
 
   const setLayoutSafe = (next: "panel" | "expanded") => {
     setLayout(next);
@@ -507,15 +510,16 @@ export function ItemModal({
 
   return (
     <div
-      className={`cw-item-modal-backdrop ${layout === "panel" ? "is-panel" : "is-expanded"}`}
+      className={`cw-item-modal-backdrop ${layout === "panel" ? "is-panel" : "is-expanded"}${docked && layout === "panel" ? " is-docked" : ""}`}
       data-testid="item-modal-v2"
-      onClick={onClose}
+      onClick={docked && layout === "panel" ? undefined : onClose}
     >
       <aside
         aria-label={`${typeLabel(kind, locale)} detail`}
         className={`cw-item-modal ${layout === "panel" ? "is-panel" : "is-expanded"}`}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
+        aria-modal={!(docked && layout === "panel")}
       >
         <header className="cw-item-modal-bar">
           <div className="cw-item-modal-bar-left">
