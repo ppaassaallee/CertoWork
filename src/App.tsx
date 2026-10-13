@@ -25,6 +25,9 @@ import {
 const PortalApp = lazy(() =>
   import("./portal/PortalApp").then((m) => ({ default: m.PortalApp })),
 );
+const ProjectTimelinePreview = import.meta.env.DEV
+  ? lazy(() => import("./dev/ProjectTimelinePreview").then((module) => ({ default: module.ProjectTimelinePreview })))
+  : null;
 
 function isPortalHost() {
   if (typeof window === "undefined") return false;
@@ -490,6 +493,7 @@ export default function App() {
           <>
             <Route element={<MobileKitPreview />} path="/dev/mobile-kit" />
             <Route element={<DesktopKitPreview />} path="/dev/desktop-kit" />
+            {ProjectTimelinePreview && <Route element={<Suspense fallback={null}><ProjectTimelinePreview /></Suspense>} path="/dev/project-timeline" />}
           </>
         ) : null}
         <Route path="*" element={<DelivereeWorkspace key={workspace.id} />} />

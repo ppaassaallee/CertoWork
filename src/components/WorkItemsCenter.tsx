@@ -33,9 +33,7 @@ import {
   ListChecks,
   ListTodo,
   Kanban,
-  Maximize2,
   MoreHorizontal,
-  Minimize2,
   Minus,
   PenLine,
   Plus,
@@ -53,7 +51,6 @@ import {
 } from "./ui/Icon";
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { type WorkLane } from "../lib/projectPortfolio";
-import { taskDueStatus } from "./ui/StatusLight";
 import { dedupeTagsByName, matchesTag, tagFilterOptions, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
 import { pushUndo } from "../lib/undoToast";
@@ -164,6 +161,7 @@ import { CompactTagPicker } from "./CompactTagPicker";
 import { RoutineLaunchButton } from "./routines/RoutineHost";
 import { emitDomainEvent } from "../lib/routines";
 import { NotionProjectTable } from "./NotionProjectTable";
+import { ProjectTimeline } from "./ProjectTimeline";
 import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "../lib/bulkPasteItems";
 import {
   ancestorCandidateIds,
@@ -801,15 +799,6 @@ function sortItems(items: any[], primary: SortBy, secondary: SortBy, projects: a
 
 function displayStatus(status: string) {
   return workStatusLabel(status);
-}
-
-function ganttDate(item: any, fallbackDays = 0) {
-  const raw = dateInputValue(item.startDate || item.plannedStartDate || item.sprintStartDate || item.dueDate || item.targetDate);
-  if (!raw) return null;
-  const date = new Date(`${raw}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  if (fallbackDays) date.setDate(date.getDate() + fallbackDays);
-  return date;
 }
 
 function dateLabel(date: Date) {
@@ -4010,200 +3999,29 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     );
   };
 
-  const renderGantt = (items = filtered) => {
-    const byId = new Map(items.map((item) => [String(item.id), item]));
-    const depthOf = (item: any) => {
-      let depth = 0;
-      let current = parentId(item);
-      const seen = new Set<string>();
-      while (current && byId.has(current) && depth < 6 && !seen.has(current)) {
-        seen.add(current);
-        depth += 1;
-        current = parentId(byId.get(current));
-      }
-      return depth;
-    };
-    const dated = items
-      .map((item) => {
-        const start = ganttDate(item);
-        const explicitEnd = ganttDate({ dueDate: item.dueDate || item.targetDate || item.endDate || item.plannedEndDate });
-        const end = explicitEnd || (start ? ganttDate(item, 3) : null);
-        return { item, start, end };
-      })
-      .filter((entry) => entry.start && entry.end) as Array<{ item: any; start: Date; end: Date }>;
-    const undated = items.filter((item) => !ganttDate(item));
-    const now = Date.now();
-    const spanDays =
-      ganttScale === "day" ? 3 : ganttScale === "week" ? 14 : ganttScale === "quarter" ? 92 : 31;
-    const minTime = dated.length ? Math.min(...dated.map((entry) => entry.start.getTime()), now) : now;
-    const maxTime = dated.length
-      ? Math.max(...dated.map((entry) => entry.end.getTime()), minTime + spanDays * 86_400_000)
-      : now + spanDays * 86_400_000;
-    const span = Math.max(1, maxTime - minTime);
-    const markers = Array.from({ length: 5 }, (_, index) => new Date(minTime + (span * index) / 4));
-    const todayLeft = ((now - minTime) / span) * 100;
-    const fitToScreen = () => {
-      if (!dated.length) {
-        setGanttScale("week");
-        return;
-      }
-      const rangeDays = Math.max(
-        1,
-        Math.ceil((Math.max(...dated.map((e) => e.end.getTime())) - Math.min(...dated.map((e) => e.start.getTime()))) / 86_400_000),
-      );
-      if (rangeDays <= 5) setGanttScale("day");
-      else if (rangeDays <= 21) setGanttScale("week");
-      else if (rangeDays <= 70) setGanttScale("month");
-      else setGanttScale("quarter");
-    };
-
-    const datedSections: Array<{ key: string; label: string; entries: typeof dated }> = (() => {
-      if (!isMyWork) return [{ key: "all", label: "", entries: dated }];
-      const map = new Map<string, typeof dated>();
-      for (const entry of dated) {
-        const label = itemProjectTitle(entry.item, projects);
-        map.set(label, [...(map.get(label) || []), entry]);
-      }
-      return orderSections(
-        [...map.entries()].map(([label, entries]) => {
-          const match = label === NO_PROJECT_LABEL
-            ? null
-            : projects.find((project) => projectTitle(project) === label);
-          return {
-            id: label === NO_PROJECT_LABEL ? NO_PROJECT_SECTION : String(match?.id || label),
-            key: `gantt-project:${label}`,
-            label,
-            entries,
-          };
-        }),
-        sectionOrder,
-      );
-    })();
-
-    const renderGanttRow = ({ item, start, end }: (typeof dated)[number]) => {
-      const kind = workItemKind(item);
-      const left = ((start.getTime() - minTime) / span) * 100;
-      const width = Math.max(4, ((end.getTime() - start.getTime()) / span) * 100);
-      const tone = taskDueStatus({ status: item.status, dueDate: end });
-      const depth = depthOf(item);
-      const barWide = width >= 14;
-      return (
-        <article
-          className={`do-gantt-row is-${tone} is-${kind}`}
-          data-depth={Math.min(depth, 3)}
-          key={item.id}
-        >
-          <button onClick={() => onSelectItem(item.id)} onMouseDown={retainFocusForOpen} type="button">
-            <span>{workItemLabel(kind)}</span>
-            <strong>{title(item)}</strong>
-            {!isMyWork ? <small>{itemProjectTitle(item, projects)}</small> : null}
-          </button>
-          <div className="do-gantt-track">
-            <div
-              className={`do-gantt-bar${barWide ? " is-wide" : ""}`}
-              style={{ "--gantt-left": `${left}%`, "--gantt-width": `${Math.min(width, 100 - left)}%` } as CSSProperties}
-            >
-              <span>{dateLabel(start)} - {dateLabel(end)}</span>
-            </div>
-          </div>
-        </article>
-      );
-    };
-
-    return (
-      <div className="do-gantt" data-testid="work-items-gantt">
-        <div className="do-gantt-toolbar">
-          <div className="do-gantt-scale" aria-label="Gantt zoom">
-            {(
-              [
-                ["day", t("gantt.day")],
-                ["week", t("gantt.week")],
-                ["month", t("gantt.month")],
-                ["quarter", t("gantt.quarter")],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                className={ganttScale === value ? "is-active" : ""}
-                key={value}
-                onClick={() => setGanttScale(value)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button className="do-button-secondary" onClick={fitToScreen} type="button">
-            {t("gantt.fit")}
-          </button>
-          <span className="spacer" style={{ flex: 1 }} />
-          <button
-            aria-label={ganttFocus ? "Salir de focus" : "Focus Gantt"}
-            className="do-icon-tool"
-            onClick={() => setGanttFocus((current) => !current)}
-            title={ganttFocus ? "Salir de focus (F)" : "Focus (F)"}
-            type="button"
-          >
-            {ganttFocus ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
-        </div>
-        <div className="do-gantt-axis">
-          {markers.map((marker) => <span key={marker.toISOString()}>{dateLabel(marker)}</span>)}
-        </div>
-        <div className="do-gantt-rows">
-          <div className="do-gantt-today" style={{ left: `calc(200px + (100% - 200px) * ${Math.max(0, Math.min(100, todayLeft)) / 100})` }} title="Today" />
-          {datedSections.map((section) => {
-            const collapsed = Boolean(section.label) && collapsedGroups.includes(section.key);
-            return (
-              <Fragment key={section.key}>
-                {section.label ? (
-                  <button
-                    className="do-gantt-section-head"
-                    data-testid="gantt-project-section"
-                    onClick={() => toggleGroup(section.key)}
-                    type="button"
-                  >
-                    <ChevronDown className={collapsed ? "is-collapsed" : ""} size={13} />
-                    <strong>{section.label}</strong>
-                    <span>{section.entries.length}</span>
-                  </button>
-                ) : null}
-                {!collapsed ? section.entries.map(renderGanttRow) : null}
-              </Fragment>
-            );
-          })}
-          {dated.length === 0 && <div className="do-items-empty"><CalendarRange size={21} /><strong>No scheduled items yet.</strong><span>Add due dates or start dates to build the project timeline.</span></div>}
-          {compact && (
-            <form
-              className="do-gantt-add-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!newTitle.trim() || !activeProject?.id) return;
-                void onAddTask(activeProject.id, newTitle.trim(), "backlog", {
-                  workItemType: newType,
-                  dueDate: newDueDate || null,
-                });
-                setNewTitle("");
-              }}
-            >
-              <Plus size={13} />
-              <input
-                aria-label="Add PBI/Task"
-                onChange={(event) => setNewTitle(event.target.value)}
-                placeholder="Add PBI/Task…"
-                value={newTitle}
-              />
-            </form>
-          )}
-        </div>
-        {undated.length > 0 && (
-          <section className="do-gantt-unscheduled">
-            <button onClick={() => toggleGroup("gantt-unscheduled")} type="button"><ChevronDown className={collapsedGroups.includes("gantt-unscheduled") ? "is-collapsed" : ""} size={13} /><strong>No date</strong><span>{undated.length}</span></button>
-            {!collapsedGroups.includes("gantt-unscheduled") && <div>{undated.slice(0, 20).map((item) => renderRow(item, undated))}</div>}
-          </section>
-        )}
-      </div>
-    );
-  };
+  const renderGantt = (items = filtered) => (
+    <ProjectTimeline
+      items={items.map((item) => ({
+        ...item,
+        id: String(item.id),
+        title: title(item),
+        kind: workItemKind(item),
+        parentId: parentId(item),
+        projectId: String(item.projectId || ""),
+        projectLabel: itemProjectTitle(item, projects),
+        status: canonicalStatus(item),
+      }))}
+      members={workspaceMembers}
+      projectMode={!isMyWork}
+      sectionOrder={sectionOrder}
+      scale={ganttScale}
+      onScaleChange={setGanttScale}
+      focused={ganttFocus}
+      onFocusChange={setGanttFocus}
+      onOpenItem={onSelectItem}
+      onAddItem={() => { setAddItemOpen(true); setCreateAttr(null); }}
+    />
+  );
 
   const activeFilterChips: Array<{ key: string; label: string; clear: () => void }> = [];
   if (!savedView) {

@@ -4820,7 +4820,19 @@ a {
   display: none !important;
 }
 .do-shell.is-gantt-focus .do-main {
-  grid-template-columns: 1fr;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+.do-shell.is-gantt-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+.do-shell.is-gantt-focus .do-main > .do-header,
+.do-project-console.is-gantt-focus > .do-project-page-header,
+.do-project-console.is-gantt-focus > .do-project-summary-strip,
+.do-project-console.is-gantt-focus > .do-project-page-tabs,
+.do-items-center.is-gantt-focus > .do-items-toolbar {
+  display: none;
 }
 .do-gantt-focus-bar {
   display: none;
@@ -7116,6 +7128,23 @@ a {
 .do-items-center.is-gantt-mode .do-gantt {
   min-height: 0;
   flex: 1 1 auto;
+}
+.do-items-center.is-gantt-mode > .do-items-layout {
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+}
+.do-items-center.is-gantt-mode .do-items-workspace.is-gantt {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.do-items-workspace.is-gantt > [data-testid="show-completed-toggle"] {
+  flex: none;
+  align-self: flex-start;
+  margin: 6px 12px;
 }
 .do-items-mode button {
   display: inline-flex;
