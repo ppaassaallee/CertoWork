@@ -2776,16 +2776,17 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                         url: docUrl,
                         body: docBody,
                       }),
-                    ).catch((reason) => {
+                    ).then(() => {
+                      setDocTitle("");
+                      setDocBody("");
+                      setDocUrl("");
+                    }).catch((reason) => {
                       setDocError(
                         reason instanceof Error
                           ? reason.message
                           : "The document could not be saved.",
                       );
                     });
-                    setDocTitle("");
-                    setDocBody("");
-                    setDocUrl("");
                   }}
                   type="button"
                 >
