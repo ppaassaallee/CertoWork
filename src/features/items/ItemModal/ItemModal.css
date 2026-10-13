@@ -38,6 +38,28 @@
   border-radius: 0;
   margin-left: auto;
 }
+.cw-item-modal-backdrop.is-docked {
+  position: relative;
+  inset: auto;
+  z-index: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  background: var(--surface-0);
+}
+.cw-item-modal-backdrop.is-docked::before { display: none; }
+.cw-item-modal-backdrop.is-docked .cw-item-modal {
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  box-shadow: none;
+}
+.cw-item-modal-backdrop.is-docked .cw-item-modal-body { display: flex; flex-direction: column; }
+.cw-item-modal-backdrop.is-docked .cw-item-props { flex-shrink: 0; overflow: visible; }
+.cw-item-modal-backdrop.is-docked .cw-item-content { flex-shrink: 0; overflow: visible; }
 .cw-item-modal-bar {
   display: flex;
   align-items: center;

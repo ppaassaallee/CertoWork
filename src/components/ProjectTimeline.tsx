@@ -47,7 +47,8 @@ function TimelineChoice<T extends string>({ label, value, options, onChange }: {
   </div>;
 }
 
-export function ProjectTimeline({ items, members = [], projectMode, sectionOrder = [], scale, onScaleChange, focused, onFocusChange, onOpenItem, onAddItem }: {
+export function ProjectTimeline({ items, members = [], selectedItemId, projectMode, sectionOrder = [], scale, onScaleChange, focused, onFocusChange, onOpenItem, onAddItem }: {
+  selectedItemId?: string | null;
   items: TimelineItem[];
   members?: Member[];
   projectMode: boolean;
@@ -150,7 +151,7 @@ export function ProjectTimeline({ items, members = [], projectMode, sectionOrder
     const point = entry.start === entry.end;
     const inside = !point && position.width >= 180;
     const caption = dateCaption(entry);
-    return <div className={`cw-timeline-row is-${tone}${entry.rollup ? " is-rollup" : ""}`} data-testid="timeline-item" data-item-id={entry.id} data-depth={depth} key={entry.id}>
+    return <div className={`cw-timeline-row is-${tone}${entry.rollup ? " is-rollup" : ""}${entry.id === selectedItemId ? " is-selected" : ""}`} data-testid="timeline-item" data-item-id={entry.id} data-depth={depth} key={entry.id}>
       <div className="cw-timeline-rail cw-timeline-item-name" style={{ "--timeline-depth": Math.min(depth, 6) } as CSSProperties}>
         {entry.children.length ? <button className="cw-timeline-expand" aria-label={`${collapsedItems.has(entry.id) ? t("timeline.expand") : t("timeline.collapse")} ${entry.title}`} aria-expanded={!collapsedItems.has(entry.id)} onClick={() => toggleItem(entry.id)} type="button"><ChevronDown size={13} className={collapsedItems.has(entry.id) ? "is-collapsed" : ""} /></button> : <span className="cw-timeline-expand-space" />}
         {icon(entry)}
