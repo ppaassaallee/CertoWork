@@ -12,7 +12,7 @@ Workers Static Assets:
 
 - the frontend already builds to `dist/client`;
 - `worker/index.js` is already a Worker-style edge runtime;
-- the app already expects `/api/*`, `/__/auth/*`, and `/mcp/*` to be served from
+- the app already expects `/api/*`, `/__/auth/*`, `/mcp`, and `/mcp/*` to be served from
   the same origin;
 - Cloudflare can serve the SPA and route API requests through the Worker without
   introducing a second backend.
