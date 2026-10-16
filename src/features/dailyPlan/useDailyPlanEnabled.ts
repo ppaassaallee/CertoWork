@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
+import { useUserFlags } from "../flags/userFlagsStore";
 
 const LS_KEY = "certoDailyPlan";
 const CHANGE_EVENT = "certo-daily-plan-changed";
@@ -34,26 +35,8 @@ function writeLocalOverride(on: boolean) {
  */
 export function useDailyPlanEnabled(): boolean {
   const { user } = useAuth();
-  const [remote, setRemote] = useState(false);
+  const remote = useUserFlags(user?.uid);
   const [local, setLocal] = useState(readLocalOverride);
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setRemote(false);
-      return;
-    }
-    const ref = doc(db, "users", user.uid);
-    return onSnapshot(
-      ref,
-      (snap) => {
-        const flags = snap.exists()
-          ? (snap.data() as { flags?: { dailyPlan?: unknown } }).flags
-          : undefined;
-        setRemote(flags?.dailyPlan === true);
-      },
-      () => setRemote(false),
-    );
-  }, [user?.uid]);
 
   useEffect(() => {
     const syncLocal = () => setLocal(readLocalOverride());
@@ -65,7 +48,7 @@ export function useDailyPlanEnabled(): boolean {
     };
   }, []);
 
-  return remote || local;
+  return remote.dailyPlan === true || local;
 }
 
 /** Turn Daily Plan on for this user (Firestore + localStorage). */
