@@ -166,6 +166,7 @@ import { countBulkPasteItems, parseBulkPasteItems, type BulkPasteNode } from "..
 import {
   ancestorCandidateIds,
   allowedChildKinds,
+  canBeStandalone,
   allowedParentItems,
   allowedParentKinds,
   compareHierarchySiblings,
@@ -1743,7 +1744,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));
   const projectCreateBlocked =
     String(activeProject?.status || "").toLowerCase() === "deleted";
-  const canCreate = Boolean(newTitle.trim()) && !projectCreateBlocked;
+  const validCreateParent = newParentId && parentOptions.some((item) => item.id === newParentId);
+  const canCreate = Boolean(newTitle.trim()) && !projectCreateBlocked && (canBeStandalone(newType) || Boolean(validCreateParent));
   const pasteTree = useMemo(() => parseBulkPasteItems(pasteText), [pasteText]);
   const pasteCounts = useMemo(() => countBulkPasteItems(pasteTree), [pasteTree]);
 
@@ -1773,7 +1775,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const createItem = async () => {
     const projectId = activeProject?.id || newProjectId || "";
     if (!newTitle.trim()) return;
-    if (projectCreateBlocked) return;
+    if (projectCreateBlocked || !canCreate) return;
     const project = projects.find((candidate) => candidate.id === projectId);
     const inheritedDeliveryEntity = String(
       newDeliveryEntity || project?.deliveryEntity || project?.bpo || "",
@@ -1781,7 +1783,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const inheritedClientEntity = String(
       project?.clientEntity || project?.client || "",
     );
-    const parent = findPoolItem(newParentId);
+    const parent = newType === "epic" ? null : findPoolItem(newParentId);
     const links = parentLinkPatch(parent);
     const assigneeMembers = newAssigneeIds
       .map((id) => workspaceMembers.find((member) => member.id === id || member.userId === id))
@@ -1845,6 +1847,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const allowed = allowedParentKinds(kind);
     const currentParent = findPoolItem(parentId(item));
     const parentOk = Boolean(currentParent && allowed.includes(workItemKind(currentParent)));
+    if (!parentOk && !canBeStandalone(kind)) {
+      setKanbanError(`A ${workItemLabel(kind)} needs a ${joinWorkItemTypeLabels(allowed)} parent. Choose the parent before changing its type.`);
+      return;
+    }
     onUpdateTask(item.id, {
       workItemType: kind,
       itemType: kind,
@@ -1860,13 +1866,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       setKanbanDraftColumn(null);
       return;
     }
+    // The one-line board composer has no parent picker; create a standalone PBI.
+    const kind: WorkItemKind = canBeStandalone(newType) ? newType : "pbi";
     const project = projects.find((candidate) => candidate.id === projectId);
     const inheritedDeliveryEntity = String(project?.deliveryEntity || project?.bpo || "");
     const inheritedClientEntity = String(project?.clientEntity || project?.client || "");
     await onAddTask(projectId, text, laneForKanbanColumn(columnKey), {
-      workItemType: newType,
-      itemType: newType,
-      taskType: newType,
+      workItemType: kind,
+      itemType: kind,
+      taskType: kind,
       parentId: null,
       deliveryEntity: inheritedDeliveryEntity,
       bpo: inheritedDeliveryEntity,
@@ -1915,6 +1923,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const createBulkItems = async () => {
     const nodes = parseBulkPasteItems(pasteText);
     if (!nodes.length || pasteSaving) return;
+    if (nodes.some((node) => node.children.some((child) => child.children.length > 0))) {
+      setPasteError("Subtasks must sit directly under a PBI. Remove the extra indentation before pasting.");
+      return;
+    }
     const projectId = newProjectId || baseProjectId;
     setPasteSaving(true);
     setPasteError("");
@@ -1966,6 +1978,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     if (nextParent && !allowedParentKinds(workItemKind(dragged)).includes(workItemKind(nextParent))) {
       throw new Error(`A ${workItemLabel(workItemKind(dragged))} cannot be placed under this parent. Drop it on the project heading instead.`);
     }
+    if (!nextParent && !canBeStandalone(workItemKind(dragged))) {
+      throw new Error(`A ${workItemLabel(workItemKind(dragged))} needs a parent and cannot become a standalone item.`);
+    }
     const ordered = [...peers].sort(compareVisibleSiblings);
     const ids = placeItemBefore(ordered.map((item) => String(item.id)), draggedId, String(target.id));
     await Promise.all(ids.map((id, index) => {
@@ -2000,6 +2015,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     roots: any[],
     beforeId: string | null,
   ) => {
+    const movingItem = findPoolItem(draggedId);
+    if (movingItem && !canBeStandalone(workItemKind(movingItem))) {
+      throw new Error(`A ${workItemLabel(workItemKind(movingItem))} needs a parent. Move its parent project instead.`);
+    }
     const moving = subtreeIds(draggedId, (id) => hierarchyChildren(parentPool, id).map((child) => String(child.id)));
     const movingSet = new Set(moving);
     const rootIds = roots.map((item) => String(item.id)).filter((id) => !movingSet.has(id));
@@ -2643,6 +2662,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const allowed = allowedParentKinds(workItemKind(item));
     if (nextId && parent && !allowed.includes(workItemKind(parent))) return;
     if (nextId && !parent) return;
+    if (!parent && !canBeStandalone(workItemKind(item))) return;
     onUpdateTask(item.id, parentLinkPatch(parent));
     setOpenAttr(null);
     setParentSearch("");
@@ -2652,7 +2672,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const kind = workItemKind(item);
     const allowed = allowedParentKinds(kind);
     if (allowed.length === 0) {
-      return <span className="do-parent-hint">Epics sit at the top of the tree.</span>;
+      return <span className="do-parent-hint">{kind === "ticket" ? "Requests are separate from the planning hierarchy." : "Epics sit at the top of the tree."}</span>;
     }
     const candidates = allowedParentItems(item, parentPool);
     const current = parentId(item);
@@ -2676,13 +2696,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           value={parentSearch}
         />
         <div className="do-parent-options" role="listbox" aria-label={`${labels} parents`}>
-          <button
+          {canBeStandalone(kind) ? <button
             className={!current ? "is-active" : ""}
             onClick={() => assignParent(item, "")}
             type="button"
           >
             <span className="do-parent-title">No parent</span>
-          </button>
+          </button> : null}
           {visible.map((candidate) => (
             <button
               aria-selected={candidate.id === current}
@@ -2698,7 +2718,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           ))}
         </div>
         {options.length === 0 && (
-          <small>No {labels} yet. Add one below.</small>
+          <small>{canBeStandalone(allowed[0]) ? `No ${labels} yet. Add one below.` : "Create a Feature under an Epic first."}</small>
         )}
         {options.length > 0 && visible.length === 0 && (
           <small>No matching {labels}. Try another name.</small>
@@ -2706,7 +2726,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         {options.length > visible.length && needle === "" && (
           <small>Showing {visible.length} of {options.length}. Type to find the rest.</small>
         )}
-        <QuickAttrCreate
+        {canBeStandalone(allowed[0]) ? <QuickAttrCreate
           onCreate={(name) => {
             const kind = allowed[0];
             Promise.resolve(onAddTask(String(item.projectId || ""), name, "backlog", {
@@ -2724,7 +2744,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             });
           }}
           placeholder={`Create ${workItemLabel(allowed[0])}`}
-        />
+        /> : null}
       </div>
     );
   };
@@ -3282,30 +3302,35 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const addLabel = `Add ${childLabel}`;
     const draft = inlineAddDrafts[parent.id] || "";
     const open = Boolean(inlineAddOpen[parent.id]);
-    const indent = Math.max(depth + 1, 1) * 24;
+    // Match the child title's tree indent inside the same four-column row grid.
+    const indent = (depth + 1) * 24 + 20;
     if (!open) {
       return (
-        <button
-          aria-label={`${addLabel} under ${title(parent)}`}
-          className="do-items-inline-add-btn"
-          data-testid="item-inline-add-child"
-          onClick={() => focusInlineAdd(parent.id, groupKey, workItemKind(parent), depth)}
-          style={{ paddingLeft: indent }}
-          type="button"
-        >
-          <Plus size={12} aria-hidden="true" />
-          <span>{addLabel}</span>
-        </button>
+        <div className="do-items-inline-add" data-testid="item-inline-add-child" style={itemGridStyle}>
+          <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+          <button
+            aria-label={`${addLabel} under ${title(parent)}`}
+            className="do-items-inline-add-btn"
+            onClick={() => focusInlineAdd(parent.id, groupKey, workItemKind(parent), depth)}
+            style={{ marginLeft: indent }}
+            title={`${addLabel} under ${title(parent)}`}
+            type="button"
+          >
+            <Plus size={13} aria-hidden="true" />
+          </button>
+        </div>
       );
     }
     return (
       <div
         className="do-items-inline-add is-open"
         data-testid="item-inline-add-child"
-        style={{ paddingLeft: indent }}
+        style={itemGridStyle}
       >
-        <Plus size={12} aria-hidden="true" />
-        <input
+        <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+        <div className="do-items-inline-add-entry" style={{ marginLeft: indent }}>
+          <Plus size={13} aria-hidden="true" />
+          <input
           aria-label={`${addLabel} under ${title(parent)}`}
           onBlur={(event) => {
             if (!event.currentTarget.value.trim()) {
@@ -3338,7 +3363,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             inlineAddRefs.current[parent.id] = node;
           }}
           value={draft}
-        />
+          />
+        </div>
       </div>
     );
   };
@@ -4862,7 +4888,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               const TypeIcon = WORK_ITEM_TYPE_ICONS[newType] || Target;
               const parentLabel = newParentId
                 ? title(parentOptions.find((item) => item.id === newParentId) || { title: "Parent" })
-                : newType === "epic"
+                : canBeStandalone(newType)
                   ? "No parent"
                   : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`;
               const deliveryLabel = newDeliveryEntity || "Delivery entity";
@@ -5000,10 +5026,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                           onChange={(event) => { setNewParentId(event.target.value); setCreateAttr(null); }}
                           value={newParentId}
                         >
-                          <option value="">{newType === "epic" ? "No parent" : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`}</option>
+                          <option value="">{canBeStandalone(newType) ? "No parent" : `Choose ${joinWorkItemTypeLabels(allowedParentKinds(newType))}`}</option>
                           {parentOptions.map((item) => <option key={item.id} value={item.id}>{workItemLabel(workItemKind(item))} · {title(item)}</option>)}
                         </select>
-                        {newType !== "epic" && allowedParentKinds(newType).length > 0 ? (
+                        {newType !== "epic" && canBeStandalone(allowedParentKinds(newType)[0]) ? (
                           <QuickAttrCreate
                             onCreate={async (name) => {
                               const kind = allowedParentKinds(newType)[0];
@@ -5185,6 +5211,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               text={newTitle}
             />
           </div>
+          {!canBeStandalone(newType) && !validCreateParent ? (
+            <small role="status">Choose a {joinWorkItemTypeLabels(allowedParentKinds(newType))} parent before adding this item.</small>
+          ) : null}
           <button disabled={!canCreate} onClick={createItem} type="button"><Plus size={13} /> Add</button>        </section>
       )}
       {addSprintOpen && onCreateSprint && (

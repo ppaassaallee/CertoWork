@@ -7,6 +7,7 @@ import {
   allowedParentItems,
   applyTreeLevel,
   canNestUnder,
+  canBeStandalone,
   defaultExpandedTreeKeys,
   effectiveInheritedField,
   effectivePriority,
@@ -135,7 +136,7 @@ test("PBIs pick Features as parents; Features pick Epics; tasks pick PBIs", () =
   assert.deepEqual(allowedParentKinds("epic"), []);
   assert.deepEqual(allowedParentKinds("feature"), ["epic"]);
   assert.deepEqual(allowedParentKinds("pbi"), ["feature"]);
-  assert.deepEqual(allowedParentKinds("task"), ["pbi", "story"]);
+  assert.deepEqual(allowedParentKinds("task"), ["pbi"]);
   assert.deepEqual(allowedParentItems(feature, items).map((item) => item.id), ["e1", "e2"]);
   assert.deepEqual(allowedParentItems(pbi, items).map((item) => item.id), ["f1"]);
   assert.deepEqual(allowedParentItems(epic, items), []);
@@ -190,12 +191,25 @@ test("allowedChildKinds is the inverse nesting table", () => {
   assert.deepEqual(allowedChildKinds("epic"), ["feature"]);
   assert.deepEqual(allowedChildKinds("feature"), ["pbi", "story"]);
   assert.deepEqual(allowedChildKinds("pbi"), ["subtask", "task", "bug", "issue"]);
-  assert.deepEqual(allowedChildKinds("story"), ["subtask", "task", "bug", "issue"]);
-  assert.deepEqual(allowedChildKinds("task"), ["subtask"]);
-  assert.deepEqual(allowedChildKinds("bug"), ["subtask"]);
-  assert.deepEqual(allowedChildKinds("issue"), ["subtask"]);
+  assert.deepEqual(allowedChildKinds("story"), []);
+  assert.deepEqual(allowedChildKinds("task"), []);
+  assert.deepEqual(allowedChildKinds("bug"), []);
+  assert.deepEqual(allowedChildKinds("issue"), []);
   assert.deepEqual(allowedChildKinds("ticket"), []);
   assert.deepEqual(allowedChildKinds("subtask"), []);
+});
+
+test("planning roots are Epics/PBIs; Features need Epics and Subtasks need PBIs", () => {
+  assert.equal(canBeStandalone("epic"), true);
+  assert.equal(canBeStandalone("pbi"), true);
+  assert.equal(canBeStandalone("ticket"), true); // Customer requests use a separate workflow.
+  for (const kind of ["feature", "subtask", "story", "task", "bug", "issue"]) {
+    assert.equal(canBeStandalone(kind), false, kind);
+  }
+  assert.deepEqual(allowedParentKinds("feature"), ["epic"]);
+  assert.deepEqual(allowedParentKinds("subtask"), ["pbi"]);
+  assert.equal(canNestUnder("subtask", "task"), false);
+  assert.equal(canNestUnder("feature", "pbi"), false);
 });
 
 test("effectivePriority inherits from the highest ancestor; due dates stay local", () => {
