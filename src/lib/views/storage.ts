@@ -165,13 +165,6 @@ export async function setLastUsedView(
       /* ignore quota */
     }
   }
-  try {
-    await setDoc(
-      doc(db, "users", userId),
-      { lastViews: { [surface]: viewId } },
-      { merge: true },
-    );
-  } catch {
-    /* users rules may reject until lastViews is allowed; LS still works */
-  }
+  // This is a device navigation preference, read only from localStorage above.
+  // Selecting a tab must not spend a Firestore write or wait on server quota.
 }

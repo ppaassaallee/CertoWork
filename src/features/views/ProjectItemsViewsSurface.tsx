@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createView,
   getLastUsedViewId,
@@ -15,6 +15,7 @@ import { ViewsBar } from "./ViewsBar";
 import { ViewCustomizer, type CustomizerSection } from "./ViewCustomizer";
 import { buildTaskAdapter, type TaskRow } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
+import { normalizeTaskView } from "../../lib/views/filterDraft";
 import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { WorkItemsCenter } from "../../components/WorkItemsCenter";
@@ -119,24 +120,28 @@ export function ProjectItemsViewsSurface({
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [customizerSection, setCustomizerSection] = useState<CustomizerSection>("customize");
+  const [previewView, setPreviewView] = useState<SavedView | null>(null);
+  const [viewError, setViewError] = useState("");
 
+  const defaultViewRef = useRef(defaultView);
+  defaultViewRef.current = defaultView;
   const refresh = useCallback(async () => {
     try {
       const remote = await listViews(workspaceId, surface, actorId);
-      const next = remote.length ? [defaultView, ...remote] : [defaultView];
+      const next = [defaultViewRef.current, ...remote];
       setViews(next);
       const last = getLastUsedViewId(actorId, surface);
       if (last && next.some((view) => view.id === last)) setActiveId(last);
     } catch {
-      setViews([defaultView]);
+      setViews([defaultViewRef.current]);
     }
-  }, [workspaceId, surface, actorId, defaultView]);
+  }, [workspaceId, surface, actorId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const active = views.find((view) => view.id === activeId) || defaultView;
+  const active = useMemo(() => normalizeTaskView(previewView || views.find((view) => view.id === activeId) || defaultView), [previewView, views, activeId, defaultView]);
 
   useEffect(() => {
     onViewChange?.(active);
@@ -192,9 +197,16 @@ export function ProjectItemsViewsSurface({
         ...active,
         filters: active.filters.filter((_, i) => i !== index),
       };
-      const saved = await ensurePersisted(next);
-      setViews((current) => current.map((view) => (view.id === saved.id ? saved : view)));
-      setActiveId(saved.id);
+      setPreviewView(next);
+      try {
+        const saved = await ensurePersisted(next);
+        setViews((current) => [...current.filter((view) => view.id !== saved.id), saved]);
+        setActiveId(saved.id);
+        setPreviewView((current) => current === next ? null : current);
+        setViewError("");
+      } catch (error) {
+        setViewError(`Filters are applied locally. Could not save this view: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
     })();
   };
 
@@ -206,6 +218,7 @@ export function ProjectItemsViewsSurface({
       className={`cw-views-surface is-asana-list${isList ? "" : " is-board-mode"}`}
       data-testid="project-items-views-surface"
     >
+      {viewError && <p role="status" className="cw-views-error">{viewError}</p>}
       {isList ? (
         <>
           <ViewsBar
@@ -233,6 +246,8 @@ export function ProjectItemsViewsSurface({
             }}
             onOpenCustomizer={(section = "customize") => { setCustomizerSection(section); setCustomizerOpen(true); }}
             onSelect={(viewId) => {
+              setPreviewView(null);
+              setViewError("");
               setActiveId(viewId);
               void setLastUsedView(actorId, surface, viewId);
             }}
@@ -302,16 +317,23 @@ export function ProjectItemsViewsSurface({
           <ViewCustomizer
             adapter={adapter}
             onChange={(next) => {
+              setPreviewView(next);
               void (async () => {
-                const saved = await ensurePersisted(next);
-                setViews((current) =>
-                  current.map((view) => (view.id === saved.id ? saved : view)),
-                );
-                setActiveId(saved.id);
+                try {
+                  const saved = await ensurePersisted(next);
+                  setViews((current) => [...current.filter((view) => view.id !== saved.id), saved]);
+                  setActiveId(saved.id);
+                  setPreviewView((current) => current === next ? null : current);
+                  setViewError("");
+                } catch (error) {
+                  setViewError(`Changes are applied locally. Could not save this view: ${error instanceof Error ? error.message : "Unknown error"}`);
+                }
               })();
             }}
             onClose={() => setCustomizerOpen(false)}
             onReset={() => {
+              setPreviewView(null);
+              setViewError("");
               setActiveId(defaultView.id);
               setCustomizerOpen(false);
             }}

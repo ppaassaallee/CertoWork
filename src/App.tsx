@@ -28,6 +28,9 @@ const PortalApp = lazy(() =>
 const ProjectTimelinePreview = import.meta.env.DEV
   ? lazy(() => import("./dev/ProjectTimelinePreview").then((module) => ({ default: module.ProjectTimelinePreview })))
   : null;
+const WorkFiltersPreview = import.meta.env.DEV
+  ? lazy(() => import("./dev/WorkFiltersPreview").then((module) => ({ default: module.WorkFiltersPreview })))
+  : null;
 
 function isPortalHost() {
   if (typeof window === "undefined") return false;
@@ -482,6 +485,9 @@ export default function App() {
   if (inviteToken) {
     return <InviteActivate token={inviteToken} />;
   }
+  if (WorkFiltersPreview && window.location.pathname === "/dev/work-filters") {
+    return <BrowserRouter><Suspense fallback={null}><WorkFiltersPreview /></Suspense></BrowserRouter>;
+  }
   if (!user) return <SignIn />;
   if (!workspace) return <WorkspaceRecovery />;
 
@@ -494,6 +500,7 @@ export default function App() {
             <Route element={<MobileKitPreview />} path="/dev/mobile-kit" />
             <Route element={<DesktopKitPreview />} path="/dev/desktop-kit" />
             {ProjectTimelinePreview && <Route element={<Suspense fallback={null}><ProjectTimelinePreview /></Suspense>} path="/dev/project-timeline" />}
+            {WorkFiltersPreview && <Route element={<Suspense fallback={null}><WorkFiltersPreview /></Suspense>} path="/dev/work-filters" />}
           </>
         ) : null}
         <Route path="*" element={<DelivereeWorkspace key={workspace.id} />} />

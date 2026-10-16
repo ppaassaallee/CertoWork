@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EntityAdapter, FilterRule, SavedView } from "../../lib/views/types";
 import { t } from "../../lib/i18n";
+import { applyPendingFilter } from "../../lib/views/filterDraft";
 
 export type CustomizerSection = "filter" | "sort" | "group" | "customize";
 
@@ -50,9 +51,10 @@ export function ViewCustomizer<Row>({
   const [filterColumnId, setFilterColumnId] = useState("");
   const [filterOp, setFilterOp] = useState<FilterRule["op"]>("contains");
   const [filterValue, setFilterValue] = useState("");
+  const [filterDirty, setFilterDirty] = useState(false);
 
   useEffect(() => {
-    if (open) setDraft(view);
+    if (open) { setDraft(view); setFilterDirty(false); setFilterValue(""); }
   }, [open, view.id]);
 
   useEffect(() => {
@@ -88,6 +90,7 @@ export function ViewCustomizer<Row>({
       }],
     }));
     setFilterValue("");
+    setFilterDirty(false);
   };
 
   const toggleColumn = (id: string, fixed?: boolean) => {
@@ -156,7 +159,7 @@ export function ViewCustomizer<Row>({
       </header>
 
       {section === "filter" ? (
-        <section className="cw-views-editor-section">
+        <section className="cw-views-editor-section" onChange={() => setFilterDirty(true)}>
           <h3>{t("views.filter")}</h3>
           {draft.filters.map((rule, index) => (
             <div className="cw-views-rule" key={`${rule.columnId}-${index}`}>
@@ -305,7 +308,7 @@ export function ViewCustomizer<Row>({
         {section === "customize" && <button onClick={() => { onSaveAsTeam(draft); onClose(); }} type="button">
           {t("views.saveAsTeam")}
         </button>}
-        <button onClick={() => { onChange(draft); onClose(); }} type="button">{t("views.apply")}</button>
+        <button onClick={() => { onChange(section === "filter" && filterDirty ? applyPendingFilter(draft, selectedFilterColumn?.id || "", selectedFilterOp, filterValue) : draft); onClose(); }} type="button">{t("views.apply")}</button>
         <button onClick={onReset} type="button">
           {t("views.reset")}
         </button>
