@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   createView,
   getLastUsedViewId,
@@ -19,6 +19,7 @@ import {
   type TaskRow,
 } from "./adapters/taskAdapter";
 import { t } from "../../lib/i18n";
+import { normalizeTaskView } from "../../lib/views/filterDraft";
 import { actorEquivalentMemberIds } from "../../lib/myWorkItems";
 import { isRemovedWorkItem } from "../../lib/itemRemoval";
 import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
@@ -166,27 +167,28 @@ export function MyWorkViewsSurface({
     return [...systemViews, ...remote];
   }, [systemViews, remoteViews]);
 
+  const viewDefaults = useRef({ systemViews, preferredSystemViewId });
+  viewDefaults.current = { systemViews, preferredSystemViewId };
   const refresh = useCallback(async () => {
     try {
       const listed = await listViews(workspaceId, surface, actorId);
       setRemoteViews(listed);
-      if (preferredSystemViewId) {
-        setActiveId(preferredSystemViewId);
+      if (viewDefaults.current.preferredSystemViewId) {
+        setActiveId(viewDefaults.current.preferredSystemViewId);
         return;
       }
       const last = getLastUsedViewId(actorId, surface);
       if (
         last &&
         (listed.some((view) => view.id === last) ||
-          systemViews.some((view) => view.id === last))
+          viewDefaults.current.systemViews.some((view) => view.id === last))
       ) {
         setActiveId(last);
       }
     } catch (error) {
-      setRemoteViews([]);
       setViewError(error instanceof Error ? error.message : "Could not load saved views.");
     }
-  }, [workspaceId, actorId, systemViews, preferredSystemViewId]);
+  }, [workspaceId, actorId]);
 
   useEffect(() => {
     void refresh();
@@ -199,7 +201,7 @@ export function MyWorkViewsSurface({
   }, [preferredSystemViewId, systemViews]);
 
   const selectedView = views.find((view) => view.id === activeId) || defaultView;
-  const active = previewView?.id === selectedView.id ? previewView : selectedView;
+  const active = useMemo(() => normalizeTaskView(previewView?.id === selectedView.id ? previewView : selectedView), [previewView, selectedView]);
 
   const appliedResult = useMemo(
     () => {
@@ -273,7 +275,7 @@ export function MyWorkViewsSurface({
           current.map((view) => (view.id === saved.id ? saved : view)),
         );
         setActiveId(saved.id);
-        setPreviewView(null);
+        setPreviewView((current) => current === next ? null : current);
         setViewError("");
       } catch (error) {
         setViewError(`Filter active only for this session; it could not be saved: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -446,7 +448,7 @@ export function MyWorkViewsSurface({
                   return [...without, saved];
                 });
                 setActiveId(saved.id);
-                setPreviewView(null);
+                setPreviewView((current) => current === next ? null : current);
                 setViewError("");
               } catch (error) {
                 setViewError(`Changes active only for this session; they could not be saved: ${error instanceof Error ? error.message : "Unknown error"}`);

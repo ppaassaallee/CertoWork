@@ -2190,7 +2190,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     </button>
   );
 
+  const completionInFlight = useRef(new Set<string>());
+  const [pendingCompletions, setPendingCompletions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!pendingCompletions.length) return;
+    const timer = window.setTimeout(() => setKanbanError("Status change is still waiting for server confirmation. Do not repeat the action; check Firestore usage if the quota warning is shown."), 10000);
+    return () => window.clearTimeout(timer);
+  }, [pendingCompletions]);
+
   const toggleDone = async (item: any) => {
+    if (completionInFlight.current.has(item.id)) return;
+    completionInFlight.current.add(item.id);
+    setPendingCompletions([...completionInFlight.current]);
+    setKanbanError("");
+    let statusSaved = false;
+    try {
     const isDone = canonicalStatus(item) === "done";
     const nextStatus = isDone ? "backlog" : "done";
     await onUpdateTask(item.id, {
@@ -2198,6 +2212,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       completedAt: isDone ? null : new Date().toISOString(),
       statusHistory: appendStatusHistory(item, nextStatus, isDone ? "backlog" : "done"),
     });
+    statusSaved = true;
+    setKanbanError("");
     if (isDone) return;
     const recurrenceType = (item.recurrenceType || item.recurrence || "none") as RecurrenceType;
     if (!recurrenceType || recurrenceType === "none") return;
@@ -2231,6 +2247,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       assignees: item.assignees || [],
       owner: item.owner || item.assignee || "",
     });
+    } catch (error) {
+      setKanbanError(`${statusSaved ? "Status saved, but the next recurring item could not be created" : "Status was not saved"}: ${error instanceof Error ? error.message : "Please try again"}`);
+    } finally {
+      completionInFlight.current.delete(item.id);
+      setPendingCompletions([...completionInFlight.current]);
+    }
   };
 
   const [pendingRemoval, setPendingRemoval] = useState<any | null>(null);
@@ -5323,6 +5345,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         </section>
       )}
 
+      {pendingCompletions.length > 0 && <p role="status">Saving {pendingCompletions.length} status change(s) — awaiting server confirmation.</p>}
       {mode !== "kanban" && kanbanError ? <p className="do-signin-error" role="alert">{kanbanError}</p> : null}
       <div className={`do-items-layout${mode === "gantt" && selectedItem ? " has-timeline-detail" : ""}`}>
         <section className={`do-items-workspace is-${mode}`}>

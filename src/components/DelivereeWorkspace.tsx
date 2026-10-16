@@ -5471,13 +5471,15 @@ export function DelivereeWorkspace() {
     try {
       await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
     } catch (reason) {
+      reportDataSyncError(reason);
       setTasks((prev) =>
         prev.map((item) => (item.id === taskId ? { ...item, ...current } : item)),
       );
-      setNotice(
+      flashNotice(
         reason instanceof Error
           ? `Could not update item: ${reason.message}`
           : "Could not update item.",
+        "error",
       );
       throw reason;
     }

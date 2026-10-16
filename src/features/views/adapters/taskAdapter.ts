@@ -12,6 +12,7 @@ import { localDateKey } from "../../../lib/dayplan/types";
 import { ancestorCandidateIds } from "../../../lib/itemHierarchy";
 import { t } from "../../../lib/i18n";
 import { toDateKey } from "../../../shared/formatDate";
+import { canonicalWorkStatus, WORK_STATUSES } from "../../../lib/workStatuses";
 
 /** Loose row shape — My Work mixes tasks and table records. */
 export type TaskRow = Record<string, unknown> & { id: string };
@@ -119,15 +120,12 @@ export function buildTaskAdapter(deps: TaskAdapterDeps): EntityAdapter<TaskRow> 
       groupable: true,
       filterable: true,
       width: 120,
-      read: (row) => readString(row, ["status"]) || "open",
+      read: (row) => canonicalWorkStatus({ status: readString(row, ["status"]) }),
       write: async (row, value) => {
-        await deps.onUpdateTask(row.id, statusPatch(row, String(value || "open")));
+        await deps.onUpdateTask(row.id, statusPatch(row, canonicalWorkStatus({ status: String(value || "backlog") })));
       },
       options: () => [
-        { id: "open", label: t("tables.status.todo"), tone: "neutral" },
-        { id: "doing", label: t("tables.status.doing"), tone: "info" },
-        { id: "done", label: t("tables.status.done"), tone: "success" },
-        { id: "blocked", label: "Blocked", tone: "danger" },
+        ...WORK_STATUSES.map((status) => ({ id: status.key, label: status.label, tone: "neutral" as const })),
         { id: "archived", label: t("views.action.archive"), tone: "neutral" },
       ],
     },
