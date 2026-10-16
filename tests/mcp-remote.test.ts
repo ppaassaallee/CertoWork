@@ -367,3 +367,216 @@ test("streamable HTTP speaks initialize and SSE without taking the Codex route",
   const server = readFileSync(new URL("../server.ts", import.meta.url), "utf8");
   assert.match(server, /req.path === "\/mcp\/tokens"/);
 });
+
+test("search stays inside the workspace and compact fields keep the workspace", async () => {
+  const repo = seed();
+  const issued = await tokenFor(repo, "read", ["w1", "w2"]);
+  const stored = repo.state.tokens[0];
+  repo.state.items.push(
+    { id: "needle-w1", workspaceId: "w1", title: "Shared needle", description: "only one", workItemType: "epic", status: "todo", userId: "user-1", dueDate: "2026-10-01" },
+    { id: "needle-w2", workspaceId: "w2", title: "Shared needle", workItemType: "epic", status: "todo", userId: "user-1" },
+    { id: "done-w1", workspaceId: "w1", title: "Finished needle", workItemType: "epic", status: "done", userId: "user-1" },
+    { id: "later-w1", workspaceId: "w1", title: "Later", workItemType: "pbi", status: "todo", userId: "user-1", dueDate: "2026-12-01", assigneeId: "" },
+  );
+  const found = await executeTool(repo, stored, "search", { workspace_id: "w1", query: "Shared needle" }, NOW);
+  assert.deepEqual(found.items.map((item: { id: string }) => item.id), ["needle-w1"]);
+  assert.equal(found.workspace_id, "w1");
+  assert.equal(found.workspace_name, "One");
+  assert.equal(JSON.stringify(found).includes("needle-w2"), false);
+  const compact = await executeTool(repo, stored, "get_item", {
+    workspace_id: "w1",
+    item_id: "needle-w1",
+    fields: ["title", "due_date"],
+  }, NOW);
+  assert.equal(compact.item.workspace_id, "w1");
+  assert.equal(compact.item.workspace_name, "One");
+  assert.equal(compact.item.title, "Shared needle");
+  assert.equal(compact.item.due_date, "2026-10-01T00:00:00.000Z");
+  assert.equal(compact.item.description, undefined);
+  const listed = await executeTool(repo, stored, "list_items", { workspace_id: "w1" }, NOW);
+  assert.equal(listed.items.some((item: { id: string }) => item.id === "done-w1"), false);
+  assert.equal(listed.items.some((item: { id: string }) => item.id === "later-w1"), true);
+  const withDone = await executeTool(repo, stored, "list_items", { workspace_id: "w1", incluir_completados: true }, NOW);
+  assert.equal(withDone.items.some((item: { id: string }) => item.id === "done-w1"), true);
+  const overdue = await executeTool(repo, stored, "list_items", { workspace_id: "w1", vencidos: true }, NOW);
+  assert.deepEqual(overdue.items.map((item: { id: string }) => item.id), ["needle-w1"]);
+  const foreign = await call(repo, issued.token, "search", { workspace_id: "foreign", query: "Shared needle" });
+  assert.equal(foreign.data.code, "workspace_forbidden");
+});
+
+test("exact PBI and task stay distinct, and a read-only or no-delete token cannot change them", async () => {
+  const repo = seed();
+  repo.state.projects.push({ id: "proj-1", workspaceId: "w1", name: "Billing App", status: "active" });
+  const issued = await tokenFor(repo, "read-write", ["w1", "w2"]);
+  const stored = repo.state.tokens[0];
+  const feature = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w1",
+    type: "feature",
+    title: "Parent",
+  }, NOW);
+  const pbi = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w1",
+    type: "pbi",
+    title: "Story slice",
+    description: "keep me",
+    parent_id: feature.item.id,
+    project_id: "proj-1",
+    product_phase: "Build",
+  }, NOW);
+  const task = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w1",
+    type: "task",
+    title: "Task slice",
+    parent_id: feature.item.id,
+  }, NOW);
+  assert.equal(pbi.item.type, "pbi");
+  assert.equal(task.item.type, "task");
+  assert.equal(pbi.item.type_label, "PBI/Task");
+  assert.equal(task.item.type_label, "PBI/Task");
+  assert.notEqual(pbi.item.type, task.item.type);
+  assert.equal(pbi.item.project_id, "proj-1");
+  assert.equal(pbi.item.product_phase, "Build");
+  const full = await executeTool(repo, stored, "get_item", { workspace_id: "w1", item_id: pbi.item.id }, NOW);
+  assert.deepEqual(full.item.chain.map((row: { type: string }) => row.type), ["feature", "pbi"]);
+  const changed = await executeTool(repo, stored, "change_type", {
+    workspace_id: "w1",
+    item_id: pbi.item.id,
+    type: "task",
+  }, NOW);
+  assert.equal(changed.item.type, "task");
+  assert.equal(changed.item.description, "keep me");
+  assert.equal(changed.item.project_id, "proj-1");
+  const badParent = await call(repo, issued.token, "create_item", {
+    workspace_id: "w1",
+    type: "bug",
+    title: "Loose bug",
+    parent_id: feature.item.id,
+  });
+  assert.equal(badParent.data.code, "invalid_parent");
+  const line = await executeTool(repo, stored, "add_checklist_line", {
+    workspace_id: "w1",
+    item_id: task.item.id,
+    text: "Check the invoice",
+  }, NOW);
+  const sub = await executeTool(repo, stored, "add_subtask", {
+    workspace_id: "w1",
+    parent_id: task.item.id,
+    title: "Send the invoice",
+  }, NOW);
+  assert.notEqual(line.line.id, sub.item.id);
+  assert.equal(sub.item.type, "subtask");
+  assert.equal(repo.state.items.filter((row: { parentId?: string }) => row.parentId === task.item.id).length, 1);
+  const detail = await executeTool(repo, stored, "get_item", { workspace_id: "w1", item_id: task.item.id }, NOW);
+  assert.equal(detail.item.checklist.length, 1);
+  assert.equal(detail.item.subtasks.length, 1);
+  const locked = await issueToken(
+    repo,
+    { uid: "user-1" },
+    { name: "No delete", workspaceIds: ["w1"], permission: "read-write", canDelete: false, admin: false, expiresInDays: 30 },
+    NOW,
+  );
+  const lockedToken = repo.state.tokens.find((row: { id: string }) => row.id === locked.id);
+  const deniedDelete = await executeTool(repo, lockedToken, "delete_item", {
+    workspace_id: "w1",
+    item_id: sub.item.id,
+  }, NOW).catch((error: { code?: string }) => error);
+  assert.equal(deniedDelete.code, "delete_forbidden");
+  assert.notEqual(repo.state.items.find((row: { id: string }) => row.id === sub.item.id).status, "deleted");
+  const deniedTag = await call(repo, locked.token, "create_tag", { workspace_id: "w1", name: "Ops" });
+  assert.equal(deniedTag.data.code, "admin_required");
+  const badTag = await call(repo, issued.token, "create_item", {
+    workspace_id: "w1",
+    type: "epic",
+    title: "Bad tag",
+    tags: ["Not a real tag"],
+  });
+  assert.equal(badTag.data.code, "unknown_tag");
+  assert.match(badTag.data.message, /Billing/);
+  const admin = await issueToken(
+    repo,
+    { uid: "user-1" },
+    { name: "Admin", workspaceIds: ["w1"], permission: "read-write", admin: true, expiresInDays: 30 },
+    NOW,
+  );
+  const adminToken = repo.state.tokens.find((row: { id: string }) => row.id === admin.id);
+  const createdTag = await executeTool(repo, adminToken, "create_tag", { workspace_id: "w1", name: "Ops" }, NOW);
+  assert.equal(createdTag.created, true);
+  const again = await executeTool(repo, adminToken, "create_tag", { workspace_id: "w1", name: "Ops" }, NOW);
+  assert.equal(again.created, false);
+});
+
+test("cascade delete restores, dry-run move writes nothing, and a move can retarget the parent", async () => {
+  const repo = seed();
+  const issued = await tokenFor(repo, "read-write", ["w1", "w2"]);
+  const stored = repo.state.tokens[0];
+  const epic = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w1",
+    type: "epic",
+    title: "Tree",
+  }, NOW);
+  const feature = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w1",
+    type: "feature",
+    title: "Branch",
+    parent_id: epic.item.id,
+  }, NOW);
+  const home = await executeTool(repo, stored, "create_item", {
+    workspace_id: "w2",
+    type: "epic",
+    title: "Home",
+  }, NOW);
+  const preview = await executeTool(repo, stored, "bulk_move_to_workspace", {
+    workspace_id: "w1",
+    target_workspace_id: "w2",
+    item_ids: [feature.item.id],
+    dry_run: true,
+  }, NOW);
+  assert.equal(preview.applied, false);
+  assert.equal(repo.state.items.find((row: { id: string }) => row.id === feature.item.id).workspaceId, "w1");
+  const tooBig = await executeTool(repo, stored, "bulk_update", {
+    workspace_id: "w1",
+    items: Array.from({ length: 201 }, (_, index) => ({ item_id: `missing-${index}`, title: "x" })),
+  }, NOW).catch((error: { code?: string }) => error);
+  assert.equal(tooBig.code, "bulk_too_large");
+  const moved = await executeTool(repo, stored, "move_item_to_workspace", {
+    workspace_id: "w1",
+    item_id: feature.item.id,
+    target_workspace_id: "w2",
+    target_parent_id: home.item.id,
+  }, NOW);
+  assert.equal(moved.item.parent_id, home.item.id);
+  assert.equal(moved.item.workspace_id, "w2");
+  assert.ok(moved.moved.includes(feature.item.id));
+  const copy = await executeTool(repo, stored, "duplicate_item", {
+    workspace_id: "w2",
+    item_id: feature.item.id,
+  }, NOW);
+  assert.notEqual(copy.item.id, feature.item.id);
+  assert.equal(copy.item.external_id, null);
+  assert.equal(repo.state.items.filter((row: { parentId?: string }) => row.parentId === feature.item.id).length, 0);
+  const removed = await executeTool(repo, stored, "delete_item", {
+    workspace_id: "w1",
+    item_id: epic.item.id,
+    cascade: true,
+  }, NOW);
+  assert.equal(removed.deleted, true);
+  assert.equal(repo.state.items.find((row: { id: string }) => row.id === epic.item.id).status, "deleted");
+  const restored = await executeTool(repo, stored, "restore_item", {
+    workspace_id: "w1",
+    item_id: epic.item.id,
+  }, NOW);
+  assert.equal(restored.restored, true);
+  assert.equal(restored.item.status, "backlog");
+  const view = await executeTool(repo, stored, "create_view", {
+    workspace_id: "w1",
+    preset: "vencidos",
+  }, NOW);
+  assert.equal(view.view.name, "Vencidos");
+  assert.equal(view.view.workspace_id, "w1");
+  const views = await executeTool(repo, stored, "list_views", { workspace_id: "w1" }, NOW);
+  assert.equal(views.views.some((row: { name: string }) => row.name === "Vencidos"), true);
+  assert.equal(views.workspace_name, "One");
+  const project = await executeTool(repo, stored, "get_project", { workspace_id: "w2", project_id: "missing" }, NOW).catch((error: { code?: string }) => error);
+  assert.equal(project.code, "not_found");
+  void issued;
+});

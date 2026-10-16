@@ -10,6 +10,8 @@ type ApiTokenRow = {
   workspaceIds: string[];
   permission: "read" | "read-write";
   assign: boolean;
+  canDelete?: boolean;
+  admin?: boolean;
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string | null;
@@ -29,6 +31,8 @@ export function ApiTokensPanel() {
   const [name, setName] = useState("");
   const [permission, setPermission] = useState<"read" | "read-write">("read");
   const [assign, setAssign] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [admin, setAdmin] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState(90);
   const [selected, setSelected] = useState<string[]>([]);
   const [secret, setSecret] = useState("");
@@ -86,6 +90,8 @@ export function ApiTokensPanel() {
           workspaceIds: selected,
           permission,
           assign: permission === "read-write" && assign,
+          canDelete: permission === "read-write" && canDelete,
+          admin: permission === "read-write" && admin,
           expiresInDays,
         }),
       });
@@ -97,6 +103,8 @@ export function ApiTokensPanel() {
       setSecret(String(payload.token || ""));
       setName("");
       setAssign(false);
+      setCanDelete(false);
+      setAdmin(false);
       await load();
     } finally {
       setBusy(false);
@@ -180,6 +188,8 @@ export function ApiTokensPanel() {
               onChange={() => {
                 setPermission("read");
                 setAssign(false);
+                setCanDelete(false);
+                setAdmin(false);
               }}
               type="radio"
             />
@@ -207,6 +217,32 @@ export function ApiTokensPanel() {
           <span>
             {t("mcp.tokens.assign")}
             <small>{t("mcp.tokens.assignHint")}</small>
+          </span>
+        </label>
+        <label className="mcp-tokens-check">
+          <input
+            checked={canDelete}
+            data-testid="mcp-token-delete"
+            disabled={permission !== "read-write"}
+            onChange={(event) => setCanDelete(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            {t("mcp.tokens.delete")}
+            <small>{t("mcp.tokens.deleteHint")}</small>
+          </span>
+        </label>
+        <label className="mcp-tokens-check">
+          <input
+            checked={admin}
+            data-testid="mcp-token-admin"
+            disabled={permission !== "read-write"}
+            onChange={(event) => setAdmin(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            {t("mcp.tokens.admin")}
+            <small>{t("mcp.tokens.adminHint")}</small>
           </span>
         </label>
         <fieldset>
@@ -249,7 +285,12 @@ export function ApiTokensPanel() {
             <div>
               <strong>{row.name}</strong>
               <span>{row.tokenPrefix}…</span>
-              <span>{row.permission}{row.assign ? " · assign" : ""}</span>
+              <span>
+                {row.permission}
+                {row.assign ? " · assign" : ""}
+                {row.canDelete ? " · delete" : ""}
+                {row.admin ? " · admin" : ""}
+              </span>
               <span>{tokenState(row)}</span>
             </div>
             {!row.revokedAt ? (
