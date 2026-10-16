@@ -95,6 +95,24 @@ export function createMcpRepository(db: {
       }
       return { categories, members };
     },
+    listProjects(workspaceId: string) {
+      return queryEqual("projects", "workspaceId", workspaceId, 200);
+    },
+    async getProject(projectId: string) {
+      const snap = await db.collection("projects").doc(projectId).get();
+      return snap.exists ? asRecord(snap.id, snap.data()) : null;
+    },
+    async saveCategory(record: { id: string } & Record<string, unknown>) {
+      const { id, ...data } = record;
+      await db.collection("categories").doc(id).set(stamp(data), { merge: true });
+    },
+    listViews(workspaceId: string) {
+      return queryEqual("saved_views", "workspaceId", workspaceId, 200);
+    },
+    async saveView(record: { id: string } & Record<string, unknown>) {
+      const { id, ...data } = record;
+      await db.collection("saved_views").doc(id).set(data, { merge: true });
+    },
   };
 }
 

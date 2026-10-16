@@ -112,5 +112,24 @@ export function createWorkerMcpRepo(env) {
       }
       return { categories, members };
     },
+    listProjects(workspaceId) {
+      return queryEqual(env, "projects", "workspaceId", workspaceId, 200);
+    },
+    getProject(projectId) {
+      return firestoreGetDocument(env, "projects", projectId);
+    },
+    async saveCategory(record) {
+      const { id, ...data } = record;
+      const saved = await firestoreUpsertDocument(env, "categories", id, stamp(data));
+      if (!saved.ok) throw new McpError("unavailable", saved.reason || "Could not save the catalog option.", 503);
+    },
+    listViews(workspaceId) {
+      return queryEqual(env, "saved_views", "workspaceId", workspaceId, 200);
+    },
+    async saveView(record) {
+      const { id, ...data } = record;
+      const saved = await firestoreUpsertDocument(env, "saved_views", id, data);
+      if (!saved.ok) throw new McpError("unavailable", saved.reason || "Could not save the view.", 503);
+    },
   };
 }

@@ -10,7 +10,10 @@ export const RATE_LIMIT = 60;
 export const RATE_WINDOW_MS = 60_000;
 export const ITEM_FETCH_CAP = 2000;
 export const SOFT_DELETE_MS = 30 * 24 * 60 * 60 * 1000;
-export const ITEM_TYPES = ["epic", "feature", "pbi", "subtask"];
+export const ITEM_TYPES = ["epic", "feature", "pbi", "story", "task", "subtask", "bug", "issue"];
+export const BULK_LIMIT = 200;
+export const PRODUCT_PHASES = ["Explore", "Shape", "Build", "Beta", "Launch", "Grow"];
+export const PRIORITIES = ["1", "2", "3", "N/A"];
 export const ITEM_STATUSES = [
   "backlog",
   "ready",
@@ -21,6 +24,9 @@ export const ITEM_STATUSES = [
   "done",
   "cancelled",
 ];
+
+const PBI_FAMILY = new Set(["pbi", "story", "task"]);
+const COMPLETED = new Set(["done", "cancelled"]);
 
 const ASSIGNEE_KEYS = ["assignee", "assignee_id", "assigneeId", "assigneeIds", "assignees"];
 
@@ -91,6 +97,8 @@ export function publicToken(record) {
     workspaceIds: record.workspaceIds || [],
     permission: record.permission,
     assign: Boolean(record.assign),
+    canDelete: record.permission === "read-write" && record.canDelete !== false,
+    admin: Boolean(record.admin),
     expiresAt: record.expiresAt || null,
     revokedAt: record.revokedAt || null,
     createdAt: record.createdAt || null,
@@ -99,12 +107,32 @@ export function publicToken(record) {
 }
 
 function kindOf(item) {
-  const value = text(item?.workItemType || item?.type || item?.itemType).toLowerCase();
+  const value = text(item?.workItemType || item?.type || item?.itemType)
+    .toLowerCase()
+    .replace(/[\s/-]+/g, "_");
+  if (value === "sub_task" || value === "subtask") return "subtask";
+  if (value === "user_story" || value === "story") return "story";
+  if (value === "ticket") return "issue";
+  if (ITEM_TYPES.includes(value)) return value;
   if (value.includes("epic")) return "epic";
   if (value.includes("feature")) return "feature";
   if (value.includes("sub")) return "subtask";
-  if (value.includes("pbi") || value.includes("story")) return "pbi";
+  if (value.includes("bug")) return "bug";
+  if (value.includes("issue") || value.includes("ticket")) return "issue";
+  if (value.includes("pbi")) return "pbi";
+  if (value.includes("story")) return "story";
+  if (value.includes("task")) return "task";
   return value;
+}
+
+function typeLabel(kind) {
+  if (PBI_FAMILY.has(kind)) return "PBI/Task";
+  if (kind === "epic") return "Epic";
+  if (kind === "feature") return "Feature";
+  if (kind === "subtask") return "Sub Task";
+  if (kind === "bug") return "Bug";
+  if (kind === "issue") return "Issue";
+  return kind || "";
 }
 
 function isDeleted(item) {
@@ -116,22 +144,24 @@ function parentOk(childType, parentType) {
   if (!parentType) return false;
   if (childType === "epic") return false;
   if (childType === "feature") return parentType === "epic";
-  if (childType === "pbi") return parentType === "feature";
-  if (childType === "subtask") return parentType === "pbi";
+  if (PBI_FAMILY.has(childType)) return parentType === "feature";
+  if (childType === "subtask" || childType === "bug" || childType === "issue") return PBI_FAMILY.has(parentType);
   return false;
 }
 
 function parentMessage(childType) {
   if (childType === "feature") return "A Feature can only sit under an Epic.";
-  if (childType === "pbi") return "A PBI can only sit under a Feature.";
+  if (PBI_FAMILY.has(childType)) return "A PBI/Task can only sit under a Feature.";
   if (childType === "subtask") return "A Sub Task can only sit under a PBI.";
+  if (childType === "bug" || childType === "issue") return "A Bug or Issue can only sit under a PBI.";
   if (childType === "epic") return "An Epic cannot have a parent.";
   return "That parent is not allowed for this type.";
 }
 
 function resolveType(raw) {
-  const key = text(raw).toLowerCase().replace(/[\s-]+/g, "_");
-  const type = key === "sub_task" ? "subtask" : key;
+  const key = text(raw).toLowerCase().replace(/[\s/-]+/g, "_");
+  const aliases = { sub_task: "subtask", user_story: "story", ticket: "issue" };
+  const type = aliases[key] || key;
   if (!ITEM_TYPES.includes(type)) {
     throw new McpError("invalid_type", `Type must be one of: ${ITEM_TYPES.join(", ")}.`, 400);
   }
@@ -157,9 +187,19 @@ function resolveDue(raw) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) {
-    throw new McpError("invalid_due_date", "due_date must be YYYY-MM-DD.", 400);
+    throw new McpError("invalid_due_date", "due_date must be YYYY-MM-DD or an ISO 8601 date.", 400);
   }
   return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function dueIso(value) {
+  if (value == null || value === "") return null;
+  const raw = typeof value === "string" ? value.trim() : iso(value);
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw}T00:00:00.000Z`;
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  return new Date(parsed).toISOString();
 }
 
 function resolvePriority(raw) {
@@ -211,7 +251,19 @@ function buildCatalog(categories, members) {
       email: text(member.email || member.emailLower),
     });
   }
-  return { clients, deliveries, tags, members: people, statuses: ITEM_STATUSES, types: ITEM_TYPES };
+  return {
+    clients,
+    deliveries,
+    tags,
+    members: people,
+    statuses: ITEM_STATUSES,
+    types: ITEM_TYPES,
+    projects: [],
+    phases: PRODUCT_PHASES,
+    priorities: PRIORITIES,
+    workspaceId: "",
+    workspaceName: "",
+  };
 }
 
 function matchNamed(list, raw) {
@@ -229,9 +281,11 @@ function requireNamed(list, raw, code, label) {
   if (raw == null || text(raw) === "") return null;
   const match = matchNamed(list, raw);
   if (!match) {
+    const names = (list || []).map((entry) => entry.name).filter(Boolean);
+    const hint = names.length ? ` Valid values: ${names.slice(0, 40).join(", ")}.` : "";
     throw new McpError(
       code,
-      `${label} "${text(raw)}" is not in this workspace. Add it in settings before using the API.`,
+      `${label} "${text(raw)}" is not in this workspace.${hint}`,
       400,
     );
   }
@@ -244,7 +298,9 @@ function resolveTags(catalog, raw) {
   return raw.map((value) => {
     const match = matchNamed(catalog.tags, value);
     if (!match) {
-      throw new McpError("unknown_tag", `Tag "${text(value)}" is not in this workspace.`, 400);
+      const names = (catalog.tags || []).map((entry) => entry.name).filter(Boolean);
+      const hint = names.length ? ` Valid values: ${names.slice(0, 40).join(", ")}.` : "";
+      throw new McpError("unknown_tag", `Tag "${text(value)}" is not in this workspace.${hint}`, 400);
     }
     return match;
   });
@@ -293,7 +349,10 @@ function comparable(item) {
     delivery: item?.deliveryEntity || item?.bpo || "",
     tags: item?.tags || [],
     due_date: item?.dueDate || "",
+    start_date: item?.startDate || "",
     priority: item?.priority ?? "",
+    project_id: item?.projectId || "",
+    product_phase: item?.productPhase || item?.roadmapPhase || "",
     assignee_id: item?.assigneeId || "",
     external_id: item?.externalId || "",
     workspace_id: item?.workspaceId || "",
@@ -347,6 +406,32 @@ function requireWrite(token) {
   }
 }
 
+function tokenMayDelete(token) {
+  return token.permission === "read-write" && token.canDelete !== false;
+}
+
+function requireDelete(token) {
+  requireWrite(token);
+  if (!tokenMayDelete(token)) {
+    throw new McpError(
+      "delete_forbidden",
+      "This token cannot delete items. Turn on the delete permission.",
+      403,
+    );
+  }
+}
+
+function requireAdmin(token) {
+  requireWrite(token);
+  if (!token.admin) {
+    throw new McpError(
+      "admin_required",
+      "This token cannot change catalogs. Turn on the admin permission.",
+      403,
+    );
+  }
+}
+
 async function workspaceItems(repo, workspaceId) {
   const rows = await repo.listItems(workspaceId);
   return (rows || []).filter((item) => text(item.workspaceId) === workspaceId);
@@ -364,7 +449,39 @@ async function requireItem(repo, workspaceId, itemId) {
 
 async function loadCatalog(repo, workspaceId, userId) {
   const loaded = await repo.loadCatalog(workspaceId, userId);
-  return buildCatalog(loaded?.categories || [], loaded?.members || []);
+  const catalog = buildCatalog(loaded?.categories || [], loaded?.members || []);
+  const workspace = await repo.getWorkspace(workspaceId);
+  catalog.workspaceId = workspaceId;
+  catalog.workspaceName = workspace?.name || workspaceId;
+  if (typeof repo.listProjects === "function") {
+    const projects = await repo.listProjects(workspaceId);
+    catalog.projects = (projects || [])
+      .filter((row) => text(row.workspaceId || workspaceId) === workspaceId)
+      .map((row) => ({ id: row.id, name: text(row.name || row.title) || row.id }));
+  }
+  return catalog;
+}
+
+function requestedFields(args) {
+  const raw = args?.fields;
+  if (raw == null || raw === "") return null;
+  const list = Array.isArray(raw) ? raw : String(raw).split(",");
+  const names = list.map((value) => text(value)).filter(Boolean);
+  return names.length ? names : null;
+}
+
+function pickFields(record, fields) {
+  if (!fields) return record;
+  const wanted = new Set(fields);
+  wanted.add("workspace_id");
+  wanted.add("workspace_name");
+  const out = {};
+  for (const key of Object.keys(record)) {
+    if (wanted.has(key)) out[key] = record[key];
+  }
+  if (!("workspace_id" in out)) out.workspace_id = record.workspace_id ?? null;
+  if (!("workspace_name" in out)) out.workspace_name = record.workspace_name ?? null;
+  return out;
 }
 
 function childrenOf(items, parentId) {
@@ -450,42 +567,92 @@ function activityRows(item) {
 
 function publicSummary(item, catalog) {
   const assignee = memberName(catalog, item.assigneeId);
+  const kind = kindOf(item);
   return {
     id: item.id,
     workspace_id: item.workspaceId,
-    type: kindOf(item) || null,
+    workspace_name: catalog?.workspaceName || "",
+    type: kind || null,
+    type_exact: text(item.workItemType || item.itemType || item.type) || kind || null,
+    type_label: typeLabel(kind),
     title: item.title || "",
     status: item.status || "",
     parent_id: item.parentId || null,
+    project_id: item.projectId || null,
+    product_phase: item.productPhase || item.roadmapPhase || null,
     assignee: assignee ? { id: assignee.id, name: assignee.name } : null,
     client: item.clientEntity || item.client || null,
     delivery: item.deliveryEntity || item.bpo || null,
     tags: publicTags(item, catalog),
-    due_date: item.dueDate || null,
+    due_date: dueIso(item.dueDate),
+    start_date: dueIso(item.startDate),
     priority: item.priority ?? null,
     external_id: item.externalId || null,
-    deleted_at: item.deletedAt || null,
-    purge_after: item.purgeAfter || null,
+    deleted_at: dueIso(item.deletedAt),
+    purge_after: dueIso(item.purgeAfter),
     updated_at: iso(item.updatedAt),
   };
 }
 
+function commentRows(item) {
+  return (Array.isArray(item.comments) ? item.comments : []).map((comment) => ({
+    id: comment.id || "",
+    text: comment.text || "",
+    at: dueIso(comment.at) || comment.at || "",
+    author: comment.author || "",
+    via: comment.via || "",
+  }));
+}
+
+function checklistRows(item) {
+  return (Array.isArray(item.checklist) ? item.checklist : []).map((line) => ({
+    id: line.id || "",
+    text: line.text || "",
+    done: Boolean(line.done),
+  }));
+}
+
+function attachmentRows(item) {
+  const files = Array.isArray(item.attachments) ? item.attachments : [];
+  const docs = Array.isArray(item.linkedDocumentIds) ? item.linkedDocumentIds : [];
+  return [
+    ...files.map((file) => ({
+      id: file.id || "",
+      name: file.name || file.title || "",
+      url: file.url || "",
+      kind: file.kind || "file",
+    })),
+    ...docs.map((id) => ({ id: String(id), name: "", url: "", kind: "document" })),
+  ];
+}
+
+function ancestorChain(item, items, catalog) {
+  const chain = [];
+  let cursor = item;
+  const seen = new Set();
+  while (cursor && !seen.has(cursor.id)) {
+    seen.add(cursor.id);
+    chain.unshift(publicSummary(cursor, catalog));
+    const parentId = text(cursor.parentId);
+    cursor = parentId ? items.find((row) => row.id === parentId) || null : null;
+  }
+  return chain;
+}
+
 function publicItem(item, catalog, items) {
   const parent = item.parentId ? items.find((row) => row.id === item.parentId) : null;
-  const children = childrenOf(items, item.id);
+  const kids = childrenOf(items, item.id);
   return {
     ...publicSummary(item, catalog),
     description: item.description || "",
     created_at: iso(item.createdAt),
+    chain: ancestorChain(item, items, catalog),
     parent: parent ? publicSummary(parent, catalog) : null,
-    children: children.map((child) => publicSummary(child, catalog)),
-    comments: (Array.isArray(item.comments) ? item.comments : []).map((comment) => ({
-      id: comment.id || "",
-      text: comment.text || "",
-      at: comment.at || "",
-      author: comment.author || "",
-      via: comment.via || "",
-    })),
+    children: kids.filter((child) => kindOf(child) !== "subtask").map((child) => publicSummary(child, catalog)),
+    subtasks: kids.filter((child) => kindOf(child) === "subtask").map((child) => publicSummary(child, catalog)),
+    checklist: checklistRows(item),
+    comments: commentRows(item),
+    attachments: attachmentRows(item),
     activity: activityRows(item),
   };
 }
@@ -519,12 +686,27 @@ function dateKey(value) {
   return raw ? raw.slice(0, 10) : "";
 }
 
-function matchesFilters(item, args, catalog, typeFilter) {
+function isCompleted(item) {
+  return COMPLETED.has(text(item?.status).toLowerCase());
+}
+
+function tagHit(item, wanted) {
+  const tags = Array.isArray(item.tags) ? item.tags.map((tag) => text(tag).toLowerCase()) : [];
+  const ids = Array.isArray(item.categoryIds) ? item.categoryIds : [];
+  return tags.includes(wanted) || ids.includes(wanted);
+}
+
+function matchesFilters(item, args, catalog, typeFilter, now) {
   if (isDeleted(item) && arg(args, "status") !== "deleted") return false;
+  const statusFilter = arg(args, "status").toLowerCase();
+  const includeDone = args.incluir_completados === true || statusFilter === "done" || statusFilter === "cancelled";
+  if (!includeDone && isCompleted(item)) return false;
   if (typeFilter && kindOf(item) !== typeFilter) return false;
   if (arg(args, "parent_id") && text(item.parentId) !== arg(args, "parent_id")) return false;
   if (args.sin_padre === true && text(item.parentId)) return false;
-  if (arg(args, "status") && text(item.status).toLowerCase() !== arg(args, "status").toLowerCase()) return false;
+  if (arg(args, "project_id") && text(item.projectId) !== arg(args, "project_id")) return false;
+  if (statusFilter && text(item.status).toLowerCase() !== statusFilter) return false;
+  if (arg(args, "priority") && String(item.priority ?? "").toLowerCase() !== arg(args, "priority").toLowerCase()) return false;
   if (arg(args, "client")) {
     const wanted = arg(args, "client").toLowerCase();
     const client = text(item.clientEntity || item.client).toLowerCase();
@@ -535,11 +717,15 @@ function matchesFilters(item, args, catalog, typeFilter) {
     const delivery = text(item.deliveryEntity || item.bpo).toLowerCase();
     if (delivery !== wanted) return false;
   }
-  if (arg(args, "tag")) {
-    const wanted = arg(args, "tag").toLowerCase();
-    const tags = Array.isArray(item.tags) ? item.tags.map((tag) => text(tag).toLowerCase()) : [];
-    const ids = Array.isArray(item.categoryIds) ? item.categoryIds : [];
-    if (!tags.includes(wanted) && !ids.includes(arg(args, "tag"))) return false;
+  if (arg(args, "tag") && !tagHit(item, arg(args, "tag").toLowerCase())) return false;
+  if (Array.isArray(args.tags) && args.tags.length) {
+    const wanted = args.tags.map((tag) => text(tag).toLowerCase()).filter(Boolean);
+    if (!wanted.every((tag) => tagHit(item, tag))) return false;
+  }
+  if (args.vencidos === true) {
+    const due = dateKey(item.dueDate);
+    const today = new Date(now).toISOString().slice(0, 10);
+    if (!due || due >= today || isCompleted(item)) return false;
   }
   if (arg(args, "assignee")) {
     const wanted = arg(args, "assignee").toLowerCase();
@@ -592,16 +778,18 @@ async function listWorkspaces(repo, token) {
   return { workspaces };
 }
 
-async function listItems(repo, token, args) {
+async function listItems(repo, token, args, now) {
   const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
   const catalog = await loadCatalog(repo, workspaceId, token.userId);
   const items = await workspaceItems(repo, workspaceId);
   const typeFilter = arg(args, "type") ? resolveType(args.type) : "";
-  const filtered = items.filter((item) => matchesFilters(item, args, catalog, typeFilter));
+  const filtered = items.filter((item) => matchesFilters(item, args, catalog, typeFilter, now));
   const paged = page(filtered, args);
+  const fields = requestedFields(args);
   return {
     workspace_id: workspaceId,
-    items: paged.slice.map((item) => publicSummary(item, catalog)),
+    workspace_name: catalog.workspaceName,
+    items: paged.slice.map((item) => pickFields(publicSummary(item, catalog), fields)),
     next_cursor: paged.next_cursor,
   };
 }
@@ -611,11 +799,26 @@ async function getItem(repo, token, args) {
   const items = await workspaceItems(repo, workspaceId);
   const item = await requireItem(repo, workspaceId, args.item_id);
   const catalog = await loadCatalog(repo, workspaceId, token.userId);
-  return { item: publicItem(item, catalog, items) };
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    item: pickFields(publicItem(item, catalog, items), requestedFields(args)),
+  };
+}
+
+function hierarchyCounts(item, byParent) {
+  const kids = byParent.get(item.id) || [];
+  return {
+    children: kids.length,
+    subtasks: kids.filter((child) => kindOf(child) === "subtask").length,
+    open: kids.filter((child) => !isCompleted(child)).length,
+    done: kids.filter((child) => isCompleted(child)).length,
+  };
 }
 
 async function getHierarchy(repo, token, args) {
   const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
   const items = (await workspaceItems(repo, workspaceId)).filter((item) => !isDeleted(item));
   const ids = new Set(items.map((item) => item.id));
   const byParent = new Map();
@@ -627,14 +830,24 @@ async function getHierarchy(repo, token, args) {
   }
   const node = (item) => ({
     id: item.id,
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
     type: kindOf(item),
+    type_exact: text(item.workItemType || item.type) || kindOf(item),
+    type_label: typeLabel(kindOf(item)),
     title: item.title || "",
     status: item.status || "",
+    counts: hierarchyCounts(item, byParent),
     children: (byParent.get(item.id) || []).map(node),
   });
   const roots = items.filter((item) => !text(item.parentId));
   const unparented = items.filter((item) => text(item.parentId) && !ids.has(text(item.parentId)));
-  return { workspace_id: workspaceId, tree: roots.map(node), unparented: unparented.map(node) };
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    tree: roots.map(node),
+    unparented: unparented.map(node),
+  };
 }
 
 async function listFields(repo, token, args) {
@@ -642,11 +855,15 @@ async function listFields(repo, token, args) {
   const catalog = await loadCatalog(repo, workspaceId, token.userId);
   return {
     workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
     types: catalog.types,
     statuses: catalog.statuses,
+    priorities: catalog.priorities,
+    product_phases: catalog.phases,
     clients: catalog.clients,
     deliveries: catalog.deliveries,
     tags: catalog.tags,
+    projects: catalog.projects,
     members: catalog.members.map((person) => ({ id: person.id, name: person.name })),
   };
 }
@@ -674,9 +891,35 @@ function applyFieldPatch(item, token, catalog, args) {
     item.categoryIds = tags.map((tag) => tag.id).filter(Boolean);
   }
   if (args.due_date != null) item.dueDate = resolveDue(args.due_date);
+  if (args.start_date != null) item.startDate = resolveDue(args.start_date);
   if (args.priority != null) item.priority = resolvePriority(args.priority);
   if (args.status != null) item.status = resolveStatus(args.status, item.status || "backlog");
   if (args.external_id != null) item.externalId = text(args.external_id) || null;
+  if (args.project != null || args.project_id != null) {
+    const raw = args.project_id != null ? args.project_id : args.project;
+    if (text(raw) === "") {
+      item.projectId = null;
+    } else {
+      const project = requireNamed(catalog.projects, raw, "unknown_project", "Project");
+      item.projectId = project.id;
+    }
+  }
+  if (args.product_phase != null || args.productPhase != null) {
+    const raw = args.product_phase != null ? args.product_phase : args.productPhase;
+    if (text(raw) === "") {
+      item.productPhase = null;
+    } else {
+      const match = PRODUCT_PHASES.find((phase) => phase.toLowerCase() === text(raw).toLowerCase());
+      if (!match) {
+        throw new McpError(
+          "unknown_phase",
+          `Product phase "${text(raw)}" is not valid. Valid values: ${PRODUCT_PHASES.join(", ")}.`,
+          400,
+        );
+      }
+      item.productPhase = match;
+    }
+  }
   const assignee = resolveAssignee(token, catalog, args);
   if (assignee) {
     item.assigneeId = assignee.id;
@@ -830,7 +1073,9 @@ function storedLabels(item, catalog, field) {
     return tags.map((tag) => {
       const match = matchNamed(catalog.tags, tag);
       if (!match) {
-        throw new McpError("unknown_tag", `Tag "${tag}" on ${item.id} is not in the target workspace.`, 400);
+        const names = (catalog.tags || []).map((entry) => entry.name).filter(Boolean);
+        const hint = names.length ? ` Valid values: ${names.slice(0, 40).join(", ")}.` : "";
+        throw new McpError("unknown_tag", `Tag "${tag}" on ${item.id} is not in the target workspace.${hint}`, 400);
       }
       return match;
     });
@@ -849,6 +1094,15 @@ async function moveItem(repo, token, args, now) {
   const current = await requireItem(repo, sourceId, args.item_id);
   const moving = [current, ...descendants(sourceItems, current.id)];
   const targetCatalog = await loadCatalog(repo, targetId, token.userId);
+  let targetParent = null;
+  if (args.target_parent_id != null && text(args.target_parent_id) !== "") {
+    const parentId = text(args.target_parent_id);
+    if (moving.some((row) => row.id === parentId)) {
+      throw new McpError("invalid_parent", "target_parent_id is part of the moved tree.", 400);
+    }
+    targetParent = await requireItem(repo, targetId, parentId);
+    assertParentLink(kindOf(current), targetParent);
+  }
   for (const row of moving) {
     if (text(row.clientEntity || row.client)) {
       requireNamed(targetCatalog.clients, row.clientEntity || row.client, "unknown_client", "Client");
@@ -856,17 +1110,21 @@ async function moveItem(repo, token, args, now) {
     if (text(row.deliveryEntity || row.bpo)) {
       requireNamed(targetCatalog.deliveries, row.deliveryEntity || row.bpo, "unknown_delivery", "Delivery");
     }
+    if (text(row.projectId)) {
+      requireNamed(targetCatalog.projects, row.projectId, "unknown_project", "Project");
+    }
     storedLabels(row, targetCatalog, "tags");
   }
-  const target = await repo.getWorkspace(targetId);
-  const targetName = target?.name || targetId;
+  const targetName = targetCatalog.workspaceName || targetId;
   const saved = [];
   for (const row of moving) {
     const next = { ...row, workspaceId: targetId };
+    if (targetParent && row.id === current.id) applyParent(next, targetParent);
     saved.push(await persist(repo, token, row, next, `Moved to workspace ${targetName}`, "move_item_to_workspace", now));
   }
   return {
     workspace_id: targetId,
+    workspace_name: targetName,
     moved: saved.map((item) => item.id),
     item: publicItem(saved[0], targetCatalog, saved),
   };
@@ -918,8 +1176,8 @@ async function bulkUpdate(repo, token, args, now) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new McpError("bulk_empty", "items must contain at least one update.", 400);
   }
-  if (entries.length > 100) {
-    throw new McpError("bulk_too_large", "Bulk update accepts at most 100 items.", 400);
+  if (entries.length > BULK_LIMIT) {
+    throw new McpError("bulk_too_large", `Bulk update accepts at most ${BULK_LIMIT} items.`, 400);
   }
   const ids = entries.map((entry) => text(entry?.item_id));
   if (new Set(ids).size !== ids.length) {
@@ -973,31 +1231,606 @@ async function bulkUpdate(repo, token, args, now) {
   };
 }
 
+async function trashCopy(current, now) {
+  return {
+    ...current,
+    status: "deleted",
+    previousStatus: current.status || "backlog",
+    deletedAt: new Date(now).toISOString(),
+    purgeAfter: new Date(now + SOFT_DELETE_MS).toISOString(),
+  };
+}
+
 async function deleteItem(repo, token, args, now) {
-  requireWrite(token);
+  requireDelete(token);
   const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
   const items = await workspaceItems(repo, workspaceId);
   const current = await requireItem(repo, workspaceId, args.item_id);
-  if (childrenOf(items, current.id).length) {
-    throw new McpError("has_children", "Delete or move the child items first. This item still has children.", 409);
+  const liveChildren = childrenOf(items, current.id);
+  if (liveChildren.length && args.cascade !== true) {
+    throw new McpError("has_children", "Delete or move the child items first, or pass cascade true.", 409);
   }
   if (isDeleted(current)) {
     throw new McpError("already_deleted", "This item is already in the trash.", 409);
   }
-  const deletedAt = new Date(now).toISOString();
-  const next = {
-    ...current,
-    status: "deleted",
-    previousStatus: current.status || "backlog",
-    deletedAt,
-    purgeAfter: new Date(now + SOFT_DELETE_MS).toISOString(),
-  };
   const catalog = await loadCatalog(repo, workspaceId, token.userId);
-  const saved = await persist(repo, token, current, next, "Moved to trash", "delete_item", now);
+  const removed = [];
+  if (args.cascade === true) {
+    const tree = descendants(items, current.id).filter((row) => !isDeleted(row));
+    for (const child of [...tree].reverse()) {
+      const savedChild = await persist(repo, token, child, await trashCopy(child, now), "Moved to trash", "delete_item", now);
+      removed.push(savedChild.id);
+    }
+  }
+  const saved = await persist(repo, token, current, await trashCopy(current, now), "Moved to trash", "delete_item", now);
+  const latest = await workspaceItems(repo, workspaceId);
   return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
     deleted: true,
+    cascade: args.cascade === true,
+    removed: [saved.id, ...removed],
     recoverable_until: saved.purgeAfter,
-    item: publicItem(saved, catalog, items.map((item) => (item.id === saved.id ? saved : item))),
+    item: publicItem(saved, catalog, latest),
+  };
+}
+
+async function searchItems(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const query = arg(args, "query") || arg(args, "texto");
+  if (!query) throw new McpError("search_required", "query is required.", 400);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const needle = query.toLowerCase();
+  const hits = (await workspaceItems(repo, workspaceId)).filter((item) => {
+    if (text(item.workspaceId) !== workspaceId || isDeleted(item)) return false;
+    const comments = (Array.isArray(item.comments) ? item.comments : []).map((comment) => comment.text || "").join(" ");
+    const tags = Array.isArray(item.tags) ? item.tags.join(" ") : "";
+    const haystack = `${item.title || ""} ${item.description || ""} ${item.externalId || ""} ${comments} ${tags}`.toLowerCase();
+    return haystack.includes(needle);
+  });
+  const paged = page(hits, args);
+  const fields = requestedFields(args);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    items: paged.slice.map((item) => pickFields(publicSummary(item, catalog), fields)),
+    next_cursor: paged.next_cursor,
+  };
+}
+
+async function listProjects(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    projects: catalog.projects,
+  };
+}
+
+async function getProject(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const projectId = arg(args, "project_id") || arg(args, "id");
+  if (!projectId) throw new McpError("project_required", "project_id is required.", 400);
+  const project = typeof repo.getProject === "function" ? await repo.getProject(projectId) : null;
+  if (!project || text(project.workspaceId) !== workspaceId) {
+    throw new McpError("not_found", "Project not found in this workspace.", 404);
+  }
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    project: {
+      id: project.id,
+      workspace_id: workspaceId,
+      workspace_name: catalog.workspaceName,
+      name: project.name || project.title || project.id,
+      status: project.status || "",
+      description: project.description || "",
+    },
+  };
+}
+
+async function duplicateItem(repo, token, args, now) {
+  requireWrite(token);
+  const sourceId = await requireWorkspace(repo, token, args.workspace_id);
+  const targetId = arg(args, "target_workspace_id") || sourceId;
+  await requireWorkspace(repo, token, targetId);
+  const current = await requireItem(repo, sourceId, args.item_id);
+  const targetCatalog = await loadCatalog(repo, targetId, token.userId);
+  const kind = kindOf(current);
+  if (text(current.clientEntity || current.client)) {
+    requireNamed(targetCatalog.clients, current.clientEntity || current.client, "unknown_client", "Client");
+  }
+  if (text(current.deliveryEntity || current.bpo)) {
+    requireNamed(targetCatalog.deliveries, current.deliveryEntity || current.bpo, "unknown_delivery", "Delivery");
+  }
+  if (text(current.projectId)) {
+    requireNamed(targetCatalog.projects, current.projectId, "unknown_project", "Project");
+  }
+  storedLabels(current, targetCatalog, "tags");
+  let parent = null;
+  if (targetId === sourceId && text(current.parentId)) {
+    const sourceItems = await workspaceItems(repo, sourceId);
+    parent = sourceItems.find((item) => item.id === current.parentId) || null;
+    if (!parent || isDeleted(parent)) parent = null;
+    else assertParentLink(kind, parent);
+  }
+  const copy = {
+    id: createId("task"),
+    userId: token.userId,
+    createdBy: token.userId,
+    ownerId: token.userId,
+    workspaceId: targetId,
+    title: `${current.title || "Item"} (copy)`.slice(0, 500),
+    description: current.description || "",
+    status: isDeleted(current) ? "backlog" : (current.status || "backlog"),
+    priority: current.priority ?? null,
+    dueDate: current.dueDate || null,
+    startDate: current.startDate || null,
+    workItemType: kind,
+    itemType: kind,
+    type: kind,
+    parentId: null,
+    epicId: null,
+    featureId: null,
+    projectId: current.projectId || null,
+    productPhase: current.productPhase || current.roadmapPhase || null,
+    clientEntity: current.clientEntity || current.client || null,
+    client: current.clientEntity || current.client || null,
+    deliveryEntity: current.deliveryEntity || current.bpo || null,
+    bpo: current.deliveryEntity || current.bpo || null,
+    tags: Array.isArray(current.tags) ? [...current.tags] : [],
+    categoryIds: Array.isArray(current.categoryIds) ? [...current.categoryIds] : [],
+    checklist: checklistRows(current).map((line) => ({ ...line, id: createId("chk") })),
+    attachments: Array.isArray(current.attachments) ? current.attachments : [],
+    linkedDocumentIds: Array.isArray(current.linkedDocumentIds) ? [...current.linkedDocumentIds] : [],
+    externalId: null,
+    comments: [],
+    statusHistory: [],
+    source: "api",
+    deletedAt: null,
+    purgeAfter: null,
+    createdAt: new Date(now).toISOString(),
+  };
+  applyParent(copy, parent);
+  const saved = await persist(repo, token, {}, copy, `Duplicated from ${current.id}`, "duplicate_item", now);
+  const items = await workspaceItems(repo, targetId);
+  return {
+    workspace_id: targetId,
+    workspace_name: targetCatalog.workspaceName,
+    item: publicItem(saved, targetCatalog, items),
+  };
+}
+
+async function restoreItem(repo, token, args, now) {
+  requireDelete(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const current = await requireItem(repo, workspaceId, args.item_id);
+  if (!isDeleted(current)) throw new McpError("not_deleted", "This item is not in the trash.", 409);
+  const previous = text(current.previousStatus).toLowerCase();
+  const status = !previous || previous === "deleted" || previous === "archived" ? "backlog" : previous;
+  const next = { ...current, status, previousStatus: null, deletedAt: null, purgeAfter: null };
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const saved = await persist(repo, token, current, next, "Restored from trash", "restore_item", now);
+  const items = await workspaceItems(repo, workspaceId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    restored: true,
+    item: publicItem(saved, catalog, items),
+  };
+}
+
+async function addSubtask(repo, token, args, now) {
+  const parentId = arg(args, "parent_id") || arg(args, "item_id");
+  if (!parentId) throw new McpError("item_required", "parent_id is required.", 400);
+  return createItem(repo, token, { ...args, type: "subtask", parent_id: parentId }, now);
+}
+
+async function updateSubtask(repo, token, args, now) {
+  requireWrite(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const current = await requireItem(repo, workspaceId, args.item_id || args.subtask_id);
+  if (kindOf(current) !== "subtask") {
+    throw new McpError("invalid_type", "That item is not a Sub Task. Use update_item for other types.", 400);
+  }
+  return updateItem(repo, token, { ...args, item_id: current.id }, now);
+}
+
+async function deleteSubtask(repo, token, args, now) {
+  requireDelete(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const current = await requireItem(repo, workspaceId, args.item_id || args.subtask_id);
+  if (kindOf(current) !== "subtask") {
+    throw new McpError("invalid_type", "That item is not a Sub Task.", 400);
+  }
+  return deleteItem(repo, token, { ...args, item_id: current.id }, now);
+}
+
+async function mutateChecklist(repo, token, args, now, change) {
+  requireWrite(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const current = await requireItem(repo, workspaceId, args.item_id);
+  if (isDeleted(current)) throw new McpError("deleted", "This item is in the trash.", 409);
+  const lines = checklistRows(current);
+  const nextLines = change(lines);
+  const next = { ...current, checklist: nextLines };
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const saved = await persist(repo, token, current, next, "Checklist updated", "checklist", now);
+  const items = await workspaceItems(repo, workspaceId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    checklist: checklistRows(saved),
+    item: publicItem(saved, catalog, items),
+  };
+}
+
+async function addChecklistLine(repo, token, args, now) {
+  const body = text(args.text);
+  if (!body) throw new McpError("checklist_required", "text is required.", 400);
+  const line = { id: createId("chk"), text: body.slice(0, 500), done: false };
+  const result = await mutateChecklist(repo, token, args, now, (lines) => [...lines, line].slice(-200));
+  return { ...result, line };
+}
+
+async function toggleChecklistLine(repo, token, args, now) {
+  const lineId = arg(args, "line_id") || arg(args, "id");
+  if (!lineId) throw new McpError("checklist_required", "line_id is required.", 400);
+  return mutateChecklist(repo, token, args, now, (lines) => {
+    const line = lines.find((row) => row.id === lineId);
+    if (!line) throw new McpError("not_found", "Checklist line not found on this item.", 404);
+    line.done = args.done == null ? !line.done : args.done === true;
+    return lines;
+  });
+}
+
+async function deleteChecklistLine(repo, token, args, now) {
+  const lineId = arg(args, "line_id") || arg(args, "id");
+  if (!lineId) throw new McpError("checklist_required", "line_id is required.", 400);
+  return mutateChecklist(repo, token, args, now, (lines) => {
+    if (!lines.some((row) => row.id === lineId)) {
+      throw new McpError("not_found", "Checklist line not found on this item.", 404);
+    }
+    return lines.filter((row) => row.id !== lineId);
+  });
+}
+
+async function listComments(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const item = await requireItem(repo, workspaceId, args.item_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    item_id: item.id,
+    comments: commentRows(item),
+  };
+}
+
+async function setAssignee(repo, token, args, now) {
+  requireWrite(token);
+  if (!token.assign) {
+    throw new McpError(
+      "assign_forbidden",
+      "This token cannot assign people. Turn on the assign permission to change an assignee.",
+      403,
+    );
+  }
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const current = await requireItem(repo, workspaceId, args.item_id);
+  if (isDeleted(current)) throw new McpError("deleted", "This item is in the trash.", 409);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const next = { ...current };
+  const raw = args.assignee_id ?? args.assigneeId ?? args.assignee;
+  if (raw == null || text(raw) === "") {
+    next.assigneeId = null;
+    next.assignees = [];
+  } else {
+    const member = resolveAssignee(token, catalog, args);
+    next.assigneeId = member.id;
+    next.assignees = [member.name];
+  }
+  const saved = await persist(repo, token, current, next, "", "set_assignee", now);
+  const items = await workspaceItems(repo, workspaceId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    item: publicItem(saved, catalog, items),
+  };
+}
+
+async function listMembers(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    members: catalog.members,
+  };
+}
+
+function bulkRows(args) {
+  const entries = args.items;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new McpError("bulk_empty", "items must contain at least one row.", 400);
+  }
+  if (entries.length > BULK_LIMIT) {
+    throw new McpError("bulk_too_large", `Bulk calls accept at most ${BULK_LIMIT} items.`, 400);
+  }
+  return entries;
+}
+
+function bulkResult(plans, dryRun) {
+  return {
+    dry_run: dryRun,
+    applied: false,
+    results: plans.map((plan) => {
+      const copy = { ...plan };
+      delete copy.next;
+      return copy;
+    }),
+  };
+}
+
+async function bulkSetParent(repo, token, args, now) {
+  requireWrite(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const entries = bulkRows(args);
+  const ids = entries.map((entry) => text(entry?.item_id));
+  if (new Set(ids).size !== ids.length) {
+    throw new McpError("duplicate_item", "Each item_id can appear only once.", 400);
+  }
+  const items = await workspaceItems(repo, workspaceId);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const plans = [];
+  for (const entry of entries) {
+    try {
+      const current = await requireItem(repo, workspaceId, entry?.item_id);
+      if (isDeleted(current)) throw new McpError("deleted", "This item is in the trash.", 409);
+      let parent = null;
+      if (text(entry?.parent_id)) {
+        parent = await requireItem(repo, workspaceId, entry.parent_id);
+        if (parent.id === current.id) throw new McpError("invalid_parent", "An item cannot be its own parent.", 400);
+        assertNoCycle(items, current.id, parent.id);
+      }
+      assertParentLink(kindOf(current), parent);
+      const next = { ...current };
+      applyParent(next, parent);
+      plans.push({
+        item_id: current.id,
+        ok: true,
+        before: comparable(current),
+        after: comparable(next),
+        next,
+      });
+    } catch (error) {
+      plans.push({
+        item_id: text(entry?.item_id),
+        ok: false,
+        code: error.code || "tool_error",
+        message: error.message,
+      });
+    }
+  }
+  const dryRun = args.dry_run === true;
+  if (dryRun || plans.some((plan) => !plan.ok)) return { ...bulkResult(plans, dryRun), workspace_id: workspaceId, workspace_name: catalog.workspaceName };
+  for (const plan of plans) {
+    const current = items.find((item) => item.id === plan.item_id);
+    await persist(repo, token, current, plan.next, "", "bulk_set_parent", now);
+  }
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    dry_run: false,
+    applied: true,
+    results: plans.map((plan) => ({ item_id: plan.item_id, ok: true, before: plan.before, after: plan.after })),
+  };
+}
+
+async function bulkMove(repo, token, args, now) {
+  requireWrite(token);
+  const sourceId = await requireWorkspace(repo, token, args.workspace_id);
+  const targetId = await requireWorkspace(repo, token, args.target_workspace_id);
+  const rawIds = Array.isArray(args.item_ids)
+    ? args.item_ids
+    : (Array.isArray(args.items) ? args.items.map((entry) => entry?.item_id || entry) : []);
+  if (!rawIds.length) throw new McpError("bulk_empty", "item_ids must contain at least one id.", 400);
+  if (rawIds.length > BULK_LIMIT) {
+    throw new McpError("bulk_too_large", `Bulk calls accept at most ${BULK_LIMIT} items.`, 400);
+  }
+  const sourceItems = await workspaceItems(repo, sourceId);
+  const catalog = await loadCatalog(repo, sourceId, token.userId);
+  const targetCatalog = await loadCatalog(repo, targetId, token.userId);
+  const plans = [];
+  const selected = new Set(rawIds.map((id) => text(id)));
+  for (const itemId of rawIds) {
+    try {
+      const current = await requireItem(repo, sourceId, itemId);
+      const moving = [current, ...descendants(sourceItems, current.id)];
+      if (moving.some((row) => row.id !== current.id && selected.has(row.id))) {
+        throw new McpError("duplicate_item", "That item is already included through a parent in this batch.", 400);
+      }
+      for (const row of moving) {
+        if (text(row.clientEntity || row.client)) {
+          requireNamed(targetCatalog.clients, row.clientEntity || row.client, "unknown_client", "Client");
+        }
+        if (text(row.deliveryEntity || row.bpo)) {
+          requireNamed(targetCatalog.deliveries, row.deliveryEntity || row.bpo, "unknown_delivery", "Delivery");
+        }
+        storedLabels(row, targetCatalog, "tags");
+      }
+      plans.push({
+        item_id: current.id,
+        ok: true,
+        moved: moving.map((row) => row.id),
+        before: { workspace_id: sourceId, workspace_name: catalog.workspaceName },
+        after: { workspace_id: targetId, workspace_name: targetCatalog.workspaceName },
+      });
+    } catch (error) {
+      plans.push({
+        item_id: text(itemId),
+        ok: false,
+        code: error.code || "tool_error",
+        message: error.message,
+      });
+    }
+  }
+  const dryRun = args.dry_run === true;
+  if (dryRun || plans.some((plan) => !plan.ok)) {
+    return {
+      workspace_id: sourceId,
+      workspace_name: catalog.workspaceName,
+      target_workspace_id: targetId,
+      ...bulkResult(plans, dryRun),
+    };
+  }
+  const moved = [];
+  for (const plan of plans) {
+    const result = await moveItem(repo, token, {
+      workspace_id: sourceId,
+      item_id: plan.item_id,
+      target_workspace_id: targetId,
+      target_parent_id: args.target_parent_id,
+    }, now);
+    moved.push(...result.moved);
+  }
+  return {
+    workspace_id: targetId,
+    workspace_name: targetCatalog.workspaceName,
+    dry_run: false,
+    applied: true,
+    moved,
+    results: plans.map((plan) => ({ item_id: plan.item_id, ok: true, before: plan.before, after: plan.after, moved: plan.moved })),
+  };
+}
+
+const OPTION_GROUPS = {
+  create_client_option: "client_entity",
+  create_delivery_option: "delivery_entity",
+  create_tag: "tag",
+};
+
+async function createCatalogOption(repo, token, args, now, group) {
+  requireAdmin(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const name = text(args.name || args.title);
+  if (!name || name.length > 100) throw new McpError("invalid_name", "Name is required and must be 100 characters or less.", 400);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const list = group === "client_entity" ? catalog.clients : group === "delivery_entity" ? catalog.deliveries : catalog.tags;
+  const existing = matchNamed(list, name);
+  if (existing) {
+    return { workspace_id: workspaceId, workspace_name: catalog.workspaceName, created: false, option: existing };
+  }
+  if (typeof repo.saveCategory !== "function") {
+    throw new McpError("unavailable", "Catalog storage is unavailable.", 503);
+  }
+  const colors = { client_entity: "#4b6988", delivery_entity: "#315f46", tag: "#7b5ea7" };
+  const record = {
+    id: createId("cat"),
+    name,
+    group,
+    color: colors[group],
+    workspaceId,
+    userId: token.userId,
+    createdBy: token.userId,
+    createdAt: new Date(now).toISOString(),
+    updatedAt: new Date(now).toISOString(),
+  };
+  await repo.saveCategory(record);
+  await repo.writeAudit({
+    id: createId("aud"),
+    action: "catalog.create",
+    tokenId: token.id,
+    tokenName: token.name,
+    userId: token.userId,
+    workspaceId,
+    at: record.createdAt,
+    before: null,
+    after: { id: record.id, name, group },
+  });
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    created: true,
+    option: { id: record.id, name },
+  };
+}
+
+const VIEW_PRESETS = {
+  hoy: { name: "Hoy", filters: [{ columnId: "due", op: "today" }] },
+  solo_yo: { name: "Solo yo", filters: [{ columnId: "assignee", op: "me" }] },
+  esperando_a_terceros: { name: "Esperando a terceros", filters: [{ columnId: "status", op: "eq", value: "blocked" }] },
+  sin_dueno_ni_fecha: {
+    name: "Sin dueño ni fecha",
+    filters: [{ columnId: "assignee", op: "empty" }, { columnId: "due", op: "empty" }],
+  },
+  vencidos: { name: "Vencidos", filters: [{ columnId: "due", op: "overdue" }] },
+};
+
+function publicView(view) {
+  return {
+    id: view.id,
+    workspace_id: view.workspaceId,
+    name: view.name || "",
+    scope: view.scope || "personal",
+    surface: view.surface || "my-work",
+    filters: view.filters || [],
+    sort: view.sort || [],
+    owner_id: view.ownerId || "",
+  };
+}
+
+async function listViews(repo, token, args) {
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const rows = typeof repo.listViews === "function" ? await repo.listViews(workspaceId, token.userId) : [];
+  const views = (rows || []).filter((view) => {
+    if (text(view.workspaceId) !== workspaceId) return false;
+    if (view.scope === "team") return true;
+    return text(view.ownerId) === token.userId;
+  }).map(publicView);
+  return { workspace_id: workspaceId, workspace_name: catalog.workspaceName, views };
+}
+
+async function createView(repo, token, args, now) {
+  requireWrite(token);
+  const workspaceId = await requireWorkspace(repo, token, args.workspace_id);
+  const catalog = await loadCatalog(repo, workspaceId, token.userId);
+  const presetKey = text(args.preset).toLowerCase().replace(/[\s-]+/g, "_");
+  const preset = VIEW_PRESETS[presetKey] || null;
+  const name = text(args.name) || preset?.name || "";
+  if (!name || name.length > 80) throw new McpError("invalid_name", "Give the view a name up to 80 characters.", 400);
+  if (typeof repo.saveView !== "function") throw new McpError("unavailable", "View storage is unavailable.", 503);
+  const filters = args.filters != null || args.filtros != null
+    ? (Array.isArray(args.filters || args.filtros) ? (args.filters || args.filtros) : [args.filters || args.filtros])
+    : (preset?.filters || []);
+  const sortRaw = args.sort != null ? args.sort : args.orden;
+  const sort = sortRaw == null ? [] : (Array.isArray(sortRaw) ? sortRaw : [sortRaw]);
+  const stamp = new Date(now).toISOString();
+  const record = {
+    id: createId("view"),
+    workspaceId,
+    surface: text(args.surface) || "my-work",
+    name,
+    scope: "personal",
+    ownerId: token.userId,
+    layout: "list",
+    columns: [{ id: "title" }],
+    quickActions: [],
+    filters,
+    sort,
+    groupBy: null,
+    density: "compact",
+    createdAt: stamp,
+    updatedAt: stamp,
+  };
+  await repo.saveView(record);
+  return {
+    workspace_id: workspaceId,
+    workspace_name: catalog.workspaceName,
+    view: publicView(record),
   };
 }
 
@@ -1007,14 +1840,35 @@ const TOOL_RUNNERS = {
   get_item: getItem,
   get_hierarchy: getHierarchy,
   list_fields: listFields,
+  search: searchItems,
+  list_projects: listProjects,
+  get_project: getProject,
   create_item: createItem,
   update_item: updateItem,
   set_parent: setParent,
   change_type: changeType,
   move_item_to_workspace: moveItem,
-  add_comment: addComment,
-  bulk_update: bulkUpdate,
+  duplicate_item: duplicateItem,
   delete_item: deleteItem,
+  restore_item: restoreItem,
+  add_subtask: addSubtask,
+  update_subtask: updateSubtask,
+  delete_subtask: deleteSubtask,
+  add_checklist_line: addChecklistLine,
+  toggle_checklist_line: toggleChecklistLine,
+  delete_checklist_line: deleteChecklistLine,
+  add_comment: addComment,
+  list_comments: listComments,
+  set_assignee: setAssignee,
+  list_members: listMembers,
+  bulk_update: bulkUpdate,
+  bulk_set_parent: bulkSetParent,
+  bulk_move_to_workspace: bulkMove,
+  create_client_option: (repo, token, args, now) => createCatalogOption(repo, token, args, now, OPTION_GROUPS.create_client_option),
+  create_delivery_option: (repo, token, args, now) => createCatalogOption(repo, token, args, now, OPTION_GROUPS.create_delivery_option),
+  create_tag: (repo, token, args, now) => createCatalogOption(repo, token, args, now, OPTION_GROUPS.create_tag),
+  list_views: listViews,
+  create_view: createView,
 };
 
 const workspaceProp = {
@@ -1033,28 +1887,38 @@ export const MCP_TOOLS = [
   },
   {
     name: "list_items",
-    description: "List work items in one workspace. Filters combine with AND. Deleted items stay hidden unless status is deleted.",
+    description: "List work items in one workspace. Does not depend on the signed-in assignee. Filters combine with AND. Done and Cancelled stay hidden unless incluir_completados is true or status asks for them. Deleted items stay hidden unless status is deleted.",
     inputSchema: schema({
       ...workspaceProp,
       type: { type: "string", enum: ITEM_TYPES },
       parent_id: { type: "string" },
-      status: { type: "string" },
+      sin_padre: { type: "boolean" },
+      project_id: { type: "string" },
+      status: { type: "string", description: "Includes done and cancelled." },
       assignee: { type: "string", description: "Member id or name. Does not change assignment." },
       client: { type: "string" },
       delivery: { type: "string" },
       tag: { type: "string" },
+      tags: { type: "array", items: { type: "string" } },
+      priority: { type: "string" },
       due_before: { type: "string" },
       due_after: { type: "string" },
-      sin_padre: { type: "boolean" },
+      vencidos: { type: "boolean" },
       texto: { type: "string" },
+      incluir_completados: { type: "boolean" },
+      fields: { type: "array", items: { type: "string" } },
       cursor: { type: "string" },
       limit: { type: "integer", minimum: 1, maximum: 100 },
     }, ["workspace_id"]),
   },
   {
     name: "get_item",
-    description: "Read one item, including parent, children, tags, comments, and API activity.",
-    inputSchema: schema({ ...workspaceProp, item_id: { type: "string" } }, ["workspace_id", "item_id"]),
+    description: "Read one item: exact type (pbi, story, and task share the label PBI/Task), parent, Epic > Feature > PBI chain, children, sub tasks, checklist, comments, attachments, and history. fields limits the keys. workspace_id and workspace_name always stay.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      fields: { type: "array", items: { type: "string" } },
+    }, ["workspace_id", "item_id"]),
   },
   {
     name: "get_hierarchy",
@@ -1063,7 +1927,7 @@ export const MCP_TOOLS = [
   },
   {
     name: "list_fields",
-    description: "Valid clients, deliveries, tags, statuses, members, and types. The API does not create new options.",
+    description: "Valid clients, deliveries, projects, tags, statuses, priorities, types, product phases, and members. Unknown values are rejected with that list. New options require the admin permission.",
     inputSchema: schema(workspaceProp, ["workspace_id"]),
   },
   {
@@ -1081,7 +1945,10 @@ export const MCP_TOOLS = [
       due_date: { type: "string" },
       priority: {},
       status: { type: "string" },
-      external_id: { type: "string" },
+      project: { type: "string" },
+      project_id: { type: "string" },
+      product_phase: { type: "string", enum: PRODUCT_PHASES },
+      external_id: { type: "string", description: "Source id. A live item with the same external_id in this workspace is returned instead of creating another." },
       assignee: { type: "string" },
     }, ["workspace_id", "type", "title"]),
   },
@@ -1097,15 +1964,19 @@ export const MCP_TOOLS = [
       delivery: { type: "string" },
       tags: { type: "array", items: { type: "string" } },
       due_date: { type: "string" },
+      start_date: { type: "string" },
       priority: {},
       status: { type: "string" },
+      project: { type: "string" },
+      project_id: { type: "string" },
+      product_phase: { type: "string", enum: PRODUCT_PHASES },
       external_id: { type: "string" },
       assignee: { type: "string" },
     }, ["workspace_id", "item_id"]),
   },
   {
     name: "set_parent",
-    description: "Move an item under a parent. Feature only under Epic, PBI only under Feature, Sub Task only under PBI. Empty parent_id detaches it.",
+    description: "Move an item under a parent. Feature only under Epic. PBI, story, and task only under Feature. Sub Task, Bug, and Issue only under a PBI/Task. parent_id null detaches it.",
     inputSchema: schema({
       ...workspaceProp,
       item_id: { type: "string" },
@@ -1123,11 +1994,12 @@ export const MCP_TOOLS = [
   },
   {
     name: "move_item_to_workspace",
-    description: "Move an item and its descendants to another workspace on this token. History and comments stay. Client, delivery, and tags must already exist there.",
+    description: "Move an item with its children, comments, and history to another workspace on this token. Optional target_parent_id must already live in the target and satisfy the hierarchy. Client, delivery, tags, and project must already exist there.",
     inputSchema: schema({
       ...workspaceProp,
       item_id: { type: "string" },
       target_workspace_id: { type: "string" },
+      target_parent_id: { type: "string" },
     }, ["workspace_id", "item_id", "target_workspace_id"]),
   },
   {
@@ -1141,7 +2013,7 @@ export const MCP_TOOLS = [
   },
   {
     name: "bulk_update",
-    description: "Update up to 100 items. dry_run returns the diff and writes nothing. Any invalid row writes nothing.",
+    description: "Update up to 200 items. dry_run returns the diff and writes nothing. Any invalid row writes nothing.",
     inputSchema: schema({
       ...workspaceProp,
       dry_run: { type: "boolean" },
@@ -1150,8 +2022,167 @@ export const MCP_TOOLS = [
   },
   {
     name: "delete_item",
-    description: "Soft-delete an item that has no children. It stays recoverable for 30 days.",
+    description: "Soft-delete an item for 30 days. Fails when it has live children unless cascade is true. Requires the delete permission.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      cascade: { type: "boolean" },
+    }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "search",
+    description: "Search title, description, external id, comments, and tags inside one workspace. Does not search other workspaces.",
+    inputSchema: schema({
+      ...workspaceProp,
+      query: { type: "string" },
+      fields: { type: "array", items: { type: "string" } },
+      cursor: { type: "string" },
+      limit: { type: "integer", minimum: 1, maximum: 100 },
+    }, ["workspace_id", "query"]),
+  },
+  {
+    name: "list_projects",
+    description: "Projects in one workspace.",
+    inputSchema: schema(workspaceProp, ["workspace_id"]),
+  },
+  {
+    name: "get_project",
+    description: "One project in the given workspace.",
+    inputSchema: schema({ ...workspaceProp, project_id: { type: "string" } }, ["workspace_id", "project_id"]),
+  },
+  {
+    name: "duplicate_item",
+    description: "Copy one item. Children, comments, history, and external_id are not copied. Optional target_workspace_id must be on the token.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      target_workspace_id: { type: "string" },
+    }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "restore_item",
+    description: "Restore a soft-deleted item. Requires the delete permission.",
     inputSchema: schema({ ...workspaceProp, item_id: { type: "string" } }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "add_subtask",
+    description: "Create a Sub Task under a PBI, story, or task. This is a child item, not a checklist line.",
+    inputSchema: schema({
+      ...workspaceProp,
+      parent_id: { type: "string" },
+      title: { type: "string" },
+      description: { type: "string" },
+      due_date: { type: "string" },
+      status: { type: "string" },
+    }, ["workspace_id", "parent_id", "title"]),
+  },
+  {
+    name: "update_subtask",
+    description: "Patch a Sub Task. Refuses items that are not subtasks.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      title: { type: "string" },
+      description: { type: "string" },
+      due_date: { type: "string" },
+      status: { type: "string" },
+      priority: {},
+    }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "delete_subtask",
+    description: "Soft-delete a Sub Task. Requires the delete permission.",
+    inputSchema: schema({ ...workspaceProp, item_id: { type: "string" } }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "add_checklist_line",
+    description: "Add a checklist line on the item. This is not a Sub Task.",
+    inputSchema: schema({ ...workspaceProp, item_id: { type: "string" }, text: { type: "string" } }, ["workspace_id", "item_id", "text"]),
+  },
+  {
+    name: "toggle_checklist_line",
+    description: "Check or uncheck a checklist line.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      line_id: { type: "string" },
+      done: { type: "boolean" },
+    }, ["workspace_id", "item_id", "line_id"]),
+  },
+  {
+    name: "delete_checklist_line",
+    description: "Remove a checklist line. Does not delete a Sub Task.",
+    inputSchema: schema({ ...workspaceProp, item_id: { type: "string" }, line_id: { type: "string" } }, ["workspace_id", "item_id", "line_id"]),
+  },
+  {
+    name: "list_comments",
+    description: "Comments on one item.",
+    inputSchema: schema({ ...workspaceProp, item_id: { type: "string" } }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "set_assignee",
+    description: "Set or clear the assignee. Requires the assign permission, which is off by default. Empty assignee clears it.",
+    inputSchema: schema({
+      ...workspaceProp,
+      item_id: { type: "string" },
+      assignee: { type: "string" },
+    }, ["workspace_id", "item_id"]),
+  },
+  {
+    name: "list_members",
+    description: "Members of one workspace. Available to every token, including read-only.",
+    inputSchema: schema(workspaceProp, ["workspace_id"]),
+  },
+  {
+    name: "bulk_set_parent",
+    description: "Reparent up to 200 items. dry_run returns the diff and writes nothing. Any invalid row writes nothing.",
+    inputSchema: schema({
+      ...workspaceProp,
+      dry_run: { type: "boolean" },
+      items: { type: "array", items: { type: "object" } },
+    }, ["workspace_id", "items"]),
+  },
+  {
+    name: "bulk_move_to_workspace",
+    description: "Move up to 200 items, with their children, to another workspace on this token. dry_run writes nothing.",
+    inputSchema: schema({
+      ...workspaceProp,
+      target_workspace_id: { type: "string" },
+      target_parent_id: { type: "string" },
+      item_ids: { type: "array", items: { type: "string" } },
+      dry_run: { type: "boolean" },
+    }, ["workspace_id", "target_workspace_id", "item_ids"]),
+  },
+  {
+    name: "create_client_option",
+    description: "Create a client. Requires the admin permission. Without it, unknown clients are an error that lists the valid ones.",
+    inputSchema: schema({ ...workspaceProp, name: { type: "string" } }, ["workspace_id", "name"]),
+  },
+  {
+    name: "create_delivery_option",
+    description: "Create a delivery. Requires the admin permission.",
+    inputSchema: schema({ ...workspaceProp, name: { type: "string" } }, ["workspace_id", "name"]),
+  },
+  {
+    name: "create_tag",
+    description: "Create a tag. Requires the admin permission.",
+    inputSchema: schema({ ...workspaceProp, name: { type: "string" } }, ["workspace_id", "name"]),
+  },
+  {
+    name: "list_views",
+    description: "Personal and team saved views for this workspace.",
+    inputSchema: schema(workspaceProp, ["workspace_id"]),
+  },
+  {
+    name: "create_view",
+    description: "Save a personal My Work view. Pass filters and sort, or preset: hoy, solo_yo, esperando_a_terceros, sin_dueno_ni_fecha, vencidos.",
+    inputSchema: schema({
+      ...workspaceProp,
+      name: { type: "string" },
+      preset: { type: "string" },
+      filters: { type: "array", items: { type: "object" } },
+      sort: { type: "array", items: { type: "object" } },
+    }, ["workspace_id"]),
   },
 ];
 
@@ -1161,7 +2192,16 @@ export async function executeTool(repo, token, name, args, now = Date.now()) {
   if (name !== "list_workspaces") {
     await requireWorkspace(repo, token, args?.workspace_id);
   }
-  return run(repo, token, args || {}, now);
+  const data = await run(repo, token, args || {}, now);
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const workspaceId = data.workspace_id || data.item?.workspace_id;
+    if (workspaceId && (data.workspace_id == null || data.workspace_name == null)) {
+      const workspace = await repo.getWorkspace(workspaceId);
+      if (data.workspace_id == null) data.workspace_id = workspaceId;
+      if (data.workspace_name == null) data.workspace_name = workspace?.name || workspaceId;
+    }
+  }
+  return data;
 }
 
 function bearer(authorization) {
@@ -1239,7 +2279,7 @@ async function dispatchMethod(repo, token, message, now) {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "Certo Work", version: "1.0.0" },
-      instructions: "Pass workspace_id on every tool except list_workspaces. Never infer the workspace. Do not invent clients, deliveries, or tags.",
+      instructions: "Pass workspace_id on every tool except list_workspaces. Never infer the workspace. Every item includes workspace_id and workspace_name. Do not invent clients, deliveries, tags, or projects unless the token has admin.",
     };
   }
   if (method === "ping") return {};
@@ -1339,6 +2379,12 @@ export async function issueToken(repo, user, input, now = Date.now()) {
   if (input?.assign && permission !== "read-write") {
     throw new McpError("assign_requires_write", "The assign permission requires read-write.", 400);
   }
+  if (input?.canDelete && permission !== "read-write") {
+    throw new McpError("delete_requires_write", "The delete permission requires read-write.", 400);
+  }
+  if (input?.admin && permission !== "read-write") {
+    throw new McpError("admin_requires_write", "The admin permission requires read-write.", 400);
+  }
   const days = Number(input?.expiresInDays ?? 90);
   if (!Number.isInteger(days) || days < 1 || days > 365) {
     throw new McpError("invalid_expiry", "Expiration must be between 1 and 365 days.", 400);
@@ -1353,6 +2399,8 @@ export async function issueToken(repo, user, input, now = Date.now()) {
     workspaceIds,
     permission,
     assign: Boolean(input?.assign),
+    admin: Boolean(input?.admin) && permission === "read-write",
+    ...(input?.canDelete === undefined ? {} : { canDelete: Boolean(input.canDelete) && permission === "read-write" }),
     expiresAt: new Date(now + days * 24 * 60 * 60 * 1000).toISOString(),
     revokedAt: null,
     createdAt: new Date(now).toISOString(),
@@ -1369,7 +2417,14 @@ export async function issueToken(repo, user, input, now = Date.now()) {
     userId: user.uid,
     at: record.createdAt,
     before: null,
-    after: { workspaceIds, permission, assign: record.assign, expiresAt: record.expiresAt },
+    after: {
+      workspaceIds,
+      permission,
+      assign: record.assign,
+      canDelete: record.canDelete !== false && permission === "read-write",
+      admin: record.admin,
+      expiresAt: record.expiresAt,
+    },
   });
   return { token: secret, access_token: secret, ...publicToken(record) };
 }
@@ -1424,6 +2479,8 @@ export function createMemoryMcpRepo() {
     workspaces: [],
     categories: [],
     members: [],
+    projects: [],
+    views: [],
   };
   return {
     state,
@@ -1478,6 +2535,25 @@ export function createMemoryMcpRepo() {
       });
       const members = state.members.filter((member) => member.workspaceId === workspaceId);
       return { categories, members };
+    },
+    async listProjects(workspaceId) {
+      return state.projects.filter((project) => project.workspaceId === workspaceId);
+    },
+    async getProject(projectId) {
+      return state.projects.find((project) => project.id === projectId) || null;
+    },
+    async saveCategory(record) {
+      const index = state.categories.findIndex((row) => row.id === record.id);
+      if (index >= 0) state.categories[index] = record;
+      else state.categories.push(record);
+    },
+    async listViews(workspaceId) {
+      return state.views.filter((view) => view.workspaceId === workspaceId);
+    },
+    async saveView(record) {
+      const index = state.views.findIndex((row) => row.id === record.id);
+      if (index >= 0) state.views[index] = record;
+      else state.views.push(record);
     },
   };
 }
