@@ -5,6 +5,8 @@ import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { portalEmailContent } from "./portalEmail.js";
 import { processDueRoutines, processEventOutbox } from "./routinesScheduler.js";
+import { createSingleFlight, digestCostKey, shouldRenewCalendarChannels } from "./costControls.js";
+const rewriteSingleFlight = createSingleFlight();
 import {
   encryptCalendarSecrets,
   signCalendarState,
@@ -818,8 +820,10 @@ function openAIUsage(payload) {
   const usage = payload?.usage || {};
   const inputTokens = Number(usage.input_tokens || usage.prompt_tokens || 0) || 0;
   const outputTokens = Number(usage.output_tokens || usage.completion_tokens || 0) || 0;
+  const cachedInputTokens = Math.min(inputTokens, Math.max(0, Number(usage.input_tokens_details?.cached_tokens || usage.prompt_tokens_details?.cached_tokens || 0)));
   return {
     inputTokens,
+    cachedInputTokens,
     outputTokens,
     totalTokens: Number(usage.total_tokens || inputTokens + outputTokens) || 0,
   };
@@ -837,6 +841,7 @@ function logAIUsage({ env, body, feature, model, usage }) {
       userId: body.userId || body.workspaceContext?.userId || null,
       conversationId: body.conversationId || null,
       inputTokens: usage.inputTokens,
+      cachedInputTokens: usage.cachedInputTokens || 0,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
       timestamp: new Date().toISOString(),
@@ -1309,22 +1314,27 @@ async function rewriteField(request, env) {
     1_200,
   );
   try {
-    const response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${openaiApiKey(env)}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
+    const requestBody = {
         model,
         instructions: rewriteInstructions(String(body.fieldKind || "project_description"), body.context || {}),
         input: [{ role: "user", content: source }],
         text: { format: { type: "json_object" } },
         max_output_tokens: maxOutputTokens,
         store: false,
-      }),
+    };
+    // Concurrent duplicates only. A later retry always produces a fresh answer.
+    const requestKey = await digestCostKey(JSON.stringify([openaiApiKey(env), auth.subject, body.workspaceId, requestBody]));
+    const response = await rewriteSingleFlight(requestKey, async () => {
+      const upstream = await fetch(OPENAI_RESPONSES_URL, {
+        method: "POST",
+        headers: { authorization: `Bearer ${openaiApiKey(env)}`, "content-type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      const payload = await upstream.json();
+      if (upstream.ok) logAIUsage({ env, body: { ...body, userId: auth.subject }, feature: "rewrite", model, usage: openAIUsage(payload) });
+      return { ok: upstream.ok, status: upstream.status, payload };
     });
-    const payload = await response.json();
+    const payload = response.payload;
     if (!response.ok) {
       return json({ error: payload?.error?.message || `OpenAI request failed (${response.status})`, code: "OPENAI_REQUEST_FAILED" }, 502);
     }
@@ -1332,7 +1342,6 @@ async function rewriteField(request, env) {
     const text = String(result?.text || "").trim();
     if (!text) throw new Error("OpenAI returned an empty rewrite");
     const usage = openAIUsage(payload);
-    logAIUsage({ env, body, feature: "rewrite", model, usage });
     return json({ text, provider: { provider: "openai", model, usage, costMode: "efficient" } });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "The writing assistant is temporarily unavailable", code: "REWRITE_UNAVAILABLE" }, 502);
@@ -2348,7 +2357,7 @@ const worker = {
     return handleCloudflareEmail(message, env, ctx);
   },
   async scheduled(controller, env, ctx) {
-    // Cloudflare Cron Trigger (*/5) — drain due Certo Rutinas.
+    // Drain routines/outbox every 15 minutes; renew calendar channels hourly.
     const run = async () => {
       try {
         const events = await processEventOutbox(env, {
@@ -2363,7 +2372,9 @@ const worker = {
             env.PUBLIC_ORIGIN ||
             env.CERTO_PUBLIC_ORIGIN ||
             "https://certo.work";
-          calendar = await renewCalendarChannels(env, origin);
+          if (shouldRenewCalendarChannels(controller?.scheduledTime)) {
+            calendar = await renewCalendarChannels(env, origin);
+          }
         } catch (calendarError) {
           calendar = {
             ok: false,

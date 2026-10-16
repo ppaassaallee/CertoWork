@@ -131,11 +131,18 @@ export function resolveFirestoreListenPacks(lens: DelivereeLens): FirestoreListe
   return { ...packs, key: packsKey(packs) };
 }
 
+/** One pack per subscription owner, so other route changes do not restart it. */
+export function singleFirestoreListenPack(name: string): FirestoreListenPacks {
+  const packs = { ...OFF };
+  if (name in packs) packs[name as keyof typeof packs] = true;
+  return { ...packs, key: name };
+}
+
 /** Collab presence heartbeat — was 45s; stretch to cut steady writes. */
 export const COLLAB_PRESENCE_HEARTBEAT_MS = 90_000;
 
-/** Kanban board presence — was 20s; align with TTL-friendly cadence. */
-export const KANBAN_PRESENCE_HEARTBEAT_MS = 45_000;
+/** Viewer presence — was 45s; halve steady writes with a matching TTL. */
+export const KANBAN_PRESENCE_HEARTBEAT_MS = 90_000;
 
 /** Notes autosave debounce — was 800ms. */
 export const NOTES_AUTOSAVE_DEBOUNCE_MS = 2_500;
