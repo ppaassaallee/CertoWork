@@ -5672,6 +5672,19 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               });
             }}
             onUpdateTask={onUpdateTask}
+            onAddSubtask={workItemKind(selectedItem) === "pbi" ? (subtaskTitle) => {
+              const projectId = String(selectedItem.projectId || "");
+              void onAddTask(projectId, subtaskTitle, "backlog", {
+                workItemType: "subtask",
+                itemType: "subtask",
+                taskType: "subtask",
+                ...parentLinkPatch(selectedItem),
+                order: (hierarchyTasks || tasks).filter((candidate) => parentId(candidate) === selectedItem.id).length,
+              });
+            } : undefined}
+            onToggleSubtask={(id, done) => {
+              void onUpdateTask(id, { status: done ? "done" : "backlog", completedAt: done ? new Date().toISOString() : null });
+            }}
             parentBreadcrumb={(() => {
               const crumbs: Array<{ id: string; title: string; kind: string }> = [];
               let cursor = findPoolItem(parentId(selectedItem));

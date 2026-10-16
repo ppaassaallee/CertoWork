@@ -68,3 +68,16 @@ test("ItemModal uses DestructiveDialog and existing save props", () => {
   assert.match(source, /MultiAssigneePicker/);
   assert.doesNotMatch(source, /window\.confirm/);
 });
+
+test("item detail keeps secondary sections compact without hiding their actions", () => {
+  const source = readFileSync(resolve("src/features/items/ItemModal/ItemModal.tsx"), "utf8");
+  const center = readFileSync(resolve("src/components/WorkItemsCenter.tsx"), "utf8");
+  const css = readFileSync(resolve("src/features/items/ItemModal/ItemModal.css"), "utf8");
+
+  assert.match(source, /parentPickerOpen \? <div className="cw-item-parent-popover"/);
+  assert.match(source, /className="cw-item-parent-trigger"/);
+  assert.match(source, /className="cw-item-resources"/);
+  assert.match(source, /onAddSubtask\(subtaskDraft\.trim\(\)\)/);
+  assert.match(center, /onAddSubtask=\{workItemKind\(selectedItem\) === "pbi"/);
+  assert.match(css, /\.cw-item-prop-row:has\(\.cw-item-parent-popover\)/);
+});

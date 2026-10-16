@@ -362,11 +362,14 @@ export function ItemModal({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [classificationOpen, setClassificationOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [checklistDraft, setChecklistDraft] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [activePicker, setActivePicker] = useState<string | null>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const parentPickerRef = useRef<HTMLDivElement>(null);
   const kind = workItemKind(item);
   const TypeIcon = TYPE_ICONS[kind] || Target;
   const project = projects.find((entry) => entry.id === item.projectId) || null;
@@ -421,6 +424,14 @@ export function ItemModal({
     setTitleDraft(itemTitle(item));
     setBodyDraft(String(item.description || item.definitionOfDone || ""));
   }, [item.id, item.title, item.description, item.definitionOfDone]);
+
+  useEffect(() => {
+    setParentPickerOpen(false);
+  }, [item.id, item.parentId, item.featureId, item.epicId]);
+
+  useEffect(() => {
+    if (parentPickerOpen) parentPickerRef.current?.querySelector("input")?.focus();
+  }, [parentPickerOpen]);
 
   useEffect(() => {
     if (layoutProp) setLayout(layoutProp);
@@ -583,6 +594,11 @@ export function ItemModal({
             )}
           </div>
           <div className="cw-item-modal-bar-right">
+            <RoutineLaunchButton
+              compact
+              scope={{ entityType: "task", entityId: String(item.id), entityTitle: itemTitle(item) }}
+              testId="item-routine-button"
+            />
             <button
               aria-label="Odysseus"
               className="cw-item-icon-btn"
@@ -662,7 +678,12 @@ export function ItemModal({
 
         <div className="cw-item-modal-body">
           <div className="cw-item-content">
-            <input
+            <div className="cw-item-context-line">
+              {project ? String(project.title || project.name || "Project") : locale === "es" ? "Sin proyecto" : "No project"}
+              <span aria-hidden="true">/</span>
+              {typeLabel(kind, locale)}
+            </div>
+            <textarea
               aria-label="Selected item title"
               className="cw-item-title"
               onBlur={commitTitle}
@@ -670,14 +691,15 @@ export function ItemModal({
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  (event.target as HTMLInputElement).blur();
+                  (event.target as HTMLTextAreaElement).blur();
                 }
                 if (event.key === "Escape") {
                   setTitleDraft(itemTitle(item));
-                  (event.target as HTMLInputElement).blur();
+                  (event.target as HTMLTextAreaElement).blur();
                 }
               }}
               ref={titleRef}
+              rows={titleDraft.length > (layout === "panel" ? 32 : 62) ? 2 : 1}
               value={titleDraft}
             />
 
@@ -761,14 +783,15 @@ export function ItemModal({
               </div>
             )}
 
-            <button
-              className="d-ask-ody"
-              onClick={onAskOdysseus}
-              style={{ margin: "8px 0 12px" }}
-              type="button"
-            >
-              Ask Odysseus to summarize
-            </button>
+            <div className="cw-item-section-heading">
+              <h2>{locale === "es" ? "Descripción" : "Description"}</h2>
+              {onAskOdysseus ? (
+                <button className="cw-item-ai-action" onClick={onAskOdysseus} type="button">
+                  <Sparkles size={14} aria-hidden="true" />
+                  {locale === "es" ? "Resumir con Odysseus" : "Summarize with Odysseus"}
+                </button>
+              ) : null}
+            </div>
 
             <div
               className={`cw-item-body-wrap ${bodyFocused ? "is-focused" : ""}`}
@@ -811,10 +834,10 @@ export function ItemModal({
               )}
             </div>
 
-            <section className="cw-item-card" data-testid="item-checklist">
+            <section className="cw-item-card cw-item-subtasks" data-testid="item-checklist">
               <header>
                 <strong>
-                  {copy("subtasks", locale)}{" "}
+                  {onAddSubtask ? (locale === "es" ? "Subtareas" : "Subtasks") : (locale === "es" ? "Lista de verificación" : "Checklist")}{" "}
                   {subtaskItems.length > 0
                     ? `${doneSubtasks}/${subtaskItems.length}`
                     : checklist.length > 0
@@ -881,7 +904,9 @@ export function ItemModal({
                     setChecklistDraft(event.target.value);
                     setSubtaskDraft(event.target.value);
                   }}
-                  placeholder="+"
+                  placeholder={onAddSubtask
+                    ? (locale === "es" ? "+ Añadir subtarea" : "+ Add subtask")
+                    : (locale === "es" ? "+ Añadir a la lista" : "+ Add checklist item")}
                   value={onAddSubtask ? subtaskDraft : checklistDraft}
                 />
               </form>
@@ -960,17 +985,19 @@ export function ItemModal({
               </section>
             )}
 
-            <ItemNotesSection
-              item={item}
-              notebookEntries={notebookEntries}
-              onOpenNote={onOpenNote}
-            />
-            <ItemRecordsSection
-              item={item}
-              onOpenRecord={onOpenRecord}
-              records={workspaceRecords}
-              tables={workspaceTables}
-            />
+            <div className="cw-item-resources">
+              <ItemNotesSection
+                item={item}
+                notebookEntries={notebookEntries}
+                onOpenNote={onOpenNote}
+              />
+              <ItemRecordsSection
+                item={item}
+                onOpenRecord={onOpenRecord}
+                records={workspaceRecords}
+                tables={workspaceTables}
+              />
+            </div>
           </div>
 
           <aside className="cw-item-props">
@@ -1030,28 +1057,33 @@ export function ItemModal({
               </PropRow>
               <PropRow label={copy("dates", locale)}>
                 <div className="cw-item-date-range">
-                  <input
-                    aria-label="Start date"
-                    defaultValue={dateInputValue(item.startDate)}
-                    onBlur={(event) =>
-                      onUpdateTask(item.id, {
-                        startDate: event.target.value || null,
-                      })
-                    }
-                    type="date"
-                  />
-                  <span>→</span>
-                  <input
-                    aria-label="Due date"
-                    defaultValue={dateInputValue(item.dueDate || item.targetDate)}
-                    onBlur={(event) =>
-                      onUpdateTask(
-                        item.id,
-                        dueDateTimingPatch(event.target.value || null),
-                      )
-                    }
-                    type="date"
-                  />
+                  <label>
+                    <span>{locale === "es" ? "Inicio" : "Start"}</span>
+                    <input
+                      aria-label="Start date"
+                      defaultValue={dateInputValue(item.startDate)}
+                      onBlur={(event) =>
+                        onUpdateTask(item.id, {
+                          startDate: event.target.value || null,
+                        })
+                      }
+                      type="date"
+                    />
+                  </label>
+                  <label>
+                    <span>{locale === "es" ? "Entrega" : "Due"}</span>
+                    <input
+                      aria-label="Due date"
+                      defaultValue={dateInputValue(item.dueDate || item.targetDate)}
+                      onBlur={(event) =>
+                        onUpdateTask(
+                          item.id,
+                          dueDateTimingPatch(event.target.value || null),
+                        )
+                      }
+                      type="date"
+                    />
+                  </label>
                 </div>
               </PropRow>
               <PropRow label={copy("sprint", locale)}>
@@ -1096,7 +1128,19 @@ export function ItemModal({
                 />
               </PropRow>
               <PropRow label={copy("parent", locale)}>
-                <div className="cw-item-parent">{parentEditor}</div>
+                <div className="cw-item-parent">
+                  <button
+                    aria-expanded={parentPickerOpen}
+                    className="cw-item-parent-trigger"
+                    onClick={() => setParentPickerOpen((open) => !open)}
+                    type="button"
+                  >
+                    <CornerDownRight size={14} aria-hidden="true" />
+                    <span>{parentBreadcrumb[parentBreadcrumb.length - 1]?.title || (locale === "es" ? "Sin padre" : "No parent")}</span>
+                    <ChevronDown className={parentPickerOpen ? "" : "is-collapsed"} size={13} aria-hidden="true" />
+                  </button>
+                  {parentPickerOpen ? <div className="cw-item-parent-popover" ref={parentPickerRef}>{parentEditor}</div> : null}
+                </div>
               </PropRow>
             </section>
 
@@ -1290,21 +1334,14 @@ export function ItemModal({
               </PropRow>
             </CollapsibleGroup>
 
-            <section className="cw-item-prop-group">
-              <h3>{copy("routines", locale)}</h3>
-              <RoutineLaunchButton
-                compact
-                scope={{
-                  entityType: "task",
-                  entityId: String(item.id),
-                  entityTitle: itemTitle(item),
-                }}
-                testId="item-routine-button"
-              />
-            </section>
-
-            <section className="cw-item-prop-group">
-              <h3>{copy("activity", locale)}</h3>
+            <CollapsibleGroup
+              open={activityOpen}
+              onToggle={() => setActivityOpen((open) => !open)}
+              summary={activityEntries(item).length
+                ? `${activityEntries(item).length} ${locale === "es" ? "actualizaciones" : "updates"}`
+                : (locale === "es" ? "Sin actividad" : "No activity")}
+              title={copy("activity", locale)}
+            >
               <ul className="cw-item-activity">
                 {activityEntries(item).map((entry) => (
                   <li key={entry.id}>
@@ -1316,7 +1353,7 @@ export function ItemModal({
                   <li className="is-empty">—</li>
                 )}
               </ul>
-            </section>
+            </CollapsibleGroup>
           </aside>
         </div>
       </aside>

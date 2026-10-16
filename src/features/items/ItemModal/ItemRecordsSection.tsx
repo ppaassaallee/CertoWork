@@ -97,7 +97,7 @@ export function ItemRecordsSection({
   };
 
   return (
-    <section className="cw-item-card" data-testid="item-records">
+    <section className={`cw-item-card cw-item-resource${rows.length ? "" : " is-empty"}`} data-testid="item-records">
       <header>
         <strong>
           <LayoutGrid size={12} style={{ marginRight: 6 }} />
@@ -167,11 +167,6 @@ export function ItemRecordsSection({
           </button>
         </article>
       ))}
-      {!rows.length ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "8px 0 0" }}>
-          {locale === "es" ? "Sin registros vinculados" : "No linked records"}
-        </p>
-      ) : null}
     </section>
   );
 }
