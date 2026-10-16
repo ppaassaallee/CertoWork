@@ -20,6 +20,7 @@ import {
   writeNotifyOnAssignmentEmail,
   writeSlackWebhookUrl,
 } from "../../lib/itemUpdateChannels";
+import { ApiTokensPanel } from "./ApiTokensPanel";
 
 function calendarConnectErrorMessage(payload: { error?: string; code?: string }, status: number): string {
   const code = String(payload.code || "");
@@ -377,6 +378,8 @@ export function Integrations() {
           </div>
         ))}
       </section>
+
+      <ApiTokensPanel />
 
       <section
         className="bg-white rounded-2xl border border-gray-200 overflow-hidden"

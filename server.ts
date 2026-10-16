@@ -25,6 +25,7 @@ import { registerCaptureRoutes } from "./server/routes/capture";
 import { registerDomainAiRoutes } from "./server/routes/domainAi";
 import { registerDataManagementRoutes } from "./server/routes/dataManagement";
 import { registerAssistantAccessRoutes } from "./server/routes/assistantAccess";
+import { registerMcpRoutes } from "./server/routes/mcpRemote";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -780,6 +781,7 @@ async function startServer() {
 
   app.use("/api", (req, res, next) => {
     if (req.path === "/webhooks/hubspot") return next();
+    if (req.path === "/mcp/tokens" || req.path.startsWith("/mcp/tokens/")) return next();
     return requireWorkspaceApiAuth(req, res, next);
   });
   app.use(
@@ -3359,6 +3361,7 @@ Respond STRICTLY in a valid JSON schema:
     getDb: () => dbAdmin,
     loadWorkspaceAccess,
   });
+  registerMcpRoutes(app, { getDb: () => dbAdmin });
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ ok: true });
