@@ -28,6 +28,7 @@ import {
   syncCalendar,
 } from "./calendarSync.js";
 import { handleAssistantWorkerRequest } from "./assistantAccess.js";
+import { handleWorkerMcp } from "./mcp/remoteHttp.js";
 import {
   firestoreAdminConfigured,
   firestoreCreateDocument,
@@ -2406,6 +2407,9 @@ const worker = {
     if (url.pathname.startsWith("/__/auth/")) {
       return proxyFirebaseAuth(request);
     }
+
+    const mcpResponse = await handleWorkerMcp(request, env, url);
+    if (mcpResponse) return mcpResponse;
 
     if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
       return new Response(null, {

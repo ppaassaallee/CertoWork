@@ -42,7 +42,9 @@ export function formatStatusActivity(entry: {
   to?: unknown;
   status?: unknown;
   text?: unknown;
+  via?: unknown;
 }) {
+  if (entry.via === "api" && String(entry.text || "").trim()) return String(entry.text).trim();
   const rewritten = rewriteStatusArrow(String(entry.text || ""));
   if (rewritten) return rewritten;
   const loose = rewriteStatusArrow(String(entry.status || ""));
