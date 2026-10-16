@@ -125,6 +125,11 @@ export function sortHierarchyForest(
 
 export type HierarchyKind = "epic" | "feature" | "pbi" | "story" | "task" | "bug" | "subtask" | "ticket" | "issue";
 
+/** Planning roots are Epics/PBIs; customer-request tickets are a separate root workflow. */
+export function canBeStandalone(kind: HierarchyKind | string): boolean {
+  return kind === "epic" || kind === "pbi" || kind === "ticket";
+}
+
 export function hierarchyKind(item: any): HierarchyKind {
   const structuralValue = String(
     item?.workItemType || item?.taskType || item?.issueType || item?.kind || item?.type || "",
@@ -145,18 +150,16 @@ export function hierarchyKind(item: any): HierarchyKind {
 export function allowedParentKinds(kind: HierarchyKind | string): HierarchyKind[] {
   if (kind === "epic" || kind === "ticket") return [];
   if (kind === "feature") return ["epic"];
-  // Epic → Feature → PBI/Task → bug/issue → Sub Task
+  // Epic → Feature → PBI → Subtask. A PBI may also be a root.
   if (kind === "pbi" || kind === "story") return ["feature"];
-  if (kind === "task" || kind === "bug" || kind === "issue") return ["pbi", "story"];
-  return ["pbi", "story", "task", "bug", "issue"];
+  return ["pbi"];
 }
 
 /** Inverse of parent rules: which kinds may be created / dropped directly under a parent. */
 export function allowedChildKinds(parentKind: HierarchyKind | string): HierarchyKind[] {
   if (parentKind === "epic") return ["feature"];
   if (parentKind === "feature") return ["pbi", "story"];
-  if (parentKind === "pbi" || parentKind === "story") return ["subtask", "task", "bug", "issue"];
-  if (parentKind === "task" || parentKind === "bug" || parentKind === "issue") return ["subtask"];
+  if (parentKind === "pbi") return ["subtask", "task", "bug", "issue"];
   return [];
 }
 
