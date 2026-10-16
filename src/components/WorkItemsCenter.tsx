@@ -2213,6 +2213,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       statusHistory: appendStatusHistory(item, nextStatus, isDone ? "backlog" : "done"),
     });
     statusSaved = true;
+    setKanbanError("");
     if (isDone) return;
     const recurrenceType = (item.recurrenceType || item.recurrence || "none") as RecurrenceType;
     if (!recurrenceType || recurrenceType === "none") return;
