@@ -1,3 +1,5 @@
+import type { RecordDoc } from "./types";
+
 /**
  * Table list queries that stay inside canReadTable.
  * A workspaceId-only list fails for everyone when any private table exists,
@@ -56,6 +58,20 @@ export function readableRecordQueryPlans(workspaceId: string, tableIds: string[]
     ]);
   }
   return plans;
+}
+
+/** Undefined preserves TablePage's own listener for archived/deleted or unowned data. */
+export function sharedTableRecords(
+  workspaceId: string,
+  tableId: string,
+  subscribedTableIds: readonly string[],
+  records: readonly RecordDoc[],
+  joined: boolean,
+): RecordDoc[] | undefined {
+  if (!joined || !workspaceId || !tableId || !subscribedTableIds.includes(tableId)) return undefined;
+  return records
+    .filter((record) => record.workspaceId === workspaceId && record.tableId === tableId)
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 export function planIsWorkspaceWideOnly(plan: ReadableFilter[]) {

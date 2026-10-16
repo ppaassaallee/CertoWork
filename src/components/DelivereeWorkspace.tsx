@@ -82,6 +82,7 @@ import {
   readableEquality,
   readableInList,
   readableRecordQueryPlans,
+  sharedTableRecords,
   readableTableQueryPlans,
 } from "../lib/tables/readableQueries";
 import { AliasProfileEditor } from "./ProjectControls";
@@ -636,6 +637,7 @@ export function DelivereeWorkspace() {
   const [notebookEntries, setNotebookEntries] = useState<NotebookEntry[]>([]);
   const [workspaceTables, setWorkspaceTables] = useState<TableDoc[]>([]);
   const [workspaceRecords, setWorkspaceRecords] = useState<RecordDoc[]>([]);
+  const [workspaceRecordsReadFailed, setWorkspaceRecordsReadFailed] = useState(false);
   const [supportCases, setSupportCases] = useState<any[]>([]);
   const [tablesTrashOpen, setTablesTrashOpen] = useState(false);
   const [reviewItems, setReviewItems] = useState<any[]>([]);
@@ -1695,6 +1697,7 @@ export function DelivereeWorkspace() {
   const visibleTableIdsKey = JSON.stringify([...new Set(visibleTables.map((table) => String(table.id || "")))].filter(Boolean).sort());
   const visibleTableIds = useMemo(() => JSON.parse(visibleTableIdsKey) as string[], [visibleTableIdsKey]);
   useEffect(() => {
+    setWorkspaceRecordsReadFailed(false);
     if (!user?.uid || !workspace?.id || !listenPacks.tableRecords || !joinedWorkspace) {
       setWorkspaceRecords([]);
       return;
@@ -1731,6 +1734,7 @@ export function DelivereeWorkspace() {
         },
         (error) => {
           logFirestoreListenError(`table_records ${index}`, error);
+          setWorkspaceRecordsReadFailed(true);
           merge.fail(index);
           reportDataSyncError(error);
         },
@@ -1774,6 +1778,10 @@ export function DelivereeWorkspace() {
       null
     );
   }, [lens, visibleTables, archivedTables, deletedTables]);
+  const activeTableSharedRecords = useMemo(
+    () => activeTable ? sharedTableRecords(activeTable.workspaceId, activeTable.id, visibleTableIds, workspaceRecords, joinedWorkspace && !workspaceRecordsReadFailed) : undefined,
+    [activeTable?.workspaceId, activeTable?.id, visibleTableIds, workspaceRecords, joinedWorkspace, workspaceRecordsReadFailed],
+  );
   const openCreateTableWizard = (projectId?: string | null) => {
     setCreateTableProjectId(projectId ? String(projectId) : null);
     setCreateTableWizardOpen(true);
@@ -9537,6 +9545,7 @@ export function DelivereeWorkspace() {
         ) : centerView === "tables" && tablesEnabled ? (
           activeTable ? (
             <TablePage
+              records={activeTableSharedRecords}
               itemCandidates={openTasks.map((task) => ({
                 id: String(task.id),
                 title: entityTitle(task),
