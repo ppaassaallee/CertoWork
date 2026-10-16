@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/AuthContext";
-import { t } from "../../lib/i18n";
+import { mcpTokenText } from "../../lib/mcpTokenCopy";
 import { DestructiveDialog } from "../ui/DestructiveDialog";
 
 type ApiTokenRow = {
@@ -20,9 +20,9 @@ type ApiTokenRow = {
 const DAY_CHOICES = [30, 90, 365];
 
 function tokenState(row: ApiTokenRow) {
-  if (row.revokedAt) return t("mcp.tokens.revoked");
-  if (row.expiresAt && Date.parse(row.expiresAt) <= Date.now()) return t("mcp.tokens.expired");
-  return t("mcp.tokens.active");
+  if (row.revokedAt) return mcpTokenText("revoked");
+  if (row.expiresAt && Date.parse(row.expiresAt) <= Date.now()) return mcpTokenText("expired");
+  return mcpTokenText("active");
 }
 
 export function ApiTokensPanel() {
@@ -72,7 +72,7 @@ export function ApiTokensPanel() {
   const createToken = async () => {
     if (!user) return;
     if (!selected.length) {
-      setNotice(t("mcp.tokens.needWorkspace"));
+      setNotice(mcpTokenText("needWorkspace"));
       return;
     }
     setBusy(true);
@@ -132,7 +132,7 @@ export function ApiTokensPanel() {
     if (!secret) return;
     try {
       await navigator.clipboard.writeText(secret);
-      setNotice(t("mcp.tokens.copied"));
+      setNotice(mcpTokenText("copied"));
     } catch {
       setNotice(secret);
     }
@@ -143,21 +143,21 @@ export function ApiTokensPanel() {
   return (
     <section className="mcp-tokens" data-testid="mcp-api-tokens">
       <header className="mcp-tokens-head">
-        <h2>{t("mcp.tokens.title")}</h2>
-        <p>{t("mcp.tokens.subtitle")}</p>
+        <h2>{mcpTokenText("title")}</h2>
+        <p>{mcpTokenText("subtitle")}</p>
       </header>
 
       <div className="mcp-tokens-connect">
-        <strong>{t("mcp.tokens.connectTitle")}</strong>
-        <p>{t("mcp.tokens.connectBody").replace("{url}", endpoint)}</p>
+        <strong>{mcpTokenText("connectTitle")}</strong>
+        <p>{mcpTokenText("connectBody").replace("{url}", endpoint)}</p>
         <code data-testid="mcp-endpoint">{endpoint}</code>
       </div>
 
       {secret ? (
         <div className="mcp-tokens-secret" data-testid="mcp-token-secret">
-          <p>{t("mcp.tokens.once")}</p>
+          <p>{mcpTokenText("once")}</p>
           <code>{secret}</code>
-          <button onClick={() => void copySecret()} type="button">{t("mcp.tokens.copy")}</button>
+          <button onClick={() => void copySecret()} type="button">{mcpTokenText("copy")}</button>
         </div>
       ) : null}
 
@@ -169,7 +169,7 @@ export function ApiTokensPanel() {
         }}
       >
         <label>
-          <span>{t("mcp.tokens.name")}</span>
+          <span>{mcpTokenText("name")}</span>
           <input
             data-testid="mcp-token-name"
             maxLength={80}
@@ -180,7 +180,7 @@ export function ApiTokensPanel() {
           />
         </label>
         <fieldset>
-          <legend>{t("mcp.tokens.permission")}</legend>
+          <legend>{mcpTokenText("permission")}</legend>
           <label>
             <input
               checked={permission === "read"}
@@ -193,7 +193,7 @@ export function ApiTokensPanel() {
               }}
               type="radio"
             />
-            {t("mcp.tokens.read")}
+            {mcpTokenText("read")}
           </label>
           <label>
             <input
@@ -203,7 +203,7 @@ export function ApiTokensPanel() {
               onChange={() => setPermission("read-write")}
               type="radio"
             />
-            {t("mcp.tokens.readWrite")}
+            {mcpTokenText("readWrite")}
           </label>
         </fieldset>
         <label className="mcp-tokens-check">
@@ -215,8 +215,8 @@ export function ApiTokensPanel() {
             type="checkbox"
           />
           <span>
-            {t("mcp.tokens.assign")}
-            <small>{t("mcp.tokens.assignHint")}</small>
+            {mcpTokenText("assign")}
+            <small>{mcpTokenText("assignHint")}</small>
           </span>
         </label>
         <label className="mcp-tokens-check">
@@ -228,8 +228,8 @@ export function ApiTokensPanel() {
             type="checkbox"
           />
           <span>
-            {t("mcp.tokens.delete")}
-            <small>{t("mcp.tokens.deleteHint")}</small>
+            {mcpTokenText("delete")}
+            <small>{mcpTokenText("deleteHint")}</small>
           </span>
         </label>
         <label className="mcp-tokens-check">
@@ -241,12 +241,12 @@ export function ApiTokensPanel() {
             type="checkbox"
           />
           <span>
-            {t("mcp.tokens.admin")}
-            <small>{t("mcp.tokens.adminHint")}</small>
+            {mcpTokenText("admin")}
+            <small>{mcpTokenText("adminHint")}</small>
           </span>
         </label>
         <fieldset>
-          <legend>{t("mcp.tokens.expires")}</legend>
+          <legend>{mcpTokenText("expires")}</legend>
           {DAY_CHOICES.map((days) => (
             <label key={days}>
               <input
@@ -255,12 +255,12 @@ export function ApiTokensPanel() {
                 onChange={() => setExpiresInDays(days)}
                 type="radio"
               />
-              {t("mcp.tokens.days").replace("{n}", String(days))}
+              {mcpTokenText("days").replace("{n}", String(days))}
             </label>
           ))}
         </fieldset>
         <fieldset>
-          <legend>{t("mcp.tokens.workspaces")}</legend>
+          <legend>{mcpTokenText("workspaces")}</legend>
           {choices.map((item) => (
             <label key={item.id}>
               <input
@@ -273,13 +273,13 @@ export function ApiTokensPanel() {
           ))}
         </fieldset>
         <button data-testid="mcp-token-create" disabled={busy || !name.trim()} type="submit">
-          {t("mcp.tokens.create")}
+          {mcpTokenText("create")}
         </button>
         {notice ? <p className="mcp-tokens-notice" role="status">{notice}</p> : null}
       </form>
 
       <ul className="mcp-tokens-list" data-testid="mcp-token-list">
-        {rows.length === 0 ? <li className="mcp-tokens-empty">{t("mcp.tokens.empty")}</li> : null}
+        {rows.length === 0 ? <li className="mcp-tokens-empty">{mcpTokenText("empty")}</li> : null}
         {rows.map((row) => (
           <li key={row.id}>
             <div>
@@ -294,20 +294,20 @@ export function ApiTokensPanel() {
               <span>{tokenState(row)}</span>
             </div>
             {!row.revokedAt ? (
-              <button onClick={() => setRevokeId(row.id)} type="button">{t("mcp.tokens.revoke")}</button>
+              <button onClick={() => setRevokeId(row.id)} type="button">{mcpTokenText("revoke")}</button>
             ) : null}
           </li>
         ))}
       </ul>
 
       <DestructiveDialog
-        confirmLabel={t("mcp.tokens.revoke")}
-        entityName={rows.find((row) => row.id === revokeId)?.name || t("mcp.tokens.title")}
-        impact={[t("mcp.tokens.confirmRevoke")]}
+        confirmLabel={mcpTokenText("revoke")}
+        entityName={rows.find((row) => row.id === revokeId)?.name || mcpTokenText("title")}
+        impact={[mcpTokenText("confirmRevoke")]}
         onCancel={() => setRevokeId(null)}
         onConfirm={() => void revoke()}
         open={Boolean(revokeId)}
-        verb={t("mcp.tokens.revoke")}
+        verb={mcpTokenText("revoke")}
       />
     </section>
   );
