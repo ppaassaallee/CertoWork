@@ -218,7 +218,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
         contrato: "PDF",
       },
       {
-        nombre: "Chatwoot",
+        nombre: "Figma",
         estado: "vencido",
         responsable: "César",
         renovacion: "Sep 10",

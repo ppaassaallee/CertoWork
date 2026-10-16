@@ -37,7 +37,7 @@ export function platformEmail(profile: PlatformOnboardingProfile = {}) {
   return String(profile.email || "").trim();
 }
 
-/** First-run identity for Work and Collab. Chatwoot must not own this step. */
+/** First-run identity shared by Work and Collab. */
 export function needsPlatformOnboarding(profile: PlatformOnboardingProfile = {}) {
   if (profile.platformOnboardedAt) return false;
   return !(platformProfileName(profile) && platformCompanyName(profile) && platformEmail(profile));

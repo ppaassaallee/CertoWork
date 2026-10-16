@@ -1,4 +1,4 @@
-/** Collab area path helpers (no Chatwoot). */
+/** Native Collab area path helpers. */
 
 export const COLLAB_PATH = "/collab";
 
