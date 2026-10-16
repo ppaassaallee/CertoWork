@@ -16,7 +16,7 @@ Cloudflare production deploy:
 
 1. Worker secrets stay in Cloudflare (not GitHub). Set them once with Wrangler:
    - `npx wrangler secret put OPENAI_API_KEY`
-   - plus Chatwoot / Hermes / Brevo if you use those features
+   - plus Hermes / Brevo if you use those features
 2. Deploy from a machine with Wrangler auth:
    - `npm run deploy:cloudflare`
 3. Or deploy from GitHub Actions. Add repository secrets

@@ -198,7 +198,7 @@ function inventSampleRows(columns: Column[], locale: "es" | "en"): Array<Record<
   const titles =
     locale === "en"
       ? ["Acme renewal", "Northwind deal", "Contoso access"]
-      : ["Brevo · correo", "Cloudflare", "Chatwoot"];
+      : ["Brevo · correo", "Cloudflare", "Figma"];
   const dates = ["Sep 30", "Dic 1", "Sep 10"];
   const amounts = ["$180", "$240", "$99"];
   return [0, 1, 2].map((i) => {
