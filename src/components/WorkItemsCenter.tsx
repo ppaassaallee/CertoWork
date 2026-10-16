@@ -1715,24 +1715,29 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     return true;
   };
 
+  const presenceMember = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
+  const presenceDisplayName = presenceMember ? memberName(presenceMember) : "You";
   useEffect(() => {
     if (!workspaceId || !viewerId) return;
-    const self = workspaceMembers.find((member) => member.userId === viewerId || member.id === viewerId);
-    const displayName = self ? memberName(self) : "You";
     const beat = () => {
       if (document.visibilityState !== "visible") return;
-      heartbeatKanbanPresence({ workspaceId, userId: viewerId, surface, displayName }).catch(() => undefined);
+      heartbeatKanbanPresence({ workspaceId, userId: viewerId, surface, displayName: presenceDisplayName }).catch(() => undefined);
     };
-    beat();
     const timer = window.setInterval(beat, KANBAN_PRESENCE_HEARTBEAT_MS);
-    document.addEventListener("visibilitychange", beat);
-    const stop = listenKanbanPresence(workspaceId, surface, setBoardViewers);
+    let stop: (() => void) | null = null;
+    const updateVisibility = () => {
+      if (document.visibilityState !== "visible") { stop?.(); stop = null; return; }
+      if (!stop) stop = listenKanbanPresence(workspaceId, surface, setBoardViewers);
+      beat();
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", beat);
-      stop();
+      document.removeEventListener("visibilitychange", updateVisibility);
+      stop?.();
     };
-  }, [surface, viewerId, workspaceId, workspaceMembers]);
+  }, [surface, viewerId, workspaceId, presenceDisplayName]);
 
   const selectedItem = findWorkItemById([tasks, hierarchyTasks], selectedItemId);
   const currentProject = projects.find((project) => project.id === (selectedItem?.projectId || newProjectId || baseProjectId));

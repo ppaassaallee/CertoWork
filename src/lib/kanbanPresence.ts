@@ -3,7 +3,7 @@ import { db } from "./firebase";
 
 export const KANBAN_PRESENCE_COLLECTION = "kanban_board_presence";
 /** Readers treat presence stale after this window (must exceed heartbeat). */
-export const PRESENCE_TTL_MS = 120_000;
+export const PRESENCE_TTL_MS = 240_000;
 
 export type KanbanPresence = {
   id: string;

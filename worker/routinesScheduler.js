@@ -585,14 +585,6 @@ async function queryActiveDateReachedRoutines(env) {
   });
 }
 
-async function queryTablesWithDateKey(env) {
-  // Simple scan — filter keyColumns.date in memory (Firestore inequality on nested maps is awkward).
-  return firestoreRunQuery(env, {
-    from: [{ collectionId: "tables" }],
-    limit: 80,
-  });
-}
-
 async function queryRecordsForTable(env, tableId) {
   return firestoreRunQuery(env, {
     from: [{ collectionId: "table_records" }],
@@ -638,13 +630,12 @@ export async function emitTableDateReachedEvents(env, now = new Date()) {
   }
   if (!watches.length) return { ok: true, emitted: 0, skipped: "no_table_filters" };
 
-  const tablesRes = await queryTablesWithDateKey(env);
-  if (!tablesRes.ok) return { ok: false, reason: tablesRes.reason, emitted: 0 };
-  const tablesById = new Map(
-    (tablesRes.documents || [])
-      .filter((row) => row?.id && row.keyColumns?.date)
-      .map((row) => [String(row.id), row]),
-  );
+  const tablesById = new Map();
+  for (const tableId of new Set(watches.map((watch) => watch.tableId))) {
+    const table = await firestoreGetDocument(env, "tables", tableId);
+    if (table?.keyColumns?.date) tablesById.set(tableId, table);
+  }
+  const recordsByTable = new Map();
 
   const todayIso = now.toISOString().slice(0, 10);
   let emitted = 0;
@@ -657,12 +648,13 @@ export async function emitTableDateReachedEvents(env, now = new Date()) {
     seenWatch.add(key);
 
     const table = tablesById.get(watch.tableId);
-    if (!table) continue;
+    if (!table || (watch.workspaceId && table.workspaceId !== watch.workspaceId)) continue;
     const columnId = watch.columnId || String(table.keyColumns?.date || "");
     if (!columnId) continue;
 
     const targetDate = addDaysIso(todayIso, watch.offsetDays);
-    const recordsRes = await queryRecordsForTable(env, watch.tableId);
+    if (!recordsByTable.has(watch.tableId)) recordsByTable.set(watch.tableId, await queryRecordsForTable(env, watch.tableId));
+    const recordsRes = recordsByTable.get(watch.tableId);
     if (!recordsRes.ok) continue;
 
     for (const record of recordsRes.documents || []) {

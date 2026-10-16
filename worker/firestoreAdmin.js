@@ -3,7 +3,10 @@
  * Uses FIREBASE_SERVICE_ACCOUNT JSON when present.
  */
 
+import { createTokenCache, digestCostKey } from "./costControls.js";
+
 const FIREBASE_PROJECT_ID = "gen-lang-client-0277783597";
+const cachedAccessToken = createTokenCache();
 const FIRESTORE_DATABASE_ID = "ai-studio-0db18e51-58a2-4763-a4d7-3fced116347d";
 const FIREBASE_WEB_API_KEY = "AIzaSyDa-1rva5k-ky_f6L4A6lenqz8cBUP6Hn4";
 
@@ -48,6 +51,8 @@ function pemToArrayBuffer(pem) {
 }
 
 async function googleAccessToken(serviceAccount) {
+  const identityKey = await digestCostKey(`${serviceAccount.client_email}|${serviceAccount.private_key}`);
+  return cachedAccessToken(identityKey, async () => {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const claim = {
@@ -83,7 +88,9 @@ async function googleAccessToken(serviceAccount) {
   if (!response.ok || !payload.access_token) {
     throw new Error(payload.error_description || payload.error || "Could not mint Firestore access token");
   }
-  return String(payload.access_token);
+  const lifetime = Math.min(3600, Math.max(0, Number(payload.expires_in) || 3600));
+  return { token: String(payload.access_token), expiresAt: Date.now() + Math.max(0, lifetime - 60) * 1000 };
+  });
 }
 
 function encodeFirestoreValue(value) {

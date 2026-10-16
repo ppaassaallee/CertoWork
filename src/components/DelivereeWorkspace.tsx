@@ -98,7 +98,8 @@ import { useAuth } from "../lib/AuthContext";
 import { TextSizeControl } from "./TextSizeControl";
 import type { JudgmentAssessment } from "../lib/judgment";
 import { actionLabel, resolveDelivereeLens } from "../lib/delivereeRoutes";
-import { resolveFirestoreListenPacks, type FirestoreListenPacks } from "../lib/firestoreListenDiet";
+import { resolveFirestoreListenPacks, singleFirestoreListenPack, type FirestoreListenPacks } from "../lib/firestoreListenDiet";
+import { reconcileSubscriptionPacks, stopSubscriptionPacks } from "../lib/subscriptionPacks";
 import { isPureAiWorkspace } from "../lib/portfolioMasterImport";
 import { clearPureAiProjects } from "../lib/runPortfolioMasterImport";
 import {
@@ -682,6 +683,7 @@ export function DelivereeWorkspace() {
   const [workspaceSkills, setWorkspaceSkills] = useState<any[]>([]);
   const [odiseusSchedules, setOdysseusSchedules] = useState<any[]>([]);
   const deferredSubscribeRef = useRef<((packs: FirestoreListenPacks) => () => void) | null>(null);
+  const deferredPackHandles = useRef(new Map<string, () => void>());
   const aiContextCacheRef = useRef<{
     workspaceId: string;
     loadedAt: number;
@@ -1119,12 +1121,9 @@ export function DelivereeWorkspace() {
       stopWorkspaceData,
       ...mergeQueriesLocal(
         "feedback_reports",
-        [
-          [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-          ...(canTriageFeedback
-            ? [[where("workspaceId", "==", workspace.id)]]
-            : []),
-        ],
+        canTriageFeedback
+          ? [[where("workspaceId", "==", workspace.id)]]
+          : [[where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)]],
         (items) =>
           setFeedbackReports(
             (items as FeedbackReport[]).sort(
@@ -1323,6 +1322,7 @@ export function DelivereeWorkspace() {
     };
 
     return () => {
+      stopSubscriptionPacks(deferredPackHandles.current);
       deferredSubscribeRef.current = null;
       unsubscribers.forEach((unsubscribe) => unsubscribe());
       extraUnsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -1361,12 +1361,12 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!workspace?.id || lens.kind !== "project" || !lens.projectId) return;
     return subscribeProjectTasks(db, lens.projectId, reportDataSyncError);
-  }, [workspace?.id, lens, dataRetryVersion, reportDataSyncError]);
+  }, [workspace?.id, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     const subscribe = deferredSubscribeRef.current;
     if (!subscribe) return;
-    return subscribe(listenPacks);
+    reconcileSubscriptionPacks(deferredPackHandles.current, listenPacks, (name) => subscribe(singleFirestoreListenPack(name)));
   }, [dataAccessKey, dataRetryVersion, listenPacks.key]);
 
   useEffect(() => {
@@ -1692,6 +1692,8 @@ export function DelivereeWorkspace() {
         return String(a.name || "").localeCompare(String(b.name || ""));
       });
   }, [user?.uid, viewerProjectIds, workspaceTables]);
+  const visibleTableIdsKey = JSON.stringify([...new Set(visibleTables.map((table) => String(table.id || "")))].filter(Boolean).sort());
+  const visibleTableIds = useMemo(() => JSON.parse(visibleTableIdsKey) as string[], [visibleTableIdsKey]);
   useEffect(() => {
     if (!user?.uid || !workspace?.id || !listenPacks.tableRecords || !joinedWorkspace) {
       setWorkspaceRecords([]);
@@ -1699,7 +1701,7 @@ export function DelivereeWorkspace() {
     }
     const plans = readableRecordQueryPlans(
       workspace.id,
-      visibleTables.map((table) => String(table.id || "")),
+      visibleTableIds,
     );
     if (plans.length === 0) {
       setWorkspaceRecords([]);
@@ -1742,7 +1744,7 @@ export function DelivereeWorkspace() {
     dataRetryVersion,
     reportDataSyncError,
     joinedWorkspace,
-    visibleTables,
+    visibleTableIds,
   ]);
   const archivedTables = useMemo(() => {
     if (!user?.uid) return [];
