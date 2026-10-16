@@ -45,9 +45,9 @@ test("parent picker CSS stacks options in a column with opaque rows", () => {
   assert.doesNotMatch(css, /\.do-parent-kind\s*\{[^}]*text-transform:\s*uppercase/s);
 });
 
-test("item modal parent field uses full-width layout to avoid crush", () => {
+test("item modal expands the parent picker to full width to avoid crush", () => {
   const css = readFileSync(resolve("src/features/items/ItemModal/ItemModal.css"), "utf8");
-  assert.match(css, /\.cw-item-prop-row:has\(\.cw-item-parent\)\s*\{[^}]*grid-template-columns:\s*1fr/s);
+  assert.match(css, /\.cw-item-prop-row:has\(\.cw-item-parent-popover\)\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
 });
 
 test("shared label helper is wired into modal and items center", () => {

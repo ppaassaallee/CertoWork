@@ -97,14 +97,14 @@ export function ItemNotesSection({
   };
 
   return (
-    <section className="cw-item-card" data-testid="item-notes">
+    <section className={`cw-item-card cw-item-resource${linked.length ? "" : " is-empty"}`} data-testid="item-notes">
       <header>
         <strong>
           <FileText size={12} style={{ marginRight: 6 }} />
           {copy("notes", locale)} {linked.length || noteIds.length || ""}
         </strong>
         <div style={{ position: "relative" }}>
-          <button onClick={() => setMenuOpen((v) => !v)} type="button">
+          <button aria-label={locale === "es" ? "Añadir nota" : "Add note"} onClick={() => setMenuOpen((v) => !v)} type="button">
             <Plus size={12} />
           </button>
           {menuOpen ? (
@@ -140,11 +140,6 @@ export function ItemNotesSection({
           </button>
         </article>
       ))}
-      {!linked.length ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "8px 0 0" }}>
-          {locale === "es" ? "Sin notas vinculadas" : "No linked notes"}
-        </p>
-      ) : null}
     </section>
   );
 }
