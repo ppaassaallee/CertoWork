@@ -1532,44 +1532,21 @@ export function DelivereeWorkspace() {
 
   useEffect(() => {
     if (!user || !workspace) return;
-    const unsubscribers: Array<() => void> = [
-      onSnapshot(
-        query(
-          collection(db, "workspace_members"),
-          where("workspaceId", "==", workspace.id),
-        ),
-                (snapshot) => {
-          if (!hasConfirmedSnapshotData(snapshot)) return;
-          setWorkspaceMembers(
-            snapshot.docs.map(
-              (item) => ({ id: item.id, ...item.data() }) as WorkspaceMember,
-            ),
-          );
-        },
-        reportDataSyncError,
-      ),
-      onSnapshot(
-        query(
-          collection(db, "agent_groups"),
-          where("workspaceId", "==", workspace.id),
-        ),
-                (snapshot) => {
-          if (!hasConfirmedSnapshotData(snapshot)) return;
-          setWorkspaceTeams(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }) as WorkspaceTeam)
-              .filter(
-                (team: any) =>
-                  team.groupType === "workspace_team" &&
-                  team.status !== "archived",
-              ),
-          );
-        },
-        reportDataSyncError,
-      ),
-    ];
-
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    // startWorkspaceData already owns workspace_members → membersStore. The
+    // shell reads that store through useMembers(); a second identical query
+    // here only duplicates initial roster work and creates a race on reload.
+    return onSnapshot(
+      query(collection(db, "agent_groups"), where("workspaceId", "==", workspace.id)),
+      (snapshot) => {
+        if (!hasConfirmedSnapshotData(snapshot)) return;
+        setWorkspaceTeams(
+          snapshot.docs
+            .map((item) => ({ id: item.id, ...item.data() }) as WorkspaceTeam)
+            .filter((team: any) => team.groupType === "workspace_team" && team.status !== "archived"),
+        );
+      },
+      reportDataSyncError,
+    );
   }, [
     user?.uid,
     workspace?.id,

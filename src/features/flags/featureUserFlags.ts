@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { useAuth } from "../../lib/AuthContext";
 import { db } from "../../lib/firebase";
+import { useUserFlags } from "./userFlagsStore";
 
 const LS_BRIEF = "certoDailyBrief";
 const LS_BILLING = "certoBilling";
@@ -32,21 +33,8 @@ function useFlag(
   lsKey: string,
 ): boolean {
   const { user } = useAuth();
-  const [remote, setRemote] = useState(false);
+  const remote = useUserFlags(user?.uid);
   const [local, setLocal] = useState(() => readLs(lsKey));
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setRemote(false);
-      return;
-    }
-    return onSnapshot(doc(db, "users", user.uid), (snap) => {
-      const flags = snap.exists()
-        ? (snap.data() as { flags?: Record<string, unknown> }).flags
-        : undefined;
-      setRemote(flags?.[flag] === true);
-    });
-  }, [user?.uid, flag]);
 
   useEffect(() => {
     const sync = () => setLocal(readLs(lsKey));
@@ -58,7 +46,7 @@ function useFlag(
     };
   }, [lsKey]);
 
-  return remote || local;
+  return remote[flag] === true || local;
 }
 
 export function useDailyBriefEnabled() {
