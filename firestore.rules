@@ -226,6 +226,27 @@ service cloud.firestore {
       );
     }
 
+    // Project membership opens every item. Being a workspace member does not.
+    function projectGrantsTaskAccess(data) {
+      return isSignedIn() && (
+        data.userId == request.auth.uid ||
+        (('createdBy' in data) && data.createdBy == request.auth.uid) ||
+        (('ownerId' in data) && data.ownerId == request.auth.uid) ||
+        hasExplicitUserAccess(data) ||
+        hasProjectRoleAccess(data)
+      );
+    }
+
+    function canReadTasksInProject(data) {
+      return ('projectId' in data)
+        && data.projectId is string
+        && data.projectId.size() > 0
+        && exists(/databases/$(database)/documents/projects/$(data.projectId))
+        && projectGrantsTaskAccess(
+          get(/databases/$(database)/documents/projects/$(data.projectId)).data
+        );
+    }
+
     function canReadTask(data) {
       return isSignedIn() && (
         data.userId == request.auth.uid ||
@@ -234,6 +255,7 @@ service cloud.firestore {
         (('workspaceId' in data) && isWorkspaceOwner(data.workspaceId)) ||
         (('assigneeId' in data) && data.assigneeId == request.auth.uid) ||
         hasExplicitUserAccess(data) ||
+        canReadTasksInProject(data) ||
         (
           ('workspaceId' in data) &&
           ('assigneeIds' in data) &&

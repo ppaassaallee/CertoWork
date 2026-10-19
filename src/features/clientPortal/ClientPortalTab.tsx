@@ -33,7 +33,7 @@ type Props = {
 };
 
 export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }: Props) {
-  const es = getLocale() === "es";
+  const es = getLocale().startsWith("es");
   const clientId = String(project.clientId || "");
   const [settings, setSettings] = useState<PortalSettings>(DEFAULT_PORTAL_SETTINGS);
   const [inviteEmail, setInviteEmail] = useState("");

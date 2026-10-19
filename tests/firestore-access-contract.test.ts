@@ -60,6 +60,14 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(canRead, /assigneeIds/);
   assert.match(canRead, /accessMemberIds/);
   assert.match(canRead, /sharedWithUserIds/);
+  assert.match(canRead, /canReadTasksInProject\(data\)/);
+  const viaProject = ruleFn("canReadTasksInProject");
+  assert.match(viaProject, /projects\/\$\(data\.projectId\)/);
+  assert.match(viaProject, /projectGrantsTaskAccess/);
+  const projectGrant = ruleFn("projectGrantsTaskAccess");
+  assert.match(projectGrant, /hasProjectRoleAccess\(data\)/);
+  assert.match(projectGrant, /hasExplicitUserAccess\(data\)/);
+  assert.doesNotMatch(projectGrant, /isWorkspaceMember/);
 
   assert.match(dataLayer, /workspace\.ownerId === user\.uid/);
   assert.match(dataLayer, /where\("createdBy", "==", user\.uid\)/);

@@ -242,6 +242,7 @@ type ProjectPageHeaderProps = {
   moreMenu: ReactNode;
   titleEditor: ReactNode;
   onOpenRoutine?: () => void;
+  shareControl?: ReactNode;
 };
 
 export function ProjectPageHeader({
@@ -254,6 +255,7 @@ export function ProjectPageHeader({
   moreMenu,
   titleEditor,
   onOpenRoutine,
+  shareControl,
 }: ProjectPageHeaderProps) {
   const [descExpanded, setDescExpanded] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -329,6 +331,7 @@ export function ProjectPageHeader({
       </div>
 
       <div className="do-project-page-header-aside">
+        {shareControl ? <div className="do-project-share">{shareControl}</div> : null}
         <span className={`do-project-health-chip is-${healthTone}`}>{healthLabel}</span>
         {onOpenRoutine ? (
           <button

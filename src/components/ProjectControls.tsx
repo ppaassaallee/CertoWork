@@ -152,6 +152,7 @@ export function MultiAssigneePicker({
   triggerTestId,
   maxSelections,
   helperText,
+  emptyLabel,
 }: {
   members: AssignableMember[];
   /** Published agents shown in an Agents group (Track B). */
@@ -166,6 +167,8 @@ export function MultiAssigneePicker({
   /** Cap selections. Use 1 for Certo's single primary assignee. */
   maxSelections?: number;
   helperText?: string;
+  /** Trigger text when nobody is selected. */
+  emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -347,7 +350,7 @@ export function MultiAssigneePicker({
                   ? orphanNames.slice(0, 2).join(", ")
                 : single
                   ? "Unassigned"
-                  : "None"}
+                  : emptyLabel || "None"}
               {selected.length > 2 ? ` +${selected.length - 2}` : ""}
             </span>
           </>

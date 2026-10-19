@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { t } from "../lib/i18n";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -126,6 +126,8 @@ import {
 import {
   buildProjectCollaboratorAccessPatch,
   collaborationShareGrant,
+  mergeProjectMembers,
+  projectSharePatchForItems,
   shareableEmail,
   withCollaboratorAccess,
 } from "../lib/collaborationAccess";
@@ -222,6 +224,7 @@ type SharedProjectActions = {
   onUpdateProject: (
     projectId: string,
     patch: ProjectPatch,
+    options?: { silent?: boolean },
   ) => Promise<void> | void;
   onArchiveProject: (project: any) => Promise<void> | void;
   onOpenProject: (project: any) => void;
@@ -1628,6 +1631,15 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   }, []);
 
   const update = (patch: ProjectPatch) => onUpdateProject(project.id, patch);
+  const enrolledKey = useRef("");
+  useEffect(() => {
+    const patch = projectSharePatchForItems(project, tasks, workspaceMembers);
+    if (!patch) return;
+    const key = `${project.id}:${patch.teamMemberIds.join("|")}`;
+    if (enrolledKey.current === key) return;
+    enrolledKey.current = key;
+    void Promise.resolve(onUpdateProject(project.id, patch, { silent: true })).catch(() => undefined);
+  }, [onUpdateProject, project, tasks, workspaceMembers]);
   const datedEpics = hierarchy.epics
     .filter((epic) => isActiveWorkLane(epic))
     .sort((left, right) =>
@@ -1960,6 +1972,18 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
         }
         onToggleMore={() => setMoreOpen((open) => !open)}
         project={project}
+        shareControl={
+          <MultiAssigneePicker
+            emptyLabel="Compartir"
+            helperText="Quien esté aquí ve el proyecto entero, aunque solo tenga un ítem."
+            label="Compartir proyecto"
+            members={workspaceMembers}
+            onChange={(teamMemberIds, teamMembers) => update({ teamMemberIds, teamMembers })}
+            selectedIds={Array.isArray(project.teamMemberIds) ? project.teamMemberIds : []}
+            selectedNames={Array.isArray(project.teamMembers) ? project.teamMembers : []}
+            triggerTestId="share-project"
+          />
+        }
         titleEditor={
           <InlineEdit
             ariaLabel="Project name"
@@ -2429,7 +2453,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                   <th>Project members</th>
                   <td>
                     <MultiAssigneePicker
-                      helperText="People who can view and update this project. Task delivery still has one assignee each."
+                      helperText="People on this project can see and update every item, even if they only have one task."
                       label="Project members"
                       members={workspaceMembers}
                       onChange={(teamMemberIds, teamMembers) =>
@@ -2471,7 +2495,11 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                 const member = activeMembers.find((item) => item.id === shareMemberId);
                 if (!member) return;
                 const grant = collaborationShareGrant(member);
+                const enrolled = mergeProjectMembers(project, [
+                  { id: member.id, name: memberName(member) },
+                ]);
                 update({
+                  ...(enrolled || {}),
                   ...withCollaboratorAccess(project, grant),
                 });
                 setShareMemberId("");

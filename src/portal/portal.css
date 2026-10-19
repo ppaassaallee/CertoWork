@@ -273,6 +273,10 @@
 .cp-language button[aria-pressed="true"] { color: var(--c-ink); background: var(--c-accent-bg); font-weight: 700; }
 .cp-request-form { display: grid; gap: 16px; max-width: 680px; }
 .cp-request-form label { display: grid; gap: 6px; font-weight: 600; }
+.cp-choice { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cp-choice > span { width: 100%; font-weight: 600; }
+.cp-choice button { border: 1px solid var(--c-line); border-radius: 9px; background: white; color: var(--c-ink); padding: 8px 10px; font: inherit; cursor: pointer; }
+.cp-choice button[aria-pressed="true"] { border-color: var(--c-ink); }
 .cp-request-form input, .cp-request-form select, .cp-request-form textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--c-line); border-radius: 9px; background: white; color: var(--c-ink); font: inherit; }
 .cp-request-form textarea { resize: vertical; }
 .cp-request-actions, .cp-request-badges { justify-content: flex-start; }

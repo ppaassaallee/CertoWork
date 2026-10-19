@@ -222,7 +222,8 @@ export function PortalProvider({
         setClientIds(ids);
         const m = await loadPortalMember(next.uid);
         setMember(m);
-        if (m?.locale === "en" || m?.locale === "es") setLocale(m.locale as PortalLocale);
+        const savedLocale = m?.locale;
+        if (savedLocale === "en" || savedLocale === "es") setLocale(savedLocale);
         await touchPortalLastSeen(next.uid);
       } finally {
         setLoading(false);
