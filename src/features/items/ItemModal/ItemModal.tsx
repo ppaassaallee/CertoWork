@@ -226,26 +226,26 @@ function dateInputValue(value: unknown) {
 }
 
 function relativeDateLabel(value: any, locale: "en" | "es") {
-  if (!value) return locale === "es" ? "Sin fecha" : "No date";
+  if (!value) return locale.startsWith("es") ? "Sin fecha" : "No date";
   try {
     const date = value?.toDate ? value.toDate() : new Date(value);
-    if (Number.isNaN(date.getTime())) return locale === "es" ? "Sin fecha" : "No date";
+    if (Number.isNaN(date.getTime())) return locale.startsWith("es") ? "Sin fecha" : "No date";
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const target = new Date(date);
     target.setHours(0, 0, 0, 0);
     const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return locale === "es" ? "Hoy" : "Today";
-    if (diff === 1) return locale === "es" ? "Mañana" : "Tomorrow";
-    if (diff === -1) return locale === "es" ? "Ayer" : "Yesterday";
-    if (diff > 1 && diff < 7) return locale === "es" ? "Esta semana" : "This week";
-    if (diff < 0) return locale === "es" ? "Atrasado" : "Overdue";
-    return date.toLocaleDateString(locale === "es" ? "es" : "en", {
+    if (diff === 0) return locale.startsWith("es") ? "Hoy" : "Today";
+    if (diff === 1) return locale.startsWith("es") ? "Mañana" : "Tomorrow";
+    if (diff === -1) return locale.startsWith("es") ? "Ayer" : "Yesterday";
+    if (diff > 1 && diff < 7) return locale.startsWith("es") ? "Esta semana" : "This week";
+    if (diff < 0) return locale.startsWith("es") ? "Atrasado" : "Overdue";
+    return date.toLocaleDateString(locale.startsWith("es") ? "es" : "en", {
       month: "short",
       day: "numeric",
     });
   } catch {
-    return locale === "es" ? "Sin fecha" : "No date";
+    return locale.startsWith("es") ? "Sin fecha" : "No date";
   }
 }
 
@@ -679,7 +679,7 @@ export function ItemModal({
         <div className="cw-item-modal-body">
           <div className="cw-item-content">
             <div className="cw-item-context-line">
-              {project ? String(project.title || project.name || "Project") : locale === "es" ? "Sin proyecto" : "No project"}
+              {project ? String(project.title || project.name || "Project") : locale.startsWith("es") ? "Sin proyecto" : "No project"}
               <span aria-hidden="true">/</span>
               {typeLabel(kind, locale)}
             </div>
@@ -784,11 +784,11 @@ export function ItemModal({
             )}
 
             <div className="cw-item-section-heading">
-              <h2>{locale === "es" ? "Descripción" : "Description"}</h2>
+              <h2>{locale.startsWith("es") ? "Descripción" : "Description"}</h2>
               {onAskOdysseus ? (
                 <button className="cw-item-ai-action" onClick={onAskOdysseus} type="button">
                   <Sparkles size={14} aria-hidden="true" />
-                  {locale === "es" ? "Resumir con Odysseus" : "Summarize with Odysseus"}
+                  {locale.startsWith("es") ? "Resumir con Odysseus" : "Summarize with Odysseus"}
                 </button>
               ) : null}
             </div>
@@ -837,7 +837,7 @@ export function ItemModal({
             <section className="cw-item-card cw-item-subtasks" data-testid="item-checklist">
               <header>
                 <strong>
-                  {onAddSubtask ? (locale === "es" ? "Subtareas" : "Subtasks") : (locale === "es" ? "Lista de verificación" : "Checklist")}{" "}
+                  {onAddSubtask ? (locale.startsWith("es") ? "Subtareas" : "Subtasks") : (locale.startsWith("es") ? "Lista de verificación" : "Checklist")}{" "}
                   {subtaskItems.length > 0
                     ? `${doneSubtasks}/${subtaskItems.length}`
                     : checklist.length > 0
@@ -905,8 +905,8 @@ export function ItemModal({
                     setSubtaskDraft(event.target.value);
                   }}
                   placeholder={onAddSubtask
-                    ? (locale === "es" ? "+ Añadir subtarea" : "+ Add subtask")
-                    : (locale === "es" ? "+ Añadir a la lista" : "+ Add checklist item")}
+                    ? (locale.startsWith("es") ? "+ Añadir subtarea" : "+ Add subtask")
+                    : (locale.startsWith("es") ? "+ Añadir a la lista" : "+ Add checklist item")}
                   value={onAddSubtask ? subtaskDraft : checklistDraft}
                 />
               </form>
@@ -1034,7 +1034,11 @@ export function ItemModal({
               </PropRow>
               <PropRow label={copy("assignee", locale)}>
                 <MultiAssigneePicker
-                  helperText="Multi-select. The first person stays the owner."
+                  helperText={
+                    item.projectId
+                      ? "Adding someone shares the whole project. They can see every item, not only this task."
+                      : "Multi-select. The first person stays the owner."
+                  }
                   label={copy("assignee", locale)}
                   members={workspaceMembers}
                   onInviteEmail={onInviteAssigneeEmail}
@@ -1058,7 +1062,7 @@ export function ItemModal({
               <PropRow label={copy("dates", locale)}>
                 <div className="cw-item-date-range">
                   <label>
-                    <span>{locale === "es" ? "Inicio" : "Start"}</span>
+                    <span>{locale.startsWith("es") ? "Inicio" : "Start"}</span>
                     <input
                       aria-label="Start date"
                       defaultValue={dateInputValue(item.startDate)}
@@ -1071,7 +1075,7 @@ export function ItemModal({
                     />
                   </label>
                   <label>
-                    <span>{locale === "es" ? "Entrega" : "Due"}</span>
+                    <span>{locale.startsWith("es") ? "Entrega" : "Due"}</span>
                     <input
                       aria-label="Due date"
                       defaultValue={dateInputValue(item.dueDate || item.targetDate)}
@@ -1136,7 +1140,7 @@ export function ItemModal({
                     type="button"
                   >
                     <CornerDownRight size={14} aria-hidden="true" />
-                    <span>{parentBreadcrumb[parentBreadcrumb.length - 1]?.title || (locale === "es" ? "Sin padre" : "No parent")}</span>
+                    <span>{parentBreadcrumb[parentBreadcrumb.length - 1]?.title || (locale.startsWith("es") ? "Sin padre" : "No parent")}</span>
                     <ChevronDown className={parentPickerOpen ? "" : "is-collapsed"} size={13} aria-hidden="true" />
                   </button>
                   {parentPickerOpen ? <div className="cw-item-parent-popover" ref={parentPickerRef}>{parentEditor}</div> : null}
@@ -1338,8 +1342,8 @@ export function ItemModal({
               open={activityOpen}
               onToggle={() => setActivityOpen((open) => !open)}
               summary={activityEntries(item).length
-                ? `${activityEntries(item).length} ${locale === "es" ? "actualizaciones" : "updates"}`
-                : (locale === "es" ? "Sin actividad" : "No activity")}
+                ? `${activityEntries(item).length} ${locale.startsWith("es") ? "actualizaciones" : "updates"}`
+                : (locale.startsWith("es") ? "Sin actividad" : "No activity")}
               title={copy("activity", locale)}
             >
               <ul className="cw-item-activity">

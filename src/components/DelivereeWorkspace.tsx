@@ -384,7 +384,7 @@ import {
   patchTouchesAssignment,
   patchTouchesCollaborators,
 } from "../lib/taskAssignment";
-import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
+import { buildProjectCollaboratorAccessPatch, projectSharePatchForItems } from "../lib/collaborationAccess";
 import {
   DELIVEREE_SKILLS,
   defaultProjectWizardFirstAction,
@@ -1359,10 +1359,28 @@ export function DelivereeWorkspace() {
     );
   }, [user?.uid, workspace?.id, dataRetryVersion, reportDataSyncError]);
 
-  // Per-project closed/open tasks while viewing a project console.
+  // Per-project tasks while a project is open. One retry covers the moment
+  // assigning a single item enrolls that person and the first listen was denied.
   useEffect(() => {
     if (!workspace?.id || lens.kind !== "project" || !lens.projectId) return;
-    return subscribeProjectTasks(db, lens.projectId, reportDataSyncError);
+    const projectId = lens.projectId;
+    let current = () => {};
+    let retryTimer = 0;
+    let attempts = 0;
+    const listen = () => {
+      current();
+      current = subscribeProjectTasks(db, projectId, (error) => {
+        reportDataSyncError(error);
+        if (attempts >= 1) return;
+        attempts += 1;
+        retryTimer = window.setTimeout(listen, 1200);
+      });
+    };
+    listen();
+    return () => {
+      window.clearTimeout(retryTimer);
+      current();
+    };
   }, [workspace?.id, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
@@ -3557,6 +3575,7 @@ export function DelivereeWorkspace() {
   const updateProject = async (
     projectId: string,
     patch: Record<string, unknown>,
+    options?: { silent?: boolean },
   ) => {
     try {
       const current =
@@ -3575,13 +3594,29 @@ export function DelivereeWorkspace() {
         updatedAt: serverTimestamp(),
       });
     } catch (reason) {
-      setNotice(
-        reason instanceof Error
-          ? `Project update was not saved: ${reason.message}`
-          : "Project update was not saved. Check access and try again.",
-      );
+      if (!options?.silent) {
+        setNotice(
+          reason instanceof Error
+            ? `Project update was not saved: ${reason.message}`
+            : "Project update was not saved. Check access and try again.",
+        );
+      }
       throw reason;
     }
+  };
+
+  const enrollItemPeopleOnProject = async (
+    projectId: string,
+    items: Array<Record<string, unknown>>,
+  ) => {
+    const id = String(projectId || "").trim();
+    if (!id) return;
+    const project =
+      projects.find((item) => item.id === id) ||
+      getProjectsSnapshot().find((item: { id?: string }) => item.id === id);
+    const patch = projectSharePatchForItems(project, items, workspaceMembers);
+    if (!patch) return;
+    await updateProject(id, patch, { silent: true });
   };
 
   const syncInvoiceToProject = async (invoice: InvoiceDocument) => {
@@ -5252,6 +5287,11 @@ export function DelivereeWorkspace() {
         });
       }
     }
+    try {
+      await enrollItemPeopleOnProject(projectId, [assigned as Record<string, unknown>]);
+    } catch {
+      /* The item exists. Opening the project enrolls anyone already assigned. */
+    }
     return created.id;
   };
 
@@ -5492,6 +5532,14 @@ export function DelivereeWorkspace() {
         "error",
       );
       throw reason;
+    }
+
+    if (touchesAssignment || touchesCollaborators) {
+      try {
+        await enrollItemPeopleOnProject(String(next.projectId || ""), [next]);
+      } catch {
+        /* The item saved. Sharing the rest of the project retries when it is opened. */
+      }
     }
 
     if (!user || !workspace) return;

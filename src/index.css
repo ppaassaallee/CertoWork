@@ -2164,6 +2164,28 @@ a {
   flex-wrap: wrap;
   gap: 10px;
 }
+.do-requests-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.do-requests-choice > span {
+  width: 100%;
+  font-size: 12px;
+}
+.do-requests-choice button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.do-requests-choice button[aria-pressed="true"] {
+  border-color: var(--text-primary);
+}
 .do-requests-messages {
   display: grid;
   gap: 8px;
@@ -3833,6 +3855,19 @@ a {
   gap: 8px;
   padding-top: 0;
   min-width: 0;
+}
+.do-project-share .cw-multi-assignee-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  max-width: 220px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  padding: 0 8px;
+  font-size: 12px;
 }
 .do-project-kpi-row,
 .do-project-date-pill {

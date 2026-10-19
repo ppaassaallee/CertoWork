@@ -20,12 +20,12 @@ function relative(iso: string | null | undefined, locale: "es" | "en") {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return "";
   const mins = Math.round((Date.now() - ms) / 60000);
-  if (mins < 1) return locale === "es" ? "ahora" : "now";
-  if (mins < 60) return locale === "es" ? `hace ${mins} min` : `${mins}m ago`;
+  if (mins < 1) return locale.startsWith("es") ? "ahora" : "now";
+  if (mins < 60) return locale.startsWith("es") ? `hace ${mins} min` : `${mins}m ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 24) return locale === "es" ? `hace ${hours} h` : `${hours}h ago`;
+  if (hours < 24) return locale.startsWith("es") ? `hace ${hours} h` : `${hours}h ago`;
   const days = Math.round(hours / 24);
-  return locale === "es" ? `hace ${days} d` : `${days}d ago`;
+  return locale.startsWith("es") ? `hace ${days} d` : `${days}d ago`;
 }
 
 export function ItemNotesSection({
@@ -104,16 +104,16 @@ export function ItemNotesSection({
           {copy("notes", locale)} {linked.length || noteIds.length || ""}
         </strong>
         <div style={{ position: "relative" }}>
-          <button aria-label={locale === "es" ? "Añadir nota" : "Add note"} onClick={() => setMenuOpen((v) => !v)} type="button">
+          <button aria-label={locale.startsWith("es") ? "Añadir nota" : "Add note"} onClick={() => setMenuOpen((v) => !v)} type="button">
             <Plus size={12} />
           </button>
           {menuOpen ? (
             <div className="cw-notes-popover" style={{ right: 0, minWidth: 160 }}>
               <button onClick={() => void createLinked("note")} type="button">
-                {locale === "es" ? "Nota rápida" : "Quick note"}
+                {locale.startsWith("es") ? "Nota rápida" : "Quick note"}
               </button>
               <button onClick={() => void createLinked("meeting")} type="button">
-                {locale === "es" ? "Nota de reunión" : "Meeting note"}
+                {locale.startsWith("es") ? "Nota de reunión" : "Meeting note"}
               </button>
             </div>
           ) : null}

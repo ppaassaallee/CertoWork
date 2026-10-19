@@ -966,6 +966,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const workspaceId = workspace?.id || "";
   const surface = itemViewSurface(activeProject?.id);
   const isMyWork = !activeProject;
+  const assigneeHint = activeProject
+    ? "Adding someone shares the whole project. They can see every item, not only this task."
+    : "Multi-select. The first person stays the owner.";
   const viewHydrated = useRef(false);
   const skipPersist = useRef(true);
   const remotePushTimer = useRef<number | null>(null);
@@ -2943,7 +2946,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
-                helperText="Multi-select. The first person stays the owner."
+                helperText={assigneeHint}
                 label="Assignees"
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
@@ -3545,7 +3548,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               agentMembers={agentMembers}
               compact
-              helperText="Multi-select. The first person stays the owner."
+              helperText={assigneeHint}
               label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
@@ -5096,7 +5099,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                         (member) => String(member.status || "active") !== "removed",
                       )}
                       onInviteEmail={onInviteAssigneeEmail}
-                      helperText="Multi-select. The first person stays the owner."
+                      helperText={assigneeHint}
                       onChange={(assigneeIds) => {
                         setNewAssigneeIds(assigneeIds);
                       }}
@@ -5848,7 +5851,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               />
             </label>
             <MultiAssigneePicker
-              helperText="Multi-select. The first person stays the owner."
+              helperText={assigneeHint}
               label="Assignees"
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
@@ -5876,7 +5879,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               />
             </label>
             <MultiAssigneePicker
-              helperText="Collaborators get updates and can help. They are not the delivery owner."
+              helperText={
+                activeProject
+                  ? "Collaborators see the whole project too. They are not the delivery owner."
+                  : "Collaborators get updates and can help. They are not the delivery owner."
+              }
               label="Collaborators"
               members={workspaceMembers.filter((member) => {
                 const assigneeId = Array.isArray(selectedItem.assigneeIds)

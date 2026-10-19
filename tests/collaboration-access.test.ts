@@ -8,6 +8,9 @@ import {
   collaborationShareGrant,
   collaboratorAccessFromMembers,
   isShareableAuthUserId,
+  mergeProjectMembers,
+  peopleAssignedOnItems,
+  projectSharePatchForItems,
   shareableAuthUserId,
   withCollaboratorAccess,
 } from "../src/lib/collaborationAccess";
@@ -85,6 +88,33 @@ test("assigning an invited teammate still grants email access", () => {
   ]);
 });
 
+test("one assigned item enrolls that person on the whole project", () => {
+  const project = { teamMemberIds: ["ws_owner"], teamMembers: ["Alejandro"] };
+  const patch = projectSharePatchForItems(
+    project,
+    [{ id: "task-1", projectId: "p1", assigneeIds: [active.id], assignees: ["agustin"] }],
+    [active, invited],
+  );
+  assert.ok(patch);
+  assert.deepEqual(patch?.teamMemberIds, ["ws_owner", active.id]);
+  assert.ok(patch?.teamMembers.includes("agustin@getboldr.ai"));
+  assert.equal(
+    projectSharePatchForItems(patch, [{ assigneeIds: [active.id] }], [active]),
+    null,
+  );
+});
+
+test("a saved assignee name enrolls the matching teammate, and removed people stay off", () => {
+  const removed = { ...active, id: "ws_removed", status: "removed", alias: "gone" };
+  const named = { ...active, alias: "josue" };
+  const people = peopleAssignedOnItems(
+    [{ assignees: ["josue"], assigneeIds: [removed.id, "missing"] }],
+    [named, removed],
+  );
+  assert.deepEqual(people.map((person) => person.id), [named.id]);
+  assert.equal(mergeProjectMembers({ teamMemberIds: [named.id] }, people), null);
+});
+
 test("project share and item share look up members by id instead of pending user ids", () => {
   const projectSurfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "utf8");
   const workItems = readFileSync(resolve("src/components/WorkItemsCenter.tsx"), "utf8");
@@ -99,6 +129,9 @@ test("project share and item share look up members by id instead of pending user
   assert.match(workItems, /value=\{member\.id\}/);
   assert.match(workspace, /members: workspaceMembers/);
   assert.match(workspace, /buildProjectCollaboratorAccessPatch/);
+  assert.match(workspace, /enrollItemPeopleOnProject/);
+  assert.match(projectSurfaces, /share-project/);
+  assert.match(projectSurfaces, /projectSharePatchForItems/);
   assert.match(workspace, /Only the workspace owner or an admin can invite people/);
   assert.match(workspace, /resendWorkspaceInvite/);
   assert.match(workspace, /Remove invite/);

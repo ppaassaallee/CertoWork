@@ -100,8 +100,8 @@ export function PortalRequestsPage() {
         <div><h1>{t("requests")}</h1><p className="cp-muted">{t("requestIntro")}</p></div>
         <div className="cp-request-header-actions">
           <div className="cp-language" aria-label={t("language")}>
-            <button aria-pressed={locale === "es"} onClick={() => changeLocale("es")} type="button">ES</button>
-            <button aria-pressed={locale === "en"} onClick={() => changeLocale("en")} type="button">EN</button>
+            <button aria-pressed={locale.startsWith("es")} onClick={() => changeLocale("es")} type="button">ES</button>
+            <button aria-pressed={locale.startsWith("en")} onClick={() => changeLocale("en")} type="button">EN</button>
           </div>
           <button className="cp-btn" disabled={areas.length === 0} onClick={() => { setOpen(true); setSelectedId(null); setAreaId(areas[0]?.id || ""); setRequestKind(areas[0]?.requestKinds[0] || "request"); }} type="button">+ {t("newRequest")}</button>
         </div>
@@ -111,16 +111,32 @@ export function PortalRequestsPage() {
 
       {open && <form className="cp-card cp-request-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
         <h2>{t("newRequest")}</h2>
-        <label>{t("requestSelectArea")}
-          <select required value={areaId} onChange={(event) => { const next = areas.find((area) => area.id === event.target.value); setAreaId(event.target.value); setRequestKind(next?.requestKinds[0] || "request"); }}>
-            {areas.map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}
-          </select>
-        </label>
-        <label>{t("requestSelectKind")}
-          <select value={requestKind} onChange={(event) => setRequestKind(event.target.value as ServiceRequestKind)}>
-            {(selectedArea?.requestKinds || []).map((kind) => <option key={kind} value={kind}>{t(kindKeys[kind])}</option>)}
-          </select>
-        </label>
+        <div className="cp-choice" role="group" aria-label={t("requestSelectArea")}>
+          <span>{t("requestSelectArea")}</span>
+          {areas.map((area) => (
+            <button
+              aria-pressed={areaId === area.id}
+              key={area.id}
+              onClick={() => { setAreaId(area.id); setRequestKind(area.requestKinds[0] || "request"); }}
+              type="button"
+            >
+              {area.name}
+            </button>
+          ))}
+        </div>
+        <div className="cp-choice" role="group" aria-label={t("requestSelectKind")}>
+          <span>{t("requestSelectKind")}</span>
+          {(selectedArea?.requestKinds || []).map((kind) => (
+            <button
+              aria-pressed={requestKind === kind}
+              key={kind}
+              onClick={() => setRequestKind(kind)}
+              type="button"
+            >
+              {t(kindKeys[kind])}
+            </button>
+          ))}
+        </div>
         <label>{t("requestTitle")}
           <input required maxLength={160} value={title} placeholder={t("requestTitlePlaceholder")} onChange={(event) => setTitle(event.target.value)} />
         </label>
@@ -135,7 +151,7 @@ export function PortalRequestsPage() {
         <p className="cp-muted">{selected.requestNumber || t("requestDetail")}</p>
         <h2>{selected.title}</h2>
         <div className="cp-request-badges"><span className="cp-pill">{t(statusKey(selected.ticketStatus || selected.status, selected.status))}</span>{selected.requestKind && <span className="cp-pill">{t(kindKeys[selected.requestKind])}</span>}{selected.serviceAreaId && areas.find((area) => area.id === selected.serviceAreaId) && <span className="cp-pill">{areas.find((area) => area.id === selected.serviceAreaId)?.name}</span>}</div>
-        {selected.createdAt && <p className="cp-muted">{t("requestSentOn")}: {new Date(selected.createdAt).toLocaleDateString(locale === "es" ? "es" : "en")}</p>}
+        {selected.createdAt && <p className="cp-muted">{t("requestSentOn")}: {new Date(selected.createdAt).toLocaleDateString(locale.startsWith("es") ? "es" : "en")}</p>}
         {selected.description && <p className="cp-request-description">{selected.description}</p>}
         {selected.lastPublicUpdate && <section><h3>{t("requestLatestUpdate")}</h3><p>{selected.lastPublicUpdate}</p></section>}
         <section className="cp-request-conversation"><h3>{t("requestConversation")}</h3>

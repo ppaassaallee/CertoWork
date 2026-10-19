@@ -87,15 +87,15 @@ export function RequestsCenter({
   const [draftProjectId, setDraftProjectId] = useState("");
   const [relatedKind, setRelatedKind] = useState<"epic" | "feature" | "pbi" | "bug" | "task" | "issue">("pbi");
   const [relatedParentId, setRelatedParentId] = useState("");
-  const [locale, setRequestLocale] = useState<"en" | "es">(getLocale() === "es" ? "es" : "en");
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const [locale, setRequestLocale] = useState<"en" | "es">(getLocale().startsWith("es") ? "es" : "en");
+  const tr = (en: string, es: string) => (locale.startsWith("es") ? es : en);
   const requestKindText = (kind: string) => ({
     request: tr("Request", "Solicitud"), incident: tr("Incident", "Incidente"), feedback: tr("Feedback", "Comentario"),
   } as Record<string, string>)[kind] || kind;
-  const statusText = (status: TicketStatus) => locale === "es"
+  const statusText = (status: TicketStatus) => locale.startsWith("es")
     ? ({ new: "Nueva", in_progress: "En progreso", waiting: "En espera", resolved: "Resuelta", closed: "Cerrada" } as const)[status]
     : ticketStatusLabel(status);
-  const waitText = (reason: string) => locale === "es" ? ({
+  const waitText = (reason: string) => locale.startsWith("es") ? ({
     "Waiting for requester": "Esperando al solicitante",
     "Waiting for vendor": "Esperando al proveedor",
     "Waiting for engineering": "Esperando a ingeniería",
@@ -218,13 +218,20 @@ export function RequestsCenter({
               value={draftBody}
             />
           </label>
-          <label>
-            {tr("Project (optional)", "Proyecto (opcional)")}
-            <select value={draftProjectId} onChange={(event) => setDraftProjectId(event.target.value)}>
-              <option value="">{tr("No project", "Sin proyecto")}</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{String(project.title || project.name || project.id)}</option>)}
-            </select>
-          </label>
+          <div className="do-requests-choice" role="group" aria-label={tr("Project (optional)", "Proyecto (opcional)")}>
+            <span>{tr("Project (optional)", "Proyecto (opcional)")}</span>
+            <button aria-pressed={draftProjectId === ""} onClick={() => setDraftProjectId("")} type="button">{tr("No project", "Sin proyecto")}</button>
+            {projects.map((project) => (
+              <button
+                aria-pressed={draftProjectId === project.id}
+                key={project.id}
+                onClick={() => setDraftProjectId(String(project.id))}
+                type="button"
+              >
+                {String(project.title || project.name || project.id)}
+              </button>
+            ))}
+          </div>
           <button className="do-button do-button-dark" disabled={busy || !draftTitle.trim()} onClick={() => void create()} type="button">
             <Plus size={14} /> {tr("Create ticket", "Crear ticket")}
           </button>
@@ -379,17 +386,34 @@ export function RequestsCenter({
                 <section className="do-requests-related">
                   <strong>{tr("Related work", "Trabajo relacionado")}</strong>
                   <div>
-                    <label>{tr("Create as", "Crear como")}
-                      <select value={relatedKind} onChange={(event) => { setRelatedKind(event.target.value as typeof relatedKind); setRelatedParentId(""); }}>
-                        {(["epic", "feature", "pbi", "task", "bug", "issue"] as const).map((kind) => <option key={kind} value={kind}>{kind.toUpperCase()}</option>)}
-                      </select>
-                    </label>
-                    {(relatedKind === "feature" || relatedKind === "task") && <label>{relatedKind === "feature" ? tr("Parent Epic", "Épica principal") : tr("Parent PBI", "PBI principal")}
-                      <select value={relatedParentId} onChange={(event) => setRelatedParentId(event.target.value)}>
-                        <option value="">{tr("Select parent", "Selecciona un padre")}</option>
-                        {allTasks.filter((item) => String(item.projectId || "") === String(selected.projectId || "") && String(item.workItemType || item.type || "").toLowerCase() === (relatedKind === "feature" ? "epic" : "pbi")).map((item) => <option key={item.id} value={item.id}>{titleOf(item)}</option>)}
-                      </select>
-                    </label>}
+                    <div className="do-requests-choice" role="group" aria-label={tr("Create as", "Crear como")}>
+                      <span>{tr("Create as", "Crear como")}</span>
+                      {(["epic", "feature", "pbi", "task", "bug", "issue"] as const).map((kind) => (
+                        <button
+                          aria-pressed={relatedKind === kind}
+                          key={kind}
+                          onClick={() => { setRelatedKind(kind); setRelatedParentId(""); }}
+                          type="button"
+                        >
+                          {kind.toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                    {(relatedKind === "feature" || relatedKind === "task") && (
+                      <div className="do-requests-choice" role="group" aria-label={relatedKind === "feature" ? tr("Parent Epic", "Épica principal") : tr("Parent PBI", "PBI principal")}>
+                        <span>{relatedKind === "feature" ? tr("Parent Epic", "Épica principal") : tr("Parent PBI", "PBI principal")}</span>
+                        {allTasks.filter((item) => String(item.projectId || "") === String(selected.projectId || "") && String(item.workItemType || item.type || "").toLowerCase() === (relatedKind === "feature" ? "epic" : "pbi")).map((item) => (
+                          <button
+                            aria-pressed={relatedParentId === item.id}
+                            key={item.id}
+                            onClick={() => setRelatedParentId(String(item.id))}
+                            type="button"
+                          >
+                            {titleOf(item)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <button disabled={(relatedKind === "feature" || relatedKind === "task") && !relatedParentId} onClick={() => void onCreateRelatedWork(selected.id, relatedKind, relatedParentId || undefined)} type="button"><Link2 size={13} /> {tr("Create linked item", "Crear item vinculado")}</button>
                   </div>
                   {(Array.isArray(selected.relatedWorkIds) ? selected.relatedWorkIds : []).length ? (
