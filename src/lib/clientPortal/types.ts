@@ -9,6 +9,16 @@ export type PortalMemberRole = "approver" | "viewer";
 export type PortalMemberStatus = "invited" | "active" | "revoked";
 export type DigestPref = "immediate" | "weekly";
 
+export type ServiceRequestKind = "request" | "incident" | "feedback";
+
+export interface ServiceArea {
+  id: string;
+  projectId: string;
+  name: string;
+  enabled: boolean;
+  requestKinds: ServiceRequestKind[];
+}
+
 export interface PortalBrand {
   name: string;
   logoUrl?: string;
@@ -39,6 +49,7 @@ export interface Client {
   domain?: string;
   locale: PortalLocale;
   projectIds: string[];
+  serviceAreas?: ServiceArea[];
   primaryContactId?: string;
   portalEnabled: boolean;
   settings: PortalSettings;
@@ -219,11 +230,16 @@ export interface ItemView {
   id: string;
   projectId: string;
   title: string;
+  description?: string;
   status: string;
+  ticketStatus?: string;
   dueDate?: string;
   lastPublicUpdate?: string;
   kind: "work" | "request";
   requestNumber?: string;
+  requestKind?: ServiceRequestKind;
+  serviceAreaId?: string;
+  createdAt?: string;
   sla?: ItemViewSla;
 }
 
@@ -316,6 +332,7 @@ export interface PortalMeta {
     approvals: number;
   };
   locale: PortalLocale;
+  serviceAreas?: ServiceArea[];
 }
 
 export type PortalEventKind =
@@ -466,11 +483,16 @@ export const itemViewZ = z
     id: z.string(),
     projectId: z.string(),
     title: z.string(),
+    description: z.string().optional(),
     status: z.string(),
+    ticketStatus: z.string().optional(),
     dueDate: z.string().optional(),
     lastPublicUpdate: z.string().optional(),
     kind: z.enum(["work", "request"]),
     requestNumber: z.string().optional(),
+    requestKind: z.enum(["request", "incident", "feedback"]).optional(),
+    serviceAreaId: z.string().optional(),
+    createdAt: z.string().optional(),
     sla: z
       .object({ dueAt: z.string().optional(), breached: z.boolean().optional() })
       .strict()
@@ -589,6 +611,13 @@ export const portalMetaZ = z
       })
       .strict(),
     locale: z.enum(["es", "en"]),
+    serviceAreas: z.array(z.object({
+      id: z.string(),
+      projectId: z.string(),
+      name: z.string(),
+      enabled: z.boolean(),
+      requestKinds: z.array(z.enum(["request", "incident", "feedback"])),
+    }).strict()).optional(),
   })
   .strict();
 

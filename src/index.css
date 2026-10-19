@@ -1995,6 +1995,26 @@ a {
   color: var(--text-secondary);
   font-size: var(--text-caption);
 }
+.do-requests-head > .do-requests-language {
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 2px;
+}
+.do-requests-language button {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.do-requests-language button[aria-pressed="true"] {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  font-weight: 700;
+}
 .do-capture-inbox-card,
 .do-capture-ingest-form,
 .do-requests-create {

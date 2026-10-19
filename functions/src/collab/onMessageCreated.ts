@@ -56,6 +56,22 @@ export const onMessageCreated = onDocumentCreated(
     const convSnap = await convRef.get();
     const conv = convSnap.data() || {};
 
+    if (data.visibility === "external" && conv.anchor?.type === "task" && conv.anchor?.id) {
+      const ticketId = String(conv.anchor.id);
+      const task = (await db.doc(`tasks/${ticketId}`).get()).data();
+      const clientId = String(task?.clientId || "");
+      if (clientId && task?.workItemType === "ticket" && task?.clientVisible === true) {
+        await db.doc(`client_portal/${clientId}/request_messages/${messageId}`).set({
+          id: messageId,
+          ticketId,
+          body: String(data.text || "").slice(0, 8000),
+          authorName: String(data.senderName || "").slice(0, 120),
+          authorRole: data.senderType === "guest" ? "client" : "team",
+          createdAt: event.data?.data()?.createdAt || new Date().toISOString(),
+        });
+      }
+    }
+
     await convRef.set(
       {
         messageCount: FieldValue.increment(1),

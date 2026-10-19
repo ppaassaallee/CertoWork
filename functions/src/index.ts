@@ -187,6 +187,7 @@ export {
   publishPortalUpdate,
   getPortalDocumentUrl,
   createPortalRequest,
+  replyPortalRequest,
   portalAsk,
   onApprovalDecided,
   onProjectWriteForPortal,

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
+  onSnapshot,
+  runTransaction,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db } from "../../lib/firebase";
+import { getLocale } from "../../lib/i18n";
 import {
   CLIENTS_COLLECTION,
   PORTAL_EVENTS_COLLECTION,
@@ -18,6 +22,7 @@ import {
 import {
   DEFAULT_PORTAL_SETTINGS,
   type PortalSettings,
+  type ServiceArea,
 } from "../../lib/clientPortal/types";
 
 type Props = {
@@ -28,14 +33,63 @@ type Props = {
 };
 
 export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }: Props) {
+  const es = getLocale() === "es";
   const clientId = String(project.clientId || "");
   const [settings, setSettings] = useState<PortalSettings>(DEFAULT_PORTAL_SETTINGS);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [notice, setNotice] = useState("");
+  const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
+  const [newAreaName, setNewAreaName] = useState("");
   const [draftTitle, setDraftTitle] = useState("Weekly update");
   const [draftSummary, setDraftSummary] = useState("");
   const live = Boolean(clientId);
+
+  useEffect(() => {
+    if (!clientId) {
+      setServiceAreas([]);
+      return;
+    }
+    return onSnapshot(doc(db, CLIENTS_COLLECTION, clientId), (snap) => {
+      const data = snap.data();
+      setServiceAreas(Array.isArray(data?.serviceAreas) ? data.serviceAreas as ServiceArea[] : []);
+      if (data?.settings) setSettings({ ...DEFAULT_PORTAL_SETTINGS, ...data.settings } as PortalSettings);
+    });
+  }, [clientId]);
+
+  const addServiceArea = async () => {
+    const name = newAreaName.trim().slice(0, 80);
+    if (!name) return;
+    const id = clientId || (await ensureClient());
+    const area: ServiceArea = {
+      id: `${String(project.id)}_${crypto.randomUUID().slice(0, 8)}`,
+      projectId: String(project.id),
+      name,
+      enabled: true,
+      requestKinds: ["request", "incident", "feedback"],
+    };
+    await runTransaction(db, async (transaction) => {
+      const ref = doc(db, CLIENTS_COLLECTION, id);
+      const snapshot = await transaction.get(ref);
+      const existing = Array.isArray(snapshot.data()?.serviceAreas) ? snapshot.data()!.serviceAreas as ServiceArea[] : [];
+      transaction.update(ref, { serviceAreas: [...existing, area], projectIds: arrayUnion(String(project.id)), updatedAt: new Date().toISOString() });
+    });
+    setNewAreaName("");
+    setNotice(es ? `Área de servicio publicada: ${name}` : `Service area published: ${name}`);
+  };
+
+  const setServiceAreaEnabled = async (areaId: string, enabled: boolean) => {
+    if (!clientId) return;
+    await runTransaction(db, async (transaction) => {
+      const ref = doc(db, CLIENTS_COLLECTION, clientId);
+      const snapshot = await transaction.get(ref);
+      const existing = Array.isArray(snapshot.data()?.serviceAreas) ? snapshot.data()!.serviceAreas as ServiceArea[] : [];
+      transaction.update(ref, {
+        serviceAreas: existing.map((area) => area.id === areaId ? { ...area, enabled } : area),
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  };
 
   const statusLabel = useMemo(() => {
     if (!clientId) return "Off";
@@ -181,6 +235,22 @@ export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }:
         <p className="cp-muted">
           Publishing requires PM/admin. Odysseus Friday draft uses the Client weekly update routine.
         </p>
+      </section>
+
+      <section className="cp-card">
+        <h3 style={{ marginTop: 0 }}>{es ? "Áreas de servicio" : "Service areas"}</h3>
+        <p className="cp-muted">{es ? "Publica áreas donde los clientes de este proyecto puedan enviar solicitudes, incidentes y comentarios." : "Publish places where this project's clients can send requests, incidents and feedback."}</p>
+        {serviceAreas.filter((area) => area.projectId === String(project.id)).map((area) => (
+          <label key={area.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <input checked={area.enabled} onChange={(event) => void setServiceAreaEnabled(area.id, event.target.checked)} type="checkbox" />
+            <span>{area.name}</span>
+            <span className="cp-muted">{area.enabled ? (es ? "Publicada" : "Published") : (es ? "Oculta" : "Hidden")}</span>
+          </label>
+        ))}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input aria-label={es ? "Nombre del área" : "Service area name"} onChange={(event) => setNewAreaName(event.target.value)} placeholder={es ? "Ej. Soporte del marketplace" : "e.g. Marketplace support"} value={newAreaName} />
+          <button className="cp-btn" disabled={!newAreaName.trim()} onClick={() => void addServiceArea()} type="button">+ {es ? "Publicar área" : "Publish area"}</button>
+        </div>
       </section>
 
       <section className="cp-card">

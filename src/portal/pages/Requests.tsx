@@ -1,32 +1,94 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { app } from "../../lib/firebase";
-import { usePortal, usePortalCollection } from "../PortalContext";
-import type { ItemView } from "../../lib/clientPortal/types";
+import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "firebase/firestore";
+import { app, db } from "../../lib/firebase";
+import { PORTAL_MEMBERS_COLLECTION, clientPortalRoot } from "../../lib/clientPortal/collections";
+import type { ItemView, PortalLocale, ServiceRequestKind } from "../../lib/clientPortal/types";
+import { usePortal } from "../PortalContext";
+
+const kindKeys: Record<ServiceRequestKind, string> = {
+  request: "requestKindRequest", incident: "requestKindIncident", feedback: "requestKindFeedback",
+};
+
+function statusKey(value: string, customerStatus = ""): string {
+  const status = value.toLowerCase().replace(/[ _-]/g, "");
+  const customer = customerStatus.toLowerCase().replace(/[ _-]/g, "");
+  if (["resolved", "done", "completed"].includes(status)) return "requestStatusResolved";
+  if (["closed", "cancelled"].includes(status)) return "requestStatusClosed";
+  if (["waitingcustomer", "waitingyou", "awaitingcustomer"].includes(status)) return "requestStatusWaitingYou";
+  if (["waitingteam", "waitinginternal", "waitingonourside"].includes(status)) return "requestStatusWaitingTeam";
+  if (status === "waiting") return customer.includes("you") || customer.includes("requester") ? "requestStatusWaitingYou" : "requestStatusWaitingTeam";
+  if (["inprogress", "active", "triaged"].includes(status)) return "requestStatusInProgress";
+  return "requestStatusReceived";
+}
 
 export function PortalRequestsPage() {
-  const { t, clientId } = usePortal();
-  const items = usePortalCollection<ItemView>("items");
-  const requests = items.filter((i) => i.kind === "request");
+  const { t, clientId, meta, locale, setLocale, user } = usePortal();
+  const [requests, setRequests] = useState<ItemView[]>([]);
+  const areas = useMemo(() => (meta?.serviceAreas || []).filter((area) => area.enabled), [meta?.serviceAreas]);
   const [open, setOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [areaId, setAreaId] = useState("");
+  const [requestKind, setRequestKind] = useState<ServiceRequestKind>("request");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [reply, setReply] = useState("");
+  const [messages, setMessages] = useState<Array<{ id: string; body: string; authorName: string; authorRole: string; createdAt: string }>>([]);
+  const selectedArea = areas.find((area) => area.id === areaId);
+  const selected = requests.find((request) => request.id === selectedId);
+
+  useEffect(() => {
+    if (!clientId) { setRequests([]); return; }
+    const q = query(collection(db, `${clientPortalRoot(clientId)}/items`), where("kind", "==", "request"), limit(200));
+    return onSnapshot(q, (snapshot) => setRequests(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as ItemView))
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))), () => setRequests([]));
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId || !selectedId) { setMessages([]); return; }
+    const q = query(collection(db, `${clientPortalRoot(clientId)}/request_messages`), where("ticketId", "==", selectedId), limit(100));
+    return onSnapshot(q, (snapshot) => {
+      setMessages(snapshot.docs.map((message) => ({ id: message.id, ...message.data() } as typeof messages[number]))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+    }, () => setMessages([]));
+  }, [clientId, selectedId]);
+
+  const changeLocale = (next: PortalLocale) => {
+    setLocale(next);
+    if (user) updateDoc(doc(db, PORTAL_MEMBERS_COLLECTION, user.uid), { locale: next }).catch(() => undefined);
+  };
 
   const create = async () => {
-    if (!clientId || !title.trim() || !projectId.trim()) return;
+    if (!clientId || !selectedArea || !title.trim() || !description.trim() || !selectedArea.requestKinds.includes(requestKind)) return;
     setBusy(true);
+    setNotice("");
     try {
       const fn = httpsCallable(getFunctions(app, "us-central1"), "createPortalRequest");
-      await fn({ clientId, projectId, title, description });
-      setNotice("Request created");
+      await fn({ clientId, serviceAreaId: selectedArea.id, requestKind, title: title.trim(), description: description.trim() });
+      setNotice(t("requestCreated"));
       setOpen(false);
       setTitle("");
       setDescription("");
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Failed");
+    } catch {
+      setNotice(t("requestCreateFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendReply = async () => {
+    if (!clientId || !selected || !reply.trim()) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const fn = httpsCallable(getFunctions(app, "us-central1"), "replyPortalRequest");
+      await fn({ clientId, ticketId: selected.id, body: reply.trim() });
+      setReply("");
+      setNotice(t("requestReplySent"));
+    } catch {
+      setNotice(t("requestReplyFailed"));
     } finally {
       setBusy(false);
     }
@@ -34,57 +96,62 @@ export function PortalRequestsPage() {
 
   return (
     <div className="cp-grid">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <h1 style={{ margin: 0 }}>{t("requests")}</h1>
-        <button className="cp-btn" onClick={() => setOpen(true)} type="button">
-          {t("newRequest")}
-        </button>
-      </div>
-      <div className="cp-card">
-        {requests.map((r) => (
-          <div className="cp-row" key={r.id}>
-            <div>
-              <strong>{r.requestNumber ? `${r.requestNumber} · ` : ""}{r.title}</strong>
-              <div className="cp-muted">{r.lastPublicUpdate || "—"}</div>
-            </div>
-            <span className="cp-pill">{r.status}</span>
+      <header className="cp-request-header">
+        <div><h1>{t("requests")}</h1><p className="cp-muted">{t("requestIntro")}</p></div>
+        <div className="cp-request-header-actions">
+          <div className="cp-language" aria-label={t("language")}>
+            <button aria-pressed={locale === "es"} onClick={() => changeLocale("es")} type="button">ES</button>
+            <button aria-pressed={locale === "en"} onClick={() => changeLocale("en")} type="button">EN</button>
           </div>
-        ))}
-        {requests.length === 0 ? <p className="cp-muted">No requests yet.</p> : null}
-      </div>
-      {notice ? <p className="cp-muted">{notice}</p> : null}
-      {open ? (
-        <div className="cp-card">
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>{t("newRequest")}</h2>
-          <input
-            onChange={(e) => setProjectId(e.target.value)}
-            placeholder="Project id"
-            style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid var(--c-line)" }}
-            value={projectId}
-          />
-          <input
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title"
-            style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid var(--c-line)" }}
-            value={title}
-          />
-          <textarea
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description"
-            rows={4}
-            style={{ width: "100%", marginBottom: 8, padding: 10, borderRadius: 8, border: "1px solid var(--c-line)" }}
-            value={description}
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="cp-btn" disabled={busy} onClick={create} type="button">
-              Create
-            </button>
-            <button className="cp-btn ghost" onClick={() => setOpen(false)} type="button">
-              Cancel
-            </button>
-          </div>
+          <button className="cp-btn" disabled={areas.length === 0} onClick={() => { setOpen(true); setSelectedId(null); setAreaId(areas[0]?.id || ""); setRequestKind(areas[0]?.requestKinds[0] || "request"); }} type="button">+ {t("newRequest")}</button>
         </div>
-      ) : null}
+      </header>
+      {notice && <p role="status" className="cp-muted">{notice}</p>}
+      {!areas.length && <p className="cp-card cp-muted">{t("requestNoAreas")}</p>}
+
+      {open && <form className="cp-card cp-request-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
+        <h2>{t("newRequest")}</h2>
+        <label>{t("requestSelectArea")}
+          <select required value={areaId} onChange={(event) => { const next = areas.find((area) => area.id === event.target.value); setAreaId(event.target.value); setRequestKind(next?.requestKinds[0] || "request"); }}>
+            {areas.map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}
+          </select>
+        </label>
+        <label>{t("requestSelectKind")}
+          <select value={requestKind} onChange={(event) => setRequestKind(event.target.value as ServiceRequestKind)}>
+            {(selectedArea?.requestKinds || []).map((kind) => <option key={kind} value={kind}>{t(kindKeys[kind])}</option>)}
+          </select>
+        </label>
+        <label>{t("requestTitle")}
+          <input required maxLength={160} value={title} placeholder={t("requestTitlePlaceholder")} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label>{t("requestDescription")}
+          <textarea required maxLength={8000} rows={5} value={description} placeholder={t("requestDescriptionPlaceholder")} onChange={(event) => setDescription(event.target.value)} />
+        </label>
+        <div className="cp-request-actions"><button className="cp-btn" disabled={busy || !areaId || !title.trim() || !description.trim()} type="submit">{t("requestSubmit")}</button><button className="cp-btn ghost" onClick={() => setOpen(false)} type="button">{t("requestCancel")}</button></div>
+      </form>}
+
+      {selected && !open ? <article className="cp-card cp-request-detail">
+        <button className="cp-btn ghost" onClick={() => setSelectedId(null)} type="button">← {t("requestBack")}</button>
+        <p className="cp-muted">{selected.requestNumber || t("requestDetail")}</p>
+        <h2>{selected.title}</h2>
+        <div className="cp-request-badges"><span className="cp-pill">{t(statusKey(selected.ticketStatus || selected.status, selected.status))}</span>{selected.requestKind && <span className="cp-pill">{t(kindKeys[selected.requestKind])}</span>}{selected.serviceAreaId && areas.find((area) => area.id === selected.serviceAreaId) && <span className="cp-pill">{areas.find((area) => area.id === selected.serviceAreaId)?.name}</span>}</div>
+        {selected.createdAt && <p className="cp-muted">{t("requestSentOn")}: {new Date(selected.createdAt).toLocaleDateString(locale === "es" ? "es" : "en")}</p>}
+        {selected.description && <p className="cp-request-description">{selected.description}</p>}
+        {selected.lastPublicUpdate && <section><h3>{t("requestLatestUpdate")}</h3><p>{selected.lastPublicUpdate}</p></section>}
+        <section className="cp-request-conversation"><h3>{t("requestConversation")}</h3>
+          {messages.length === 0 ? <p className="cp-muted">{t("requestNoConversation")}</p> : messages.map((message) => <article className={`cp-request-message is-${message.authorRole}`} key={message.id}>
+            <strong>{message.authorName || (message.authorRole === "client" ? t("profile") : t("yourProjects"))}</strong>
+            <p>{message.body}</p>
+          </article>)}
+          {selected.ticketStatus !== "closed" && <div className="cp-request-reply"><textarea aria-label={t("requestReply")} maxLength={4000} rows={3} placeholder={t("requestReplyPlaceholder")} value={reply} onChange={(event) => setReply(event.target.value)} /><button className="cp-btn" disabled={busy || !reply.trim()} onClick={() => void sendReply()} type="button">{t("requestReply")}</button></div>}
+        </section>
+      </article> : !open && <section className="cp-card" aria-label={t("requestMyRequests")}>
+        <h2>{t("requestMyRequests")}</h2>
+        {requests.length === 0 ? <p className="cp-muted">{t("requestEmpty")}</p> : requests.map((request) => <button className="cp-row cp-request-row" key={request.id} onClick={() => setSelectedId(request.id)} type="button">
+          <span><strong>{request.title}</strong><small className="cp-muted">{request.requestNumber || ""}{request.lastPublicUpdate ? ` · ${request.lastPublicUpdate}` : ""}</small></span>
+          <span className="cp-pill">{t(statusKey(request.ticketStatus || request.status, request.status))}</span>
+        </button>)}
+      </section>}
     </div>
   );
 }

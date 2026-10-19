@@ -99,11 +99,16 @@ export const itemViewZ = z
     id: z.string(),
     projectId: z.string(),
     title: z.string(),
+    description: z.string().optional(),
     status: z.string(),
+    ticketStatus: z.string().optional(),
     dueDate: z.string().optional(),
     lastPublicUpdate: z.string().optional(),
     kind: z.enum(["work", "request"]),
     requestNumber: z.string().optional(),
+    requestKind: z.enum(["request", "incident", "feedback"]).optional(),
+    serviceAreaId: z.string().optional(),
+    createdAt: z.string().optional(),
     sla: z
       .object({ dueAt: z.string().optional(), breached: z.boolean().optional() })
       .strict()
@@ -216,6 +221,13 @@ export const portalMetaZ = z
       })
       .strict(),
     locale: z.enum(["es", "en"]),
+    serviceAreas: z.array(z.object({
+      id: z.string(),
+      projectId: z.string(),
+      name: z.string(),
+      enabled: z.boolean(),
+      requestKinds: z.array(z.enum(["request", "incident", "feedback"])),
+    }).strict()).optional(),
   })
   .strict();
 
