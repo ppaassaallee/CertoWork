@@ -259,6 +259,35 @@
 .cp-muted { color: var(--c-ink-2); font-size: 13px; }
 .cp-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
+.cp-request-header, .cp-request-header-actions, .cp-request-actions, .cp-request-badges {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cp-request-header h1, .cp-request-form h2, .cp-request-detail h2 { margin: 0 0 6px; }
+.cp-request-header p { margin: 0; }
+.cp-language { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--c-line); border-radius: 10px; }
+.cp-language button { border: 0; border-radius: 7px; padding: 7px 10px; color: var(--c-ink-2); background: transparent; cursor: pointer; }
+.cp-language button[aria-pressed="true"] { color: var(--c-ink); background: var(--c-accent-bg); font-weight: 700; }
+.cp-request-form { display: grid; gap: 16px; max-width: 680px; }
+.cp-request-form label { display: grid; gap: 6px; font-weight: 600; }
+.cp-request-form input, .cp-request-form select, .cp-request-form textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--c-line); border-radius: 9px; background: white; color: var(--c-ink); font: inherit; }
+.cp-request-form textarea { resize: vertical; }
+.cp-request-actions, .cp-request-badges { justify-content: flex-start; }
+.cp-request-row { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.cp-request-row:hover { background: var(--c-accent-bg); }
+.cp-request-row span:first-child { display: grid; gap: 4px; }
+.cp-request-description { white-space: pre-wrap; line-height: 1.6; }
+.cp-request-conversation { display: grid; gap: 12px; margin-top: 24px; }
+.cp-request-conversation h3 { margin: 0; }
+.cp-request-message { max-width: 80%; padding: 12px 14px; border: 1px solid var(--c-line); border-radius: 12px; background: white; }
+.cp-request-message.is-client { justify-self: end; background: var(--c-accent-bg); }
+.cp-request-message p { margin: 6px 0 0; white-space: pre-wrap; }
+.cp-request-reply { display: grid; justify-items: start; gap: 8px; }
+.cp-request-reply textarea { width: 100%; padding: 12px; border: 1px solid var(--c-line); border-radius: 9px; font: inherit; resize: vertical; }
+
 @media (max-width: 820px) {
   .cp-nav { display: none; }
   .cp-bottom { display: flex; }

@@ -77,7 +77,16 @@ service cloud.firestore {
     function isPortalMemberOf(clientId) {
       return isPortalToken()
         && clientId is string
-        && clientId in portalClientIds();
+        && clientId in portalClientIds()
+        && (
+          // Existing invitations used a provisional document id. Preserve reads
+          // until portalEnsureClaims migrates that record to the auth uid.
+          !exists(/databases/$(database)/documents/portal_members/$(request.auth.uid))
+          || (
+            get(/databases/$(database)/documents/portal_members/$(request.auth.uid)).data.status == "active"
+            && clientId in get(/databases/$(database)/documents/portal_members/$(request.auth.uid)).data.clientIds
+          )
+        );
     }
 
     function isPortalApprover() {

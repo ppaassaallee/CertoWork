@@ -197,6 +197,20 @@ export async function refreshPortalMeta(db: Firestore, clientId: string) {
   ]);
   const meta = parseStrict(portalMetaZ, {
     brand: settings.brand,
+    serviceAreas: (Array.isArray(client.serviceAreas) ? client.serviceAreas : [])
+      .filter((area): area is Record<string, unknown> => Boolean(area) && typeof area === "object")
+      .filter((area) => area.enabled === true && Array.isArray(client.projectIds) && client.projectIds.includes(area.projectId))
+      .slice(0, 40)
+      .map((area) => ({
+        id: str(area.id),
+        projectId: str(area.projectId),
+        name: str(area.name).slice(0, 80),
+        enabled: true,
+        requestKinds: (Array.isArray(area.requestKinds) ? area.requestKinds : [])
+          .filter((kind): kind is "request" | "incident" | "feedback" =>
+            kind === "request" || kind === "incident" || kind === "feedback"),
+      }))
+      .filter((area) => area.id && area.projectId && area.name && area.requestKinds.length),
     nav: {
       home: approvals?.size ?? 0,
       projects: projects?.size ?? 0,

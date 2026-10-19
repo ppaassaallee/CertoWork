@@ -11,7 +11,7 @@ import { projectApprovals } from "./projectApprovals";
 import { projectThreads } from "./projectThreads";
 import { publishUpdate } from "./publishUpdate";
 import { writeActivity } from "./writeActivity";
-import { PORTAL_MEMBERS, PORTAL_EVENTS, CLIENT_APPROVALS } from "./paths";
+import { PORTAL_MEMBERS, PORTAL_EVENTS, CLIENT_APPROVALS, portalDoc } from "./paths";
 
 const region = { region: "us-central1" as const };
 
@@ -53,19 +53,25 @@ export const portalEnsureClaims = onCall(region, async (request) => {
   const member = doc.data();
   if (member.status === "revoked") throw new HttpsError("permission-denied", "revoked");
   const clientIds = Array.isArray(member.clientIds) ? member.clientIds : [];
+  const canonicalRef = db.doc(`${PORTAL_MEMBERS}/${uid}`);
+  await db.runTransaction(async (tx) => {
+    const existing = await tx.get(canonicalRef);
+    if (existing.exists && String(existing.data()?.email || "").toLowerCase() !== email) {
+      throw new HttpsError("permission-denied", "member-uid-conflict");
+    }
+    tx.set(canonicalRef, {
+      ...member,
+      uid,
+      status: "active",
+      lastSeenAt: new Date().toISOString(),
+    }, { merge: true });
+    if (doc.ref.path !== canonicalRef.path) tx.delete(doc.ref);
+  });
   await getAuth().setCustomUserClaims(uid, {
     portal: true,
     workspaceId: member.workspaceId || null,
     clientIds,
   });
-  await doc.ref.set(
-    {
-      uid,
-      status: "active",
-      lastSeenAt: new Date().toISOString(),
-    },
-    { merge: true },
-  );
   for (const clientId of clientIds) {
     await projectThreads(db, clientId).catch(() => null);
   }
@@ -127,52 +133,162 @@ export const createPortalRequest = onCall(region, async (request) => {
     throw new HttpsError("permission-denied", "portal-only");
   }
   const clientId = String(request.data?.clientId || "");
-  const projectId = String(request.data?.projectId || "");
+  const serviceAreaId = String(request.data?.serviceAreaId || "").trim();
   const title = String(request.data?.title || "").trim();
   const description = String(request.data?.description || "").trim();
+  const requestKind = String(request.data?.requestKind || "request");
   const clientIds: string[] = Array.isArray(request.auth!.token.clientIds)
     ? (request.auth!.token.clientIds as string[])
     : [];
-  if (!clientId || !clientIds.includes(clientId) || !projectId || !title) {
+  if (!clientId || !clientIds.includes(clientId) || !serviceAreaId || !title || !description ||
+    title.length > 160 || description.length > 8000 ||
+    !["request", "incident", "feedback"].includes(requestKind)) {
     throw new HttpsError("invalid-argument", "fields");
   }
   const db = getFirestore();
+  const memberSnap = await db.doc(`${PORTAL_MEMBERS}/${request.auth!.uid}`).get();
+  const member = memberSnap.data();
+  if (!member || member.status !== "active" || !Array.isArray(member.clientIds) ||
+    !member.clientIds.includes(clientId)) {
+    throw new HttpsError("permission-denied", "portal-member");
+  }
+  const clientSnap = await db.doc(`clients/${clientId}`).get();
+  const client = clientSnap.data();
+  const area = (Array.isArray(client?.serviceAreas) ? client.serviceAreas : [])
+    .find((entry: Record<string, unknown>) => entry.id === serviceAreaId && entry.enabled === true);
+  if (!client || client.portalEnabled === false || client.settings?.requests === false ||
+    !area || !Array.isArray(area.requestKinds) || !area.requestKinds.includes(requestKind)) {
+    throw new HttpsError("permission-denied", "service-area");
+  }
+  const projectId = String(area.projectId || "");
   const project = await db.doc(`projects/${projectId}`).get();
-  if (!project.exists || String(project.data()?.clientId) !== clientId) {
+  if (!project.exists || String(project.data()?.clientId) !== clientId ||
+    !Array.isArray(client.projectIds) || !client.projectIds.includes(projectId)) {
     throw new HttpsError("permission-denied", "project");
   }
-  const email = String(request.auth!.token.email || "").toLowerCase();
-  const taskRef = await db.collection("tasks").add({
-    workspaceId: project.data()?.workspaceId || request.auth!.token.workspaceId,
+  const projectData = project.data() || {};
+  const workspaceId = String(projectData.workspaceId || client.workspaceId || "");
+  const ownerId = String(projectData.userId || projectData.ownerId || projectData.createdBy || "");
+  if (!workspaceId || !ownerId) throw new HttpsError("failed-precondition", "project-owner");
+  const email = String(member.email || request.auth!.token.email || "").toLowerCase();
+  const taskRef = db.collection("tasks").doc();
+  const requestNumber = `REQ-${taskRef.id.slice(0, 8).toUpperCase()}`;
+  const writes = db.batch();
+  writes.set(taskRef, {
+    userId: ownerId,
+    createdBy: ownerId,
+    workspaceId,
     projectId,
+    clientId,
+    serviceAreaId,
+    serviceAreaName: String(area.name || "").slice(0, 80),
+    requestKind,
+    key: requestNumber,
     title,
     description,
+    type: "ticket",
+    workItemType: "ticket",
     kind: "ticket",
+    status: "backlog",
     ticketStatus: "new",
     customerStatus: "Received",
     requesterEmail: email,
+    requesterId: request.auth!.uid,
+    requesterName: String(member.name || request.auth!.token.name || email).slice(0, 120),
+    projectManagerId: projectData.projectManagerId || null,
+    productOwnerId: projectData.productOwnerId || null,
+    assigneeIds: [],
+    relatedWorkIds: [],
+    source: "request_portal",
+    sourceType: "form",
     channel: "portal",
     clientVisible: true,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
-  await writeActivity(db, {
-    clientId,
-    id: `request_${taskRef.id}`,
-    kind: "request",
-    title,
-    body: description.slice(0, 280),
-    projectId,
+  writes.set(db.doc(`user_notifications/request_${taskRef.id}`), {
+    userId: ownerId, workspaceId, type: "request", taskId: taskRef.id, taskTitle: title,
+    preview: description.slice(0, 140), fromName: String(member.name || email),
+    read: false, createdAt: FieldValue.serverTimestamp(),
   });
-  await projectItems(db, projectId);
-  await db.collection(PORTAL_EVENTS).add({
-    clientId,
-    uid: request.auth!.uid,
-    at: new Date().toISOString(),
-    kind: "request_created",
-    refId: taskRef.id,
+  writes.set(db.doc(portalDoc(clientId, "items", taskRef.id)), {
+    id: taskRef.id, projectId, title, description, status: "Received", ticketStatus: "new",
+    kind: "request", requestNumber, requestKind, serviceAreaId,
+    createdAt: new Date().toISOString(),
   });
-  return { ok: true, taskId: taskRef.id };
+  await writes.commit();
+  await Promise.allSettled([
+    writeActivity(db, { clientId, id: `request_${taskRef.id}`, kind: "request", title,
+      body: description.slice(0, 280), projectId }),
+    db.collection(PORTAL_EVENTS).add({ clientId, uid: request.auth!.uid,
+      at: new Date().toISOString(), kind: "request_created", refId: taskRef.id }),
+  ]);
+  return { ok: true, taskId: taskRef.id, requestNumber };
+});
+
+export const replyPortalRequest = onCall(region, async (request) => {
+  requireAuth(request.auth?.uid);
+  if (request.auth!.token.portal !== true) throw new HttpsError("permission-denied", "portal-only");
+  const clientId = String(request.data?.clientId || "");
+  const ticketId = String(request.data?.ticketId || "");
+  const body = String(request.data?.body || "").trim();
+  if (!clientId || !ticketId || !body || body.length > 4000) throw new HttpsError("invalid-argument", "fields");
+  const db = getFirestore();
+  const member = (await db.doc(`${PORTAL_MEMBERS}/${request.auth!.uid}`).get()).data();
+  if (!member || member.status !== "active" || !Array.isArray(member.clientIds) || !member.clientIds.includes(clientId)) {
+    throw new HttpsError("permission-denied", "portal-member");
+  }
+  const taskRef = db.doc(`tasks/${ticketId}`);
+  const task = (await taskRef.get()).data();
+  if (!task || task.clientId !== clientId || task.workItemType !== "ticket" || task.clientVisible !== true ||
+    task.ticketStatus === "closed") throw new HttpsError("permission-denied", "ticket");
+  const now = new Date().toISOString();
+  const conversationId = `task_${ticketId}`;
+  const convRef = db.doc(`conversations/${conversationId}`);
+  let createdConversation = false;
+  try {
+    await convRef.create({
+      workspaceId: task.workspaceId, type: "item_thread", title: String(task.title || "Request").slice(0, 120),
+      anchor: { type: "task", id: ticketId, label: String(task.title || "Request") },
+      participantIds: [task.userId], agentIds: [], guestIds: [], isPrivate: false, status: "active",
+      lastMessageAt: null, messageCount: 0, pinnedMessageIds: [], createdBy: task.userId,
+      createdAt: now, updatedAt: now,
+    });
+    createdConversation = true;
+  } catch (error) {
+    const code = (error as { code?: number | string }).code;
+    if (code !== 6 && code !== "already-exists") throw error;
+  }
+  if (createdConversation) {
+    await db.doc(`conversation_participants/${conversationId}_${task.userId}`).set({
+      id: `${conversationId}_${task.userId}`, workspaceId: task.workspaceId, conversationId,
+      kind: "user", userId: task.userId, displayName: "Project team", roleInChat: "owner",
+      status: "active", unreadCount: 0, joinedAt: now, addedBy: task.userId,
+    });
+  }
+  const messageRef = db.collection("conversation_messages").doc();
+  const replyWrites = db.batch();
+  replyWrites.set(messageRef, {
+    workspaceId: task.workspaceId, conversationId, threadId: null,
+    senderType: "guest", senderId: request.auth!.uid,
+    senderName: String(member.name || member.email || "Client").slice(0, 120),
+    kind: "text", text: body, mentions: { userIds: [], agentIds: [], itemIds: [], projectIds: [], recordRefs: [] },
+    attachments: [], card: null, reactions: {}, visibility: "external", channel: "app",
+    status: "sent", replyCount: 0, model: null, searchText: body.toLowerCase(),
+    createdAt: now, updatedAt: now,
+  });
+  replyWrites.set(db.doc(`user_notifications/request_reply_${messageRef.id}`), {
+    userId: task.userId, workspaceId: task.workspaceId, type: "request_reply",
+    taskId: ticketId, taskTitle: String(task.title || "Request"),
+    preview: body.slice(0, 140), fromName: String(member.name || member.email || "Client"),
+    read: false, createdAt: FieldValue.serverTimestamp(),
+  });
+  replyWrites.set(taskRef, {
+    status: "blocked", ticketStatus: "waiting", waitingReason: "Waiting for engineering",
+    customerStatus: "Waiting on our side", updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await replyWrites.commit();
+  return { ok: true, messageId: messageRef.id };
 });
 
 export const portalAsk = onCall(region, async (request) => {
@@ -337,9 +453,13 @@ export const onTaskWriteForPortal = onDocumentWritten(
   { ...region, document: "tasks/{taskId}" },
   async (event) => {
     const after = event.data?.after?.data();
-    const projectId = String(after?.projectId || event.data?.before?.data()?.projectId || "");
-    if (!projectId) return;
-    await projectItems(getFirestore(), projectId).catch(() => null);
+    const previousProjectId = String(event.data?.before?.data()?.projectId || "");
+    const projectId = String(after?.projectId || "");
+    const db = getFirestore();
+    if (previousProjectId && previousProjectId !== projectId) {
+      await projectItems(db, previousProjectId, event.params.taskId);
+    }
+    if (projectId) await projectItems(db, projectId, event.params.taskId);
   },
 );
 
@@ -349,6 +469,15 @@ export const onClientSettingsWrite = onDocumentWritten(
     const clientId = event.params.clientId;
     const db = getFirestore();
     const client = event.data?.after?.data();
+    const previous = event.data?.before?.data();
+    if (client && previous) {
+      const changed = Object.keys({ ...previous, ...client }).filter((key) =>
+        JSON.stringify(previous[key]) !== JSON.stringify(client[key]));
+      if (changed.length && changed.every((key) => key === "serviceAreas" || key === "updatedAt")) {
+        await refreshPortalMeta(db, clientId);
+        return;
+      }
+    }
     const projectIds: string[] = Array.isArray(client?.projectIds) ? client!.projectIds : [];
     for (const projectId of projectIds.slice(0, 40)) {
       await projectProject(db, projectId).catch(() => null);

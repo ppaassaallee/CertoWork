@@ -5704,10 +5704,11 @@ export function DelivereeWorkspace() {
     description: string;
     requesterEmail?: string;
     priority?: string;
+    projectId?: string;
   }) => {
     if (!user || !workspace) return;
     const portalToken = createRequestPortalToken();
-    const id = await addProjectTask("", input.title, "backlog", {
+    const id = await addProjectTask(input.projectId || "", input.title, "backlog", {
       workItemType: "ticket",
       type: "ticket",
       description: input.description || "",
@@ -5719,7 +5720,7 @@ export function DelivereeWorkspace() {
       customerStatus: "Received",
       priority: input.priority || "2",
       relatedWorkIds: [],
-      projectId: null,
+      projectId: input.projectId || null,
       portalToken,
       sla: buildTicketSlaPatch(),
     });
@@ -5872,10 +5873,20 @@ export function DelivereeWorkspace() {
 
   const createRelatedWorkFromTicket = async (
     ticketId: string,
-    kind: "pbi" | "bug" | "task" | "issue",
+    kind: "epic" | "feature" | "pbi" | "bug" | "task" | "issue",
+    parentId?: string,
   ) => {
     const ticket = tasks.find((item) => item.id === ticketId);
     if (!ticket) return;
+    if (kind === "feature" || kind === "task") {
+      const parent = tasks.find((item) => item.id === parentId);
+      const expected = kind === "feature" ? "epic" : "pbi";
+      if (!parent || String(parent.workItemType || parent.type || "").toLowerCase() !== expected ||
+        String(parent.projectId || "") !== String(ticket.projectId || "")) {
+        setNotice(`Select a ${expected.toUpperCase()} in this project first.`);
+        return;
+      }
+    }
     const relatedId = await addProjectTask(
       String(ticket.projectId || ""),
       `${String(kind).toUpperCase()}: ${ticket.title || "Untitled"}`,
@@ -5886,6 +5897,7 @@ export function DelivereeWorkspace() {
         description: ticket.description || "",
         source: "ticket",
         sourceTicketId: ticketId,
+        parentId: parentId || null,
         priority: ticket.priority || "2",
         projectId: ticket.projectId || null,
       },
@@ -5895,6 +5907,8 @@ export function DelivereeWorkspace() {
     related.push(relatedId);
     await updateDoc(doc(db, "tasks", ticketId), prepareItemWrite({
       relatedWorkIds: related,
+      ticketStatus: "in_progress",
+      customerStatus: "In progress",
       updatedAt: serverTimestamp(),
     }));
     setNotice(`Created related ${kind.toUpperCase()}.`);
@@ -9133,6 +9147,7 @@ export function DelivereeWorkspace() {
         ) : centerView === "requests" ? (
           <RequestsCenter
             allTasks={tasks}
+            projects={projects}
             messages={workItemMessages}
             onChangeSection={(section) => {
               if (section === "inbox") navigate("/requests");

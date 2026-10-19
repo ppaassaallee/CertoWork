@@ -12,6 +12,7 @@ import {
   User,
 } from "./ui/Icon";
 import { RoutineLaunchButton } from "./routines/RoutineHost";
+import { getLocale, setLocale } from "../lib/i18n";
 import {
   TICKET_STATUSES,
   WAITING_REASONS,
@@ -25,6 +26,7 @@ type Props = {
   section: "inbox" | "mine" | "waiting" | "resolved" | "new";
   tickets: any[];
   allTasks?: any[];
+  projects?: any[];
   viewerId?: string;
   viewerName?: string;
   selectedId?: string | null;
@@ -35,10 +37,11 @@ type Props = {
     description: string;
     requesterEmail?: string;
     priority?: string;
+    projectId?: string;
   }) => Promise<void> | void;
   onUpdateTicket: (id: string, patch: Record<string, unknown>) => Promise<void> | void;
   onSendMessage: (ticketId: string, body: string, visibility: "public" | "internal") => Promise<void> | void;
-  onCreateRelatedWork: (ticketId: string, kind: "pbi" | "bug" | "task" | "issue") => Promise<void> | void;
+  onCreateRelatedWork: (ticketId: string, kind: "epic" | "feature" | "pbi" | "bug" | "task" | "issue", parentId?: string) => Promise<void> | void;
   onChangeSection: (section: Props["section"]) => void;
   onCopyPortalLink?: (ticket: any) => void;
   onEnsurePortal?: (ticket: any) => Promise<void> | void;
@@ -63,6 +66,7 @@ export function RequestsCenter({
   section,
   tickets,
   allTasks = [],
+  projects = [],
   viewerId,
   viewerName,
   selectedId,
@@ -80,6 +84,24 @@ export function RequestsCenter({
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [draftRequester, setDraftRequester] = useState("");
+  const [draftProjectId, setDraftProjectId] = useState("");
+  const [relatedKind, setRelatedKind] = useState<"epic" | "feature" | "pbi" | "bug" | "task" | "issue">("pbi");
+  const [relatedParentId, setRelatedParentId] = useState("");
+  const [locale, setRequestLocale] = useState<"en" | "es">(getLocale() === "es" ? "es" : "en");
+  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const requestKindText = (kind: string) => ({
+    request: tr("Request", "Solicitud"), incident: tr("Incident", "Incidente"), feedback: tr("Feedback", "Comentario"),
+  } as Record<string, string>)[kind] || kind;
+  const statusText = (status: TicketStatus) => locale === "es"
+    ? ({ new: "Nueva", in_progress: "En progreso", waiting: "En espera", resolved: "Resuelta", closed: "Cerrada" } as const)[status]
+    : ticketStatusLabel(status);
+  const waitText = (reason: string) => locale === "es" ? ({
+    "Waiting for requester": "Esperando al solicitante",
+    "Waiting for vendor": "Esperando al proveedor",
+    "Waiting for engineering": "Esperando a ingeniería",
+    "Waiting for approval": "Esperando aprobación",
+    "Waiting for information": "Esperando información",
+  } as Record<string, string>)[reason] || reason : reason;
   const [reply, setReply] = useState("");
   const [replyMode, setReplyMode] = useState<"public" | "internal">("public");
   const [busy, setBusy] = useState(false);
@@ -111,10 +133,12 @@ export function RequestsCenter({
         description: draftBody.trim(),
         requesterEmail: draftRequester.trim() || undefined,
         priority: "2",
+        projectId: draftProjectId || undefined,
       });
       setDraftTitle("");
       setDraftBody("");
       setDraftRequester("");
+      setDraftProjectId("");
       onChangeSection("inbox");
     } finally {
       setBusy(false);
@@ -136,16 +160,19 @@ export function RequestsCenter({
     <div className="do-requests" data-testid="requests-center">
       <header className="do-requests-head">
         <div>
-          <strong>Requests</strong>
-          <span>Simple tickets for inbound work — not a separate help desk.</span>
+          <strong>{tr("Requests", "Solicitudes")}</strong>
+          <span>{tr("Capture, triage and follow up on client work.", "Captura, clasifica y da seguimiento al trabajo del cliente.")}</span>
+        </div>
+        <div className="do-requests-language" aria-label={tr("Language", "Idioma")}>
+          {(["en", "es"] as const).map((next) => <button aria-pressed={locale === next} key={next} onClick={() => { setLocale(next); setRequestLocale(next); }} type="button">{next.toUpperCase()}</button>)}
         </div>
         <div className="do-requests-tabs" role="tablist" aria-label="Request views">
           {([
-            ["inbox", "Inbox"],
-            ["mine", "Mine"],
-            ["waiting", "Waiting"],
-            ["resolved", "Resolved"],
-            ["new", "New request"],
+            ["inbox", tr("Inbox", "Bandeja")],
+            ["mine", tr("Mine", "Mías")],
+            ["waiting", tr("Waiting", "En espera")],
+            ["resolved", tr("Resolved", "Resueltas")],
+            ["new", tr("New request", "Nueva solicitud")],
           ] as const).map(([id, label]) => (
             <button
               aria-selected={section === id}
@@ -164,16 +191,16 @@ export function RequestsCenter({
       {section === "new" ? (
         <section className="do-requests-create" data-testid="requests-create">
           <label>
-            Short title
+            {tr("Short title", "Título breve")}
             <input
               aria-label="Ticket title"
               onChange={(event) => setDraftTitle(event.target.value)}
-              placeholder="What needs help?"
+              placeholder={tr("What needs help?", "¿En qué podemos ayudarte?")}
               value={draftTitle}
             />
           </label>
           <label>
-            Requester email
+            {tr("Requester email", "Correo del solicitante")}
             <input
               aria-label="Requester email"
               onChange={(event) => setDraftRequester(event.target.value)}
@@ -182,17 +209,24 @@ export function RequestsCenter({
             />
           </label>
           <label>
-            What happened?
+            {tr("What happened?", "¿Qué sucedió?")}
             <textarea
               aria-label="Ticket description"
               onChange={(event) => setDraftBody(event.target.value)}
-              placeholder="Enough detail to act — Certo AI can refine later."
+              placeholder={tr("Details to help the team take action.", "Detalles para que el equipo pueda actuar.")}
               rows={5}
               value={draftBody}
             />
           </label>
+          <label>
+            {tr("Project (optional)", "Proyecto (opcional)")}
+            <select value={draftProjectId} onChange={(event) => setDraftProjectId(event.target.value)}>
+              <option value="">{tr("No project", "Sin proyecto")}</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{String(project.title || project.name || project.id)}</option>)}
+            </select>
+          </label>
           <button className="do-button do-button-dark" disabled={busy || !draftTitle.trim()} onClick={() => void create()} type="button">
-            <Plus size={14} /> Create ticket
+            <Plus size={14} /> {tr("Create ticket", "Crear ticket")}
           </button>
         </section>
       ) : (
@@ -210,17 +244,17 @@ export function RequestsCenter({
                   <Ticket size={14} />
                   <span>
                     <strong>{titleOf(item)}</strong>
-                    <em>{item.requesterName || item.requesterEmail || "Unknown requester"}</em>
+                    <em>{item.requesterName || item.requesterEmail || tr("Unknown requester", "Solicitante desconocido")}{item.requestKind ? ` · ${requestKindText(String(item.requestKind))}` : ""}</em>
                   </span>
-                  <small className={`is-${status}`}>{ticketStatusLabel(status)}</small>
+                  <small className={`is-${status}`}>{statusText(status)}</small>
                 </button>
               );
             })}
             {filtered.length === 0 ? (
               <div className="do-requests-empty">
                 <Inbox size={22} />
-                <strong>No requests here</strong>
-                <span>New email and form tickets land in Inbox.</span>
+                <strong>{tr("No requests here", "No hay solicitudes aquí")}</strong>
+                <span>{tr("New email and form tickets land in Inbox.", "Los tickets nuevos llegan a la bandeja.")}</span>
               </div>
             ) : null}
           </div>
@@ -229,8 +263,8 @@ export function RequestsCenter({
             {!selected ? (
               <div className="do-requests-empty">
                 <MessageSquare size={22} />
-                <strong>Select a request</strong>
-                <span>Reply to the requester or leave an internal note.</span>
+                <strong>{tr("Select a request", "Selecciona una solicitud")}</strong>
+                <span>{tr("Reply to the requester or leave an internal note.", "Responde al solicitante o deja una nota interna.")}</span>
               </div>
             ) : (
               <>
@@ -238,7 +272,7 @@ export function RequestsCenter({
                   <div>
                     <small>{selected.key || selected.id}</small>
                     <h2>{titleOf(selected)}</h2>
-                    <p>{toCustomerStatus(selected)}</p>
+                    <p>{statusText(ticketStatusOf(selected))}</p>
                   </div>
                   <div className="do-requests-status-fields">
                     <RoutineLaunchButton
@@ -250,7 +284,7 @@ export function RequestsCenter({
                       testId="request-routine-button"
                     />
                     <label>
-                      Status
+                      {tr("Status", "Estado")}
                       <select
                         aria-label="Ticket status"
                         onChange={(event) => {
@@ -275,13 +309,13 @@ export function RequestsCenter({
                         value={ticketStatusOf(selected)}
                       >
                         {TICKET_STATUSES.map((status) => (
-                          <option key={status} value={status}>{ticketStatusLabel(status)}</option>
+                          <option key={status} value={status}>{statusText(status)}</option>
                         ))}
                       </select>
                     </label>
                     {ticketStatusOf(selected) === "waiting" ? (
                       <label>
-                        Waiting reason
+                        {tr("Waiting reason", "Motivo de espera")}
                         <select
                           aria-label="Waiting reason"
                           data-testid="requests-waiting-reason"
@@ -301,7 +335,7 @@ export function RequestsCenter({
                           value={selected.waitingReason || WAITING_REASONS[0]}
                         >
                           {WAITING_REASONS.map((reason) => (
-                            <option key={reason} value={reason}>{reason}</option>
+                          <option key={reason} value={reason}>{waitText(reason)}</option>
                           ))}
                         </select>
                       </label>
@@ -310,9 +344,11 @@ export function RequestsCenter({
                 </header>
 
                 <div className="do-requests-meta">
-                  <span><User size={13} /> {selected.requesterName || selected.requesterEmail || "Requester"}</span>
-                  <span><Clock size={13} /> Priority {selected.priority || "2"}</span>
-                  <span><AlertCircle size={13} /> {selected.waitingReason || "No wait reason"}</span>
+                  <span><User size={13} /> {selected.requesterName || selected.requesterEmail || tr("Requester", "Solicitante")}</span>
+                  {selected.projectId && <span>{tr("Project", "Proyecto")}: {String(projects.find((project) => project.id === selected.projectId)?.title || projects.find((project) => project.id === selected.projectId)?.name || selected.projectId)}</span>}
+                  {selected.serviceAreaName && <span>{tr("Service area", "Área de servicio")}: {String(selected.serviceAreaName)}</span>}
+                  <span><Clock size={13} /> {tr("Priority", "Prioridad")} {selected.priority || "2"}</span>
+                  <span><AlertCircle size={13} /> {selected.waitingReason || tr("No wait reason", "Sin motivo de espera")}</span>
                   {selected.portalToken && onCopyPortalLink ? (
                     <button
                       className="do-button"
@@ -320,7 +356,7 @@ export function RequestsCenter({
                       onClick={() => onCopyPortalLink(selected)}
                       type="button"
                     >
-                      <Link2 size={13} /> Copy requester portal
+                      <Link2 size={13} /> {tr("Copy requester portal", "Copiar portal del solicitante")}
                     </button>
                   ) : onEnsurePortal ? (
                     <button
@@ -329,29 +365,32 @@ export function RequestsCenter({
                       onClick={() => void onEnsurePortal(selected)}
                       type="button"
                     >
-                      <Link2 size={13} /> Create requester portal
+                      <Link2 size={13} /> {tr("Create requester portal", "Crear portal del solicitante")}
                     </button>
                   ) : null}
                 </div>
 
                 <article className="do-requests-description">
-                  {(selected.description || "No description yet.").split("\n").map((line: string, index: number) => (
+                  {(selected.description || tr("No description yet.", "Aún no hay descripción.")).split("\n").map((line: string, index: number) => (
                     <p key={`${index}-${line.slice(0, 12)}`}>{line || "\u00A0"}</p>
                   ))}
                 </article>
 
                 <section className="do-requests-related">
-                  <strong>Related work</strong>
+                  <strong>{tr("Related work", "Trabajo relacionado")}</strong>
                   <div>
-                    {(["bug", "pbi", "task", "issue"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        onClick={() => void onCreateRelatedWork(selected.id, kind)}
-                        type="button"
-                      >
-                        <Link2 size={13} /> Create {kind.toUpperCase()}
-                      </button>
-                    ))}
+                    <label>{tr("Create as", "Crear como")}
+                      <select value={relatedKind} onChange={(event) => { setRelatedKind(event.target.value as typeof relatedKind); setRelatedParentId(""); }}>
+                        {(["epic", "feature", "pbi", "task", "bug", "issue"] as const).map((kind) => <option key={kind} value={kind}>{kind.toUpperCase()}</option>)}
+                      </select>
+                    </label>
+                    {(relatedKind === "feature" || relatedKind === "task") && <label>{relatedKind === "feature" ? tr("Parent Epic", "Épica principal") : tr("Parent PBI", "PBI principal")}
+                      <select value={relatedParentId} onChange={(event) => setRelatedParentId(event.target.value)}>
+                        <option value="">{tr("Select parent", "Selecciona un padre")}</option>
+                        {allTasks.filter((item) => String(item.projectId || "") === String(selected.projectId || "") && String(item.workItemType || item.type || "").toLowerCase() === (relatedKind === "feature" ? "epic" : "pbi")).map((item) => <option key={item.id} value={item.id}>{titleOf(item)}</option>)}
+                      </select>
+                    </label>}
+                    <button disabled={(relatedKind === "feature" || relatedKind === "task") && !relatedParentId} onClick={() => void onCreateRelatedWork(selected.id, relatedKind, relatedParentId || undefined)} type="button"><Link2 size={13} /> {tr("Create linked item", "Crear item vinculado")}</button>
                   </div>
                   {(Array.isArray(selected.relatedWorkIds) ? selected.relatedWorkIds : []).length ? (
                     <ul>
@@ -379,23 +418,23 @@ export function RequestsCenter({
                       })}
                     </ul>
                   ) : (
-                    <em>No related engineering work yet.</em>
+                    <em>{tr("No related engineering work yet.", "Aún no hay trabajo de ingeniería relacionado.")}</em>
                   )}
                 </section>
 
                 <section className="do-requests-thread" data-testid="requests-thread">
-                  <strong>Conversation</strong>
+                  <strong>{tr("Conversation", "Conversación")}</strong>
                   <div className="do-requests-messages">
                     {selectedMessages.map((message) => (
                       <article className={`is-${message.visibility || "public"}`} key={message.id}>
                         <header>
                           <b>{message.authorName || message.authorEmail || "Someone"}</b>
-                          <small>{message.visibility === "internal" ? "Internal note" : "Reply"}</small>
+                          <small>{message.visibility === "internal" ? tr("Internal note", "Nota interna") : tr("Reply", "Respuesta")}</small>
                         </header>
                         <p>{message.body}</p>
                       </article>
                     ))}
-                    {selectedMessages.length === 0 ? <em>No conversation yet.</em> : null}
+                    {selectedMessages.length === 0 ? <em>{tr("No conversation yet.", "Aún no hay conversación.")}</em> : null}
                   </div>
                   <div className="do-requests-composer">
                     <div className="do-requests-composer-modes" role="tablist" aria-label="Reply mode">
@@ -406,7 +445,7 @@ export function RequestsCenter({
                         onClick={() => setReplyMode("public")}
                         type="button"
                       >
-                        Reply to requester
+                        {tr("Reply to requester", "Responder al solicitante")}
                       </button>
                       <button
                         aria-selected={replyMode === "internal"}
@@ -415,18 +454,18 @@ export function RequestsCenter({
                         onClick={() => setReplyMode("internal")}
                         type="button"
                       >
-                        Internal note
+                        {tr("Internal note", "Nota interna")}
                       </button>
                     </div>
                     <textarea
                       aria-label={replyMode === "public" ? "Public reply" : "Internal note"}
                       onChange={(event) => setReply(event.target.value)}
-                      placeholder={replyMode === "public" ? "Visible to the requester…" : "Only visible to your team…"}
+                      placeholder={replyMode === "public" ? tr("Visible to the requester…", "Visible para el solicitante…") : tr("Only visible to your team…", "Solo visible para tu equipo…")}
                       rows={3}
                       value={reply}
                     />
                     <button className="do-button do-button-dark" disabled={busy || !reply.trim()} onClick={() => void send()} type="button">
-                      <Send size={13} /> {replyMode === "public" ? "Send reply" : "Save note"}
+                      <Send size={13} /> {replyMode === "public" ? tr("Send reply", "Enviar respuesta") : tr("Save note", "Guardar nota")}
                     </button>
                   </div>
                 </section>
@@ -443,7 +482,7 @@ export function RequestsCenter({
                     })}
                     type="button"
                   >
-                    <CheckCircle2 size={14} /> Resolve request
+                    <CheckCircle2 size={14} /> {tr("Resolve request", "Resolver solicitud")}
                   </button>
                 )}
               </>
