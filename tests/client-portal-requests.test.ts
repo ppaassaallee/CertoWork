@@ -39,6 +39,19 @@ test("client requests require a published area, matching project and active memb
   assert.match(backend, /conversation_messages/);
 });
 
+test("portal functions and triggers use the configured named Firestore database", () => {
+  const configured = JSON.parse(source("firebase-applet-config.json"));
+  const firestore = source("functions/src/firestore.ts");
+  const portal = source("functions/src/clientPortal/index.ts");
+  const collab = source("functions/src/collab/onMessageCreated.ts");
+  assert.match(firestore, new RegExp(configured.firestoreDatabaseId));
+  assert.match(firestore, /getFirestore\(CERTO_FIRESTORE_DATABASE\)/);
+  assert.equal((portal.match(/database: CERTO_FIRESTORE_DATABASE/g) || []).length, 4);
+  assert.equal((collab.match(/database: CERTO_FIRESTORE_DATABASE/g) || []).length, 1);
+  assert.doesNotMatch(portal, /getFirestore\(\)/);
+  assert.doesNotMatch(collab, /getFirestore\(\)/);
+});
+
 test("only external request messages reach the client projection", () => {
   const projection = source("functions/src/collab/onMessageCreated.ts");
   assert.match(projection, /data\.visibility === "external" && conv\.anchor\?\.type === "task"/);

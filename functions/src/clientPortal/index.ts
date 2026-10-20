@@ -1,5 +1,5 @@
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
@@ -12,6 +12,7 @@ import { projectThreads } from "./projectThreads";
 import { publishUpdate } from "./publishUpdate";
 import { writeActivity } from "./writeActivity";
 import { PORTAL_MEMBERS, PORTAL_EVENTS, CLIENT_APPROVALS, portalDoc } from "./paths";
+import { CERTO_FIRESTORE_DATABASE, getCertoFirestore } from "../firestore";
 
 const region = { region: "us-central1" as const };
 
@@ -26,7 +27,7 @@ export const portalLoginPrecheck = onCall(region, async (request) => {
   if (!email || !email.includes("@")) {
     throw new HttpsError("invalid-argument", "email-required");
   }
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const snap = await db.collection(PORTAL_MEMBERS).where("email", "==", email).limit(1).get();
   if (snap.empty) {
     return { ok: false, reason: "not-invited" as const };
@@ -46,7 +47,7 @@ export const portalEnsureClaims = onCall(region, async (request) => {
   requireAuth(request.auth?.uid);
   const uid = request.auth!.uid;
   const email = String(request.auth!.token.email || "").toLowerCase();
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const snap = await db.collection(PORTAL_MEMBERS).where("email", "==", email).limit(1).get();
   if (snap.empty) throw new HttpsError("permission-denied", "not-a-portal-member");
   const doc = snap.docs[0];
@@ -85,7 +86,7 @@ export const publishPortalUpdate = onCall(region, async (request) => {
   }
   const updateId = String(request.data?.updateId || "");
   if (!updateId) throw new HttpsError("invalid-argument", "updateId");
-  const result = await publishUpdate(getFirestore(), updateId, request.auth!.uid);
+  const result = await publishUpdate(getCertoFirestore(), updateId, request.auth!.uid);
   if (!result.ok) throw new HttpsError("failed-precondition", result.reason || "publish-failed");
   return result;
 });
@@ -103,7 +104,7 @@ export const getPortalDocumentUrl = onCall(region, async (request) => {
   if (!clientId || !clientIds.includes(clientId)) {
     throw new HttpsError("permission-denied", "client");
   }
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const viewSnap = await db.doc(`client_portal/${clientId}/documents/${docId}`).get();
   if (!viewSnap.exists) throw new HttpsError("not-found", "document");
   const storagePath = String(
@@ -145,7 +146,7 @@ export const createPortalRequest = onCall(region, async (request) => {
     !["request", "incident", "feedback"].includes(requestKind)) {
     throw new HttpsError("invalid-argument", "fields");
   }
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const memberSnap = await db.doc(`${PORTAL_MEMBERS}/${request.auth!.uid}`).get();
   const member = memberSnap.data();
   if (!member || member.status !== "active" || !Array.isArray(member.clientIds) ||
@@ -233,7 +234,7 @@ export const replyPortalRequest = onCall(region, async (request) => {
   const ticketId = String(request.data?.ticketId || "");
   const body = String(request.data?.body || "").trim();
   if (!clientId || !ticketId || !body || body.length > 4000) throw new HttpsError("invalid-argument", "fields");
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const member = (await db.doc(`${PORTAL_MEMBERS}/${request.auth!.uid}`).get()).data();
   if (!member || member.status !== "active" || !Array.isArray(member.clientIds) || !member.clientIds.includes(clientId)) {
     throw new HttpsError("permission-denied", "portal-member");
@@ -305,7 +306,7 @@ export const portalAsk = onCall(region, async (request) => {
   if (!clientId || !clientIds.includes(clientId) || !projectId || !question) {
     throw new HttpsError("invalid-argument", "fields");
   }
-  const db = getFirestore();
+  const db = getCertoFirestore();
   const uid = request.auth!.uid;
   const day = new Date().toISOString().slice(0, 10);
   const rateRef = db.doc(`portal_ask_rate/${uid}_${day}`);
@@ -392,7 +393,7 @@ export const portalAsk = onCall(region, async (request) => {
 });
 
 export const onApprovalDecided = onDocumentWritten(
-  { ...region, document: `${CLIENT_APPROVALS}/{approvalId}` },
+  { ...region, database: CERTO_FIRESTORE_DATABASE, document: `${CLIENT_APPROVALS}/{approvalId}` },
   async (event) => {
     const after = event.data?.after;
     if (!after?.exists) return;
@@ -400,7 +401,7 @@ export const onApprovalDecided = onDocumentWritten(
     const data = after.data()!;
     if (before?.status === data.status) return;
     if (data.status !== "accepted" && data.status !== "rejected") return;
-    const db = getFirestore();
+    const db = getCertoFirestore();
     const clientId = String(data.clientId || "");
     if (!clientId) return;
     await projectApprovals(db, clientId);
@@ -439,10 +440,10 @@ export const onApprovalDecided = onDocumentWritten(
 );
 
 export const onProjectWriteForPortal = onDocumentWritten(
-  { ...region, document: "projects/{projectId}" },
+  { ...region, database: CERTO_FIRESTORE_DATABASE, document: "projects/{projectId}" },
   async (event) => {
     const projectId = event.params.projectId;
-    const db = getFirestore();
+    const db = getCertoFirestore();
     await projectProject(db, projectId).catch(() => null);
     await projectItems(db, projectId).catch(() => null);
     await projectDocuments(db, projectId).catch(() => null);
@@ -450,12 +451,12 @@ export const onProjectWriteForPortal = onDocumentWritten(
 );
 
 export const onTaskWriteForPortal = onDocumentWritten(
-  { ...region, document: "tasks/{taskId}" },
+  { ...region, database: CERTO_FIRESTORE_DATABASE, document: "tasks/{taskId}" },
   async (event) => {
     const after = event.data?.after?.data();
     const previousProjectId = String(event.data?.before?.data()?.projectId || "");
     const projectId = String(after?.projectId || "");
-    const db = getFirestore();
+    const db = getCertoFirestore();
     if (previousProjectId && previousProjectId !== projectId) {
       await projectItems(db, previousProjectId, event.params.taskId);
     }
@@ -464,10 +465,10 @@ export const onTaskWriteForPortal = onDocumentWritten(
 );
 
 export const onClientSettingsWrite = onDocumentWritten(
-  { ...region, document: "clients/{clientId}" },
+  { ...region, database: CERTO_FIRESTORE_DATABASE, document: "clients/{clientId}" },
   async (event) => {
     const clientId = event.params.clientId;
-    const db = getFirestore();
+    const db = getCertoFirestore();
     const client = event.data?.after?.data();
     const previous = event.data?.before?.data();
     if (client && previous) {
