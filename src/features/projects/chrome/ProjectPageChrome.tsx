@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { getLocale, localize, t, type MessageKey } from "../../../lib/i18n";
+import { getLocale, t, type MessageKey } from "../../../lib/i18n";
+import { localize } from "../../../lib/localize";
 import { useLocale } from "../../../lib/useLocale";
 import {
   ArrowUpDown,

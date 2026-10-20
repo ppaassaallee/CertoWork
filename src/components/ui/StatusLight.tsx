@@ -1,6 +1,6 @@
 import { AlertTriangle, Ban, Check, Circle, Square } from "./Icon";
 import { useLocale } from "../../lib/useLocale";
-import { localize } from "../../lib/i18n";
+import { localize } from "../../lib/localize";
 
 export const STATUS_TONES = ["green", "amber", "red", "blue", "gray"] as const;
 export type StatusTone = (typeof STATUS_TONES)[number];

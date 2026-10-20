@@ -1,6 +1,7 @@
 import { normalizeTimeSector, type TimeSectorId } from "./operatingModel";
 import { localDateKey } from "./workspaceDisplay";
-import { getLocale, localize } from "./i18n";
+import { getLocale } from "./i18n";
+import { localize } from "./localize";
 
 /** Normalize stored due/start values to YYYY-MM-DD in local calendar terms. */
 export function dateInputValue(value: any) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../lib/useLocale";
-import { localize } from "../lib/i18n";
+import { localize } from "../lib/localize";
 import {
   CERTO_TEXT_SIZE_EVENT,
   CERTO_TEXT_SIZE_OPTIONS,

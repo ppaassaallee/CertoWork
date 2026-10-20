@@ -206,7 +206,8 @@ import {
 } from "../lib/itemTiming";
 import { dueEdgeTone } from "../lib/dueEdgeTone";
 import { filterPointerKeepsOpen, shouldDismissFilterOnEscape } from "../lib/filterPopover";
-import { getLocale, localize, t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
+import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";

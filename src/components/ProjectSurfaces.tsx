@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { localize, t } from "../lib/i18n";
+import { t } from "../lib/i18n";
+import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {

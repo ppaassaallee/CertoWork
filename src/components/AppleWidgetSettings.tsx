@@ -1,6 +1,6 @@
 import { widgetPublicPath } from "../lib/appleWidget";
 import { useLocale } from "../lib/useLocale";
-import { localize } from "../lib/i18n";
+import { localize } from "../lib/localize";
 
 export function AppleWidgetSettings({
   enabled,

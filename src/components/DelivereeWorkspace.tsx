@@ -124,7 +124,8 @@ import { projectWorkCounts } from "../lib/projectWorkCounts";
 import { dateRangeError } from "../lib/itemTiming";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
-import { getLocale, localize, setLocale, t, type Locale } from "../lib/i18n";
+import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
+import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
 import {
   dateKey,

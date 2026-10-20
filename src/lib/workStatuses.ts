@@ -1,5 +1,6 @@
 /** Single catalog for item status. Filters, board, table, Gantt, and calendar use these eight. */
-import { getLocale, localize } from "./i18n";
+import { getLocale } from "./i18n";
+import { localize } from "./localize";
 
 export const WORK_STATUSES = [
   { key: "backlog", label: "Backlog", completed: false },

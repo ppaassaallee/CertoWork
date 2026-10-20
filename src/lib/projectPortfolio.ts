@@ -1,5 +1,6 @@
 import { isRemovedWorkItem } from "./itemRemoval";
-import { getLocale, localize } from "./i18n";
+import { getLocale } from "./i18n";
+import { localize } from "./localize";
 import { projectWorkCounts } from "./projectWorkCounts";
 import { isCompletedWorkStatus, noteUnknownWorkStatus } from "./workStatuses";
 
