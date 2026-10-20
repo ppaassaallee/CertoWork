@@ -15,12 +15,15 @@ import { PORTAL_MEMBERS, PORTAL_EVENTS, CLIENT_APPROVALS, portalDoc } from "./pa
 import { CERTO_FIRESTORE_DATABASE, getCertoFirestore } from "../firestore";
 
 const region = { region: "us-central1" as const };
+// Firebase clients authenticate inside each callable. Cloud Run must allow the
+// initial HTTPS request through, including the magic-link precheck before login.
+const publicPortalHttps = { ...region, invoker: "public" as const };
 
 function requireAuth(uid?: string) {
   if (!uid) throw new HttpsError("unauthenticated", "Sign in required");
 }
 
-export const portalLoginPrecheck = onCall(region, async (request) => {
+export const portalLoginPrecheck = onCall(publicPortalHttps, async (request) => {
   const email = String(request.data?.email || "")
     .trim()
     .toLowerCase();
@@ -43,7 +46,7 @@ export const portalLoginPrecheck = onCall(region, async (request) => {
   };
 });
 
-export const portalEnsureClaims = onCall(region, async (request) => {
+export const portalEnsureClaims = onCall(publicPortalHttps, async (request) => {
   requireAuth(request.auth?.uid);
   const uid = request.auth!.uid;
   const email = String(request.auth!.token.email || "").toLowerCase();
@@ -128,7 +131,7 @@ export const getPortalDocumentUrl = onCall(region, async (request) => {
   return { url, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() };
 });
 
-export const createPortalRequest = onCall(region, async (request) => {
+export const createPortalRequest = onCall(publicPortalHttps, async (request) => {
   requireAuth(request.auth?.uid);
   if (request.auth!.token.portal !== true) {
     throw new HttpsError("permission-denied", "portal-only");
@@ -227,7 +230,7 @@ export const createPortalRequest = onCall(region, async (request) => {
   return { ok: true, taskId: taskRef.id, requestNumber };
 });
 
-export const replyPortalRequest = onCall(region, async (request) => {
+export const replyPortalRequest = onCall(publicPortalHttps, async (request) => {
   requireAuth(request.auth?.uid);
   if (request.auth!.token.portal !== true) throw new HttpsError("permission-denied", "portal-only");
   const clientId = String(request.data?.clientId || "");

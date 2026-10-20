@@ -39,6 +39,18 @@ test("client requests require a published area, matching project and active memb
   assert.match(backend, /conversation_messages/);
 });
 
+test("browser-facing portal callables accept HTTPS before enforcing app authorization", () => {
+  const backend = source("functions/src/clientPortal/index.ts");
+  assert.match(backend, /const publicPortalHttps = \{ \.\.\.region, invoker: "public" as const \}/);
+  for (const name of ["portalLoginPrecheck", "portalEnsureClaims", "createPortalRequest", "replyPortalRequest"]) {
+    assert.match(backend, new RegExp(`export const ${name} = onCall\\(publicPortalHttps,`));
+  }
+  assert.match(backend, /export const publishPortalUpdate = onCall\(region,/);
+  assert.match(backend, /export const getPortalDocumentUrl = onCall\(region,/);
+  assert.match(backend, /export const portalAsk = onCall\(region,/);
+  assert.match(backend, /requireAuth\(request\.auth\?\.uid\)/);
+});
+
 test("portal functions and triggers use the configured named Firestore database", () => {
   const configured = JSON.parse(source("firebase-applet-config.json"));
   const firestore = source("functions/src/firestore.ts");
