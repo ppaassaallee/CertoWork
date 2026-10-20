@@ -13,7 +13,7 @@ import {
 } from "../lib/feedbackReports";
 
 type Props = {
-  mode: "submit" | "queue";
+  mode: "submit" | "queue" | "combined";
   canManage: boolean;
   initialKind?: FeedbackKind;
   reports: FeedbackReport[];
@@ -106,17 +106,21 @@ export function FeedbackCenter({
 
   const submit = async () => {
     if (!title.trim()) return;
-    await onSubmit({
-      kind,
-      title: title.trim(),
-      description: description.trim(),
-      projectId,
-      severity: kind === "bug" ? severity || "medium" : "",
-    });
-    setTitle("");
-    setDescription("");
-    setProjectId("");
-    setSeverity("medium");
+    try {
+      await onSubmit({
+        kind,
+        title: title.trim(),
+        description: description.trim(),
+        projectId,
+        severity: kind === "bug" ? severity || "medium" : "",
+      });
+      setTitle("");
+      setDescription("");
+      setProjectId("");
+      setSeverity("medium");
+    } catch {
+      // Keep the draft so a failed request can be retried.
+    }
   };
 
   const copy = async (value: string, label: string) => {
@@ -140,11 +144,11 @@ export function FeedbackCenter({
       <header className="do-feedback-head">
         <div>
           <span className="do-kicker">{mode === "queue" ? "Admin console" : "Support desk"}</span>
-          <h1>{mode === "queue" ? "SupportOps command center" : "SupportOps intake"}</h1>
+          <h1>{mode === "queue" ? "Past reports" : "Report a bug or idea"}</h1>
           <p>
             {mode === "queue"
-              ? "Triage, route, and convert incoming reports into backlog work without losing the customer context."
-              : "Capture bugs and feature requests in a clean intake flow. Route them to a project now or let Tier 1 classify them later."}
+              ? "Triage and convert reports created before the unified Requests inbox."
+              : "New reports become trackable requests. Earlier reports remain available below."}
           </p>
         </div>
         <div className="do-feedback-head-actions">
@@ -216,7 +220,7 @@ export function FeedbackCenter({
         </section>
       )}
 
-      {mode === "submit" && (
+      {mode !== "queue" && (
         <section className="do-feedback-submit-card" aria-label="Submit SupportOps request">
           <span className="do-feedback-ticket-stamp"><Sparkles size={13} /> Smart intake</span>
           <div className="do-feedback-submit-hero">
@@ -315,12 +319,12 @@ export function FeedbackCenter({
         </section>
       )}
 
-      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All SupportOps reports" : "My reports"}>
+      <section className="do-workspace-admin-card" aria-label={mode !== "submit" ? "Earlier reports" : "My earlier reports"}>
         <div className="do-workspace-admin-head">
-          <span className="do-kicker">{mode === "queue" ? "Queue" : "My reports"}</span>
+          <span className="do-kicker">{mode !== "submit" ? "Earlier reports" : "My earlier reports"}</span>
           <strong>
             {filtered.length} shown
-            {mode === "queue" ? ` · ${openCount} open` : ""}
+            {mode !== "submit" ? ` · ${openCount} open` : ""}
           </strong>
         </div>
         <label>
@@ -362,7 +366,7 @@ export function FeedbackCenter({
                     {` · ${feedbackStatusLabel(report.status)}`}
                   </small>
                 </div>
-                {mode === "queue" && canManage && isOpenFeedback(report.status) && (
+                {mode !== "submit" && canManage && isOpenFeedback(report.status) && (
                   <div className="do-feedback-actions">
                     <select
                       aria-label={`Project for ${report.title || "report"}`}

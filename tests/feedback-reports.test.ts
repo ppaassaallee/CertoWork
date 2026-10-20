@@ -37,6 +37,10 @@ test("converting feedback produces a PBI patch linked to the report", () => {
 });
 
 test("feedback routes split submit from the admin queue", () => {
+  assert.deepEqual(resolveDelivereeLens("/requests/reports"), {
+    kind: "requests",
+    section: "reports",
+  });
   assert.deepEqual(resolveDelivereeLens("/feedback"), {
     kind: "feedback",
     section: "submit",
@@ -68,8 +72,10 @@ test("feedback rules and UI stay aligned", () => {
   assert.match(rules, /match \/feedback_reports\/\{id\}/);
   assert.match(rules, /function canReadFeedbackReport\(data\)/);
   assert.match(rules, /isWorkspaceAdmin\(data\.workspaceId\)/);
-  assert.match(workspace, /collection\(db, "feedback_reports"\)/);
+  assert.match(workspace, /mergeQueriesLocal\(\s*"feedback_reports"/);
   assert.match(workspace, /convertFeedbackToPbi/);
+  assert.match(workspace, /source: input\.feedbackKind \? "supportops" : "manual"/);
+  assert.doesNotMatch(workspace, /addDoc\(collection\(db, "feedback_reports"\)/);
   assert.match(center, /feedback-submit/);
   assert.match(center, /feedback-admin-queue/);
   assert.match(center, /Convert to/);
