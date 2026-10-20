@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useLocale } from "../lib/useLocale";
+import { localize } from "../lib/localize";
 import {
   CERTO_TEXT_SIZE_EVENT,
   CERTO_TEXT_SIZE_OPTIONS,
@@ -8,6 +10,7 @@ import {
 } from "../lib/textSize";
 
 export function TextSizeControl({ compact = false }: { compact?: boolean }) {
+  const locale = useLocale();
   const [textSize, setTextSize] = useState<CertoTextSize>(() => getStoredCertoTextSize());
 
   useEffect(() => {
@@ -25,21 +28,32 @@ export function TextSizeControl({ compact = false }: { compact?: boolean }) {
   }, []);
 
   return (
-    <div className={`do-text-size-control ${compact ? "is-compact" : ""}`} role="group" aria-label="Text size">
-      {CERTO_TEXT_SIZE_OPTIONS.map((option) => (
+    <div className={`do-text-size-control ${compact ? "is-compact" : ""}`} role="group" aria-label={localize(locale, "Text size", "Tamaño del texto")}>
+      {CERTO_TEXT_SIZE_OPTIONS.map((option, index) => {
+        const spanish = [
+          ["Compacto", "Más información"],
+          ["Predeterminado", "Equilibrado"],
+          ["Cómodo", "Lectura más fácil"],
+          ["Grande", "Alta legibilidad"],
+          ["Muy grande", "Máxima legibilidad"],
+        ][index];
+        const label = localize(locale, option.label, spanish[0]);
+        const description = localize(locale, option.description, spanish[1]);
+        return (
         <button
-          aria-label={`${option.label}: ${option.description}`}
+          aria-label={`${label}: ${description}`}
           aria-pressed={textSize === option.value}
           className={textSize === option.value ? "is-active" : ""}
           key={option.value}
           onClick={() => setStoredCertoTextSize(option.value)}
-          title={option.label}
+          title={label}
           type="button"
         >
           <span>{option.value}</span>
-          {!compact && <small>{option.label}</small>}
+          {!compact && <small>{label}</small>}
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }

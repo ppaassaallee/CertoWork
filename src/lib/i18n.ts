@@ -1,4 +1,6 @@
-export type Locale = "en" | "es";
+import { getLocale, type Locale } from "./localeStore";
+export { getLocale, setLocale, subscribeLocale } from "./localeStore";
+export type { Locale } from "./localeStore";
 
 const dictionaries = {
   en: {
@@ -1467,31 +1469,11 @@ const dictionaries = {
 
 export type MessageKey = keyof typeof dictionaries.en;
 
-function detectLocale(): Locale {
-  if (typeof navigator === "undefined") return "en";
-  try {
-    const saved = window.localStorage.getItem("certo-locale");
-    if (saved === "en" || saved === "es") return saved;
-  } catch { /* storage may be unavailable */ }
-  return navigator.language.toLowerCase().startsWith("es") ? "es" : "en";
-}
-
-let currentLocale: Locale = detectLocale();
-
-export function setLocale(locale: Locale) {
-  currentLocale = locale;
-  try { window.localStorage.setItem("certo-locale", locale); } catch { /* storage may be unavailable */ }
-}
-
-export function getLocale() {
-  return currentLocale;
-}
-
 export function isSpanish(value: string) {
   return value === "es";
 }
 
-export function t(key: MessageKey, locale: Locale = currentLocale) {
+export function t(key: MessageKey, locale: Locale = getLocale()) {
   return dictionaries[locale][key] || dictionaries.en[key];
 }
 

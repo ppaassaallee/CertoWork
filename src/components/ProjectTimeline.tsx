@@ -2,7 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { AlertCircle, Bookmark, Bug, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, CornerDownRight, Gem, Inbox, Layers, Maximize2, Minimize2, Plus, Target, User } from "./ui/Icon";
 import { memberName } from "./ProjectControls";
 import { retainFocusForOpen } from "../lib/openWorkItem";
-import { getLocale, t } from "../lib/i18n";
+import { t } from "../lib/i18n";
+import { useLocale } from "../lib/useLocale";
 import { workItemTypeLabel } from "../lib/workItemTypeLabels";
 import { workStatusLabel } from "../lib/workStatuses";
 import { buildTimelineEntries, timelineDate, timelineGeometry, timelineMonths, timelinePosition, timelineRange, timelineSections, timelineToday, type TimelineEntry, type TimelineGrouping, type TimelineItem, type TimelineScale } from "../lib/projectTimeline";
@@ -60,7 +61,7 @@ export function ProjectTimeline({ items, members = [], selectedItemId, projectMo
   onOpenItem: (id: string) => void;
   onAddItem: () => void;
 }) {
-  const locale = getLocale();
+  const locale = useLocale();
   const dateLocale = { en: "en-US", es: "es-GT" }[locale];
   const entries = useMemo(() => buildTimelineEntries(items), [items]);
   const today = timelineToday();

@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { t } from "../lib/i18n";
+import { localize } from "../lib/localize";
+import { useLocale } from "../lib/useLocale";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
@@ -1400,6 +1402,8 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
   onCreateProject?: (name: string) => Promise<string | void> | string | void;
 }) {
   const navigate = useNavigate();
+  const locale = useLocale();
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const tablesEnabled = useTablesEnabled();
   const collabEnabled = useCollabEnabled();
   const { user: authUser, workspace: authWorkspace } = useAuth();
@@ -1962,9 +1966,9 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
         project={project}
         titleEditor={
           <InlineEdit
-            ariaLabel="Project name"
+            ariaLabel={tr("Project name", "Nombre del proyecto")}
             onCommit={(title) => title && update({ title, name: title })}
-            placeholder="Project name"
+            placeholder={tr("Project name", "Nombre del proyecto")}
             value={projectDisplayName(project)}
           />
         }
@@ -1975,15 +1979,15 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           project={project}
           stageControl={
             <label className="do-project-inline-edit">
-              <span className="sr-only">Delivery stage</span>
+              <span className="sr-only">{tr("Delivery stage", "Etapa de entrega")}</span>
               <select
-                aria-label="Project delivery stage"
+                aria-label={tr("Project delivery stage", "Etapa de entrega del proyecto")}
                 onChange={(event) => update({ deliveryStage: event.target.value })}
                 value={deliveryStage(project)}
               >
                 {DELIVERY_STAGES.map((stage) => (
                   <option key={stage} value={stage}>
-                    {deliveryStageLabels[stage]}
+                    {localize(locale, deliveryStageLabels[stage], ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage])}
                   </option>
                 ))}
               </select>
@@ -5422,6 +5426,8 @@ function ProjectCommandCenterInner({
   onPortfolioViewChange?: (view: PortfolioView) => void;
   canViewFinance?: boolean;
 } & SharedProjectActions) {
+  const locale = useLocale();
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const [filter, setFilter] = useState("active");
   const [statusFilters, setStatusFilters] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -6044,8 +6050,8 @@ function ProjectCommandCenterInner({
       </datalist>
       <header className="do-command-head is-compact">
         <div>
-          <h1>Projects</h1>
-          <p><button className="do-projects-subtitle-filter" onClick={() => openListWith({ filter: "active" })} type="button">{openCount} open</button>{operationsCount ? ` · ${operationsCount} in operations` : ""}{allAttention.length ? ` · ${allAttention.length} need attention` : ""}</p>
+          <h1>{tr("Projects", "Proyectos")}</h1>
+          <p><button className="do-projects-subtitle-filter" onClick={() => openListWith({ filter: "active" })} type="button">{openCount} {tr("open", "abiertos")}</button>{operationsCount ? ` · ${operationsCount} ${tr("in operations", "en operaciones")}` : ""}{allAttention.length ? ` · ${allAttention.length} ${tr("need attention", "requieren atención")}` : ""}</p>
         </div>
         <div className="do-command-head-actions">
           {onNewProject && (
@@ -6055,15 +6061,15 @@ function ProjectCommandCenterInner({
               onClick={onNewProject}
               type="button"
             >
-              <Plus size={14} /> New project
+              <Plus size={14} /> {tr("New project", "Nuevo proyecto")}
             </button>
           )}
         </div>
       </header>
-      <nav aria-label="Projects views" className="do-command-view-tabs do-projects-view-tabs">
-        <button aria-current={view === "overview" ? "page" : undefined} className={view === "overview" ? "is-active" : ""} data-testid="projects-view-list" onClick={() => selectPortfolioView("overview")} type="button">List</button>
-        <button aria-current={view === "dashboard" ? "page" : undefined} className={view === "dashboard" ? "is-active" : ""} data-testid="projects-view-dashboard" onClick={() => selectPortfolioView("dashboard")} type="button">Dashboard</button>
-        {canViewFinance ? <button aria-current={view === "economics" ? "page" : undefined} className={view === "economics" ? "is-active" : ""} data-testid="projects-costs-tab" onClick={() => selectPortfolioView("economics")} type="button">Costs</button> : null}
+      <nav aria-label={tr("Projects views", "Vistas de proyectos")} className="do-command-view-tabs do-projects-view-tabs">
+        <button aria-current={view === "overview" ? "page" : undefined} className={view === "overview" ? "is-active" : ""} data-testid="projects-view-list" onClick={() => selectPortfolioView("overview")} type="button">{tr("List", "Lista")}</button>
+        <button aria-current={view === "dashboard" ? "page" : undefined} className={view === "dashboard" ? "is-active" : ""} data-testid="projects-view-dashboard" onClick={() => selectPortfolioView("dashboard")} type="button">{tr("Dashboard", "Panel")}</button>
+        {canViewFinance ? <button aria-current={view === "economics" ? "page" : undefined} className={view === "economics" ? "is-active" : ""} data-testid="projects-costs-tab" onClick={() => selectPortfolioView("economics")} type="button">{tr("Costs", "Costos")}</button> : null}
       </nav>
       {templatesOpen && onCreateProjectTemplate && onDeleteProjectTemplate && onApplyProjectTemplate && (
         <ProjectTemplatesPanel
@@ -6084,7 +6090,7 @@ function ProjectCommandCenterInner({
               type="button"
             >
               <strong>{operationsCount}</strong>
-              <span>in operations</span>
+              <span>{tr("in operations", "en operaciones")}</span>
             </button>
           )}
           {allAttention.length > 0 && (
@@ -6094,7 +6100,7 @@ function ProjectCommandCenterInner({
               type="button"
             >
               <strong>{allAttention.length}</strong>
-              <span>need attention</span>
+              <span>{tr("need attention", "requieren atención")}</span>
             </button>
           )}
         </div>
@@ -6124,24 +6130,24 @@ function ProjectCommandCenterInner({
                       ? (totals.actualHours / totals.plannedHours) * 100
                       : 0,
                   )}
-                  % hours used
+                  % {tr("hours used", "horas usadas")}
                 </strong>
                 <span>
                   {Math.round(totals.actualHours)}h / {Math.round(totals.plannedHours)}h
-                  {hoursAtCapacity ? " · at capacity" : ""}
+                  {hoursAtCapacity ? ` · ${tr("at capacity", "al límite")}` : ""}
                 </span>
               </button>
             )}
             {totals.recurring > 0 && (
               <button onClick={() => selectPortfolioView("economics")} type="button">
                 <strong>${Math.round(totals.recurring).toLocaleString()}</strong>
-                <span>monthly recurring</span>
+                <span>{tr("monthly recurring", "recurrente mensual")}</span>
               </button>
             )}
             {totals.initial > 0 && (
               <button onClick={() => selectPortfolioView("economics")} type="button">
                 <strong>${Math.round(totals.initial).toLocaleString()}</strong>
-                <span>initial investment</span>
+                <span>{tr("initial investment", "inversión inicial")}</span>
               </button>
             )}
           </div>
@@ -6151,13 +6157,13 @@ function ProjectCommandCenterInner({
           <section className="do-portfolio-dashboard">
             {allAttention.length > 0 && <section className="do-portfolio-card do-portfolio-card-wide do-attention-board">
               <div className="do-portfolio-card-head">
-                <h3>Needs your attention</h3>
+                <h3>{tr("Needs your attention", "Requiere tu atención")}</h3>
                 {allAttention.length > 0 && (
                   <button
                     onClick={() => openListWith({ healthFilter: "needs_attention" })}
                     type="button"
                   >
-                    Open list <ArrowRight size={13} />
+                    {tr("Open list", "Abrir lista")} <ArrowRight size={13} />
                   </button>
                 )}
               </div>
@@ -6208,8 +6214,8 @@ function ProjectCommandCenterInner({
                 <div className="do-command-calm">
                   <CheckCircle2 size={17} />
                   <span>
-                    <strong>Nothing needs escalation.</strong>
-                    <small>Portfolio signals are on track.</small>
+                    <strong>{tr("Nothing needs escalation.", "Nada requiere escalamiento.")}</strong>
+                    <small>{tr("Portfolio signals are on track.", "Las señales del portafolio están bien.")}</small>
                   </span>
                 </div>
               )}
@@ -6217,7 +6223,7 @@ function ProjectCommandCenterInner({
 
             {onAsk && (
               <details className="do-projects-tools">
-                <summary><Sparkles size={14} /> Ask Odysseus or start a routine</summary>
+                <summary><Sparkles size={14} /> {tr("Ask Odysseus or start a routine", "Preguntar a Odysseus o iniciar una rutina")}</summary>
               <form
                 className="do-pm-ask-bar"
                 data-testid="projects-ask-bar"
@@ -6269,10 +6275,10 @@ function ProjectCommandCenterInner({
                   type="button"
                 >
                   <Sparkles size={13} />
-                  <span>Rutina</span>
+                  <span>{tr("Routine", "Rutina")}</span>
                 </button>
                 <button className="do-pm-ask-submit" type="submit">
-                  Ask
+                  {tr("Ask", "Preguntar")}
                 </button>
               </form>
               </details>
@@ -6281,8 +6287,8 @@ function ProjectCommandCenterInner({
             <div className="do-portfolio-dashboard-grid">
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <h3>By stage</h3>
-                  <span>{openProjects.length} total</span>
+                  <h3>{tr("By stage", "Por etapa")}</h3>
+                  <span>{openProjects.length} {tr("total", "en total")}</span>
                 </div>
                 <div className="do-stage-bars">
                   {stageCounts.map(({ stage, count }) => (
@@ -6291,7 +6297,7 @@ function ProjectCommandCenterInner({
                       onClick={() => openListWith({ stageFilter: stage })}
                       type="button"
                     >
-                      <span>{deliveryStageLabels[stage]}</span>
+                      <span>{localize(locale, deliveryStageLabels[stage], ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage])}</span>
                       <i>
                         <em
                           style={{
@@ -6306,7 +6312,7 @@ function ProjectCommandCenterInner({
               </section>
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <h3>Health</h3>
+                  <h3>{tr("Health", "Salud")}</h3>
                   <button
                     aria-label="How health is calculated"
                     className="do-icon-tip"
@@ -6335,7 +6341,7 @@ function ProjectCommandCenterInner({
               </section>
               <section className="do-portfolio-card do-portfolio-card-wide">
                 <div className="do-portfolio-card-head">
-                  <h3>Upcoming checkpoints</h3>
+                  <h3>{tr("Upcoming checkpoints", "Próximos hitos")}</h3>
                   <button
                     onClick={() =>
                       openListWith({
@@ -6345,7 +6351,7 @@ function ProjectCommandCenterInner({
                     }
                     type="button"
                   >
-                    Open list <ArrowRight size={13} />
+                    {tr("Open list", "Abrir lista")} <ArrowRight size={13} />
                   </button>
                 </div>
                 <div className="do-upcoming-list">
@@ -6372,7 +6378,7 @@ function ProjectCommandCenterInner({
                         <span>
                           <strong>{entry.title}</strong>
                           <small>
-                            {entry.kind === "item" ? "Item" : project?.client || "Internal"}
+                            {entry.kind === "item" ? tr("Item", "Ítem") : project?.client || tr("Internal", "Interno")}
                             {entry.kind === "project" && project
                               ? ` · ${deliveryPhaseLabel(project)}`
                               : ""}
@@ -6390,17 +6396,17 @@ function ProjectCommandCenterInner({
                   {upcomingProjects.length === 0 && (
                     <EmptyState
                       icon={<CalendarDays size={18} />}
-                      title="No upcoming checkpoints"
-                      text="Add a future due date on a project or an open item."
+                      title={tr("No upcoming checkpoints", "No hay próximos hitos")}
+                      text={tr("Add a future due date on a project or an open item.", "Agrega una fecha futura a un proyecto o ítem abierto.")}
                     />
                   )}
                 </div>
               </section>
               <section className="do-portfolio-card">
                 <div className="do-portfolio-card-head">
-                  <h3>Explore</h3>
+                  <h3>{tr("Explore", "Explorar")}</h3>
                   <label className="do-taxonomy-dimension">
-                    <span>Group by</span>
+                    <span>{tr("Group by", "Agrupar por")}</span>
                     <select
                       aria-label="Group portfolio projects"
                       onChange={(event) => {
@@ -6413,7 +6419,7 @@ function ProjectCommandCenterInner({
                     >
                       {portfolioDimensionOptions.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {option.label}
+                          {localize(locale, option.label, ({ bpo: "Entidad de entrega", client: "Entidad cliente", work_category: "Categoría de trabajo", product_phase: "Fase del producto", stage: "Etapa de entrega", status: "Estado", health: "Salud", service: "Servicio", owner: "Responsable" } as Record<string, string>)[option.value] || option.label)}
                         </option>
                       ))}
                     </select>

@@ -64,5 +64,5 @@ test("item open and close keep the project view and the sidebar chrome", () => {
   assert.doesNotMatch(shell, /centerView !== "portfolio" &&/);
   assert.match(shell, /sidebarProjects\.favorites\.length === 0 && sidebarProjects\.recent\.length === 0/);
   assert.match(shell, /aria-selected=\{lens\.section === "this_week"\}/);
-  assert.match(shell, /label: "This week"/);
+  assert.match(shell, /label: t\("myWorkThisWeek"\)/);
 });

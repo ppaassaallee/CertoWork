@@ -29,7 +29,7 @@ test("Projects home hides empty investment KPI and warns at capacity hours", () 
 test("Projects home drops marketing chrome and portfolio access banner", () => {
   assert.doesNotMatch(surfaces, /DELIVERY CONTROL TOWER/);
   assert.doesNotMatch(surfaces, /Project command center/);
-  assert.match(surfaces, /<h1>Projects<\/h1>/);
+  assert.match(surfaces, /<h1>\{tr\("Projects", "Proyectos"\)\}<\/h1>/);
   assert.doesNotMatch(workspace, /pure-ai-grant-followers-portfolio/);
   assert.doesNotMatch(surfaces, /aria-label="Close command center"/);
 });

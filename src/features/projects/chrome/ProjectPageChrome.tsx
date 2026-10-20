@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { t, type MessageKey } from "../../../lib/i18n";
+import { getLocale, t, type MessageKey } from "../../../lib/i18n";
+import { localize } from "../../../lib/localize";
+import { useLocale } from "../../../lib/useLocale";
 import {
   ArrowUpDown,
   Bookmark,
@@ -102,7 +104,7 @@ function shortDate(value: unknown) {
   if (!raw) return "";
   const date = new Date(`${raw.slice(0, 10)}T12:00:00`);
   if (Number.isNaN(date.getTime())) return raw.slice(0, 10);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString(localize(getLocale(), "en-US", "es-GT"), { month: "short", day: "numeric", year: "numeric" });
 }
 
 /** Display name without trailing `(PROJECT-KEY)`. Key renders as its own badge. */
@@ -255,6 +257,7 @@ export function ProjectPageHeader({
   titleEditor,
   onOpenRoutine,
 }: ProjectPageHeaderProps) {
+  const locale = useLocale();
   const [descExpanded, setDescExpanded] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const briefRef = useRef<HTMLDivElement>(null);
@@ -336,13 +339,13 @@ export function ProjectPageHeader({
               ) : null}
             </div>
           ) : (
-            <p className="do-project-page-desc is-empty">Add a one-line outcome for this project</p>
+            <p className="do-project-page-desc is-empty">{localize(locale, "Add a one-line outcome for this project", "Añade un resultado breve para este proyecto")}</p>
           )}
         </div>
       </div>
 
       <div className="do-project-page-header-aside">
-        <span className={`do-project-health-chip is-${healthTone}`}>{healthLabel}</span>
+        <span className={`do-project-health-chip is-${healthTone}`}>{localize(locale, healthLabel, ({ "On track": "En curso", "At risk": "En riesgo", "Blocked": "Bloqueado" } as Record<string, string>)[healthLabel] || healthLabel)}</span>
         {onOpenRoutine ? (
           <button
             aria-label={t("project.routine")}
@@ -360,12 +363,12 @@ export function ProjectPageHeader({
           <button
             aria-expanded={moreOpen}
             aria-haspopup="menu"
-            aria-label="More"
+            aria-label={localize(locale, "More", "Más")}
             className="do-project-icon-btn"
             data-testid="notion-more-button"
             onClick={onToggleMore}
             ref={moreButtonRef}
-            title="More"
+            title={localize(locale, "More", "Más")}
             type="button"
           >
             <MoreHorizontal size={16} />
@@ -395,12 +398,13 @@ export function ProjectSummaryStrip({
   tasks,
   stageControl,
 }: ProjectSummaryStripProps) {
+  const locale = useLocale();
   const stats = useMemo(() => projectSummaryStats(project, tasks), [project, tasks]);
 
   return (
     <div className="do-project-summary-strip" data-testid="project-summary-strip">
       <div className="do-project-summary-stat">
-        <span>Progreso</span>
+        <span>{localize(locale, "Progress", "Progreso")}</span>
         <b>
           {stats.progress}%
           <span className="do-project-mini-bar" aria-hidden="true">
@@ -409,39 +413,39 @@ export function ProjectSummaryStrip({
         </b>
       </div>
       <div className="do-project-summary-stat">
-        <span>Entrega</span>
+        <span>{localize(locale, "Due", "Entrega")}</span>
         <b className={stats.dueOverdue ? "is-overdue" : ""}>{stats.dueLabel}</b>
       </div>
       <div className="do-project-summary-stat">
-        <span>Etapa</span>
+        <span>{localize(locale, "Stage", "Etapa")}</span>
         <b className="do-project-summary-stage">
           {stageControl}
           <ChevronDown size={11} aria-hidden="true" />
         </b>
       </div>
       <div className="do-project-summary-stat">
-        <span>Owner</span>
+        <span>{localize(locale, "Owner", "Responsable")}</span>
         <b>{stats.owner}</b>
       </div>
       <div className="do-project-summary-stat">
-        <span>Horas</span>
+        <span>{localize(locale, "Hours", "Horas")}</span>
         <b>{stats.hoursLabel}</b>
       </div>
       <div className="do-project-summary-stat">
-        <span>Ítems</span>
+        <span>{localize(locale, "Items", "Ítems")}</span>
         <b>
           {stats.openItems}
-          <span className="do-project-summary-muted"> open</span>
+          <span className="do-project-summary-muted"> {localize(locale, "open", "abiertos")}</span>
           {stats.doneItems > 0 ? (
-            <span className="do-project-summary-muted"> · {stats.doneItems} done</span>
+            <span className="do-project-summary-muted"> · {stats.doneItems} {localize(locale, "done", "terminados")}</span>
           ) : null}
           {stats.subtasks > 0 ? (
-            <span className="do-project-summary-muted"> · {stats.subtasks} subtasks</span>
+            <span className="do-project-summary-muted"> · {stats.subtasks} {localize(locale, "subtasks", "subtareas")}</span>
           ) : null}
           {stats.blockedCount > 0 ? (
             <span className="do-project-summary-muted">
               {" "}
-              · {stats.blockedCount} bloqueado{stats.blockedCount === 1 ? "" : "s"}
+              · {stats.blockedCount} {localize(locale, "blocked", `bloqueado${stats.blockedCount === 1 ? "" : "s"}`)}
             </span>
           ) : null}
         </b>
@@ -477,6 +481,7 @@ export function ProjectViewTabs({
   showCosts = false,
   showTables = false,
 }: ProjectViewTabsProps) {
+  useLocale();
   const tabs = viewTabs(showCosts, showTables);
   return (
     <div className="do-project-page-tabs" data-testid="project-page-tabs" aria-label="Project views">

@@ -1,4 +1,6 @@
 import { AlertTriangle, Ban, Check, Circle, Square } from "./Icon";
+import { useLocale } from "../../lib/useLocale";
+import { localize } from "../../lib/localize";
 
 export const STATUS_TONES = ["green", "amber", "red", "blue", "gray"] as const;
 export type StatusTone = (typeof STATUS_TONES)[number];
@@ -10,6 +12,13 @@ const LABELS: Record<StatusTone, string> = {
   red: "Blocked",
   blue: "In progress",
   gray: "Not started",
+};
+const LABELS_ES: Record<StatusTone, string> = {
+  green: "En curso",
+  amber: "En riesgo",
+  red: "Bloqueado",
+  blue: "En progreso",
+  gray: "Sin iniciar",
 };
 
 export function healthToStatus(health?: string | null): StatusTone {
@@ -73,11 +82,13 @@ export function StatusLight({
   size?: "sm" | "md" | "lg";
   pulse?: boolean;
 }) {
+  const locale = useLocale();
+  const defaultLabel = localize(locale, LABELS[status], LABELS_ES[status]);
   const text =
     label === false || label === undefined
       ? label === false
         ? null
-        : LABELS[status]
+        : defaultLabel
       : String(label);
   const Shape = SHAPE[status];
   const shouldPulse = pulse ?? status === "red";
@@ -91,7 +102,7 @@ export function StatusLight({
       {text ? (
         <span className="status-light-label">{text}</span>
       ) : (
-        <span className="sr-only">{LABELS[status]}</span>
+        <span className="sr-only">{defaultLabel}</span>
       )}
     </span>
   );

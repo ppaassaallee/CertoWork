@@ -206,7 +206,9 @@ import {
 } from "../lib/itemTiming";
 import { dueEdgeTone } from "../lib/dueEdgeTone";
 import { filterPointerKeepsOpen, shouldDismissFilterOnEscape } from "../lib/filterPopover";
-import { t } from "../lib/i18n";
+import { getLocale, t } from "../lib/i18n";
+import { localize } from "../lib/localize";
+import { useLocale } from "../lib/useLocale";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -803,7 +805,7 @@ function displayStatus(status: string) {
 }
 
 function dateLabel(date: Date) {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return date.toLocaleDateString(getLocale() === "es" ? "es-GT" : "en-US", { month: "short", day: "numeric" });
 }
 
 function InlineText({
@@ -958,6 +960,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   onOpenRecord,
   renderRowExtra,
 }: Props) {
+  const locale = useLocale();
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
   const navigate = useNavigate();
@@ -1175,7 +1179,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const itemGridStyle = {
     gridTemplateColumns: isMyWork
       ? "20px 20px 28px minmax(160px, 1fr) auto 28px"
-      : "20px 20px 28px minmax(160px, 1fr) auto auto 28px",
+      : "20px 20px 28px minmax(160px, 1fr) auto 28px",
   };
   const pinnedLabelColumns = new Set(["project", "due"]);
   const projectItemRequired = new Set(["delivery_entity", "client_entity", "work_category", "assignees"]);
@@ -2355,41 +2359,6 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     </button>
   );
 
-  const renderTimingButtons = (item: any) => {
-    if (canonicalStatus(item) === "done") return <span className="do-item-timing-actions is-empty" aria-hidden="true" />;
-    const marks = timingMarksForItem(item);
-    return (
-      <div className="do-item-timing-actions" aria-label={`Plan ${title(item)}`}>
-        <button
-          aria-label={`Move ${title(item)} to Today`}
-          className={marks.markedToday ? "is-active" : ""}
-          onClick={(event) => {
-            event.stopPropagation();
-            onUpdateTask(item.id, todayTimingPatch());
-          }}
-          title="Add to Today. It disappears from Today tomorrow."
-          type="button"
-        >
-          <Calendar size={12} />
-          <span>Today</span>
-        </button>
-        <button
-          aria-label={`Move ${title(item)} to This week`}
-          className={marks.markedWeek ? "is-active" : ""}
-          onClick={(event) => {
-            event.stopPropagation();
-            onUpdateTask(item.id, weekTimingPatch());
-          }}
-          title="Add to This week. It resets Saturday at noon."
-          type="button"
-        >
-          <Clock size={12} />
-          <span>Week</span>
-        </button>
-      </div>
-    );
-  };
-
   const renderTitleCell = (
     item: any,
     kind: WorkItemKind,
@@ -2613,14 +2582,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               else pick(weekTimingPatch());
             }}
             options={[
-              { id: "today", label: "Today" },
-              { id: "week", label: "This week" },
-              { id: "clear", label: "No date" },
+              { id: "today", label: tr("Today", "Hoy") },
+              { id: "week", label: tr("This week", "Esta semana") },
+              { id: "clear", label: tr("No date", "Sin fecha") },
             ]}
             value={timingMarksForItem(item).markedToday ? "today" : timingMarksForItem(item).markedWeek ? "week" : ""}
           />
           <label className="do-quick-attr-date">
-            Due date
+            {tr("Due date", "Fecha de entrega")}
             <input
               aria-label={`Due date for ${title(item)}`}
               defaultValue={dateInputValue(item.dueDate || item.targetDate)}
@@ -2822,7 +2791,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             {dueCaption}
           </button>
           {dueOpen && attrAnchor && (
-            <QuickAttrMenu anchor={attrAnchor} mode="single" title="Due">
+            <QuickAttrMenu anchor={attrAnchor} mode="single" title={tr("Due date", "Fecha de entrega")}>
               {renderQuickAttrChoices(item, "due")}
             </QuickAttrMenu>
           )}
@@ -3095,7 +3064,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <GripVertical size={14} />
         </button>
         {renderTitleCell(item, kind, childCount, tree)}
-        {isMyWork ? <>{renderAttributeIcons(item)}{renderDeleteButton(item)}</> : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderRowExtra ? renderRowExtra(item) : null}{renderDeleteButton(item)}</>}
+        {renderAttributeIcons(item)}{!isMyWork && renderRowExtra ? renderRowExtra(item) : null}{renderDeleteButton(item)}
       </article>
     );
   };
@@ -3131,9 +3100,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       <span />
       {renderSelectAll()}
       <span />
-      <strong>Item</strong>
-      <span className="do-items-attr-head">Fields</span>
-      {isMyWork ? <span /> : <><span /><span /></>}
+      <strong>{tr("Item", "Ítem")}</strong>
+      <span className="do-items-attr-head">{tr("Fields", "Campos")}</span>
+      <span />
     </div>
   );
 
@@ -3281,7 +3250,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           onToggle: () => toggleTreeNode(groupKey, kind, depth),
           onEnterAddChild: canAddChild ? () => focusInlineAdd(item.id, groupKey, kind, depth) : undefined,
         })}
-        {isMyWork ? <>{renderAttributeIcons(item)}{renderDeleteButton(item)}</> : <>{renderAttributeIcons(item)}{renderTimingButtons(item)}{renderDeleteButton(item)}</>}
+        {renderAttributeIcons(item)}{renderDeleteButton(item)}
       </header>
     );
   };
@@ -3545,8 +3514,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               agentMembers={agentMembers}
               compact
-              helperText="Multi-select. The first person stays the owner."
-              label="Assignees"
+              helperText={tr("Multi-select. The first person stays the owner.", "Puedes elegir varias personas. La primera será la responsable.")}
+              label={tr("Assignees", "Asignados")}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => {
@@ -3602,8 +3571,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           )}
           <label className={`do-kanban-card-due${due ? "" : " is-empty"}`}>
             <Calendar size={12} aria-hidden="true" />
-            <time>{dueText || "Date"}</time>
-            <input aria-label={`Due date for ${title(item)}`} defaultValue={due} onBlur={(event) => commitTaskPatch(item, dueDateTimingPatch(event.target.value || null))} type="date" />
+            <time>{dueText || tr("Date", "Fecha")}</time>
+            <input aria-label={`${tr("Due date for", "Fecha de entrega de")} ${title(item)}`} defaultValue={due} onBlur={(event) => commitTaskPatch(item, dueDateTimingPatch(event.target.value || null))} type="date" />
           </label>
         </div>
       </article>
@@ -3683,7 +3652,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       setKanbanDraftTitle("");
                     }
                   }}
-                  placeholder="Write a task name"
+                  placeholder={tr("Write a task name", "Escribe el nombre de la tarea")}
                   value={kanbanDraftTitle}
                 />
               </form>
@@ -3696,7 +3665,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 }}
                 type="button"
               >
-                <Plus size={14} /> Add task
+                <Plus size={14} /> {tr("Add task", "Agregar tarea")}
               </button>
             )}
           </div>
@@ -3717,7 +3686,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const columns = useDeliveryBoard && effectiveGroupBy !== "actionBoard"
       ? deliveryColumns.map((column) => ({
           key: column.key,
-          title: kanbanColumnLabels[column.key] || column.label,
+          title: kanbanColumnLabels[column.key] || displayStatus(column.key),
           items: filtered.filter((item) => kanbanColumnForStatus(canonicalStatus(item)) === column.key),
         }))
       : Object.entries(grouped)
@@ -3747,13 +3716,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             onClick={() => onSelectItem(mentionAlertItem.id)}
             type="button"
           >
-            You were mentioned on {title(mentionAlertItem)}. Open to reply.
+            {tr("You were mentioned on", "Te mencionaron en")} {title(mentionAlertItem)}. {tr("Open to reply.", "Ábrelo para responder.")}
           </button>
         )}
         {kanbanSwimlane === "none" ? (
           <div className={`do-kanban-board ${effectiveGroupBy === "actionBoard" ? "is-action-board" : "is-dynamic-board"}`} data-testid="kanban-board">
             {visibleColumns.map((column) => renderKanbanColumnBody(column.key, column.title, column.items, column.key))}
-            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>{tr("No items match the current filters.", "Ningún ítem coincide con los filtros.")}</strong><span>{tr("Clear a filter or create the next item.", "Quita un filtro o crea un ítem.")}</span></div>}
           </div>
         ) : (
           <div className="do-kanban-swim-board" data-testid="kanban-board">
@@ -3774,7 +3743,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 </div>
               </div>
             ))}
-            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>No items match the current filters.</strong><span>Clear a filter or create the next item.</span></div>}
+            {filtered.length === 0 && <div className="do-items-empty"><ListChecks size={21} /><strong>{tr("No items match the current filters.", "Ningún ítem coincide con los filtros.")}</strong><span>{tr("Clear a filter or create the next item.", "Quita un filtro o crea un ítem.")}</span></div>}
           </div>
         )}
       </DragDropContext>
@@ -4167,15 +4136,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       {pendingRemoval ? (
         <div className="cw-remove-dialog" role="dialog" aria-modal="true" aria-labelledby="cw-remove-title">
           <div>
-            <h2 id="cw-remove-title">Delete {title(pendingRemoval)} and its subtasks?</h2>
-            <p>{childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child)).length} subtasks will be deleted with it. Undo restores all of them.</p>
-            <button type="button" onClick={() => setPendingRemoval(null)}>Cancel</button>
+            <h2 id="cw-remove-title">{tr("Delete", "Eliminar")} {title(pendingRemoval)} {tr("and its subtasks?", "y sus subtareas?")}</h2>
+            <p>{childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child)).length} {tr("subtasks will be deleted with it. Undo restores all of them.", "subtareas también se eliminarán. Deshacer las restaura todas.")}</p>
+            <button type="button" onClick={() => setPendingRemoval(null)}>{tr("Cancel", "Cancelar")}</button>
             <button type="button" onClick={() => {
               const children = childItemsOf(pendingRemoval).filter((child) => !isRemovedWorkItem(child));
               const target = pendingRemoval;
               setPendingRemoval(null);
               softDeleteItems([target, ...children]);
-            }}>Delete with subtasks</button>
+            }}>{tr("Delete with subtasks", "Eliminar con subtareas")}</button>
           </div>
         </div>
       ) : null}
@@ -4231,7 +4200,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                     : CREATE_QUICK_ACTION_LABELS[key as CreateQuickAction]}
                 </button>
               ))}
-              {(actionMenu.scope === "row" ? hiddenRowActions : hiddenCreateActions).length === 0 && <span>Todos visibles</span>}
+              {(actionMenu.scope === "row" ? hiddenRowActions : hiddenCreateActions).length === 0 && <span>{tr("All visible", "Todos visibles")}</span>}
             </div>
           )}
           {actionMenu.key ? (
@@ -4241,7 +4210,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               role="menuitem"
               type="button"
             >
-              Mover
+              {tr("Move", "Mover")}
             </button>
           ) : null}
           {actionMenu.key && actionMenu.submenu === "move" && (
@@ -4254,7 +4223,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 }}
                 type="button"
               >
-                A la izquierda
+                {tr("Move left", "A la izquierda")}
               </button>
               <button
                 onClick={() => {
@@ -4264,7 +4233,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 }}
                 type="button"
               >
-                A la derecha
+                {tr("Move right", "A la derecha")}
               </button>
             </div>
           )}
@@ -4315,14 +4284,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         {(mode === "kanban" || mode === "calendar") && (
           <div className="do-kanban-board-tools">
             <label>
-              Swimlanes
+              {tr("Swimlanes", "Carriles")}
               <select
                 aria-label="Kanban swimlanes"
                 data-testid="kanban-swimlane"
                 onChange={(event) => setKanbanSwimlane(event.target.value as KanbanSwimlaneBy)}
                 value={kanbanSwimlane}
               >
-                {KANBAN_SWIMLANES.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
+                {KANBAN_SWIMLANES.map((option) => <option key={option.key} value={option.key}>{localize(locale, option.label, ({ "No swimlanes": "Sin carriles", Project: "Proyecto", Assignee: "Responsable", Priority: "Prioridad" } as Record<string, string>)[option.label] || option.label)}</option>)}
               </select>
             </label>
             <div className="do-popover-anchor">
@@ -4333,11 +4302,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 onClick={() => setBoardSettingsOpen((open) => !open)}
                 type="button"
               >
-                <SlidersHorizontal size={14} /> Board
+                <SlidersHorizontal size={14} /> {tr("Board", "Tablero")}
               </button>
               {boardSettingsOpen && (
                 <div className="do-popover do-kanban-settings" data-testid="kanban-settings">
-                  <strong>WIP limits</strong>
+                  <strong>{tr("WIP limits", "Límites de trabajo en curso")}</strong>
                   {KANBAN_COLUMNS.map((column) => (
                     <label key={column.key}>
                       {kanbanColumnLabels[column.key] || column.label}
@@ -4351,7 +4320,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       />
                     </label>
                   ))}
-                  <strong>Column names</strong>
+                  <strong>{tr("Column names", "Nombres de columnas")}</strong>
                   {KANBAN_COLUMNS.map((column) => (
                     <label key={`label-${column.key}`}>
                       {column.label}
@@ -4363,7 +4332,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       />
                     </label>
                   ))}
-                  <strong>Rules</strong>
+                  <strong>{tr("Rules", "Reglas")}</strong>
                   <p className="do-kanban-rule-help">If this, then that — runs when a card is dropped into a column.</p>
                   {kanbanAutomations.map((rule) => (
                     <div className="do-kanban-rule" data-testid="kanban-rule" key={rule.id}>
@@ -4424,14 +4393,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <div className="do-popover-anchor">
             <button
               aria-expanded={viewsOpen}
-              aria-label="Views"
+              aria-label={tr("Views", "Vistas")}
               className={`do-icon-tool do-mobile-advanced ${viewsOpen ? "is-active" : ""}`}
               onClick={() => { setViewsOpen((o) => !o); setFilterOpen(false); setSortOpen(false); setFieldsOpen(false); }}
-              title="Views"
+              title={tr("Views", "Vistas")}
               type="button"
             >
               <Eye size={15} />
-              <span>Views</span>
+              <span>{tr("Views", "Vistas")}</span>
             </button>
             {viewsOpen && (
               <div className="do-popover do-items-views-popover" role="menu">
@@ -4497,20 +4466,20 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <div className="do-popover-anchor">
             <button
               aria-expanded={fieldsOpen}
-              aria-label="Fields"
+              aria-label={tr("Fields", "Campos")}
               className={`do-icon-tool do-mobile-advanced ${fieldsOpen ? "is-active" : ""}`}
               data-testid="item-fields-button"
               onClick={() => { setFieldsOpen((o) => !o); setViewsOpen(false); setFilterOpen(false); setSortOpen(false); }}
-              title="Fields"
+              title={tr("Fields", "Campos")}
               type="button"
             >
               <Settings2 size={15} />
-              <span>Fields</span>
+              <span>{tr("Fields", "Campos")}</span>
             </button>
             {fieldsOpen && (
               <div className="do-popover do-fields-popover" data-testid="item-fields-picker" role="menu">
-                <strong>Item fields</strong>
-                <span>Choose which attribute icons appear beside each title. Empty fields stay faded; filters still use every field.</span>
+                <strong>{tr("Item fields", "Campos del ítem")}</strong>
+                <span>{tr("Choose which attribute icons appear beside each title. Empty fields stay faded; filters still use every field.", "Elige los iconos que aparecen junto a cada título. Los campos vacíos se muestran atenuados; los filtros siguen usando todos los campos.")}</span>
                 <div className="do-column-picker">
                   {selectableItemColumns().map((column) => (
                     <label key={column} className="do-column-toggle">
@@ -4541,70 +4510,70 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <div className="do-popover-anchor">
             <button
               aria-expanded={filterPanelOpen}
-              aria-label="Filter"
+              aria-label={tr("Filter", "Filtrar")}
               className={`do-icon-tool ${activeFilterChips.length || filterPanelOpen ? "is-active" : ""}`}
               data-testid="items-filter-button"
               onClick={() => { setFilterOpen((o) => !o); setSortOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
-              title="Filter"
+              title={tr("Filter", "Filtrar")}
               type="button"
             >
               <SlidersHorizontal size={15} />
-              <span>Filter</span>
+              <span>{tr("Filter", "Filtrar")}</span>
               {activeFilterChips.length > 0 && <em>{activeFilterChips.length}</em>}
             </button>
             {filterPanelOpen && !notionSurface && (
               <div className="do-popover do-filter-popover" data-testid="items-filter-popover">
                 <label>
-                  Add filter
+                  {tr("Add filter", "Agregar filtro")}
                   <select aria-label="Filter field" onChange={(event) => setFilterDraft(event.target.value)} value={filterDraft}>
-                    <option value="project">Project</option>
-                    <option value="status">Status</option>
-                    <option value="priority">Priority</option>
-                    <option value="type">Type</option>
-                    <option value="owner">Owner</option>
-                    <option value="date">Date</option>
-                    <option value="tag">Tag</option>
-                    <option value="category">Category</option>
-                    <option value="phase">Product phase</option>
+                    <option value="project">{tr("Project", "Proyecto")}</option>
+                    <option value="status">{tr("Status", "Estado")}</option>
+                    <option value="priority">{tr("Priority", "Prioridad")}</option>
+                    <option value="type">{tr("Type", "Tipo")}</option>
+                    <option value="owner">{tr("Owner", "Responsable")}</option>
+                    <option value="date">{tr("Date", "Fecha")}</option>
+                    <option value="tag">{tr("Tag", "Etiqueta")}</option>
+                    <option value="category">{tr("Category", "Categoría")}</option>
+                    <option value="phase">{tr("Product phase", "Fase del producto")}</option>
                     <option value="sprint">Sprint</option>
                   </select>
                 </label>
                 {filterDraft === "project" && (
                   <select aria-label="Project filter" onChange={(event) => setProjectFilter(event.target.value)} value={projectFilter}>
-                    <option value="all">All projects</option>
+                    <option value="all">{tr("All projects", "Todos los proyectos")}</option>
                     <option value="no_project">{NO_PROJECT_LABEL}</option>
                     {projects.map((project) => <option key={project.id} value={project.id}>{projectTitle(project)}</option>)}
                   </select>
                 )}
                 {filterDraft === "status" && (
                   <select aria-label="Status filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-                    <option value="open">Open · hide done</option>
-                    <option value="all">All statuses</option>
+                    <option value="open">{tr("Open · hide done", "Abiertos · ocultar terminados")}</option>
+                    <option value="all">{tr("All statuses", "Todos los estados")}</option>
                     {WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}
                   </select>
                 )}
                 {filterDraft === "priority" && (
                   <select aria-label="Priority filter" onChange={(event) => setPriorityFilter(event.target.value)} value={priorityFilter}>
-                    <option value="all">Any priority</option>
+                    <option value="all">{tr("Any priority", "Cualquier prioridad")}</option>
                     {priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
                   </select>
                 )}
                 {filterDraft === "type" && (
                   <select aria-label="Type filter" onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
-                    <option value="all">Any type</option>
+                    <option value="all">{tr("Any type", "Cualquier tipo")}</option>
                     {pickerWorkTypes().map((kind) => <option key={kind} value={kind}>{workItemLabel(kind)}</option>)}
                   </select>
                 )}
                 {filterDraft === "owner" && (
                   <select aria-label="Owner filter" onChange={(event) => setOwnerFilter(event.target.value)} value={ownerFilter}>
-                    <option value="all">Any owner</option>
+                    <option value="all">{tr("Any owner", "Cualquier responsable")}</option>
                     {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
                   </select>
                 )}
                 {filterDraft === "date" && (
                   <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
-                    <option value="all">Any date</option>
-                    {dueFilterOptions.map((option) => <option key={option} value={option}>{dueBucketLabels[option]}</option>)}
+                    <option value="all">{tr("Any date", "Cualquier fecha")}</option>
+                    {dueFilterOptions.map((option) => <option key={option} value={option}>{localize(locale, dueBucketLabels[option], (({ overdue: "Vencidos", today: "Hoy", this_week: "Esta semana", next_week: "Próxima semana", this_month: "Este mes", next_month: "Próximo mes", later: "Más adelante", unscheduled: "Sin fecha" } as Record<string, string>)[option] || dueBucketLabels[option]))}</option>)}
                   </select>
                 )}
                 {filterDraft === "tag" && (
@@ -4636,7 +4605,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   onClick={() => setFilterOpen(false)}
                   type="button"
                 >
-                  Close
+                  {tr("Close", "Cerrar")}
                 </button>
               </div>
             )}
@@ -4644,26 +4613,26 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <div className="do-popover-anchor">
               <button
               aria-expanded={sortPanelOpen}
-              aria-label="Sort"
+              aria-label={tr("Sort", "Ordenar")}
               className={`do-icon-tool ${sortPanelOpen ? "is-active" : ""}`}
               data-testid="items-sort-button"
               onClick={() => { setSortOpen((o) => !o); setFilterOpen(false); setViewsOpen(false); setFieldsOpen(false); }}
-              title="Sort"
+              title={tr("Sort", "Ordenar")}
               type="button"
             >
               <ArrowUpDown size={15} />
-              <span>Sort</span>
+              <span>{tr("Sort", "Ordenar")}</span>
             </button>
             {sortPanelOpen && !notionSurface && (
               <div className="do-popover" data-testid="items-sort-popover">
-                <p className="do-items-views-label">Two-level sort keeps Epic → Feature → PBI/Task → Sub Task nested. Dragging a row switches to Manual order.</p>
+                <p className="do-items-views-label">{tr("Two-level sort keeps Epic → Feature → PBI/Task → Sub Task nested. Dragging a row switches to Manual order.", "La ordenación de dos niveles mantiene la jerarquía Épica → Función → PBI/Tarea → Subtarea. Al arrastrar una fila se usa el orden manual.")}</p>
                 {isMyWork ? (
-                  <p className="do-items-views-label">Grouped by project.</p>
+                  <p className="do-items-views-label">{tr("Grouped by project.", "Agrupado por proyecto.")}</p>
                 ) : (
-                  <label>Group by<select aria-label="Group by" onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">Hierarchy</option><option value="actionBoard">Action Board</option><option value="status">Status</option><option value="priority">Priority</option><option value="project">Project</option><option value="owner">Owner</option><option value="type">Type</option><option value="work_category">Work Category</option><option value="product_phase">Product Phase</option><option value="tag">Tag</option><option value="due">Due date</option></select></label>
+                  <label>{tr("Group by", "Agrupar por")}<select aria-label={tr("Group by", "Agrupar por")} onChange={(event) => setGroupBy(event.target.value as GroupBy)} value={groupBy}><option value="hierarchy">{tr("Hierarchy", "Jerarquía")}</option><option value="actionBoard">{tr("Action Board", "Plan de acción")}</option><option value="status">{tr("Status", "Estado")}</option><option value="priority">{tr("Priority", "Prioridad")}</option><option value="project">{tr("Project", "Proyecto")}</option><option value="owner">{tr("Owner", "Responsable")}</option><option value="type">{tr("Type", "Tipo")}</option><option value="work_category">{tr("Work Category", "Categoría de trabajo")}</option><option value="product_phase">{tr("Product Phase", "Fase del producto")}</option><option value="tag">{tr("Tag", "Etiqueta")}</option><option value="due">{tr("Due date", "Fecha de entrega")}</option></select></label>
                 )}
-                <label>Primary sort<select aria-label="Primary sort" onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-                <label>Then sort<select aria-label="Secondary sort" onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label>{tr("Primary sort", "Orden principal")}<select aria-label={tr("Primary sort", "Orden principal")} onChange={(event) => setPrimarySort(event.target.value as SortBy)} value={primarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                <label>{tr("Then sort", "Luego ordenar")}<select aria-label={tr("Secondary sort", "Orden secundario")} onChange={(event) => setSecondarySort(event.target.value as SortBy)} value={secondarySort}>{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
               </div>
             )}
           </div>
@@ -4698,31 +4667,31 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             </div>
           ) : (
             <>
-              <button aria-label="Add item" className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> Add item</button>
+              <button aria-label={tr("Add item", "Agregar ítem")} className="cw-btn cw-btn-primary cw-btn-sm" onClick={() => { setAddItemOpen((o) => !o); setCreateAttr(null); }} type="button"><Plus size={13} /> {tr("Add item", "Agregar ítem")}</button>
               {!isMyWork && <button
                 aria-label="Paste bulk items"
                 className="do-button-secondary do-mobile-advanced"
                 onClick={() => { setPasteOpen(true); setPasteError(""); }}
                 type="button"
               >
-                <Clipboard size={13} /> Paste bulk items
+                <Clipboard size={13} /> {tr("Paste bulk items", "Pegar varios ítems")}
               </button>}
               {!isMyWork && onCreateSprint && (
-                <button aria-label="Add sprint" className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
+                <button aria-label={tr("Add sprint", "Agregar sprint")} className="do-button-secondary do-mobile-advanced" onClick={() => setAddSprintOpen((o) => !o)} type="button">+ Sprint</button>
               )}
             </>
           )}
           {isMyWork ? (
             <div className="do-popover-anchor">
-              <button aria-expanded={moreActionsOpen} aria-label="More item actions" className="do-items-focus-toggle" onClick={() => setMoreActionsOpen((open) => !open)} type="button"><MoreHorizontal size={15} /></button>
+              <button aria-expanded={moreActionsOpen} aria-label={tr("More item actions", "Más acciones del ítem")} className="do-items-focus-toggle" onClick={() => setMoreActionsOpen((open) => !open)} type="button"><MoreHorizontal size={15} /></button>
               {moreActionsOpen && <div className="do-popover do-items-more-popover" role="menu">
-                <button onClick={() => { setPasteOpen(true); setPasteError(""); setMoreActionsOpen(false); }} type="button">Paste bulk items</button>
-                {onCreateSprint && <button onClick={() => { setAddSprintOpen(true); setMoreActionsOpen(false); }} type="button">New sprint</button>}
-                {!savedView && <button onClick={() => { setFieldsOpen(true); setMoreActionsOpen(false); }} type="button">Customize fields</button>}
-                <button onClick={() => { setChromeCollapsed((collapsed) => !collapsed); setMoreActionsOpen(false); }} type="button">{chromeCollapsed ? "Show controls" : "Focus list"}</button>
+                <button onClick={() => { setPasteOpen(true); setPasteError(""); setMoreActionsOpen(false); }} type="button">{tr("Paste bulk items", "Pegar varios ítems")}</button>
+                {onCreateSprint && <button onClick={() => { setAddSprintOpen(true); setMoreActionsOpen(false); }} type="button">{tr("New sprint", "Nuevo sprint")}</button>}
+                {!savedView && <button onClick={() => { setFieldsOpen(true); setMoreActionsOpen(false); }} type="button">{tr("Customize fields", "Personalizar campos")}</button>}
+                <button onClick={() => { setChromeCollapsed((collapsed) => !collapsed); setMoreActionsOpen(false); }} type="button">{chromeCollapsed ? tr("Show controls", "Mostrar controles") : tr("Focus list", "Enfocar lista")}</button>
               </div>}
             </div>
-          ) : <button aria-label={chromeCollapsed ? "Show controls" : "Focus list"} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? "Show controls" : "Focus list"} type="button"><SlidersHorizontal size={13} /></button>}
+          ) : <button aria-label={chromeCollapsed ? tr("Show controls", "Mostrar controles") : tr("Focus list", "Enfocar lista")} className="do-items-focus-toggle" onClick={() => setChromeCollapsed((c) => !c)} title={chromeCollapsed ? tr("Show controls", "Mostrar controles") : tr("Focus list", "Enfocar lista")} type="button"><SlidersHorizontal size={13} /></button>}
         </div>
       </section>
       )}
@@ -5415,15 +5384,15 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           {mode === "list" && !notionSurface && (
             <div className="do-tree-level-bar" data-testid="tree-level-bar">
               <label>
-                <span className="sr-only">Hierarchy level</span>
+                <span className="sr-only">{tr("Hierarchy level", "Nivel de jerarquía")}</span>
                 <select
-                  aria-label="Hierarchy level"
+                  aria-label={tr("Hierarchy level", "Nivel de jerarquía")}
                   data-testid="tree-level-select"
                   onChange={(event) => setTreeLevel(event.target.value as TreeExpandLevel)}
                   value={treeLevel}
                 >
-                  <option value="epic">Epic</option>
-                  <option value="feature">Feature</option>
+                  <option value="epic">{tr("Epic", "Épica")}</option>
+                  <option value="feature">{tr("Feature", "Funcionalidad")}</option>
                 </select>
               </label>
               <button
@@ -5431,14 +5400,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 onClick={() => setTreeLevelOpen(treeLevel, "expand")}
                 type="button"
               >
-                Expand
+                {tr("Expand", "Expandir")}
               </button>
               <button
                 data-testid="tree-collapse-level"
                 onClick={() => setTreeLevelOpen(treeLevel, "collapse")}
                 type="button"
               >
-                Collapse
+                {tr("Collapse", "Contraer")}
               </button>
             </div>
           )}
@@ -5450,7 +5419,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             onClick={() => setShowCompleted((current) => !current)}
             type="button"
           >
-            {showCompleted ? "Hide completed" : "Show completed"}
+            {showCompleted ? tr("Hide completed", "Ocultar terminados") : tr("Show completed", "Mostrar terminados")}
           </button>
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
