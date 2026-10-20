@@ -1,5 +1,6 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
+import { CERTO_FIRESTORE_DATABASE, getCertoFirestore } from "../firestore";
 
 const CONVERSATIONS = "conversations";
 const CONVERSATION_PARTICIPANTS = "conversation_participants";
@@ -41,11 +42,11 @@ function preview(text: string, max = 140): string {
  * - stubs for agent / Odysseus / guest email (wired in later steps)
  */
 export const onMessageCreated = onDocumentCreated(
-  { document: `${CONVERSATION_MESSAGES}/{messageId}`, region: "us-central1" },
+  { document: `${CONVERSATION_MESSAGES}/{messageId}`, database: CERTO_FIRESTORE_DATABASE, region: "us-central1" },
   async (event) => {
     const data = event.data?.data() as MessageData | undefined;
     if (!data?.conversationId || !data.workspaceId) return;
-    const db = getFirestore();
+    const db = getCertoFirestore();
     const messageId = event.params.messageId;
     const conversationId = data.conversationId;
     const senderId = data.senderId || "";
