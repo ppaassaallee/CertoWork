@@ -679,7 +679,7 @@ export function ItemModal({
         <div className="cw-item-modal-body">
           <div className="cw-item-content">
             <div className="cw-item-context-line">
-              {project ? String(project.title || project.name || "Project") : locale === "es" ? "Sin proyecto" : "No project"}
+              {project ? String(project.title || project.name || "Project") : copy("noProject", locale)}
               <span aria-hidden="true">/</span>
               {typeLabel(kind, locale)}
             </div>
@@ -784,11 +784,11 @@ export function ItemModal({
             )}
 
             <div className="cw-item-section-heading">
-              <h2>{locale === "es" ? "Descripción" : "Description"}</h2>
+              <h2>{copy("description", locale)}</h2>
               {onAskOdysseus ? (
                 <button className="cw-item-ai-action" onClick={onAskOdysseus} type="button">
                   <Sparkles size={14} aria-hidden="true" />
-                  {locale === "es" ? "Resumir con Odysseus" : "Summarize with Odysseus"}
+                  {copy("summarizeWithOdysseus", locale)}
                 </button>
               ) : null}
             </div>
@@ -837,7 +837,7 @@ export function ItemModal({
             <section className="cw-item-card cw-item-subtasks" data-testid="item-checklist">
               <header>
                 <strong>
-                  {onAddSubtask ? (locale === "es" ? "Subtareas" : "Subtasks") : (locale === "es" ? "Lista de verificación" : "Checklist")}{" "}
+                  {onAddSubtask ? copy("subtasksSection", locale) : copy("checklistSection", locale)}{" "}
                   {subtaskItems.length > 0
                     ? `${doneSubtasks}/${subtaskItems.length}`
                     : checklist.length > 0
@@ -904,9 +904,7 @@ export function ItemModal({
                     setChecklistDraft(event.target.value);
                     setSubtaskDraft(event.target.value);
                   }}
-                  placeholder={onAddSubtask
-                    ? (locale === "es" ? "+ Añadir subtarea" : "+ Add subtask")
-                    : (locale === "es" ? "+ Añadir a la lista" : "+ Add checklist item")}
+                  placeholder={copy(onAddSubtask ? "addSubtask" : "addChecklistItem", locale)}
                   value={onAddSubtask ? subtaskDraft : checklistDraft}
                 />
               </form>
@@ -1058,7 +1056,7 @@ export function ItemModal({
               <PropRow label={copy("dates", locale)}>
                 <div className="cw-item-date-range">
                   <label>
-                    <span>{locale === "es" ? "Inicio" : "Start"}</span>
+                    <span>{copy("start", locale)}</span>
                     <input
                       aria-label="Start date"
                       defaultValue={dateInputValue(item.startDate)}
@@ -1071,7 +1069,7 @@ export function ItemModal({
                     />
                   </label>
                   <label>
-                    <span>{locale === "es" ? "Entrega" : "Due"}</span>
+                    <span>{copy("due", locale)}</span>
                     <input
                       aria-label="Due date"
                       defaultValue={dateInputValue(item.dueDate || item.targetDate)}
@@ -1136,7 +1134,7 @@ export function ItemModal({
                     type="button"
                   >
                     <CornerDownRight size={14} aria-hidden="true" />
-                    <span>{parentBreadcrumb[parentBreadcrumb.length - 1]?.title || (locale === "es" ? "Sin padre" : "No parent")}</span>
+                    <span>{parentBreadcrumb[parentBreadcrumb.length - 1]?.title || copy("noParent", locale)}</span>
                     <ChevronDown className={parentPickerOpen ? "" : "is-collapsed"} size={13} aria-hidden="true" />
                   </button>
                   {parentPickerOpen ? <div className="cw-item-parent-popover" ref={parentPickerRef}>{parentEditor}</div> : null}
@@ -1338,8 +1336,8 @@ export function ItemModal({
               open={activityOpen}
               onToggle={() => setActivityOpen((open) => !open)}
               summary={activityEntries(item).length
-                ? `${activityEntries(item).length} ${locale === "es" ? "actualizaciones" : "updates"}`
-                : (locale === "es" ? "Sin actividad" : "No activity")}
+                ? `${activityEntries(item).length} ${copy("updates", locale)}`
+                : copy("noActivity", locale)}
               title={copy("activity", locale)}
             >
               <ul className="cw-item-activity">
