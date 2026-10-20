@@ -8303,7 +8303,7 @@ a {
 }
 .do-items-row.is-icon-list,
 .do-items-column-head.is-icon-list {
-  grid-template-columns: 20px 20px 28px minmax(160px, 1fr) auto auto 28px;
+  grid-template-columns: 20px 20px 28px minmax(160px, 1fr) auto 28px;
   min-width: 0;
   overflow: visible;
 }
@@ -8382,42 +8382,6 @@ a {
   filter: none;
 }
 .do-my-work-row-popover .do-items-delete { opacity: 1; }
-.do-item-timing-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
-  padding-left: 4px;
-}
-.do-item-timing-actions button {
-  display: inline-flex;
-  height: 24px;
-  align-items: center;
-  gap: 3px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  padding: 0 6px;
-  color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-.do-item-timing-actions button:hover,
-.do-item-timing-actions button:focus-visible {
-  border-color: var(--border);
-  background: var(--surface-0);
-  color: var(--accent);
-}
-.do-item-timing-actions button.is-active {
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.do-item-timing-actions svg {
-  flex: none;
-}
 .do-item-attr.is-meta {
   width: auto;
 }
@@ -19426,10 +19390,6 @@ a {
   .do-items-row.is-icon-list {
     grid-template-columns: 22px 22px 22px minmax(0, 1fr) auto 22px;
   }
-  .do-items-row.is-icon-list .do-item-timing-actions,
-  .do-items-column-head.is-icon-list > span:nth-last-child(2) {
-    display: none;
-  }
   .do-item-attrs {
     max-width: 42vw;
     overflow-x: auto;
@@ -20734,8 +20694,7 @@ a {
   column-gap: 8px;
 }
 .do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list .do-item-expand,
-.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list .do-items-drag-handle,
-.do-shell.is-mobile-core .cw-views-surface.is-compact .do-item-timing-actions {
+.do-shell.is-mobile-core .cw-views-surface.is-compact .do-items-row.is-icon-list .do-items-drag-handle {
   display: none !important;
 }
 .do-shell.is-mobile-core .do-items-row.is-icon-list {

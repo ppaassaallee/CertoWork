@@ -190,14 +190,14 @@ test("project breadcrumb walks Workspace, Projects, then the project", () => {
     source.indexOf("<AppBreadcrumbs"),
     source.indexOf("do-header-center"),
   );
-  assert.match(crumbs, /label: workspace\?\.name \|\| "Workspace"/);
+  assert.match(crumbs, /label: workspace\?\.name \|\| tr\("Workspace", "Espacio de trabajo"\)/);
   assert.match(crumbs, /onClick: \(\) => navigate\("\/home"\)/);
   assert.match(
     crumbs,
-    /activeProject[\s\S]*?label: "Projects"[\s\S]*?navigate\("\/projects"\)[\s\S]*?entityTitle\(activeProject\)[\s\S]*?openProjectRecord\(activeProject\)/,
+    /activeProject[\s\S]*?label: t\("navProjects"\)[\s\S]*?navigate\("\/projects"\)[\s\S]*?entityTitle\(activeProject\)[\s\S]*?openProjectRecord\(activeProject\)/,
   );
   const portfolio = crumbs.match(
-    /centerView === "portfolio"\s*\?\s*\[\{ label: "Projects" \}\]/,
+    /centerView === "portfolio"\s*\?\s*\[\{ label: t\("navProjects"\) \}\]/,
   );
   assert.ok(portfolio, "project list keeps Projects as the current page");
 });

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { getLocale, setLocale } from "../src/lib/i18n";
 import {
   dateInputValue,
   dueDateLabel,
@@ -68,4 +69,18 @@ test("due labels read like a calendar chip", () => {
   assert.equal(dueDateTone("2026-10-01", now), "overdue");
   assert.equal(dueDateTone("2026-10-06", now), "today");
   assert.equal(dueDateTone("", now), "empty");
+});
+
+test("due labels follow the selected language without changing stored dates", () => {
+  const previous = getLocale();
+  const now = new Date(2026, 9, 6, 12, 0, 0);
+  try {
+    setLocale("es");
+    assert.equal(dueDateLabel("", now), "Sin fecha");
+    assert.equal(dueDateLabel("2026-10-06", now), "Hoy");
+    assert.equal(dueDateLabel("2026-10-07", now), "Mañana");
+    assert.equal(dueDateTimingPatch("2026-10-07", now).dueDate, "2026-10-07");
+  } finally {
+    setLocale(previous);
+  }
 });

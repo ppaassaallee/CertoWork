@@ -125,6 +125,7 @@ import { dateRangeError } from "../lib/itemTiming";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
+import { useLocale } from "../lib/useLocale";
 import {
   dateKey,
   entityTitle,
@@ -530,6 +531,8 @@ export type CenterView =
   | "tables-dashboard";
 
 export function DelivereeWorkspace() {
+  const locale = useLocale();
+  const tr = (en: string, es: string) => locale === "es" ? es : en;
   const {
     user,
     workspace,
@@ -7389,7 +7392,7 @@ export function DelivereeWorkspace() {
                     className={sidebarSections.favorites ? "" : "is-collapsed"}
                     size={11}
                   />
-                  <Star size={10} /> Favorites
+                  <Star size={10} /> {tr("Favorites", "Favoritos")}
                 </button>
               )}
               {sidebarSections.favorites &&
@@ -7442,7 +7445,7 @@ export function DelivereeWorkspace() {
                     className={sidebarSections.recent ? "" : "is-collapsed"}
                     size={11}
                   />
-                  Recent
+                  {tr("Recent", "Recientes")}
                 </button>
               )}
               {sidebarSections.recent &&
@@ -7490,7 +7493,7 @@ export function DelivereeWorkspace() {
                   onClick={() => openQuickProject()}
                   type="button"
                 >
-                  Create your first project
+                  {tr("Create your first project", "Crea tu primer proyecto")}
                 </button>
               )}
             </div>
@@ -7586,7 +7589,7 @@ export function DelivereeWorkspace() {
               }}
               type="button"
             >
-              Try Tables
+              {tr("Try Tables", "Probar tablas")}
             </button>
           </div>
           )}
@@ -7619,7 +7622,7 @@ export function DelivereeWorkspace() {
                   type="button"
                 >
                   <Inbox size="sm" />
-                  <span>Requests</span>
+                  <span>{tr("Requests", "Solicitudes")}</span>
                   {requestTickets.filter((item) => {
                     const status = String(item.ticketStatus || "").toLowerCase();
                     return (
@@ -7674,7 +7677,7 @@ export function DelivereeWorkspace() {
                   type="button"
                 >
                   <Receipt size="sm" />
-                  <span>{billingEnabled ? "Billing" : t("navInvoices")}</span>
+                  <span>{billingEnabled ? tr("Billing", "Facturación") : t("navInvoices")}</span>
                   {(pendingInvoiceQueue.length > 0 ||
                     invoiceDocuments.some((item) => isInvoiceOverdue(item))) && (
                     <em className="do-nav-badge">
@@ -7835,7 +7838,7 @@ export function DelivereeWorkspace() {
             type="button"
           >
             <Settings size="sm" />
-            <span>Admin & settings</span>
+            <span>{tr("Admin & settings", "Administración y ajustes")}</span>
             {accessRequests.length > 0 && (
               <em className="do-menu-badge">{accessRequests.length}</em>
             )}
@@ -7904,7 +7907,7 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                <Settings size={14} /> Admin & settings
+                <Settings size={14} /> {tr("Admin & settings", "Administración y ajustes")}
                 {accessRequests.length > 0 && (
                   <em className="do-menu-badge">{accessRequests.length}</em>
                 )}
@@ -7933,52 +7936,52 @@ export function DelivereeWorkspace() {
             <AppBreadcrumbs
               segments={[
                 {
-                  label: workspace?.name || "Workspace",
+                  label: workspace?.name || tr("Workspace", "Espacio de trabajo"),
                   onClick: () => navigate("/home"),
                 },
                 ...(centerView === "portfolio"
-                  ? [{ label: "Projects" }]
+                  ? [{ label: t("navProjects") }]
                   : []),
                 ...(lens.kind === "my-work"
                   ? [
                       {
-                        label: "My Work",
+                        label: t("navMyWork"),
                         onClick: () => navigate("/my-work"),
                       },
                       ...(lens.section === "inbox"
-                        ? [{ label: "Inbox" }]
+                        ? [{ label: tr("Inbox", "Bandeja") }]
                         : lens.section === "waiting"
-                          ? [{ label: "Waiting" }]
+                          ? [{ label: tr("Waiting", "En espera") }]
                           : lens.section === "today"
-                            ? [{ label: "Today" }]
+                            ? [{ label: t("myWorkToday") }]
                             : lens.section === "this_week"
-                              ? [{ label: "This week" }]
+                              ? [{ label: t("myWorkThisWeek") }]
                               : lens.section === "week"
-                                ? [{ label: "Events" }]
+                                ? [{ label: tr("Events", "Eventos") }]
                             : lens.section === "captured"
-                              ? [{ label: "Captured" }]
-                            : [{ label: "Assigned" }]),
+                              ? [{ label: tr("Captured", "Capturados") }]
+                            : [{ label: tr("Assigned", "Asignados") }]),
                     ]
                   : []),
                 ...(lens.kind === "requests"
                   ? [
                       {
-                        label: "Requests",
+                        label: tr("Requests", "Solicitudes"),
                         onClick: () => navigate("/requests"),
                       },
                       ...(lens.section === "mine"
-                        ? [{ label: "Mine" }]
+                        ? [{ label: tr("Mine", "Mías") }]
                         : lens.section === "waiting"
-                          ? [{ label: "Waiting" }]
+                          ? [{ label: tr("Waiting", "En espera") }]
                           : lens.section === "resolved"
-                            ? [{ label: "Resolved" }]
+                            ? [{ label: tr("Resolved", "Resueltas") }]
                             : lens.section === "new"
-                              ? [{ label: "New" }]
-                              : [{ label: "Inbox" }]),
+                              ? [{ label: tr("New", "Nuevas") }]
+                              : [{ label: tr("Inbox", "Bandeja") }]),
                     ]
                   : []),
                 ...(lens.kind === "notes"
-                  ? [{ label: "Notes" }]
+                  ? [{ label: t("navNotes") }]
                   : []),
                 ...(lens.kind === "routines"
                   ? [{ label: t("navRutinas") }]
@@ -7986,28 +7989,28 @@ export function DelivereeWorkspace() {
                 ...(lens.kind === "agents"
                   ? [
                       {
-                        label: "Agents",
+                        label: t("navAgents"),
                         onClick: () => navigate("/agents"),
                       },
                       ...(lens.section === "activity"
-                          ? [{ label: "Activity" }]
+                          ? [{ label: tr("Activity", "Actividad") }]
                           : []),
                     ]
                   : []),
-                ...(lens.kind === "invoices" ? [{ label: "Invoices" }] : []),
+                ...(lens.kind === "invoices" ? [{ label: t("navInvoices") }] : []),
                 ...(lens.kind === "feedback"
                   ? [
                       {
-                        label: "Requests",
+                        label: tr("Requests", "Solicitudes"),
                         onClick: () => navigate("/requests/reports"),
                       },
-                      ...(lens.section === "queue" ? [{ label: "Queue" }] : []),
+                      ...(lens.section === "queue" ? [{ label: tr("Queue", "Cola") }] : []),
                     ]
                   : []),
                 ...(activeProject
                   ? [
                       {
-                        label: "Projects",
+                        label: t("navProjects"),
                         onClick: () => {
                           setSelectedWorkItemId(null);
                           navigate("/projects");
@@ -8022,11 +8025,11 @@ export function DelivereeWorkspace() {
                       },
                     ]
                   : lens.kind === "home"
-                    ? [{ label: "Home" }]
+                    ? [{ label: t("navHome") }]
                     : lens.kind === "approvals"
-                      ? [{ label: "Approvals" }]
+                      ? [{ label: t("navApprovals") }]
                       : lens.kind === "settings"
-                        ? [{ label: "Settings" }]
+                        ? [{ label: t("navSettings") }]
                         : centerView === "conversation"
                           ? [{ label: currentContextLabel || "Odysseus" }]
                           : []),
@@ -10418,11 +10421,11 @@ export function DelivereeWorkspace() {
               </nav>
               {location.pathname === "/settings" && <section className="do-workspace-admin-card" id="settings-profile">
                 <div className="do-workspace-admin-head">
-                  <span className="do-kicker">Public profile</span>
-                  <strong>Alias and icon</strong>
+                  <span className="do-kicker">{tr("Public profile", "Perfil público")}</span>
+                  <strong>{tr("Alias and icon", "Nombre e ícono")}</strong>
                 </div>
                 <p className="do-panel-intro">
-                  Teammates only see your alias and emoji. Your email stays private.
+                  {tr("Teammates only see your alias and emoji. Your email stays private.", "Tus compañeros solo ven tu nombre y emoji. Tu correo permanece privado.")}
                 </p>
                 <AliasProfileEditor
                   alias={aliasDraft}
@@ -10435,7 +10438,7 @@ export function DelivereeWorkspace() {
                   onClick={saveAliasProfile}
                   type="button"
                 >
-                  Save alias
+                  {tr("Save alias", "Guardar nombre")}
                 </button>
               </section>}
               {location.pathname === "/settings/preferences" && <section className="do-workspace-admin-card" id="settings-language">
@@ -10549,11 +10552,10 @@ export function DelivereeWorkspace() {
               </section>}
               {location.pathname === "/settings/preferences" && <section className="do-settings-appearance">
                 <div>
-                  <span>Appearance</span>
-                  <h2>Text size</h2>
+                  <span>{tr("Appearance", "Apariencia")}</span>
+                  <h2>{tr("Text size", "Tamaño del texto")}</h2>
                   <p>
-                    Choose how dense or readable Certo Work feels on this
-                    device.
+                    {tr("Choose how dense or readable Certo Work feels on this device.", "Elige la densidad y legibilidad de Certo Work en este dispositivo.")}
                   </p>
                 </div>
                 <TextSizeControl />

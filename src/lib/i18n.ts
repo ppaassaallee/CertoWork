@@ -1477,10 +1477,20 @@ function detectLocale(): Locale {
 }
 
 let currentLocale: Locale = detectLocale();
+if (typeof document !== "undefined") document.documentElement.lang = currentLocale;
+const localeListeners = new Set<() => void>();
 
 export function setLocale(locale: Locale) {
+  if (typeof document !== "undefined") document.documentElement.lang = locale;
+  if (currentLocale === locale) return;
   currentLocale = locale;
   try { window.localStorage.setItem("certo-locale", locale); } catch { /* storage may be unavailable */ }
+  localeListeners.forEach((listener) => listener());
+}
+
+export function subscribeLocale(listener: () => void) {
+  localeListeners.add(listener);
+  return () => { localeListeners.delete(listener); };
 }
 
 export function getLocale() {

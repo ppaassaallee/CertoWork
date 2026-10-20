@@ -396,18 +396,18 @@ test("add item form exposes optional quick attributes before create", () => {
   assert.match(workItems, /dueDate: newDueDate \|\| null/);
 });
 
-test("toolbar views fields filter sort are icon-only with hover titles", () => {
+test("toolbar views fields filter sort keep bilingual labels and hover titles", () => {
   assert.match(workItems, /className=\{`do-icon-tool/);
-  assert.match(workItems, /title="Views"/);
-  assert.match(workItems, /title="Fields"/);
-  assert.match(workItems, /title="Filter"/);
-  assert.match(workItems, /title="Sort"/);
+  assert.match(workItems, /title=\{tr\("Views", "Vistas"\)\}/);
+  assert.match(workItems, /title=\{tr\("Fields", "Campos"\)\}/);
+  assert.match(workItems, /title=\{tr\("Filter", "Filtrar"\)\}/);
+  assert.match(workItems, /title=\{tr\("Sort", "Ordenar"\)\}/);
   assert.match(workItems, /<Eye size=\{15\} \/>/);
   assert.match(workItems, /<Settings2 size=\{15\} \/>/);
   assert.match(workItems, /<ArrowUpDown size=\{15\} \/>/);
-  assert.match(workItems, /<span>Views<\/span>/);
-  assert.match(workItems, /<span>Fields<\/span>/);
-  assert.match(workItems, /<span>Sort<\/span>/);
+  assert.match(workItems, /<span>\{tr\("Views", "Vistas"\)\}<\/span>/);
+  assert.match(workItems, /<span>\{tr\("Fields", "Campos"\)\}<\/span>/);
+  assert.match(workItems, /<span>\{tr\("Sort", "Ordenar"\)\}<\/span>/);
   assert.doesNotMatch(workItems, />Views<\/button>/);
   assert.doesNotMatch(workItems, />Fields<\/button>/);
   assert.doesNotMatch(workItems, />Sort<\/button>/);

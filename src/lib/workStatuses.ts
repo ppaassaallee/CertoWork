@@ -1,4 +1,5 @@
 /** Single catalog for item status. Filters, board, table, Gantt, and calendar use these eight. */
+import { getLocale } from "./i18n";
 
 export const WORK_STATUSES = [
   { key: "backlog", label: "Backlog", completed: false },
@@ -44,6 +45,13 @@ export function isRemovedWorkStatus(status?: string | null) {
 
 export function workStatusLabel(status?: string | null) {
   const value = String(status || "").toLowerCase();
+  if (getLocale() === "es") {
+    const spanish: Record<string, string> = {
+      backlog: "Pendiente", ready: "Listo", todo: "Por hacer", in_progress: "En curso",
+      in_review: "En revisión", blocked: "Bloqueado", done: "Terminado", cancelled: "Cancelado",
+    };
+    if (spanish[value]) return spanish[value];
+  }
   return WORK_STATUSES.find((entry) => entry.key === value)?.label || value.replace(/_/g, " ");
 }
 

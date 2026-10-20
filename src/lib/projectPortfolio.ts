@@ -1,4 +1,5 @@
 import { isRemovedWorkItem } from "./itemRemoval";
+import { getLocale } from "./i18n";
 import { projectWorkCounts } from "./projectWorkCounts";
 import { isCompletedWorkStatus, noteUnknownWorkStatus } from "./workStatuses";
 
@@ -227,6 +228,7 @@ export function projectHealth(
 }
 
 export function projectHealthLabel(health: ProjectHealth) {
+  if (getLocale() === "es") return health === "blocked" ? "Bloqueado" : health === "at_risk" ? "En riesgo" : "En curso";
   return health === "blocked" ? "Blocked" : health === "at_risk" ? "At risk" : "On track";
 }
 
