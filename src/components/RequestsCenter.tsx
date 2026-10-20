@@ -163,20 +163,21 @@ export function RequestsCenter({
     <div className="do-requests" data-testid="requests-center">
       <header className="do-requests-head">
         <div>
-          <strong>{tr("Requests", "Solicitudes")}</strong>
+          <small className="do-requests-eyebrow">{tr("SERVICE DESK", "MESA DE AYUDA")}</small>
+          <h1>{tr("Requests", "Solicitudes")}</h1>
           <span>{tr("Capture, triage and follow up on client work.", "Captura, clasifica y da seguimiento al trabajo del cliente.")}</span>
         </div>
-        <div className="do-requests-language" aria-label={tr("Language", "Idioma")}>
+        <div className="do-requests-head-actions"><div className="do-requests-language" aria-label={tr("Language", "Idioma")}>
           {(["en", "es"] as const).map((next) => <button aria-pressed={locale === next} key={next} onClick={() => { setLocale(next); setRequestLocale(next); }} type="button">{next.toUpperCase()}</button>)}
-        </div>
-        <div className="do-requests-tabs" role="tablist" aria-label="Request views">
+        </div><button className="do-button do-button-dark" onClick={() => onChangeSection("new")} type="button"><Plus size={15} /> {tr("New request", "Nueva solicitud")}</button></div>
+      </header>
+        <nav className="do-requests-tabs" role="tablist" aria-label="Request views">
           {([
             ["inbox", tr("Inbox", "Bandeja")],
             ["mine", tr("Mine", "Mías")],
             ["waiting", tr("Waiting", "En espera")],
             ["resolved", tr("Resolved", "Resueltas")],
-            ["reports", tr("Bugs & ideas", "Errores e ideas")],
-            ["new", tr("New request", "Nueva solicitud")],
+            ["reports", tr("Earlier reports", "Reportes anteriores")],
           ] as const).map(([id, label]) => (
             <button
               aria-selected={section === id}
@@ -189,8 +190,7 @@ export function RequestsCenter({
               {label}
             </button>
           ))}
-        </div>
-      </header>
+        </nav>
 
       {section === "reports" ? reportsView : section === "new" ? (
         <section className="do-requests-create" data-testid="requests-create">
@@ -234,7 +234,7 @@ export function RequestsCenter({
           </button>
         </section>
       ) : (
-        <div className="do-requests-layout">
+        <div className={`do-requests-layout ${filtered.length === 0 ? "is-empty" : ""}`}>
           <div className="do-requests-list" data-testid="requests-list">
             {filtered.map((item) => {
               const status = ticketStatusOf(item);
@@ -263,7 +263,7 @@ export function RequestsCenter({
             ) : null}
           </div>
 
-          <div className="do-requests-detail" data-testid="requests-detail">
+          {filtered.length > 0 && <div className="do-requests-detail" data-testid="requests-detail">
             {!selected ? (
               <div className="do-requests-empty">
                 <MessageSquare size={22} />
@@ -491,7 +491,7 @@ export function RequestsCenter({
                 )}
               </>
             )}
-          </div>
+          </div>}
         </div>
       )}
     </div>

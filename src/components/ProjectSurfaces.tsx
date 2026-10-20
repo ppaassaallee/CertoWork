@@ -2914,6 +2914,8 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             workspaceId={String((workspace as any)?.id || project.workspaceId || "")}
             project={project}
             userId={String((currentUser as any)?.uid || (currentUser as any)?.id || "")}
+            tickets={tasks}
+            onOpenRequest={(ticketId) => navigate(`/requests?ticket=${encodeURIComponent(ticketId)}`)}
             onOpenPreview={(cid) =>
               window.open(
                 `/portal/preview/${encodeURIComponent(cid)}/${encodeURIComponent(String(project.id))}`,
