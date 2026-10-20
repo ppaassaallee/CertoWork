@@ -44,12 +44,15 @@ test("portal functions and triggers use the configured named Firestore database"
   const firestore = source("functions/src/firestore.ts");
   const portal = source("functions/src/clientPortal/index.ts");
   const collab = source("functions/src/collab/onMessageCreated.ts");
+  const tables = source("functions/src/tables/computeFns.ts");
   assert.match(firestore, new RegExp(configured.firestoreDatabaseId));
   assert.match(firestore, /getFirestore\(CERTO_FIRESTORE_DATABASE\)/);
   assert.equal((portal.match(/database: CERTO_FIRESTORE_DATABASE/g) || []).length, 4);
   assert.equal((collab.match(/database: CERTO_FIRESTORE_DATABASE/g) || []).length, 1);
+  assert.equal((tables.match(/database: CERTO_FIRESTORE_DATABASE/g) || []).length, 1);
   assert.doesNotMatch(portal, /getFirestore\(\)/);
   assert.doesNotMatch(collab, /getFirestore\(\)/);
+  assert.doesNotMatch(tables, /getFirestore\(\)/);
 });
 
 test("only external request messages reach the client projection", () => {
