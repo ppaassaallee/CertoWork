@@ -673,6 +673,11 @@ export function DelivereeWorkspace() {
   const [restoreCreatorAssigneesBusy, setRestoreCreatorAssigneesBusy] = useState(false);
   const [workItemMessages, setWorkItemMessages] = useState<any[]>([]);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  useEffect(() => {
+    if (lens.kind !== "requests") return;
+    const ticketId = new URLSearchParams(location.search).get("ticket");
+    if (ticketId) setSelectedRequestId(ticketId);
+  }, [lens.kind, location.search]);
   const portalRequesterSyncRef = useRef<Set<string>>(new Set());
   const [costTemplates, setCostTemplates] = useState<any[]>([]);
   const [projectTemplates, setProjectTemplates] = useState<any[]>([]);

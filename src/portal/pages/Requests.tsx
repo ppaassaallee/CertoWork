@@ -7,6 +7,7 @@ import { NativeSelect } from "../../components/ui/NativeSelect";
 import { PORTAL_MEMBERS_COLLECTION, clientPortalRoot } from "../../lib/clientPortal/collections";
 import type { ItemView, PortalLocale, ServiceRequestKind } from "../../lib/clientPortal/types";
 import { usePortal } from "../PortalContext";
+import { AlertTriangle, ArrowRight, BookOpen, Inbox, MessageSquare, Sparkles, Ticket } from "../../components/ui/Icon";
 
 const kindKeys: Record<ServiceRequestKind, string> = {
   request: "requestKindRequest", incident: "requestKindIncident", feedback: "requestKindFeedback",
@@ -24,11 +25,12 @@ function statusKey(value: string, customerStatus = ""): string {
   return "requestStatusReceived";
 }
 
-export function PortalRequestsPage() {
+export function PortalRequestsPage({ preview = false }: { preview?: boolean } = {}) {
   const { t, clientId, meta, locale, setLocale, user } = usePortal();
   const [requests, setRequests] = useState<ItemView[]>([]);
   const areas = useMemo(() => (meta?.serviceAreas || []).filter((area) => area.enabled), [meta?.serviceAreas]);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"home" | "mine" | "guides">("home");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [areaId, setAreaId] = useState("");
   const [requestKind, setRequestKind] = useState<ServiceRequestKind>("request");
@@ -40,6 +42,16 @@ export function PortalRequestsPage() {
   const [messages, setMessages] = useState<Array<{ id: string; body: string; authorName: string; authorRole: string; createdAt: string }>>([]);
   const selectedArea = areas.find((area) => area.id === areaId);
   const selected = requests.find((request) => request.id === selectedId);
+  const serviceName = areas.length === 1 ? areas[0].name : (meta?.brand?.name || t("requests"));
+  const startRequest = (kind: ServiceRequestKind) => {
+    const area = areas.find((entry) => entry.requestKinds.includes(kind));
+    if (!area) return;
+    setAreaId(area.id);
+    setRequestKind(kind);
+    setSelectedId(null);
+    setOpen(true);
+    setView("home");
+  };
 
   useEffect(() => {
     if (!clientId) { setRequests([]); return; }
@@ -63,6 +75,7 @@ export function PortalRequestsPage() {
   };
 
   const create = async () => {
+    if (preview) return;
     if (!clientId || !selectedArea || !title.trim() || !description.trim() || !selectedArea.requestKinds.includes(requestKind)) return;
     setBusy(true);
     setNotice("");
@@ -71,6 +84,7 @@ export function PortalRequestsPage() {
       await fn({ clientId, serviceAreaId: selectedArea.id, requestKind, title: title.trim(), description: description.trim() });
       setNotice(t("requestCreated"));
       setOpen(false);
+      setView("mine");
       setTitle("");
       setDescription("");
     } catch {
@@ -81,6 +95,7 @@ export function PortalRequestsPage() {
   };
 
   const sendReply = async () => {
+    if (preview) return;
     if (!clientId || !selected || !reply.trim()) return;
     setBusy(true);
     setNotice("");
@@ -97,19 +112,45 @@ export function PortalRequestsPage() {
   };
 
   return (
-    <div className="cp-grid">
+    <div className="cp-service-desk" data-testid="client-service-desk">
+      <aside className="cp-service-sidebar" aria-label={t("serviceNavigation")}>
+        <div className="cp-service-identity"><span className="cp-service-mark">{serviceName.slice(0, 1).toUpperCase()}</span><div><strong>{serviceName}</strong><small>{t("helpCenter")} · Certo Work</small></div></div>
+        <nav>
+          <button className={view === "home" && !open && !selected ? "is-active" : ""} onClick={() => { setView("home"); setOpen(false); setSelectedId(null); }} type="button">{t("home")}</button>
+          <button className={view === "mine" && !open && !selected ? "is-active" : ""} onClick={() => { setView("mine"); setOpen(false); setSelectedId(null); }} type="button">{t("requestMyRequests")}</button>
+          <button className={view === "guides" && !open ? "is-active" : ""} onClick={() => { setView("guides"); setOpen(false); setSelectedId(null); }} type="button">{t("guides")}</button>
+        </nav>
+        <small className="cp-service-secure">{t("secureAccess")} {serviceName}</small>
+      </aside>
+      <div className="cp-service-content">
       <header className="cp-request-header">
-        <div><h1>{t("requests")}</h1><p className="cp-muted">{t("requestIntro")}</p></div>
+        <div className="cp-service-breadcrumb">{t("services")} / {serviceName}</div>
         <div className="cp-request-header-actions">
           <div className="cp-language" aria-label={t("language")}>
             <button aria-pressed={isSpanish(locale)} onClick={() => changeLocale("es")} type="button">ES</button>
             <button aria-pressed={!isSpanish(locale)} onClick={() => changeLocale("en")} type="button">EN</button>
           </div>
-          <button className="cp-btn" disabled={areas.length === 0} onClick={() => { setOpen(true); setSelectedId(null); setAreaId(areas[0]?.id || ""); setRequestKind(areas[0]?.requestKinds[0] || "request"); }} type="button">+ {t("newRequest")}</button>
+          {view !== "home" || selected ? <button className="cp-btn" disabled={areas.length === 0} onClick={() => startRequest(areas[0]?.requestKinds[0] || "request")} type="button">+ {t("newRequest")}</button> : null}
         </div>
       </header>
+      <main className="cp-service-main">
+      {preview && <p className="cp-service-preview" role="status">{t("previewMode")}</p>}
       {notice && <p role="status" className="cp-muted">{notice}</p>}
       {!areas.length && <p className="cp-card cp-muted">{t("requestNoAreas")}</p>}
+
+      {!open && !selected && view === "home" && <>
+        <div className="cp-service-intro"><span>{t("hereToHelp")}</span><h1>{t("howCanWeHelp")}</h1><p>{t("chooseService")}</p></div>
+        <div className="cp-service-actions">
+          {([
+            { kind: "request", icon: Sparkles, title: "requestKindRequest", description: "requestCardDescription", action: "requestCreateAction" },
+            { kind: "incident", icon: AlertTriangle, title: "requestKindIncident", description: "incidentCardDescription", action: "incidentCreateAction" },
+            { kind: "feedback", icon: MessageSquare, title: "requestKindFeedback", description: "feedbackCardDescription", action: "feedbackCreateAction" },
+          ] as const).map(({ kind, icon: Icon, title, description, action }) => <button className="cp-service-action" disabled={!areas.some((area) => area.requestKinds.includes(kind))} key={kind} onClick={() => startRequest(kind)} type="button"><Icon size={22} /><strong>{t(title)}</strong><span>{t(description)}</span><em>{t(action)} <ArrowRight size={16} /></em></button>)}
+        </div>
+        <div className="cp-service-bottom"><section className="cp-service-recent"><div className="cp-service-section-head"><h2>{t("recentRequests")}</h2><button onClick={() => setView("mine")} type="button">{t("viewAll")} <ArrowRight size={16} /></button></div>{requests.length === 0 ? <p className="cp-muted">{t("requestEmpty")}</p> : requests.slice(0, 3).map((request) => <button className="cp-service-request" key={request.id} onClick={() => setSelectedId(request.id)} type="button"><Ticket size={18} /><span><strong>{request.requestNumber ? `${request.requestNumber} · ` : ""}{request.title}</strong><small>{request.lastPublicUpdate || t("requestIntro")}</small></span><em>{t(statusKey(request.ticketStatus || request.status, request.status))}</em></button>)}</section><button className="cp-service-guide-card" onClick={() => setView("guides")} type="button"><BookOpen size={22} /><strong>{t("solveItNow")}</strong><span>{t("guideIntro")}</span><em>{t("viewGuides")} <ArrowRight size={16} /></em></button></div>
+      </>}
+
+      {!open && !selected && view === "guides" && <section className="cp-service-guides"><span className="cp-service-eyebrow">{t("helpCenter")}</span><h1>{t("guides")}</h1><p>{t("guideIntro")}</p><article><Inbox size={20} /><div><h2>{t("guideBeforeTitle")}</h2><p>{t("guideBeforeBody")}</p></div></article><article><Ticket size={20} /><div><h2>{t("guideTrackTitle")}</h2><p>{t("guideTrackBody")}</p></div></article><article><MessageSquare size={20} /><div><h2>{t("guideReplyTitle")}</h2><p>{t("guideReplyBody")}</p></div></article></section>}
 
       {open && <form className="cp-card cp-request-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
         <h2>{t("newRequest")}</h2>
@@ -129,7 +170,7 @@ export function PortalRequestsPage() {
         <label>{t("requestDescription")}
           <textarea required maxLength={8000} rows={5} value={description} placeholder={t("requestDescriptionPlaceholder")} onChange={(event) => setDescription(event.target.value)} />
         </label>
-        <div className="cp-request-actions"><button className="cp-btn" disabled={busy || !areaId || !title.trim() || !description.trim()} type="submit">{t("requestSubmit")}</button><button className="cp-btn ghost" onClick={() => setOpen(false)} type="button">{t("requestCancel")}</button></div>
+        <div className="cp-request-actions"><button className="cp-btn" disabled={preview || busy || !areaId || !title.trim() || !description.trim()} type="submit">{t("requestSubmit")}</button><button className="cp-btn ghost" onClick={() => setOpen(false)} type="button">{t("requestCancel")}</button></div>
       </form>}
 
       {selected && !open ? <article className="cp-card cp-request-detail">
@@ -145,15 +186,17 @@ export function PortalRequestsPage() {
             <strong>{message.authorName || (message.authorRole === "client" ? t("profile") : t("yourProjects"))}</strong>
             <p>{message.body}</p>
           </article>)}
-          {selected.ticketStatus !== "closed" && <div className="cp-request-reply"><textarea aria-label={t("requestReply")} maxLength={4000} rows={3} placeholder={t("requestReplyPlaceholder")} value={reply} onChange={(event) => setReply(event.target.value)} /><button className="cp-btn" disabled={busy || !reply.trim()} onClick={() => void sendReply()} type="button">{t("requestReply")}</button></div>}
+          {selected.ticketStatus !== "closed" && <div className="cp-request-reply"><textarea aria-label={t("requestReply")} maxLength={4000} rows={3} placeholder={t("requestReplyPlaceholder")} value={reply} onChange={(event) => setReply(event.target.value)} /><button className="cp-btn" disabled={preview || busy || !reply.trim()} onClick={() => void sendReply()} type="button">{t("requestReply")}</button></div>}
         </section>
-      </article> : !open && <section className="cp-card" aria-label={t("requestMyRequests")}>
+      </article> : !open && view === "mine" && <section className="cp-card" aria-label={t("requestMyRequests")}>
         <h2>{t("requestMyRequests")}</h2>
         {requests.length === 0 ? <p className="cp-muted">{t("requestEmpty")}</p> : requests.map((request) => <button className="cp-row cp-request-row" key={request.id} onClick={() => setSelectedId(request.id)} type="button">
           <span><strong>{request.title}</strong><small className="cp-muted">{request.requestNumber || ""}{request.lastPublicUpdate ? ` · ${request.lastPublicUpdate}` : ""}</small></span>
           <span className="cp-pill">{t(statusKey(request.ticketStatus || request.status, request.status))}</span>
         </button>)}
       </section>}
+      </main>
+      </div>
     </div>
   );
 }

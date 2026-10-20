@@ -2195,6 +2195,45 @@ a {
   gap: 8px;
 }
 
+/* Requests is an operator workspace, not a narrow settings panel. */
+.do-requests { gap: 0; padding: 28px clamp(18px, 3vw, 48px) 48px; background: #f8fafd; }
+.do-requests-head { align-items: center; margin-bottom: 24px; }
+.do-requests-head > div:first-child { display: grid; gap: 5px; }
+.do-requests-head .do-requests-eyebrow { color: #3459c9; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+.do-requests-head h1 { margin: 0; font-size: clamp(25px, 2vw, 32px); letter-spacing: -.04em; }
+.do-requests-head > .do-requests-head-actions { display: flex; align-items: center; gap: 12px; }
+.do-requests-head-actions .do-button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.do-requests-head > .do-requests-head-actions .do-requests-language { display: flex; gap: 2px; border: 1px solid var(--border); border-radius: 9px; padding: 2px; }
+.do-requests > .do-requests-tabs { display: flex; justify-content: flex-start; gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.do-requests > .do-requests-tabs button { border: 0; border-radius: 0; padding: 9px 2px 12px; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.do-requests > .do-requests-tabs button.is-active { border-bottom: 2px solid #3459c9; color: #2546b6; background: transparent; }
+.do-requests-layout { min-height: min(680px, calc(100vh - 280px)); gap: 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--surface-0); }
+.do-requests-layout.is-empty { display: block; min-height: 360px; }
+.do-requests-list, .do-requests-detail { border: 0; border-radius: 0; }
+.do-requests-list { border-right: 1px solid var(--border); }
+.do-requests-layout.is-empty .do-requests-list { display: grid; place-items: center; width: 100%; height: 100%; border-right: 0; }
+.do-requests-row { cursor: pointer; }
+.do-requests-row:hover { background: var(--surface-2, #f2f5fb); }
+.do-requests-detail { padding: 24px; }
+.do-requests-create { max-width: 760px; padding: 24px; }
+.cp-team-requests-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.cp-team-requests-head h3 { margin: 0 0 5px; }
+.cp-team-requests-head p { margin: 0; color: var(--text-secondary); font-size: .9rem; }
+.cp-team-requests-head > span { min-width: 30px; padding: 5px 8px; border-radius: 999px; background: #e9efff; color: #2546b6; text-align: center; font-weight: 700; }
+.cp-team-request-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; padding: 13px 4px; border: 0; border-top: 1px solid var(--border); background: transparent; text-align: left; cursor: pointer; }
+.cp-team-request-row:hover { background: var(--surface-2, #f2f5fb); }
+.cp-team-request-row span { display: grid; gap: 4px; min-width: 0; }
+.cp-team-request-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-team-request-row small { color: var(--text-secondary); }
+.cp-team-request-row em { flex: none; color: #46607f; font-size: .8rem; font-style: normal; text-transform: capitalize; }
+@media (max-width: 860px) {
+  .do-requests-head { align-items: flex-start; flex-wrap: wrap; }
+  .do-requests > .do-requests-tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .do-requests > .do-requests-tabs button { flex: none; }
+  .do-requests-list { border-right: 0; border-bottom: 1px solid var(--border); }
+  .do-requests-detail { min-height: 280px; }
+}
+
 .do-request-portal {
   min-height: 100vh;
   background:

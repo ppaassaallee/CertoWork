@@ -29,10 +29,12 @@ type Props = {
   workspaceId: string;
   project: Record<string, unknown>;
   userId: string;
+  tickets?: Array<Record<string, unknown> & { id: string }>;
+  onOpenRequest?: (ticketId: string) => void;
   onOpenPreview?: (clientId: string) => void;
 };
 
-export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }: Props) {
+export function ClientPortalTab({ workspaceId, project, userId, tickets = [], onOpenRequest, onOpenPreview }: Props) {
   const es = isSpanish(getLocale());
   const clientId = String(project.clientId || "");
   const [settings, setSettings] = useState<PortalSettings>(DEFAULT_PORTAL_SETTINGS);
@@ -44,6 +46,7 @@ export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }:
   const [draftTitle, setDraftTitle] = useState("Weekly update");
   const [draftSummary, setDraftSummary] = useState("");
   const live = Boolean(clientId);
+  const projectTickets = useMemo(() => tickets.filter((ticket) => String(ticket.projectId || "") === String(project.id || "") && (String(ticket.workItemType || ticket.type || "").toLowerCase() === "ticket" || Boolean(ticket.ticketStatus))), [tickets, project.id]);
 
   useEffect(() => {
     if (!clientId) {
@@ -251,6 +254,11 @@ export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }:
           <input aria-label={es ? "Nombre del área" : "Service area name"} onChange={(event) => setNewAreaName(event.target.value)} placeholder={es ? "Ej. Soporte del marketplace" : "e.g. Marketplace support"} value={newAreaName} />
           <button className="cp-btn" disabled={!newAreaName.trim()} onClick={() => void addServiceArea()} type="button">+ {es ? "Publicar área" : "Publish area"}</button>
         </div>
+      </section>
+
+      <section className="cp-card cp-team-requests" aria-label={es ? "Solicitudes del proyecto" : "Project requests"}>
+        <div className="cp-team-requests-head"><div><h3>{es ? "Solicitudes del proyecto" : "Project requests"}</h3><p>{es ? "El equipo ve las solicitudes recibidas y las abre en la misma bandeja del operador." : "Your team sees submitted requests and opens them in the same operator inbox."}</p></div><span>{projectTickets.length}</span></div>
+        {projectTickets.length === 0 ? <p className="cp-muted">{es ? "Aún no hay solicitudes para este proyecto." : "No requests for this project yet."}</p> : projectTickets.slice(0, 20).map((ticket) => <button className="cp-team-request-row" key={ticket.id} onClick={() => onOpenRequest?.(ticket.id)} type="button"><span><strong>{String(ticket.title || ticket.name || (es ? "Solicitud" : "Request"))}</strong><small>{String(ticket.requesterName || ticket.requesterEmail || "")}</small></span><em>{String(ticket.ticketStatus || ticket.status || "new").replace(/_/g, " ")}</em></button>)}
       </section>
 
       <section className="cp-card">

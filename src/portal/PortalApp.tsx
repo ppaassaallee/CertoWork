@@ -38,7 +38,7 @@ function PreviewRoute() {
           <strong>Preview as {asUid || "contact"}</strong>
         </div>
         <main className="cp-main">
-          <PortalHomePage />
+          <PortalRequestsPage preview />
         </main>
       </div>
     </PortalProvider>
