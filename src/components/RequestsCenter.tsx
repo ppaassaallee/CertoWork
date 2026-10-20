@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -24,7 +24,8 @@ import {
 } from "../lib/captureRequests";
 
 type Props = {
-  section: "inbox" | "mine" | "waiting" | "resolved" | "new";
+  section: "inbox" | "mine" | "waiting" | "resolved" | "new" | "reports";
+  reportsView?: ReactNode;
   tickets: any[];
   allTasks?: any[];
   projects?: any[];
@@ -65,6 +66,7 @@ function ticketStatusOf(item: any): TicketStatus {
 
 export function RequestsCenter({
   section,
+  reportsView,
   tickets,
   allTasks = [],
   projects = [],
@@ -173,6 +175,7 @@ export function RequestsCenter({
             ["mine", tr("Mine", "Mías")],
             ["waiting", tr("Waiting", "En espera")],
             ["resolved", tr("Resolved", "Resueltas")],
+            ["reports", tr("Bugs & ideas", "Errores e ideas")],
             ["new", tr("New request", "Nueva solicitud")],
           ] as const).map(([id, label]) => (
             <button
@@ -189,7 +192,7 @@ export function RequestsCenter({
         </div>
       </header>
 
-      {section === "new" ? (
+      {section === "reports" ? reportsView : section === "new" ? (
         <section className="do-requests-create" data-testid="requests-create">
           <label>
             {tr("Short title", "Título breve")}

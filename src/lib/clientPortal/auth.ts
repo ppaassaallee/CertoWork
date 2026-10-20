@@ -20,7 +20,7 @@ export function portalAuthContinueUrl() {
 export async function portalLoginPrecheck(email: string) {
   const callable = httpsCallable(portalFunctions(), "portalLoginPrecheck");
   const result = await callable({ email: email.trim().toLowerCase() });
-  return result.data as { ok: boolean; reason?: string; clientIds?: string[]; locale?: string };
+  return result.data as { ok: boolean; reason?: string };
 }
 
 export async function sendPortalMagicLink(email: string) {

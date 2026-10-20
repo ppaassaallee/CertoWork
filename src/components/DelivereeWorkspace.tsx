@@ -24,7 +24,6 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  Flag,
   Folder,
   HelpCircle,
   Inbox,
@@ -871,7 +870,7 @@ export function DelivereeWorkspace() {
       : lens.kind === "my-work"
         ? "items"
         : lens.kind === "feedback"
-        ? "feedback"
+        ? "requests"
         : lens.kind === "requests"
           ? "requests"
         : lens.kind === "work"
@@ -5302,32 +5301,22 @@ export function DelivereeWorkspace() {
     projectId: string;
     severity: FeedbackSeverity | "";
   }) => {
-    if (!user || !workspace) return;
+    if (!user || !workspace) throw new Error("Sign in to submit a request.");
     try {
-      await addDoc(collection(db, "feedback_reports"), {
-        userId: user.uid,
-        workspaceId: workspace.id,
-        createdBy: user.uid,
-        kind: input.kind,
+      await createRequestTicket({
         title: input.title,
         description: input.description,
-        status: "submitted",
         projectId: input.projectId || "",
+        feedbackKind: input.kind,
         severity: input.kind === "bug" ? input.severity || "medium" : "",
-        reporterAlias: memberPublicLabel(currentWorkspaceMember || {}),
-        reporterEmoji: memberAvatar(currentWorkspaceMember || {}),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
-      setNotice(
-        input.kind === "bug"
-          ? "Bug submitted. Admins can convert it to a PBI from the SupportOps queue."
-          : "Feature request submitted. Admins can convert it to a PBI from the SupportOps queue.",
-      );
+      setNotice("Request submitted. Track it in Requests.");
+      navigate("/requests");
     } catch (reason) {
       setNotice(
         reason instanceof Error ? reason.message : "Could not submit feedback.",
       );
+      throw reason;
     }
   };
 
@@ -5682,25 +5671,30 @@ export function DelivereeWorkspace() {
     requesterEmail?: string;
     priority?: string;
     projectId?: string;
+    feedbackKind?: FeedbackKind;
+    severity?: FeedbackSeverity | "";
   }) => {
-    if (!user || !workspace) return;
+    if (!user || !workspace) throw new Error("Sign in to create a request.");
     const portalToken = createRequestPortalToken();
     const id = await addProjectTask(input.projectId || "", input.title, "backlog", {
       workItemType: "ticket",
       type: "ticket",
       description: input.description || "",
-      source: "manual",
+      source: input.feedbackKind ? "supportops" : "manual",
       sourceType: "form",
+      requestKind: input.feedbackKind === "bug" ? "incident" : input.feedbackKind === "feature" ? "feedback" : "request",
+      ...(input.feedbackKind ? { feedbackKind: input.feedbackKind, severity: input.severity || "" } : {}),
       requesterEmail: input.requesterEmail || user.email || null,
       requesterName: memberPublicLabel(currentWorkspaceMember || {}) || user.displayName || null,
       ticketStatus: "new",
       customerStatus: "Received",
-      priority: input.priority || "2",
+      priority: input.priority || (input.feedbackKind === "bug" && input.severity === "high" ? "1" : "2"),
       relatedWorkIds: [],
       projectId: input.projectId || null,
       portalToken,
       sla: buildTicketSlaPatch(),
     });
+    if (!id) throw new Error("Could not create this request.");
     if (id) {
       const ticket = {
         id,
@@ -6770,10 +6764,10 @@ export function DelivereeWorkspace() {
         : []),
       {
         id: "nav-feedback",
-        label: "Open SupportOps",
+        label: "Open bugs and ideas in Requests",
         group: "Navigate",
         keywords: "supportops support feedback bug feature pbi request",
-        onSelect: () => navigate("/supportops"),
+        onSelect: () => navigate("/requests/reports"),
       },
       {
         id: "nav-workspace",
@@ -6864,10 +6858,10 @@ export function DelivereeWorkspace() {
       },
       {
         id: "feedback-queue",
-        label: "Open SupportOps queue",
+        label: "Open earlier reports in Requests",
         group: "Navigate",
         keywords: "admin triage pbi bug feature",
-        onSelect: () => navigate("/workspace/supportops"),
+        onSelect: () => navigate("/requests/reports"),
       },
     ];
     for (const project of paletteProjects) {
@@ -7611,7 +7605,7 @@ export function DelivereeWorkspace() {
             {sidebarSections.management && (
               <div className="do-section-body">
                 <button
-                  className={`do-nav-item is-requests ${lens.kind === "requests" ? "is-active" : ""}`}
+                  className={`do-nav-item is-requests ${lens.kind === "requests" || lens.kind === "feedback" ? "is-active" : ""}`}
                   data-testid="nav-requests"
                   onClick={() => {
                     navigate("/requests");
@@ -7683,24 +7677,6 @@ export function DelivereeWorkspace() {
                         invoiceDocuments.filter((item) => isInvoiceOverdue(item)).length}
                     </em>
                   )}
-                </button>
-                <button
-                  className={`do-nav-item is-feedback ${lens.kind === "feedback" ? "is-active" : ""}`}
-                  data-testid="nav-feedback"
-                  onClick={() => {
-                    navigate("/supportops");
-                    setSidebarOpen(false);
-                  }}
-                  type="button"
-                >
-                  <Flag size="sm" />
-                  <span>{t("navFeedback")}</span>
-                  {canManageMembers &&
-                    feedbackReports.filter((item) => isOpenFeedback(item.status)).length > 0 && (
-                      <em className="do-nav-badge">
-                        {feedbackReports.filter((item) => isOpenFeedback(item.status)).length}
-                      </em>
-                    )}
                 </button>
               </div>
             )}
@@ -8017,8 +7993,8 @@ export function DelivereeWorkspace() {
                 ...(lens.kind === "feedback"
                   ? [
                       {
-                        label: "SupportOps",
-                        onClick: () => navigate("/supportops"),
+                        label: "Requests",
+                        onClick: () => navigate("/requests/reports"),
                       },
                       ...(lens.section === "queue" ? [{ label: "Queue" }] : []),
                     ]
@@ -9093,34 +9069,6 @@ export function DelivereeWorkspace() {
           />
           </div>
           )
-        ) : centerView === "feedback" ? (
-          <FeedbackCenter
-            canManage={canManageMembers}
-            initialKind={
-              lens.kind === "feedback" && lens.intent ? lens.intent : "bug"
-            }
-            mode={
-              lens.kind === "feedback" &&
-              lens.section === "queue" &&
-              canManageMembers
-                ? "queue"
-                : "submit"
-            }
-            onConvert={convertFeedbackToPbi}
-            onOpenItem={(taskId) => {
-              setSelectedWorkItemId(taskId);
-              navigate("/my-work");
-            }}
-            onOpenQueue={() => navigate("/workspace/supportops")}
-            onSubmit={submitFeedbackReport}
-            onUpdateStatus={updateFeedbackStatus}
-            projects={projects}
-            reports={
-              lens.kind === "feedback" && lens.section === "queue" && canManageMembers
-                ? feedbackReports
-                : feedbackReports.filter((item) => item.userId === user?.uid)
-            }
-          />
         ) : centerView === "requests" ? (
           <RequestsCenter
             allTasks={tasks}
@@ -9149,7 +9097,24 @@ export function DelivereeWorkspace() {
               await updateProjectTask(id, patch);
               await syncRequestPortal(id);
             }}
-            section={lens.kind === "requests" ? lens.section : "inbox"}
+            section={lens.kind === "requests" ? lens.section : "reports"}
+            reportsView={
+              <FeedbackCenter
+                canManage={canManageMembers}
+                initialKind={lens.kind === "feedback" && lens.intent ? lens.intent : "bug"}
+                mode={canManageMembers ? "combined" : "submit"}
+                onConvert={convertFeedbackToPbi}
+                onOpenItem={(taskId) => {
+                  setSelectedWorkItemId(taskId);
+                  navigate("/my-work");
+                }}
+                onOpenQueue={() => navigate("/requests/reports")}
+                onSubmit={submitFeedbackReport}
+                onUpdateStatus={updateFeedbackStatus}
+                projects={projects}
+                reports={canManageMembers ? feedbackReports : feedbackReports.filter((item) => item.userId === user?.uid)}
+              />
+            }
             selectedId={selectedRequestId}
             tickets={requestTickets}
             viewerId={user?.uid}
@@ -10837,7 +10802,7 @@ export function DelivereeWorkspace() {
               {canManageMembers && (
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
-                  <span className="do-kicker">SupportOps</span>
+                  <span className="do-kicker">Requests · earlier reports</span>
                   <strong>
                     {feedbackReports.filter((item) => isOpenFeedback(item.status)).length} open
                     {" "}report
@@ -10845,13 +10810,13 @@ export function DelivereeWorkspace() {
                   </strong>
                 </div>
                 <p className="do-panel-intro">
-                  Support requests, bugs, and feature asks from the workspace. Convert accepted ones into backlog PBIs.
+                  Review reports created before the unified Requests inbox and convert accepted ones into backlog PBIs.
                 </p>
                 <button
-                  onClick={() => navigate("/workspace/supportops")}
+                  onClick={() => navigate("/requests/reports")}
                   type="button"
                 >
-                  Open SupportOps queue
+                  Open earlier reports
                 </button>
               </section>
               )}

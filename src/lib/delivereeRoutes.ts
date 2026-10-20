@@ -17,7 +17,7 @@ export type AgentsSection =
   | "usage";
 
 export type FeedbackSection = "submit" | "queue";
-export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new";
+export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new" | "reports";
 
 export type DelivereeLens =
   | { kind: "home" }
@@ -225,6 +225,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     if (path.endsWith("/waiting")) return { kind: "requests", section: "waiting" };
     if (path.endsWith("/resolved")) return { kind: "requests", section: "resolved" };
     if (path.endsWith("/new")) return { kind: "requests", section: "new" };
+    if (path.endsWith("/reports")) return { kind: "requests", section: "reports" };
     return { kind: "requests", section: "inbox" };
   }
 

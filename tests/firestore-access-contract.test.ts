@@ -198,12 +198,12 @@ test("invoice documents are member-listed and finance-operated", () => {
   assert.match(workspace, /pushPendingInvoice/);
 });
 
-test("feedback reports are member-created and admin-triaged", () => {
+test("earlier feedback reports remain readable and admin-triaged", () => {
   const canRead = ruleFn("canReadFeedbackReport");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);
   assert.match(canRead, /isWorkspaceAdmin\(data\.workspaceId\)/);
   assert.match(rules, /match \/feedback_reports\/\{id\}/);
-  assert.match(workspace, /collection\(db, "feedback_reports"\)/);
+  assert.match(workspace, /mergeQueriesLocal\(\s*"feedback_reports"/);
   assert.match(workspace, /convertFeedbackToPbi/);
 });
 

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bug, Check, Copy, Flag, Folder, Inbox, Lightbulb, Link2, Plus, ShieldCheck, Sparkles } from "./ui/Icon";
+import { getLocale, isSpanish } from "../lib/i18n";
 import {
   FEEDBACK_SEVERITIES,
-  feedbackKindLabel,
   feedbackStatusLabel,
   isOpenFeedback,
   workItemTypeForFeedback,
@@ -13,7 +13,7 @@ import {
 } from "../lib/feedbackReports";
 
 type Props = {
-  mode: "submit" | "queue";
+  mode: "submit" | "queue" | "combined";
   canManage: boolean;
   initialKind?: FeedbackKind;
   reports: FeedbackReport[];
@@ -49,6 +49,7 @@ export function FeedbackCenter({
   onOpenQueue,
   onOpenItem,
 }: Props) {
+  const tr = (en: string, es: string) => isSpanish(getLocale()) ? es : en;
   const [kind, setKind] = useState<FeedbackKind>(initialKind);
 
   useEffect(() => {
@@ -106,17 +107,21 @@ export function FeedbackCenter({
 
   const submit = async () => {
     if (!title.trim()) return;
-    await onSubmit({
-      kind,
-      title: title.trim(),
-      description: description.trim(),
-      projectId,
-      severity: kind === "bug" ? severity || "medium" : "",
-    });
-    setTitle("");
-    setDescription("");
-    setProjectId("");
-    setSeverity("medium");
+    try {
+      await onSubmit({
+        kind,
+        title: title.trim(),
+        description: description.trim(),
+        projectId,
+        severity: kind === "bug" ? severity || "medium" : "",
+      });
+      setTitle("");
+      setDescription("");
+      setProjectId("");
+      setSeverity("medium");
+    } catch {
+      // Keep the draft so a failed request can be retried.
+    }
   };
 
   const copy = async (value: string, label: string) => {
@@ -139,24 +144,24 @@ export function FeedbackCenter({
     <div className="do-feedback-center" data-testid={mode === "queue" ? "feedback-admin-queue" : "feedback-submit"}>
       <header className="do-feedback-head">
         <div>
-          <span className="do-kicker">{mode === "queue" ? "Admin console" : "Support desk"}</span>
-          <h1>{mode === "queue" ? "SupportOps command center" : "SupportOps intake"}</h1>
+          <span className="do-kicker">{mode === "queue" ? tr("Admin console", "Administración") : tr("Support desk", "Mesa de ayuda")}</span>
+          <h1>{mode === "queue" ? tr("Past reports", "Reportes anteriores") : tr("Report a bug or idea", "Reportar un error o idea")}</h1>
           <p>
             {mode === "queue"
-              ? "Triage, route, and convert incoming reports into backlog work without losing the customer context."
-              : "Capture bugs and feature requests in a clean intake flow. Route them to a project now or let Tier 1 classify them later."}
+              ? tr("Triage and convert reports created before the unified Requests inbox.", "Clasifica y convierte los reportes creados antes de unificar Solicitudes.")
+              : tr("New reports become trackable requests. Earlier reports remain available below.", "Los reportes nuevos se convierten en solicitudes con seguimiento. Los anteriores siguen disponibles abajo.")}
           </p>
         </div>
         <div className="do-feedback-head-actions">
           {mode === "submit" && canManage && onOpenQueue && (
             <button className="do-button-secondary" onClick={onOpenQueue} type="button">
-              <Inbox size={14} /> Queue · {openCount} open
+              <Inbox size={14} /> {tr("Queue", "Bandeja")} · {openCount} {tr("open", "abiertos")}
             </button>
           )}
         </div>
       </header>
 
-      <section className="do-feedback-metrics" aria-label="SupportOps summary">
+      {mode === "queue" && <section className="do-feedback-metrics" aria-label="Earlier reports summary">
         <article>
           <span><Inbox size={16} /></span>
           <small>Open intake</small>
@@ -177,56 +182,56 @@ export function FeedbackCenter({
           <small>Project routed</small>
           <strong>{routedCount}</strong>
         </article>
-      </section>
+      </section>}
 
       {canManage && (
         <section className="do-feedback-link-hub" aria-label="Support form links">
           <article>
             <span><Inbox size={16} /></span>
             <div>
-              <strong>General intake queue</strong>
-              <p>Share this when Tier 1 should review first and assign the project later.</p>
+              <strong>{tr("General intake", "Recepción general")}</strong>
+              <p>{tr("Share this when the team should review first and assign a project later.", "Comparte este enlace si el equipo debe revisar primero y asignar un proyecto después.")}</p>
             </div>
             <button onClick={() => void copy(intakeUrl(), "general")} type="button">
-              <Copy size={13} /> {copied === "general" ? "Copied" : "Copy link"}
+              <Copy size={13} /> {copied === "general" ? tr("Copied", "Copiado") : tr("Copy link", "Copiar enlace")}
             </button>
           </article>
           <article>
             <span><Folder size={16} /></span>
             <div>
-              <strong>Project-specific form</strong>
-              <p>Choose a project below; the link opens this form already routed to that project.</p>
+              <strong>{tr("Project-specific form", "Formulario por proyecto")}</strong>
+              <p>{tr("Choose a project below; the link opens this form already routed to it.", "Elige un proyecto abajo; el enlace abrirá el formulario asociado a él.")}</p>
             </div>
             <button disabled={!selectedProjectUrl} onClick={() => void copy(selectedProjectUrl, "project")} type="button">
-              <Copy size={13} /> {copied === "project" ? "Copied" : "Copy link"}
+              <Copy size={13} /> {copied === "project" ? tr("Copied", "Copiado") : tr("Copy link", "Copiar enlace")}
             </button>
           </article>
           <article>
             <span><ShieldCheck size={16} /></span>
             <div>
-              <strong>Access behavior</strong>
-              <p>Current links require workspace access. Use this for clients or teammates you invite, not an anonymous public web form yet.</p>
+              <strong>{tr("Who can use these links", "Quién puede usar estos enlaces")}</strong>
+              <p>{tr("These links require workspace access; they are not anonymous public forms.", "Estos enlaces requieren acceso al espacio de trabajo; no son formularios públicos anónimos.")}</p>
             </div>
             {onOpenQueue ? (
               <button onClick={onOpenQueue} type="button">
-                <Link2 size={13} /> Admin queue
+                <Link2 size={13} /> {tr("Earlier reports", "Reportes anteriores")}
               </button>
             ) : null}
           </article>
         </section>
       )}
 
-      {mode === "submit" && (
+      {mode !== "queue" && (
         <section className="do-feedback-submit-card" aria-label="Submit SupportOps request">
-          <span className="do-feedback-ticket-stamp"><Sparkles size={13} /> Smart intake</span>
+          <span className="do-feedback-ticket-stamp"><Sparkles size={13} /> {tr("Intake", "Recepción")}</span>
           <div className="do-feedback-submit-hero">
             <div>
-              <span className="do-kicker">{selectedProject ? "Project support form" : "General support intake"}</span>
-              <h2>{selectedProject ? projectTitle(selectedProject) : "Tell us what needs attention"}</h2>
+              <span className="do-kicker">{selectedProject ? tr("Project support", "Ayuda del proyecto") : tr("General support", "Ayuda general")}</span>
+              <h2>{selectedProject ? projectTitle(selectedProject) : tr("Tell us what needs attention", "Cuéntanos qué necesita atención")}</h2>
               <p>
                 {selectedProject
-                  ? "This report will land already tied to this project, so the project team can triage it directly."
-                  : "No project selected. This lands in the general queue so Tier 1 can classify and route it."}
+                  ? tr("This request will be linked to the project for its team to review.", "Esta solicitud quedará vinculada al proyecto para que su equipo la revise.")
+                  : tr("No project selected. The team can classify and route this request later.", "No seleccionaste un proyecto. El equipo puede clasificar y asignar la solicitud después.")}
               </p>
             </div>
             <div className="do-feedback-kind" role="tablist" aria-label="SupportOps type">
@@ -236,7 +241,7 @@ export function FeedbackCenter({
                 role="tab"
                 type="button"
               >
-                <Bug size={14} /> Bug
+                <Bug size={14} /> {tr("Bug", "Error")}
               </button>
               <button
                 className={kind === "feature" ? "is-active" : ""}
@@ -244,28 +249,28 @@ export function FeedbackCenter({
                 role="tab"
                 type="button"
               >
-                <Lightbulb size={14} /> Feature
+                <Lightbulb size={14} /> {tr("Idea", "Idea")}
               </button>
             </div>
           </div>
           <label className="do-feedback-field">
-            Title
+            {tr("Title", "Título")}
             <input
               aria-label="SupportOps title"
               onChange={(event) => setTitle(event.target.value)}
-              placeholder={kind === "bug" ? "What went wrong?" : "What should exist?"}
+              placeholder={kind === "bug" ? tr("What went wrong?", "¿Qué salió mal?") : tr("What should exist?", "¿Qué hace falta?")}
               value={title}
             />
           </label>
           <label className="do-feedback-field">
-            Details
+            {tr("Details", "Detalles")}
             <textarea
               aria-label="SupportOps details"
               onChange={(event) => setDescription(event.target.value)}
               placeholder={
                 kind === "bug"
-                  ? "What you expected, what happened, and how to reproduce it."
-                  : "The outcome you need and why it matters now."
+                  ? tr("What you expected, what happened, and how to reproduce it.", "Qué esperabas, qué sucedió y cómo reproducirlo.")
+                  : tr("The outcome you need and why it matters now.", "Qué resultado necesitas y por qué importa ahora.")
               }
               rows={5}
               value={description}
@@ -273,13 +278,13 @@ export function FeedbackCenter({
           </label>
           <div className="do-feedback-meta">
             <label className="do-feedback-field">
-              Related project
+              {tr("Related project", "Proyecto relacionado")}
               <select
                 aria-label="Related project"
                 onChange={(event) => setProjectId(event.target.value)}
                 value={projectId}
               >
-                <option value="">No project / product-wide</option>
+                <option value="">{tr("No project / product-wide", "Sin proyecto / general")}</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {projectTitle(project)}
@@ -289,7 +294,7 @@ export function FeedbackCenter({
             </label>
             {kind === "bug" && (
               <label className="do-feedback-field">
-                Severity
+                {tr("Severity", "Gravedad")}
                 <select
                   aria-label="Bug severity"
                   onChange={(event) => setSeverity(event.target.value as FeedbackSeverity)}
@@ -310,33 +315,34 @@ export function FeedbackCenter({
             onClick={() => void submit()}
             type="button"
           >
-            <Plus size={13} /> {kind === "bug" ? "Submit bug" : "Submit feature request"}
+            <Plus size={13} /> {kind === "bug" ? tr("Submit bug", "Enviar error") : tr("Submit idea", "Enviar idea")}
           </button>
         </section>
       )}
 
-      <section className="do-workspace-admin-card" aria-label={mode === "queue" ? "All SupportOps reports" : "My reports"}>
+      <section className="do-workspace-admin-card" aria-label={mode !== "submit" ? tr("Earlier reports", "Reportes anteriores") : tr("My earlier reports", "Mis reportes anteriores")}>
         <div className="do-workspace-admin-head">
-          <span className="do-kicker">{mode === "queue" ? "Queue" : "My reports"}</span>
+          <span className="do-kicker">{mode !== "submit" ? tr("Earlier reports", "Reportes anteriores") : tr("My earlier reports", "Mis reportes anteriores")}</span>
           <strong>
-            {filtered.length} shown
-            {mode === "queue" ? ` · ${openCount} open` : ""}
+            {filtered.length} {tr("shown", "visibles")}
+            {mode !== "submit" ? ` · ${openCount} ${tr("open", "abiertos")}` : ""}
           </strong>
         </div>
+        <p className="do-panel-intro">{tr("New bugs and ideas appear as tickets in the Requests inbox. This list preserves earlier reports.", "Los errores e ideas nuevos aparecen como tickets en Solicitudes. Esta lista conserva los reportes anteriores.")}</p>
         <label>
-          Status
+          {tr("Status", "Estado")}
           <select
             aria-label="SupportOps status filter"
             onChange={(event) => setStatusFilter(event.target.value)}
             value={statusFilter}
           >
-            <option value="open">Open</option>
-            <option value="all">All</option>
-            <option value="submitted">Submitted</option>
-            <option value="triaged">Triaged</option>
-            <option value="converted">Converted</option>
-            <option value="closed">Closed</option>
-            <option value="wontfix">Won't fix</option>
+            <option value="open">{tr("Open", "Abiertos")}</option>
+            <option value="all">{tr("All", "Todos")}</option>
+            <option value="submitted">{tr("Submitted", "Enviados")}</option>
+            <option value="triaged">{tr("Triaged", "Clasificados")}</option>
+            <option value="converted">{tr("Converted", "Convertidos")}</option>
+            <option value="closed">{tr("Closed", "Cerrados")}</option>
+            <option value="wontfix">{tr("Won't fix", "No se realizará")}</option>
           </select>
         </label>
         <div className="do-feedback-list">
@@ -348,21 +354,21 @@ export function FeedbackCenter({
               <article className="do-feedback-row" key={report.id}>
                 <span className={`do-feedback-chip is-${report.kind === "bug" ? "bug" : "feature"}`}>
                   {report.kind === "bug" ? <Bug size={12} /> : <Lightbulb size={12} />}
-                  {feedbackKindLabel(report.kind)}
+                  {report.kind === "bug" ? tr("Bug", "Error") : tr("Idea", "Idea")}
                 </span>
                 <div>
-                  <strong>{report.title || "Untitled"}</strong>
+                  <strong>{report.title || tr("Untitled", "Sin título")}</strong>
                   {report.description ? <p>{report.description}</p> : null}
                   <small>
-                    {report.reporterEmoji || "🙂"} {report.reporterAlias || "Teammate"}
+                    {report.reporterEmoji || "🙂"} {report.reporterAlias || tr("Teammate", "Compañero")}
                     {report.severity ? ` · ${report.severity}` : ""}
                     {report.projectId
                       ? ` · ${projectTitle(projects.find((project) => project.id === report.projectId))}`
                       : ""}
-                    {` · ${feedbackStatusLabel(report.status)}`}
+                    {` · ${tr(feedbackStatusLabel(report.status), ({ submitted: "Enviado", triaged: "Clasificado", converted: "Convertido", closed: "Cerrado", wontfix: "No se realizará" } as Record<string, string>)[String(report.status || "submitted")] || "Enviado")}`}
                   </small>
                 </div>
-                {mode === "queue" && canManage && isOpenFeedback(report.status) && (
+                {mode !== "submit" && canManage && isOpenFeedback(report.status) && (
                   <div className="do-feedback-actions">
                     <select
                       aria-label={`Project for ${report.title || "report"}`}
@@ -374,7 +380,7 @@ export function FeedbackCenter({
                       }
                       value={selectedProject}
                     >
-                      <option value="">No project / errand</option>
+                      <option value="">{tr("No project", "Sin proyecto")}</option>
                       {projects.map((project) => (
                         <option key={project.id} value={project.id}>
                           {projectTitle(project)}
@@ -388,7 +394,7 @@ export function FeedbackCenter({
                       }
                       type="button"
                     >
-                      <Flag size={12} /> Convert to {itemType === "bug" ? "bug PBI" : "PBI"}
+                      <Flag size={12} /> {tr("Convert to", "Convertir a")} {itemType === "bug" ? "bug PBI" : "PBI"}
                     </button>
                     {report.status === "submitted" && (
                       <button
@@ -396,7 +402,7 @@ export function FeedbackCenter({
                         onClick={() => void run(report.id, () => onUpdateStatus(report, "triaged"))}
                         type="button"
                       >
-                        Triage
+                        {tr("Triage", "Clasificar")}
                       </button>
                     )}
                     <button
@@ -405,7 +411,7 @@ export function FeedbackCenter({
                       onClick={() => void run(report.id, () => onUpdateStatus(report, "wontfix"))}
                       type="button"
                     >
-                      Won't fix
+                      {tr("Won't fix", "No se realizará")}
                     </button>
                   </div>
                 )}
@@ -414,12 +420,12 @@ export function FeedbackCenter({
                     onClick={() => onOpenItem?.(report.convertedToId as string)}
                     type="button"
                   >
-                    <Folder size={12} /> Open PBI
+                    <Folder size={12} /> {tr("Open PBI", "Abrir PBI")}
                   </button>
                 )}
                 {report.status === "converted" && !onOpenItem && (
                   <span className="do-feedback-done">
-                    <Check size={12} /> Converted
+                    <Check size={12} /> {tr("Converted", "Convertido")}
                   </span>
                 )}
               </article>
@@ -428,11 +434,11 @@ export function FeedbackCenter({
           {filtered.length === 0 && (
             <div className="do-panel-empty">
               <Flag size={20} />
-              <strong>{mode === "queue" ? "No reports in this filter." : "You have not submitted anything yet."}</strong>
+              <strong>{mode !== "submit" ? tr("No earlier reports in this filter.", "No hay reportes anteriores con este filtro.") : tr("No earlier reports yet.", "Aún no hay reportes anteriores.")}</strong>
               <span>
-                {mode === "queue"
-                  ? "Open items from teammates will show here for triage."
-                  : "Submit a bug or feature request to start the queue."}
+                {mode !== "submit"
+                  ? tr("New bugs and ideas now appear as tickets in the Requests inbox.", "Los errores e ideas nuevos aparecen como tickets en Solicitudes.")
+                  : tr("Your new bugs and ideas now appear as tickets in Requests.", "Tus errores e ideas nuevos aparecen como tickets en Solicitudes.")}
               </span>
             </div>
           )}
