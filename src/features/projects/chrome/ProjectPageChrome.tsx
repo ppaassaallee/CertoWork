@@ -257,6 +257,7 @@ export function ProjectPageHeader({
 }: ProjectPageHeaderProps) {
   const [descExpanded, setDescExpanded] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const briefRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   useEffect(() => {
     if (!moreOpen) {
@@ -279,6 +280,24 @@ export function ProjectPageHeader({
       window.removeEventListener("scroll", place, true);
     };
   }, [moreOpen, moreMenu]);
+  useEffect(() => {
+    setDescExpanded(false);
+  }, [project.id]);
+  useEffect(() => {
+    if (!descExpanded) return undefined;
+    const dismiss = (event: PointerEvent) => {
+      if (!briefRef.current?.contains(event.target as Node)) setDescExpanded(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDescExpanded(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [descExpanded]);
   const initial = projectDisplayName(project).charAt(0).toUpperCase() || "P";
   const key = projectKeyBadge(project);
   const desc = String(description || "").trim();
@@ -295,33 +314,27 @@ export function ProjectPageHeader({
             {key ? <code className="do-project-key-badge">{key}</code> : null}
           </div>
           {desc ? (
-            <p className={`do-project-page-desc${descExpanded ? " is-expanded" : ""}`}>
-              {desc}
-              {!descExpanded && desc.length > 90 ? (
-                <>
-                  {" "}
-                  <button
-                    className="do-project-desc-more"
-                    onClick={() => setDescExpanded(true)}
-                    type="button"
-                  >
-                    {t("project.more")}
-                  </button>
-                </>
-              ) : null}
+            <div className="do-project-page-description" ref={briefRef}>
+              <p className="do-project-page-desc">{desc}</p>
+              <button
+                aria-controls="project-brief-panel"
+                aria-expanded={descExpanded}
+                className="do-project-desc-more"
+                onClick={() => setDescExpanded((open) => !open)}
+                type="button"
+              >
+                {descExpanded ? t("project.closeBrief") : t("project.readBrief")}
+              </button>
               {descExpanded ? (
-                <>
-                  {" "}
-                  <button
-                    className="do-project-desc-more"
-                    onClick={() => setDescExpanded(false)}
-                    type="button"
-                  >
-                    {t("project.less")}
-                  </button>
-                </>
+                <div className="do-project-brief-panel" id="project-brief-panel" role="dialog" aria-label={t("project.brief")}>
+                  <div className="do-project-brief-panel-heading">
+                    <strong>{t("project.brief")}</strong>
+                    <button onClick={() => setDescExpanded(false)} type="button">{t("project.closeBrief")}</button>
+                  </div>
+                  <div className="do-project-brief-panel-content">{desc}</div>
+                </div>
               ) : null}
-            </p>
+            </div>
           ) : (
             <p className="do-project-page-desc is-empty">Add a one-line outcome for this project</p>
           )}

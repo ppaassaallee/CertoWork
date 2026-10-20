@@ -3779,33 +3779,80 @@ a {
 .do-project-page-desc {
   margin: 0;
   min-width: 0;
-  max-width: 100%;
+  flex: 0 1 auto;
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.5;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
   line-clamp: 1;
 }
-.do-project-page-desc.is-expanded {
-  display: block;
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  white-space: normal;
+.do-project-page-description {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 .do-project-page-desc.is-empty {
   color: var(--text-muted);
 }
 .do-project-desc-more {
+  flex: none;
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface-1);
+  padding: 4px 7px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.do-project-desc-more:hover,
+.do-project-desc-more:focus-visible { background: var(--accent-soft); }
+.do-project-brief-panel {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 12px);
+  left: 0;
+  width: min(640px, calc(100vw - 80px));
+  max-height: min(58vh, 540px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-lg);
+}
+.do-project-brief-panel-heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.do-project-brief-panel-heading button {
   border: 0;
   background: transparent;
-  padding: 0;
   color: var(--accent);
   font: inherit;
-  font-weight: 500;
   cursor: pointer;
+}
+.do-project-brief-panel-content {
+  overflow: auto;
+  padding: 20px 24px 26px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .do-project-page-meta {
   display: none;

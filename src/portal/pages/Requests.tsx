@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { app, db } from "../../lib/firebase";
+import { isSpanish } from "../../lib/i18n";
+import { NativeSelect } from "../../components/ui/NativeSelect";
 import { PORTAL_MEMBERS_COLLECTION, clientPortalRoot } from "../../lib/clientPortal/collections";
 import type { ItemView, PortalLocale, ServiceRequestKind } from "../../lib/clientPortal/types";
 import { usePortal } from "../PortalContext";
@@ -100,8 +102,8 @@ export function PortalRequestsPage() {
         <div><h1>{t("requests")}</h1><p className="cp-muted">{t("requestIntro")}</p></div>
         <div className="cp-request-header-actions">
           <div className="cp-language" aria-label={t("language")}>
-            <button aria-pressed={locale === "es"} onClick={() => changeLocale("es")} type="button">ES</button>
-            <button aria-pressed={locale === "en"} onClick={() => changeLocale("en")} type="button">EN</button>
+            <button aria-pressed={isSpanish(locale)} onClick={() => changeLocale("es")} type="button">ES</button>
+            <button aria-pressed={!isSpanish(locale)} onClick={() => changeLocale("en")} type="button">EN</button>
           </div>
           <button className="cp-btn" disabled={areas.length === 0} onClick={() => { setOpen(true); setSelectedId(null); setAreaId(areas[0]?.id || ""); setRequestKind(areas[0]?.requestKinds[0] || "request"); }} type="button">+ {t("newRequest")}</button>
         </div>
@@ -112,14 +114,14 @@ export function PortalRequestsPage() {
       {open && <form className="cp-card cp-request-form" onSubmit={(event) => { event.preventDefault(); void create(); }}>
         <h2>{t("newRequest")}</h2>
         <label>{t("requestSelectArea")}
-          <select required value={areaId} onChange={(event) => { const next = areas.find((area) => area.id === event.target.value); setAreaId(event.target.value); setRequestKind(next?.requestKinds[0] || "request"); }}>
+          <NativeSelect required value={areaId} onChange={(event) => { const next = areas.find((area) => area.id === event.target.value); setAreaId(event.target.value); setRequestKind(next?.requestKinds[0] || "request"); }}>
             {areas.map((area) => <option value={area.id} key={area.id}>{area.name}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label>{t("requestSelectKind")}
-          <select value={requestKind} onChange={(event) => setRequestKind(event.target.value as ServiceRequestKind)}>
+          <NativeSelect value={requestKind} onChange={(event) => setRequestKind(event.target.value as ServiceRequestKind)}>
             {(selectedArea?.requestKinds || []).map((kind) => <option key={kind} value={kind}>{t(kindKeys[kind])}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label>{t("requestTitle")}
           <input required maxLength={160} value={title} placeholder={t("requestTitlePlaceholder")} onChange={(event) => setTitle(event.target.value)} />
@@ -135,7 +137,7 @@ export function PortalRequestsPage() {
         <p className="cp-muted">{selected.requestNumber || t("requestDetail")}</p>
         <h2>{selected.title}</h2>
         <div className="cp-request-badges"><span className="cp-pill">{t(statusKey(selected.ticketStatus || selected.status, selected.status))}</span>{selected.requestKind && <span className="cp-pill">{t(kindKeys[selected.requestKind])}</span>}{selected.serviceAreaId && areas.find((area) => area.id === selected.serviceAreaId) && <span className="cp-pill">{areas.find((area) => area.id === selected.serviceAreaId)?.name}</span>}</div>
-        {selected.createdAt && <p className="cp-muted">{t("requestSentOn")}: {new Date(selected.createdAt).toLocaleDateString(locale === "es" ? "es" : "en")}</p>}
+        {selected.createdAt && <p className="cp-muted">{t("requestSentOn")}: {new Date(selected.createdAt).toLocaleDateString(isSpanish(locale) ? "es" : "en")}</p>}
         {selected.description && <p className="cp-request-description">{selected.description}</p>}
         {selected.lastPublicUpdate && <section><h3>{t("requestLatestUpdate")}</h3><p>{selected.lastPublicUpdate}</p></section>}
         <section className="cp-request-conversation"><h3>{t("requestConversation")}</h3>
