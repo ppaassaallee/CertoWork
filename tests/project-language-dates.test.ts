@@ -18,7 +18,7 @@ test("project rows have one date control with today and week in its menu", () =>
 test("project chrome and item surface subscribe to language changes", () => {
   assert.match(items, /const locale = useLocale\(\)/);
   assert.match(chrome, /const locale = useLocale\(\)/);
-  assert.match(chrome, /"Progreso" : "Progress"/);
+  assert.match(chrome, /localize\(locale, "Progress", "Progreso"\)/);
 });
 
 test("status labels switch with the language, while status keys stay stable", () => {

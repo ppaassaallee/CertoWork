@@ -1,5 +1,6 @@
 import { AlertTriangle, Ban, Check, Circle, Square } from "./Icon";
 import { useLocale } from "../../lib/useLocale";
+import { localize } from "../../lib/i18n";
 
 export const STATUS_TONES = ["green", "amber", "red", "blue", "gray"] as const;
 export type StatusTone = (typeof STATUS_TONES)[number];
@@ -82,7 +83,7 @@ export function StatusLight({
   pulse?: boolean;
 }) {
   const locale = useLocale();
-  const defaultLabel = locale === "es" ? LABELS_ES[status] : LABELS[status];
+  const defaultLabel = localize(locale, LABELS[status], LABELS_ES[status]);
   const text =
     label === false || label === undefined
       ? label === false

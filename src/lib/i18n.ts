@@ -1,5 +1,9 @@
 export type Locale = "en" | "es";
 
+export function localize<T>(locale: Locale, english: T, spanish: T): T {
+  return { en: english, es: spanish }[locale];
+}
+
 const dictionaries = {
   en: {
     navHome: "Home",

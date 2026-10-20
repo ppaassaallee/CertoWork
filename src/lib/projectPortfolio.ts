@@ -1,5 +1,5 @@
 import { isRemovedWorkItem } from "./itemRemoval";
-import { getLocale } from "./i18n";
+import { getLocale, localize } from "./i18n";
 import { projectWorkCounts } from "./projectWorkCounts";
 import { isCompletedWorkStatus, noteUnknownWorkStatus } from "./workStatuses";
 
@@ -228,8 +228,13 @@ export function projectHealth(
 }
 
 export function projectHealthLabel(health: ProjectHealth) {
-  if (getLocale() === "es") return health === "blocked" ? "Bloqueado" : health === "at_risk" ? "En riesgo" : "En curso";
-  return health === "blocked" ? "Blocked" : health === "at_risk" ? "At risk" : "On track";
+  const labels = {
+    blocked: ["Blocked", "Bloqueado"],
+    at_risk: ["At risk", "En riesgo"],
+    on_track: ["On track", "En curso"],
+  } as const;
+  const [english, spanish] = labels[health];
+  return localize(getLocale(), english, spanish);
 }
 
 /** Same definition as portfolio health: open projects that are not on track. */

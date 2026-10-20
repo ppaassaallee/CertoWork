@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { t } from "../lib/i18n";
+import { localize, t } from "../lib/i18n";
 import { useLocale } from "../lib/useLocale";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
@@ -1402,7 +1402,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
 }) {
   const navigate = useNavigate();
   const locale = useLocale();
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const tablesEnabled = useTablesEnabled();
   const collabEnabled = useCollabEnabled();
   const { user: authUser, workspace: authWorkspace } = useAuth();
@@ -1986,7 +1986,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
               >
                 {DELIVERY_STAGES.map((stage) => (
                   <option key={stage} value={stage}>
-                    {locale === "es" ? ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage] : deliveryStageLabels[stage]}
+                    {localize(locale, deliveryStageLabels[stage], ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage])}
                   </option>
                 ))}
               </select>
@@ -5426,7 +5426,7 @@ function ProjectCommandCenterInner({
   canViewFinance?: boolean;
 } & SharedProjectActions) {
   const locale = useLocale();
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const [filter, setFilter] = useState("active");
   const [statusFilters, setStatusFilters] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -6296,7 +6296,7 @@ function ProjectCommandCenterInner({
                       onClick={() => openListWith({ stageFilter: stage })}
                       type="button"
                     >
-                      <span>{locale === "es" ? ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage] : deliveryStageLabels[stage]}</span>
+                      <span>{localize(locale, deliveryStageLabels[stage], ({ define: "Definir", onboarding: "Incorporación", build: "Construcción", deploy: "Despliegue", operations: "Operaciones" } as Record<string, string>)[stage] || deliveryStageLabels[stage])}</span>
                       <i>
                         <em
                           style={{
@@ -6418,7 +6418,7 @@ function ProjectCommandCenterInner({
                     >
                       {portfolioDimensionOptions.map((option) => (
                         <option key={option.value} value={option.value}>
-                          {locale === "es" ? ({ bpo: "Entidad de entrega", client: "Entidad cliente", work_category: "Categoría de trabajo", product_phase: "Fase del producto", stage: "Etapa de entrega", status: "Estado", health: "Salud", service: "Servicio", owner: "Responsable" } as Record<string, string>)[option.value] || option.label : option.label}
+                          {localize(locale, option.label, ({ bpo: "Entidad de entrega", client: "Entidad cliente", work_category: "Categoría de trabajo", product_phase: "Fase del producto", stage: "Etapa de entrega", status: "Estado", health: "Salud", service: "Servicio", owner: "Responsable" } as Record<string, string>)[option.value] || option.label)}
                         </option>
                       ))}
                     </select>

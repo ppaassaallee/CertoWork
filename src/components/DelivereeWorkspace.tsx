@@ -124,7 +124,7 @@ import { projectWorkCounts } from "../lib/projectWorkCounts";
 import { dateRangeError } from "../lib/itemTiming";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
-import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
+import { getLocale, localize, setLocale, t, type Locale } from "../lib/i18n";
 import { useLocale } from "../lib/useLocale";
 import {
   dateKey,
@@ -532,7 +532,7 @@ export type CenterView =
 
 export function DelivereeWorkspace() {
   const locale = useLocale();
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const {
     user,
     workspace,

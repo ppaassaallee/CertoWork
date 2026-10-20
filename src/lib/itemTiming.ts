@@ -1,6 +1,6 @@
 import { normalizeTimeSector, type TimeSectorId } from "./operatingModel";
 import { localDateKey } from "./workspaceDisplay";
-import { getLocale } from "./i18n";
+import { getLocale, localize } from "./i18n";
 
 /** Normalize stored due/start values to YYYY-MM-DD in local calendar terms. */
 export function dateInputValue(value: any) {
@@ -42,18 +42,18 @@ function isExpired(value: any, now: Date) {
 
 /** Asana-style date label: Today, Tomorrow, Yesterday, or a short calendar date. */
 export function dueDateLabel(value: unknown, now = new Date()) {
-  const spanish = getLocale() === "es";
+  const locale = getLocale();
   const due = dateInputValue(value);
-  if (!due) return spanish ? "Sin fecha" : "No date";
+  if (!due) return localize(locale, "No date", "Sin fecha");
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   const date = new Date(`${due}T00:00:00`);
   const days = Math.round((date.getTime() - today.getTime()) / 86_400_000);
-  if (days === 0) return spanish ? "Hoy" : "Today";
-  if (days === 1) return spanish ? "Mañana" : "Tomorrow";
-  if (days === -1) return spanish ? "Ayer" : "Yesterday";
+  if (days === 0) return localize(locale, "Today", "Hoy");
+  if (days === 1) return localize(locale, "Tomorrow", "Mañana");
+  if (days === -1) return localize(locale, "Yesterday", "Ayer");
   const sameYear = date.getFullYear() === today.getFullYear();
-  return date.toLocaleDateString(spanish ? "es-GT" : "en-US", sameYear
+  return date.toLocaleDateString(localize(locale, "en-US", "es-GT"), sameYear
     ? { month: "short", day: "numeric" }
     : { month: "short", day: "numeric", year: "numeric" });
 }

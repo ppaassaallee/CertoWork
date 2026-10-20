@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../lib/useLocale";
+import { localize } from "../lib/i18n";
 import {
   CERTO_TEXT_SIZE_EVENT,
   CERTO_TEXT_SIZE_OPTIONS,
@@ -27,7 +28,7 @@ export function TextSizeControl({ compact = false }: { compact?: boolean }) {
   }, []);
 
   return (
-    <div className={`do-text-size-control ${compact ? "is-compact" : ""}`} role="group" aria-label={locale === "es" ? "Tamaño del texto" : "Text size"}>
+    <div className={`do-text-size-control ${compact ? "is-compact" : ""}`} role="group" aria-label={localize(locale, "Text size", "Tamaño del texto")}>
       {CERTO_TEXT_SIZE_OPTIONS.map((option, index) => {
         const spanish = [
           ["Compacto", "Más información"],
@@ -36,8 +37,8 @@ export function TextSizeControl({ compact = false }: { compact?: boolean }) {
           ["Grande", "Alta legibilidad"],
           ["Muy grande", "Máxima legibilidad"],
         ][index];
-        const label = locale === "es" ? spanish[0] : option.label;
-        const description = locale === "es" ? spanish[1] : option.description;
+        const label = localize(locale, option.label, spanish[0]);
+        const description = localize(locale, option.description, spanish[1]);
         return (
         <button
           aria-label={`${label}: ${description}`}

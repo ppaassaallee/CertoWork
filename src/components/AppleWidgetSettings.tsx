@@ -1,5 +1,6 @@
 import { widgetPublicPath } from "../lib/appleWidget";
 import { useLocale } from "../lib/useLocale";
+import { localize } from "../lib/i18n";
 
 export function AppleWidgetSettings({
   enabled,
@@ -17,7 +18,7 @@ export function AppleWidgetSettings({
   onRevoke: () => void;
 }) {
   const locale = useLocale();
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const origin = typeof window !== "undefined" ? window.location.origin : "https://certo.work";
   const pageUrl = token ? `${origin}${widgetPublicPath(token)}` : "";
   const apiUrl = token ? `${origin}/api/widget/${token}` : "";

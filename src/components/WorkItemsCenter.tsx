@@ -206,7 +206,7 @@ import {
 } from "../lib/itemTiming";
 import { dueEdgeTone } from "../lib/dueEdgeTone";
 import { filterPointerKeepsOpen, shouldDismissFilterOnEscape } from "../lib/filterPopover";
-import { getLocale, t } from "../lib/i18n";
+import { getLocale, localize, t } from "../lib/i18n";
 import { useLocale } from "../lib/useLocale";
 import { useNavigate } from "react-router-dom";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -960,7 +960,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   renderRowExtra,
 }: Props) {
   const locale = useLocale();
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const tr = (en: string, es: string) => localize(locale, en, es);
   const mobileCore = useMobileCore();
   const { user, workspace } = useAuth();
   const navigate = useNavigate();
@@ -4290,7 +4290,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 onChange={(event) => setKanbanSwimlane(event.target.value as KanbanSwimlaneBy)}
                 value={kanbanSwimlane}
               >
-                {KANBAN_SWIMLANES.map((option) => <option key={option.key} value={option.key}>{locale === "es" ? ({ "No swimlanes": "Sin carriles", Project: "Proyecto", Assignee: "Responsable", Priority: "Prioridad" }[option.label] || option.label) : option.label}</option>)}
+                {KANBAN_SWIMLANES.map((option) => <option key={option.key} value={option.key}>{localize(locale, option.label, ({ "No swimlanes": "Sin carriles", Project: "Proyecto", Assignee: "Responsable", Priority: "Prioridad" } as Record<string, string>)[option.label] || option.label)}</option>)}
               </select>
             </label>
             <div className="do-popover-anchor">
@@ -4572,7 +4572,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 {filterDraft === "date" && (
                   <select aria-label="Date filter" onChange={(event) => setDateFilter(event.target.value)} value={dateFilter}>
                     <option value="all">{tr("Any date", "Cualquier fecha")}</option>
-                    {dueFilterOptions.map((option) => <option key={option} value={option}>{locale === "es" ? (({ overdue: "Vencidos", today: "Hoy", this_week: "Esta semana", next_week: "Próxima semana", this_month: "Este mes", next_month: "Próximo mes", later: "Más adelante", unscheduled: "Sin fecha" } as Record<string, string>)[option] || dueBucketLabels[option]) : dueBucketLabels[option]}</option>)}
+                    {dueFilterOptions.map((option) => <option key={option} value={option}>{localize(locale, dueBucketLabels[option], (({ overdue: "Vencidos", today: "Hoy", this_week: "Esta semana", next_week: "Próxima semana", this_month: "Este mes", next_month: "Próximo mes", later: "Más adelante", unscheduled: "Sin fecha" } as Record<string, string>)[option] || dueBucketLabels[option]))}</option>)}
                   </select>
                 )}
                 {filterDraft === "tag" && (
