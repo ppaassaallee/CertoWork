@@ -47,6 +47,8 @@ Configuración del cliente:
 
 En local la URL es `http://localhost:3000/mcp`. Sin la credencial de Firebase admin el local responde 503 y no escribe.
 
+En Cloudflare, `run_worker_first` lista `/mcp` y `/mcp/*`. El comodín no cubre la ruta exacta: sin `/mcp` el sitio estático contesta 405 al POST y el worker nunca ve la llamada. `/mcp/` ya entra al worker con el comodín.
+
 ## Crear el token
 
 1. En Certo Work: **Ajustes → Integraciones → Tokens de API**.

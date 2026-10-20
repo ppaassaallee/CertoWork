@@ -366,6 +366,9 @@ test("streamable HTTP speaks initialize and SSE without taking the Codex route",
   assert.match(worker, /\/mcp\/delivereeos/);
   const server = readFileSync(new URL("../server.ts", import.meta.url), "utf8");
   assert.match(server, /req.path === "\/mcp\/tokens"/);
+  const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  assert.match(wrangler, /"\/mcp"/);
+  assert.match(wrangler, /"\/mcp\/\*"/);
 });
 
 test("search stays inside the workspace and compact fields keep the workspace", async () => {
