@@ -41,8 +41,6 @@ export const portalLoginPrecheck = onCall(publicPortalHttps, async (request) => 
   }
   return {
     ok: true,
-    clientIds: member.clientIds || [],
-    locale: member.locale || "es",
   };
 });
 

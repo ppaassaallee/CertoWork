@@ -41,6 +41,9 @@ test("client requests require a published area, matching project and active memb
 
 test("browser-facing portal callables accept HTTPS before enforcing app authorization", () => {
   const backend = source("functions/src/clientPortal/index.ts");
+  const precheck = backend.split("export const portalLoginPrecheck =")[1]?.split("export const portalEnsureClaims =")[0] || "";
+  assert.match(precheck, /return \{\s*ok: true,\s*\}/);
+  assert.doesNotMatch(precheck, /clientIds:|locale:/);
   assert.match(backend, /const publicPortalHttps = \{ \.\.\.region, invoker: "public" as const \}/);
   for (const name of ["portalLoginPrecheck", "portalEnsureClaims", "createPortalRequest", "replyPortalRequest"]) {
     assert.match(backend, new RegExp(`export const ${name} = onCall\\(publicPortalHttps,`));
