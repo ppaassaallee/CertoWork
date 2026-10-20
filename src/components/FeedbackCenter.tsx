@@ -160,7 +160,7 @@ export function FeedbackCenter({
         </div>
       </header>
 
-      <section className="do-feedback-metrics" aria-label="SupportOps summary">
+      {mode === "queue" && <section className="do-feedback-metrics" aria-label="Earlier reports summary">
         <article>
           <span><Inbox size={16} /></span>
           <small>Open intake</small>
@@ -181,7 +181,7 @@ export function FeedbackCenter({
           <small>Project routed</small>
           <strong>{routedCount}</strong>
         </article>
-      </section>
+      </section>}
 
       {canManage && (
         <section className="do-feedback-link-hub" aria-label="Support form links">
@@ -327,6 +327,7 @@ export function FeedbackCenter({
             {mode !== "submit" ? ` · ${openCount} open` : ""}
           </strong>
         </div>
+        <p className="do-panel-intro">New bugs and ideas appear as tickets in the Requests inbox. This list preserves reports created before the change.</p>
         <label>
           Status
           <select
@@ -432,11 +433,11 @@ export function FeedbackCenter({
           {filtered.length === 0 && (
             <div className="do-panel-empty">
               <Flag size={20} />
-              <strong>{mode === "queue" ? "No reports in this filter." : "You have not submitted anything yet."}</strong>
+              <strong>{mode !== "submit" ? "No earlier reports in this filter." : "No earlier reports yet."}</strong>
               <span>
-                {mode === "queue"
-                  ? "Open items from teammates will show here for triage."
-                  : "Submit a bug or feature request to start the queue."}
+                {mode !== "submit"
+                  ? "New bugs and ideas now appear as tickets in the Requests inbox."
+                  : "Your new bugs and ideas now appear as tickets in Requests."}
               </span>
             </div>
           )}

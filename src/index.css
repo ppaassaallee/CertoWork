@@ -1607,6 +1607,20 @@ a {
     radial-gradient(circle at top left, rgba(40, 177, 145, 0.10), transparent 28%),
     linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.55));
 }
+.do-requests > .do-feedback-center {
+  overflow: visible;
+  padding: 0;
+  background: none;
+}
+.do-requests > .do-feedback-center .do-feedback-head {
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: none;
+}
+.do-requests > .do-feedback-center .do-feedback-head h1 {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
 .do-feedback-head {
   display: flex;
   align-items: flex-end;
