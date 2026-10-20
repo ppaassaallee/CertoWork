@@ -28,5 +28,5 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
           npx --yes firebase-tools@14.27.0 deploy \
-            --only functions:portalLoginPrecheck,functions:portalEnsureClaims,functions:createPortalRequest,functions:replyPortalRequest,functions:onProjectWriteForPortal,functions:onTaskWriteForPortal,functions:onClientSettingsWrite,functions:onMessageCreated \
+            --only functions:daily-plan:portalLoginPrecheck,functions:daily-plan:portalEnsureClaims,functions:daily-plan:createPortalRequest,functions:daily-plan:replyPortalRequest,functions:daily-plan:onProjectWriteForPortal,functions:daily-plan:onTaskWriteForPortal,functions:daily-plan:onClientSettingsWrite,functions:daily-plan:onMessageCreated \
             --project gen-lang-client-0277783597 --non-interactive
