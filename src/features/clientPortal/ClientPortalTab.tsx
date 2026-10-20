@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app, db } from "../../lib/firebase";
-import { getLocale } from "../../lib/i18n";
+import { getLocale, isSpanish } from "../../lib/i18n";
 import {
   CLIENTS_COLLECTION,
   PORTAL_EVENTS_COLLECTION,
@@ -33,7 +33,7 @@ type Props = {
 };
 
 export function ClientPortalTab({ workspaceId, project, userId, onOpenPreview }: Props) {
-  const es = getLocale() === "es";
+  const es = isSpanish(getLocale());
   const clientId = String(project.clientId || "");
   const [settings, setSettings] = useState<PortalSettings>(DEFAULT_PORTAL_SETTINGS);
   const [inviteEmail, setInviteEmail] = useState("");

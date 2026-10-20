@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+import { isSpanish } from "../../lib/i18n";
 import { PORTAL_MEMBERS_COLLECTION } from "../../lib/clientPortal/collections";
 import { usePortal } from "../PortalContext";
 import type { PortalLocale } from "../../lib/clientPortal/types";
@@ -25,10 +26,10 @@ export function PortalProfilePage() {
         <div className="cp-row">
           <span>{t("language")}</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className={`cp-btn ${locale === "es" ? "" : "ghost"}`} onClick={() => saveLocale("es")} type="button">
+            <button className={`cp-btn ${isSpanish(locale) ? "" : "ghost"}`} onClick={() => saveLocale("es")} type="button">
               ES
             </button>
-            <button className={`cp-btn ${locale === "en" ? "" : "ghost"}`} onClick={() => saveLocale("en")} type="button">
+            <button className={`cp-btn ${!isSpanish(locale) ? "" : "ghost"}`} onClick={() => saveLocale("en")} type="button">
               EN
             </button>
           </div>

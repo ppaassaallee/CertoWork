@@ -12,7 +12,8 @@ import {
   User,
 } from "./ui/Icon";
 import { RoutineLaunchButton } from "./routines/RoutineHost";
-import { getLocale, setLocale } from "../lib/i18n";
+import { NativeSelect } from "./ui/NativeSelect";
+import { getLocale, isSpanish, setLocale } from "../lib/i18n";
 import {
   TICKET_STATUSES,
   WAITING_REASONS,
@@ -87,15 +88,15 @@ export function RequestsCenter({
   const [draftProjectId, setDraftProjectId] = useState("");
   const [relatedKind, setRelatedKind] = useState<"epic" | "feature" | "pbi" | "bug" | "task" | "issue">("pbi");
   const [relatedParentId, setRelatedParentId] = useState("");
-  const [locale, setRequestLocale] = useState<"en" | "es">(getLocale() === "es" ? "es" : "en");
-  const tr = (en: string, es: string) => locale === "es" ? es : en;
+  const [locale, setRequestLocale] = useState<"en" | "es">(isSpanish(getLocale()) ? "es" : "en");
+  const tr = (en: string, es: string) => isSpanish(locale) ? es : en;
   const requestKindText = (kind: string) => ({
     request: tr("Request", "Solicitud"), incident: tr("Incident", "Incidente"), feedback: tr("Feedback", "Comentario"),
   } as Record<string, string>)[kind] || kind;
-  const statusText = (status: TicketStatus) => locale === "es"
+  const statusText = (status: TicketStatus) => isSpanish(locale)
     ? ({ new: "Nueva", in_progress: "En progreso", waiting: "En espera", resolved: "Resuelta", closed: "Cerrada" } as const)[status]
     : ticketStatusLabel(status);
-  const waitText = (reason: string) => locale === "es" ? ({
+  const waitText = (reason: string) => isSpanish(locale) ? ({
     "Waiting for requester": "Esperando al solicitante",
     "Waiting for vendor": "Esperando al proveedor",
     "Waiting for engineering": "Esperando a ingeniería",
@@ -220,10 +221,10 @@ export function RequestsCenter({
           </label>
           <label>
             {tr("Project (optional)", "Proyecto (opcional)")}
-            <select value={draftProjectId} onChange={(event) => setDraftProjectId(event.target.value)}>
+            <NativeSelect value={draftProjectId} onChange={(event) => setDraftProjectId(event.target.value)}>
               <option value="">{tr("No project", "Sin proyecto")}</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{String(project.title || project.name || project.id)}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <button className="do-button do-button-dark" disabled={busy || !draftTitle.trim()} onClick={() => void create()} type="button">
             <Plus size={14} /> {tr("Create ticket", "Crear ticket")}
@@ -285,7 +286,7 @@ export function RequestsCenter({
                     />
                     <label>
                       {tr("Status", "Estado")}
-                      <select
+                      <NativeSelect
                         aria-label="Ticket status"
                         onChange={(event) => {
                           const ticketStatus = event.target.value as TicketStatus;
@@ -311,12 +312,12 @@ export function RequestsCenter({
                         {TICKET_STATUSES.map((status) => (
                           <option key={status} value={status}>{statusText(status)}</option>
                         ))}
-                      </select>
+                      </NativeSelect>
                     </label>
                     {ticketStatusOf(selected) === "waiting" ? (
                       <label>
                         {tr("Waiting reason", "Motivo de espera")}
-                        <select
+                        <NativeSelect
                           aria-label="Waiting reason"
                           data-testid="requests-waiting-reason"
                           onChange={(event) => {
@@ -337,7 +338,7 @@ export function RequestsCenter({
                           {WAITING_REASONS.map((reason) => (
                           <option key={reason} value={reason}>{waitText(reason)}</option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </label>
                     ) : null}
                   </div>
@@ -380,15 +381,15 @@ export function RequestsCenter({
                   <strong>{tr("Related work", "Trabajo relacionado")}</strong>
                   <div>
                     <label>{tr("Create as", "Crear como")}
-                      <select value={relatedKind} onChange={(event) => { setRelatedKind(event.target.value as typeof relatedKind); setRelatedParentId(""); }}>
+                      <NativeSelect value={relatedKind} onChange={(event) => { setRelatedKind(event.target.value as typeof relatedKind); setRelatedParentId(""); }}>
                         {(["epic", "feature", "pbi", "task", "bug", "issue"] as const).map((kind) => <option key={kind} value={kind}>{kind.toUpperCase()}</option>)}
-                      </select>
+                      </NativeSelect>
                     </label>
                     {(relatedKind === "feature" || relatedKind === "task") && <label>{relatedKind === "feature" ? tr("Parent Epic", "Épica principal") : tr("Parent PBI", "PBI principal")}
-                      <select value={relatedParentId} onChange={(event) => setRelatedParentId(event.target.value)}>
+                      <NativeSelect value={relatedParentId} onChange={(event) => setRelatedParentId(event.target.value)}>
                         <option value="">{tr("Select parent", "Selecciona un padre")}</option>
                         {allTasks.filter((item) => String(item.projectId || "") === String(selected.projectId || "") && String(item.workItemType || item.type || "").toLowerCase() === (relatedKind === "feature" ? "epic" : "pbi")).map((item) => <option key={item.id} value={item.id}>{titleOf(item)}</option>)}
-                      </select>
+                      </NativeSelect>
                     </label>}
                     <button disabled={(relatedKind === "feature" || relatedKind === "task") && !relatedParentId} onClick={() => void onCreateRelatedWork(selected.id, relatedKind, relatedParentId || undefined)} type="button"><Link2 size={13} /> {tr("Create linked item", "Crear item vinculado")}</button>
                   </div>

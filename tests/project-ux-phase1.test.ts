@@ -41,6 +41,19 @@ test("header no longer shows Open / In progress / Done KPIs", () => {
   assert.doesNotMatch(headerFn, /do-project-page-meta/);
 });
 
+test("long project briefs stay compact and open in a bounded reading panel", () => {
+  const headerFn = chrome.slice(
+    chrome.indexOf("export function ProjectPageHeader"),
+    chrome.indexOf("export function ProjectSummaryStrip"),
+  );
+  assert.match(headerFn, /className="do-project-page-desc"/);
+  assert.match(headerFn, /className="do-project-brief-panel"/);
+  assert.match(headerFn, /aria-expanded=\{descExpanded\}/);
+  assert.match(headerFn, /setDescExpanded\(false\)/);
+  assert.match(css, /\.do-project-brief-panel \{[^}]*max-height:/s);
+  assert.doesNotMatch(css, /\.do-project-page-desc\.is-expanded/);
+});
+
 test("project display name strips trailing key badge text", () => {
   assert.equal(
     projectDisplayName({

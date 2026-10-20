@@ -305,8 +305,9 @@ const dictionaries = {
     "project.view.costs": "Costs",
     "project.view.new": "New",
     "project.view.groupEpic": "Group: Epic",
-    "project.more": "more",
-    "project.less": "less",
+    "project.brief": "Project brief",
+    "project.readBrief": "Read brief",
+    "project.closeBrief": "Close",
     "project.routine": "Routine",
     "project.exitFocus": "Exit focus",
     "notion.type": "Type",
@@ -1036,8 +1037,9 @@ const dictionaries = {
     "project.view.costs": "Costos",
     "project.view.new": "Nueva",
     "project.view.groupEpic": "Agrupar: Épica",
-    "project.more": "más",
-    "project.less": "menos",
+    "project.brief": "Resumen del proyecto",
+    "project.readBrief": "Leer resumen",
+    "project.closeBrief": "Cerrar",
     "project.routine": "Rutina",
     "project.exitFocus": "Salir focus",
     "notion.type": "Tipo",
@@ -1483,6 +1485,10 @@ export function setLocale(locale: Locale) {
 
 export function getLocale() {
   return currentLocale;
+}
+
+export function isSpanish(value: string) {
+  return value === "es";
 }
 
 export function t(key: MessageKey, locale: Locale = currentLocale) {

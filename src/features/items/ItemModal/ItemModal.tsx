@@ -43,7 +43,7 @@ import {
   type KanbanComment,
 } from "../../../lib/kanbanFeatures";
 import { workCategory, productPhase, WORK_CATEGORIES, PRODUCT_PHASES } from "../../../lib/workClassification";
-import { getLocale } from "../../../lib/i18n";
+import { getLocale, isSpanish } from "../../../lib/i18n";
 import { compileItemSentence } from "../../capture/compileItemSentence";
 import { copy, priorityLabel, statusLabel, typeLabel } from "./labels";
 import { ItemNotesSection } from "./ItemNotesSection";
@@ -226,26 +226,26 @@ function dateInputValue(value: unknown) {
 }
 
 function relativeDateLabel(value: any, locale: "en" | "es") {
-  if (!value) return locale === "es" ? "Sin fecha" : "No date";
+  if (!value) return isSpanish(locale) ? "Sin fecha" : "No date";
   try {
     const date = value?.toDate ? value.toDate() : new Date(value);
-    if (Number.isNaN(date.getTime())) return locale === "es" ? "Sin fecha" : "No date";
+    if (Number.isNaN(date.getTime())) return isSpanish(locale) ? "Sin fecha" : "No date";
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const target = new Date(date);
     target.setHours(0, 0, 0, 0);
     const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return locale === "es" ? "Hoy" : "Today";
-    if (diff === 1) return locale === "es" ? "Mañana" : "Tomorrow";
-    if (diff === -1) return locale === "es" ? "Ayer" : "Yesterday";
-    if (diff > 1 && diff < 7) return locale === "es" ? "Esta semana" : "This week";
-    if (diff < 0) return locale === "es" ? "Atrasado" : "Overdue";
-    return date.toLocaleDateString(locale === "es" ? "es" : "en", {
+    if (diff === 0) return isSpanish(locale) ? "Hoy" : "Today";
+    if (diff === 1) return isSpanish(locale) ? "Mañana" : "Tomorrow";
+    if (diff === -1) return isSpanish(locale) ? "Ayer" : "Yesterday";
+    if (diff > 1 && diff < 7) return isSpanish(locale) ? "Esta semana" : "This week";
+    if (diff < 0) return isSpanish(locale) ? "Atrasado" : "Overdue";
+    return date.toLocaleDateString(isSpanish(locale) ? "es" : "en", {
       month: "short",
       day: "numeric",
     });
   } catch {
-    return locale === "es" ? "Sin fecha" : "No date";
+    return isSpanish(locale) ? "Sin fecha" : "No date";
   }
 }
 
