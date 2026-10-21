@@ -13,6 +13,7 @@ import { publishUpdate } from "./publishUpdate";
 import { writeActivity } from "./writeActivity";
 import { PORTAL_MEMBERS, PORTAL_EVENTS, CLIENT_APPROVALS, portalDoc } from "./paths";
 import { CERTO_FIRESTORE_DATABASE, getCertoFirestore } from "../firestore";
+import { isPublishedDocumentPath } from "./documentAccess";
 
 const region = { region: "us-central1" as const };
 // Firebase clients authenticate inside each callable. Cloud Run must allow the
@@ -106,11 +107,41 @@ export const getPortalDocumentUrl = onCall(region, async (request) => {
     throw new HttpsError("permission-denied", "client");
   }
   const db = getCertoFirestore();
+  const memberSnap = await db.doc(`${PORTAL_MEMBERS}/${request.auth!.uid}`).get();
+  const member = memberSnap.data();
+  if (member?.status !== "active" ||
+    !Array.isArray(member.clientIds) || !member.clientIds.includes(clientId)) {
+    throw new HttpsError("permission-denied", "portal-member");
+  }
   const viewSnap = await db.doc(`client_portal/${clientId}/documents/${docId}`).get();
   if (!viewSnap.exists) throw new HttpsError("not-found", "document");
-  const storagePath = String(
-    request.data?.storagePath || viewSnap.data()?.storagePath || "",
-  );
+  const projectId = String(viewSnap.data()?.projectId || "");
+  if (!projectId) throw new HttpsError("permission-denied", "project-document");
+  const [clientSnap, projectSnap, attachmentSnap, projectDocumentSnap] = await Promise.all([
+    db.doc(`clients/${clientId}`).get(),
+    db.doc(`projects/${projectId}`).get(),
+    db.doc(`attachments/${docId}`).get(),
+    db.doc(`project_documents/${docId}`).get(),
+  ]);
+  const client = clientSnap.data();
+  const project = projectSnap.data();
+  if (!projectId || !client || client.portalEnabled === false ||
+    client.settings?.documents === false ||
+    !Array.isArray(client.projectIds) || !client.projectIds.includes(projectId) ||
+    !project || project.clientId !== clientId) {
+    throw new HttpsError("permission-denied", "project-document");
+  }
+  const source = attachmentSnap.exists ? attachmentSnap.data() : projectDocumentSnap.data();
+  if (!source || source.projectId !== projectId || source.clientFolder !== true) {
+    throw new HttpsError("permission-denied", "document-source");
+  }
+  // Never accept a caller-provided path or a long-lived URL. The source record
+  // is the only authority for which object this published document represents.
+  const storagePath = String(source.storagePath || "");
+  const workspaceId = String(project.workspaceId || "");
+  if (storagePath && !isPublishedDocumentPath(storagePath, workspaceId, projectId)) {
+    throw new HttpsError("permission-denied", "document-path");
+  }
   if (!storagePath) {
     return { url: null, expiresAt: null };
   }

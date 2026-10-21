@@ -20,13 +20,14 @@ Status: code changes validated locally; **not a production certification or depl
 - Creating an invitation also commits the workspace email/role list, pending member, and invitation token together before attempting email delivery. Delivery failures still expose the copyable invite link, but do not leave a half-created invitation.
 - Workspace-scoped project/item queries and required composite indexes were added. The project feed retains closed items for the owner; for teammates it merges project-visible rows with their directly assigned private rows instead of letting either subscription erase the other.
 - A local Firestore rules emulator exercised owner, member, viewer, invited email, and unrelated-workspace accounts for project, public/private item, milestone, document, invitation and role-escalation cases. It passed. The full repository test suite passed 893/893; TypeScript/Vite build passed; lint had zero errors (pre-existing warnings).
+- The client portal's document-download callable no longer accepts an arbitrary `storagePath` from the caller. It rechecks the active portal membership, client/project publication, source document, and that the object path belongs to that exact workspace and project. The source-path checks are covered by tests; the full repository suite now passes 896/896 and the Functions TypeScript build passes.
 
 ## Production blockers / remaining work
 
 1. **Firebase Storage is not tenant-isolated.** `storage.rules` currently allow any authenticated account to read project documents and Collab attachments. The app uses a named Firestore database, while Storage rules can consult only the default Firestore database. A server-mediated upload/download path using Firebase Admin against the named database, plus migration/revocation of existing download tokens, is needed before claiming cross-workspace isolation for files. Do not merely deny all reads: that would break existing documents.
 2. **Legacy item visibility needs an audited migration.** Historical project items were written with `visibility: private` by default. There is no reliable flag separating deliberate privacy from that former default. Do not bulk-change them to `project` without an owner review, because doing so could expose intentionally private data.
 3. **Live verification is pending.** The local Firebase CLI credential is expired. Confirm the production rules/index deployment in CI and test with real invited member, project viewer, project assignee, removed member, and unrelated workspace accounts before release.
-4. **Other surfaces remain to audit.** `access_requests` still has signed-in global list/update permissions, and long-lived Storage download URLs may outlive membership removal. Those must be addressed in a separate security change.
+4. **Other surfaces remain to audit.** `access_requests` still has signed-in global list/update permissions, and long-lived Storage download URLs may outlive membership removal. The portal signed-link endpoint has been narrowed, but these broader paths must still be addressed before a tenant-isolation claim.
 
 ## File-access completion plan
 
