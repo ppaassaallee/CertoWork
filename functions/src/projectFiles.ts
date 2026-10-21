@@ -2,34 +2,13 @@ import { randomUUID } from "node:crypto";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getCertoFirestore } from "./firestore";
+import { isProjectFilePath, legacyStoragePath, projectFilePrefix } from "./projectFilePaths";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 const region = { region: "us-central1" as const };
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-export function projectFilePrefix(workspaceId: string, projectId: string) {
-  return `project-docs/${workspaceId}/${projectId}/`;
-}
-
-export function isProjectFilePath(path: string, workspaceId: string, projectId: string) {
-  const prefix = projectFilePrefix(workspaceId, projectId);
-  return Boolean(workspaceId && projectId && path.startsWith(prefix) &&
-    path.length > prefix.length && !path.includes(".."));
-}
-
-export function legacyStoragePath(url: string, bucketName: string) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname !== "firebasestorage.googleapis.com") return "";
-    const prefix = `/v0/b/${bucketName}/o/`;
-    if (!parsed.pathname.startsWith(prefix)) return "";
-    return decodeURIComponent(parsed.pathname.slice(prefix.length));
-  } catch {
-    return "";
-  }
 }
 
 async function requireProjectAccess(

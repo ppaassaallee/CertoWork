@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { isProjectFilePath, legacyStoragePath } from "../functions/src/projectFiles";
+import { isProjectFilePath, legacyStoragePath } from "../functions/src/projectFilePaths";
 
 test("project file paths remain inside the authorized project prefix", () => {
   assert.equal(isProjectFilePath("project-docs/ws-a/project-a/file", "ws-a", "project-a"), true);
