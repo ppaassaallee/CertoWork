@@ -28,4 +28,8 @@ test("new project uploads persist paths without Firebase download tokens", () =>
   assert.doesNotMatch(save, /getDownloadURL/);
   const project = readFileSync("src/components/ProjectSurfaces.tsx", "utf8");
   assert.match(project, /getProjectFileUrl/);
+  const deploy = readFileSync(".github/workflows/deploy-client-portal-functions.yml", "utf8");
+  assert.match(deploy, /functions:daily-plan:createProjectFileUpload/);
+  assert.match(deploy, /functions:daily-plan:getProjectFileUrl/);
+  assert.match(deploy, /functions:daily-plan:getPortalDocumentUrl/);
 });
