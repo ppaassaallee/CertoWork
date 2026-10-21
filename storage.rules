@@ -8,10 +8,9 @@ service firebase.storage {
         && request.resource.size <= 50 * 1024 * 1024;
     }
     match /workspaces/{workspaceId}/collab/{conversationId}/{messageId}/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size > 0
-        && request.resource.size <= 25 * 1024 * 1024;
+      // No current UI calls the legacy Collab upload helper. Never expose
+      // workspace attachments to every signed-in user while it is dormant.
+      allow read, write: if false;
     }
   }
 }

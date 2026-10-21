@@ -33,3 +33,9 @@ test("new project uploads persist paths without Firebase download tokens", () =>
   assert.match(deploy, /functions:daily-plan:getProjectFileUrl/);
   assert.match(deploy, /functions:daily-plan:getPortalDocumentUrl/);
 });
+
+test("dormant Collab Storage prefix is closed to signed-in strangers", () => {
+  const rules = readFileSync("storage.rules", "utf8");
+  const collab = rules.split("match /workspaces/{workspaceId}/collab/")[1];
+  assert.match(collab, /allow read, write: if false;/);
+});
