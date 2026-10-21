@@ -35,6 +35,7 @@ for (const record of fileRecords.docs) {
 let objectCount = 0;
 let tokenCount = 0;
 let unreferencedCount = 0;
+const foundReferences = new Set();
 let pageToken;
 do {
   const [files, next] = await bucket.getFiles({
@@ -47,6 +48,7 @@ do {
     objectCount += 1;
     if (file.metadata?.metadata?.firebaseStorageDownloadTokens) tokenCount += 1;
     if (!refs.has(file.name)) unreferencedCount += 1;
+    else foundReferences.add(file.name);
   }
   pageToken = next?.pageToken;
 } while (pageToken);
@@ -60,5 +62,6 @@ console.log(JSON.stringify({
   objectCount,
   objectsWithLegacyTokens: tokenCount,
   unreferencedObjects: unreferencedCount,
+  missingReferencedObjects: refs.size - foundReferences.size,
   mode: "read-only",
 }, null, 2));
