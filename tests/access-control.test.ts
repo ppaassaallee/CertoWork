@@ -4,12 +4,14 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  buildTaskAccessPatch,
   grantsWorkspacePortfolioAccess,
   isPortfolioViewerMember,
   projectAccessLookupIds,
   projectAccessNameValues,
   shouldTryWorkspacePortfolioQuery,
 } from "../src/lib/accessControl";
+import { prepareTaskCreatePayload } from "../src/lib/firestorePayload";
 
 test("workspace members who are not viewers can see the full project portfolio", () => {
   assert.equal(grantsWorkspacePortfolioAccess("member"), true);
@@ -22,6 +24,14 @@ test("workspace members who are not viewers can see the full project portfolio",
   assert.equal(isPortfolioViewerMember({ role: "viewer" }), false);
   assert.equal(isPortfolioViewerMember({ role: "viewer", portfolioViewer: true }), true);
   assert.equal(isPortfolioViewerMember(null), false);
+});
+
+test("new project items are project-visible unless explicitly private", () => {
+  assert.equal(prepareTaskCreatePayload({ projectId: "project-a" }).visibility, "project");
+  assert.equal(prepareTaskCreatePayload({ projectId: "project-a", visibility: "private" }).visibility, "private");
+  assert.equal(prepareTaskCreatePayload({}).visibility, "private");
+  assert.equal(buildTaskAccessPatch({ workspaceId: "ws", userId: "uid", task: { projectId: "project-a" } }).visibility, "project");
+  assert.equal(buildTaskAccessPatch({ workspaceId: "ws", userId: "uid", task: { projectId: "project-a", visibility: "private" } }).visibility, "private");
 });
 
 test("portfolio query tries the workspace list unless the member is a known viewer", () => {

@@ -55,16 +55,42 @@ test("project read rules and client queries stay aligned", () => {
 test("item read rules and client queries stay aligned", () => {
   const canRead = ruleFn("canReadTask");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);
-  assert.match(canRead, /createdBy/);
-  assert.match(canRead, /isWorkspaceOwner\(data\.workspaceId\)/);
-  assert.match(canRead, /assigneeIds/);
-  assert.match(canRead, /accessMemberIds/);
-  assert.match(canRead, /sharedWithUserIds/);
+  assert.match(canRead, /isWorkspaceParticipant\(data\.workspaceId\)/);
+  assert.match(canRead, /hasDirectTaskAccess\(data\)/);
+  assert.match(canRead, /hasProjectTaskAccess\(data\)/);
+  const direct = ruleFn("hasDirectTaskAccess");
+  assert.match(direct, /createdBy/);
+  assert.match(direct, /isWorkspaceOwner\(data\.workspaceId\)/);
+  assert.match(direct, /assigneeIds/);
+  assert.match(direct, /accessMemberIds/);
+  assert.match(direct, /sharedWithUserIds/);
+  const project = ruleFn("hasProjectTaskAccess");
+  assert.match(project, /data\.visibility == 'project'/);
+  assert.match(project, /canReadProject/);
 
   assert.match(dataLayer, /workspace\.ownerId === user\.uid/);
   assert.match(dataLayer, /where\("createdBy", "==", user\.uid\)/);
   assert.match(dataLayer, /where\("assigneeIds", "array-contains", memberId\)/);
   assert.match(dataLayer, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
+});
+
+test("workspace access does not trust an item assignment outside its tenant", () => {
+  const projects = ruleFn("canReadProject");
+  const tasks = ruleFn("canReadTask");
+  assert.match(projects, /isWorkspaceParticipant\(data\.workspaceId\)/);
+  assert.match(tasks, /isWorkspaceParticipant\(data\.workspaceId\)/);
+  assert.match(ruleFn("canWriteTask"), /isWorkspaceParticipant\(data\.workspaceId\)/);
+  assert.match(rules, /incoming\(\)\.workspaceId == resource\.data\.workspaceId/);
+
+  const invites = rules.slice(rules.indexOf("match /agent_invites/{id} {"), rules.indexOf("match /user_notifications/{id} {"));
+  assert.match(invites, /isWorkspaceAdmin\(incoming\(\)\.workspaceId\)/);
+  assert.match(invites, /resource\.data\.emailLower == authEmailLower\(\)/);
+  assert.doesNotMatch(invites, /allow read, write: if isSignedIn\(\)/);
+
+  const memberRules = rules.slice(rules.indexOf("match /workspace_members/{memberId} {"), rules.indexOf("match /war_room_chats/{id} {"));
+  assert.match(memberRules, /incoming\(\)\.role == resource\.data\.role/);
+  assert.match(memberRules, /incoming\(\)\.portfolioViewer == resource\.data\.portfolioViewer/);
+  assert.match(memberRules, /workspaceMembersContainAuthEmail/);
 });
 
 test("task records keep createdBy immutable and restrict delete to the record owner", () => {
@@ -143,7 +169,8 @@ test("personal notes stay owner-scoped; project documents are workspace-readable
   assert.ok(start >= 0, "canReadKnowledgeItem missing");
   const canRead = ruleFn("canReadKnowledgeItem");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);
-  assert.match(canRead, /canCreateWorkspaceRecord\(data\.workspaceId\)/);
+  assert.match(canRead, /canAccessTenantRecord\(data\)/);
+  assert.match(canRead, /canReadProject\(get\(/);
   assert.match(canRead, /projectId/);
 
   assert.match(workspace, /where\("projectId", "!=", ""\)/);

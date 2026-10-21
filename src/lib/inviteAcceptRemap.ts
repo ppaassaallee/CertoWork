@@ -31,7 +31,7 @@ async function remapByArrayContains({
 }) {
   const snaps = await Promise.all(
     idFields.map((field) =>
-      getDocs(query(collection(db, collectionName), where(field, "array-contains", pendingMemberId))).catch(
+      getDocs(query(collection(db, collectionName), where("workspaceId", "==", workspaceId), where(field, "array-contains", pendingMemberId))).catch(
         () => null,
       ),
     ),

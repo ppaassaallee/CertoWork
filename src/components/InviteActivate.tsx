@@ -60,7 +60,7 @@ export function InviteActivate({ token }: Props) {
     const current = auth.currentUser;
     if (!current?.email) throw new Error("Sign-in did not complete.");
     const snap = await getDocs(
-      query(collection(db, "agent_invites"), where("inviteToken", "==", token)),
+      query(collection(db, "agent_invites"), where("inviteToken", "==", token), where("emailLower", "==", current.email.toLowerCase())),
     );
     const inviteDoc = snap.docs[0];
     const invite = inviteDoc ? ({ id: inviteDoc.id, ...inviteDoc.data() } as Record<string, any>) : null;

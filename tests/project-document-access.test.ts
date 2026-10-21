@@ -17,7 +17,8 @@ test("project documents use the workspace access contract but personal knowledge
   const read = rules.slice(rules.indexOf("function canReadKnowledgeItem"), rules.indexOf("match /knowledge_items"));
   assert.match(read, /data.userId == request.auth.uid/);
   assert.match(read, /data.projectId.size\(\) > 0/);
-  assert.match(read, /canCreateWorkspaceRecord\(data.workspaceId\)/);
+  assert.match(read, /canAccessTenantRecord\(data\)/);
+  assert.match(read, /canReadProject\(get\(/);
   const create = rules.slice(rules.indexOf("match /knowledge_items"), rules.indexOf("match /knowledge_folders"));
   assert.match(create, /incoming\(\).userId == request.auth.uid/);
   assert.match(create, /canCreateWorkspaceRecord\(incoming\(\).workspaceId\)/);

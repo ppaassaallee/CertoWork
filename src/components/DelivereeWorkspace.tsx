@@ -56,6 +56,7 @@ import {
 import { updateProfile } from "firebase/auth";
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -385,7 +386,7 @@ import {
   patchTouchesAssignment,
   patchTouchesCollaborators,
 } from "../lib/taskAssignment";
-import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
+import { buildProjectCollaboratorAccessPatch, collaboratorAccessFromMembers } from "../lib/collaborationAccess";
 import {
   DELIVEREE_SKILLS,
   defaultProjectWizardFirstAction,
@@ -1370,8 +1371,8 @@ export function DelivereeWorkspace() {
   // Per-project closed/open tasks while viewing a project console.
   useEffect(() => {
     if (!workspace?.id || lens.kind !== "project" || !lens.projectId) return;
-    return subscribeProjectTasks(db, lens.projectId, reportDataSyncError);
-  }, [workspace?.id, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
+    return subscribeProjectTasks(db, workspace.id, lens.projectId, Boolean(user?.uid && workspace.ownerId === user.uid), reportDataSyncError);
+  }, [workspace?.id, workspace?.ownerId, user?.uid, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     const subscribe = deferredSubscribeRef.current;
@@ -5180,7 +5181,13 @@ export function DelivereeWorkspace() {
       email: user.email,
     };
     const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
-    const created = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
+    const taskRef = doc(collection(db, "tasks"));
+    const assignedPeople = collaboratorAccessFromMembers(workspaceMembers, [
+      ...(Array.isArray(assigned.assigneeIds) ? assigned.assigneeIds.map(String) : []),
+      ...(Array.isArray(assigned.collaboratorMemberIds) ? assigned.collaboratorMemberIds.map(String) : []),
+    ]);
+    const batch = writeBatch(db);
+    batch.set(taskRef, prepareTaskCreatePayload({
       ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -5205,6 +5212,16 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }));
+    if (project && assignedPeople.memberIds.length) {
+      batch.update(doc(db, "projects", projectId), {
+        teamMemberIds: arrayUnion(...assignedPeople.memberIds),
+        ...(assignedPeople.userIds.length ? { visibleToUserIds: arrayUnion(...assignedPeople.userIds) } : {}),
+        ...(assignedPeople.emails.length ? { visibleToEmails: arrayUnion(...assignedPeople.emails) } : {}),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    const created = taskRef;
     const createdDiff = assignmentDiff({}, assigned);
     if (createdDiff.added.length) {
       const notifications = buildAssignmentNotificationDocs({
@@ -5454,7 +5471,28 @@ export function DelivereeWorkspace() {
     );
 
     try {
-      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+      const linkedProjectId = String(next.projectId || "");
+      const assignedPeople = touchesAssignment || touchesCollaborators
+        ? collaboratorAccessFromMembers(workspaceMembers, [
+            ...(Array.isArray(next.assigneeIds) ? next.assigneeIds.map(String) : []),
+            ...(Array.isArray(next.collaboratorMemberIds) ? next.collaboratorMemberIds.map(String) : []),
+          ])
+        : null;
+      // Joining an item joins its project team. Keep both writes atomic so an
+      // assignee never receives an item but cannot open its project context.
+      if (linkedProjectId && assignedPeople && assignedPeople.memberIds.length && projects.some((project) => project.id === linkedProjectId)) {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+        batch.update(doc(db, "projects", linkedProjectId), {
+          teamMemberIds: arrayUnion(...assignedPeople.memberIds),
+          ...(assignedPeople.userIds.length ? { visibleToUserIds: arrayUnion(...assignedPeople.userIds) } : {}),
+          ...(assignedPeople.emails.length ? { visibleToEmails: arrayUnion(...assignedPeople.emails) } : {}),
+          updatedAt: serverTimestamp(),
+        });
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+      }
     } catch (reason) {
       reportDataSyncError(reason);
       setTasks((prev) =>

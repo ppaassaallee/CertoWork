@@ -31,6 +31,22 @@ import {
 } from "./collections";
 import type { DocStore, DocRow } from "./createDocStore";
 
+// The project page and My Work have separate subscriptions. Replacing My Work's
+// snapshot must not erase project-visible rows that are only in the project feed.
+let directRoleTasks: { workspaceId: string; rows: TaskDoc[] } | null = null;
+let projectViewTasks: { workspaceId: string; projectId: string; rows: TaskDoc[] } | null = null;
+
+function publishSharedTaskSources(workspaceId: string) {
+  const merged = new Map<string, TaskDoc>();
+  if (directRoleTasks?.workspaceId === workspaceId) {
+    for (const row of directRoleTasks.rows) merged.set(row.id, row);
+  }
+  if (projectViewTasks?.workspaceId === workspaceId) {
+    for (const row of projectViewTasks.rows) merged.set(row.id, row);
+  }
+  tasksStore.replaceAll([...merged.values()]);
+}
+
 /** Apply Firestore docChanges() into a Map-backed store (added/modified/removed). */
 export function applyDocChanges<T extends DocRow>(
   store: DocStore<T>,
@@ -213,11 +229,11 @@ export function startWorkspaceData(args: StartArgs): () => void {
       : []),
     ...(roleNames.length
       ? [
-          [where("projectManager", "in", roleNames), where("workspaceId", "==", workspace.id)],
-          [where("contact", "in", roleNames), where("workspaceId", "==", workspace.id)],
+          [where("projectManager", "in", roleNames)],
+          [where("contact", "in", roleNames)],
         ]
       : []),
-  ];
+  ].map((clauses) => [...clauses, where("workspaceId", "==", workspace.id)]);
 
   let cancelled = false;
   const extraUnsubscribers: Array<() => void> = [];
@@ -297,8 +313,8 @@ export function startWorkspaceData(args: StartArgs): () => void {
       : mergeQueries(
           "tasks",
           [
-            [where("userId", "==", user.uid), where("workspaceId", "==", workspace.id)],
-            [where("createdBy", "==", user.uid), where("workspaceId", "==", workspace.id)],
+            [where("userId", "==", user.uid)],
+            [where("createdBy", "==", user.uid)],
             [where("visibleToUserIds", "array-contains", user.uid)],
             [where("visibleToEmails", "array-contains", emailLower)],
             [where("assigneeIds", "array-contains", memberId)],
@@ -310,8 +326,11 @@ export function startWorkspaceData(args: StartArgs): () => void {
               [where("assignees", "array-contains", name)],
               [where("owner", "==", name)],
             ]),
-          ],
-          (items) => tasksStore.replaceAll(items as TaskDoc[]),
+          ].map((clauses) => [...clauses, where("workspaceId", "==", workspace.id)]),
+          (items) => {
+            directRoleTasks = { workspaceId: workspace.id, rows: items as TaskDoc[] };
+            publishSharedTaskSources(workspace.id);
+          },
         );
 
   const unsubscribers: Array<() => void> = [
@@ -351,23 +370,45 @@ export function startWorkspaceData(args: StartArgs): () => void {
   return () => {
     cancelled = true;
     for (const stop of [...unsubscribers, ...extraUnsubscribers]) stop();
+    if (directRoleTasks?.workspaceId === workspace.id) directRoleTasks = null;
   };
 }
 
 export function clearWorkspaceDataStores() {
+  directRoleTasks = null;
+  projectViewTasks = null;
   clearWorkspaceCollectionStores();
 }
 
-/** Subscribe to all tasks for one project (including completed) while a project page is open. */
+/** Subscribe to all project tasks for the owner, or project-visible tasks for a teammate.
+ * A teammate's private assigned items arrive through direct access queries.
+ * Querying all project items for a teammate is rejected when any private item exists.
+ */
 export function subscribeProjectTasks(
   db: Firestore,
+  workspaceId: string,
   projectId: string,
+  isWorkspaceOwner: boolean,
   onError?: (error: unknown) => void,
 ): () => void {
-  return onSnapshot(
-    query(collection(db, "tasks"), where("projectId", "==", projectId)),
+  const stop = onSnapshot(
+    query(
+      collection(db, "tasks"),
+      where("workspaceId", "==", workspaceId),
+      where("projectId", "==", projectId),
+      ...(isWorkspaceOwner ? [] : [where("visibility", "==", "project")]),
+    ),
     (snapshot) => {
       if (!hasConfirmedSnapshotData(snapshot)) return;
+      if (!isWorkspaceOwner) {
+        projectViewTasks = {
+          workspaceId,
+          projectId,
+          rows: snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TaskDoc),
+        };
+        publishSharedTaskSources(workspaceId);
+        return;
+      }
       for (const change of snapshot.docChanges()) {
         if (change.type === "removed") {
           // Only remove if it still belongs to this project in the store.
@@ -385,5 +426,12 @@ export function subscribeProjectTasks(
     },
     (error) => onError?.(error),
   );
+  return () => {
+    stop();
+    if (projectViewTasks?.workspaceId === workspaceId && projectViewTasks.projectId === projectId) {
+      projectViewTasks = null;
+      if (!isWorkspaceOwner) publishSharedTaskSources(workspaceId);
+    }
+  };
 }
 
