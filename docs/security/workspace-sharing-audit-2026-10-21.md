@@ -28,4 +28,12 @@ Status: code changes validated locally; **not a production certification or depl
 3. **Live verification is pending.** The local Firebase CLI credential is expired. Confirm the production rules/index deployment in CI and test with real invited member, project viewer, project assignee, removed member, and unrelated workspace accounts before release.
 4. **Other surfaces remain to audit.** `access_requests` still has signed-in global list/update permissions, and long-lived Storage download URLs may outlive membership removal. Those must be addressed in a separate security change.
 
+## File-access completion plan
+
+1. Add authenticated callable endpoints for a short-lived upload policy (with size and content-type constraints) and a short-lived download URL. Use `getCertoFirestore()` (the named database) to confirm active membership, project access, and item/document visibility for **every** request; use random object IDs under the workspace path.
+2. Change Project Docs and Collab attachments to persist object paths instead of long-lived Firebase download URLs. Request a fresh signed URL only when uploading or opening an attachment. Do not expose a permanent download token in Firestore records.
+3. Inventory existing objects and references. Migrate in batches, rotate/remove `firebaseStorageDownloadTokens`, and confirm previously shared links stop working. Preserve recovery copies and log exceptions before cutting over.
+4. Only after both UIs use the endpoints, change `storage.rules` to deny direct client reads/writes for those prefixes. Test current member, removed member, project assignee, private-item nonparticipant, and unrelated workspace against both new and migrated files.
+5. Deploy function + UI first, validate on staging, then deploy the Storage rule lock and repeat the same checks in production. Firebase budget/usage should be monitored because signed-link issuance adds server calls.
+
 Do not present this branch as resolving all three user requirements until blockers 1–3 are complete.
