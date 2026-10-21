@@ -3814,13 +3814,14 @@ export function DelivereeWorkspace() {
         email,
       ]),
     ];
-    await updateDoc(doc(db, "workspaces", workspace.id), {
+    const invitation = writeBatch(db);
+    invitation.update(doc(db, "workspaces", workspace.id), {
       members: currentMembers,
       roles: { ...(workspace.roles || {}), [email]: inviteRole },
       updatedAt: serverTimestamp(),
     });
     const pendingId = pendingMemberId(workspace.id, email);
-    await setDoc(
+    invitation.set(
       doc(db, "workspace_members", pendingId),
       {
         id: pendingId,
@@ -3840,7 +3841,8 @@ export function DelivereeWorkspace() {
     );
     const inviteToken = createInviteCode();
     const expiresAt = inviteExpiresAt();
-    const inviteRef = await addDoc(collection(db, "agent_invites"), {
+    const inviteRef = doc(collection(db, "agent_invites"));
+    invitation.set(inviteRef, {
       userId: user.uid,
       workspaceId: workspace.id,
       email,
@@ -3856,6 +3858,7 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    await invitation.commit();
     const result = await deliverWorkspaceInvite({
       email,
       role: inviteRole,
@@ -4357,7 +4360,8 @@ export function DelivereeWorkspace() {
             await batch.commit();
           }
           const email = normalizeInviteEmail(member.email || member.emailLower || "");
-          await updateDoc(doc(db, "workspace_members", member.id), {
+          const removal = writeBatch(db);
+          removal.update(doc(db, "workspace_members", member.id), {
             status: "removed",
             removedBy: user.uid,
             removedAt: serverTimestamp(),
@@ -4366,7 +4370,7 @@ export function DelivereeWorkspace() {
           if (email) {
             const roles = { ...(workspace.roles || {}) };
             delete roles[email];
-            await updateDoc(doc(db, "workspaces", workspace.id), {
+            removal.update(doc(db, "workspaces", workspace.id), {
               members: (workspace.members || []).filter(
                 (item) => String(item).toLowerCase() !== email,
               ),
@@ -4379,12 +4383,15 @@ export function DelivereeWorkspace() {
                 normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
             );
             for (const invite of matchingInvites) {
-              await updateDoc(doc(db, "agent_invites", invite.id), {
+              removal.update(doc(db, "agent_invites", invite.id), {
                 status: "revoked",
                 revokedBy: user.uid,
                 updatedAt: serverTimestamp(),
               });
             }
+          }
+          await removal.commit();
+          if (email) {
             await reloadWorkspaces();
           }
           setNotice(`${label} removed from the workspace.`);
@@ -4398,7 +4405,8 @@ export function DelivereeWorkspace() {
 
   const revokeWorkspaceInvite = async (invite: any) => {
     if (!workspace || !user || !canManageMembers) return;
-    await updateDoc(doc(db, "agent_invites", invite.id), {
+    const revocation = writeBatch(db);
+    revocation.update(doc(db, "agent_invites", invite.id), {
       status: "revoked",
       revokedBy: user.uid,
       updatedAt: serverTimestamp(),
@@ -4412,7 +4420,7 @@ export function DelivereeWorkspace() {
           String(member.status || "") === "invited"),
     );
     if (pending) {
-      await updateDoc(doc(db, "workspace_members", pending.id), {
+      revocation.update(doc(db, "workspace_members", pending.id), {
         status: "removed",
         removedBy: user.uid,
         updatedAt: serverTimestamp(),
@@ -4421,13 +4429,16 @@ export function DelivereeWorkspace() {
     if (email) {
       const roles = { ...(workspace.roles || {}) };
       delete roles[email];
-      await updateDoc(doc(db, "workspaces", workspace.id), {
+      revocation.update(doc(db, "workspaces", workspace.id), {
         members: (workspace.members || []).filter(
           (item) => String(item).toLowerCase() !== email,
         ),
         roles,
         updatedAt: serverTimestamp(),
       });
+    }
+    await revocation.commit();
+    if (email) {
       await reloadWorkspaces();
     }
     setNotice("Invite revoked.");

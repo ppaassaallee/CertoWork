@@ -52,6 +52,27 @@ test("project read rules and client queries stay aligned", () => {
   assert.match(roleAccess, /isSelfRoleId\(data\.workspaceId, data\.projectManagerId\)/);
 });
 
+test("workspace invitations and revocations commit access changes atomically", () => {
+  const invite = workspace.slice(workspace.indexOf("const inviteWorkspaceMember ="), workspace.indexOf("const copyInviteMessage ="));
+  assert.match(invite, /const invitation = writeBatch\(db\)/);
+  assert.match(invite, /invitation\.update\(doc\(db, "workspaces"/);
+  assert.match(invite, /invitation\.set\(\s*doc\(db, "workspace_members"/);
+  assert.match(invite, /invitation\.set\(inviteRef/);
+  assert.match(invite, /await invitation\.commit\(\)/);
+
+  const removal = workspace.slice(workspace.indexOf("const removeWorkspaceMember ="), workspace.indexOf("const revokeWorkspaceInvite ="));
+  assert.match(removal, /const removal = writeBatch\(db\)/);
+  assert.match(removal, /removal\.update\(doc\(db, "workspace_members"/);
+  assert.match(removal, /removal\.update\(doc\(db, "workspaces"/);
+  assert.match(removal, /await removal\.commit\(\)/);
+
+  const revocation = workspace.slice(workspace.indexOf("const revokeWorkspaceInvite ="), workspace.indexOf("const approveAccessRequest ="));
+  assert.match(revocation, /const revocation = writeBatch\(db\)/);
+  assert.match(revocation, /revocation\.update\(doc\(db, "agent_invites"/);
+  assert.match(revocation, /revocation\.update\(doc\(db, "workspaces"/);
+  assert.match(revocation, /await revocation\.commit\(\)/);
+});
+
 test("item read rules and client queries stay aligned", () => {
   const canRead = ruleFn("canReadTask");
   assert.match(canRead, /data\.userId == request\.auth\.uid/);
