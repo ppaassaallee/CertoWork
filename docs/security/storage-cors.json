@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://certo.work", "http://localhost:3000"],
+    "method": ["POST", "GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Location"],
+    "maxAgeSeconds": 3600
+  }
+]

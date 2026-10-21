@@ -71,8 +71,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { app, db, storage } from "../lib/firebase";
+import { app, db } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
 import { isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
 import { buildWorkItemPaletteEntries, readRecentItemIds, rememberRecentItem, type PaletteTaskRow } from "../lib/commandSearch";
@@ -6135,6 +6134,7 @@ export function DelivereeWorkspace() {
       throw new Error("Sign in to add a document.");
     }
     let url = String(payload.url || "");
+    let storagePath = "";
     const file = payload.file as File | undefined;
     let saveStage: ProjectDocumentSaveStage = "metadata";
     try {
@@ -6142,12 +6142,24 @@ export function DelivereeWorkspace() {
         if (!isAllowedProjectResourceSize(file.size)) {
           throw new Error(projectResourceSizeLimitMessage());
         }
-        const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
-        const fileRef = ref(storage, path);
         saveStage = "upload";
-        await uploadBytes(fileRef, file);
-        saveStage = "download-url";
-        url = await getDownloadURL(fileRef);
+        const createUpload = httpsCallable<
+          { workspaceId: string; projectId: string; size: number; contentType: string },
+          { url: string; fields: Record<string, string>; storagePath: string }
+        >(getFunctions(app, "us-central1"), "createProjectFileUpload");
+        const upload = await createUpload({
+          workspaceId: workspace.id,
+          projectId,
+          size: file.size,
+          contentType: file.type || "application/octet-stream",
+        });
+        const form = new FormData();
+        for (const [key, value] of Object.entries(upload.data.fields)) form.append(key, value);
+        form.append("file", file);
+        const response = await fetch(upload.data.url, { method: "POST", body: form });
+        if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
+        storagePath = upload.data.storagePath;
+        url = "";
       }
       saveStage = "metadata";
       await addDoc(collection(db, "knowledge_items"), {
@@ -6157,6 +6169,7 @@ export function DelivereeWorkspace() {
         title: payload.title || file?.name || "Untitled",
         resourceType: payload.resourceType || "note",
         url,
+        ...(storagePath ? { storagePath } : {}),
         content: payload.body || "",
         status: "active",
         createdAt: serverTimestamp(),
