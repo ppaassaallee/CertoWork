@@ -667,6 +667,7 @@ export function DelivereeWorkspace() {
   const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [isBetaApprover, setIsBetaApprover] = useState(false);
   const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
   const [captureAddress, setCaptureAddress] = useState<CaptureAddress | null>(null);
   const [teamCaptureAddresses, setTeamCaptureAddresses] = useState<CaptureAddress[]>([]);
@@ -725,6 +726,7 @@ export function DelivereeWorkspace() {
     setSprints([]);
     setWorkspaceInvites([]);
     setAccessRequests([]);
+    setIsBetaApprover(false);
     setFeedbackReports([]);
     setCaptureAddress(null);
     setTeamCaptureAddresses([]);
@@ -1583,16 +1585,26 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!listenPacks.accessRequests || !user?.uid || !workspace?.id || !canReadAccessRequests) return;
     let cancelled = false;
-    void getDocsFromServer(query(collection(db, "access_requests"), where("status", "==", "pending")))
-      .then((snapshot) => {
+    const list = httpsCallable<{ workspaceId: string }, { requests: AccessRequest[] }>(
+      getFunctions(app, "us-central1"), "listBetaAccessRequests",
+    );
+    void list({ workspaceId: workspace.id })
+      .then(({ data }) => {
         if (cancelled) return;
-        setAccessRequests(snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
+        setIsBetaApprover(true);
+        setAccessRequests(data.requests
           .sort((left, right) =>
             timestamp(right.requestedAt || right.updatedAt) -
             timestamp(left.requestedAt || left.updatedAt)));
       })
-      .catch(reportDataSyncError);
+      .catch((error) => {
+        if (cancelled) return;
+        setIsBetaApprover(false);
+        setAccessRequests([]);
+        if (error?.code !== "functions/permission-denied" &&
+            error?.code !== "functions/not-found" &&
+            error?.code !== "functions/failed-precondition") reportDataSyncError(error);
+      });
     return () => { cancelled = true; };
   }, [listenPacks.accessRequests, user?.uid, workspace?.id, canReadAccessRequests, dataRetryVersion, reportDataSyncError]);
 
@@ -4447,63 +4459,28 @@ export function DelivereeWorkspace() {
     request: AccessRequest,
     role: "admin" | "member" | "viewer" = "member",
   ) => {
-    if (!user || !workspace) return;
-    const email = normalizeInviteEmail(request.email || request.emailLower || "");
-    const requestUserId = request.userId || request.id;
-    if (!email || !requestUserId) {
-      setNotice("This access request is missing an email or user id.");
-      return;
+    if (!user || !workspace || !isBetaApprover) return;
+    const decide = httpsCallable(getFunctions(app, "us-central1"), "decideBetaAccessRequest");
+    try {
+      await decide({ workspaceId: workspace.id, requestId: request.id, decision: "approve", role });
+      setAccessRequests((current) => current.filter((item) => item.id !== request.id));
+      await reloadWorkspaces();
+      setNotice(`${normalizeAlias(request.displayName) || "Teammate"} approved for ${workspace.name || "this workspace"}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Approval failed. Please retry.");
     }
-    const currentMembers = [
-      ...new Set([
-        ...(workspace.members || []).map((item) => String(item).toLowerCase()),
-        email,
-      ]),
-    ];
-    await updateDoc(doc(db, "workspaces", workspace.id), {
-      members: currentMembers,
-      roles: { ...(workspace.roles || {}), [email]: role },
-      updatedAt: serverTimestamp(),
-    });
-    await setDoc(
-      doc(db, "workspace_members", activeMemberId(workspace.id, requestUserId)),
-      {
-        id: activeMemberId(workspace.id, requestUserId),
-        workspaceId: workspace.id,
-        userId: requestUserId,
-        email,
-        emailLower: email,
-        ...membershipPublicPatch({ displayName: request.displayName, email }),
-        role,
-        status: "active",
-        portfolioViewer: role !== "viewer",
-        approvedBy: user.uid,
-        approvedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await updateDoc(doc(db, "access_requests", request.id), {
-      status: "approved",
-      approvedBy: user.uid,
-      approvedWorkspaceId: workspace.id,
-      approvedRole: role,
-      updatedAt: serverTimestamp(),
-    });
-    await reloadWorkspaces();
-    setNotice(`${normalizeAlias(request.displayName) || "Teammate"} approved for ${workspace.name || "this workspace"}.`);
   };
 
   const rejectAccessRequest = async (request: AccessRequest) => {
-    if (!user) return;
-    await updateDoc(doc(db, "access_requests", request.id), {
-      status: "rejected",
-      rejectedBy: user.uid,
-      rejectedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice(`${request.email || request.emailLower || "Request"} rejected.`);
+    if (!user || !workspace || !isBetaApprover) return;
+    const decide = httpsCallable(getFunctions(app, "us-central1"), "decideBetaAccessRequest");
+    try {
+      await decide({ workspaceId: workspace.id, requestId: request.id, decision: "reject" });
+      setAccessRequests((current) => current.filter((item) => item.id !== request.id));
+      setNotice(`${request.email || request.emailLower || "Request"} rejected.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Rejection failed. Please retry.");
+    }
   };
 
   const archiveConversation = async (conversation: Conversation) => {
@@ -10892,7 +10869,7 @@ export function DelivereeWorkspace() {
               )}
               </details>}
 
-              <details className="cw-admin-disclosure" open={accessRequests.length > 0}>
+              {isBetaApprover && <details className="cw-admin-disclosure" open={accessRequests.length > 0}>
               <summary>Beta access <span>{accessRequests.length} pending</span></summary>
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -10986,7 +10963,7 @@ export function DelivereeWorkspace() {
                   )}
                 </div>
               </section>
-              </details>
+              </details>}
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">

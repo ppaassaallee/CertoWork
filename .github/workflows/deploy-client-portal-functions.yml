@@ -5,16 +5,21 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Deploy functions or audit existing Project Docs (read-only)"
+        description: "Deploy functions or run a read-only audit"
         type: choice
         options:
           - deploy
           - audit-project-docs
+          - audit-workspace-invite
         default: deploy
+      invitee_email:
+        description: "Email to diagnose (audit-workspace-invite only; not logged)"
+        required: false
+        type: string
 
 jobs:
   deploy:
-    if: inputs.mode != 'audit-project-docs'
+    if: inputs.mode == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,15 +43,21 @@ jobs:
       - name: Deploy request and portal functions
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BETA_APPROVER_UID: ${{ vars.BETA_APPROVER_UID }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
             echo "FIREBASE_SERVICE_ACCOUNT is required to deploy portal functions."
             exit 1
           fi
+          if [ -z "$BETA_APPROVER_UID" ]; then
+            echo "BETA_APPROVER_UID repository variable is required before deploy."
+            exit 1
+          fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          printf 'BETA_APPROVER_UID=%s\n' "$BETA_APPROVER_UID" > functions/.env
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
           npx --yes firebase-tools@14.27.0 deploy \
-            --only functions:daily-plan:portalLoginPrecheck,functions:daily-plan:portalEnsureClaims,functions:daily-plan:createPortalRequest,functions:daily-plan:replyPortalRequest,functions:daily-plan:getPortalDocumentUrl,functions:daily-plan:createProjectFileUpload,functions:daily-plan:getProjectFileUrl,functions:daily-plan:onProjectWriteForPortal,functions:daily-plan:onTaskWriteForPortal,functions:daily-plan:onClientSettingsWrite,functions:daily-plan:onMessageCreated \
+            --only functions:daily-plan:portalLoginPrecheck,functions:daily-plan:portalEnsureClaims,functions:daily-plan:createPortalRequest,functions:daily-plan:replyPortalRequest,functions:daily-plan:getPortalDocumentUrl,functions:daily-plan:createProjectFileUpload,functions:daily-plan:getProjectFileUrl,functions:daily-plan:listBetaAccessRequests,functions:daily-plan:decideBetaAccessRequest,functions:daily-plan:onProjectWriteForPortal,functions:daily-plan:onTaskWriteForPortal,functions:daily-plan:onClientSettingsWrite,functions:daily-plan:onMessageCreated \
             --project gen-lang-client-0277783597 --non-interactive --force
 
   audit-project-docs:
@@ -71,3 +82,27 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
           node scripts/audit-project-docs.mjs
+
+  audit-workspace-invite:
+    if: inputs.mode == 'audit-workspace-invite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Diagnose invitation without changing data
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INVITEE_EMAIL: ${{ inputs.invitee_email }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT is required for the read-only audit."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node scripts/audit-workspace-invite.mjs

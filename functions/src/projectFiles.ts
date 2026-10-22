@@ -5,7 +5,11 @@ import { getCertoFirestore } from "./firestore";
 import { isProjectFilePath, legacyStoragePath, projectFilePrefix } from "./projectFilePaths";
 
 const MAX_BYTES = 50 * 1024 * 1024;
-const region = { region: "us-central1" as const };
+// Dedicated workload identity: never use the project's default Compute account to sign files.
+const region = {
+  region: "us-central1" as const,
+  serviceAccount: "certo-project-files@gen-lang-client-0277783597.iam.gserviceaccount.com",
+};
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";

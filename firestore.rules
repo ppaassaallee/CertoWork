@@ -1521,15 +1521,13 @@ service cloud.firestore {
     }
 
     match /access_requests/{id} {
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow get: if isSignedIn() && (
-        resource == null ||
-        resource.data.userId == request.auth.uid ||
-        id == request.auth.uid
-      );
-      allow list: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Open beta registration is self-service; triage is server-only.
+      allow create: if isSignedIn() && id == request.auth.uid
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().emailLower == authEmailLower();
+      allow get: if isSignedIn() && id == request.auth.uid;
+      allow list, update, delete: if false;
     }
 
     match /workspace_members/{memberId} {
