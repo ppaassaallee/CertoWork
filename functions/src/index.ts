@@ -172,6 +172,8 @@ export { dailyBriefRoutineTick } from "./brief/dailyBriefRoutine";
 export { signalRoutinesTick } from "./signals/signalRoutines";
 export { allocateInvoiceNumber, flipOverdueInvoices, generateProjectInvoices } from "./billing/invoiceFns";
 export { restoreCreatorAssignees } from "./tasks/restoreCreatorAssignees";
+export { createProjectFileUpload, getProjectFileUrl } from "./projectFiles";
+export { listBetaAccessRequests, decideBetaAccessRequest } from "./betaAccess";
 export { assertWorkspaceAdmin } from "./tasks/assertWorkspaceAdmin";
 export {
   recomputeTableRecord,

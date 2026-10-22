@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { app } from "../lib/firebase";
 import { t } from "../lib/i18n";
 import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
@@ -2853,6 +2855,8 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
           <div className="do-console-list do-docs-list">
             {documents.map((document) => {
               const href = document.url || document.href;
+              const storedFile = document.resourceType === "file" &&
+                (Boolean(document.storagePath) || String(href || "").includes("firebasestorage.googleapis.com"));
               return (
                 <article key={document.id}>
                   <span className="do-docs-item-icon" aria-hidden="true">
@@ -2862,7 +2866,31 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
                     <strong>{document.title || document.name || "Untitled document"}</strong>
                     <small>{projectDocumentMeta(document)}</small>
                   </span>
-                  {href && (
+                  {storedFile ? (
+                    <button
+                      aria-label={`Open ${document.title || document.name || "file"}`}
+                      className="do-docs-item-link"
+                      onClick={() => {
+                        const opened = window.open("", "_blank");
+                        const getUrl = httpsCallable<{ documentId: string }, { url: string }>(
+                          getFunctions(app, "us-central1"), "getProjectFileUrl",
+                        );
+                        void getUrl({ documentId: document.id })
+                          .then(({ data }) => {
+                            if (opened) opened.location.href = data.url;
+                            else window.location.href = data.url;
+                          })
+                          .catch((reason) => {
+                            opened?.close();
+                            setDocError(reason instanceof Error ? reason.message : "The file could not be opened.");
+                          });
+                      }}
+                      title="Open"
+                      type="button"
+                    >
+                      <ExternalLink size={13} />
+                    </button>
+                  ) : href && (
                     <a
                       className="do-docs-item-link"
                       href={href}

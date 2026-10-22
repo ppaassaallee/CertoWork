@@ -3,9 +3,24 @@ name: Deploy Client Portal Functions
 # Deliberate production release: Cloudflare's workflow only ships the SPA/Worker.
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Deploy functions or run a read-only audit"
+        type: choice
+        options:
+          - deploy
+          - audit-project-docs
+          - audit-workspace-invite
+          - repair-workspace-invite
+        default: deploy
+      invitee_email:
+        description: "Email to diagnose (audit-workspace-invite only; not logged)"
+        required: false
+        type: string
 
 jobs:
   deploy:
+    if: inputs.mode == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,13 +44,90 @@ jobs:
       - name: Deploy request and portal functions
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BETA_APPROVER_EMAIL: ${{ secrets.BETA_APPROVER_EMAIL }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
             echo "FIREBASE_SERVICE_ACCOUNT is required to deploy portal functions."
             exit 1
           fi
+          if [ -z "$BETA_APPROVER_EMAIL" ]; then
+            echo "BETA_APPROVER_EMAIL repository secret is required before deploy."
+            exit 1
+          fi
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node functions/scripts/resolve-beta-approver.mjs > functions/.env
           npx --yes firebase-tools@14.27.0 deploy \
-            --only functions:daily-plan:portalLoginPrecheck,functions:daily-plan:portalEnsureClaims,functions:daily-plan:createPortalRequest,functions:daily-plan:replyPortalRequest,functions:daily-plan:onProjectWriteForPortal,functions:daily-plan:onTaskWriteForPortal,functions:daily-plan:onClientSettingsWrite,functions:daily-plan:onMessageCreated \
+            --only functions:daily-plan:portalLoginPrecheck,functions:daily-plan:portalEnsureClaims,functions:daily-plan:createPortalRequest,functions:daily-plan:replyPortalRequest,functions:daily-plan:getPortalDocumentUrl,functions:daily-plan:createProjectFileUpload,functions:daily-plan:getProjectFileUrl,functions:daily-plan:listBetaAccessRequests,functions:daily-plan:decideBetaAccessRequest,functions:daily-plan:onProjectWriteForPortal,functions:daily-plan:onTaskWriteForPortal,functions:daily-plan:onClientSettingsWrite,functions:daily-plan:onMessageCreated \
             --project gen-lang-client-0277783597 --non-interactive --force
+
+  audit-project-docs:
+    if: inputs.mode == 'audit-project-docs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Count Project Docs references and legacy tokens without changing data
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT is required for the read-only inventory."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node scripts/audit-project-docs.mjs
+
+  audit-workspace-invite:
+    if: inputs.mode == 'audit-workspace-invite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Diagnose invitation without changing data
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INVITEE_EMAIL: ${{ inputs.invitee_email }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT is required for the read-only audit."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node scripts/audit-workspace-invite.mjs
+
+  repair-workspace-invite:
+    if: inputs.mode == 'repair-workspace-invite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Restore only accepted active Boldr admin membership
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INVITEE_EMAIL: ${{ inputs.invitee_email }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT is required for the targeted repair."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node scripts/repair-workspace-invite.mjs

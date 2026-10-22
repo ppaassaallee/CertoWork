@@ -56,6 +56,7 @@ import {
 import { updateProfile } from "firebase/auth";
 import {
   addDoc,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -70,8 +71,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { app, db, storage } from "../lib/firebase";
+import { app, db } from "../lib/firebase";
 import { createCompleteSnapshotMerge, hasConfirmedSnapshotData } from "../lib/firestoreSnapshotSafety";
 import { isFirestoreQuotaError, logFirestoreListenError } from "../lib/workspaceLoadError";
 import { buildWorkItemPaletteEntries, readRecentItemIds, rememberRecentItem, type PaletteTaskRow } from "../lib/commandSearch";
@@ -385,7 +385,7 @@ import {
   patchTouchesAssignment,
   patchTouchesCollaborators,
 } from "../lib/taskAssignment";
-import { buildProjectCollaboratorAccessPatch } from "../lib/collaborationAccess";
+import { buildProjectCollaboratorAccessPatch, collaboratorAccessFromMembers } from "../lib/collaborationAccess";
 import {
   DELIVEREE_SKILLS,
   defaultProjectWizardFirstAction,
@@ -667,6 +667,7 @@ export function DelivereeWorkspace() {
   const [driveMessage, setDriveMessage] = useState("");
   const [workspaceInvites, setWorkspaceInvites] = useState<any[]>([]);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const [isBetaApprover, setIsBetaApprover] = useState(false);
   const [feedbackReports, setFeedbackReports] = useState<FeedbackReport[]>([]);
   const [captureAddress, setCaptureAddress] = useState<CaptureAddress | null>(null);
   const [teamCaptureAddresses, setTeamCaptureAddresses] = useState<CaptureAddress[]>([]);
@@ -725,6 +726,7 @@ export function DelivereeWorkspace() {
     setSprints([]);
     setWorkspaceInvites([]);
     setAccessRequests([]);
+    setIsBetaApprover(false);
     setFeedbackReports([]);
     setCaptureAddress(null);
     setTeamCaptureAddresses([]);
@@ -1370,8 +1372,8 @@ export function DelivereeWorkspace() {
   // Per-project closed/open tasks while viewing a project console.
   useEffect(() => {
     if (!workspace?.id || lens.kind !== "project" || !lens.projectId) return;
-    return subscribeProjectTasks(db, lens.projectId, reportDataSyncError);
-  }, [workspace?.id, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
+    return subscribeProjectTasks(db, workspace.id, lens.projectId, Boolean(user?.uid && workspace.ownerId === user.uid), reportDataSyncError);
+  }, [workspace?.id, workspace?.ownerId, user?.uid, lens.kind, lens.kind === "project" ? lens.projectId : null, dataRetryVersion, reportDataSyncError]);
 
   useEffect(() => {
     const subscribe = deferredSubscribeRef.current;
@@ -1583,16 +1585,26 @@ export function DelivereeWorkspace() {
   useEffect(() => {
     if (!listenPacks.accessRequests || !user?.uid || !workspace?.id || !canReadAccessRequests) return;
     let cancelled = false;
-    void getDocsFromServer(query(collection(db, "access_requests"), where("status", "==", "pending")))
-      .then((snapshot) => {
+    const list = httpsCallable<{ workspaceId: string }, { requests: AccessRequest[] }>(
+      getFunctions(app, "us-central1"), "listBetaAccessRequests",
+    );
+    void list({ workspaceId: workspace.id })
+      .then(({ data }) => {
         if (cancelled) return;
-        setAccessRequests(snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() }) as AccessRequest)
+        setIsBetaApprover(true);
+        setAccessRequests(data.requests
           .sort((left, right) =>
             timestamp(right.requestedAt || right.updatedAt) -
             timestamp(left.requestedAt || left.updatedAt)));
       })
-      .catch(reportDataSyncError);
+      .catch((error) => {
+        if (cancelled) return;
+        setIsBetaApprover(false);
+        setAccessRequests([]);
+        if (error?.code !== "functions/permission-denied" &&
+            error?.code !== "functions/not-found" &&
+            error?.code !== "functions/failed-precondition") reportDataSyncError(error);
+      });
     return () => { cancelled = true; };
   }, [listenPacks.accessRequests, user?.uid, workspace?.id, canReadAccessRequests, dataRetryVersion, reportDataSyncError]);
 
@@ -3813,13 +3825,14 @@ export function DelivereeWorkspace() {
         email,
       ]),
     ];
-    await updateDoc(doc(db, "workspaces", workspace.id), {
+    const invitation = writeBatch(db);
+    invitation.update(doc(db, "workspaces", workspace.id), {
       members: currentMembers,
       roles: { ...(workspace.roles || {}), [email]: inviteRole },
       updatedAt: serverTimestamp(),
     });
     const pendingId = pendingMemberId(workspace.id, email);
-    await setDoc(
+    invitation.set(
       doc(db, "workspace_members", pendingId),
       {
         id: pendingId,
@@ -3839,7 +3852,8 @@ export function DelivereeWorkspace() {
     );
     const inviteToken = createInviteCode();
     const expiresAt = inviteExpiresAt();
-    const inviteRef = await addDoc(collection(db, "agent_invites"), {
+    const inviteRef = doc(collection(db, "agent_invites"));
+    invitation.set(inviteRef, {
       userId: user.uid,
       workspaceId: workspace.id,
       email,
@@ -3855,6 +3869,7 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    await invitation.commit();
     const result = await deliverWorkspaceInvite({
       email,
       role: inviteRole,
@@ -4356,7 +4371,8 @@ export function DelivereeWorkspace() {
             await batch.commit();
           }
           const email = normalizeInviteEmail(member.email || member.emailLower || "");
-          await updateDoc(doc(db, "workspace_members", member.id), {
+          const removal = writeBatch(db);
+          removal.update(doc(db, "workspace_members", member.id), {
             status: "removed",
             removedBy: user.uid,
             removedAt: serverTimestamp(),
@@ -4365,7 +4381,7 @@ export function DelivereeWorkspace() {
           if (email) {
             const roles = { ...(workspace.roles || {}) };
             delete roles[email];
-            await updateDoc(doc(db, "workspaces", workspace.id), {
+            removal.update(doc(db, "workspaces", workspace.id), {
               members: (workspace.members || []).filter(
                 (item) => String(item).toLowerCase() !== email,
               ),
@@ -4378,12 +4394,15 @@ export function DelivereeWorkspace() {
                 normalizeInviteEmail(invite.email || invite.emailLower || "") === email,
             );
             for (const invite of matchingInvites) {
-              await updateDoc(doc(db, "agent_invites", invite.id), {
+              removal.update(doc(db, "agent_invites", invite.id), {
                 status: "revoked",
                 revokedBy: user.uid,
                 updatedAt: serverTimestamp(),
               });
             }
+          }
+          await removal.commit();
+          if (email) {
             await reloadWorkspaces();
           }
           setNotice(`${label} removed from the workspace.`);
@@ -4397,12 +4416,25 @@ export function DelivereeWorkspace() {
 
   const revokeWorkspaceInvite = async (invite: any) => {
     if (!workspace || !user || !canManageMembers) return;
-    await updateDoc(doc(db, "agent_invites", invite.id), {
+    // A consumed invite is historical evidence, not an active grant. Removing it
+    // must never strip an already-accepted member from workspace.members/roles.
+    if (!inviteIsUsable(invite)) {
+      setNotice("This invitation has already been used. Remove the member directly if needed.");
+      return;
+    }
+    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
+    if (workspaceMembers.some((member) =>
+      member.workspaceId === workspace.id && member.emailLower === email &&
+      member.status === "active" && !String(member.userId || "").startsWith("pending:"))) {
+      setNotice("This person already joined. Remove the member directly if needed.");
+      return;
+    }
+    const revocation = writeBatch(db);
+    revocation.update(doc(db, "agent_invites", invite.id), {
       status: "revoked",
       revokedBy: user.uid,
       updatedAt: serverTimestamp(),
     });
-    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
     const pending = workspaceMembers.find(
       (member) =>
         pendingMemberId(workspace.id, member.email || member.emailLower || "") ===
@@ -4411,7 +4443,7 @@ export function DelivereeWorkspace() {
           String(member.status || "") === "invited"),
     );
     if (pending) {
-      await updateDoc(doc(db, "workspace_members", pending.id), {
+      revocation.update(doc(db, "workspace_members", pending.id), {
         status: "removed",
         removedBy: user.uid,
         updatedAt: serverTimestamp(),
@@ -4420,13 +4452,16 @@ export function DelivereeWorkspace() {
     if (email) {
       const roles = { ...(workspace.roles || {}) };
       delete roles[email];
-      await updateDoc(doc(db, "workspaces", workspace.id), {
+      revocation.update(doc(db, "workspaces", workspace.id), {
         members: (workspace.members || []).filter(
           (item) => String(item).toLowerCase() !== email,
         ),
         roles,
         updatedAt: serverTimestamp(),
       });
+    }
+    await revocation.commit();
+    if (email) {
       await reloadWorkspaces();
     }
     setNotice("Invite revoked.");
@@ -4436,63 +4471,28 @@ export function DelivereeWorkspace() {
     request: AccessRequest,
     role: "admin" | "member" | "viewer" = "member",
   ) => {
-    if (!user || !workspace) return;
-    const email = normalizeInviteEmail(request.email || request.emailLower || "");
-    const requestUserId = request.userId || request.id;
-    if (!email || !requestUserId) {
-      setNotice("This access request is missing an email or user id.");
-      return;
+    if (!user || !workspace || !isBetaApprover) return;
+    const decide = httpsCallable(getFunctions(app, "us-central1"), "decideBetaAccessRequest");
+    try {
+      await decide({ workspaceId: workspace.id, requestId: request.id, decision: "approve", role });
+      setAccessRequests((current) => current.filter((item) => item.id !== request.id));
+      await reloadWorkspaces();
+      setNotice(`${normalizeAlias(request.displayName) || "Teammate"} approved for ${workspace.name || "this workspace"}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Approval failed. Please retry.");
     }
-    const currentMembers = [
-      ...new Set([
-        ...(workspace.members || []).map((item) => String(item).toLowerCase()),
-        email,
-      ]),
-    ];
-    await updateDoc(doc(db, "workspaces", workspace.id), {
-      members: currentMembers,
-      roles: { ...(workspace.roles || {}), [email]: role },
-      updatedAt: serverTimestamp(),
-    });
-    await setDoc(
-      doc(db, "workspace_members", activeMemberId(workspace.id, requestUserId)),
-      {
-        id: activeMemberId(workspace.id, requestUserId),
-        workspaceId: workspace.id,
-        userId: requestUserId,
-        email,
-        emailLower: email,
-        ...membershipPublicPatch({ displayName: request.displayName, email }),
-        role,
-        status: "active",
-        portfolioViewer: role !== "viewer",
-        approvedBy: user.uid,
-        approvedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-    await updateDoc(doc(db, "access_requests", request.id), {
-      status: "approved",
-      approvedBy: user.uid,
-      approvedWorkspaceId: workspace.id,
-      approvedRole: role,
-      updatedAt: serverTimestamp(),
-    });
-    await reloadWorkspaces();
-    setNotice(`${normalizeAlias(request.displayName) || "Teammate"} approved for ${workspace.name || "this workspace"}.`);
   };
 
   const rejectAccessRequest = async (request: AccessRequest) => {
-    if (!user) return;
-    await updateDoc(doc(db, "access_requests", request.id), {
-      status: "rejected",
-      rejectedBy: user.uid,
-      rejectedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    setNotice(`${request.email || request.emailLower || "Request"} rejected.`);
+    if (!user || !workspace || !isBetaApprover) return;
+    const decide = httpsCallable(getFunctions(app, "us-central1"), "decideBetaAccessRequest");
+    try {
+      await decide({ workspaceId: workspace.id, requestId: request.id, decision: "reject" });
+      setAccessRequests((current) => current.filter((item) => item.id !== request.id));
+      setNotice(`${request.email || request.emailLower || "Request"} rejected.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Rejection failed. Please retry.");
+    }
   };
 
   const archiveConversation = async (conversation: Conversation) => {
@@ -5180,7 +5180,13 @@ export function DelivereeWorkspace() {
       email: user.email,
     };
     const assigned = withCreatorAssignee(patch, actor, workspaceMembers);
-    const created = await addDoc(collection(db, "tasks"), prepareTaskCreatePayload({
+    const taskRef = doc(collection(db, "tasks"));
+    const assignedPeople = collaboratorAccessFromMembers(workspaceMembers, [
+      ...(Array.isArray(assigned.assigneeIds) ? assigned.assigneeIds.map(String) : []),
+      ...(Array.isArray(assigned.collaboratorMemberIds) ? assigned.collaboratorMemberIds.map(String) : []),
+    ]);
+    const batch = writeBatch(db);
+    batch.set(taskRef, prepareTaskCreatePayload({
       ...assigned,
       userId: user.uid,
       workspaceId: workspace.id,
@@ -5205,6 +5211,16 @@ export function DelivereeWorkspace() {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }));
+    if (project && assignedPeople.memberIds.length) {
+      batch.update(doc(db, "projects", projectId), {
+        teamMemberIds: arrayUnion(...assignedPeople.memberIds),
+        ...(assignedPeople.userIds.length ? { visibleToUserIds: arrayUnion(...assignedPeople.userIds) } : {}),
+        ...(assignedPeople.emails.length ? { visibleToEmails: arrayUnion(...assignedPeople.emails) } : {}),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    const created = taskRef;
     const createdDiff = assignmentDiff({}, assigned);
     if (createdDiff.added.length) {
       const notifications = buildAssignmentNotificationDocs({
@@ -5454,7 +5470,28 @@ export function DelivereeWorkspace() {
     );
 
     try {
-      await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+      const linkedProjectId = String(next.projectId || "");
+      const assignedPeople = touchesAssignment || touchesCollaborators
+        ? collaboratorAccessFromMembers(workspaceMembers, [
+            ...(Array.isArray(next.assigneeIds) ? next.assigneeIds.map(String) : []),
+            ...(Array.isArray(next.collaboratorMemberIds) ? next.collaboratorMemberIds.map(String) : []),
+          ])
+        : null;
+      // Joining an item joins its project team. Keep both writes atomic so an
+      // assignee never receives an item but cannot open its project context.
+      if (linkedProjectId && assignedPeople && assignedPeople.memberIds.length && projects.some((project) => project.id === linkedProjectId)) {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+        batch.update(doc(db, "projects", linkedProjectId), {
+          teamMemberIds: arrayUnion(...assignedPeople.memberIds),
+          ...(assignedPeople.userIds.length ? { visibleToUserIds: arrayUnion(...assignedPeople.userIds) } : {}),
+          ...(assignedPeople.emails.length ? { visibleToEmails: arrayUnion(...assignedPeople.emails) } : {}),
+          updatedAt: serverTimestamp(),
+        });
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, "tasks", taskId), prepareItemWrite(write as any));
+      }
     } catch (reason) {
       reportDataSyncError(reason);
       setTasks((prev) =>
@@ -6086,6 +6123,7 @@ export function DelivereeWorkspace() {
       throw new Error("Sign in to add a document.");
     }
     let url = String(payload.url || "");
+    let storagePath = "";
     const file = payload.file as File | undefined;
     let saveStage: ProjectDocumentSaveStage = "metadata";
     try {
@@ -6093,12 +6131,24 @@ export function DelivereeWorkspace() {
         if (!isAllowedProjectResourceSize(file.size)) {
           throw new Error(projectResourceSizeLimitMessage());
         }
-        const path = `project-docs/${workspace.id}/${projectId}/${Date.now()}-${file.name}`;
-        const fileRef = ref(storage, path);
         saveStage = "upload";
-        await uploadBytes(fileRef, file);
-        saveStage = "download-url";
-        url = await getDownloadURL(fileRef);
+        const createUpload = httpsCallable<
+          { workspaceId: string; projectId: string; size: number; contentType: string },
+          { url: string; fields: Record<string, string>; storagePath: string }
+        >(getFunctions(app, "us-central1"), "createProjectFileUpload");
+        const upload = await createUpload({
+          workspaceId: workspace.id,
+          projectId,
+          size: file.size,
+          contentType: file.type || "application/octet-stream",
+        });
+        const form = new FormData();
+        for (const [key, value] of Object.entries(upload.data.fields)) form.append(key, value);
+        form.append("file", file);
+        const response = await fetch(upload.data.url, { method: "POST", body: form });
+        if (!response.ok) throw new Error(`File upload failed (${response.status}).`);
+        storagePath = upload.data.storagePath;
+        url = "";
       }
       saveStage = "metadata";
       await addDoc(collection(db, "knowledge_items"), {
@@ -6108,6 +6158,7 @@ export function DelivereeWorkspace() {
         title: payload.title || file?.name || "Untitled",
         resourceType: payload.resourceType || "note",
         url,
+        ...(storagePath ? { storagePath } : {}),
         content: payload.body || "",
         status: "active",
         createdAt: serverTimestamp(),
@@ -10830,7 +10881,7 @@ export function DelivereeWorkspace() {
               )}
               </details>}
 
-              <details className="cw-admin-disclosure" open={accessRequests.length > 0}>
+              {isBetaApprover && <details className="cw-admin-disclosure" open={accessRequests.length > 0}>
               <summary>Beta access <span>{accessRequests.length} pending</span></summary>
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">
@@ -10924,7 +10975,7 @@ export function DelivereeWorkspace() {
                   )}
                 </div>
               </section>
-              </details>
+              </details>}
 
               <section className="do-workspace-admin-card">
                 <div className="do-workspace-admin-head">

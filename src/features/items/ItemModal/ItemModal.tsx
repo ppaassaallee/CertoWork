@@ -638,6 +638,21 @@ export function ItemModal({
               </button>
               {menuOpen && (
                 <div className="cw-item-more-menu" role="menu">
+                  {project && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void onUpdateTask(item.id, {
+                          visibility: String(item.visibility || "") === "private" ? "project" : "private",
+                        });
+                      }}
+                      type="button"
+                    >
+                      {String(item.visibility || "") === "private"
+                        ? (isSpanish(locale) ? "Compartir con el proyecto" : "Share with project")
+                        : (isSpanish(locale) ? "Hacer privado" : "Make private")}
+                    </button>
+                  )}
                   <button onClick={copyLink} type="button">
                     <Copy size={13} /> {copy("copyLink", locale)}
                   </button>

@@ -25,6 +25,9 @@ export function prepareTaskCreatePayload(data: Record<string, unknown>) {
   const clean = sanitizeFirestorePayload(data);
   const criteria = clean.acceptanceCriteria;
   clean.acceptanceCriteria = criteria == null ? "" : String(criteria);
+  if (clean.visibility == null) {
+    clean.visibility = clean.projectId ? "project" : "private";
+  }
   return clean;
 }
 

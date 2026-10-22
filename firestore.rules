@@ -48,7 +48,7 @@ service cloud.firestore {
       );
       allow create: if isSignedIn() && incoming().keys().hasAll(['ownerId', 'name', 'createdAt']) && incoming().ownerId == request.auth.uid;
       allow update: if isSignedIn()
-        && (resource.data.ownerId == request.auth.uid || workspaceListsAuthEmail())
+        && isWorkspaceAdmin(id)
         && incoming().ownerId == resource.data.ownerId
         && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 200
         && (!('createdAt' in resource.data) || incoming().createdAt == resource.data.createdAt);
@@ -65,7 +65,7 @@ service cloud.firestore {
     }
 
     function isPortalToken() {
-      return isSignedIn() && request.auth.token.portal == true;
+      return isSignedIn() && ('portal' in request.auth.token) && request.auth.token.portal == true;
     }
 
     function portalClientIds() {
@@ -98,7 +98,7 @@ service cloud.firestore {
 
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() && workspaceId != null
-        && request.auth.token.portal != true
+        && (!('portal' in request.auth.token) || request.auth.token.portal != true)
         && exists(memberDoc(workspaceId))
         && isJoinedMemberStatus(get(memberDoc(workspaceId)).data.status);
     }
@@ -138,6 +138,31 @@ service cloud.firestore {
       return isSignedIn()
         && workspaceId != null
         && get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid;
+    }
+
+    function isWorkspaceParticipant(workspaceId) {
+      return isWorkspaceOwner(workspaceId) || isWorkspaceMember(workspaceId);
+    }
+
+    // Legacy collections still used by optional surfaces are not a reason to
+    // grant every Firebase account access to every tenant's records.
+    function canAccessTenantRecord(data) {
+      return isSignedIn() && (
+        (('workspaceId' in data) && data.workspaceId is string
+          && isWorkspaceParticipant(data.workspaceId))
+        || (!('workspaceId' in data) && ('userId' in data)
+          && data.userId == request.auth.uid)
+      );
+    }
+
+    function preservesTenantRecord(before, after) {
+      return (!('workspaceId' in before) || after.workspaceId == before.workspaceId)
+        && (!('userId' in before) || after.userId == before.userId);
+    }
+
+    function canUpdateTenantRecord() {
+      return canAccessTenantRecord(resource.data)
+        && preservesTenantRecord(resource.data, incoming());
     }
 
     // People who can already open a workspace must be able to create projects
@@ -202,7 +227,11 @@ service cloud.firestore {
     }
 
     function canReadProject(data) {
-      return isSignedIn() && (
+      return isSignedIn()
+        && (('workspaceId' in data) && data.workspaceId is string
+          ? isWorkspaceParticipant(data.workspaceId)
+          : data.userId == request.auth.uid)
+        && (
         data.userId == request.auth.uid ||
         (('createdBy' in data) && data.createdBy == request.auth.uid) ||
         (('ownerId' in data) && data.ownerId == request.auth.uid) ||
@@ -215,7 +244,11 @@ service cloud.firestore {
     }
 
     function canWriteProject(data) {
-      return isSignedIn() && (
+      return isSignedIn()
+        && (('workspaceId' in data) && data.workspaceId is string
+          ? isWorkspaceParticipant(data.workspaceId)
+          : data.userId == request.auth.uid)
+        && (
         data.userId == request.auth.uid ||
         (('createdBy' in data) && data.createdBy == request.auth.uid) ||
         (('ownerId' in data) && data.ownerId == request.auth.uid) ||
@@ -226,8 +259,8 @@ service cloud.firestore {
       );
     }
 
-    function canReadTask(data) {
-      return isSignedIn() && (
+    function hasDirectTaskAccess(data) {
+      return (
         data.userId == request.auth.uid ||
         (('createdBy' in data) && data.createdBy == request.auth.uid) ||
         (('ownerId' in data) && data.ownerId == request.auth.uid) ||
@@ -253,8 +286,30 @@ service cloud.firestore {
       );
     }
 
+    function hasProjectTaskAccess(data) {
+      return ('workspaceId' in data) && data.workspaceId is string
+        && ('projectId' in data) && data.projectId is string
+        && data.projectId != ''
+        && ('visibility' in data) && data.visibility == 'project'
+        && exists(/databases/$(database)/documents/projects/$(data.projectId))
+        && get(/databases/$(database)/documents/projects/$(data.projectId)).data.workspaceId == data.workspaceId
+        && canReadProject(get(/databases/$(database)/documents/projects/$(data.projectId)).data);
+    }
+
+    function canReadTask(data) {
+      return isSignedIn()
+        && (('workspaceId' in data) && data.workspaceId is string
+          ? isWorkspaceParticipant(data.workspaceId)
+          : data.userId == request.auth.uid)
+        && (hasDirectTaskAccess(data) || hasProjectTaskAccess(data));
+    }
+
     function canWriteTask(data) {
-      return canReadTask(data);
+      return isSignedIn()
+        && (('workspaceId' in data) && data.workspaceId is string
+          ? isWorkspaceParticipant(data.workspaceId)
+          : data.userId == request.auth.uid)
+        && hasDirectTaskAccess(data);
     }
 
     // Playbooks
@@ -273,19 +328,34 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid && isValidPlaybook(incoming()) && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
     }
     match /playbook_runs/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canAccessTenantRecord(resource.data) && preservesTenantRecord(resource.data, incoming());
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /entity_links/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canAccessTenantRecord(resource.data) && preservesTenantRecord(resource.data, incoming());
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /resources/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canAccessTenantRecord(resource.data) && preservesTenantRecord(resource.data, incoming());
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /task_organize_runs/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canAccessTenantRecord(resource.data) && preservesTenantRecord(resource.data, incoming());
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /task_organize_suggestions/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canAccessTenantRecord(resource.data) && preservesTenantRecord(resource.data, incoming());
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /skills/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
@@ -294,14 +364,16 @@ service cloud.firestore {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
     function canReadKnowledgeItem(data) {
-      return isSignedIn() && (
+      return canAccessTenantRecord(data) && (
         data.userId == request.auth.uid ||
         (
           ('projectId' in data) &&
           data.projectId is string &&
           data.projectId.size() > 0 &&
           ('workspaceId' in data) &&
-          canCreateWorkspaceRecord(data.workspaceId)
+          exists(/databases/$(database)/documents/projects/$(data.projectId)) &&
+          get(/databases/$(database)/documents/projects/$(data.projectId)).data.workspaceId == data.workspaceId &&
+          canReadProject(get(/databases/$(database)/documents/projects/$(data.projectId)).data)
         )
       );
     }
@@ -799,7 +871,8 @@ service cloud.firestore {
       allow list: if isSignedIn() && canReadProject(resource.data);
       allow create: if isSignedIn() && isValidId(id) && isValidProject(incoming()) && incoming().userId == request.auth.uid && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
       allow update: if isSignedIn() && isValidId(id) && canWriteProject(resource.data) && isValidProject(incoming()) 
-                     && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
+                     && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt
+                     && incoming().workspaceId == resource.data.workspaceId;
     }
 
     // Milestones
@@ -810,11 +883,11 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
     match /milestones/{id} {
-      allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow delete: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.email != null);
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || canAccessTenantRecord(resource.data));
+      allow delete: if isSignedIn() && isValidId(id) && canAccessTenantRecord(resource.data) && resource.data.userId == request.auth.uid;
+      allow list: if canAccessTenantRecord(resource.data);
       allow create: if isSignedIn() && isValidId(id) && isValidMilestone(incoming()) && (!('workspaceId' in incoming()) || canCreateWorkspaceRecord(incoming().workspaceId));
-      allow update: if isSignedIn() && isValidId(id) && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId))) && isValidMilestone(incoming()) 
+      allow update: if isSignedIn() && isValidId(id) && canAccessTenantRecord(resource.data) && isValidMilestone(incoming())
                      && incoming().userId == resource.data.userId && incoming().createdAt == resource.data.createdAt;
     }
 
@@ -1005,6 +1078,7 @@ service cloud.firestore {
         (
           isSignedIn() && canWriteTask(resource.data)
           && incoming().userId == resource.data.userId
+          && incoming().workspaceId == resource.data.workspaceId
           && incoming().createdAt == resource.data.createdAt
           && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy)
         ) || (
@@ -1194,18 +1268,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
       allow update: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid && incoming().userId == request.auth.uid;
     }
-    match /boldr_projects/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_initiatives/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_risks/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_changes/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_qas/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_mbrs/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_handoffs/{id} { allow read, write: if isSignedIn(); }
-    match /boldr_artifacts/{id} { allow read, write: if isSignedIn(); }
+    match /boldr_projects/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_initiatives/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_risks/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_changes/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_qas/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_mbrs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_handoffs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /boldr_artifacts/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
 
-    match /strategic_goals/{id} { allow read, write: if isSignedIn(); }
-    match /key_results/{id} { allow read, write: if isSignedIn(); }
-    match /strategic_initiatives/{id} { allow read, write: if isSignedIn(); }
+    match /strategic_goals/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /key_results/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /strategic_initiatives/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
     function canAccessBoldiRecord(data) {
       return isSignedIn()
         && data.userId == request.auth.uid
@@ -1363,13 +1437,13 @@ service cloud.firestore {
     match /boldi_profiles/{userId} {
       allow read, write: if isSignedIn() && userId == request.auth.uid;
     }
-    match /daily_briefs/{id} { allow read, write: if isSignedIn(); }
-    match /start_day_preferences/{id} { allow read, write: if isSignedIn(); }
-    match /start_day_sessions/{id} { allow read, write: if isSignedIn(); }
-    match /meeting_intakes/{id} { allow read, write: if isSignedIn(); }
-    match /strategic_alignment_runs/{id} { allow read, write: if isSignedIn(); }
-    match /strategic_alignment_suggestions/{id} { allow read, write: if isSignedIn(); }
-    match /strategic_alerts/{id} { allow read, write: if isSignedIn(); }
+    match /daily_briefs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /start_day_preferences/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /start_day_sessions/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /meeting_intakes/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /strategic_alignment_runs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /strategic_alignment_suggestions/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /strategic_alerts/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
 
     function canCreateUserOwnedRecord(data) {
       return isSignedIn()
@@ -1447,65 +1521,81 @@ service cloud.firestore {
     }
 
     match /access_requests/{id} {
-      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
-      allow get: if isSignedIn() && (
-        resource == null ||
-        resource.data.userId == request.auth.uid ||
-        id == request.auth.uid
-      );
-      allow list: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Open beta registration is self-service; triage is server-only.
+      allow create: if isSignedIn() && id == request.auth.uid
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'pending'
+        && incoming().emailLower == authEmailLower();
+      allow get: if isSignedIn() && id == request.auth.uid;
+      allow list, update, delete: if false;
     }
 
     match /workspace_members/{memberId} {
       allow read: if isSignedIn() && (
         resource == null ||
         resource.data.userId == request.auth.uid ||
-        exists(/databases/$(database)/documents/workspace_members/$(resource.data.workspaceId + "_" + request.auth.uid)) ||
+        isWorkspaceParticipant(resource.data.workspaceId) ||
+        // Login looks up every membership addressed to this verified email,
+        // including records already accepted on another device.
         (authEmailLower() != "" && resource.data.emailLower == authEmailLower())
       );
-      allow create: if isSignedIn() && (
-        incoming().userId == request.auth.uid && (
-          get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-          workspaceMembersContainAuthEmail(incoming().workspaceId)
-        ) ||
-        get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-        isWorkspaceAdmin(incoming().workspaceId)
-      );
-      allow update: if isSignedIn() && (
-        incoming().userId == request.auth.uid && (
-          get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-          workspaceMembersContainAuthEmail(incoming().workspaceId)
-        ) ||
-        get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.ownerId == request.auth.uid ||
-        isWorkspaceAdmin(incoming().workspaceId) ||
-        (
-          authEmailLower() != "" &&
-          resource.data.emailLower == authEmailLower() &&
-          incoming().workspaceId == resource.data.workspaceId
-        )
-      );
+      allow create: if isSignedIn() && incoming().workspaceId is string
+        && incoming().userId is string
+        && incoming().emailLower is string
+        && (
+          isWorkspaceAdmin(incoming().workspaceId)
+          || (memberId == incoming().workspaceId + "_" + request.auth.uid
+            && incoming().userId == request.auth.uid
+            && incoming().emailLower == authEmailLower()
+            && incoming().status in ["active", "accepted"]
+            && workspaceMembersContainAuthEmail(incoming().workspaceId)
+            && incoming().role == get(/databases/$(database)/documents/workspaces/$(incoming().workspaceId)).data.roles[authEmailLower()]
+            && incoming().portfolioViewer == (incoming().role != "viewer")
+            && (!('financeAccess' in incoming()) || incoming().financeAccess == false)
+            && (!('teamIds' in incoming()) || incoming().teamIds == []))
+        );
+      allow update: if isSignedIn() && incoming().workspaceId == resource.data.workspaceId
+        && incoming().userId == resource.data.userId
+        && incoming().emailLower == resource.data.emailLower
+        && (
+          isWorkspaceAdmin(resource.data.workspaceId)
+          || (resource.data.userId == request.auth.uid
+            && incoming().role == resource.data.role
+            && incoming().portfolioViewer == resource.data.portfolioViewer
+            && (!('financeAccess' in resource.data) || incoming().financeAccess == resource.data.financeAccess)
+            && (!('teamIds' in resource.data) || incoming().teamIds == resource.data.teamIds)
+            && incoming().status == resource.data.status
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'alias', 'displayName', 'emoji', 'locale', 'updatedAt', 'createdAt',
+              'email', 'acceptedAt', 'id', 'invitedBy'
+            ]))
+          || (resource.data.status == "invited"
+            && resource.data.emailLower == authEmailLower()
+            && incoming().status == "accepted"
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'acceptedUserId', 'acceptedMemberId', 'acceptedAt', 'updatedAt'
+            ]))
+        );
       allow delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/workspaces/$(resource.data.workspaceId)).data.ownerId == request.auth.uid
+        isWorkspaceAdmin(resource.data.workspaceId)
       );
     }
 
     // Legacy War Room collections — read-only during Collab migration window (30 days).
-    match /war_room_chats/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /war_room_participants/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /war_room_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /war_room_threads/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /boldi_agents/{id} { allow read, write: if isSignedIn(); }
-    match /agent_templates/{id} { allow read, write: if isSignedIn(); }
-    match /agent_runs/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_widgets/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_widget_versions/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_files/{id} { allow read: if isSignedIn(); allow write: if false; }
-    match /war_room_action_plans/{id} { allow read, write: if isSignedIn(); }
-    match /war_room_audit_logs/{id} { allow read, write: if isSignedIn(); }
-    match /work_item_messages/{id} { allow read: if isSignedIn(); allow write: if false; }
+    match /war_room_chats/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
+    match /war_room_participants/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
+    match /war_room_messages/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
+    match /war_room_threads/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
+    match /boldi_agents/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_templates/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_runs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /war_room_widgets/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /war_room_widget_versions/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /war_room_files/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
+    match /war_room_action_plans/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /war_room_audit_logs/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /work_item_messages/{id} { allow read: if canAccessTenantRecord(resource.data); allow write: if false; }
 
     // —— Native Collab (workspace + participant scoped) ——
     function conversationDoc(conversationId) {
@@ -1681,8 +1771,45 @@ service cloud.firestore {
         && isWorkspaceAdmin(resource.data.workspaceId);
       allow write: if false;
     }
-    match /agent_resources/{id} { allow read, write: if isSignedIn(); }
-    match /agent_invites/{id} { allow read, write: if isSignedIn(); }
+    match /agent_resources/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_invites/{id} {
+      allow get, list: if isSignedIn() && (
+        (('userId' in resource.data) && resource.data.userId == request.auth.uid)
+        || (('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid)
+        || (resource.data.workspaceId is string && isWorkspaceAdmin(resource.data.workspaceId))
+        || (resource.data.inviteType != 'workspace_member'
+            && isWorkspaceMember(resource.data.workspaceId))
+        || (resource.data.emailLower is string && resource.data.emailLower == authEmailLower())
+      );
+      allow create: if isSignedIn()
+        && incoming().workspaceId is string
+        && (
+          (isWorkspaceAdmin(incoming().workspaceId)
+            && incoming().userId == request.auth.uid
+            && incoming().emailLower is string
+            && incoming().inviteType == 'workspace_member')
+          || (isWorkspaceMember(incoming().workspaceId)
+            && incoming().createdBy == request.auth.uid
+            && incoming().inviteType != 'workspace_member')
+        );
+      allow update: if isSignedIn() && incoming().workspaceId == resource.data.workspaceId
+        && incoming().inviteType == resource.data.inviteType
+        && (!('emailLower' in resource.data) || incoming().emailLower == resource.data.emailLower)
+        && (!('userId' in resource.data) || incoming().userId == resource.data.userId)
+        && (
+          isWorkspaceAdmin(resource.data.workspaceId)
+          || (resource.data.inviteType != 'workspace_member'
+              && resource.data.createdBy == request.auth.uid
+              && isWorkspaceMember(resource.data.workspaceId))
+          || (resource.data.emailLower == authEmailLower()
+              && resource.data.status in ['pending', 'sent', 'invited']
+              && incoming().status == 'accepted'
+              && incoming().acceptedBy == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'acceptedBy', 'acceptedAt', 'updatedAt']))
+        );
+      allow delete: if isSignedIn() && isWorkspaceAdmin(resource.data.workspaceId);
+    }
     match /user_notifications/{id} {
       allow get, list: if isSignedIn()
         && resource.data.userId == request.auth.uid;
@@ -1699,9 +1826,9 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
     }
     match /sprints/{id} {
-      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow read: if isSignedIn() && (resource == null || canAccessTenantRecord(resource.data));
       allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().workspaceId is string && isWorkspaceMember(incoming().workspaceId);
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || ('workspaceId' in resource.data && isWorkspaceMember(resource.data.workspaceId)));
+      allow update, delete: if canUpdateTenantRecord();
     }
     match /widget_tokens/{id} {
       allow get: if resource.data.revoked != true
@@ -1742,15 +1869,15 @@ service cloud.firestore {
         ('workspaceId' in resource.data && isWorkspaceAdmin(resource.data.workspaceId))
       );
     }
-    match /contacts/{id} { allow read, write: if isSignedIn(); }
-    match /contact_requests/{id} { allow read, write: if isSignedIn(); }
-    match /agent_groups/{id} { allow read, write: if isSignedIn(); }
-    match /agent_group_members/{id} { allow read, write: if isSignedIn(); }
-    match /agent_workbench_templates/{id} { allow read, write: if isSignedIn(); }
-    match /agent_moments/{id} { allow read, write: if isSignedIn(); }
-    match /agent_widgets/{id} { allow read, write: if isSignedIn(); }
-    match /agent_widget_versions/{id} { allow read, write: if isSignedIn(); }
-    match /workspace_settings/{id} { allow read, write: if isSignedIn(); }
+    match /contacts/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /contact_requests/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_groups/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_group_members/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_workbench_templates/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_moments/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_widgets/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /agent_widget_versions/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
+    match /workspace_settings/{id} { allow read: if canAccessTenantRecord(resource.data); allow create: if canAccessTenantRecord(incoming()); allow update: if canUpdateTenantRecord(); allow delete: if canAccessTenantRecord(resource.data); }
 
     match /calendar_accounts/{id} {
       allow create: if isSignedIn() && isValidId(id) && incoming().userId == request.auth.uid;
@@ -1848,13 +1975,15 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && isValidId(id) && canWriteTableChild(resource.data);
     }
     match /tableEvents/{id} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
       allow update, delete: if false;
     }
     match /dashboards/{id} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow read: if canAccessTenantRecord(resource.data);
+      allow create: if canAccessTenantRecord(incoming());
+      allow update: if canUpdateTenantRecord();
+      allow delete: if canAccessTenantRecord(resource.data);
     }
     match /tableTemplates/{id} {
       allow read: if isSignedIn();

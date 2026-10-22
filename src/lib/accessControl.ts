@@ -127,7 +127,9 @@ export function buildTaskAccessPatch({
   const assignees = collaboratorAccessFromMembers(members, assigneeIds);
   const followers = collaboratorAccessFromMembers(members, collaboratorMemberIds);
   return {
-    visibility: String(task?.visibility || "private"),
+    // Project work is visible to its project by default. "private" must be an
+    // explicit item choice; the old default accidentally hid team work.
+    visibility: String(task?.visibility || (task?.projectId ? "project" : "private")),
     visibleToUserIds: unique([
       userId,
       ...explicitUserIds,
