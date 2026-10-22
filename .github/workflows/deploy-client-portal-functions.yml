@@ -11,6 +11,7 @@ on:
           - deploy
           - audit-project-docs
           - audit-workspace-invite
+          - repair-workspace-invite
         default: deploy
       invitee_email:
         description: "Email to diagnose (audit-workspace-invite only; not logged)"
@@ -106,3 +107,27 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
           node scripts/audit-workspace-invite.mjs
+
+  repair-workspace-invite:
+    if: inputs.mode == 'repair-workspace-invite'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Restore only accepted active Boldr admin membership
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INVITEE_EMAIL: ${{ inputs.invitee_email }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT is required for the targeted repair."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/certo-firebase.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/certo-firebase.json"
+          node scripts/repair-workspace-invite.mjs

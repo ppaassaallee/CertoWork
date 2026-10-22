@@ -25,3 +25,13 @@ test("beta decisions require the sole designated approver and verify account ema
   assert.match(server, /email !== accountEmail/);
   assert.match(server, /db\.runTransaction/);
 });
+
+test("revoke cannot erase an accepted invitation's active workspace access", () => {
+  const revoke = client.split("const revokeWorkspaceInvite =")[1].split("const approveAccessRequest =")[0];
+  assert.match(revoke, /if \(!inviteIsUsable\(invite\)\)/);
+  assert.match(revoke, /member\.status === "active"/);
+  const repair = readFileSync("scripts/repair-workspace-invite.mjs", "utf8");
+  assert.match(repair, /row\.status === "accepted"/);
+  assert.match(repair, /member\.status !== "active"/);
+  assert.match(repair, /db\.runTransaction/);
+});

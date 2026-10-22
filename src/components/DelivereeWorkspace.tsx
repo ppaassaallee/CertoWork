@@ -4416,13 +4416,25 @@ export function DelivereeWorkspace() {
 
   const revokeWorkspaceInvite = async (invite: any) => {
     if (!workspace || !user || !canManageMembers) return;
+    // A consumed invite is historical evidence, not an active grant. Removing it
+    // must never strip an already-accepted member from workspace.members/roles.
+    if (!inviteIsUsable(invite)) {
+      setNotice("This invitation has already been used. Remove the member directly if needed.");
+      return;
+    }
+    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
+    if (workspaceMembers.some((member) =>
+      member.workspaceId === workspace.id && member.emailLower === email &&
+      member.status === "active" && !String(member.userId || "").startsWith("pending:"))) {
+      setNotice("This person already joined. Remove the member directly if needed.");
+      return;
+    }
     const revocation = writeBatch(db);
     revocation.update(doc(db, "agent_invites", invite.id), {
       status: "revoked",
       revokedBy: user.uid,
       updatedAt: serverTimestamp(),
     });
-    const email = normalizeInviteEmail(invite.email || invite.emailLower || "");
     const pending = workspaceMembers.find(
       (member) =>
         pendingMemberId(workspace.id, member.email || member.emailLower || "") ===
