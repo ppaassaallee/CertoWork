@@ -387,6 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   ).catch((remapError) => {
                     console.error(`Failed to remap assignees for ${wsId}:`, remapError);
                   });
+                  localStorage.setItem('activeWorkspaceId', wsId);
                 }
                 await Promise.all(inviteSnaps.map(async (inviteDoc) => {
                   const inviteData = inviteDoc.data() as {

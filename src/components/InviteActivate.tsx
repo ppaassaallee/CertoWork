@@ -123,6 +123,7 @@ export function InviteActivate({ token }: Props) {
         email: current.email || invitedEmail,
       }).catch(() => undefined);
     }
+    localStorage.setItem("activeWorkspaceId", workspaceId);
     setNotice("Account activated. Opening Certo Work…");
     window.setTimeout(() => {
       window.location.assign("/");
