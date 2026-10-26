@@ -594,6 +594,51 @@
   line-height: 1.35;
 }
 .cw-item-prop-row > div { min-width: 0; }
+.cw-item-share-control {
+  display: grid;
+  gap: 5px;
+}
+.cw-item-share-picker {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.cw-item-share-picker > svg {
+  color: var(--text-muted);
+}
+.cw-item-share-picker select {
+  min-width: 0;
+}
+.cw-item-share-picker button {
+  grid-column: 2;
+  justify-self: start;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.cw-item-share-picker button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.cw-item-share-control > small {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cw-item-share-control > .cw-item-share-notice {
+  color: var(--accent);
+  white-space: normal;
+}
 .cw-item-prop-row > span em {
   display: inline;
   margin-left: 4px;

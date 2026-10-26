@@ -24,7 +24,52 @@ import {
   projectStatusLabel,
 } from "../../lib/projectPortfolio";
 import { deliveryStageLabels } from "../../lib/projectDelivery";
-import { CheckCircle2, Circle, Minus } from "../../components/ui/Icon";
+import { CheckCircle2, Circle, Minus, Users, X } from "../../components/ui/Icon";
+import {
+  collaborationShareGrant,
+  withCollaboratorAccess,
+} from "../../lib/collaborationAccess";
+import { memberPublicLabel } from "../../lib/workspaceCollaboration";
+import { getLocale, isSpanish } from "../../lib/i18n";
+
+type ProjectMember = {
+  id: string;
+  alias?: string;
+  displayName?: string;
+  email?: string;
+  emailLower?: string;
+  publicAlias?: string;
+  status?: string;
+  userId?: string;
+};
+
+function looksLikeOpaqueId(value: string) {
+  const text = value.trim();
+  return !text.includes(" ") && /^[A-Za-z0-9_-]{18,}$/.test(text);
+}
+
+export function projectOwnerDisplay(row: ProjectRow, members: ProjectMember[] = []) {
+  const ownerId = String(
+    row.projectManagerId || row.ownerId || row.owner || row.contactId || "",
+  ).trim();
+  const owner = members.find((member) =>
+    [member.id, member.userId, member.email, member.emailLower]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+      .includes(ownerId.toLowerCase()),
+  );
+  if (owner) {
+    return memberPublicLabel({
+      ...owner,
+      alias: owner.alias || owner.publicAlias,
+    });
+  }
+
+  const legacyLabel = String(row.projectManager || row.contact || "").trim();
+  if (legacyLabel && !looksLikeOpaqueId(legacyLabel)) return legacyLabel;
+  if (ownerId && !looksLikeOpaqueId(ownerId) && !ownerId.includes("@")) return ownerId;
+  return "—";
+}
 
 function groupByProjectId<T extends { projectId?: string }>(rows: T[]) {
   const map = new Map<string, T[]>();
@@ -79,7 +124,7 @@ export function ProjectsViewsSurface({
   risks?: Array<Record<string, unknown> & { projectId?: string }>;
   actorId: string;
   workspaceId: string;
-  members?: Array<{ id: string; displayName?: string; email?: string; publicAlias?: string }>;
+  members?: ProjectMember[];
   onUpdateProject(projectId: string, patch: Record<string, unknown>): Promise<void> | void;
   onArchiveProject(project: ProjectRow): Promise<void> | void;
   onOpenProject(project: ProjectRow): void;
@@ -92,16 +137,16 @@ export function ProjectsViewsSurface({
   const surface: Surface = "projects-list";
   const tasksByProject = useMemo(() => groupByProjectId(tasks), [tasks]);
   const risksByProject = useMemo(() => groupByProjectId(risks), [risks]);
-  const memberLabel = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const member of members) {
-      map.set(
-        member.id,
-        member.displayName || member.publicAlias || member.email || member.id,
-      );
-    }
-    return map;
-  }, [members]);
+  const locale = getLocale();
+  const spanish = isSpanish(locale);
+  const shareableMembers = useMemo(
+    () => members.filter((member) => {
+      const status = String(member.status || "active").toLowerCase();
+      return !["removed", "rejected", "revoked"].includes(status) &&
+        Boolean(member.userId || member.email || member.emailLower);
+    }),
+    [members],
+  );
 
   const adapter = useMemo(
     () =>
@@ -133,6 +178,10 @@ export function ProjectsViewsSurface({
   const [activeId, setActiveId] = useState(defaultView.id);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [customizerSection, setCustomizerSection] = useState<CustomizerSection>("customize");
+  const [sharingProjectId, setSharingProjectId] = useState("");
+  const [shareMemberId, setShareMemberId] = useState("");
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -228,12 +277,39 @@ export function ProjectsViewsSurface({
     return updateView(withList.id, withList, { userId: actorId }, withList);
   };
 
-  const ownerLabel = (row: ProjectRow) => {
-    const id = String(
-      row.projectManagerId || row.ownerId || row.owner || row.contactId || "",
-    );
-    if (!id) return "—";
-    return memberLabel.get(id) || String(row.projectManager || row.contact || id);
+  const shareProject = async (project: ProjectRow) => {
+    const member = shareableMembers.find((entry) => entry.id === shareMemberId);
+    if (!member) return;
+    setSharingBusy(true);
+    setShareNotice("");
+    try {
+      await onUpdateProject(
+        String(project.id),
+        withCollaboratorAccess(
+          project as ProjectRow & {
+            visibleToUserIds?: unknown;
+            visibleToEmails?: unknown;
+            sharedWithUserIds?: unknown;
+          },
+          collaborationShareGrant(member),
+        ),
+      );
+      setShareNotice(
+        spanish
+          ? `Compartido con ${memberPublicLabel({ ...member, alias: member.alias || member.publicAlias })}.`
+          : `Shared with ${memberPublicLabel({ ...member, alias: member.alias || member.publicAlias })}.`,
+      );
+      setShareMemberId("");
+      setSharingProjectId("");
+    } catch {
+      setShareNotice(
+        spanish
+          ? "No se pudo compartir el proyecto. Intenta de nuevo."
+          : "The project could not be shared. Try again.",
+      );
+    } finally {
+      setSharingBusy(false);
+    }
   };
 
   return (
@@ -305,6 +381,7 @@ export function ProjectsViewsSurface({
             <span>Owner</span>
             <span>Due</span>
             <span>Open</span>
+            <span aria-hidden="true" />
           </div>
           {applied.rows.length === 0 ? (
             <div className="do-projects-asana-empty">No projects match this view.</div>
@@ -373,15 +450,65 @@ export function ProjectsViewsSurface({
                   <span>
                     {(deliveryStageLabels as Record<string, string>)[stage] || stage || "—"}
                   </span>
-                  <span title={ownerLabel(project)}>{ownerLabel(project)}</span>
+                  <span className="do-projects-asana-owner" title={projectOwnerDisplay(project, members)}>
+                    {projectOwnerDisplay(project, members)}
+                  </span>
                   <span className="do-projects-asana-due">{due || "—"}</span>
                   <span className="do-projects-asana-open tabular-nums">{openCount}</span>
+                  <div
+                    className="do-projects-share-cell"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <button
+                      aria-expanded={sharingProjectId === id}
+                      aria-label={spanish ? `Compartir ${name}` : `Share ${name}`}
+                      className="do-projects-share-trigger"
+                      onClick={() => {
+                        setShareNotice("");
+                        setSharingProjectId((current) => current === id ? "" : id);
+                      }}
+                      title={spanish ? "Compartir proyecto" : "Share project"}
+                      type="button"
+                    >
+                      <Users size={15} />
+                    </button>
+                    {sharingProjectId === id ? (
+                      <div className="do-projects-share-popover" role="dialog" aria-label={spanish ? "Compartir proyecto" : "Share project"}>
+                        <div className="do-projects-share-popover-head">
+                          <strong>{spanish ? "Compartir proyecto" : "Share project"}</strong>
+                          <button aria-label={spanish ? "Cerrar" : "Close"} onClick={() => setSharingProjectId("")} type="button">
+                            <X size={14} />
+                          </button>
+                        </div>
+                        <p>{spanish ? "Da acceso a una persona de este workspace." : "Give access to a person in this workspace."}</p>
+                        <div className="do-projects-share-people" aria-label={spanish ? "Persona" : "Person"} role="listbox">
+                          {shareableMembers.map((member) => (
+                            <button
+                              aria-selected={shareMemberId === member.id}
+                              className={shareMemberId === member.id ? "is-selected" : ""}
+                              key={member.id}
+                              onClick={() => setShareMemberId(member.id)}
+                              role="option"
+                              type="button"
+                            >
+                              {memberPublicLabel({ ...member, alias: member.alias || member.publicAlias })}
+                            </button>
+                          ))}
+                          {!shareableMembers.length ? <span>{spanish ? "No hay personas disponibles." : "No people available."}</span> : null}
+                        </div>
+                        <button className="do-projects-share-confirm" disabled={!shareMemberId || sharingBusy} onClick={() => void shareProject(project)} type="button">
+                          {sharingBusy ? (spanish ? "Compartiendo…" : "Sharing…") : (spanish ? "Dar acceso" : "Grant access")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </article>
               );
             })
           )}
         </div>
       </div>
+      {shareNotice ? <div className="do-projects-share-notice" role="status">{shareNotice}</div> : null}
       <ViewCustomizer
         adapter={adapter}
         onChange={(next) => {

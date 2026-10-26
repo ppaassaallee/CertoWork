@@ -52,6 +52,7 @@ import type { RecordDoc, TableDoc } from "../../../lib/tables";
 import { useAuth } from "../../../lib/AuthContext";
 import { useCollabEnabled } from "../../flags/featureUserFlags";
 import { ConversationThread } from "../../collab/ConversationThread";
+import { ItemShareControl } from "./ItemShareControl";
 import "./ItemModal.css";
 import "../../../desktop/ui/desktop-ui.css";
 
@@ -1067,6 +1068,9 @@ export function ItemModal({
                       : [item.owner || item.assignee].filter(Boolean)
                   }
                 />
+              </PropRow>
+              <PropRow label={isSpanish(locale) ? "Compartir" : "Share"}>
+                <ItemShareControl item={item} locale={locale} members={workspaceMembers} onUpdateTask={onUpdateTask} />
               </PropRow>
               <PropRow label={copy("dates", locale)}>
                 <div className="cw-item-date-range">
