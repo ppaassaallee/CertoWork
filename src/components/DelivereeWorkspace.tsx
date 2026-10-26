@@ -384,6 +384,8 @@ import {
   normalizeCollaboratorsPatch,
   patchTouchesAssignment,
   patchTouchesCollaborators,
+  patchTouchesSharing,
+  sharedMemberDiff,
 } from "../lib/taskAssignment";
 import { buildProjectCollaboratorAccessPatch, collaboratorAccessFromMembers } from "../lib/collaborationAccess";
 import {
@@ -5409,6 +5411,7 @@ export function DelivereeWorkspace() {
       {}) as Record<string, unknown>;
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
+    const touchesSharing = patchTouchesSharing(patch);
     const movesProject =
       Object.prototype.hasOwnProperty.call(patch, "projectId") &&
       String(patch.projectId || "") !== String(current.projectId || "");
@@ -5452,7 +5455,7 @@ export function DelivereeWorkspace() {
       ...nextPatch,
       updatedAt: serverTimestamp(),
     };
-    if (touchesAssignment || touchesCollaborators || movesProject) {
+    if (touchesAssignment || touchesCollaborators || touchesSharing || movesProject) {
       Object.assign(
         write,
         buildTaskAccessPatch({
@@ -5580,6 +5583,42 @@ export function DelivereeWorkspace() {
             itemId: taskId,
             itemTitle: taskTitle,
             message: `Added as collaborator by ${user.displayName || user.email || "someone"}`,
+            recipientEmails: notifications.map((n) => n.email).filter(Boolean),
+            actorName: user.displayName || user.email || "",
+            token,
+          });
+        }
+      }
+    }
+    if (touchesSharing) {
+      const diff = sharedMemberDiff(current, write);
+      if (diff.added.length) {
+        const notifications = buildAssignmentNotificationDocs({
+          taskId,
+          taskTitle,
+          workspaceId: workspace.id,
+          assignedByUserId: user.uid,
+          assignedByName: user.displayName || user.email || "",
+          members: workspaceMembers,
+          addedMemberIds: diff.added,
+          type: "task_shared",
+        });
+        await Promise.allSettled(
+          notifications.map((payload) =>
+            addDoc(collection(db, "user_notifications"), {
+              ...payload,
+              createdAt: serverTimestamp(),
+            }),
+          ),
+        );
+        if (notifications.length) {
+          setNotice(`Shared “${taskTitle}” — they can open it from their notification.`);
+          const token = await user.getIdToken().catch(() => null);
+          void postAssignmentNotify({
+            workspaceId: workspace.id,
+            itemId: taskId,
+            itemTitle: taskTitle,
+            message: `Shared by ${user.displayName || user.email || "someone"}`,
             recipientEmails: notifications.map((n) => n.email).filter(Boolean),
             actorName: user.displayName || user.email || "",
             token,

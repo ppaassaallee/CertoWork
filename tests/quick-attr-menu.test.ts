@@ -23,7 +23,8 @@ test("quick action click opens a portaled single or multi select menu", () => {
   assert.match(workItems, /Create \$\{workItemLabel\(allowed\[0\]\)\}/);
   assert.match(workItems, /onRenameWorkCategory/);
   assert.match(workItems, /onRenameControlledOption/);
-  assert.match(workItems, /Multi-select. The first person stays the owner./);
+  assert.match(workItems, /Choose the one person accountable/);
+  assert.match(workItems, /maxSelections=\{1\}/);
   assert.match(menu, /Rename \$\{option.label\}/);
   assert.match(workItems, /\.do-quick-attr-menu/);
 });

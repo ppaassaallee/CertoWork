@@ -27,6 +27,8 @@ export function ItemShareControl({
   item: Record<string, unknown> & {
     id: string;
     sharedWithUserIds?: unknown;
+    sharedMemberIds?: unknown;
+    accessMemberIds?: unknown;
     visibleToEmails?: unknown;
     visibleToUserIds?: unknown;
   };
@@ -54,12 +56,18 @@ export function ItemShareControl({
       (Array.isArray(item.visibleToEmails) ? item.visibleToEmails : [])
         .map((value: unknown) => String(value || "").trim().toLowerCase()),
     );
+    const memberIds = new Set([
+      ...(Array.isArray(item.sharedMemberIds) ? item.sharedMemberIds : []),
+      ...(Array.isArray(item.accessMemberIds) ? item.accessMemberIds : []),
+    ].map(String));
     return shareable
       .filter((member) =>
-        (member.userId && userIds.has(String(member.userId))) || emails.has(shareableEmail(member)),
+        memberIds.has(String(member.id)) ||
+        (member.userId && userIds.has(String(member.userId))) ||
+        emails.has(shareableEmail(member)),
       )
       .map((member) => memberPublicLabel(member));
-  }, [item.sharedWithUserIds, item.visibleToEmails, item.visibleToUserIds, shareable]);
+  }, [item.accessMemberIds, item.sharedMemberIds, item.sharedWithUserIds, item.visibleToEmails, item.visibleToUserIds, shareable]);
 
   const share = async () => {
     const member = shareable.find((entry) => entry.id === memberId);

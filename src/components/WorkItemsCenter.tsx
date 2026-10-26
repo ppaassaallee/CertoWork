@@ -1055,6 +1055,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [bulkSprintId, setBulkSprintId] = useState("");
   const [bulkProjectId, setBulkProjectId] = useState("");
   const [bulkShareId, setBulkShareId] = useState("");
+  const [bulkShareNotice, setBulkShareNotice] = useState("");
   const [sprintFilter, setSprintFilter] = useState("all");
   const [ganttScale, setGanttScale] = useState<"day" | "week" | "month" | "quarter">("week");
   const [ganttFocus, setGanttFocus] = useState(false);
@@ -2107,6 +2108,26 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     }
   };
 
+  const shareBulkItems = async () => {
+    const member = workspaceMembers.find((candidate) => candidate.id === bulkShareId);
+    if (!member) return;
+    setBulkShareNotice("");
+    try {
+      await Promise.all(selectedBulkIds.map((id) => {
+        const item = tasks.find((task) => task.id === id);
+        if (!item) return Promise.resolve();
+        return onUpdateTask(id, withCollaboratorAccess(item, collaborationShareGrant(member)));
+      }));
+      const count = selectedBulkIds.length;
+      setBulkShareNotice(`${count} item${count === 1 ? "" : "s"} shared with ${memberName(member)}.`);
+      setBulkShareId("");
+      setSelectedBulkIds([]);
+      setKanbanError("");
+    } catch (reason) {
+      setKanbanError(reason instanceof Error ? reason.message : "Items could not be shared.");
+    }
+  };
+
   const projectSprints = sprints.filter((sprint) => !activeProject || sprint.projectId === activeProject.id);
 
   const persistKanbanMove = async (result: DropResult) => {
@@ -2931,8 +2952,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             >
               <MultiAssigneePicker
                 compact
-                helperText="Multi-select. The first person stays the owner."
-                label="Assignees"
+                helperText="Choose the one person accountable for finishing this work."
+                label="Assignee"
+                maxSelections={1}
                 members={workspaceMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
@@ -3539,8 +3561,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               agentMembers={agentMembers}
               compact
-              helperText={tr("Multi-select. The first person stays the owner.", "Puedes elegir varias personas. La primera será la responsable.")}
-              label={tr("Assignees", "Asignados")}
+              helperText={tr("Choose the one person accountable for finishing this work.", "Elige a la única persona responsable de terminar este trabajo.")}
+              label={tr("Assignee", "Responsable")}
+              maxSelections={1}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => {
@@ -5085,12 +5108,13 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                   >
                     <MultiAssigneePicker
                       compact
-                      label="Assignees"
+                      label="Assignee"
+                      maxSelections={1}
                       members={workspaceMembers.filter(
                         (member) => String(member.status || "active") !== "removed",
                       )}
                       onInviteEmail={onInviteAssigneeEmail}
-                      helperText="Multi-select. The first person stays the owner."
+                      helperText="Choose the one person accountable for finishing this work."
                       onChange={(assigneeIds) => {
                         setNewAssigneeIds(assigneeIds);
                       }}
@@ -5358,13 +5382,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           </select>
           <button
             disabled={!bulkShareId}
-            onClick={() => Promise.all(selectedBulkIds.map((id) => {
-              const item = tasks.find((task) => task.id === id);
-              const member = workspaceMembers.find((candidate) => candidate.id === bulkShareId);
-              if (!item || !member) return Promise.resolve();
-              const grant = collaborationShareGrant(member);
-              return onUpdateTask(id, withCollaboratorAccess(item, grant));
-            }))}
+            onClick={() => void shareBulkItems()}
             type="button"
           >
             Share item
@@ -5372,6 +5390,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
           <button onClick={() => updateBulk({ status: "archived" })} type="button">Archive</button>
         </section>
       )}
+
+      {bulkShareNotice ? <p role="status">{bulkShareNotice}</p> : null}
 
       {pendingCompletions.length > 0 && <p role="status">Saving {pendingCompletions.length} status change(s) — awaiting server confirmation.</p>}
       {mode !== "kanban" && kanbanError ? <p className="do-signin-error" role="alert">{kanbanError}</p> : null}
@@ -5835,15 +5855,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <label className="do-mobile-advanced">Product Phase<select onChange={(event) => onUpdateTask(selectedItem.id, { productPhase: event.target.value })} value={itemProductPhase(selectedItem, projects)}>{PRODUCT_PHASES.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select></label>
             <label className="do-mobile-advanced">Tags<CompactTagPicker label="Selected item tags" onCreateTag={(name) => onCreateControlledOption?.("tag", name)} onChange={(patch) => onUpdateTask(selectedItem.id, patch)} record={selectedItem} tags={tags} /></label>
             <label>
-              Assignees{" "}
+              Assignee{" "}
               <InfoTip
-                label="Assignees"
-                text="Select one or more people. The first person stays the owner. Add collaborators below if they only need updates."
+                label="Assignee"
+                text="Choose one accountable owner. Add collaborators below if other people only need updates."
               />
             </label>
             <MultiAssigneePicker
-              helperText="Multi-select. The first person stays the owner."
-              label="Assignees"
+              helperText="Choose the one person accountable for finishing this work."
+              label="Assignee"
+              maxSelections={1}
               members={workspaceMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) =>

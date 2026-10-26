@@ -91,7 +91,7 @@ export function AssignmentNotificationsBell({
         aria-label={unread.length ? `${unread.length} unread assignments` : "Notifications"}
         className={`do-icon-button${unread.length ? " is-attention" : ""}`}
         onClick={() => setOpen((current) => !current)}
-        title="Assignments"
+        title="Work notifications"
         type="button"
       >
         <Bell size={15} />
@@ -99,8 +99,8 @@ export function AssignmentNotificationsBell({
       </button>
       {open && (
         <div className="do-notify-menu" role="menu">
-          <strong>Assigned to you</strong>
-          {items.length === 0 && <p className="do-notify-empty">No assignment notifications yet.</p>}
+          <strong>Work notifications</strong>
+          {items.length === 0 && <p className="do-notify-empty">No work notifications yet.</p>}
           {items.map((item) => (
             <button
               className={`do-notify-item${!item.read ? " is-unread" : ""}`}
@@ -114,7 +114,11 @@ export function AssignmentNotificationsBell({
             >
               <span>{item.taskTitle || "Work item"}</span>
               <small>
-                {item.type === "task_collaborator"
+                {item.type === "task_shared"
+                  ? item.assignedByName
+                    ? `Shared with you by ${item.assignedByName}`
+                    : "Shared with you"
+                  : item.type === "task_collaborator"
                   ? item.assignedByName
                     ? `Added as collaborator by ${item.assignedByName}`
                     : "Added as collaborator"

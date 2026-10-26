@@ -58,13 +58,20 @@ export function collaboratorAccessFromMembers(
 
 export function withCollaboratorAccess(
   current: {
+    accessMemberIds?: unknown;
+    sharedMemberIds?: unknown;
     visibleToUserIds?: unknown;
     visibleToEmails?: unknown;
     sharedWithUserIds?: unknown;
   },
-  grant: { userId?: string | null; email?: string | null },
+  grant: { memberId?: string | null; userId?: string | null; email?: string | null },
 ) {
   return {
+    // Member ids are the stable workspace identity. Relying only on an auth uid
+    // or email made sharing silently fail for accepted invites whose membership
+    // had not yet been hydrated with both fields.
+    accessMemberIds: unique([...asIdList(current.accessMemberIds), grant.memberId]),
+    sharedMemberIds: unique([...asIdList(current.sharedMemberIds), grant.memberId]),
     visibleToUserIds: unique([...asIdList(current.visibleToUserIds), grant.userId]),
     visibleToEmails: unique([
       ...asIdList(current.visibleToEmails).map((item) => normalizeInviteEmail(item)),

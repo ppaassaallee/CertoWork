@@ -44,6 +44,8 @@ test("sharing an invited teammate grants their email so they can see the work af
     grant,
   );
   assert.deepEqual(patch.visibleToUserIds, ["owner-uid"]);
+  assert.ok(patch.accessMemberIds.includes(invited.id));
+  assert.ok(patch.sharedMemberIds.includes(invited.id));
   assert.ok(patch.visibleToEmails.includes("agustin@getboldr.ai"));
   assert.equal(patch.sharedWithUserIds.includes("pending:agustin@getboldr.ai"), false);
 });
@@ -52,6 +54,8 @@ test("sharing an active teammate grants their auth uid", () => {
   const grant = collaborationShareGrant(active);
   const patch = withCollaboratorAccess({}, grant);
   assert.deepEqual(patch.visibleToUserIds, ["uid-agustin"]);
+  assert.deepEqual(patch.accessMemberIds, [active.id]);
+  assert.deepEqual(patch.sharedMemberIds, [active.id]);
   assert.deepEqual(patch.sharedWithUserIds, ["uid-agustin"]);
   assert.deepEqual(patch.visibleToEmails, ["agustin@getboldr.ai"]);
 });
@@ -83,6 +87,30 @@ test("assigning an invited teammate still grants email access", () => {
   assert.deepEqual(collaboratorAccessFromMembers([invited], [invited.id]).emails, [
     "agustin@getboldr.ai",
   ]);
+});
+
+test("rebuilding assignment access preserves members who received an explicit share", () => {
+  const patch = buildTaskAccessPatch({
+    task: {
+      assigneeIds: [],
+      accessMemberIds: [active.id],
+      sharedMemberIds: [active.id],
+      visibleToUserIds: [active.userId],
+    },
+    workspaceId: "ws",
+    userId: "owner-uid",
+    email: "owner@certo.work",
+    members: [active],
+  });
+  assert.ok(patch.accessMemberIds.includes(active.id));
+  assert.ok(patch.visibleToUserIds.includes(active.userId));
+});
+
+test("primary assignee controls replace the current owner in one selection", () => {
+  const workItems = readFileSync(resolve("src/components/WorkItemsCenter.tsx"), "utf8");
+  const itemModal = readFileSync(resolve("src/features/items/ItemModal/ItemModal.tsx"), "utf8");
+  assert.match(workItems, /label="Assignee"[\s\S]{0,120}maxSelections=\{1\}/);
+  assert.match(itemModal, /label=\{copy\("assignee", locale\)\}[\s\S]{0,80}maxSelections=\{1\}/);
 });
 
 test("project share and item share look up members by id instead of pending user ids", () => {

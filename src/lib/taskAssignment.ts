@@ -24,6 +24,14 @@ export const COLLABORATOR_FIELD_KEYS = [
   "followerIds",
 ] as const;
 
+export const SHARING_FIELD_KEYS = [
+  "sharedMemberIds",
+  "accessMemberIds",
+  "sharedWithUserIds",
+  "visibleToUserIds",
+  "visibleToEmails",
+] as const;
+
 export function patchTouchesAssignment(patch: Record<string, unknown> | null | undefined) {
   if (!patch) return false;
   return ASSIGNMENT_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
@@ -32,6 +40,11 @@ export function patchTouchesAssignment(patch: Record<string, unknown> | null | u
 export function patchTouchesCollaborators(patch: Record<string, unknown> | null | undefined) {
   if (!patch) return false;
   return COLLABORATOR_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
+}
+
+export function patchTouchesSharing(patch: Record<string, unknown> | null | undefined) {
+  if (!patch) return false;
+  return SHARING_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 }
 
 /** Stable label for task assignee arrays — alias, then email local-part (never "Pending acceptance"). */
@@ -295,6 +308,21 @@ export function collaboratorDiff(
   return { added, removed, changed: added.length > 0 || removed.length > 0 };
 }
 
+export function sharedMemberDiff(
+  previous: { sharedMemberIds?: unknown } | null | undefined,
+  next: { sharedMemberIds?: unknown } | null | undefined,
+) {
+  const before = new Set(
+    (Array.isArray(previous?.sharedMemberIds) ? previous!.sharedMemberIds : []).map((item) => String(item)),
+  );
+  const after = new Set(
+    (Array.isArray(next?.sharedMemberIds) ? next!.sharedMemberIds : []).map((item) => String(item)),
+  );
+  const added = [...after].filter((id) => id && !before.has(id));
+  const removed = [...before].filter((id) => id && !after.has(id));
+  return { added, removed, changed: added.length > 0 || removed.length > 0 };
+}
+
 export function buildAssignmentNotificationDocs({
   taskId,
   taskTitle,
@@ -312,7 +340,7 @@ export function buildAssignmentNotificationDocs({
   assignedByName?: string | null;
   members: CollaborationMember[];
   addedMemberIds: string[];
-  type?: "task_assigned" | "task_collaborator";
+  type?: "task_assigned" | "task_collaborator" | "task_shared";
 }) {
   const selected = new Set(addedMemberIds.map(String));
   return members
@@ -355,6 +383,7 @@ const ARRAY_ID_FIELDS = [
   "sponsorIds",
   "collaboratorMemberIds",
   "followerIds",
+  "sharedMemberIds",
 ] as const;
 
 const SCALAR_ID_FIELDS = [
