@@ -124,6 +124,12 @@ export function buildTaskAccessPatch({
   const sharedWithUserIds = Array.isArray(task?.sharedWithUserIds)
     ? (task?.sharedWithUserIds as unknown[]).map((item) => String(item))
     : [];
+  const explicitAccessMemberIds = Array.isArray(task?.accessMemberIds)
+    ? (task?.accessMemberIds as unknown[]).map((item) => String(item))
+    : [];
+  const sharedMemberIds = Array.isArray(task?.sharedMemberIds)
+    ? (task?.sharedMemberIds as unknown[]).map((item) => String(item))
+    : [];
   const assignees = collaboratorAccessFromMembers(members, assigneeIds);
   const followers = collaboratorAccessFromMembers(members, collaboratorMemberIds);
   return {
@@ -152,6 +158,8 @@ export function buildTaskAccessPatch({
     collaboratorMemberIds: unique(collaboratorMemberIds),
     accessMemberIds: unique([
       activeWorkspaceMemberId(workspaceId, userId),
+      ...explicitAccessMemberIds,
+      ...sharedMemberIds,
       ...assigneeIds,
       ...collaboratorMemberIds,
       ...assignees.memberIds,

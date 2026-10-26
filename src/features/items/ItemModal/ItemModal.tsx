@@ -1048,8 +1048,11 @@ export function ItemModal({
               </PropRow>
               <PropRow label={copy("assignee", locale)}>
                 <MultiAssigneePicker
-                  helperText="Multi-select. The first person stays the owner."
+                  helperText={isSpanish(locale)
+                    ? "Elige a la única persona responsable de terminar este trabajo."
+                    : "Choose the one person accountable for finishing this work."}
                   label={copy("assignee", locale)}
+                  maxSelections={1}
                   members={workspaceMembers}
                   onInviteEmail={onInviteAssigneeEmail}
                   onChange={(assigneeIds, assignees) =>
