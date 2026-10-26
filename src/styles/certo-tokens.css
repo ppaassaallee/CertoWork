@@ -3501,7 +3501,7 @@
 .do-projects-asana-head,
 .do-projects-asana-row {
   display: grid;
-  grid-template-columns: 36px minmax(180px, 1.6fr) 100px 100px 110px 130px 100px 64px;
+  grid-template-columns: 36px minmax(180px, 1.6fr) 100px 100px 110px minmax(0, 130px) 100px 64px 36px;
   align-items: center;
   gap: 8px;
   padding: 0 8px;
@@ -3539,6 +3539,107 @@
 }
 .do-projects-asana-row .do-command-project-name {
   min-width: 0;
+}
+.do-projects-asana-owner {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.do-projects-share-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.do-projects-share-trigger {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.do-projects-asana-row:hover .do-projects-share-trigger,
+.do-projects-share-trigger[aria-expanded="true"],
+.do-projects-share-trigger:focus-visible {
+  opacity: 1;
+}
+.do-projects-share-trigger:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.do-projects-share-popover {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  z-index: 30;
+  width: 260px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-lg);
+  cursor: default;
+}
+.do-projects-share-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.do-projects-share-popover-head button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.do-projects-share-popover p {
+  margin: 6px 0 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.do-projects-share-popover select,
+.do-projects-share-confirm {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.do-projects-share-popover select {
+  background: var(--surface-0);
+  color: var(--text-primary);
+  padding: 0 8px;
+}
+.do-projects-share-confirm {
+  margin-top: 8px;
+  background: var(--accent);
+  color: white;
+  font-weight: 650;
+  cursor: pointer;
+}
+.do-projects-share-confirm:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.do-projects-share-notice {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  font-size: 12px;
 }
 .do-projects-asana-pill,
 .do-projects-asana-health {
@@ -3579,11 +3680,14 @@
 @media (max-width: 900px) {
   .do-projects-asana-head,
   .do-projects-asana-row {
-    grid-template-columns: 36px minmax(140px, 1fr) 90px 90px;
+    grid-template-columns: 36px minmax(140px, 1fr) 90px 90px 36px;
   }
   .do-projects-asana-head > span:nth-child(n + 5),
   .do-projects-asana-row > span:nth-child(n + 5) {
     display: none;
+  }
+  .do-projects-share-trigger {
+    opacity: 1;
   }
 }
 

@@ -5409,6 +5409,9 @@ export function DelivereeWorkspace() {
       {}) as Record<string, unknown>;
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
+    const movesProject =
+      Object.prototype.hasOwnProperty.call(patch, "projectId") &&
+      String(patch.projectId || "") !== String(current.projectId || "");
     let nextPatch = { ...patch };
     if (
       Array.isArray(nextPatch.tagIds) || Array.isArray(nextPatch.tags) || Array.isArray(nextPatch.labels)
@@ -5449,7 +5452,7 @@ export function DelivereeWorkspace() {
       ...nextPatch,
       updatedAt: serverTimestamp(),
     };
-    if (touchesAssignment || touchesCollaborators) {
+    if (touchesAssignment || touchesCollaborators || movesProject) {
       Object.assign(
         write,
         buildTaskAccessPatch({
@@ -5471,7 +5474,7 @@ export function DelivereeWorkspace() {
 
     try {
       const linkedProjectId = String(next.projectId || "");
-      const assignedPeople = touchesAssignment || touchesCollaborators
+      const assignedPeople = touchesAssignment || touchesCollaborators || movesProject
         ? collaboratorAccessFromMembers(workspaceMembers, [
             ...(Array.isArray(next.assigneeIds) ? next.assigneeIds.map(String) : []),
             ...(Array.isArray(next.collaboratorMemberIds) ? next.collaboratorMemberIds.map(String) : []),
@@ -5479,7 +5482,7 @@ export function DelivereeWorkspace() {
         : null;
       // Joining an item joins its project team. Keep both writes atomic so an
       // assignee never receives an item but cannot open its project context.
-      if (linkedProjectId && assignedPeople && assignedPeople.memberIds.length && projects.some((project) => project.id === linkedProjectId)) {
+      if (linkedProjectId && assignedPeople && assignedPeople.memberIds.length) {
         const batch = writeBatch(db);
         batch.update(doc(db, "tasks", taskId), prepareItemWrite(write as any));
         batch.update(doc(db, "projects", linkedProjectId), {

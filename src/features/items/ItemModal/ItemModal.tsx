@@ -52,6 +52,12 @@ import type { RecordDoc, TableDoc } from "../../../lib/tables";
 import { useAuth } from "../../../lib/AuthContext";
 import { useCollabEnabled } from "../../flags/featureUserFlags";
 import { ConversationThread } from "../../collab/ConversationThread";
+import {
+  collaborationShareGrant,
+  shareableEmail,
+  withCollaboratorAccess,
+} from "../../../lib/collaborationAccess";
+import { memberPublicLabel } from "../../../lib/workspaceCollaboration";
 import "./ItemModal.css";
 import "../../../desktop/ui/desktop-ui.css";
 
@@ -368,6 +374,9 @@ export function ItemModal({
   const [commentDraft, setCommentDraft] = useState("");
   const [subtaskDraft, setSubtaskDraft] = useState("");
   const [activePicker, setActivePicker] = useState<string | null>(null);
+  const [shareMemberId, setShareMemberId] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareNotice, setShareNotice] = useState("");
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const parentPickerRef = useRef<HTMLDivElement>(null);
   const kind = workItemKind(item);
@@ -380,6 +389,59 @@ export function ItemModal({
   const progress = checklistProgress(checklist);
   const comments = Array.isArray(item.comments) ? item.comments : [];
   const keyLabel = itemKey || item.projectKey || item.key || item.id?.slice(0, 8) || "—";
+  const shareableMembers = useMemo(
+    () => workspaceMembers.filter((member) => {
+      const status = String(member.status || "active").toLowerCase();
+      return !["removed", "rejected", "revoked"].includes(status) &&
+        Boolean(member.userId || member.email || member.emailLower);
+    }),
+    [workspaceMembers],
+  );
+  const sharedMemberNames = useMemo(() => {
+    const sharedUserIds = new Set(
+      [
+        ...(Array.isArray(item.visibleToUserIds) ? item.visibleToUserIds : []),
+        ...(Array.isArray(item.sharedWithUserIds) ? item.sharedWithUserIds : []),
+      ].map(String),
+    );
+    const sharedEmails = new Set(
+      (Array.isArray(item.visibleToEmails) ? item.visibleToEmails : [])
+        .map((value: unknown) => String(value || "").trim().toLowerCase()),
+    );
+    return shareableMembers
+      .filter((member) =>
+        (member.userId && sharedUserIds.has(String(member.userId))) ||
+        sharedEmails.has(shareableEmail(member)),
+      )
+      .map((member) => memberPublicLabel(member));
+  }, [item.sharedWithUserIds, item.visibleToEmails, item.visibleToUserIds, shareableMembers]);
+
+  const shareItem = async () => {
+    const member = shareableMembers.find((entry) => entry.id === shareMemberId);
+    if (!member) return;
+    setShareBusy(true);
+    setShareNotice("");
+    try {
+      await onUpdateTask(
+        item.id,
+        withCollaboratorAccess(item, collaborationShareGrant(member)),
+      );
+      setShareNotice(
+        isSpanish(locale)
+          ? `Acceso otorgado a ${memberPublicLabel(member)}.`
+          : `Access granted to ${memberPublicLabel(member)}.`,
+      );
+      setShareMemberId("");
+    } catch {
+      setShareNotice(
+        isSpanish(locale)
+          ? "No se pudo compartir este item. Intenta de nuevo."
+          : "This item could not be shared. Try again.",
+      );
+    } finally {
+      setShareBusy(false);
+    }
+  };
 
   const deliveryDisplay =
     deliveryEntityValue ||
@@ -1067,6 +1129,45 @@ export function ItemModal({
                       : [item.owner || item.assignee].filter(Boolean)
                   }
                 />
+              </PropRow>
+              <PropRow label={isSpanish(locale) ? "Compartir" : "Share"}>
+                <div className="cw-item-share-control">
+                  <div className="cw-item-share-picker">
+                    <Users aria-hidden="true" size={14} />
+                    <select
+                      aria-label={isSpanish(locale) ? "Compartir item con" : "Share item with"}
+                      onChange={(event) => {
+                        setShareNotice("");
+                        setShareMemberId(event.target.value);
+                      }}
+                      value={shareMemberId}
+                    >
+                      <option value="">
+                        {isSpanish(locale) ? "Seleccionar persona…" : "Select a person…"}
+                      </option>
+                      {shareableMembers.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {memberPublicLabel(member)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={!shareMemberId || shareBusy}
+                      onClick={() => void shareItem()}
+                      type="button"
+                    >
+                      {shareBusy
+                        ? (isSpanish(locale) ? "Compartiendo…" : "Sharing…")
+                        : (isSpanish(locale) ? "Dar acceso" : "Grant access")}
+                    </button>
+                  </div>
+                  {sharedMemberNames.length ? (
+                    <small title={sharedMemberNames.join(", ")}>
+                      {isSpanish(locale) ? "Compartido con" : "Shared with"}: {sharedMemberNames.join(", ")}
+                    </small>
+                  ) : null}
+                  {shareNotice ? <small className="cw-item-share-notice" role="status">{shareNotice}</small> : null}
+                </div>
               </PropRow>
               <PropRow label={copy("dates", locale)}>
                 <div className="cw-item-date-range">
