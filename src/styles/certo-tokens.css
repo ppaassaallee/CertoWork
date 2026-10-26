@@ -3605,17 +3605,38 @@
   font-size: 12px;
   line-height: 1.4;
 }
-.do-projects-share-popover select,
 .do-projects-share-confirm {
   width: 100%;
   min-height: 34px;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
-.do-projects-share-popover select {
-  background: var(--surface-0);
+.do-projects-share-people {
+  display: grid;
+  max-height: 170px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+}
+.do-projects-share-people > button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 7px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.do-projects-share-people > button:hover,
+.do-projects-share-people > button.is-selected {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
   color: var(--text-primary);
-  padding: 0 8px;
+}
+.do-projects-share-people > span {
+  color: var(--text-muted);
+  padding: 8px;
+  font-size: 11px;
 }
 .do-projects-share-confirm {
   margin-top: 8px;

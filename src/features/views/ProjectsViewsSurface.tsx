@@ -481,14 +481,21 @@ export function ProjectsViewsSurface({
                           </button>
                         </div>
                         <p>{spanish ? "Da acceso a una persona de este workspace." : "Give access to a person in this workspace."}</p>
-                        <select aria-label={spanish ? "Persona" : "Person"} onChange={(event) => setShareMemberId(event.target.value)} value={shareMemberId}>
-                          <option value="">{spanish ? "Seleccionar persona…" : "Select a person…"}</option>
+                        <div className="do-projects-share-people" aria-label={spanish ? "Persona" : "Person"} role="listbox">
                           {shareableMembers.map((member) => (
-                            <option key={member.id} value={member.id}>
+                            <button
+                              aria-selected={shareMemberId === member.id}
+                              className={shareMemberId === member.id ? "is-selected" : ""}
+                              key={member.id}
+                              onClick={() => setShareMemberId(member.id)}
+                              role="option"
+                              type="button"
+                            >
                               {memberPublicLabel({ ...member, alias: member.alias || member.publicAlias })}
-                            </option>
+                            </button>
                           ))}
-                        </select>
+                          {!shareableMembers.length ? <span>{spanish ? "No hay personas disponibles." : "No people available."}</span> : null}
+                        </div>
                         <button className="do-projects-share-confirm" disabled={!shareMemberId || sharingBusy} onClick={() => void shareProject(project)} type="button">
                           {sharingBusy ? (spanish ? "Compartiendo…" : "Sharing…") : (spanish ? "Dar acceso" : "Grant access")}
                         </button>
