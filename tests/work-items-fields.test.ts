@@ -188,7 +188,15 @@ test("hierarchy remembers expanded epics and can expand or collapse a level", ()
 test("expanded parents hide completed children unless status filter includes them", () => {
   assert.match(workItems, /matchesStatusFilter/);
   assert.match(workItems, /visibleChildrenOf/);
-  assert.match(workItems, /hierarchyChildren\(childPool, parentIdValue\)\.filter\(\(child\) => matchesStatusFilter\(child, statusFilter, showCompleted\)\)/);
+  assert.match(workItems, /visibleItemIds\.has\(String\(child\.id\)\) && matchesStatusFilter\(child, statusFilter, showCompleted\)/);
+});
+
+test("completing an item animates before the default view removes it", () => {
+  assert.match(workItems, /completionAnimationIds/);
+  assert.match(workItems, /await new Promise<void>\(\(resolve\) => window\.setTimeout\(resolve, 260\)\)/);
+  assert.match(workItems, /is-completing/);
+  const css = readFileSync(resolve("src/index.css"), "utf8");
+  assert.match(css, /@keyframes certo-item-complete/);
 });
 
 test("items list shows faded attribute icons instead of field columns", () => {

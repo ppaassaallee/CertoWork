@@ -112,7 +112,7 @@ import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
 import { KANBAN_COLUMNS, clampKanbanColumnWidth, columnOrderAfterDrop, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn, visibleBoardColumns } from "../lib/kanbanBoard";
-import { WORK_STATUS_KEYS, canonicalWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
+import { WORK_STATUS_KEYS, canonicalWorkStatus, isCompletedWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
 import { workItemChipLabel } from "../lib/workItemKey";
 import {
   KANBAN_SWIMLANES,
@@ -279,7 +279,7 @@ type Props = {
   compact?: boolean;
   forceMode?: WorkItemsViewMode;
   /** Canonical My Work view; outer Filter/Sort/Group/Customize own these settings. */
-  savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks">;
+  savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks" | "filters">;
   /** The saved-views bar already owns filter, sort, and group. */
   externalFilterBar?: boolean;
   /** Notion-style project surface: dense table + parent owns chrome. */
@@ -675,6 +675,15 @@ function matchesStatusFilter(item: any, statusFilter: string, showCompleted = fa
   return passesStatusView(item, statusFilter, showCompleted);
 }
 
+function savedViewRequestsCompleted(view?: Pick<SavedView, "filters">) {
+  if (!view) return false;
+  return view.filters.some((rule) => {
+    if (rule.columnId !== "status" || !["eq", "in"].includes(rule.op)) return false;
+    const values = Array.isArray(rule.value) ? rule.value : [rule.value];
+    return values.some((value) => isCompletedWorkStatus(String(value || "")));
+  });
+}
+
 function actionBoardBucket(item: any) {
   const globalStage = String(item?.globalStageId || "").toLowerCase();
   const bucket = dueBucket(item.dueDate || item.targetDate);
@@ -992,6 +1001,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
   const [statusFilter, setStatusFilter] = useState(savedView ? "all" : "open");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [completionAnimationIds, setCompletionAnimationIds] = useState<string[]>([]);
+  const viewRequestsCompleted = useMemo(() => savedViewRequestsCompleted(savedView), [savedView]);
+  useEffect(() => {
+    setShowCompleted(viewRequestsCompleted);
+  }, [viewRequestsCompleted]);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -2233,51 +2247,56 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     setKanbanError("");
     let statusSaved = false;
     try {
-    const isDone = canonicalStatus(item) === "done";
-    const nextStatus = isDone ? "backlog" : "done";
-    await onUpdateTask(item.id, {
-      status: nextStatus,
-      completedAt: isDone ? null : new Date().toISOString(),
-      statusHistory: appendStatusHistory(item, nextStatus, isDone ? "backlog" : "done"),
-    });
-    statusSaved = true;
-    setKanbanError("");
-    if (isDone) return;
-    const recurrenceType = (item.recurrenceType || item.recurrence || "none") as RecurrenceType;
-    if (!recurrenceType || recurrenceType === "none") return;
-    const due = dateInputValue(item.dueDate || item.targetDate) || new Date().toISOString().slice(0, 10);
-    const nextDue = getNextOccurrence(
-      item.recurrenceAnchorDate || due,
-      item.occurrenceDate || due,
-      new Date(),
-      {
-        type: recurrenceType,
-        interval: item.recurrenceInterval || 1,
-        unit: item.recurrenceUnit || "days",
-      },
-    );
-    if (!nextDue) return;
-    await onAddTask(item.projectId || "", title(item), "backlog", {
-      workItemType: workItemKind(item),
-      itemType: item.itemType,
-      parentId: item.parentId || null,
-      recurrenceType,
-      recurrenceInterval: item.recurrenceInterval || 1,
-      recurrenceUnit: item.recurrenceUnit || "days",
-      recurrenceAnchorDate: item.recurrenceAnchorDate || due,
-      recurrenceStatus: "active",
-      isRoutineTask: true,
-      recurringSeriesId: item.recurringSeriesId || item.id,
-      dueDate: nextDue,
-      occurrenceDate: nextDue,
-      priority: item.priority ?? null,
-      assigneeIds: item.assigneeIds || [],
-      assignees: item.assignees || [],
-      owner: item.owner || item.assignee || "",
-    });
+      const isDone = canonicalStatus(item) === "done";
+      const nextStatus = isDone ? "backlog" : "done";
+      if (!isDone) {
+        setCompletionAnimationIds((current) => current.includes(item.id) ? current : [...current, item.id]);
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 260));
+      }
+      await onUpdateTask(item.id, {
+        status: nextStatus,
+        completedAt: isDone ? null : new Date().toISOString(),
+        statusHistory: appendStatusHistory(item, nextStatus, isDone ? "backlog" : "done"),
+      });
+      statusSaved = true;
+      setKanbanError("");
+      if (isDone) return;
+      const recurrenceType = (item.recurrenceType || item.recurrence || "none") as RecurrenceType;
+      if (!recurrenceType || recurrenceType === "none") return;
+      const due = dateInputValue(item.dueDate || item.targetDate) || new Date().toISOString().slice(0, 10);
+      const nextDue = getNextOccurrence(
+        item.recurrenceAnchorDate || due,
+        item.occurrenceDate || due,
+        new Date(),
+        {
+          type: recurrenceType,
+          interval: item.recurrenceInterval || 1,
+          unit: item.recurrenceUnit || "days",
+        },
+      );
+      if (!nextDue) return;
+      await onAddTask(item.projectId || "", title(item), "backlog", {
+        workItemType: workItemKind(item),
+        itemType: item.itemType,
+        parentId: item.parentId || null,
+        recurrenceType,
+        recurrenceInterval: item.recurrenceInterval || 1,
+        recurrenceUnit: item.recurrenceUnit || "days",
+        recurrenceAnchorDate: item.recurrenceAnchorDate || due,
+        recurrenceStatus: "active",
+        isRoutineTask: true,
+        recurringSeriesId: item.recurringSeriesId || item.id,
+        dueDate: nextDue,
+        occurrenceDate: nextDue,
+        priority: item.priority ?? null,
+        assigneeIds: item.assigneeIds || [],
+        assignees: item.assignees || [],
+        owner: item.owner || item.assignee || "",
+      });
     } catch (error) {
       setKanbanError(`${statusSaved ? "Status saved, but the next recurring item could not be created" : "Status was not saved"}: ${error instanceof Error ? error.message : "Please try again"}`);
     } finally {
+      setCompletionAnimationIds((current) => current.filter((id) => id !== item.id));
       completionInFlight.current.delete(item.id);
       setPendingCompletions([...completionInFlight.current]);
     }
@@ -3000,11 +3019,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const kind = workItemKind(item);
     const childCount = tree?.childCount ?? tasks.filter((candidate) => parentId(candidate) === item.id).length;
     const isDone = canonicalStatus(item) === "done";
+    const isCompleting = completionAnimationIds.includes(item.id);
     const edgeTone = isMyWork ? dueEdgeTone(item) : null;
     const edgeClass = edgeTone ? `is-due-edge is-due-edge-${edgeTone}` : "";
     return (
       <article
-        className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""} ${edgeClass}`.trim()}
+        className={`do-items-row is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${isCompleting ? "is-completing" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""} ${edgeClass}`.trim()}
         data-item-id={item.id}
         data-due-edge={edgeTone || undefined}
         key={item.id}
@@ -3043,8 +3063,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         }}
         style={itemGridStyle}
       >
-        <button aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`} className={`do-items-check ${isDone ? "is-done" : ""}`} onClick={() => toggleDone(item)} title={isDone ? "Reopen item" : "Mark item done"} type="button">
-          {isDone ? <Check size={12} /> : <Circle size={12} />}
+        <button aria-busy={isCompleting || undefined} aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`} className={`do-items-check ${isDone ? "is-done" : ""} ${isCompleting ? "is-completing" : ""}`} onClick={() => toggleDone(item)} title={isDone ? "Reopen item" : "Mark item done"} type="button">
+          {isDone || isCompleting ? <Check size={12} /> : <Circle size={12} />}
         </button>
         {renderBulkSelect(item)}
         <button
@@ -3211,10 +3231,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     const depth = 0;
     const collapsed = isTreeNodeCollapsed(groupKey, kind, depth);
     const isDone = canonicalStatus(item) === "done";
+    const isCompleting = completionAnimationIds.includes(item.id);
     const canAddChild = allowedChildKinds(kind).length > 0;
     return (
       <header
-        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
+        className={`do-items-row do-items-section-head is-icon-list is-${kind} ${isDone ? "is-done" : ""} ${isCompleting ? "is-completing" : ""} ${selectedItemId === item.id ? "is-selected" : ""} ${draggedItemId === item.id ? "is-dragging" : ""} ${dragOverItemId === item.id ? "is-drag-over" : ""}`}
         data-item-id={item.id}
         data-testid="item-section-head"
         onDragOver={(event) => previewItemDrag(item.id, event)}
@@ -3223,13 +3244,14 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       >
         <button
           aria-label={`${isDone ? "Reopen" : "Mark done"} ${title(item)}`}
-          className={`do-items-check ${isDone ? "is-done" : ""}`}
+          aria-busy={isCompleting || undefined}
+          className={`do-items-check ${isDone ? "is-done" : ""} ${isCompleting ? "is-completing" : ""}`}
           data-testid="item-epic-complete"
           onClick={() => toggleDone(item)}
           title={isDone ? "Reopen epic" : "Mark epic done"}
           type="button"
         >
-          {isDone ? <Check size={12} /> : <Circle size={12} />}
+          {isDone || isCompleting ? <Check size={12} /> : <Circle size={12} />}
         </button>
         {renderBulkSelect(item)}
         <button
@@ -3349,9 +3371,12 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     // themselves in the filtered view. Status filter still applies to nested
     // children so completed work stays hidden unless the filter asks for it.
     const childPool = parentPool;
+    const visibleItemIds = new Set(items.map((item) => String(item.id)));
     const visibleChildrenOf = (parentIdValue: string) =>
         sortHierarchySiblings(
-        hierarchyChildren(childPool, parentIdValue).filter((child) => matchesStatusFilter(child, statusFilter, showCompleted)),
+        hierarchyChildren(childPool, parentIdValue).filter((child) =>
+          visibleItemIds.has(String(child.id)) && matchesStatusFilter(child, statusFilter, showCompleted),
+        ),
         compare,
       );
     const walk = (item: any, depth: number, ancestors: Set<string>, siblings: any[]) => {

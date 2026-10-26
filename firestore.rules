@@ -290,7 +290,9 @@ service cloud.firestore {
       return ('workspaceId' in data) && data.workspaceId is string
         && ('projectId' in data) && data.projectId is string
         && data.projectId != ''
-        && ('visibility' in data) && data.visibility == 'project'
+        // Legacy project items omitted visibility. They are project-visible by
+        // default; only an explicit private value removes inherited access.
+        && (!('visibility' in data) || data.visibility != 'private')
         && exists(/databases/$(database)/documents/projects/$(data.projectId))
         && get(/databases/$(database)/documents/projects/$(data.projectId)).data.workspaceId == data.workspaceId
         && canReadProject(get(/databases/$(database)/documents/projects/$(data.projectId)).data);
@@ -1081,6 +1083,17 @@ service cloud.firestore {
           && incoming().workspaceId == resource.data.workspaceId
           && incoming().createdAt == resource.data.createdAt
           && (!('createdBy' in resource.data) || incoming().createdBy == resource.data.createdBy)
+        ) || (
+          // A project reader may only normalize the missing legacy visibility
+          // field. This is a one-time compatibility write, not edit access.
+          isSignedIn()
+          && hasProjectTaskAccess(resource.data)
+          && !('visibility' in resource.data)
+          && incoming().visibility == 'project'
+          && incoming().userId == resource.data.userId
+          && incoming().workspaceId == resource.data.workspaceId
+          && incoming().createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visibility'])
         ) || (
           // Requester portal may only nudge status fields after a public portal reply.
           resource.data.portalToken is string

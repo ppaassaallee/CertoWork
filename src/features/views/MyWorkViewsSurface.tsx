@@ -322,6 +322,8 @@ export function MyWorkViewsSurface({
               });
               setRemoteViews((current) => [...current, created]);
               setActiveId(created.id);
+              setCustomizerSection("customize");
+              setCustomizerOpen(true);
               setViewError("");
               await setLastUsedView(actorId, surface, created.id);
             } catch (error) {

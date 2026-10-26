@@ -86,13 +86,15 @@ test("item read rules and client queries stay aligned", () => {
   assert.match(direct, /accessMemberIds/);
   assert.match(direct, /sharedWithUserIds/);
   const project = ruleFn("hasProjectTaskAccess");
-  assert.match(project, /data\.visibility == 'project'/);
+  assert.match(project, /!\('visibility' in data\) \|\| data\.visibility != 'private'/);
   assert.match(project, /canReadProject/);
 
   assert.match(dataLayer, /workspace\.ownerId === user\.uid/);
   assert.match(dataLayer, /where\("createdBy", "==", user\.uid\)/);
   assert.match(dataLayer, /where\("assigneeIds", "array-contains", memberId\)/);
   assert.match(dataLayer, /where\("sharedWithUserIds", "array-contains", user\.uid\)/);
+  assert.match(dataLayer, /normalizeLegacyVisibility/);
+  assert.match(dataLayer, /where\("visibility", "==", "project"\)/);
 });
 
 test("workspace access does not trust an item assignment outside its tenant", () => {

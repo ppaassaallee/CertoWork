@@ -8163,6 +8163,24 @@ a {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
+@keyframes certo-item-complete {
+  0% { background: transparent; transform: translateX(0); opacity: 1; }
+  45% { background: color-mix(in srgb, var(--status-success, #16a34a) 10%, transparent); transform: translateX(2px); opacity: 1; }
+  100% { background: transparent; transform: translateX(8px); opacity: 0.35; }
+}
+.do-items-row.is-completing {
+  pointer-events: none;
+  animation: certo-item-complete 260ms ease-out both;
+}
+.do-items-check.is-completing {
+  border-color: var(--status-success, #16a34a);
+  background: var(--status-success, #16a34a);
+  color: #fff;
+  transform: scale(1.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .do-items-row.is-completing { animation: none; opacity: 0.55; }
+}
 .do-items-row.is-epic,
 .do-items-row.is-feature,
 .do-items-row.is-pbi,

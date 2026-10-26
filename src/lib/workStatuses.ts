@@ -77,7 +77,8 @@ export function canonicalWorkStatus(item?: { status?: string | null; deletedAt?:
 
 /**
  * Status filters compose with the completed toggle.
- * "all" shows every live status. "open" hides Done and Cancelled until the toggle is on.
+ * "all" shows every open live status until the completed toggle is on.
+ * "open" has the same completed behavior while still excluding removed work.
  * Choosing Done or Cancelled directly still shows those items.
  * Archived and deleted stay out unless the filter names them.
  */
@@ -88,9 +89,9 @@ export function passesStatusView(
 ) {
   const filter = String(statusFilter || "all").toLowerCase();
   const status = canonicalWorkStatus(item);
-  if (filter === "all") return true;
   if (isRemovedWorkStatus(status)) return filter === status;
   const completed = isCompletedWorkStatus(status);
+  if (filter === "all") return showCompleted || !completed;
   if (filter === "open") return showCompleted || !completed;
   if (completed && !showCompleted && filter !== status) return false;
   return status === filter;
