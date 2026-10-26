@@ -118,9 +118,11 @@ test("status filters use the eight statuses and the completed toggle", () => {
   assert.equal(WORK_STATUS_KEYS.length, 8);
   assert.equal(passesStatusView({ status: "done" }, "open", false), false);
   assert.equal(passesStatusView({ status: "done" }, "open", true), true);
+  assert.equal(passesStatusView({ status: "done" }, "all", false), false);
+  assert.equal(passesStatusView({ status: "done" }, "all", true), true);
   assert.equal(passesStatusView({ status: "done" }, "done", false), true);
   assert.equal(passesStatusView({ status: "todo" }, "open", false), true);
-  assert.equal(passesStatusView({ status: "archived" }, "all", true), true);
+  assert.equal(passesStatusView({ status: "archived" }, "all", true), false);
   assert.equal(passesStatusView({ status: "deleted" }, "done", true), false);
   resetUnknownWorkStatusLogForTests();
   const warnings: string[] = [];

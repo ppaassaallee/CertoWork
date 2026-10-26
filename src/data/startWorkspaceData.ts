@@ -1,7 +1,9 @@
 import {
   collection,
+  getDocs,
   onSnapshot,
   query,
+  writeBatch,
   where,
   type Firestore,
   type QuerySnapshot,
@@ -391,24 +393,69 @@ export function subscribeProjectTasks(
   isWorkspaceOwner: boolean,
   onError?: (error: unknown) => void,
 ): () => void {
+  let cancelled = false;
+  let explicitProjectRows: TaskDoc[] = [];
+  let legacyProjectRows: TaskDoc[] = [];
+  const visibilityBackfillInFlight = new Set<string>();
+  const visibilityMigrationKey = `certo:project-task-visibility:v1:${workspaceId}:${projectId}`;
+
+  const publishProjectRows = () => {
+    if (cancelled || isWorkspaceOwner) return;
+    const merged = new Map<string, TaskDoc>();
+    for (const row of [...legacyProjectRows, ...explicitProjectRows]) merged.set(row.id, row);
+    projectViewTasks = { workspaceId, projectId, rows: [...merged.values()] };
+    publishSharedTaskSources(workspaceId);
+  };
+
+  const normalizeLegacyVisibility = async (snapshot: QuerySnapshot) => {
+    if (cancelled) return false;
+    let succeeded = true;
+    const legacy = snapshot.docs.filter(
+      (item) => !("visibility" in item.data()) && !visibilityBackfillInFlight.has(item.id),
+    );
+    for (let offset = 0; offset < legacy.length; offset += 400) {
+      const chunk = legacy.slice(offset, offset + 400);
+      const batch = writeBatch(db);
+      for (const item of chunk) {
+        visibilityBackfillInFlight.add(item.id);
+        batch.update(item.ref, { visibility: "project" });
+      }
+      try {
+        await batch.commit();
+      } catch (error) {
+        succeeded = false;
+        for (const item of chunk) visibilityBackfillInFlight.delete(item.id);
+        onError?.(error);
+      }
+    }
+    return succeeded;
+  };
+
+  const baseProjectQuery = query(
+    collection(db, "tasks"),
+    where("workspaceId", "==", workspaceId),
+    where("projectId", "==", projectId),
+  );
+
   const stop = onSnapshot(
-    query(
-      collection(db, "tasks"),
-      where("workspaceId", "==", workspaceId),
-      where("projectId", "==", projectId),
-      ...(isWorkspaceOwner ? [] : [where("visibility", "==", "project")]),
-    ),
+    isWorkspaceOwner
+      ? baseProjectQuery
+      : query(
+          collection(db, "tasks"),
+          where("workspaceId", "==", workspaceId),
+          where("projectId", "==", projectId),
+          where("visibility", "==", "project"),
+        ),
     (snapshot) => {
       if (!hasConfirmedSnapshotData(snapshot)) return;
       if (!isWorkspaceOwner) {
-        projectViewTasks = {
-          workspaceId,
-          projectId,
-          rows: snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as TaskDoc),
-        };
-        publishSharedTaskSources(workspaceId);
+        explicitProjectRows = snapshot.docs.map(
+          (item) => ({ id: item.id, ...item.data() }) as TaskDoc,
+        );
+        publishProjectRows();
         return;
       }
+      void normalizeLegacyVisibility(snapshot);
       for (const change of snapshot.docChanges()) {
         if (change.type === "removed") {
           // Only remove if it still belongs to this project in the store.
@@ -426,7 +473,34 @@ export function subscribeProjectTasks(
     },
     (error) => onError?.(error),
   );
+
+  // Older project items predate the visibility field. The rules treat those as
+  // project-visible, so a one-shot read makes them available immediately when
+  // the project contains no inaccessible private item. If a private item makes
+  // Firestore reject the broad query, the explicit project feed remains active;
+  // an owner visit safely normalizes only the legacy rows above.
+  const visibilityAlreadyNormalized = typeof window !== "undefined"
+    && window.localStorage.getItem(visibilityMigrationKey) === "done";
+  if (!isWorkspaceOwner && !visibilityAlreadyNormalized) {
+    void getDocs(baseProjectQuery)
+      .then(async (snapshot) => {
+        if (cancelled || !hasConfirmedSnapshotData(snapshot)) return;
+        legacyProjectRows = snapshot.docs.map(
+          (item) => ({ id: item.id, ...item.data() }) as TaskDoc,
+        );
+        publishProjectRows();
+        const normalized = await normalizeLegacyVisibility(snapshot);
+        if (normalized && !cancelled && typeof window !== "undefined") {
+          window.localStorage.setItem(visibilityMigrationKey, "done");
+        }
+      })
+      .catch((error) => {
+        if (!isFirestorePermissionDenied(error)) onError?.(error);
+      });
+  }
+
   return () => {
+    cancelled = true;
     stop();
     if (projectViewTasks?.workspaceId === workspaceId && projectViewTasks.projectId === projectId) {
       projectViewTasks = null;

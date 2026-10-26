@@ -241,6 +241,8 @@ export function ProjectItemsViewsSurface({
                 });
                 setViews((current) => [...current, created]);
                 setActiveId(created.id);
+                setCustomizerSection("customize");
+                setCustomizerOpen(true);
                 await setLastUsedView(actorId, surface, created.id);
               })();
             }}
@@ -287,6 +289,7 @@ export function ProjectItemsViewsSurface({
           externalFilterBar={isList}
           forceMode={mode}
           hierarchyTasks={listBody.hierarchyTasks || tasks}
+          savedView={active}
           onAddTask={(pid, title, status, patch) =>
             listBody.onAddTask(title, status, { ...patch, projectId: pid })
           }
