@@ -39,13 +39,15 @@ test("project owner labels resolve member ids without exposing opaque identifier
 test("project and item surfaces expose direct workspace sharing", () => {
   const projects = readFileSync(resolve("src/features/views/ProjectsViewsSurface.tsx"), "utf8");
   const itemModal = readFileSync(resolve("src/features/items/ItemModal/ItemModal.tsx"), "utf8");
+  const itemShare = readFileSync(resolve("src/features/items/ItemModal/ItemShareControl.tsx"), "utf8");
 
   assert.match(projects, /Share project/);
   assert.match(projects, /withCollaboratorAccess/);
   assert.match(projects, /collaborationShareGrant/);
-  assert.match(itemModal, /Share item with/);
-  assert.match(itemModal, /withCollaboratorAccess/);
-  assert.match(itemModal, /collaborationShareGrant/);
+  assert.match(itemModal, /ItemShareControl/);
+  assert.match(itemShare, /Share item with/);
+  assert.match(itemShare, /withCollaboratorAccess/);
+  assert.match(itemShare, /collaborationShareGrant/);
 });
 
 test("moving an assigned item grants its people access to the destination project", () => {
