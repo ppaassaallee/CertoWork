@@ -98,7 +98,7 @@ import {
   startRunOnAgentAssign,
   startRunsOnAgentMention,
 } from "../lib/agent-platform";
-import { looksLikeEmail } from "../lib/workspaceCollaboration";
+import { activeDirectoryMembers, looksLikeEmail } from "../lib/workspaceCollaboration";
 import { assignmentFieldsFromMembers, itemCollaboratorMemberIds } from "../lib/taskAssignment";
 import {
   collaborationShareGrant,
@@ -1056,6 +1056,8 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [bulkProjectId, setBulkProjectId] = useState("");
   const [bulkShareId, setBulkShareId] = useState("");
   const [bulkShareNotice, setBulkShareNotice] = useState("");
+  const [bulkProgress, setBulkProgress] = useState<{ label: string; completed: number; total: number } | null>(null);
+  const [bulkFeedback, setBulkFeedback] = useState("");
   const [sprintFilter, setSprintFilter] = useState("all");
   const [ganttScale, setGanttScale] = useState<"day" | "week" | "month" | "quarter">("week");
   const [ganttFocus, setGanttFocus] = useState(false);
@@ -1130,6 +1132,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   }, [isMyWork, savedView?.id]);
   const [createQuickActions, setCreateQuickActions] = useState<CreateQuickAction[]>(() =>
     readQuickActions(typeof window === "undefined" ? null : window.localStorage, MY_WORK_CREATE_ACTIONS_KEY, CREATE_QUICK_ACTIONS),
+  );
+  const directoryMembers = useMemo(
+    () => activeDirectoryMembers(workspaceMembers as any),
+    [workspaceMembers],
   );
   const [actionMenu, setActionMenu] = useState<null | {
     scope: "row" | "create";
@@ -2086,7 +2092,51 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
     void onUpdateTask(item.id, patch);
   };
 
-  const updateBulk = async (patch: Record<string, unknown>) => {
+  const runBulkAction = async (
+    label: string,
+    operation: (id: string) => Promise<void> | void,
+  ) => {
+    if (bulkProgress || selectedBulkIds.length === 0) return false;
+    const ids = [...selectedBulkIds];
+    const failed: string[] = [];
+    let cursor = 0;
+    let completed = 0;
+    setBulkFeedback("");
+    setBulkShareNotice("");
+    setKanbanError("");
+    setBulkProgress({ label, completed: 0, total: ids.length });
+
+    const worker = async () => {
+      while (cursor < ids.length) {
+        const id = ids[cursor++];
+        try {
+          await operation(id);
+        } catch {
+          failed.push(id);
+        } finally {
+          completed += 1;
+          setBulkProgress({ label, completed, total: ids.length });
+        }
+      }
+    };
+
+    // Firestore updates can also add project access and send assignment notices.
+    // A small concurrency limit prevents large selections from creating quota spikes.
+    await Promise.all(Array.from({ length: Math.min(4, ids.length) }, () => worker()));
+    setBulkProgress(null);
+    if (failed.length) {
+      setSelectedBulkIds(failed);
+      const succeeded = ids.length - failed.length;
+      setBulkFeedback(`${succeeded} updated · ${failed.length} need retry`);
+      setKanbanError(`${failed.length} item${failed.length === 1 ? "" : "s"} could not be updated. Only those items remain selected.`);
+      return false;
+    }
+    setSelectedBulkIds([]);
+    setBulkFeedback(`${ids.length} item${ids.length === 1 ? "" : "s"} updated`);
+    return true;
+  };
+
+  const updateBulk = async (patch: Record<string, unknown>, label = "Updating") => {
     if ("dueDate" in patch || "startDate" in patch) {
       const invalid = tasks.some((item) => {
         if (!selectedBulkIds.includes(item.id)) return false;
@@ -2099,32 +2149,21 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         return;
       }
     }
-    try {
-      await Promise.all(selectedBulkIds.map((id) => onUpdateTask(id, patch)));
-      setSelectedBulkIds([]);
-      setKanbanError("");
-    } catch (reason) {
-      setKanbanError(reason instanceof Error ? reason.message : "Bulk update failed.");
-    }
+    await runBulkAction(label, (id) => onUpdateTask(id, patch));
   };
 
   const shareBulkItems = async () => {
-    const member = workspaceMembers.find((candidate) => candidate.id === bulkShareId);
+    const member = directoryMembers.find((candidate) => candidate.id === bulkShareId);
     if (!member) return;
-    setBulkShareNotice("");
-    try {
-      await Promise.all(selectedBulkIds.map((id) => {
-        const item = tasks.find((task) => task.id === id);
-        if (!item) return Promise.resolve();
-        return onUpdateTask(id, withCollaboratorAccess(item, collaborationShareGrant(member)));
-      }));
-      const count = selectedBulkIds.length;
+    const count = selectedBulkIds.length;
+    const shared = await runBulkAction(`Sharing with ${memberName(member)}`, (id) => {
+      const item = tasks.find((task) => task.id === id);
+      if (!item) return;
+      return onUpdateTask(id, withCollaboratorAccess(item, collaborationShareGrant(member)));
+    });
+    if (shared) {
       setBulkShareNotice(`${count} item${count === 1 ? "" : "s"} shared with ${memberName(member)}.`);
       setBulkShareId("");
-      setSelectedBulkIds([]);
-      setKanbanError("");
-    } catch (reason) {
-      setKanbanError(reason instanceof Error ? reason.message : "Items could not be shared.");
     }
   };
 
@@ -2955,7 +2994,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                 helperText="Choose the one person accountable for finishing this work."
                 label="Assignee"
                 maxSelections={1}
-                members={workspaceMembers}
+                members={directoryMembers}
                 onInviteEmail={onInviteAssigneeEmail}
                 onChange={(assigneeIds, assignees) =>
                   onUpdateTask(item.id, {
@@ -3564,7 +3603,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               helperText={tr("Choose the one person accountable for finishing this work.", "Elige a la única persona responsable de terminar este trabajo.")}
               label={tr("Assignee", "Responsable")}
               maxSelections={1}
-              members={workspaceMembers}
+              members={directoryMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) => {
                 onUpdateTask(item.id, {
@@ -5110,9 +5149,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       compact
                       label="Assignee"
                       maxSelections={1}
-                      members={workspaceMembers.filter(
-                        (member) => String(member.status || "active") !== "removed",
-                      )}
+                      members={directoryMembers}
                       onInviteEmail={onInviteAssigneeEmail}
                       helperText="Choose the one person accountable for finishing this work."
                       onChange={(assigneeIds) => {
@@ -5121,7 +5158,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
                       selectedIds={newAssigneeIds}
                       selectedNames={newAssigneeIds.map((id) =>
                         memberName(
-                          workspaceMembers.find((member) => member.id === id) || { id },
+                          directoryMembers.find((member) => member.id === id) || { id },
                         ),
                       )}
                       triggerTestId="item-create-assignee"
@@ -5312,82 +5349,73 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       )}
 
       {selectedBulkIds.length > 0 && (
-        <section className="do-items-bulk do-mobile-advanced" aria-label="Bulk actions">
-          <span><SlidersHorizontal size={13} /> {selectedBulkIds.length} selected</span>
-          {renderSelectAll("items-select-all-bulk")}
-          <button onClick={() => setSelectedBulkIds([])} type="button">Clear</button>
-          <select aria-label="Bulk status" onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
-          <button onClick={() => updateBulk({ status: bulkStatus })} type="button">Apply status</button>
-          <select aria-label="Bulk priority" onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
-          <button onClick={() => updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority })} type="button">Apply priority</button>
-          <input aria-label="Bulk due date" onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
-          <button onClick={() => updateBulk(dueDateTimingPatch(bulkDueDate || null))} type="button">Apply date</button>
-          <button onClick={() => updateBulk(dueDateTimingPatch(null))} type="button">Clear date</button>
-          <select aria-label="Bulk assignee" onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
-            <option value="">Assignee</option>
-            <option value="none">Unassigned</option>
-            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
-              <option key={member.id} value={member.id}>{memberName(member)}</option>
-            ))}
-          </select>
-          <button
-            disabled={!bulkAssigneeId}
-            onClick={() => {
-              if (bulkAssigneeId === "none") {
-                updateBulk({
-                  assigneeIds: [],
-                  assignees: [],
-                  owner: "",
-                  assignee: "",
-                });
-                return;
-              }
-              const member = workspaceMembers.find((item) => item.id === bulkAssigneeId);
-              updateBulk(
-                member
-                  ? assignmentFieldsFromMembers([member as any])
-                  : {
-                      assigneeIds: [],
-                      assignees: [],
-                      owner: "",
-                      assignee: "",
-                    },
-              );
-            }}
-            type="button"
-          >
-            {bulkAssigneeId === "none" ? "Unassign" : "Assign"}
-          </button>
-          {onCreateSprint && (
-            <>
-              <select aria-label="Bulk sprint" onChange={(event) => setBulkSprintId(event.target.value)} value={bulkSprintId}>
-                <option value="">Sprint</option>
-                <option value="none">Remove sprint</option>
-                {projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}
-              </select>
-              <button disabled={!bulkSprintId} onClick={() => updateBulk({ sprintId: bulkSprintId === "none" ? null : bulkSprintId })} type="button">Apply sprint</button>
-            </>
-          )}
-          <select aria-label="Bulk project" onChange={(event) => setBulkProjectId(event.target.value)} value={bulkProjectId}>
-            <option value="">Project</option>
-            <option value="none">Remove from project</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}
-          </select>
-          <button disabled={!bulkProjectId} onClick={() => updateBulk({ projectId: bulkProjectId === "none" ? null : bulkProjectId })} type="button">Apply project</button>
-          <select aria-label="Share item with colleague" onChange={(event) => setBulkShareId(event.target.value)} value={bulkShareId}>
-            <option value="">Share with</option>
-            {workspaceMembers.filter((member) => String(member.status || "active") !== "removed").map((member) => (
-              <option key={`share-${member.id}`} value={member.id}>{memberName(member)}</option>
-            ))}
-          </select>
-          <button
-            disabled={!bulkShareId}
-            onClick={() => void shareBulkItems()}
-            type="button"
-          >
-            Share item
-          </button>
-          <button onClick={() => updateBulk({ status: "archived" })} type="button">Archive</button>
+        <section className="do-items-bulk do-items-bulk-compact do-mobile-advanced" aria-label="Bulk actions">
+          <div className="do-items-bulk-lead">
+            <strong><CheckSquare size={14} /> {selectedBulkIds.length} selected</strong>
+            {bulkProgress ? (
+              <span className="do-items-bulk-progress" role="status">
+                {bulkProgress.label} {bulkProgress.completed}/{bulkProgress.total}
+              </span>
+            ) : bulkFeedback ? (
+              <span className="do-items-bulk-feedback" role="status">{bulkFeedback}</span>
+            ) : null}
+            <button
+              aria-label="Clear selection"
+              className="do-items-bulk-close"
+              disabled={Boolean(bulkProgress)}
+              onClick={() => setSelectedBulkIds([])}
+              type="button"
+            ><X size={14} /></button>
+          </div>
+          <div className="do-items-bulk-actions">
+            {renderSelectAll("items-select-all-bulk")}
+            <details className="do-items-bulk-menu">
+              <summary>Status <ChevronDown size={13} /></summary>
+              <div className="do-items-bulk-popover">
+                <select aria-label="Bulk status" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkStatus(event.target.value)} value={bulkStatus}>{WORK_STATUS_KEYS.map((status) => <option key={status} value={status}>{displayStatus(status)}</option>)}</select>
+                <button disabled={Boolean(bulkProgress)} onClick={() => void updateBulk({ status: bulkStatus }, "Updating status")} type="button">Apply</button>
+              </div>
+            </details>
+            <details className="do-items-bulk-menu">
+              <summary>Assignee <ChevronDown size={13} /></summary>
+              <div className="do-items-bulk-popover">
+                <select aria-label="Bulk assignee" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkAssigneeId(event.target.value)} value={bulkAssigneeId}>
+                  <option value="">Choose person</option>
+                  <option value="none">Unassigned</option>
+                  {directoryMembers.map((member) => <option key={member.id} value={member.id}>{memberName(member)}</option>)}
+                </select>
+                <button
+                  disabled={!bulkAssigneeId || Boolean(bulkProgress)}
+                  onClick={() => {
+                    const member = directoryMembers.find((item) => item.id === bulkAssigneeId);
+                    const patch = bulkAssigneeId === "none" || !member
+                      ? { assigneeIds: [], assignees: [], owner: "", assignee: "", assigneeId: "" }
+                      : assignmentFieldsFromMembers([member as any]);
+                    void updateBulk(patch, bulkAssigneeId === "none" ? "Removing assignee" : `Assigning ${memberName(member!)}`);
+                  }}
+                  type="button"
+                >{bulkAssigneeId === "none" ? "Unassign" : "Assign"}</button>
+              </div>
+            </details>
+            <details className="do-items-bulk-menu">
+              <summary>Due date <ChevronDown size={13} /></summary>
+              <div className="do-items-bulk-popover">
+                <input aria-label="Bulk due date" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkDueDate(event.target.value)} type="date" value={bulkDueDate} />
+                <button disabled={!bulkDueDate || Boolean(bulkProgress)} onClick={() => void updateBulk(dueDateTimingPatch(bulkDueDate), "Updating due date")} type="button">Apply</button>
+                <button className="is-quiet" disabled={Boolean(bulkProgress)} onClick={() => void updateBulk(dueDateTimingPatch(null), "Clearing due date")} type="button">Clear date</button>
+              </div>
+            </details>
+            <details className="do-items-bulk-menu">
+              <summary>More <MoreHorizontal size={14} /></summary>
+              <div className="do-items-bulk-popover is-wide">
+                <label><span>Priority</span><select aria-label="Bulk priority" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkPriority(event.target.value)} value={bulkPriority}>{priorities.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select><button disabled={Boolean(bulkProgress)} onClick={() => void updateBulk({ priority: bulkPriority === "N/A" ? null : bulkPriority }, "Updating priority")} type="button">Apply</button></label>
+                {onCreateSprint && <label><span>Sprint</span><select aria-label="Bulk sprint" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkSprintId(event.target.value)} value={bulkSprintId}><option value="">Choose sprint</option><option value="none">Remove sprint</option>{projectSprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name || "Sprint"}</option>)}</select><button disabled={!bulkSprintId || Boolean(bulkProgress)} onClick={() => void updateBulk({ sprintId: bulkSprintId === "none" ? null : bulkSprintId }, "Updating sprint")} type="button">Apply</button></label>}
+                <label><span>Project</span><select aria-label="Bulk project" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkProjectId(event.target.value)} value={bulkProjectId}><option value="">Choose project</option><option value="none">Remove from project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.title || project.name}</option>)}</select><button disabled={!bulkProjectId || Boolean(bulkProgress)} onClick={() => void updateBulk({ projectId: bulkProjectId === "none" ? null : bulkProjectId }, "Moving items")} type="button">Apply project</button></label>
+                <label><span>Share</span><select aria-label="Share item with colleague" disabled={Boolean(bulkProgress)} onChange={(event) => setBulkShareId(event.target.value)} value={bulkShareId}><option value="">Choose person</option>{directoryMembers.map((member) => <option key={`share-${member.id}`} value={member.id}>{memberName(member)}</option>)}</select><button disabled={!bulkShareId || Boolean(bulkProgress)} onClick={() => void shareBulkItems()} type="button">Share</button></label>
+                <button className="is-danger" disabled={Boolean(bulkProgress)} onClick={() => void updateBulk({ status: "archived" }, "Archiving")} type="button">Archive selected</button>
+              </div>
+            </details>
+          </div>
         </section>
       )}
 
@@ -5865,7 +5893,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
               helperText="Choose the one person accountable for finishing this work."
               label="Assignee"
               maxSelections={1}
-              members={workspaceMembers}
+              members={directoryMembers}
               onInviteEmail={onInviteAssigneeEmail}
               onChange={(assigneeIds, assignees) =>
                 onUpdateTask(selectedItem.id, {
@@ -5893,7 +5921,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             <MultiAssigneePicker
               helperText="Collaborators get updates and can help. They are not the delivery owner."
               label="Collaborators"
-              members={workspaceMembers.filter((member) => {
+              members={directoryMembers.filter((member) => {
                 const assigneeId = Array.isArray(selectedItem.assigneeIds)
                   ? String(selectedItem.assigneeIds[0] || "")
                   : "";

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   WORKSPACE_LIMIT,
+  activeDirectoryMembers,
   activeMemberId,
   canCreateWorkspace,
   canChangePasswordForProvider,
@@ -88,6 +89,48 @@ test("assignment matching uses ids without exposing email", () => {
   assert.equal(memberMatchesSelection(member, ["user-1"], []), true);
   assert.equal(memberMatchesSelection(member, [], ["ana@example.com"]), true);
   assert.equal(memberMatchesSelection(member, [], ["Ana"]), true);
+});
+
+test("assignable directory contains one joined record per real person", () => {
+  const directory = activeDirectoryMembers([
+    {
+      id: "invite-adriana",
+      userId: "pending:adriana@getboldr.ai",
+      email: "adriana@getboldr.ai",
+      alias: "adriana o",
+      status: "invited",
+    },
+    {
+      id: "legacy-adriana",
+      userId: "uid-adriana",
+      email: "ADRIANA@getboldr.ai",
+      displayName: "adriana o",
+      status: "accepted",
+    },
+    {
+      id: "active-adriana",
+      userId: "uid-adriana",
+      emailLower: "adriana@getboldr.ai",
+      alias: "Adriana O",
+      status: "active",
+    },
+    {
+      id: "removed-cesar",
+      userId: "uid-cesar",
+      email: "cesar@getboldr.ai",
+      alias: "Cesar",
+      status: "removed",
+    },
+    {
+      id: "active-josue",
+      userId: "uid-josue",
+      email: "josue@getboldr.ai",
+      alias: "Josue",
+      status: "active",
+    },
+  ]);
+
+  assert.deepEqual(directory.map((member) => member.id), ["active-adriana", "active-josue"]);
 });
 
 test("membership public patch never stores email as alias", () => {

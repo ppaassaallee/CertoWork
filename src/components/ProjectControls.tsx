@@ -4,8 +4,8 @@ import { Info, Users } from "./ui/Icon";
 import {
   DEFAULT_MEMBER_EMOJI,
   MEMBER_EMOJI_CHOICES,
+  activeDirectoryMembers,
   effectiveMemberAlias,
-  isAssignableMember,
   isInvitedMember,
   memberAssignmentValue,
   memberAvatar,
@@ -182,19 +182,11 @@ export function MultiAssigneePicker({
   });
   const single = maxSelections === 1;
   const activeMembers = useMemo(() => {
-    const pool = members.filter((member) => isAssignableMember(member));
-    // Joined members only — pending invites never appear. Alias falls back to email local-part.
-    const ready = pool.filter(
-      (member) => !isInvitedMember(member) && Boolean(effectiveMemberAlias(member)),
+    // Firestore may retain an invite stub and historical membership rows for the
+    // same person. Pickers expose one canonical, joined identity only.
+    return activeDirectoryMembers(members as WorkspaceMember[]).filter((member) =>
+      !isInvitedMember(member) && Boolean(effectiveMemberAlias(member)),
     );
-    const alreadyListed = new Set(ready.map((member) => String(member.id)));
-    const selectedKeep = pool.filter(
-      (member) =>
-        !alreadyListed.has(String(member.id)) &&
-        !isInvitedMember(member) &&
-        memberMatchesSelection(member, selectedIds, selectedNames),
-    );
-    return [...ready, ...selectedKeep];
   }, [members, selectedIds, selectedNames]);
   const selected = activeMembers.filter((member) =>
     memberMatchesSelection(member, selectedIds, selectedNames),
