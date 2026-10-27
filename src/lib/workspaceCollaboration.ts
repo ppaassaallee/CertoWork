@@ -193,7 +193,50 @@ export function joinedWorkspaceEmails(members: WorkspaceMember[] = []) {
 }
 
 export function activeDirectoryMembers(members: WorkspaceMember[] = []) {
-  return members.filter((member) => isAssignableMember(member) && !isInvitedMember(member));
+  const joined = members.filter((member) => {
+    if (!isAssignableMember(member) || isInvitedMember(member)) return false;
+    const userId = String(member.userId || "").trim();
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    // Modern memberships have an auth uid. Keep email-backed active legacy seats
+    // while they are migrated, but never expose anonymous alias-only rows.
+    return Boolean((userId && !userId.startsWith("pending:")) || email);
+  });
+  const groups: WorkspaceMember[][] = [];
+  const groupByIdentity = new Map<string, WorkspaceMember[]>();
+
+  for (const member of joined) {
+    const userId = String(member.userId || "").trim();
+    const email = normalizeInviteEmail(member.email || member.emailLower || "");
+    const keys = [userId ? `uid:${userId}` : "", email ? `email:${email}` : ""].filter(Boolean);
+    const matched = [...new Set(keys.map((key) => groupByIdentity.get(key)).filter(Boolean))] as WorkspaceMember[][];
+    const group = matched[0] || [];
+    if (!matched.length) groups.push(group);
+    for (const duplicateGroup of matched.slice(1)) {
+      group.push(...duplicateGroup);
+      groups.splice(groups.indexOf(duplicateGroup), 1);
+      for (const [key, value] of groupByIdentity) {
+        if (value === duplicateGroup) groupByIdentity.set(key, group);
+      }
+    }
+    group.push(member);
+    for (const key of keys) groupByIdentity.set(key, group);
+  }
+
+  const score = (member: WorkspaceMember) => {
+    const status = String(member.status || "active").toLowerCase();
+    return (
+      (status === "active" ? 16 : 0) +
+      (String(member.userId || "") && !String(member.userId).startsWith("pending:") ? 8 : 0) +
+      (normalizeInviteEmail(member.email || member.emailLower || "") ? 4 : 0) +
+      (normalizeAlias(member.alias) ? 2 : 0) +
+      (normalizeAlias(member.displayName) ? 1 : 0)
+    );
+  };
+
+  return groups
+    .map((group) => [...group].sort((left, right) => score(right) - score(left) || left.id.localeCompare(right.id))[0])
+    .filter(Boolean)
+    .sort((left, right) => memberPublicLabel(left).localeCompare(memberPublicLabel(right)));
 }
 
 export type PendingInviteRow = {

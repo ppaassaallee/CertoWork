@@ -7748,6 +7748,159 @@ a {
   font-size: var(--text-caption);
   font-weight: 600;
 }
+.do-items-bulk-compact {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-0) 96%, var(--accent));
+  margin: 8px 12px 0;
+  padding: 7px 9px 7px 12px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.do-items-bulk-lead,
+.do-items-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.do-items-bulk-lead strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-size: var(--text-caption);
+  font-weight: 650;
+}
+.do-items-bulk-progress,
+.do-items-bulk-feedback {
+  overflow: hidden;
+  max-width: 220px;
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.do-items-bulk-progress {
+  color: var(--accent) !important;
+}
+.do-items-bulk-compact button.do-items-bulk-close {
+  width: 28px;
+  height: 28px;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: var(--text-muted) !important;
+}
+.do-items-bulk-compact button.do-items-bulk-close:hover {
+  background: var(--hover-overlay) !important;
+  color: var(--text-primary) !important;
+}
+.do-items-bulk-menu {
+  position: relative;
+}
+.do-items-bulk-menu > summary {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-0);
+  padding: 0 9px;
+  color: var(--text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 550;
+  cursor: pointer;
+  list-style: none;
+}
+.do-items-bulk-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.do-items-bulk-menu[open] > summary,
+.do-items-bulk-menu > summary:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: var(--text-primary);
+}
+.do-items-bulk-popover {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 80;
+  display: flex;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-0);
+  padding: 9px;
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--text-primary) 14%, transparent);
+}
+.do-items-bulk-popover.is-wide {
+  display: grid;
+  width: min(390px, calc(100vw - 32px));
+  align-items: stretch;
+}
+.do-items-bulk-popover.is-wide label {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.do-items-bulk-popover select,
+.do-items-bulk-popover input {
+  min-width: 150px;
+  height: 30px;
+  padding: 0 8px;
+}
+.do-items-bulk-popover button {
+  height: 30px !important;
+  border: 0 !important;
+  background: var(--accent) !important;
+  padding: 0 10px !important;
+  color: var(--surface-0) !important;
+}
+.do-items-bulk-popover button.is-quiet {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+}
+.do-items-bulk-popover button.is-danger {
+  justify-self: end;
+  background: color-mix(in srgb, var(--status-danger) 10%, var(--surface-0)) !important;
+  color: var(--status-danger) !important;
+}
+.do-items-bulk-popover button:disabled,
+.do-items-bulk-compact button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+@media (max-width: 860px) {
+  .do-items-bulk-compact {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .do-items-bulk-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
 .do-command-bulk {
   display: flex;
   flex-direction: column;
