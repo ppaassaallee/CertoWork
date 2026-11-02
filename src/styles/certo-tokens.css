@@ -3766,6 +3766,94 @@
   background: var(--c-wash);
   color: var(--c-ink);
 }
+.cw-history-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cw-history-pair {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  background: var(--c-panel);
+}
+.cw-history-pair button,
+.cw-history-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--h-ctrl-sm);
+  min-height: var(--h-ctrl-sm);
+  border: 0;
+  background: transparent;
+  padding: 0 9px;
+  color: var(--c-ink);
+  font: inherit;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.cw-history-pair button + button {
+  border-left: 1px solid var(--c-line);
+}
+.cw-history-pair button:hover:not(.is-disabled),
+.cw-history-done:hover {
+  background: var(--c-wash);
+  color: var(--c-accent);
+}
+.cw-history-pair button.is-disabled {
+  color: var(--c-ink-2);
+  opacity: 0.45;
+  cursor: default;
+}
+.cw-history-done {
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+  background: var(--c-panel);
+}
+.cw-history-done.is-on {
+  border-color: var(--c-accent);
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+}
+.cw-history-step,
+.cw-history-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.cw-history-pair button.is-disabled .cw-history-step {
+  background: var(--c-ink-2);
+}
+@media (max-width: 720px) {
+  .cw-history-pair button,
+  .cw-history-done {
+    position: relative;
+  }
+  .cw-history-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .cw-history-pair button,
+  .cw-history-done {
+    padding: 0 8px;
+  }
+}
 .cw-views-grid-wrap {
   position: relative;
   flex: 1;

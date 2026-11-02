@@ -52,8 +52,8 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { type WorkLane } from "../lib/projectPortfolio";
 import { dedupeTagsByName, matchesTag, tagFilterOptions, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
-import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
-import { pushUndo } from "../lib/undoToast";
+import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, softDeletePatch } from "../lib/itemRemoval";
+import { toggleDoneVisibility, useRevealDone } from "../lib/doneVisibility";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { shouldCloseItemOnProjectChange } from "../lib/projectViewUrl";
 import { controlledOptionNames } from "../lib/controlledLists";
@@ -112,7 +112,7 @@ import { AiRewriteButton } from "./AiRewriteButton";
 import { ControlledSelect } from "./ControlledSelect";
 import { ItemModal, isItemModalV2Enabled } from "../features/items/ItemModal";
 import { KANBAN_COLUMNS, clampKanbanColumnWidth, columnOrderAfterDrop, DEFAULT_KANBAN_COLUMN_WIDTH, kanbanColumnForStatus, laneForKanbanColumn, statusForKanbanColumn, visibleBoardColumns } from "../lib/kanbanBoard";
-import { WORK_STATUS_KEYS, canonicalWorkStatus, isCompletedWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
+import { WORK_STATUS_KEYS, canonicalWorkStatus, passesStatusView, workStatusLabel } from "../lib/workStatuses";
 import { workItemChipLabel } from "../lib/workItemKey";
 import {
   KANBAN_SWIMLANES,
@@ -282,6 +282,8 @@ type Props = {
   savedView?: Pick<SavedView, "id" | "columns" | "sort" | "groupBy" | "density" | "showSubtasks" | "filters">;
   /** The saved-views bar already owns filter, sort, and group. */
   externalFilterBar?: boolean;
+  /** Parent chrome owns the show/hide done control. */
+  externalDoneToggle?: boolean;
   /** Notion-style project surface: dense table + parent owns chrome. */
   notionSurface?: boolean;
   notionMode?: WorkItemsViewMode;
@@ -675,15 +677,6 @@ function matchesStatusFilter(item: any, statusFilter: string, showCompleted = fa
   return passesStatusView(item, statusFilter, showCompleted);
 }
 
-function savedViewRequestsCompleted(view?: Pick<SavedView, "filters">) {
-  if (!view) return false;
-  return view.filters.some((rule) => {
-    if (rule.columnId !== "status" || !["eq", "in"].includes(rule.op)) return false;
-    const values = Array.isArray(rule.value) ? rule.value : [rule.value];
-    return values.some((value) => isCompletedWorkStatus(String(value || "")));
-  });
-}
-
 function actionBoardBucket(item: any) {
   const globalStage = String(item?.globalStageId || "").toLowerCase();
   const bucket = dueBucket(item.dueDate || item.targetDate);
@@ -949,6 +942,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   onUpdateSprint: _onUpdateSprint,
   onInviteAssigneeEmail,
   compact = false,
+  externalDoneToggle = false,
   forceMode,
   savedView,
   externalFilterBar = false,
@@ -1000,12 +994,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState(activeProject?.id || "all");
   const [statusFilter, setStatusFilter] = useState(savedView ? "all" : "open");
-  const [showCompleted, setShowCompleted] = useState(false);
+  const doneScope = activeProject?.id ? `project:${String(activeProject.id)}` : "my-work";
+  const showCompleted = useRevealDone(doneScope);
   const [completionAnimationIds, setCompletionAnimationIds] = useState<string[]>([]);
-  const viewRequestsCompleted = useMemo(() => savedViewRequestsCompleted(savedView), [savedView]);
-  useEffect(() => {
-    setShowCompleted(viewRequestsCompleted);
-  }, [viewRequestsCompleted]);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
@@ -2376,15 +2367,7 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (selectedItemId === item.id) onSelectItem(null);
     }
     setSelectedBulkIds((current) => current.filter((id) => !unique.some((item) => item.id === id)));
-    const snapshots = unique.map((item) => ({
-      id: item.id,
-      previous: item.previousStatus || item.status,
-    }));
     void Promise.all(unique.map((item) => onUpdateTask(item.id, softDeletePatch(item.status))));
-    pushUndo(
-      unique.length === 1 ? `Deleted ${title(unique[0])}` : `Deleted ${unique.length} items`,
-      () => Promise.all(snapshots.map((row) => onUpdateTask(row.id, restoreItemPatch(row.previous)))).then(() => undefined),
-    );
   };
 
   const requestDelete = (item: any) => {
@@ -3769,7 +3752,10 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       isMyWork ||
       effectiveGroupBy === "hierarchy" ||
       effectiveGroupBy === "status";
-    const deliveryColumns = visibleBoardColumns(showCompleted, statusFilter);
+    const deliveryColumns = visibleBoardColumns(
+      showCompleted,
+      showCompleted || (statusFilter !== "all" && statusFilter !== "open") ? statusFilter : "open",
+    );
     const columns = useDeliveryBoard && effectiveGroupBy !== "actionBoard"
       ? deliveryColumns.map((column) => ({
           key: column.key,
@@ -5485,15 +5471,17 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
             </div>
           )}
           {mode === "list" && !notionSurface && renderColumnHeader()}
+          {externalDoneToggle ? null : (
           <button
             aria-pressed={showCompleted}
             className={`do-button-secondary${showCompleted ? " is-active" : ""}`}
             data-testid="show-completed-toggle"
-            onClick={() => setShowCompleted((current) => !current)}
+            onClick={() => toggleDoneVisibility(doneScope)}
             type="button"
           >
             {showCompleted ? tr("Hide completed", "Ocultar terminados") : tr("Show completed", "Mostrar terminados")}
           </button>
+          )}
           {mode === "flow" ? renderAnalytics() : mode === "gantt" ? renderGantt() : mode === "epics" ? renderGantt(filtered.filter((item) => workItemKind(item) === "epic")) : mode === "kanban" ? renderKanban() : mode === "calendar" ? renderCalendar() : notionSurface && mode === "list" ? (
             <NotionProjectTable
               createDisabled={projectCreateBlocked}
