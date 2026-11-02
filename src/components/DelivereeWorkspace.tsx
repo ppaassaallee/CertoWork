@@ -5530,7 +5530,8 @@ export function DelivereeWorkspace() {
       throw reason;
     }
 
-    if (options?.history !== false) {
+    // Deletes record their own undo in the item list (restoreItemPatch). Recording here too would make Ctrl+Z undo the delete twice.
+    if (options?.history !== false && String(patch?.status || "") !== "deleted") {
       recordItemEdit(taskId, current, patch, write);
     }
     if (options?.history === false || !user || !workspace) return;

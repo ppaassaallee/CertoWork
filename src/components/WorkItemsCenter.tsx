@@ -52,7 +52,8 @@ import {
 import { TIME_SECTOR_MODEL, normalizeTimeSector } from "../lib/operatingModel";
 import { type WorkLane } from "../lib/projectPortfolio";
 import { dedupeTagsByName, matchesTag, tagFilterOptions, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
-import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, softDeletePatch } from "../lib/itemRemoval";
+import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
+import { describeItemEdit, pushEdit } from "../lib/editHistory";
 import { toggleDoneVisibility, useRevealDone } from "../lib/doneVisibility";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { shouldCloseItemOnProjectChange } from "../lib/projectViewUrl";
@@ -2367,7 +2368,16 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (selectedItemId === item.id) onSelectItem(null);
     }
     setSelectedBulkIds((current) => current.filter((id) => !unique.some((item) => item.id === id)));
-    void Promise.all(unique.map((item) => onUpdateTask(item.id, softDeletePatch(item.status))));
+    void Promise.all(unique.map(async (item) => {
+      const previous = item.status;
+      await onUpdateTask(item.id, softDeletePatch(previous));
+      // The writer skips history for a delete. This is the one undo step, and it restores the status the row had.
+      pushEdit({
+        label: describeItemEdit({ title: title(item) }, { status: "deleted" }),
+        undo: () => onUpdateTask(item.id, restoreItemPatch(previous)),
+        redo: () => onUpdateTask(item.id, softDeletePatch(previous)),
+      });
+    }));
   };
 
   const requestDelete = (item: any) => {
