@@ -54,6 +54,8 @@ import { type WorkLane } from "../lib/projectPortfolio";
 import { dedupeTagsByName, matchesTag, tagFilterOptions, tagIds, tagLabels, toggleTagWithCatalog, type TagLike } from "../lib/tagging";
 import { consumeDeleteGesture, isRemovedWorkItem, removedItemMatchesStatus, restoreItemPatch, softDeletePatch } from "../lib/itemRemoval";
 import { pushUndo } from "../lib/undoToast";
+import { blockDoneWithOpenChildren, isMovingToDone, unfinishedDescendants } from "../lib/closeGuard";
+import { getTasksSnapshot } from "../data/selectors";
 import { findWorkItemById, retainFocusForOpen } from "../lib/openWorkItem";
 import { shouldCloseItemOnProjectChange } from "../lib/projectViewUrl";
 import { controlledOptionNames } from "../lib/controlledLists";
@@ -2149,6 +2151,22 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
         return;
       }
     }
+    if (isMovingToDone({ status: "backlog" }, patch)) {
+      const pool = getTasksSnapshot();
+      const source = pool.length ? pool : tasks;
+      const blocked = selectedBulkIds
+        .map((id) => source.find((item) => String(item?.id || "") === id))
+        .filter((item) => item && isMovingToDone(item, patch) && unfinishedDescendants(item, source).length > 0);
+      if (blocked.length) {
+        blockDoneWithOpenChildren(blocked[0], source);
+        const allowed = selectedBulkIds.filter((id) => !blocked.some((item) => String(item?.id || "") === id));
+        if (!allowed.length) return;
+        await runBulkAction(label, (id) => (allowed.includes(id) ? onUpdateTask(id, patch) : undefined));
+        setBulkFeedback(`${allowed.length} updated · ${blocked.length} still have open items inside`);
+        setKanbanError("");
+        return;
+      }
+    }
     await runBulkAction(label, (id) => onUpdateTask(id, patch));
   };
 
@@ -2232,6 +2250,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       patch.order = moved.order;
       patch.rank = moved.rank;
     }
+    if (isMovingToDone(item, patch)) {
+      const pool = getTasksSnapshot();
+      const source = pool.length ? pool : tasks;
+      if (blockDoneWithOpenChildren(item, source)) return;
+    }
     try {
       await onUpdateTask(item.id, patch);
       await Promise.all(
@@ -2302,6 +2325,11 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
 
   const toggleDone = async (item: any) => {
     if (completionInFlight.current.has(item.id)) return;
+    if (canonicalStatus(item) !== "done") {
+      const pool = getTasksSnapshot();
+      const source = pool.length ? pool : (hierarchyTasks || tasks);
+      if (blockDoneWithOpenChildren(item, source)) return;
+    }
     completionInFlight.current.add(item.id);
     setPendingCompletions([...completionInFlight.current]);
     setKanbanError("");
@@ -2312,6 +2340,9 @@ export const WorkItemsCenter = memo(function WorkItemsCenter({
       if (!isDone) {
         setCompletionAnimationIds((current) => current.includes(item.id) ? current : [...current, item.id]);
         await new Promise<void>((resolve) => window.setTimeout(resolve, 260));
+        const pool = getTasksSnapshot();
+        const source = pool.length ? pool : (hierarchyTasks || tasks);
+        if (blockDoneWithOpenChildren(item, source)) return;
       }
       await onUpdateTask(item.id, {
         status: nextStatus,

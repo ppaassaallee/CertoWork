@@ -238,7 +238,9 @@ import { stripUndefinedValues } from "../lib/projectFinance";
 import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
 import { canonicalTagIds } from "../lib/tagging";
 import { pushUndo } from "../lib/undoToast";
+import { blockDoneWithOpenChildren, isMovingToDone } from "../lib/closeGuard";
 import { UndoToast } from "./UndoToast";
+import { CloseGuardDialog } from "./CloseGuardDialog";
 import { ProjectRowMenu } from "./ProjectRowMenu";
 import { InvoiceCenter } from "./InvoiceCenter";
 import { CaptureSettingsPanel, CaptureIngestForm } from "./CaptureSettingsPanel";
@@ -5409,6 +5411,10 @@ export function DelivereeWorkspace() {
     const current = (getTasksSnapshot().find((item) => item.id === taskId) ||
       tasks.find((item) => item.id === taskId) ||
       {}) as Record<string, unknown>;
+    if (isMovingToDone(current, patch)) {
+      const pool = getTasksSnapshot();
+      if (blockDoneWithOpenChildren(current, pool.length ? pool : tasks)) return;
+    }
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     const touchesSharing = patchTouchesSharing(patch);
@@ -8267,6 +8273,7 @@ export function DelivereeWorkspace() {
         )}
 
         <UndoToast />
+        <CloseGuardDialog onOpenItem={(id) => openWorkOrRecord(id)} />
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>
             {notice}
