@@ -466,7 +466,10 @@ type ProjectViewTabsProps = {
   showFilterSort?: boolean;
   showCosts?: boolean;
   showTables?: boolean;
+  historyTools?: ReactNode;
 };
+
+const WORK_HISTORY_VIEWS = new Set<ProjectViewId>(["list", "kanban", "gantt", "calendar", "flow", "epics"]);
 
 export function ProjectViewTabs({
   activeView,
@@ -480,9 +483,12 @@ export function ProjectViewTabs({
   showFilterSort = false,
   showCosts = false,
   showTables = false,
+  historyTools = null,
 }: ProjectViewTabsProps) {
   useLocale();
   const tabs = viewTabs(showCosts, showTables);
+  const showHistory = WORK_HISTORY_VIEWS.has(activeView) && historyTools;
+  const showItemActions = showActions && activeView !== "costs" && activeView !== "tables" && activeView !== "gantt";
   return (
     <div className="do-project-page-tabs" data-testid="project-page-tabs" aria-label="Project views">
       <div className="do-project-page-tablist" role="tablist">
@@ -507,8 +513,11 @@ export function ProjectViewTabs({
           </button>
         ))}
       </div>
-      {showActions && activeView !== "costs" && activeView !== "tables" && activeView !== "gantt" ? (
+      {showHistory || showItemActions ? (
       <div className="do-project-page-tab-actions">
+        {showHistory ? historyTools : null}
+        {showItemActions ? (
+        <>
         <span className="do-project-group-label">{t("project.view.groupEpic")}</span>
         {showFilterSort ? (
         <>
@@ -536,6 +545,8 @@ export function ProjectViewTabs({
           <Plus size={15} />
           {t("project.view.new")}
         </button>
+        </>
+        ) : null}
       </div>
       ) : null}
     </div>

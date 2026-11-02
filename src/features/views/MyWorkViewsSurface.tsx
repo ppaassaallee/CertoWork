@@ -26,6 +26,8 @@ import type { WorkspaceMember } from "../../lib/workspaceCollaboration";
 import { WorkItemsCenter } from "../../components/WorkItemsCenter";
 import type { WorkLane } from "../../lib/projectPortfolio";
 import { GroupedItemsList } from "../lists/GroupedItemsList";
+import { WorkHistoryTools } from "../../components/WorkHistoryTools";
+import { clearDoneForce, isDoneWorkItem, setDoneViewAsks, useRevealDone, viewAsksForDone } from "../../lib/doneVisibility";
 
 const LIST_LANG_KEY = "certoListLanguage";
 
@@ -217,6 +219,15 @@ export function MyWorkViewsSurface({
     [tasks, adapter, active, actorId, meMemberIds],
   );
   const appliedRows = appliedResult.rows;
+  const doneScope = "my-work";
+  const revealDone = useRevealDone(doneScope);
+  const asksForDone = viewAsksForDone(active);
+  useEffect(() => {
+    clearDoneForce(doneScope);
+    setDoneViewAsks(doneScope, asksForDone);
+  }, [asksForDone, active.id]);
+  const listedRows = revealDone ? appliedRows : appliedRows.filter((row) => !isDoneWorkItem(row));
+  const historyTools = <WorkHistoryTools rows={appliedRows} scope={doneScope} />;
   const toGroupedItem = (row: TaskRow) => ({
     id: row.id,
     title: String(row.title || row.name || "Untitled"),
@@ -290,6 +301,7 @@ export function MyWorkViewsSurface({
     >
       {compact ? (
         <div className="cw-views-bar is-compact" data-testid="views-bar">
+          {historyTools}
           <button
             className="cw-views-compact-tool"
             data-testid="views-customize"
@@ -302,6 +314,7 @@ export function MyWorkViewsSurface({
         </div>
       ) : (
       <ViewsBar
+        accessory={historyTools}
         activeViewId={active.id}
         filterCount={active.filters.length}
         groupLabel={
@@ -395,8 +408,8 @@ export function MyWorkViewsSurface({
         {groupedLook && !listRenderer ? (
           <GroupedItemsList
             density={active.density === "compact" ? "compact" : "regular"}
-            groupedRows={appliedResult.groups.map((group) => ({ key: group.key, label: group.label, items: group.rows.map(toGroupedItem) }))}
-            items={appliedRows.map(toGroupedItem)}
+            groupedRows={appliedResult.groups.map((group) => ({ key: group.key, label: group.label, items: group.rows.filter((row) => revealDone || !isDoneWorkItem(row)).map(toGroupedItem) }))}
+            items={listedRows.map(toGroupedItem)}
             onComplete={(id) => void onUpdateTask(id, { status: "done" })}
             onDueChange={(id, due) => void onUpdateTask(id, { dueDate: due })}
             onOpen={(id) => listBody.onSelectItem(id)}
@@ -406,6 +419,7 @@ export function MyWorkViewsSurface({
         ) : (
           <WorkItemsCenter
             activeProject={null}
+            externalDoneToggle
             forceMode="list"
             savedView={active}
             hierarchyTasks={listBody.hierarchyTasks}

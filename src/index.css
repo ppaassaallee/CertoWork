@@ -4197,6 +4197,11 @@ a {
   height: 26px;
   padding: 0 8px;
 }
+.do-project-console.is-notion .cw-history-pair button,
+.do-project-console.is-notion .cw-history-done {
+  height: 26px;
+  min-height: 26px;
+}
 .do-project-console.is-notion .do-items-toolbar {
   gap: 6px;
   padding: 4px 10px;

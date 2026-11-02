@@ -237,8 +237,8 @@ import {
 import { stripUndefinedValues } from "../lib/projectFinance";
 import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
 import { canonicalTagIds } from "../lib/tagging";
-import { pushUndo } from "../lib/undoToast";
 import { blockDoneWithOpenChildren, isMovingToDone } from "../lib/closeGuard";
+import { bindItemHistoryWriter, pushEdit, recordItemEdit } from "../lib/editHistory";
 import { UndoToast } from "./UndoToast";
 import { CloseGuardDialog } from "./CloseGuardDialog";
 import { ProjectRowMenu } from "./ProjectRowMenu";
@@ -4549,10 +4549,16 @@ export function DelivereeWorkspace() {
       previousStatus: previous,
       archivedAt: serverTimestamp(),
     });
-    pushUndo(`Archived ${entityTitle(project)}`, () => updateProject(project.id, {
-      status: previous,
-      archivedAt: null,
-    }));
+    const archivedName = entityTitle(project);
+    pushEdit({
+      label: { en: `Archived ${archivedName}`, es: `Archivado ${archivedName}` },
+      undo: () => updateProject(project.id, { status: previous, archivedAt: null }),
+      redo: () => updateProject(project.id, {
+        status: "archived",
+        previousStatus: previous,
+        archivedAt: serverTimestamp(),
+      }),
+    });
     if (projectConsoleId === project.id) {
       setProjectConsoleId(null);
       setPanel(null);
@@ -4596,11 +4602,22 @@ export function DelivereeWorkspace() {
             archivedAt: null,
           });
           const previous = project.status || "active";
-          pushUndo(`Deleted ${entityTitle(project)}`, () => updateProject(project.id, {
-            status: previous,
-            deletedAt: null,
-            purgeAfter: null,
-          }));
+          const deletedName = entityTitle(project);
+          pushEdit({
+            label: { en: `Deleted ${deletedName}`, es: `Eliminado ${deletedName}` },
+            undo: () => updateProject(project.id, {
+              status: previous,
+              deletedAt: null,
+              purgeAfter: null,
+            }),
+            redo: () => updateProject(project.id, {
+              status: "deleted",
+              previousStatus: previous,
+              deletedAt,
+              purgeAfter,
+              archivedAt: null,
+            }),
+          });
           if (projectConsoleId === project.id) {
             setProjectConsoleId(null);
             setPanel(null);
@@ -5407,6 +5424,7 @@ export function DelivereeWorkspace() {
   const updateProjectTask = async (
     taskId: string,
     patch: Record<string, unknown>,
+    options?: { history?: boolean },
   ) => {
     const current = (getTasksSnapshot().find((item) => item.id === taskId) ||
       tasks.find((item) => item.id === taskId) ||
@@ -5518,7 +5536,11 @@ export function DelivereeWorkspace() {
       throw reason;
     }
 
-    if (!user || !workspace) return;
+    // Deletes record their own undo in the item list (restoreItemPatch). Recording here too would make Ctrl+Z undo the delete twice.
+    if (options?.history !== false && String(patch?.status || "") !== "deleted") {
+      recordItemEdit(taskId, current, patch, write);
+    }
+    if (options?.history === false || !user || !workspace) return;
     const taskTitle = String(next.title || next.name || "Untitled");
     if (touchesAssignment) {
       const diff = assignmentDiff(current, write);
@@ -5633,6 +5655,7 @@ export function DelivereeWorkspace() {
       }
     }
   };
+  bindItemHistoryWriter(updateProjectTask);
 
   const captureUsername = () =>
     String(user?.email || "")

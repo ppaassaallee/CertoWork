@@ -23,6 +23,7 @@ import type { WorkLane } from "../../lib/projectPortfolio";
 import type { WorkItemsViewMode } from "../../lib/itemViewMemory";
 import type { SprintRecord } from "../../lib/sprints";
 import type { TagLike } from "../../lib/tagging";
+import { clearDoneForce, setDoneCandidates, setDoneViewAsks, viewAsksForDone } from "../../lib/doneVisibility";
 
 /** Props for the Asana-style WorkItemsCenter body inside a project. */
 export type ProjectItemsListBodyProps = {
@@ -155,6 +156,15 @@ export function ProjectItemsViewsSurface({
       }).rows,
     [tasks, adapter, active, actorId, meMemberIds],
   );
+  const doneScope = `project:${projectId}`;
+  const asksForDone = viewAsksForDone(active);
+  useEffect(() => {
+    clearDoneForce(doneScope);
+    setDoneViewAsks(doneScope, asksForDone);
+  }, [asksForDone, active.id, doneScope]);
+  useEffect(() => {
+    setDoneCandidates(doneScope, appliedRows);
+  }, [appliedRows, doneScope]);
 
   const ensurePersisted = async (next: SavedView): Promise<SavedView> => {
     if (next.isDefault || next.id.startsWith("default:") || next.id.startsWith("system:")) {
@@ -286,6 +296,7 @@ export function ProjectItemsViewsSurface({
         <WorkItemsCenter
           activeProject={listBody.project}
           compact
+          externalDoneToggle
           externalFilterBar={isList}
           forceMode={mode}
           hierarchyTasks={listBody.hierarchyTasks || tasks}
