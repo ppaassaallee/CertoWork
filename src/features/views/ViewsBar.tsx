@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Filter, Layers, Settings2, Users, LayoutGrid } from "../../components/ui/Icon";
 import type { SavedView } from "../../lib/views/types";
 import { t } from "../../lib/i18n";
@@ -11,6 +12,7 @@ export function ViewsBar({
   filterCount = 0,
   sortLabel,
   groupLabel,
+  accessory,
 }: {
   views: SavedView[];
   activeViewId: string;
@@ -20,6 +22,7 @@ export function ViewsBar({
   filterCount?: number;
   sortLabel?: string;
   groupLabel?: string;
+  accessory?: ReactNode;
 }) {
   return (
     <div className="cw-views-bar" data-testid="views-bar">
@@ -41,6 +44,7 @@ export function ViewsBar({
         </button>
       </div>
       <div className="cw-views-bar-tools">
+        {accessory}
         <button
           aria-label={t("views.filter")}
           data-testid="views-filter"

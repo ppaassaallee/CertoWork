@@ -21,6 +21,7 @@ import {
 } from "../features/overview";
 import { ProjectsViewsSurface } from "../features/views/ProjectsViewsSurface";
 import { ProjectItemsViewsSurface } from "../features/views/ProjectItemsViewsSurface";
+import { WorkHistoryTools } from "./WorkHistoryTools";
 import { type TaskRow } from "../features/views/adapters/taskAdapter";
 import { ClientPortalTab } from "../features/clientPortal/ClientPortalTab";
 import {
@@ -2062,6 +2063,11 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
             setNotionSortOpen((open) => !open);
             setNotionFilterOpen(false);
           }}
+          historyTools={
+            tab === "items" ? (
+              <WorkHistoryTools rows={tasks} scope={`project:${String(project.id)}`} />
+            ) : null
+          }
           showActions={chromeView !== "overview" && tab !== "costs" && tab !== "tables"}
           showCosts={canViewFinance}
           showTables={tablesEnabled}
