@@ -8,6 +8,28 @@ import {
 
 export type RelationshipLens = "client" | "delivery" | "people" | "project";
 
+export type RelationshipRecord = {
+  id?: unknown;
+  title?: unknown;
+  name?: unknown;
+  projectId?: unknown;
+  parentId?: unknown;
+  clientEntity?: unknown;
+  client?: unknown;
+  deliveryEntity?: unknown;
+  delivery?: unknown;
+  bpo?: unknown;
+  stakeholderIds?: unknown;
+  email?: unknown;
+  role?: unknown;
+  status?: unknown;
+  state?: unknown;
+  type?: unknown;
+  kind?: unknown;
+  itemType?: unknown;
+  hierarchyType?: unknown;
+};
+
 export type RelationshipRoot = {
   id: string;
   label: string;
@@ -20,7 +42,7 @@ export type RelationshipRoot = {
 export type RelationshipTreeNode = {
   id: string;
   kind: "project" | HierarchyKind;
-  record: any;
+  record: RelationshipRecord;
   children: RelationshipTreeNode[];
 };
 
@@ -28,7 +50,7 @@ function text(value: unknown) {
   return String(value || "").trim();
 }
 
-function title(record: any) {
+function title(record: RelationshipRecord) {
   return text(record?.title || record?.name) || "Untitled";
 }
 
@@ -36,13 +58,13 @@ function normalized(value: unknown) {
   return text(value).toLocaleLowerCase();
 }
 
-function entityValue(record: any, lens: "client" | "delivery") {
+function entityValue(record: RelationshipRecord, lens: "client" | "delivery") {
   return lens === "client"
     ? text(record?.clientEntity || record?.client)
     : text(record?.deliveryEntity || record?.bpo || record?.delivery);
 }
 
-function uniqueRecords(records: any[]) {
+function uniqueRecords(records: RelationshipRecord[]) {
   const seen = new Set<string>();
   return records.filter((record) => {
     const id = text(record?.id);
@@ -59,9 +81,9 @@ export function buildRelationshipRoots({
   stakeholders,
 }: {
   lens: RelationshipLens;
-  projects: any[];
-  tasks: any[];
-  stakeholders: any[];
+  projects: RelationshipRecord[];
+  tasks: RelationshipRecord[];
+  stakeholders: RelationshipRecord[];
 }): RelationshipRoot[] {
   if (lens === "project") {
     return projects
@@ -81,7 +103,7 @@ export function buildRelationshipRoots({
     return stakeholders
       .map((stakeholder) => {
         const personTasks = tasks.filter((task) =>
-          Array.isArray(task?.stakeholderIds) && task.stakeholderIds.map(String).includes(String(stakeholder.id)),
+          Array.isArray(task.stakeholderIds) && task.stakeholderIds.map(String).includes(String(stakeholder.id)),
         );
         return {
           id: text(stakeholder.id),
@@ -124,18 +146,18 @@ export function buildRelationshipRoots({
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function buildItemForest(items: any[]): RelationshipTreeNode[] {
+function buildItemForest(items: RelationshipRecord[]): RelationshipTreeNode[] {
   const unique = uniqueRecords(items);
   const ids = presentItemIds(unique);
-  const children = new Map<string, any[]>();
-  const roots: any[] = [];
+  const children = new Map<string, RelationshipRecord[]>();
+  const roots: RelationshipRecord[] = [];
   for (const item of unique) {
     const parent = visibleParentId(item, ids);
     if (!parent) roots.push(item);
     else children.set(parent, [...(children.get(parent) || []), item]);
   }
 
-  const walk = (item: any, path = new Set<string>()): RelationshipTreeNode => {
+  const walk = (item: RelationshipRecord, path = new Set<string>()): RelationshipTreeNode => {
     const id = text(item.id);
     if (path.has(id)) return { id, kind: hierarchyKind(item), record: item, children: [] };
     const nextPath = new Set(path).add(id);
@@ -158,8 +180,8 @@ export function buildRelationshipTree({
   tasks,
 }: {
   root: RelationshipRoot;
-  projects: any[];
-  tasks: any[];
+  projects: RelationshipRecord[];
+  tasks: RelationshipRecord[];
 }): RelationshipTreeNode[] {
   const projectIds = new Set(root.projectIds.map(String));
   const explicitItemIds = new Set(root.itemIds.map(String));

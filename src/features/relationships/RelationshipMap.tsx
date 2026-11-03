@@ -6,12 +6,14 @@ import {
   relationshipBranchIds,
   relationshipNodeCount,
   type RelationshipLens,
+  type RelationshipRecord,
   type RelationshipRoot,
   type RelationshipTreeNode,
 } from "../../lib/relationshipMap";
 import { getLocale } from "../../lib/i18n";
 import { workItemTypeLabel } from "../../lib/workItemTypeLabels";
 import { createWorkspaceStakeholder, listWorkspaceStakeholders } from "../../lib/stakeholders/storage";
+import { NativeSelect } from "../../components/ui/NativeSelect";
 import {
   Briefcase,
   CheckCircle2,
@@ -34,19 +36,19 @@ type CreateItemInput = {
   projectId: string;
   title: string;
   kind: HierarchyKind;
-  parent: any | null;
+  parent: RelationshipRecord | null;
   root: RelationshipRoot;
 };
 
 type Props = {
-  projects: any[];
-  tasks: any[];
+  projects: RelationshipRecord[];
+  tasks: RelationshipRecord[];
   userId: string;
   workspaceId: string;
   onCreateItem(input: CreateItemInput): Promise<string | void>;
   onCreateProject(name: string, root: RelationshipRoot): Promise<string | void>;
   onOpenItem(id: string): void;
-  onOpenProject(project: any): void;
+  onOpenProject(project: RelationshipRecord): void;
   onNotice(message: string): void;
 };
 
@@ -57,11 +59,11 @@ const LENSES: Array<{ id: RelationshipLens; en: string; es: string; icon: typeof
   { id: "project", en: "Projects", es: "Proyectos", icon: FolderKanban },
 ];
 
-function entityTitle(record: any) {
+function entityTitle(record: RelationshipRecord) {
   return String(record?.title || record?.name || "Untitled").trim();
 }
 
-function nodeStatus(record: any) {
+function nodeStatus(record: RelationshipRecord) {
   const status = String(record?.status || record?.state || "open").toLowerCase();
   return status === "done" || status === "completed" || status === "closed" ? "done" : status;
 }
@@ -92,7 +94,7 @@ export function RelationshipMap({
   const locale = getLocale() === "es" ? "es" : "en";
   const tx = (en: string, es: string) => (locale === "es" ? es : en);
   const [lens, setLens] = useState<RelationshipLens>("client");
-  const [stakeholders, setStakeholders] = useState<any[]>([]);
+  const [stakeholders, setStakeholders] = useState<RelationshipRecord[]>([]);
   const [loadingPeople, setLoadingPeople] = useState(false);
   const [selectedRootId, setSelectedRootId] = useState("");
   const [queryText, setQueryText] = useState("");
@@ -360,7 +362,7 @@ export function RelationshipMap({
           <form onSubmit={(event) => { event.preventDefault(); void submitCreate(); }}>
             <div className="cw-map-create-head"><div><small>{tx("Quick create", "Creación rápida")}</small><strong>{createTarget.node ? entityTitle(createTarget.node.record) : createTarget.root.label}</strong></div><button onClick={() => setCreateTarget(null)} type="button"><X size={16} /></button></div>
             {createTarget.node ? (
-              <label><span>{tx("Type", "Tipo")}</span><select onChange={(event) => setCreateTarget((current) => current ? { ...current, kind: event.target.value as HierarchyKind } : current)} value={createTarget.kind}>{(createTarget.node.kind === "project" ? ["epic", "pbi"] : allowedChildKinds(hierarchyKind(createTarget.node.record))).map((kind) => <option key={kind} value={kind}>{workItemTypeLabel(kind, locale)}</option>)}</select></label>
+              <label><span>{tx("Type", "Tipo")}</span><NativeSelect onChange={(event) => setCreateTarget((current) => current ? { ...current, kind: event.target.value as HierarchyKind } : current)} value={createTarget.kind}>{(createTarget.node.kind === "project" ? ["epic", "pbi"] : allowedChildKinds(hierarchyKind(createTarget.node.record))).map((kind) => <option key={kind} value={kind}>{workItemTypeLabel(kind, locale)}</option>)}</NativeSelect></label>
             ) : null}
             <label><span>{createTarget.kind === "project" ? tx("Project name", "Nombre del proyecto") : createTarget.root.lens === "people" && !createTarget.node ? tx("Commitment", "Compromiso") : tx("Item title", "Título del ítem")}</span><input autoFocus onChange={(event) => setCreateTitle(event.target.value)} placeholder={tx("What needs to exist?", "¿Qué debe existir?")} value={createTitle} /></label>
             <footer><button onClick={() => setCreateTarget(null)} type="button">{tx("Cancel", "Cancelar")}</button><button className="is-primary" disabled={creating || !createTitle.trim()} type="submit">{creating ? <Loader2 className="spin" size={14} /> : <Plus size={14} />}{tx("Create", "Crear")}</button></footer>
