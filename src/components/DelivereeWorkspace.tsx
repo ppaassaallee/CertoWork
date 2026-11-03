@@ -36,6 +36,7 @@ import {
   Mic,
   MicOff,
   MoreHorizontal,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Phone,
@@ -332,6 +333,11 @@ const ProjectRouteLazy = lazy(() =>
 const BillingScreenLazy = lazy(() =>
   import("../features/billing").then((m) => ({ default: m.BillingScreen })),
 );
+const RelationshipMapLazy = lazy(() =>
+  import("../features/relationships/RelationshipMap").then((m) => ({
+    default: m.RelationshipMap,
+  })),
+);
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import { SystemTemplateGallery } from "../features/tables/SystemTemplateGallery";
@@ -533,6 +539,7 @@ export type CenterView =
   | "invoices"
   | "feedback"
   | "requests"
+  | "relationships"
   | "tables-dashboard";
 
 export function DelivereeWorkspace() {
@@ -878,6 +885,8 @@ export function DelivereeWorkspace() {
       ? "dashboard"
       : lens.kind === "workload"
       ? "workload"
+      : lens.kind === "relationships"
+      ? "relationships"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -911,6 +920,7 @@ export function DelivereeWorkspace() {
     else if (next === "tables") navigate("/tables");
     else if (next === "dashboard") navigate("/dashboard");
     else if (next === "workload") navigate("/workload");
+    else if (next === "relationships") navigate("/relationships");
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -7736,6 +7746,18 @@ export function DelivereeWorkspace() {
             {sidebarSections.management && (
               <div className="do-section-body">
                 <button
+                  className={`do-nav-item is-relationships ${lens.kind === "relationships" ? "is-active" : ""}`}
+                  data-testid="nav-relationships"
+                  onClick={() => {
+                    navigate("/relationships");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Network size="sm" />
+                  <span>{tr("Relationships", "Relaciones")}</span>
+                </button>
+                <button
                   className={`do-nav-item is-requests ${lens.kind === "requests" || lens.kind === "feedback" ? "is-active" : ""}`}
                   data-testid="nav-requests"
                   onClick={() => {
@@ -8121,6 +8143,9 @@ export function DelivereeWorkspace() {
                     ]
                   : []),
                 ...(lens.kind === "invoices" ? [{ label: t("navInvoices") }] : []),
+                ...(lens.kind === "relationships"
+                  ? [{ label: tr("Relationships", "Relaciones") }]
+                  : []),
                 ...(lens.kind === "feedback"
                   ? [
                       {
@@ -9145,6 +9170,50 @@ export function DelivereeWorkspace() {
             </Suspense>
             )}
           </div>
+        ) : centerView === "relationships" ? (
+          <Suspense fallback={<div className="do-panel-empty">{tr("Loading relationship map…", "Cargando mapa de relaciones…")}</div>}>
+            <RelationshipMapLazy
+              onCreateItem={async ({ projectId, title, kind, parent, root }) => {
+                const relationshipPatch =
+                  root.lens === "people"
+                    ? { stakeholderIds: [root.id] }
+                    : root.lens === "client"
+                      ? { clientEntity: root.label, client: root.label }
+                      : root.lens === "delivery"
+                        ? { deliveryEntity: root.label, bpo: root.label }
+                        : {};
+                const id = await addProjectTask(projectId, title, "backlog", {
+                  ...relationshipPatch,
+                  ...parentLinkPatch(parent),
+                  workItemType: kind,
+                  type: kind,
+                  itemType: kind,
+                });
+                if (id) setNotice(tr("Item created in the map.", "Ítem creado en el mapa."));
+                return id;
+              }}
+              onCreateProject={async (name, root) => {
+                const id = await createNamedProject(name);
+                if (!id) return id;
+                const patch =
+                  root.lens === "client"
+                    ? { clientEntity: root.label, client: root.label }
+                    : root.lens === "delivery"
+                      ? { deliveryEntity: root.label, bpo: root.label }
+                      : {};
+                if (Object.keys(patch).length) await updateProject(id, patch);
+                setNotice(tr("Project connected.", "Proyecto conectado."));
+                return id;
+              }}
+              onNotice={setNotice}
+              onOpenItem={(id) => openWorkOrRecord(id)}
+              onOpenProject={openProjectRecord}
+              projects={projects}
+              tasks={tasks}
+              userId={user?.uid || ""}
+              workspaceId={workspace?.id || ""}
+            />
+          </Suspense>
         ) : centerView === "invoices" ? (
           billingEnabled ? (
             <Suspense fallback={<div className="do-panel-empty">Loading billing…</div>}>

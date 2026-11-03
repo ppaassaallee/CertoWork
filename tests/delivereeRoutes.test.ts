@@ -26,6 +26,7 @@ test("legacy and new routes resolve into one conversational lens", () => {
   });
   assert.deepEqual(resolveDelivereeLens("/dashboard"), { kind: "dashboard" });
   assert.deepEqual(resolveDelivereeLens("/workload"), { kind: "workload" });
+  assert.deepEqual(resolveDelivereeLens("/relationships"), { kind: "relationships" });
 });
 
 test("delivery stage normalization keeps the portfolio coherent", () => {
