@@ -37,6 +37,7 @@ export type DelivereeLens =
   | { kind: "tables-dashboard"; dashboardId: string }
   | { kind: "dashboard" }
   | { kind: "workload" }
+  | { kind: "relationships" }
   | { kind: "more"; section: MoreSection }
   | { kind: "inbox" };
 
@@ -202,6 +203,10 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "workload" };
   }
 
+  if (path === "/relationships" || path === "/entities" || path === "/map") {
+    return { kind: "relationships" };
+  }
+
   if (path === "/dashboards" || path.startsWith("/dashboards/")) {
     const dashId = path.startsWith("/dashboards/")
       ? decodeURIComponent(path.slice("/dashboards/".length).split("/")[0] || "")
@@ -326,6 +331,7 @@ export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "notes") return "/notes";
   if (lens.kind === "dashboard") return "/dashboard";
   if (lens.kind === "workload") return "/workload";
+  if (lens.kind === "relationships") return "/relationships";
   if (lens.kind === "tables-dashboard") {
     return `/dashboards/${encodeURIComponent(lens.dashboardId)}`;
   }
