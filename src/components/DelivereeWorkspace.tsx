@@ -9176,7 +9176,7 @@ export function DelivereeWorkspace() {
               onCreateItem={async ({ projectId, title, kind, parent, root }) => {
                 const relationshipPatch =
                   root.lens === "people"
-                    ? { stakeholderIds: [root.id] }
+                    ? { stakeholderIds: [root.id], requesterName: root.label }
                     : root.lens === "client"
                       ? { clientEntity: root.label, client: root.label }
                       : root.lens === "delivery"
@@ -9210,6 +9210,7 @@ export function DelivereeWorkspace() {
               onOpenProject={openProjectRecord}
               projects={projects}
               tasks={tasks}
+              canManageStakeholders={canManageMembers}
               userId={user?.uid || ""}
               workspaceId={workspace?.id || ""}
             />
