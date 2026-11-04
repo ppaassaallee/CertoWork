@@ -9782,16 +9782,13 @@ export function DelivereeWorkspace() {
         ) : centerView === "run" && workspace && user ? (
           <Suspense fallback={<div className="do-panel-empty">Opening Certo Run…</div>}>
             <CertoRunDeskLazy
-              members={workspaceMembers}
               onBack={() => navigate("/home")}
               onTab={(next) => navigate(next === "today" ? "/run" : `/run/${next}`)}
               onWorkspace={(id) => {
                 const next = workspaces.find((item) => item.id === id);
                 if (next && next.id !== workspace.id) setWorkspace(next);
               }}
-              projects={projects}
               tab={lens.kind === "certo-run" ? lens.tab : "today"}
-              tasks={tasks}
               user={{ uid: user.uid, displayName: user.displayName }}
               workspace={{ id: workspace.id, name: workspace.name || "Workspace" }}
               workspaces={workspaces.map((item) => ({ id: item.id, name: item.name || "Workspace" }))}

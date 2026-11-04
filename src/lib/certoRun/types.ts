@@ -57,6 +57,7 @@ export interface DeskItem {
   postponedAt?: number;
   /** Open work that has no Certo Run decision yet. Still counts as open. */
   inQueue?: boolean;
+  runTop3Date?: string;
 }
 
 export interface Viewer {

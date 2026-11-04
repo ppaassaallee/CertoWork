@@ -1,82 +1,74 @@
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { prepareItemWrite, prepareTaskCreatePayload } from "../firestorePayload";
+import { prepareItemWrite } from "../firestorePayload";
 import { checkMoveToMake, checkSetPriority, checkTop3, type CapResult } from "./caps";
+import { RUN_COLLECTION } from "./store";
 import type { DeskItem } from "./types";
 import type { Decision, Lane } from "./vocab";
 import { adminNeverMake } from "./intake";
 
-function taskRef(id: string) {
-  return doc(db, "tasks", id);
+function runRef(id: string) {
+  return doc(db, RUN_COLLECTION, id);
 }
 
-export async function patchTask(id: string, patch: Record<string, unknown>) {
-  await updateDoc(taskRef(id), prepareItemWrite({ ...patch, updatedAt: serverTimestamp() }));
+export async function patchRunItem(id: string, patch: Record<string, unknown>) {
+  await updateDoc(runRef(id), prepareItemWrite({ ...patch, updatedAt: serverTimestamp() }));
 }
 
-export async function completeTask(id: string, kind: "done" | "yes" | "no" | "dropped", reason?: string) {
-  await patchTask(id, {
+export async function completeRunItem(id: string, kind: "done" | "yes" | "no" | "dropped", reason?: string) {
+  await patchRunItem(id, {
     status: kind === "dropped" ? "archived" : "done",
-    completedAt: serverTimestamp(),
-    runOutcome: { kind, reason, at: new Date().toISOString() },
+    outcome: { kind, reason, at: new Date().toISOString() },
   });
 }
 
-export async function moveTaskToMake(items: DeskItem[], workspaceId: string, taskId: string): Promise<CapResult> {
-  const result = checkMoveToMake(items, { workspace: workspaceId }, taskId);
+export async function moveRunItemToMake(items: DeskItem[], workspaceId: string, itemId: string): Promise<CapResult> {
+  const result = checkMoveToMake(items, { workspace: workspaceId }, itemId);
   if (!result.ok) return result;
-  await patchTask(taskId, { runDecision: "make", itemType: "next_action" });
+  await patchRunItem(itemId, { decision: "make", inQueue: true });
   return { ok: true };
 }
 
-export async function setTaskPriority(
+export async function setRunItemPriority(
   items: DeskItem[],
   workspaceId: string,
-  taskId: string,
+  itemId: string,
   priority: "P1" | "P2" | "P3" | "P4",
 ): Promise<CapResult> {
-  const result = checkSetPriority(items, { workspace: workspaceId }, taskId, priority);
+  const result = checkSetPriority(items, { workspace: workspaceId }, itemId, priority);
   if (!result.ok) return result;
-  await patchTask(taskId, { priority });
+  await patchRunItem(itemId, { priority });
   return { ok: true };
 }
 
-export async function clearTaskTop3(taskId: string) {
-  await patchTask(taskId, { runTop3Date: "" });
+export async function clearRunTop3(itemId: string) {
+  await patchRunItem(itemId, { runTop3Date: "" });
 }
 
-export async function setTaskTop3(currentIds: string[], taskId: string, date: string): Promise<CapResult> {
-  const result = checkTop3(currentIds, taskId);
+export async function setRunTop3(currentIds: string[], itemId: string, date: string): Promise<CapResult> {
+  const result = checkTop3(currentIds, itemId);
   if (!result.ok) return result;
-  await patchTask(taskId, { runTop3Date: date });
+  await patchRunItem(itemId, { runTop3Date: date });
   return { ok: true };
 }
 
-export async function delegateTask(id: string, to: string, date: string, mode: "captain" | "propose", context: string) {
-  await patchTask(id, {
-    runDecision: "delegate",
-    itemType: "delegated",
+export async function delegateRunItem(id: string, to: string, date: string, mode: "captain" | "propose", context: string) {
+  await patchRunItem(id, {
+    decision: "delegate",
+    inQueue: true,
     assigneeName: to,
-    runOutcome: { kind: "delegated", owner: to, date, mode, context, at: new Date().toISOString() },
+    outcome: { kind: "delegated", owner: to, date, mode, context, at: new Date().toISOString() },
   });
 }
 
-export async function renegotiateTask(id: string, date: string) {
-  await patchTask(id, {
+export async function renegotiateRunItem(id: string, date: string) {
+  await patchRunItem(id, {
     dueDate: date,
-    runOutcome: { kind: "renegotiated", date, at: new Date().toISOString() },
+    outcome: { kind: "renegotiated", date, at: new Date().toISOString() },
   });
 }
 
-const ITEM_TYPE: Record<Decision, string> = {
-  make: "next_action",
-  decide: "decision",
-  delegate: "delegated",
-  follow_up: "follow_up",
-  admin_batch: "admin",
-};
-
-export async function createRunTask(input: {
+export async function createRunItem(input: {
   userId: string;
   workspaceId: string;
   title: string;
@@ -87,22 +79,23 @@ export async function createRunTask(input: {
 }): Promise<{ ok: true; id: string } | { ok: false; reason: "admin-make" }> {
   if (adminNeverMake(input.lane, input.decision)) return { ok: false, reason: "admin-make" };
   const ref = await addDoc(
-    collection(db, "tasks"),
-    prepareTaskCreatePayload({
+    collection(db, RUN_COLLECTION),
+    prepareItemWrite({
       userId: input.userId,
       workspaceId: input.workspaceId,
       title: input.title,
       description: input.details || "",
       status: "open",
-      itemType: ITEM_TYPE[input.decision],
-      runDecision: input.decision,
+      decision: input.decision,
+      lane: input.lane,
+      inQueue: true,
       priority: "P3",
-      dueDate: input.dueDate || null,
+      dueDate: input.dueDate || "",
+      epic: "",
+      tags: input.lane === "admin" ? ["admin"] : [],
       createdBy: input.userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      acceptanceCriteria: "",
-      tags: input.lane === "admin" ? ["admin"] : [],
     }),
   );
   return { ok: true, id: ref.id };

@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { checkMoveToMake } from "../src/lib/certoRun/caps";
 import { workingDaysOfMonth } from "../src/lib/certoRun/dates";
-import { taskToDeskItem, type RunTask } from "../src/lib/certoRun/fromTask";
 import { queueCounts, soloQ } from "../src/lib/certoRun/queues";
 import { adminNeverMake, checkTitle } from "../src/lib/certoRun/intake";
+import { RUN_COLLECTION, runDocToDeskItem } from "../src/lib/certoRun/store";
 import { resolveDelivereeLens } from "../src/lib/delivereeRoutes";
 
 const workspace = { id: "ws-1", name: "Pure AI" };
 
-function task(partial: Partial<RunTask> & { id: string }): RunTask {
-  return { title: partial.id, status: "open", ...partial };
+function runItem(id: string, decision = "make") {
+  return runDocToDeskItem(id, { title: id, decision, status: "open", workspaceId: workspace.id }, workspace);
 }
 
 test("Certo Run opens from /run inside the Certo Work shell", () => {
@@ -19,31 +20,29 @@ test("Certo Run opens from /run inside the Certo Work shell", () => {
   assert.deepEqual(resolveDelivereeLens("/run/queue"), { kind: "certo-run", tab: "queue" });
 });
 
-test("open tasks already in the workspace become the five queues", () => {
-  const items = [
-    taskToDeskItem(task({ id: "a", itemType: "next_action" }), workspace, "Alpha"),
-    taskToDeskItem(task({ id: "b", itemType: "decision" }), workspace),
-    taskToDeskItem(task({ id: "c", itemType: "follow_up", requesterId: "me" }), workspace),
-    taskToDeskItem(task({ id: "d", itemType: "admin", tags: ["admin"] }), workspace),
-    taskToDeskItem(task({ id: "e", itemType: "delegated" }), workspace),
-    taskToDeskItem(task({ id: "f", itemType: "project_task" }), workspace),
-  ].filter((item) => item !== null);
-  const counts = queueCounts(items, { workspace: "ws-1" });
-  assert.equal(counts.make, 1);
+test("Certo Run starts empty and does not touch Work tasks", () => {
+  assert.equal(queueCounts([], { workspace: "ws-1" }).open, 0);
+  const writes = readFileSync("src/lib/certoRun/writes.ts", "utf8");
+  const desk = readFileSync("src/features/certo-run/CertoRunDesk.tsx", "utf8");
+  const rules = readFileSync("firestore.rules", "utf8");
+  assert.equal(writes.includes('"tasks"'), false);
+  assert.equal(desk.includes("fromTask"), false);
+  assert.equal(RUN_COLLECTION, "run_items");
+  assert.ok(writes.includes("RUN_COLLECTION"));
+  assert.match(rules, /match \/run_items\/\{id\}/);
+});
+
+test("only a Certo Run document enters a queue", () => {
+  const item = runItem("a", "decide");
+  const counts = queueCounts([item], { workspace: "ws-1" });
   assert.equal(counts.decide, 1);
-  assert.equal(counts.owed, 1);
-  assert.equal(counts.admin, 1);
-  assert.equal(counts.delegated, 1);
-  assert.equal(counts.open, 6);
-  assert.equal(items.filter((item) => item.inQueue === false).length, 1);
+  assert.equal(counts.make, 0);
+  assert.equal(counts.open, 1);
 });
 
 test("the sixth Make item is refused with the current five", () => {
-  const items = Array.from({ length: 5 }, (_, index) =>
-    taskToDeskItem(task({ id: `m${index}`, title: `Make ${index}`, itemType: "next_action" }), workspace),
-  ).filter((item) => item !== null);
-  const extra = taskToDeskItem(task({ id: "extra", itemType: "project_task" }), workspace);
-  assert.ok(extra);
+  const items = Array.from({ length: 5 }, (_, index) => runItem(`m${index}`));
+  const extra = runDocToDeskItem("extra", { title: "Extra", decision: "decide", status: "open", workspaceId: workspace.id, inQueue: true }, workspace);
   const result = checkMoveToMake([...items, extra], { workspace: "ws-1" }, "extra");
   assert.equal(result.ok, false);
   if (!result.ok) {

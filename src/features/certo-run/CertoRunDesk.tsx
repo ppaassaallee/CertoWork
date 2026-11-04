@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import { agedAdminCount } from "../../lib/certoRun/caps";
 import {
   DEFAULT_TEMPLATE,
@@ -19,18 +21,18 @@ import {
   segQ,
   soloQ,
 } from "../../lib/certoRun/queues";
-import { projectTitle, taskToDeskItem, type RunProject, type RunTask } from "../../lib/certoRun/fromTask";
 import { checkTitle, gateDest, type GateKey, GATE_QUESTIONS } from "../../lib/certoRun/intake";
 import { DEFAULT_MANIFESTO } from "../../lib/certoRun/manifesto";
+import { RUN_COLLECTION, runDocToDeskItem } from "../../lib/certoRun/store";
 import type { DeskItem } from "../../lib/certoRun/types";
 import {
-  clearTaskTop3,
-  completeTask,
-  createRunTask,
-  delegateTask,
-  moveTaskToMake,
-  renegotiateTask,
-  setTaskTop3,
+  clearRunTop3,
+  completeRunItem,
+  createRunItem,
+  delegateRunItem,
+  moveRunItemToMake,
+  renegotiateRunItem,
+  setRunTop3,
 } from "../../lib/certoRun/writes";
 import type { Decision, Lane } from "../../lib/certoRun/vocab";
 import { tx } from "./copy";
@@ -39,31 +41,14 @@ import "./certo-run.css";
 export type RunTab = "today" | "queue" | "projects" | "intake" | "close" | "life";
 type QueueMode = "make" | "decide" | "owed" | "admin" | "delegated" | "unsorted";
 
-interface Member {
-  userId?: string;
-  id?: string;
-  displayName?: string;
-  name?: string;
-  email?: string;
-}
-
 interface Props {
-  tasks: RunTask[];
-  projects: RunProject[];
   workspace: { id: string; name: string };
   workspaces: Array<{ id: string; name: string }>;
   user: { uid: string; displayName?: string | null };
-  members: Member[];
   tab: RunTab;
   onTab: (tab: RunTab) => void;
   onWorkspace: (id: string) => void;
   onBack: () => void;
-}
-
-function memberName(members: Member[], uid?: string | null): string {
-  if (!uid) return "";
-  const member = members.find((row) => row.userId === uid || row.id === uid);
-  return member?.displayName || member?.name || member?.email || "";
 }
 
 function localToday(): string {
@@ -73,7 +58,7 @@ function localToday(): string {
   return `${now.getFullYear()}-${m}-${d}`;
 }
 
-export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, members, tab, onTab, onWorkspace, onBack }: Props) {
+export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorkspace, onBack }: Props) {
   const [mode, setMode] = useState<QueueMode>("make");
   const [form, setForm] = useState<{ id: string; kind: "delegate" | "date" | "drop" } | null>(null);
   const [refusal, setRefusal] = useState<string[]>([]);
@@ -85,6 +70,7 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
   const [draftLane, setDraftLane] = useState<Lane>("projects");
   const [draftDecision, setDraftDecision] = useState<Decision>("make");
   const [error, setError] = useState("");
+  const [items, setItems] = useState<DeskItem[]>([]);
   const today = localToday();
   const personal = workspace.name.trim().toLowerCase() === "personal";
 
@@ -96,18 +82,16 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
     return () => window.clearInterval(timer);
   }, []);
 
-  const items = useMemo(() => {
-    return tasks
-      .map((task) => {
-        const item = taskToDeskItem(
-          { ...task, assigneeName: task.assigneeName || memberName(members, task.assigneeId || task.ownerId) },
-          workspace,
-          projectTitle(projects, task.projectId),
-        );
-        return item;
-      })
-      .filter((item): item is DeskItem => Boolean(item));
-  }, [tasks, projects, workspace, members]);
+  useEffect(() => {
+    const rows = query(collection(db, RUN_COLLECTION), where("workspaceId", "==", workspace.id));
+    return onSnapshot(
+      rows,
+      (snap) => {
+        setItems(snap.docs.map((row) => runDocToDeskItem(row.id, row.data() as Record<string, unknown>, workspace)));
+      },
+      () => setItems([]),
+    );
+  }, [workspace.id, workspace.name]);
 
   const options = { workspace: workspace.id };
   const counts = queueCounts(items, options);
@@ -122,15 +106,15 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
   const chip = nowChip(plan, personal ? "Personal" : workspace.name, minutes);
   const activeWorld = personal ? "Personal" : workspace.name;
   const current = currentBlock(plan, minutes);
-  const gap = current.kind === "before" || current.kind === "after" || current.kind === "free";
+  const gap = current.kind === "before" || current.kind === "after";
   const nowVisible = !gap && vis(current, activeWorld);
   const tabs: RunTab[] = personal ? ["today", "life", "intake", "close"] : ["today", "queue", "projects", "intake", "close"];
   const queue = queueFor(items, workspace.id, mode);
-  const top3 = tasks.filter((task) => task.runTop3Date === today).map((task) => task.id);
+  const top3 = items.filter((item) => item.runTop3Date === today).map((item) => item.id);
 
   async function onMake(id: string) {
     setError("");
-    const result = await moveTaskToMake(items, workspace.id, id);
+    const result = await moveRunItemToMake(items, workspace.id, id);
     if (!result.ok) setRefusal(result.current.map((row) => row.title));
     else setRefusal([]);
   }
@@ -156,6 +140,7 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
           </button>
         ))}
       </div>
+      {openCount(items, workspace.id) === 0 && <p className="cr-panel" data-testid="certo-run-empty">{tx("noWork")}</p>}
       <p className="cr-muted" data-testid="certo-run-now">
         {nowVisible
           ? `${tx("now")}: ${current.name} ${current.start}`
@@ -183,7 +168,7 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
           current={currentBlock(plan, minutes)}
           p1={p1Alive(items, options).length}
           plan={plan}
-          resolved={tasks.filter((task) => String(task.status) === "done").length}
+          resolved={items.filter((item) => item.state === "done").length}
         />
       )}
       {tab === "queue" && (
@@ -191,17 +176,17 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
           form={form}
           items={queue}
           mode={mode}
-          onDone={(id) => void completeTask(id, mode === "decide" ? "yes" : "done")}
+          onDone={(id) => void completeRunItem(id, mode === "decide" ? "yes" : "done")}
           onDrop={(id) => setForm({ id, kind: "drop" })}
           onForm={setForm}
           onMake={(id) => void onMake(id)}
           onMode={setMode}
-          onNo={(id) => void completeTask(id, "no")}
+          onNo={(id) => void completeRunItem(id, "no")}
           onSave={async (value) => {
             if (!form) return;
-            if (form.kind === "delegate") await delegateTask(form.id, value.who, value.date, "captain", value.context);
-            if (form.kind === "date") await renegotiateTask(form.id, value.date);
-            if (form.kind === "drop") await completeTask(form.id, "dropped", value.context || "Adds nothing");
+            if (form.kind === "delegate") await delegateRunItem(form.id, value.who, value.date, "captain", value.context);
+            if (form.kind === "date") await renegotiateRunItem(form.id, value.date);
+            if (form.kind === "drop") await completeRunItem(form.id, "dropped", value.context || "Adds nothing");
             setForm(null);
           }}
         />
@@ -219,7 +204,7 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
           onTitle={setDraftTitle}
           title={draftTitle}
           onSave={async () => {
-            const created = await createRunTask({
+            const created = await createRunItem({
               userId: user.uid,
               workspaceId: workspace.id,
               title: draftTitle,
@@ -237,10 +222,10 @@ export function CertoRunDesk({ tasks, projects, workspace, workspaces, user, mem
           top3={top3}
           onToggle={async (id) => {
             if (top3.includes(id)) {
-              await clearTaskTop3(id);
+              await clearRunTop3(id);
               return;
             }
-            const result = await setTaskTop3(top3, id, today);
+            const result = await setRunTop3(top3, id, today);
             if (!result.ok) setRefusal(result.current.map((row) => row.title));
           }}
         />

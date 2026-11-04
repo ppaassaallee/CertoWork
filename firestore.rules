@@ -1115,6 +1115,26 @@ service cloud.firestore {
                         || (('createdBy' in resource.data) && resource.data.createdBy == request.auth.uid));
     }
 
+    // Certo Run desk. Separate from tasks so Work is never read or written here.
+    match /run_items/{id} {
+      allow get: if isSignedIn() && isValidId(id) && (resource == null || (resource.data.workspaceId is string && isWorkspaceParticipant(resource.data.workspaceId)));
+      allow list: if isSignedIn() && resource.data.workspaceId is string && isWorkspaceParticipant(resource.data.workspaceId);
+      allow create: if isSignedIn() && isValidId(id)
+        && incoming().userId == request.auth.uid
+        && incoming().workspaceId is string
+        && canCreateWorkspaceRecord(incoming().workspaceId)
+        && incoming().title is string
+        && incoming().title.size() > 0
+        && incoming().title.size() <= 500
+        && incoming().status is string;
+      allow update: if isSignedIn() && isValidId(id)
+        && resource.data.workspaceId is string
+        && isWorkspaceParticipant(resource.data.workspaceId)
+        && incoming().userId == resource.data.userId
+        && incoming().workspaceId == resource.data.workspaceId;
+      allow delete: if isSignedIn() && isValidId(id) && resource.data.userId == request.auth.uid;
+    }
+
     // New Modules: Habits, Workouts, Analytics
     match /habits/{id} {
       allow get: if isSignedIn() && isValidId(id) && (resource == null || resource.data.userId == request.auth.uid);
