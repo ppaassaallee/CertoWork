@@ -7121,7 +7121,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" || lens.kind === "certo-run" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" || lens.kind === "certo-run" ? "work" : lens.kind === "work" ? "work" : lens.kind}${centerView === "run" ? " is-run-focus" : ""}`}>
       {shortcutHelpOpen ? (
         <div aria-label={t("shortcuts.title")} aria-modal="true" className="do-skill-layer" role="dialog">
           <section className="do-skill-modal do-quick-project-modal">
@@ -8094,7 +8094,7 @@ export function DelivereeWorkspace() {
         </div>
       </aside>
 
-      <main className="do-main">
+      <main className={`do-main${centerView === "run" ? " is-run-module" : ""}`}>
         <header className="do-header">
           <button
             aria-label={t("openNav")}

@@ -41,6 +41,8 @@ export interface DeskItem {
   epic: string;
   feature: string;
   clientEntity?: string;
+  health?: Health | "";
+  unblock?: string;
   tags: string[];
   assigneeUid?: string;
   assigneeName?: string;
