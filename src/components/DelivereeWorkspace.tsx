@@ -9784,14 +9784,9 @@ export function DelivereeWorkspace() {
             <CertoRunDeskLazy
               onBack={() => navigate("/home")}
               onTab={(next) => navigate(next === "today" ? "/run" : `/run/${next}`)}
-              onWorkspace={(id) => {
-                const next = workspaces.find((item) => item.id === id);
-                if (next && next.id !== workspace.id) setWorkspace(next);
-              }}
               tab={lens.kind === "certo-run" ? lens.tab : "today"}
               user={{ uid: user.uid, displayName: user.displayName }}
-              workspace={{ id: workspace.id, name: workspace.name || "Workspace" }}
-              workspaces={workspaces.map((item) => ({ id: item.id, name: item.name || "Workspace" }))}
+              workspaceId={workspace.id}
             />
           </Suspense>
         ) : centerView === "tables" && !tablesEnabled ? (

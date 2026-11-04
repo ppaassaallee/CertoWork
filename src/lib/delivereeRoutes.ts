@@ -19,7 +19,7 @@ export type AgentsSection =
 export type FeedbackSection = "submit" | "queue";
 export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new" | "reports";
 
-export type RunTab = "today" | "queue" | "projects" | "intake" | "close" | "life";
+export type RunTab = "today" | "queue" | "projects" | "team" | "week" | "intake" | "close" | "life";
 
 export type DelivereeLens =
   | { kind: "home" }
@@ -247,7 +247,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
   if (path === "/run" || path.startsWith("/run/")) {
     const tab = path.slice("/run/".length) as RunTab;
-    const allowed: RunTab[] = ["today", "queue", "projects", "intake", "close", "life"];
+    const allowed: RunTab[] = ["today", "queue", "projects", "team", "week", "intake", "close", "life"];
     return { kind: "certo-run", tab: allowed.includes(tab) ? tab : "today" };
   }
 

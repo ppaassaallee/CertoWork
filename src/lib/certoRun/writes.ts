@@ -4,7 +4,7 @@ import { prepareItemWrite } from "../firestorePayload";
 import { checkMoveToMake, checkSetPriority, checkTop3, type CapResult } from "./caps";
 import { RUN_COLLECTION } from "./store";
 import type { DeskItem } from "./types";
-import type { Decision, Lane } from "./vocab";
+import type { Decision, Lane, RunWorld } from "./vocab";
 import { adminNeverMake } from "./intake";
 
 function runRef(id: string) {
@@ -74,6 +74,7 @@ export async function createRunItem(input: {
   title: string;
   decision: Decision;
   lane: Lane;
+  world: RunWorld;
   details?: string;
   dueDate?: string;
 }): Promise<{ ok: true; id: string } | { ok: false; reason: "admin-make" }> {
@@ -88,6 +89,7 @@ export async function createRunItem(input: {
       status: "open",
       decision: input.decision,
       lane: input.lane,
+      world: input.world,
       inQueue: true,
       priority: "P3",
       dueDate: input.dueDate || "",

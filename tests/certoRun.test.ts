@@ -40,6 +40,19 @@ test("only a Certo Run document enters a queue", () => {
   assert.equal(counts.open, 1);
 });
 
+test("Certo Run worlds are not Certo Work workspaces", () => {
+  const tenant = { id: "personal-focus-id", name: "Personal Focus" };
+  const pure = runDocToDeskItem("a", { title: "Note", decision: "make", status: "open", workspaceId: tenant.id, world: "Pure AI" }, tenant);
+  const boldr = runDocToDeskItem("b", { title: "Other", decision: "make", status: "open", workspaceId: tenant.id, world: "Boldr AI" }, tenant);
+  assert.equal(pure.world, "Pure AI");
+  assert.notEqual(pure.world, tenant.name);
+  assert.equal(queueCounts([pure, boldr], { workspace: "Pure AI" }).make, 1);
+  assert.equal(queueCounts([pure, boldr], { workspace: "Personal Focus" }).open, 0);
+  const desk = readFileSync("src/features/certo-run/CertoRunDesk.tsx", "utf8");
+  assert.equal(desk.includes("workspaces"), false);
+  assert.equal(resolveDelivereeLens("/run/team").kind, "certo-run");
+});
+
 test("the sixth Make item is refused with the current five", () => {
   const items = Array.from({ length: 5 }, (_, index) => runItem(`m${index}`));
   const extra = runDocToDeskItem("extra", { title: "Extra", decision: "decide", status: "open", workspaceId: workspace.id, inQueue: true }, workspace);

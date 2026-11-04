@@ -1,4 +1,4 @@
-import { isDecision, type Decision, type Lane, type Priority } from "./vocab";
+import { isDecision, isRunWorld, type Decision, type Lane, type Priority } from "./vocab";
 import type { DeskItem, Outcome } from "./types";
 
 /** Certo Run records. Never the Certo Work `tasks` collection. */
@@ -27,7 +27,7 @@ export function runDocToDeskItem(
     id,
     externalId: id,
     workspaceId: String(data.workspaceId || workspace.id),
-    world: workspace.name,
+    world: typeof data.world === "string" && isRunWorld(data.world) ? data.world : "",
     type: "pbi",
     lane: decision === "admin_batch" ? "admin" : laneOf(data.lane),
     decision,

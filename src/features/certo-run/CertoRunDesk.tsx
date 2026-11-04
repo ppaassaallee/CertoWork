@@ -34,21 +34,31 @@ import {
   renegotiateRunItem,
   setRunTop3,
 } from "../../lib/certoRun/writes";
-import type { Decision, Lane } from "../../lib/certoRun/vocab";
+import { RUN_WORLDS, type Decision, type Lane, type RunWorld } from "../../lib/certoRun/vocab";
 import { tx } from "./copy";
 import "./certo-run.css";
 
-export type RunTab = "today" | "queue" | "projects" | "intake" | "close" | "life";
+export type RunTab = "today" | "queue" | "projects" | "team" | "week" | "intake" | "close" | "life";
 type QueueMode = "make" | "decide" | "owed" | "admin" | "delegated" | "unsorted";
 
 interface Props {
-  workspace: { id: string; name: string };
-  workspaces: Array<{ id: string; name: string }>;
+  workspaceId: string;
   user: { uid: string; displayName?: string | null };
   tab: RunTab;
   onTab: (tab: RunTab) => void;
-  onWorkspace: (id: string) => void;
   onBack: () => void;
+}
+
+const WORLD_KEY = "certo-run-world";
+
+function savedWorld(): RunWorld {
+  try {
+    const saved = window.localStorage.getItem(WORLD_KEY);
+    if (saved === "Pure AI" || saved === "Boldr AI" || saved === "Personal") return saved;
+  } catch {
+    /* private mode */
+  }
+  return "Pure AI";
 }
 
 function localToday(): string {
@@ -58,7 +68,7 @@ function localToday(): string {
   return `${now.getFullYear()}-${m}-${d}`;
 }
 
-export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorkspace, onBack }: Props) {
+export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const [mode, setMode] = useState<QueueMode>("make");
   const [form, setForm] = useState<{ id: string; kind: "delegate" | "date" | "drop" } | null>(null);
   const [refusal, setRefusal] = useState<string[]>([]);
@@ -71,8 +81,9 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
   const [draftDecision, setDraftDecision] = useState<Decision>("make");
   const [error, setError] = useState("");
   const [items, setItems] = useState<DeskItem[]>([]);
+  const [world, setWorld] = useState<RunWorld>(savedWorld);
   const today = localToday();
-  const personal = workspace.name.trim().toLowerCase() === "personal";
+  const personal = world === "Personal";
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -83,64 +94,68 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
   }, []);
 
   useEffect(() => {
-    const rows = query(collection(db, RUN_COLLECTION), where("workspaceId", "==", workspace.id));
+    const rows = query(collection(db, RUN_COLLECTION), where("workspaceId", "==", workspaceId));
     return onSnapshot(
       rows,
       (snap) => {
-        setItems(snap.docs.map((row) => runDocToDeskItem(row.id, row.data() as Record<string, unknown>, workspace)));
+        setItems(snap.docs.map((row) => runDocToDeskItem(row.id, row.data() as Record<string, unknown>, { id: workspaceId, name: "" })));
       },
       () => setItems([]),
     );
-  }, [workspace.id, workspace.name]);
+  }, [workspaceId]);
 
-  const options = { workspace: workspace.id };
-  const counts = queueCounts(items, options);
-  const plan = useMemo(() => {
-    const blocks = dayPlan(today, DEFAULT_TEMPLATE);
-    const known = workspace.name === "Pure AI" || workspace.name === "Boldr AI";
-    if (known || personal) return blocks;
-    return blocks.map((block) =>
-      block.world === "Pure AI" || block.world === "Boldr AI" ? { ...block, world: workspace.name } : block,
-    );
-  }, [today, workspace.name, personal]);
-  const chip = nowChip(plan, personal ? "Personal" : workspace.name, minutes);
-  const activeWorld = personal ? "Personal" : workspace.name;
+  const worldItems = items.filter((item) => item.world === world);
+  const options = { workspace: world };
+  const counts = queueCounts(worldItems, options);
+  const plan = useMemo(() => dayPlan(today, DEFAULT_TEMPLATE), [today]);
+  const chip = nowChip(plan, world, minutes);
+  const activeWorld = world;
   const current = currentBlock(plan, minutes);
   const gap = current.kind === "before" || current.kind === "after";
   const nowVisible = !gap && vis(current, activeWorld);
-  const tabs: RunTab[] = personal ? ["today", "life", "intake", "close"] : ["today", "queue", "projects", "intake", "close"];
-  const queue = queueFor(items, workspace.id, mode);
-  const top3 = items.filter((item) => item.runTop3Date === today).map((item) => item.id);
+  const tabs: RunTab[] = personal
+    ? ["today", "life", "intake", "close"]
+    : ["today", "queue", "projects", "team", "week", "intake", "close"];
+  const queue = queueFor(worldItems, world, mode);
+  const top3 = worldItems.filter((item) => item.runTop3Date === today).map((item) => item.id);
+
+  function chooseWorld(next: RunWorld) {
+    setWorld(next);
+    try { window.localStorage.setItem(WORLD_KEY, next); } catch { /* private mode */ }
+    const shared: RunTab[] = ["today", "queue", "projects", "team", "week", "intake", "close"];
+    const life: RunTab[] = ["today", "life", "intake", "close"];
+    if (!(next === "Personal" ? life : shared).includes(tab)) onTab("today");
+  }
 
   async function onMake(id: string) {
     setError("");
-    const result = await moveRunItemToMake(items, workspace.id, id);
+    const result = await moveRunItemToMake(worldItems, world, id);
     if (!result.ok) setRefusal(result.current.map((row) => row.title));
     else setRefusal([]);
   }
 
   return (
-    <section className="cr-desk" data-testid="certo-run-desk">
+    <section className="cr-desk" data-testid="certo-run-desk" data-world={world}>
       <div className="cr-top">
         <h1>Certo Run</h1>
         <p className="cr-lede">{tx("lede")}</p>
         <button className="do-button" onClick={onBack} type="button">{tx("back")}</button>
         <button className="do-button" onClick={() => setManifestoOpen(true)} type="button">{tx("manifesto")}</button>
       </div>
-      <div className="cr-worlds" aria-label="Worlds">
-        {workspaces.map((item) => (
+      <div className="cr-worlds" aria-label="Worlds" data-testid="certo-run-worlds">
+        {RUN_WORLDS.map((name) => (
           <button
-            aria-pressed={item.id === workspace.id}
-            key={item.id}
-            onClick={() => onWorkspace(item.id)}
+            aria-pressed={name === world}
+            data-testid={`run-world-${name}`}
+            key={name}
+            onClick={() => chooseWorld(name)}
             type="button"
           >
-            {item.name}
-            {item.id === workspace.id ? <span> {openCount(items, workspace.id)}</span> : null}
+            {name} <span>{openCount(items, name)}</span>
           </button>
         ))}
       </div>
-      {openCount(items, workspace.id) === 0 && <p className="cr-panel" data-testid="certo-run-empty">{tx("noWork")}</p>}
+      {openCount(worldItems, world) === 0 && <p className="cr-panel" data-testid="certo-run-empty">{tx("noWork")}</p>}
       <p className="cr-muted" data-testid="certo-run-now">
         {nowVisible
           ? `${tx("now")}: ${current.name} ${current.start}`
@@ -162,13 +177,13 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
       {tab === "today" && (
         <Today
           activeWorld={activeWorld}
-          admin={adminOpen(items, options).length}
-          aged={agedAdminCount(items, options, today)}
+          admin={adminOpen(worldItems, options).length}
+          aged={agedAdminCount(worldItems, options, today)}
           counts={counts}
           current={currentBlock(plan, minutes)}
-          p1={p1Alive(items, options).length}
+          p1={p1Alive(worldItems, options).length}
           plan={plan}
-          resolved={items.filter((item) => item.state === "done").length}
+          resolved={worldItems.filter((item) => item.state === "done").length}
         />
       )}
       {tab === "queue" && (
@@ -191,7 +206,9 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
           }}
         />
       )}
-      {tab === "projects" && <Projects items={items.filter((item) => item.state === "open" && item.epic)} />}
+      {tab === "projects" && <Projects items={worldItems.filter((item) => item.state === "open" && item.epic)} />}
+      {tab === "team" && <p className="cr-panel">{tx("teamEmpty")}</p>}
+      {tab === "week" && <p className="cr-panel">{tx("weekEmpty")}</p>}
       {tab === "life" && <p className="cr-panel">{tx("lifeLede")}</p>}
       {tab === "intake" && (
         <Intake
@@ -206,7 +223,8 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
           onSave={async () => {
             const created = await createRunItem({
               userId: user.uid,
-              workspaceId: workspace.id,
+              workspaceId,
+              world,
               title: draftTitle,
               decision: draftDecision,
               lane: draftLane,
@@ -218,7 +236,7 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
       )}
       {tab === "close" && (
         <Close
-          make={soloQ(items, options)}
+          make={soloQ(worldItems, options)}
           top3={top3}
           onToggle={async (id) => {
             if (top3.includes(id)) {
@@ -241,14 +259,14 @@ export function CertoRunDesk({ workspace, workspaces, user, tab, onTab, onWorksp
   );
 }
 
-function queueFor(items: DeskItem[], workspaceId: string, mode: QueueMode): DeskItem[] {
-  const options = { workspace: workspaceId };
+function queueFor(items: DeskItem[], world: string, mode: QueueMode): DeskItem[] {
+  const options = { workspace: world };
   if (mode === "make") return soloQ(items, options);
   if (mode === "decide") return decQ(items, options);
   if (mode === "owed") return segQ(items, options);
   if (mode === "admin") return adminOpen(items, options);
   if (mode === "delegated") return delQ(items, options);
-  return items.filter((item) => item.workspaceId === workspaceId && item.state === "open" && item.inQueue === false);
+  return items.filter((item) => item.world === world && item.state === "open" && item.inQueue === false);
 }
 
 function Today(props: {

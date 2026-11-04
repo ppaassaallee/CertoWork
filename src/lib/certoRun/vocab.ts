@@ -117,6 +117,14 @@ export const DECISION_LABEL: Record<Decision, string> = {
 
 export const WORLD_ORDER = ["Pure AI", "Boldr AI"] as const;
 
+/** Certo Run worlds. These are not Certo Work workspaces. */
+export const RUN_WORLDS = ["Pure AI", "Boldr AI", "Personal"] as const;
+export type RunWorld = (typeof RUN_WORLDS)[number];
+
+export function isRunWorld(value: string): value is RunWorld {
+  return (RUN_WORLDS as readonly string[]).includes(value);
+}
+
 export const AGENTS = {
   "Pure AI": { ops: "Lucy", crm: "Sales Enablement", cal: "OneSource and Allied Global" },
   "Boldr AI": { ops: "Lucy", crm: "Sales Enablement", cal: "Boldr AI" },
