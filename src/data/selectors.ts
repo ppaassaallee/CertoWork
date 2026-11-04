@@ -1,3 +1,4 @@
+import { isCertoRunItem } from "../lib/certoRun/item";
 import { isRemovedWorkItem } from "../lib/itemRemoval";
 import { useDocSelector } from "./createDocStore";
 import {
@@ -154,7 +155,7 @@ export function usePaletteTasks() {
     tasksStore,
     (rows) =>
       rows
-        .filter((row) => !isRemovedWorkItem({
+        .filter((row) => !isCertoRunItem(row) && !isRemovedWorkItem({
           status: row.status,
           archived: row.archived,
           deleted: row.deleted,
@@ -217,7 +218,7 @@ export function useTasksGroupedByProject() {
     (rows) => {
       const map = new Map<string, TaskDoc[]>();
       for (const row of rows) {
-        if (isRemovedWorkItem(row)) continue;
+        if (isCertoRunItem(row) || isRemovedWorkItem(row)) continue;
         const pid = String(row.projectId || "");
         if (!pid) continue;
         const list = map.get(pid);
@@ -248,7 +249,7 @@ export function useOpenTaskCountByProject() {
     (rows) => {
       const map = new Map<string, number>();
       for (const row of rows) {
-        if (isRemovedWorkItem(row) || isClosedStatus(row.status)) continue;
+        if (isCertoRunItem(row) || isRemovedWorkItem(row) || isClosedStatus(row.status)) continue;
         const pid = String(row.projectId || "");
         if (!pid) continue;
         map.set(pid, (map.get(pid) || 0) + 1);

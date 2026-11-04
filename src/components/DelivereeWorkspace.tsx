@@ -53,6 +53,7 @@ import {
   WandSparkles,
   X,
   LayoutGrid,
+  Gauge,
 } from "./ui/Icon";
 import { updateProfile } from "firebase/auth";
 import {
@@ -330,6 +331,9 @@ const MyWorkRouteLazy = lazy(() =>
 const ProjectRouteLazy = lazy(() =>
   import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
 ) as LazyExoticComponent<ComponentType<any>>;
+const CertoRunDeskLazy = lazy(() =>
+  import("../features/certo-run/CertoRunDesk").then((mod) => ({ default: mod.CertoRunDesk })),
+);
 const BillingScreenLazy = lazy(() =>
   import("../features/billing").then((m) => ({ default: m.BillingScreen })),
 );
@@ -540,7 +544,8 @@ export type CenterView =
   | "feedback"
   | "requests"
   | "relationships"
-  | "tables-dashboard";
+  | "tables-dashboard"
+  | "run";
 
 export function DelivereeWorkspace() {
   const locale = useLocale();
@@ -907,6 +912,8 @@ export function DelivereeWorkspace() {
               ? "routines"
             : lens.kind === "invoices"
               ? "invoices"
+            : lens.kind === "certo-run"
+              ? "run"
             : "conversation";
   const goCenterView = (next: CenterView) => {
     const projectId =
@@ -1803,7 +1810,7 @@ export function DelivereeWorkspace() {
   const openTasks = useMemo(() => {
     const source =
       tasks.length > 0 ? tasks : (getTasksSnapshot() as any[]);
-    return source.filter((task) => !isClosed(task.status));
+    return source.filter((task) => !isClosed(task.status) && !task.runWorld);
   }, [tasks]);
   const activeProject = useMemo(
     () =>
@@ -7110,7 +7117,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" || lens.kind === "certo-run" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       {shortcutHelpOpen ? (
         <div aria-label={t("shortcuts.title")} aria-modal="true" className="do-skill-layer" role="dialog">
           <section className="do-skill-modal do-quick-project-modal">
@@ -7500,6 +7507,18 @@ export function DelivereeWorkspace() {
           >
             <Sparkles size="sm" />
             <span>{t("navRutinas")}</span>
+          </button>
+          <button
+            className={`do-nav-item is-run ${lens.kind === "certo-run" ? "is-active" : ""}`}
+            data-testid="nav-certo-run"
+            onClick={() => {
+              navigate("/run");
+              setSidebarOpen(false);
+            }}
+            type="button"
+          >
+            <Gauge size="sm" />
+            <span>{t("navCertoRun")}</span>
           </button>
         </nav>
 
@@ -8015,6 +8034,16 @@ export function DelivereeWorkspace() {
           {workspaceOpen && (
             <div className="do-account-menu" data-testid="workspace-switcher-menu" role="menu">
               <span className="do-account-menu-label">Workspaces</span>
+              <button
+                data-testid="menu-certo-run"
+                onClick={() => {
+                  setWorkspaceOpen(false);
+                  navigate("/run");
+                }}
+                type="button"
+              >
+                <Gauge size={14} /> {t("navCertoRun")}
+              </button>
               {workspaces.map((item) => (
                 <button
                   className={item.id === workspace?.id ? "is-current" : ""}
@@ -9819,6 +9848,16 @@ export function DelivereeWorkspace() {
               tables={visibleTables}
             />
           )
+        ) : centerView === "run" && workspace && user ? (
+          <Suspense fallback={<div className="do-panel-empty">Opening Certo Run…</div>}>
+            <CertoRunDeskLazy
+              onBack={() => navigate("/home")}
+              onTab={(next) => navigate(next === "today" ? "/run" : `/run/${next}`)}
+              tab={lens.kind === "certo-run" ? lens.tab : "today"}
+              user={{ uid: user.uid, displayName: user.displayName }}
+              workspaceId={workspace.id}
+            />
+          </Suspense>
         ) : centerView === "tables" && !tablesEnabled ? (
           <div style={{ padding: 24, maxWidth: 480 }} data-testid="tables-flag-off">
             <h2 style={{ marginTop: 0 }}>Tables</h2>
@@ -9874,6 +9913,15 @@ export function DelivereeWorkspace() {
         >
           <BookOpen size={16} />
           Notes
+        </button>
+        <button
+          className={location.pathname.startsWith("/run") ? "is-active" : ""}
+          data-testid="dock-certo-run"
+          onClick={() => navigate("/run")}
+          type="button"
+        >
+          <Gauge size={16} />
+          Run
         </button>
       </nav>
 

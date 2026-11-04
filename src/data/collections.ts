@@ -1,4 +1,5 @@
-import { createDocStore, useDocSelector, useDocStore, type DocRow } from "./createDocStore";
+import { isCertoRunItem } from "../lib/certoRun/item";
+import { createDocStore, sameDocSignature, useDocSelector, useDocStore, type DocRow } from "./createDocStore";
 
 export type ProjectDoc = DocRow & {
   title?: string;
@@ -42,8 +43,20 @@ export function useProjects() {
   return useDocStore(projectsStore);
 }
 
+function workItems(rows: TaskDoc[]) {
+  return rows.filter((row) => !isCertoRunItem(row));
+}
+
 export function useTasks() {
-  return useDocStore(tasksStore);
+  return useDocSelector(tasksStore, workItems, sameDocSignature);
+}
+
+export function useRunItems(workspaceId: string) {
+  return useDocSelector(
+    tasksStore,
+    (rows) => rows.filter((row) => row.workspaceId === workspaceId && isCertoRunItem(row)),
+    sameDocSignature,
+  );
 }
 
 const EMPTY_TASKS: TaskDoc[] = [];
@@ -56,10 +69,10 @@ const EMPTY_TASKS: TaskDoc[] = [];
 export function useTasksWhen(enabled: boolean) {
   return useDocSelector(
     tasksStore,
-    (rows) => (enabled ? rows : EMPTY_TASKS),
+    (rows) => (enabled ? workItems(rows) : EMPTY_TASKS),
     (a, b) => {
       if (!enabled) return a === EMPTY_TASKS && b === EMPTY_TASKS;
-      return a === b;
+      return sameDocSignature(a, b);
     },
   );
 }
@@ -98,7 +111,7 @@ export function useProject(id: string | null | undefined) {
 export function useTasksByProject(projectId: string | null | undefined) {
   return useDocSelector(
     tasksStore,
-    (rows) => (projectId ? rows.filter((row) => row.projectId === projectId) : []),
+    (rows) => (projectId ? workItems(rows).filter((row) => row.projectId === projectId) : []),
     (a, b) => a === b || (a.length === b.length && a.every((row, i) => row === b[i])),
   );
 }
@@ -130,7 +143,7 @@ export function useTasksIndex() {
     tasksStore,
     (rows) => {
       const map = new Map<string, TaskDoc[]>();
-      for (const row of rows) {
+      for (const row of workItems(rows)) {
         const id = String(row.projectId || "");
         if (!id) continue;
         const list = map.get(id);

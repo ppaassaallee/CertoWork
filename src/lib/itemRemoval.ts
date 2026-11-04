@@ -1,3 +1,5 @@
+import { isCertoRunItem } from "./certoRun/item";
+
 /** Soft-removed work items stay restorable and stay out of normal lists. */
 
 export const REMOVED_WORK_STATUSES = ["archived", "deleted"] as const;
@@ -25,7 +27,7 @@ export function isRemovedWorkItem(item: unknown) {
 
 /** Live lists, search, and calendars omit soft-deleted rows. Trash asks for them explicitly. */
 export function visibleWorkItems<T>(items: readonly T[]): T[] {
-  return items.filter((item) => !isRemovedWorkItem(item));
+  return items.filter((item) => !isRemovedWorkItem(item) && !isCertoRunItem(item));
 }
 
 /**
