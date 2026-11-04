@@ -36,6 +36,7 @@ import {
   Mic,
   MicOff,
   MoreHorizontal,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   Phone,
@@ -238,8 +239,10 @@ import {
 import { stripUndefinedValues } from "../lib/projectFinance";
 import { prepareTaskCreatePayload, prepareItemWrite } from "../lib/firestorePayload";
 import { canonicalTagIds } from "../lib/tagging";
+import { blockDoneWithOpenChildren, isMovingToDone } from "../lib/closeGuard";
 import { bindItemHistoryWriter, pushEdit, recordItemEdit } from "../lib/editHistory";
 import { UndoToast } from "./UndoToast";
+import { CloseGuardDialog } from "./CloseGuardDialog";
 import { ProjectRowMenu } from "./ProjectRowMenu";
 import { InvoiceCenter } from "./InvoiceCenter";
 import { CaptureSettingsPanel, CaptureIngestForm } from "./CaptureSettingsPanel";
@@ -333,6 +336,11 @@ const CertoRunDeskLazy = lazy(() =>
 );
 const BillingScreenLazy = lazy(() =>
   import("../features/billing").then((m) => ({ default: m.BillingScreen })),
+);
+const RelationshipMapLazy = lazy(() =>
+  import("../features/relationships/RelationshipMap").then((m) => ({
+    default: m.RelationshipMap,
+  })),
 );
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
@@ -535,6 +543,7 @@ export type CenterView =
   | "invoices"
   | "feedback"
   | "requests"
+  | "relationships"
   | "tables-dashboard"
   | "run";
 
@@ -881,6 +890,8 @@ export function DelivereeWorkspace() {
       ? "dashboard"
       : lens.kind === "workload"
       ? "workload"
+      : lens.kind === "relationships"
+      ? "relationships"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -916,6 +927,7 @@ export function DelivereeWorkspace() {
     else if (next === "tables") navigate("/tables");
     else if (next === "dashboard") navigate("/dashboard");
     else if (next === "workload") navigate("/workload");
+    else if (next === "relationships") navigate("/relationships");
     // Legacy /tasks URL opens the project console on Items (tasks = backlog = items).
     else if (next === "items" && projectId)
       navigate(`/work/projects/${projectId}/tasks`);
@@ -4888,18 +4900,7 @@ export function DelivereeWorkspace() {
         if (!user || !workspace) return;
         setDestructiveBusy(true);
         try {
-          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [
-            ...linkedTasks.map(
-              (task) => (batch: ReturnType<typeof writeBatch>) =>
-                batch.delete(doc(db, "tasks", task.id)),
-            ),
-            (batch) => batch.delete(doc(db, "projects", project.id)),
-          ];
-          for (let index = 0; index < deletions.length; index += 400) {
-            const batch = writeBatch(db);
-            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
-            await batch.commit();
-          }
+          await deleteProjectItemsAndRecord(project.id);
           if (projectConsoleId === project.id) {
             setProjectConsoleId(null);
             setPanel(null);
@@ -4915,13 +4916,25 @@ export function DelivereeWorkspace() {
     });
   };
 
+  // Read the complete project scope, not the route's partial/open-item pool.
+  // Keep the parent until all child batches succeed so failures can be retried.
+  const deleteProjectItemsAndRecord = async (projectId: string) => {
+    if (!workspace || !user) throw new Error("Workspace session required.");
+    const snapshot = await getDocs(query(collection(db, "tasks"),
+      where("workspaceId", "==", workspace.id), where("projectId", "==", projectId)));
+    for (let index = 0; index < snapshot.docs.length; index += 400) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, "projects", projectId));
+  };
+
   const permanentlyDeleteProjects = async (projectsToRemove: any[]) => {
     const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
-    const deleted = projectsToRemove.filter(
-      (project) => String(project.status || "").toLowerCase() === "deleted",
-    );
+    const deleted = [...new Map(projectsToRemove.map((project) => [project.id, project])).values()];
     if (!deleted.length) {
-      setNotice("Select projects that are already in Deleted.");
+      setNotice(tr("Select projects to delete.", "Selecciona proyectos para eliminar."));
       return;
     }
     const blocked = deleted.find(
@@ -4936,29 +4949,20 @@ export function DelivereeWorkspace() {
       deleted.some((project) => project.id === task.projectId),
     ).length;
     setDestructiveDialog({
-      verb: "Delete forever",
-      entityName: `${deleted.length} project${deleted.length === 1 ? "" : "s"}`,
+      verb: tr("Delete forever", "Eliminar definitivamente"),
+      entityName: `${deleted.length} ${tr("projects", "proyectos")}`,
       impact: [
-        "This cannot be undone",
-        `${linkedTaskCount} linked item${linkedTaskCount === 1 ? "" : "s"} will also be removed`,
-        "Documents stay in knowledge unless removed separately",
-        "Use this to clear Deleted projects you will not restore",
+        tr("This cannot be undone", "Esta acción no se puede deshacer"),
+        tr("ALL project items will be removed, including completed items and every hierarchy level.", "Se eliminarán TODOS los ítems del proyecto, incluidos los terminados y todos los niveles de jerarquía."),
+        tr(`${linkedTaskCount} open items currently loaded; the full item list is fetched on confirmation.`, `${linkedTaskCount} ítems abiertos cargados; se consultará la lista completa al confirmar.`),
+        tr("Documents stay in knowledge unless removed separately", "Los documentos se conservan en conocimiento hasta eliminarlos por separado"),
       ],
       onConfirm: async () => {
         if (!user || !workspace) return;
         setDestructiveBusy(true);
         try {
-          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
           for (const project of deleted) {
-            for (const task of openTasks.filter((row) => row.projectId === project.id)) {
-              deletions.push((batch) => batch.delete(doc(db, "tasks", task.id)));
-            }
-            deletions.push((batch) => batch.delete(doc(db, "projects", project.id)));
-          }
-          for (let index = 0; index < deletions.length; index += 400) {
-            const batch = writeBatch(db);
-            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
-            await batch.commit();
+            await deleteProjectItemsAndRecord(project.id);
           }
           if (deleted.some((project) => project.id === projectConsoleId)) {
             setProjectConsoleId(null);
@@ -5434,6 +5438,10 @@ export function DelivereeWorkspace() {
     const current = (getTasksSnapshot().find((item) => item.id === taskId) ||
       tasks.find((item) => item.id === taskId) ||
       {}) as Record<string, unknown>;
+    if (isMovingToDone(current, patch)) {
+      const pool = getTasksSnapshot();
+      if (blockDoneWithOpenChildren(current, pool.length ? pool : tasks)) return;
+    }
     const touchesAssignment = patchTouchesAssignment(patch);
     const touchesCollaborators = patchTouchesCollaborators(patch);
     const touchesSharing = patchTouchesSharing(patch);
@@ -7749,6 +7757,18 @@ export function DelivereeWorkspace() {
             {sidebarSections.management && (
               <div className="do-section-body">
                 <button
+                  className={`do-nav-item is-relationships ${lens.kind === "relationships" ? "is-active" : ""}`}
+                  data-testid="nav-relationships"
+                  onClick={() => {
+                    navigate("/relationships");
+                    setSidebarOpen(false);
+                  }}
+                  type="button"
+                >
+                  <Network size="sm" />
+                  <span>{tr("Relationships", "Relaciones")}</span>
+                </button>
+                <button
                   className={`do-nav-item is-requests ${lens.kind === "requests" || lens.kind === "feedback" ? "is-active" : ""}`}
                   data-testid="nav-requests"
                   onClick={() => {
@@ -8144,6 +8164,9 @@ export function DelivereeWorkspace() {
                     ]
                   : []),
                 ...(lens.kind === "invoices" ? [{ label: t("navInvoices") }] : []),
+                ...(lens.kind === "relationships"
+                  ? [{ label: tr("Relationships", "Relaciones") }]
+                  : []),
                 ...(lens.kind === "feedback"
                   ? [
                       {
@@ -8319,6 +8342,7 @@ export function DelivereeWorkspace() {
         )}
 
         <UndoToast />
+        <CloseGuardDialog onOpenItem={(id) => openWorkOrRecord(id)} />
         {notice && (
           <Toast kind={noticeKind} onDismiss={() => setNotice("")}>
             {notice}
@@ -9167,6 +9191,51 @@ export function DelivereeWorkspace() {
             </Suspense>
             )}
           </div>
+        ) : centerView === "relationships" ? (
+          <Suspense fallback={<div className="do-panel-empty">{tr("Loading relationship map…", "Cargando mapa de relaciones…")}</div>}>
+            <RelationshipMapLazy
+              onCreateItem={async ({ projectId, title, kind, parent, root }) => {
+                const relationshipPatch =
+                  root.lens === "people"
+                    ? { stakeholderIds: [root.id], requesterName: root.label }
+                    : root.lens === "client"
+                      ? { clientEntity: root.label, client: root.label }
+                      : root.lens === "delivery"
+                        ? { deliveryEntity: root.label, bpo: root.label }
+                        : {};
+                const id = await addProjectTask(projectId, title, "backlog", {
+                  ...relationshipPatch,
+                  ...parentLinkPatch(parent),
+                  workItemType: kind,
+                  type: kind,
+                  itemType: kind,
+                });
+                if (id) setNotice(tr("Item created in the map.", "Ítem creado en el mapa."));
+                return id;
+              }}
+              onCreateProject={async (name, root) => {
+                const id = await createNamedProject(name);
+                if (!id) return id;
+                const patch =
+                  root.lens === "client"
+                    ? { clientEntity: root.label, client: root.label }
+                    : root.lens === "delivery"
+                      ? { deliveryEntity: root.label, bpo: root.label }
+                      : {};
+                if (Object.keys(patch).length) await updateProject(id, patch);
+                setNotice(tr("Project connected.", "Proyecto conectado."));
+                return id;
+              }}
+              onNotice={setNotice}
+              onOpenItem={(id) => openWorkOrRecord(id)}
+              onOpenProject={openProjectRecord}
+              projects={projects}
+              tasks={tasks}
+              canManageStakeholders={canManageMembers}
+              userId={user?.uid || ""}
+              workspaceId={workspace?.id || ""}
+            />
+          </Suspense>
         ) : centerView === "invoices" ? (
           billingEnabled ? (
             <Suspense fallback={<div className="do-panel-empty">Loading billing…</div>}>

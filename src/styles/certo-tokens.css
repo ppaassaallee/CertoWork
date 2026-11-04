@@ -500,6 +500,117 @@
   border: 0;
 }
 
+/* ——— Close parent only after children are done ——— */
+.cw-close-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.cw-close-guard-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(55, 53, 47, 0.35);
+  cursor: pointer;
+}
+.cw-close-guard-panel {
+  position: relative;
+  z-index: 1;
+  width: min(440px, 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-modal);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-md);
+  padding: 22px 22px 16px;
+}
+.cw-close-guard-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+.cw-close-guard-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  background: var(--c-accent-bg);
+  color: var(--c-accent);
+}
+.cw-close-guard-panel h2 {
+  margin: 0 28px 6px 0;
+  font-size: 18px;
+  line-height: 1.3;
+}
+.cw-close-guard-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.cw-close-guard-count {
+  margin: 14px 0 8px;
+  color: var(--c-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.cw-close-guard-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-m);
+}
+.cw-close-guard-panel li + li {
+  border-top: 1px solid var(--c-line);
+}
+.cw-close-guard-panel li button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--c-ink);
+}
+.cw-close-guard-panel li button:hover {
+  background: var(--c-wash);
+}
+.cw-close-guard-panel li b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.cw-close-guard-panel li small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.cw-close-guard-more {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+}
+.cw-close-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
 /* ——— Destructive dialog ——— */
 .cw-destructive {
   position: fixed;
