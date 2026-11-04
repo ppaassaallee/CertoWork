@@ -1798,7 +1798,7 @@ export function DelivereeWorkspace() {
   const openTasks = useMemo(() => {
     const source =
       tasks.length > 0 ? tasks : (getTasksSnapshot() as any[]);
-    return source.filter((task) => !isClosed(task.status));
+    return source.filter((task) => !isClosed(task.status) && !task.runWorld);
   }, [tasks]);
   const activeProject = useMemo(
     () =>

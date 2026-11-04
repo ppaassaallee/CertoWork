@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { useRunItems } from "../../data/collections";
 import { agedAdminCount } from "../../lib/certoRun/caps";
 import {
   DEFAULT_TEMPLATE,
@@ -23,7 +22,7 @@ import {
 } from "../../lib/certoRun/queues";
 import { checkTitle, gateDest, type GateKey, GATE_QUESTIONS } from "../../lib/certoRun/intake";
 import { DEFAULT_MANIFESTO } from "../../lib/certoRun/manifesto";
-import { RUN_COLLECTION, runDocToDeskItem } from "../../lib/certoRun/store";
+import { runDocToDeskItem } from "../../lib/certoRun/store";
 import type { DeskItem } from "../../lib/certoRun/types";
 import {
   clearRunTop3,
@@ -80,8 +79,15 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const [draftLane, setDraftLane] = useState<Lane>("projects");
   const [draftDecision, setDraftDecision] = useState<Decision>("make");
   const [error, setError] = useState("");
-  const [items, setItems] = useState<DeskItem[]>([]);
   const [world, setWorld] = useState<RunWorld>(savedWorld);
+  const rows = useRunItems(workspaceId);
+  const items = useMemo(
+    () =>
+      rows
+        .map((row) => runDocToDeskItem(row.id, row, { id: workspaceId }))
+        .filter((item): item is DeskItem => item !== null),
+    [rows, workspaceId],
+  );
   const today = localToday();
   const personal = world === "Personal";
 
@@ -92,17 +98,6 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
     }, 60_000);
     return () => window.clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    const rows = query(collection(db, RUN_COLLECTION), where("workspaceId", "==", workspaceId));
-    return onSnapshot(
-      rows,
-      (snap) => {
-        setItems(snap.docs.map((row) => runDocToDeskItem(row.id, row.data() as Record<string, unknown>, { id: workspaceId, name: "" })));
-      },
-      () => setItems([]),
-    );
-  }, [workspaceId]);
 
   const worldItems = items.filter((item) => item.world === world);
   const options = { workspace: world };

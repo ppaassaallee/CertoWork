@@ -1,8 +1,9 @@
-import { isDecision, isRunWorld, type Decision, type Lane, type Priority } from "./vocab";
+import { isCertoRunItem } from "./item";
+import { isDecision, type Decision, type Lane, type Priority, type RunWorld } from "./vocab";
 import type { DeskItem, Outcome } from "./types";
 
-/** Certo Run records. Never the Certo Work `tasks` collection. */
-export const RUN_COLLECTION = "run_items";
+/** Certo Run records are items in the existing `tasks` collection. */
+export const RUN_COLLECTION = "tasks";
 
 function priorityOf(value: unknown): Priority {
   if (value === "P1" || value === 1 || value === "1") return "P1";
@@ -19,17 +20,19 @@ function laneOf(value: unknown): Lane {
 export function runDocToDeskItem(
   id: string,
   data: Record<string, unknown>,
-  workspace: { id: string; name: string },
-): DeskItem {
+  workspace: { id: string },
+): DeskItem | null {
+  if (!isCertoRunItem(data)) return null;
   const status = String(data.status || "open");
-  const decision = typeof data.decision === "string" && isDecision(data.decision) ? data.decision : "make";
+  const decision = typeof data.runDecision === "string" && isDecision(data.runDecision) ? data.runDecision : "make";
+  const world = data.runWorld as RunWorld;
   return {
     id,
     externalId: id,
     workspaceId: String(data.workspaceId || workspace.id),
-    world: typeof data.world === "string" && isRunWorld(data.world) ? data.world : "",
+    world,
     type: "pbi",
-    lane: decision === "admin_batch" ? "admin" : laneOf(data.lane),
+    lane: decision === "admin_batch" ? "admin" : laneOf(data.runLane),
     decision,
     priority: priorityOf(data.priority),
     title: String(data.title || "Untitled"),
@@ -43,8 +46,8 @@ export function runDocToDeskItem(
     dueDate: typeof data.dueDate === "string" ? data.dueDate : "",
     queueOrder: null,
     state: status === "archived" ? "archived" : status === "done" ? "done" : "open",
-    outcome: data.outcome && typeof data.outcome === "object" ? (data.outcome as Outcome) : undefined,
-    inQueue: data.inQueue !== false,
+    outcome: data.runOutcome && typeof data.runOutcome === "object" ? (data.runOutcome as Outcome) : undefined,
+    inQueue: data.runInQueue !== false,
     runTop3Date: typeof data.runTop3Date === "string" ? data.runTop3Date : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : undefined,
   };

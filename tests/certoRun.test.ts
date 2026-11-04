@@ -6,13 +6,21 @@ import { checkMoveToMake } from "../src/lib/certoRun/caps";
 import { workingDaysOfMonth } from "../src/lib/certoRun/dates";
 import { queueCounts, soloQ } from "../src/lib/certoRun/queues";
 import { adminNeverMake, checkTitle } from "../src/lib/certoRun/intake";
+import { isCertoRunItem } from "../src/lib/certoRun/item";
+import { visibleWorkItems } from "../src/lib/itemRemoval";
 import { RUN_COLLECTION, runDocToDeskItem } from "../src/lib/certoRun/store";
 import { resolveDelivereeLens } from "../src/lib/delivereeRoutes";
 
 const workspace = { id: "ws-1", name: "Pure AI" };
 
 function runItem(id: string, decision = "make") {
-  return runDocToDeskItem(id, { title: id, decision, status: "open", workspaceId: workspace.id }, workspace);
+  const item = runDocToDeskItem(
+    id,
+    { title: id, runDecision: decision, status: "open", workspaceId: workspace.id, runWorld: "Pure AI" },
+    workspace,
+  );
+  if (!item) throw new Error("expected a Certo Run item");
+  return item;
 }
 
 test("Certo Run opens from /run inside the Certo Work shell", () => {
@@ -20,16 +28,22 @@ test("Certo Run opens from /run inside the Certo Work shell", () => {
   assert.deepEqual(resolveDelivereeLens("/run/queue"), { kind: "certo-run", tab: "queue" });
 });
 
-test("Certo Run starts empty and does not touch Work tasks", () => {
+test("Certo Run reuses items and stays out of Work lists", () => {
   assert.equal(queueCounts([], { workspace: "ws-1" }).open, 0);
   const writes = readFileSync("src/lib/certoRun/writes.ts", "utf8");
   const desk = readFileSync("src/features/certo-run/CertoRunDesk.tsx", "utf8");
   const rules = readFileSync("firestore.rules", "utf8");
-  assert.equal(writes.includes('"tasks"'), false);
+  assert.equal(RUN_COLLECTION, "tasks");
+  assert.ok(writes.includes("runWorld"));
+  assert.equal(writes.includes("run_items"), false);
   assert.equal(desk.includes("fromTask"), false);
-  assert.equal(RUN_COLLECTION, "run_items");
-  assert.ok(writes.includes("RUN_COLLECTION"));
-  assert.match(rules, /match \/run_items\/\{id\}/);
+  assert.equal(rules.includes("match /run_items/"), false);
+  const work = { id: "w", title: "Ship the brief", status: "open" };
+  const run = { id: "r", title: "Send the note", status: "open", runWorld: "Pure AI" };
+  assert.equal(isCertoRunItem(work), false);
+  assert.equal(isCertoRunItem(run), true);
+  assert.deepEqual(visibleWorkItems([work, run]), [work]);
+  assert.equal(runDocToDeskItem("w", work, { id: "ws-1" }), null);
 });
 
 test("only a Certo Run document enters a queue", () => {
@@ -42,8 +56,10 @@ test("only a Certo Run document enters a queue", () => {
 
 test("Certo Run worlds are not Certo Work workspaces", () => {
   const tenant = { id: "personal-focus-id", name: "Personal Focus" };
-  const pure = runDocToDeskItem("a", { title: "Note", decision: "make", status: "open", workspaceId: tenant.id, world: "Pure AI" }, tenant);
-  const boldr = runDocToDeskItem("b", { title: "Other", decision: "make", status: "open", workspaceId: tenant.id, world: "Boldr AI" }, tenant);
+  const pure = runDocToDeskItem("a", { title: "Note", runDecision: "make", status: "open", workspaceId: tenant.id, runWorld: "Pure AI" }, tenant);
+  const boldr = runDocToDeskItem("b", { title: "Other", runDecision: "make", status: "open", workspaceId: tenant.id, runWorld: "Boldr AI" }, tenant);
+  assert.ok(pure);
+  assert.ok(boldr);
   assert.equal(pure.world, "Pure AI");
   assert.notEqual(pure.world, tenant.name);
   assert.equal(queueCounts([pure, boldr], { workspace: "Pure AI" }).make, 1);
@@ -55,7 +71,8 @@ test("Certo Run worlds are not Certo Work workspaces", () => {
 
 test("the sixth Make item is refused with the current five", () => {
   const items = Array.from({ length: 5 }, (_, index) => runItem(`m${index}`));
-  const extra = runDocToDeskItem("extra", { title: "Extra", decision: "decide", status: "open", workspaceId: workspace.id, inQueue: true }, workspace);
+  const extra = runDocToDeskItem("extra", { title: "Extra", runDecision: "decide", status: "open", workspaceId: workspace.id, runWorld: "Pure AI", runInQueue: true }, workspace);
+  assert.ok(extra);
   const result = checkMoveToMake([...items, extra], { workspace: "ws-1" }, "extra");
   assert.equal(result.ok, false);
   if (!result.ok) {
