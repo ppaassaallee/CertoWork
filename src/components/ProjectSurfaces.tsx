@@ -3,6 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app } from "../lib/firebase";
 import { t } from "../lib/i18n";
+import { matchesProjectContents, type ProjectContentFilter } from "../lib/projectContents";
+import { NativeSelect } from "./ui/NativeSelect";
+import { workItemTypeLabel } from "../lib/workItemTypeLabels";
 import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
 import { useMobileCore } from "../hooks/useMobileCore";
@@ -5481,6 +5484,7 @@ function ProjectCommandCenterInner({
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [stageFilter, setStageFilter] = useState<"all" | DeliveryStage>("all");
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
+  const [contentFilter, setContentFilter] = useState<ProjectContentFilter>({ mode: "all", kinds: [] });
   const [phaseFilter, setPhaseFilter] = useState("all");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -5614,6 +5618,7 @@ function ProjectCommandCenterInner({
   const filtered = useMemo(
     () =>
       portfolio.filter((project) => {
+        if (!matchesProjectContents(tasksFor(project.id), contentFilter)) return false;
         const status = String(project.status || "planning").toLowerCase();
         const health = projectHealth(
           project,
@@ -5679,6 +5684,7 @@ function ProjectCommandCenterInner({
       }),
     [
       portfolio,
+      contentFilter,
       statusFilters,
       filter,
       stageFilter,
@@ -5893,6 +5899,7 @@ function ProjectCommandCenterInner({
   }) => {
     setFilter(patch.filter ?? "all");
     setStatusFilters([]);
+    setContentFilter({ mode: "all", kinds: [] });
     setStageFilter(patch.stageFilter ?? "all");
     setPhaseFilter("all");
     setHealthFilter(patch.healthFilter ?? "all");
@@ -5976,6 +5983,11 @@ function ProjectCommandCenterInner({
       clear: () => setFilter("all"),
     });
   }
+  if (contentFilter.mode !== "all") activeFilterChips.push({
+    key: "contents",
+    label: `${tr("Contents", "Contenido")}: ${contentFilter.mode} ${contentFilter.kinds.map((kind) => workItemTypeLabel(kind, locale)).join(", ")}`,
+    clear: () => setContentFilter({ mode: "all", kinds: [] }),
+  });
   for (const value of statusFilters) {
     activeFilterChips.push({
       key: `status-${value}`,
@@ -6489,6 +6501,7 @@ function ProjectCommandCenterInner({
               <button
                 className="is-clear"
                 onClick={() => {
+                  setContentFilter({ mode: "all", kinds: [] });
                   setStatusFilters([]);
                   setFilter("all");
                   setStageFilter("all");
@@ -6562,6 +6575,7 @@ function ProjectCommandCenterInner({
                 ))}
                 <button
                   onClick={() => {
+                    setContentFilter({ mode: "all", kinds: [] });
                     setStatusFilters([]);
                     setFilter("all");
                     setStageFilter("all");
@@ -6852,6 +6866,12 @@ function ProjectCommandCenterInner({
 
                 <div className="do-command-bulk-group is-danger">
                   <span>Danger</span>
+                  {selectedDeletedProjects.length !== selectedProjects.length && onPermanentlyDeleteProjects ? <button
+                    className="do-command-bulk-danger"
+                    disabled={bulkBusy}
+                    onClick={() => void onPermanentlyDeleteProjects(selectedProjects)}
+                    type="button"
+                  >{tr("Delete projects & all items…", "Eliminar proyectos y todos sus ítems…")}</button> : null}
                   {selectedDeletedProjects.length > 0 &&
                   (onPermanentlyDeleteProjects || onPermanentlyDeleteProject) ? (
                     <button
@@ -6945,6 +6965,19 @@ function ProjectCommandCenterInner({
             </div>
           ) : null}
           {advancedFiltersOpen && <div className="do-command-subtoolbar" data-testid="projects-advanced-options" id="projects-advanced-options">
+            <fieldset className="cw-project-content-filter">
+              <legend>{tr("Project contents", "Contenido del proyecto")}</legend>
+              <NativeSelect aria-label={tr("Filter project contents", "Filtrar contenido del proyecto")} value={contentFilter.mode} onChange={(event) => setContentFilter((current) => ({ ...current, mode: event.target.value as ProjectContentFilter["mode"] }))}>
+                <option value="all">{tr("Any contents", "Cualquier contenido")}</option>
+                <option value="empty">{tr("0 items", "0 ítems")}</option>
+                <option value="nonempty">{tr("Has items", "Tiene ítems")}</option>
+                <option value="includes">{tr("Includes all selected types", "Incluye todos los tipos seleccionados")}</option>
+                <option value="only">{tr("Only selected types (exact)", "Solo tipos seleccionados (exacto)")}</option>
+                <option value="excludes">{tr("Without selected types", "Sin los tipos seleccionados")}</option>
+              </NativeSelect>
+              {["includes", "only", "excludes"].includes(contentFilter.mode) ? <div>{["epic", "feature", "pbi", "task", "subtask", "bug", "issue"].map((kind) => <label key={kind}><input type="checkbox" checked={contentFilter.kinds.includes(kind)} onChange={() => setContentFilter((current) => ({ ...current, kinds: current.kinds.includes(kind) ? current.kinds.filter((entry) => entry !== kind) : [...current.kinds, kind] }))} />{workItemTypeLabel(kind, locale)}</label>)}</div> : null}
+              <small>{tr("Includes completed work. Deleted items are excluded. Select matching projects using Select all.", "Incluye trabajo terminado. Excluye ítems eliminados. Usa Seleccionar todos para seleccionar los proyectos filtrados.")}</small>
+            </fieldset>
             <label>
               Stage
               <select

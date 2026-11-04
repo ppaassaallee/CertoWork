@@ -22776,6 +22776,11 @@ a {
 .mcp-tokens-list div { display: flex; flex-wrap: wrap; gap: 6px 10px; }
 .mcp-tokens-notice { margin: 0; }
 /* Relationship map -------------------------------------------------------- */
+.cw-project-content-filter { display: grid; gap: 9px; min-width: 240px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.cw-project-content-filter legend { font-weight: 650; }
+.cw-project-content-filter > div { display: flex; flex-wrap: wrap; gap: 12px; }
+.cw-project-content-filter > div label { display: inline-flex; gap: 5px; align-items: center; }
+.cw-project-content-filter small { color: var(--text-secondary); max-width: 420px; }
 .cw-relationships {
   --map-ink: #182235;
   --map-muted: #69758a;
