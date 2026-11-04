@@ -1,0 +1,3153 @@
+[
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Lucalza · Digital Sales Budget 2027",
+  "client_entity": "Lucalza",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 4,
+  "p1": 1,
+  "make": 2,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Nicolás González"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "PYP · 6-month pod proposal",
+  "client_entity": "PYP",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 1,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Boldr AI · Ongoing Operations",
+  "client_entity": "Boldr AI",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 30,
+  "p1": 0,
+  "make": 0,
+  "decide": 7,
+  "delegate": 4,
+  "follow_up": 11,
+  "admin_batch": 8,
+  "features": [
+   "Access and Security",
+   "Billing and Collections",
+   "Contracts and Legal",
+   "Payments and Vendors",
+   "People and HR"
+  ],
+  "team": [
+   "Agustín Gutiérrez",
+   "Alejandra López",
+   "Equipo Boldr (Josué, Rafael, César, Adriana)",
+   "Herman (El Pilar)",
+   "Josué",
+   "Josué Aguilar",
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Acquaroni · B2B E-commerce Mexico",
+  "client_entity": "Acquaroni",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 10,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 3,
+  "follow_up": 6,
+  "admin_batch": 1,
+  "features": [
+   "Build",
+   "Closing and kickoff",
+   "Kickoff",
+   "Operations and reporting",
+   "Testing and go-live"
+  ],
+  "team": [
+   "Adriana Orriols",
+   "Josué Aguilar",
+   "Josué Aguilar y Adriana Orriols",
+   "Pablo Vicente"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Lucalza · Inside Sales RTM",
+  "client_entity": "Lucalza",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 10,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 5,
+  "follow_up": 5,
+  "admin_batch": 0,
+  "features": [
+   "Escalations",
+   "Operations and reporting"
+  ],
+  "team": [
+   "Jaime Alquijay",
+   "Jorge Hernández",
+   "Nicolás González"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Boldr AI · Team and Hiring",
+  "client_entity": "Boldr AI",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 8,
+  "p1": 0,
+  "make": 0,
+  "decide": 3,
+  "delegate": 5,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "People and HR"
+  ],
+  "team": [
+   "AI Recruiter"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Servinform · KYP diagnostic and control tower",
+  "client_entity": "Servinform",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 8,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 5,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Negotiation and contract",
+   "Operations and reporting",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Adriana Orriols",
+   "César Arévalo",
+   "Raúl Fernández"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "El Pilar · Pili AI Chat",
+  "client_entity": "El Pilar",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 7,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 7,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff",
+   "Operations and reporting",
+   "Testing and go-live"
+  ],
+  "team": [
+   "Astrid Erbsen",
+   "César Arévalo",
+   "Josué Aguilar",
+   "Rafael Fonseca",
+   "Rodrigo Chan"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Bunge · MindSprint Transformation Pod",
+  "client_entity": "Bunge",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 2,
+  "decide": 2,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff",
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Agustín Gutiérrez",
+   "Mohan Panicker"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Patsy · ATS on Certo",
+  "client_entity": "Patsy",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 3,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff",
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Adriana Orriols"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Boldr AI · GTM and prospecting",
+  "client_entity": "Boldr AI",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 5,
+  "p1": 0,
+  "make": 1,
+  "decide": 2,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Adri"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Forza · BPM and contact center Opportunity",
+  "client_entity": "Forza",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 5,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff",
+   "Discovery",
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Van Ardon"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "El Pilar · AI IVR",
+  "client_entity": "El Pilar",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 4,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 3,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff"
+  ],
+  "team": [
+   "Jaime Alquijay",
+   "Josué Aguilar"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Acquaroni · Honduras Commercial Strategy",
+  "client_entity": "Acquaroni",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Marco Rivera"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Alicorp · Opportunity",
+  "client_entity": "Alicorp",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Donie Mauricio"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Credichapin · RTM100 Pilot",
+  "client_entity": "Credichapin",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff"
+  ],
+  "team": [
+   "Axel Molina"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Grupo AP · SAP Reporting Platform",
+  "client_entity": "Grupo AP",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 2,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Kickoff",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "César",
+   "Josué Aguilar"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "HHS · AWS POC Opportunity",
+  "client_entity": "HHS",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Agustín Gutiérrez",
+   "Bruce Moore"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Canella · Returns Value Sprint",
+  "client_entity": "Canella",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff"
+  ],
+  "team": [
+   "César Arévalo",
+   "Josué Aguilar"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Lucalza · RGM Diagnostic",
+  "client_entity": "Lucalza",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff"
+  ],
+  "team": [
+   "Nicolás González"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Patsy · UX Design Sprint",
+  "client_entity": "Patsy",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Adriana Orriols"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Zurich · Certo Procurement and AP",
+  "client_entity": "Zurich",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Boldr AI · Alliances and partners",
+  "client_entity": "Boldr AI",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Boldr AI · Retell Voice Platform",
+  "client_entity": "Boldr AI",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Operations and reporting"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Booxkeeping · Bookkeeper Reviewer",
+  "client_entity": "Booxkeeping",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [
+   "Agustín Gutiérrez"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "CMI · RTM and RGM Opportunity",
+  "client_entity": "CMI",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Josué Aguilar"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Cementos Progreso · Shared services transformation",
+  "client_entity": "Cementos Progreso",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Certo · Certo Growth",
+  "client_entity": "Certo",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Build"
+  ],
+  "team": [
+   "Agustín Gutiérrez"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Certo · Certo Work Platform",
+  "client_entity": "Certo",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [
+   "Agustín Gutiérrez"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Corporación Alisa · Opportunity",
+  "client_entity": "Corporación Alisa",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "El Pilar · Green Cube insurer RPA",
+  "client_entity": "El Pilar",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [
+   "Josué Aguilar"
+  ],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "El Pilar · Hello Emily Contract",
+  "client_entity": "El Pilar",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Astrid Erbsen"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Enrique Hernández Rosas · Opportunity",
+  "client_entity": "Enrique Hernández Rosas",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "César Arévalo"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Generate More · Opportunity",
+  "client_entity": "Generate More",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Agustín Gutiérrez"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Grupo Lala · Opportunity",
+  "client_entity": "Grupo Lala",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Klap · Services contract",
+  "client_entity": "Klap",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Diego Cabrera"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Lucalza · Nicaragua and Panama Expansion",
+  "client_entity": "Lucalza",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [
+   "Jaime Alquijay"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Menzis · AI value sprint",
+  "client_entity": "Menzis",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Motoshop VRC · Opportunity",
+  "client_entity": "Motoshop VRC",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Josué Aguilar"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Plumb Bill Pay · Accounting Staff Augmentation",
+  "client_entity": "Plumb Bill Pay",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-12-13"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Tecalis · Tier 1-3 technical support",
+  "client_entity": "Tecalis",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Texpetrol · WhatsApp with Nextiva",
+  "client_entity": "Texpetrol",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "To be confirmed · Speech analytics QA fast track",
+  "client_entity": "To be confirmed",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "César Arévalo"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "VIP Remote Healthcare · Executive Assistant",
+  "client_entity": "VIP Remote Healthcare",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Van Helmont · Opportunity",
+  "client_entity": "Van Helmont",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Van Helmont Ardon"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Wilfredo Morazán · Opportunity",
+  "client_entity": "Wilfredo Morazán",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Wilfredo Morazán"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Xavier Rodríguez · Opportunity",
+  "client_entity": "Xavier Rodríguez",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "César Arévalo"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "boldr-ai",
+  "world": "Boldr AI",
+  "epic": "Zurich · Programa Origen",
+  "client_entity": "Zurich",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Operations and reporting"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "personal",
+  "world": "Personal",
+  "epic": "Personal",
+  "client_entity": "Personal",
+  "lane": "personal",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 7,
+  "p1": 0,
+  "make": 5,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Family",
+   "Other",
+   "Personal Finances"
+  ],
+  "team": [
+   "Jessy Chan Collamat"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "PTC · Master agreement 2026-2027",
+  "client_entity": "PTC",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 4,
+  "p1": 2,
+  "make": 4,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Cementos Progreso · Integra Procure to Pay",
+  "client_entity": "Cementos Progreso",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 8,
+  "p1": 1,
+  "make": 4,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Negotiation and contract",
+   "Proposal and pricing",
+   "Testing and release"
+  ],
+  "team": [
+   "Fred Echeverria",
+   "Marvin Soto"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Cementos Progreso · AI help desks",
+  "client_entity": "Cementos Progreso",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 5,
+  "p1": 1,
+  "make": 2,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Rafael Fonseca",
+   "Regina Guardia"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Framework contract and proposals",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 4,
+  "p1": 1,
+  "make": 3,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "La Voz del Interior · AI service and retention",
+  "client_entity": "La Voz del Interior",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 3,
+  "p1": 1,
+  "make": 2,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Tecalis · Tier 1-3 technical support",
+  "client_entity": "Tecalis",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 2,
+  "p1": 1,
+  "make": 2,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · RAP campaign",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 1,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Ongoing Operations",
+  "client_entity": "Allied Global",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 56,
+  "p1": 0,
+  "make": 0,
+  "decide": 17,
+  "delegate": 6,
+  "follow_up": 10,
+  "admin_batch": 23,
+  "features": [
+   "Access and Security",
+   "Billing and Collections",
+   "Budget and Finance",
+   "Contracts and Legal",
+   "Internal Agenda",
+   "Payments and Vendors",
+   "People and HR"
+  ],
+  "team": [
+   "Adri",
+   "Branko",
+   "Germán",
+   "Isaac García",
+   "Joshua Bergen",
+   "Pablo Andrés Castro",
+   "Rafael Fonseca"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OneSource · Ongoing Operations",
+  "client_entity": "OneSource",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 10,
+  "p1": 0,
+  "make": 0,
+  "decide": 4,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 5,
+  "features": [
+   "Access and Security",
+   "Internal Agenda",
+   "Payments and Vendors",
+   "People and HR"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · SRM Procurement presentation",
+  "client_entity": "CBC",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 9,
+  "p1": 0,
+  "make": 5,
+  "decide": 1,
+  "delegate": 3,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Training OS",
+  "client_entity": "Allied Global",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 8,
+  "p1": 0,
+  "make": 0,
+  "decide": 3,
+  "delegate": 5,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff",
+   "Testing and release"
+  ],
+  "team": [],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · SAC video call with Nextiva",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 7,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 5,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Team and Hiring",
+  "client_entity": "Allied Global",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 0,
+  "decide": 2,
+  "delegate": 2,
+  "follow_up": 0,
+  "admin_batch": 2,
+  "features": [
+   "People and HR"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Contact center operations",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 4,
+  "admin_batch": 0,
+  "features": [
+   "Escalations",
+   "Operations and reporting"
+  ],
+  "team": [
+   "Edgar Amado",
+   "Emilia y Gustavo",
+   "Maximilian Ramirez",
+   "Mirna Rivera"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OneSource · Structure and Leadership",
+  "client_entity": "OneSource",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 4,
+  "features": [
+   "Billing and Collections",
+   "Budget and Finance",
+   "Internal Agenda"
+  ],
+  "team": [
+   "Luis Iglesias"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "ServiceMaster · Janet AI front desk",
+  "client_entity": "ServiceMaster",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 2,
+  "decide": 2,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff",
+   "Escalations",
+   "Kickoff",
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Julian Falla",
+   "Julián Falla"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Verizon · Customer Care Intelligence",
+  "client_entity": "Verizon",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 6,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 3,
+  "follow_up": 3,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Discovery",
+   "Escalations",
+   "Operations and Reporting"
+  ],
+  "team": [
+   "Edgar Amado",
+   "Equipo Verizon (por confirmar)",
+   "Luis",
+   "Rafael Fonseca"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "AlphaDrive · AI staff augmentation",
+  "client_entity": "AlphaDrive",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 5,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff",
+   "Kickoff",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Calltek · Resolve AI",
+  "client_entity": "Calltek",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 4,
+  "p1": 0,
+  "make": 1,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Escalations",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Agustín Gutiérrez"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Solvo · GTM Engineering System",
+  "client_entity": "Solvo",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 4,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Kickoff"
+  ],
+  "team": [
+   "Karina Fernández",
+   "Mikayla Fedler"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Verizon · Vanguard impact model",
+  "client_entity": "Verizon",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 4,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 3,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Testing and Launch"
+  ],
+  "team": [
+   "Alex",
+   "Peter"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Vocalcom platform and channels",
+  "client_entity": "Allied Global",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [
+   "Fernando Guerrero",
+   "Germán López"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · AI QA and Capacity",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Negotiation and contract",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "César Arévalo"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Vocalcom and IVR reporting",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [
+   "Isaac García"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · AI voice order agent",
+  "client_entity": "CBC",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Winston Cruz"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · Contact center operations",
+  "client_entity": "CBC",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Escalations",
+   "Operations and reporting"
+  ],
+  "team": [
+   "Carlos Berganza"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · SIGO automation",
+  "client_entity": "CBC",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [
+   "Vivian Molina",
+   "Winston Cruz"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Cementos Progreso · KYP diagnostic and pilot",
+  "client_entity": "Cementos Progreso",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff",
+   "Operations and reporting"
+  ],
+  "team": [
+   "César Arévalo"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Menzis · AI value sprint",
+  "client_entity": "Menzis",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Edgar Amado"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OSDE · Virtual voice agent",
+  "client_entity": "OSDE",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 2,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Escalations",
+   "Operations and reporting"
+  ],
+  "team": [
+   "María Florencia Giraudo",
+   "Regina Guardia"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Vensure · KruOps",
+  "client_entity": "Vensure",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 3,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Build",
+   "Escalations"
+  ],
+  "team": [
+   "Kelly",
+   "Kelly Lawyer"
+  ],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Arbonne · AI customer service RFP",
+  "client_entity": "Arbonne",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Edgar Amado",
+   "Kevin Shaughnessy"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Bancor · Conversational AI collections",
+  "client_entity": "Bancor",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Honduras unified contract",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 2,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Migration to SDS",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Build"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · WhatsApp API payment link",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Branko Fiorio"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "ContigoSalud · AI voice collections",
+  "client_entity": "ContigoSalud",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Nicolás Araujo"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Corker y Brightstar · Home Care AI agents",
+  "client_entity": "Corker y Brightstar",
+  "lane": "commercial",
+  "pipeline_stage": "Closing and kickoff",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Closing and kickoff",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Jael Lena"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Credichapin · AI collections operation",
+  "client_entity": "Credichapin",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Escalations",
+   "Kickoff"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": "2026-11-03"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Credichapin · Framework contract and OT-001",
+  "client_entity": "Credichapin",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Heidy Sandoval"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "MinDefensa · Value sprint",
+  "client_entity": "MinDefensa",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Francisco"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OneSource · GTM and prospecting",
+  "client_entity": "OneSource",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Roberto Rios"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Oxio · Support and growth",
+  "client_entity": "Oxio",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 2,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Branko Fiorilo",
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "PTC · CX control tower",
+  "client_entity": "PTC",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Diego Bautista"
+  ],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Verizon · Global Contact Center RFP",
+  "client_entity": "Verizon",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Edgar"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "WOM Chile · AI voice agent",
+  "client_entity": "WOM Chile",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 2,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery",
+   "Escalations"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "360i · Sparring Expansion",
+  "client_entity": "360i",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "AT&T · Insourcing Action Plan",
+  "client_entity": "AT&T",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · AI recruiting assessment",
+  "client_entity": "Allied Global",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Backend core features",
+  "client_entity": "Allied Global",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Digital Dealer Offer",
+  "client_entity": "Allied Global",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · GTM and ABM Campaigns",
+  "client_entity": "Allied Global",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Legal Vertical Opportunity",
+  "client_entity": "Allied Global",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Nico"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · OneSync migration to CreAI",
+  "client_entity": "Allied Global",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Kickoff"
+  ],
+  "team": [
+   "Luis Iglesias"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Allied Global · Partnerships and Referrals",
+  "client_entity": "Allied Global",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Apex · CalibrAIte security questionnaire",
+  "client_entity": "Apex",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Arotcarena · Opportunity",
+  "client_entity": "Arotcarena",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Call center infrastructure",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Operations and reporting"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Consumo Dashboard unification",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Speech analytics",
+  "client_entity": "Banrural",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Isaac García"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Banrural · Vocalcom contingency",
+  "client_entity": "Banrural",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [
+   "Gustavo Chamber"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · CalibrAIte scale-up",
+  "client_entity": "CBC",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "CBC · Speech analytics opportunity",
+  "client_entity": "CBC",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Calltek · Heatmap POC",
+  "client_entity": "Calltek",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Build"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Certo · Ongoing Operations",
+  "client_entity": "Certo",
+  "lane": "admin",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Payments and Vendors"
+  ],
+  "team": [],
+  "next_due": "2027-01-21"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Claro · Commercial alliance",
+  "client_entity": "Claro",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Claro · Post Call Analytics CENAM",
+  "client_entity": "Claro",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Comcast · Control tower demo",
+  "client_entity": "Comcast",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": "2026-11-09"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Deepgram · Voice AI alliance",
+  "client_entity": "Deepgram",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Martin"
+  ],
+  "next_due": "2026-11-04"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Great Wolf Lodge · AI Sparring",
+  "client_entity": "Great Wolf Lodge",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Testing and release"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Klap · Services contract",
+  "client_entity": "Klap",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "KoolMóvil · Opportunity",
+  "client_entity": "KoolMóvil",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 1,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Mérida Fiatec · Capacity pentest",
+  "client_entity": "Mérida Fiatec",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Testing and release"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Nextiva · OneSource alliance",
+  "client_entity": "Nextiva",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [
+   "Regina Guardia"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OneSource · Studio and Demo Creator",
+  "client_entity": "OneSource",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Testing and release"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "OneSource · Voice agent report",
+  "client_entity": "OneSource",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Operations and reporting"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Oro Club · Opportunity",
+  "client_entity": "Oro Club",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "PTC · Email and WhatsApp analytics",
+  "client_entity": "PTC",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "PTC · Vocalcom contingency",
+  "client_entity": "PTC",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [],
+  "next_due": "2026-11-05"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "PYP · 6-month pod proposal",
+  "client_entity": "PYP",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Prism · Opportunity",
+  "client_entity": "Prism",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Ricardo Ordoñez"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "RAP · WhatsApp campaign",
+  "client_entity": "RAP",
+  "lane": "commercial",
+  "pipeline_stage": "Proposal and pricing",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 1,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Proposal and pricing"
+  ],
+  "team": [],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "TBC · Agent language selector",
+  "client_entity": "TBC",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Build"
+  ],
+  "team": [
+   "Rafael Fonseca"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "TBC · VoC control tower",
+  "client_entity": "TBC",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Operations and reporting"
+  ],
+  "team": [
+   "Regina Guardia"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Vantrap · Opportunity",
+  "client_entity": "Vantrap",
+  "lane": "commercial",
+  "pipeline_stage": "Discovery",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Discovery"
+  ],
+  "team": [],
+  "next_due": "2026-11-06"
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "Veritus · BPO alliance",
+  "client_entity": "Veritus",
+  "lane": "commercial",
+  "pipeline_stage": "Negotiation and contract",
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 0,
+  "follow_up": 1,
+  "admin_batch": 0,
+  "features": [
+   "Negotiation and contract"
+  ],
+  "team": [
+   "Carlos García-Granados"
+  ],
+  "next_due": ""
+ },
+ {
+  "workspace": "pure-ai",
+  "world": "Pure AI",
+  "epic": "WOM Chile · Migration to Genesys",
+  "client_entity": "WOM Chile",
+  "lane": "projects",
+  "pipeline_stage": null,
+  "health": null,
+  "items_open": 1,
+  "p1": 0,
+  "make": 0,
+  "decide": 0,
+  "delegate": 1,
+  "follow_up": 0,
+  "admin_batch": 0,
+  "features": [
+   "Escalations"
+  ],
+  "team": [],
+  "next_due": ""
+ }
+]

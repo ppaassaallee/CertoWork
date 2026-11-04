@@ -19,6 +19,8 @@ export type AgentsSection =
 export type FeedbackSection = "submit" | "queue";
 export type RequestsSection = "inbox" | "mine" | "waiting" | "resolved" | "new" | "reports";
 
+export type RunTab = "today" | "queue" | "projects" | "intake" | "close" | "life";
+
 export type DelivereeLens =
   | { kind: "home" }
   | { kind: "my-work"; section: MyWorkSection }
@@ -38,7 +40,8 @@ export type DelivereeLens =
   | { kind: "dashboard" }
   | { kind: "workload" }
   | { kind: "more"; section: MoreSection }
-  | { kind: "inbox" };
+  | { kind: "inbox" }
+  | { kind: "certo-run"; tab: RunTab };
 
 const MORE_SECTIONS: MoreSection[] = [
   "automations",
@@ -242,6 +245,12 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
     return { kind: "inbox" };
   }
 
+  if (path === "/run" || path.startsWith("/run/")) {
+    const tab = path.slice("/run/".length) as RunTab;
+    const allowed: RunTab[] = ["today", "queue", "projects", "intake", "close", "life"];
+    return { kind: "certo-run", tab: allowed.includes(tab) ? tab : "today" };
+  }
+
   if (
     path.startsWith("/capture") ||
     path === "/rich-capture"
@@ -274,6 +283,7 @@ export function resolveDelivereeLens(pathname: string): DelivereeLens {
 
 export function lensToPath(lens: DelivereeLens) {
   if (lens.kind === "inbox") return "/inbox";
+  if (lens.kind === "certo-run") return lens.tab === "today" ? "/run" : `/run/${lens.tab}`;
   if (lens.kind === "my-work") {
     if (lens.section === "inbox") return "/my-work/inbox";
     if (lens.section === "waiting") return "/my-work/waiting";
