@@ -10,6 +10,8 @@ Evidence from Wednesday, Nov 4, 2026, 10:53 pm America/Guatemala. Commands were 
 
 Run is always in the Certo sidebar, under Rutinas, and in the account menu. It opens `/run` inside the same Certo document. The desk reads and writes items on the signed-in workspace. No console flag is required.
 
+Checked in the browser on Wednesday, Nov 4, 2026, about 6:50 am America/Guatemala. Intake saved "Send Roger the proposal" into the Pure AI Make queue. My Work did not list it. Back returned to Home. The test item was then dropped, and the queue was empty.
+
 ## RUN-0.1.2 Serve the Run bundle from the same Worker
 
 Done when proven for routing: `/run/today` is the Run document, same origin, and it does not load Certo's stylesheet.
