@@ -126,6 +126,7 @@ import { projectWorkCounts } from "../lib/projectWorkCounts";
 import { dateRangeError } from "../lib/itemTiming";
 import { StatusLight, healthToStatus } from "./ui/StatusLight";
 import { Toast } from "./ui/Toast";
+import { isProductFlagEnabled } from "../lib/featureFlags";
 import { getLocale, setLocale, t, type Locale } from "../lib/i18n";
 import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
@@ -298,6 +299,7 @@ import {
   useTasksGroupedByProject,
   useProject,
   useProjectsWhen,
+  useRunItems,
   useSidebarProjects,
   useTask,
   useTasksWhen,
@@ -331,9 +333,6 @@ const MyWorkRouteLazy = lazy(() =>
 const ProjectRouteLazy = lazy(() =>
   import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
 ) as LazyExoticComponent<ComponentType<any>>;
-const CertoRunDeskLazy = lazy(() =>
-  import("../features/certo-run/CertoRunDesk").then((mod) => ({ default: mod.CertoRunDesk })),
-);
 const BillingScreenLazy = lazy(() =>
   import("../features/billing").then((m) => ({ default: m.BillingScreen })),
 );
@@ -342,6 +341,7 @@ const RelationshipMapLazy = lazy(() =>
     default: m.RelationshipMap,
   })),
 );
+import { lastRunWorld, openRunWorldCount, rememberRunReturn } from "../run/nav";
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import { SystemTemplateGallery } from "../features/tables/SystemTemplateGallery";
@@ -641,6 +641,13 @@ export function DelivereeWorkspace() {
     [],
   );
   const tasks = useTasksWhen(shellNeedsTaskArray) as any[];
+  const runEnabled = isProductFlagEnabled("commandRun");
+  const runRows = useRunItems(workspace?.id || "");
+  const runOpenCount = openRunWorldCount(runRows, lastRunWorld());
+  const onRunRoute = lens.kind === "certo-run";
+  useEffect(() => {
+    if (!runEnabled && onRunRoute) navigate("/home", { replace: true });
+  }, [runEnabled, onRunRoute, navigate]);
   const setTasks = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(tasksStore, update as any);
@@ -7508,18 +7515,23 @@ export function DelivereeWorkspace() {
             <Sparkles size="sm" />
             <span>{t("navRutinas")}</span>
           </button>
+          {runEnabled && (
           <button
             className={`do-nav-item is-run ${lens.kind === "certo-run" ? "is-active" : ""}`}
             data-testid="nav-certo-run"
             onClick={() => {
-              navigate("/run");
-              setSidebarOpen(false);
+              rememberRunReturn(`${location.pathname}${location.search}`);
+              window.location.assign("/run");
             }}
             type="button"
           >
             <Gauge size="sm" />
-            <span>{t("navCertoRun")}</span>
+            <span>Run</span>
+            {runOpenCount > 0 && (
+              <em className="do-nav-badge" data-testid="nav-certo-run-count">{runOpenCount}</em>
+            )}
           </button>
+          )}
         </nav>
 
         <div className="do-sidebar-scroll">
@@ -8034,16 +8046,19 @@ export function DelivereeWorkspace() {
           {workspaceOpen && (
             <div className="do-account-menu" data-testid="workspace-switcher-menu" role="menu">
               <span className="do-account-menu-label">Workspaces</span>
+              {runEnabled && (
               <button
                 data-testid="menu-certo-run"
                 onClick={() => {
                   setWorkspaceOpen(false);
-                  navigate("/run");
+                  rememberRunReturn(`${location.pathname}${location.search}`);
+                  window.location.assign("/run");
                 }}
                 type="button"
               >
-                <Gauge size={14} /> {t("navCertoRun")}
+                <Gauge size={14} /> Run
               </button>
+              )}
               {workspaces.map((item) => (
                 <button
                   className={item.id === workspace?.id ? "is-current" : ""}
@@ -9848,17 +9863,7 @@ export function DelivereeWorkspace() {
               tables={visibleTables}
             />
           )
-        ) : centerView === "run" && workspace && user ? (
-          <Suspense fallback={<div className="do-panel-empty">Opening Certo Run…</div>}>
-            <CertoRunDeskLazy
-              onBack={() => navigate("/home")}
-              onTab={(next) => navigate(next === "today" ? "/run" : `/run/${next}`)}
-              tab={lens.kind === "certo-run" ? lens.tab : "today"}
-              user={{ uid: user.uid, displayName: user.displayName }}
-              workspaceId={workspace.id}
-            />
-          </Suspense>
-        ) : centerView === "tables" && !tablesEnabled ? (
+        ) : centerView === "run" ? null : centerView === "tables" && !tablesEnabled ? (
           <div style={{ padding: 24, maxWidth: 480 }} data-testid="tables-flag-off">
             <h2 style={{ marginTop: 0 }}>Tables</h2>
             <p className="cw-tables-muted">
@@ -9914,15 +9919,21 @@ export function DelivereeWorkspace() {
           <BookOpen size={16} />
           Notes
         </button>
+        {runEnabled && (
         <button
           className={location.pathname.startsWith("/run") ? "is-active" : ""}
           data-testid="dock-certo-run"
-          onClick={() => navigate("/run")}
+          onClick={() => {
+            rememberRunReturn(`${location.pathname}${location.search}`);
+            window.location.assign("/run");
+          }}
           type="button"
         >
           <Gauge size={16} />
           Run
+          {runOpenCount > 0 && <em data-testid="dock-certo-run-count">{runOpenCount}</em>}
         </button>
+        )}
       </nav>
 
       {isPhone ? (

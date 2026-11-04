@@ -1,6 +1,8 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
+import { runDocumentPath } from "./runAssets.js";
+import { DEFAULT_CAPS as RUN_CAPS } from "./runDomain.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { portalEmailContent } from "./portalEmail.js";
@@ -2327,6 +2329,16 @@ async function inviteDeliveryStatus(request, env) {
 
 async function serveAsset(request, env) {
   const url = new URL(request.url);
+  const runDocument = runDocumentPath(url.pathname, request.method);
+  if (runDocument) {
+    const runUrl = new URL(runDocument, request.url);
+    const runResponse = withSecurityHeaders(
+      await env.ASSETS.fetch(new Request(runUrl, request)),
+    );
+    runResponse.headers.set("cache-control", "no-store, max-age=0");
+    runResponse.headers.set("x-certo-run-caps", String(RUN_CAPS.make));
+    return runResponse;
+  }
   const wantsHtml =
     request.method === "GET" &&
     (request.headers.get("accept") || "").includes("text/html");
