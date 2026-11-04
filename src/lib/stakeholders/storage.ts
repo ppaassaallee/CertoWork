@@ -23,15 +23,21 @@ export async function createWorkspaceStakeholder(input: {
   userId: string;
   workspaceId: string;
   name: string;
+  email?: string;
+  role?: string;
 }): Promise<StakeholderRecord> {
   const name = input.name.trim();
+  const email = input.email?.trim().toLowerCase() || "";
+  const role = input.role?.trim() || "";
   if (!input.userId || !input.workspaceId || !name) throw new Error("A person needs a name and workspace.");
   const created = await addDoc(collection(db, "stakeholders"), {
     userId: input.userId,
     workspaceId: input.workspaceId,
     name,
+    email,
+    role,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  return { id: created.id, userId: input.userId, workspaceId: input.workspaceId, name };
+  return { id: created.id, userId: input.userId, workspaceId: input.workspaceId, name, email, role };
 }

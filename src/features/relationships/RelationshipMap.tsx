@@ -45,6 +45,7 @@ type Props = {
   tasks: RelationshipRecord[];
   userId: string;
   workspaceId: string;
+  canManageStakeholders: boolean;
   onCreateItem(input: CreateItemInput): Promise<string | void>;
   onCreateProject(name: string, root: RelationshipRoot): Promise<string | void>;
   onOpenItem(id: string): void;
@@ -55,7 +56,7 @@ type Props = {
 const LENSES: Array<{ id: RelationshipLens; en: string; es: string; icon: typeof Users }> = [
   { id: "client", en: "Clients", es: "Clientes", icon: Briefcase },
   { id: "delivery", en: "Delivery entities", es: "Entidades de entrega", icon: Briefcase },
-  { id: "people", en: "People", es: "Personas", icon: Users },
+  { id: "people", en: "People & stakeholders", es: "Personas y stakeholders", icon: Users },
   { id: "project", en: "Projects", es: "Proyectos", icon: FolderKanban },
 ];
 
@@ -85,6 +86,7 @@ export function RelationshipMap({
   tasks,
   userId,
   workspaceId,
+  canManageStakeholders,
   onCreateItem,
   onCreateProject,
   onOpenItem,
@@ -108,6 +110,8 @@ export function RelationshipMap({
   const [creating, setCreating] = useState(false);
   const [addingPerson, setAddingPerson] = useState(false);
   const [personName, setPersonName] = useState("");
+  const [personEmail, setPersonEmail] = useState("");
+  const [personRole, setPersonRole] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -207,10 +211,12 @@ export function RelationshipMap({
     if (!personName.trim() || !userId || !workspaceId) return;
     setCreating(true);
     try {
-      const created = await createWorkspaceStakeholder({ userId, workspaceId, name: personName });
+      const created = await createWorkspaceStakeholder({ userId, workspaceId, name: personName, email: personEmail, role: personRole });
       setStakeholders((current) => [...current, created]);
       setSelectedRootId(created.id);
       setPersonName("");
+      setPersonEmail("");
+      setPersonRole("");
       setAddingPerson(false);
       onNotice(tx("Person added.", "Persona agregada."));
     } finally {
@@ -303,8 +309,8 @@ export function RelationshipMap({
               <small>{tx("Explore by", "Explorar por")}</small>
               <strong>{lensLabel(lens, locale)}</strong>
             </div>
-            {lens === "people" ? (
-              <button aria-label={tx("Add person", "Agregar persona")} onClick={() => setAddingPerson(true)} type="button"><Plus size={15} /></button>
+            {lens === "people" && canManageStakeholders ? (
+              <button aria-label={tx("Add stakeholder tag", "Agregar tag de stakeholder")} onClick={() => setAddingPerson(true)} type="button"><Plus size={15} /></button>
             ) : null}
           </div>
           <label className="cw-map-search">
@@ -313,7 +319,9 @@ export function RelationshipMap({
           </label>
           {addingPerson ? (
             <div className="cw-map-inline-create">
-              <input autoFocus onChange={(event) => setPersonName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createPerson(); }} placeholder={tx("Person or stakeholder", "Persona o stakeholder")} value={personName} />
+              <input autoFocus onChange={(event) => setPersonName(event.target.value)} placeholder={tx("Stakeholder tag name", "Nombre del tag de stakeholder")} value={personName} />
+              <input onChange={(event) => setPersonEmail(event.target.value)} placeholder={tx("Reference email (optional)", "Correo de referencia (opcional)")} type="email" value={personEmail} />
+              <input onChange={(event) => setPersonRole(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void createPerson(); }} placeholder={tx("Role or relationship", "Rol o relación")} value={personRole} />
               <button disabled={creating || !personName.trim()} onClick={() => void createPerson()} type="button">{creating ? <Loader2 className="spin" size={14} /> : <Plus size={14} />}</button>
               <button onClick={() => setAddingPerson(false)} type="button"><X size={14} /></button>
             </div>
@@ -337,7 +345,7 @@ export function RelationshipMap({
               <div className="cw-map-toolbar">
                 <div><span>{tx("Viewing", "Viendo")}</span><strong>{selectedRoot.label}</strong></div>
                 <div>
-                  {lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Commitment", "Compromiso") : tx("Project", "Proyecto")}</button> : null}
+                  {lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Related item", "Ítem relacionado") : tx("Project", "Proyecto")}</button> : null}
                   <button onClick={() => setExpanded(new Set(branchIds))} type="button">{tx("Expand all", "Expandir todo")}</button>
                   <button onClick={() => setExpanded(new Set())} type="button">{tx("Collapse all", "Contraer todo")}</button>
                 </div>
@@ -345,11 +353,11 @@ export function RelationshipMap({
               <div className="cw-map-scroll">
                 <div className="cw-map-root-node">
                   <span>{lens === "people" ? <User size={18} /> : lens === "project" ? <FolderKanban size={18} /> : <Briefcase size={18} />}</span>
-                  <div><small>{lensLabel(lens, locale)}</small><strong>{selectedRoot.label}</strong>{selectedRoot.meta ? <em>{selectedRoot.meta}</em> : null}</div>
-                  {lens === "project" && tree[0] ? <button aria-label={tx("Add item", "Agregar ítem")} onClick={() => openCreate(tree[0], selectedRoot)} type="button"><Plus size={15} /></button> : lens !== "project" ? <button aria-label={lens === "people" ? tx("Add commitment", "Agregar compromiso") : tx("Add project", "Agregar proyecto")} onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={15} /></button> : null}
+                  <div><small>{lensLabel(lens, locale)}</small><strong>{selectedRoot.label}</strong>{selectedRoot.meta ? <em>{selectedRoot.meta}</em> : null}{lens === "people" ? <em>{tx("Stakeholder tag · not a Certo user", "Tag de stakeholder · no es usuario de Certo")}</em> : null}</div>
+                  {lens === "project" && tree[0] ? <button aria-label={tx("Add item", "Agregar ítem")} onClick={() => openCreate(tree[0], selectedRoot)} type="button"><Plus size={15} /></button> : lens !== "project" ? <button aria-label={lens === "people" ? tx("Add related item", "Agregar ítem relacionado") : tx("Add project", "Agregar proyecto")} onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={15} /></button> : null}
                 </div>
                 <div className="cw-map-trunk">{displayTree.map((node) => renderNode(node, 0))}</div>
-                {displayTree.length === 0 ? <div className="cw-map-canvas-empty"><Network size={28} /><strong>{tx("This entity is ready to connect", "Esta entidad está lista para conectarse")}</strong><p>{lens === "people" ? tx("Add the first commitment you owe each other.", "Agrega el primer compromiso que tienen entre sí.") : lens === "project" ? tx("Add the first Epic or PBI.", "Agrega la primera Épica o PBI.") : tx("Add its first project to begin the map.", "Agrega su primer proyecto para comenzar el mapa.")}</p>{lens === "project" && tree[0] ? <button onClick={() => openCreate(tree[0], selectedRoot)} type="button"><Plus size={14} /> {tx("Add item", "Agregar ítem")}</button> : lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Add commitment", "Agregar compromiso") : tx("Add project", "Agregar proyecto")}</button> : null}</div> : null}
+                {displayTree.length === 0 ? <div className="cw-map-canvas-empty"><Network size={28} /><strong>{tx("This entity is ready to connect", "Esta entidad está lista para conectarse")}</strong><p>{lens === "people" ? tx("Add the first item requested by or related to this stakeholder tag.", "Agrega el primer ítem solicitado por o relacionado con este tag de stakeholder.") : lens === "project" ? tx("Add the first Epic or PBI.", "Agrega la primera Épica o PBI.") : tx("Add its first project to begin the map.", "Agrega su primer proyecto para comenzar el mapa.")}</p>{lens === "project" && tree[0] ? <button onClick={() => openCreate(tree[0], selectedRoot)} type="button"><Plus size={14} /> {tx("Add item", "Agregar ítem")}</button> : lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Add related item", "Agregar ítem relacionado") : tx("Add project", "Agregar proyecto")}</button> : null}</div> : null}
               </div>
             </>
           ) : <div className="cw-map-canvas-empty"><Network size={30} /><strong>{tx("Choose an entity to start", "Elige una entidad para comenzar")}</strong></div>}
@@ -364,7 +372,7 @@ export function RelationshipMap({
             {createTarget.node ? (
               <label><span>{tx("Type", "Tipo")}</span><NativeSelect onChange={(event) => setCreateTarget((current) => current ? { ...current, kind: event.target.value as HierarchyKind } : current)} value={createTarget.kind}>{(createTarget.node.kind === "project" ? ["epic", "pbi"] : allowedChildKinds(hierarchyKind(createTarget.node.record))).map((kind) => <option key={kind} value={kind}>{workItemTypeLabel(kind, locale)}</option>)}</NativeSelect></label>
             ) : null}
-            <label><span>{createTarget.kind === "project" ? tx("Project name", "Nombre del proyecto") : createTarget.root.lens === "people" && !createTarget.node ? tx("Commitment", "Compromiso") : tx("Item title", "Título del ítem")}</span><input autoFocus onChange={(event) => setCreateTitle(event.target.value)} placeholder={tx("What needs to exist?", "¿Qué debe existir?")} value={createTitle} /></label>
+            <label><span>{createTarget.kind === "project" ? tx("Project name", "Nombre del proyecto") : createTarget.root.lens === "people" && !createTarget.node ? tx("Related item", "Ítem relacionado") : tx("Item title", "Título del ítem")}</span><input autoFocus onChange={(event) => setCreateTitle(event.target.value)} placeholder={tx("What needs to exist?", "¿Qué debe existir?")} value={createTitle} /></label>
             <footer><button onClick={() => setCreateTarget(null)} type="button">{tx("Cancel", "Cancelar")}</button><button className="is-primary" disabled={creating || !createTitle.trim()} type="submit">{creating ? <Loader2 className="spin" size={14} /> : <Plus size={14} />}{tx("Create", "Crear")}</button></footer>
           </form>
         </div>

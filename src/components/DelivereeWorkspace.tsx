@@ -4893,18 +4893,7 @@ export function DelivereeWorkspace() {
         if (!user || !workspace) return;
         setDestructiveBusy(true);
         try {
-          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [
-            ...linkedTasks.map(
-              (task) => (batch: ReturnType<typeof writeBatch>) =>
-                batch.delete(doc(db, "tasks", task.id)),
-            ),
-            (batch) => batch.delete(doc(db, "projects", project.id)),
-          ];
-          for (let index = 0; index < deletions.length; index += 400) {
-            const batch = writeBatch(db);
-            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
-            await batch.commit();
-          }
+          await deleteProjectItemsAndRecord(project.id);
           if (projectConsoleId === project.id) {
             setProjectConsoleId(null);
             setPanel(null);
@@ -4920,13 +4909,25 @@ export function DelivereeWorkspace() {
     });
   };
 
+  // Read the complete project scope, not the route's partial/open-item pool.
+  // Keep the parent until all child batches succeed so failures can be retried.
+  const deleteProjectItemsAndRecord = async (projectId: string) => {
+    if (!workspace || !user) throw new Error("Workspace session required.");
+    const snapshot = await getDocs(query(collection(db, "tasks"),
+      where("workspaceId", "==", workspace.id), where("projectId", "==", projectId)));
+    for (let index = 0; index < snapshot.docs.length; index += 400) {
+      const batch = writeBatch(db);
+      snapshot.docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref));
+      await batch.commit();
+    }
+    await deleteDoc(doc(db, "projects", projectId));
+  };
+
   const permanentlyDeleteProjects = async (projectsToRemove: any[]) => {
     const memberId = accessMemberId(workspace?.id || "", user?.uid || "");
-    const deleted = projectsToRemove.filter(
-      (project) => String(project.status || "").toLowerCase() === "deleted",
-    );
+    const deleted = [...new Map(projectsToRemove.map((project) => [project.id, project])).values()];
     if (!deleted.length) {
-      setNotice("Select projects that are already in Deleted.");
+      setNotice(tr("Select projects to delete.", "Selecciona proyectos para eliminar."));
       return;
     }
     const blocked = deleted.find(
@@ -4941,29 +4942,20 @@ export function DelivereeWorkspace() {
       deleted.some((project) => project.id === task.projectId),
     ).length;
     setDestructiveDialog({
-      verb: "Delete forever",
-      entityName: `${deleted.length} project${deleted.length === 1 ? "" : "s"}`,
+      verb: tr("Delete forever", "Eliminar definitivamente"),
+      entityName: `${deleted.length} ${tr("projects", "proyectos")}`,
       impact: [
-        "This cannot be undone",
-        `${linkedTaskCount} linked item${linkedTaskCount === 1 ? "" : "s"} will also be removed`,
-        "Documents stay in knowledge unless removed separately",
-        "Use this to clear Deleted projects you will not restore",
+        tr("This cannot be undone", "Esta acción no se puede deshacer"),
+        tr("ALL project items will be removed, including completed items and every hierarchy level.", "Se eliminarán TODOS los ítems del proyecto, incluidos los terminados y todos los niveles de jerarquía."),
+        tr(`${linkedTaskCount} open items currently loaded; the full item list is fetched on confirmation.`, `${linkedTaskCount} ítems abiertos cargados; se consultará la lista completa al confirmar.`),
+        tr("Documents stay in knowledge unless removed separately", "Los documentos se conservan en conocimiento hasta eliminarlos por separado"),
       ],
       onConfirm: async () => {
         if (!user || !workspace) return;
         setDestructiveBusy(true);
         try {
-          const deletions: Array<(batch: ReturnType<typeof writeBatch>) => void> = [];
           for (const project of deleted) {
-            for (const task of openTasks.filter((row) => row.projectId === project.id)) {
-              deletions.push((batch) => batch.delete(doc(db, "tasks", task.id)));
-            }
-            deletions.push((batch) => batch.delete(doc(db, "projects", project.id)));
-          }
-          for (let index = 0; index < deletions.length; index += 400) {
-            const batch = writeBatch(db);
-            deletions.slice(index, index + 400).forEach((apply) => apply(batch));
-            await batch.commit();
+            await deleteProjectItemsAndRecord(project.id);
           }
           if (deleted.some((project) => project.id === projectConsoleId)) {
             setProjectConsoleId(null);
@@ -9176,7 +9168,7 @@ export function DelivereeWorkspace() {
               onCreateItem={async ({ projectId, title, kind, parent, root }) => {
                 const relationshipPatch =
                   root.lens === "people"
-                    ? { stakeholderIds: [root.id] }
+                    ? { stakeholderIds: [root.id], requesterName: root.label }
                     : root.lens === "client"
                       ? { clientEntity: root.label, client: root.label }
                       : root.lens === "delivery"
@@ -9210,6 +9202,7 @@ export function DelivereeWorkspace() {
               onOpenProject={openProjectRecord}
               projects={projects}
               tasks={tasks}
+              canManageStakeholders={canManageMembers}
               userId={user?.uid || ""}
               workspaceId={workspace?.id || ""}
             />
