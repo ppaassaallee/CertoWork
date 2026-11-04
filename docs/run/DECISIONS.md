@@ -4,11 +4,11 @@
 
 The AI Studio export from 10:17 pm and `certo-run-ux-golden.zip` are not in the repo, the uploads, or Drive. E1 cannot copy the UI file by file or run the 85-screen gate until those two files are unzipped at `incoming/certo-run-aistudio/` and `tests/run-visual/golden/`. Work continues on everything that does not need those pixels.
 
-The earlier in-shell desk restyle is not the Run UI. Run is a second document (`run.html`) served at `/run/*` by the same Worker. It does not import `src/index.css`. Certo does not import `src/run/run.css`.
+`/run` is the Certo module. A root `run.html` made Vite serve a second document at that path, so the entry now lives at `src/run/entry.html` and is not the route people open.
 
 Wrangler has one asset directory, `dist/client`. The Run entry is emitted as `dist/client/run.html` and copied to `dist/run/index.html`. `/run` and `/run/*` are in `run_worker_first` so the Certo SPA fallback does not answer those routes. HTML under `/run` is served from `/run.html`.
 
-`commandRun` defaults off. The client reads that default through `isProductFlagEnabled` (`certo-flag:commandRun` in localStorage). `resolveFeatureFlag` already applies tenant, then workspace, then user. The nav does not load a flag document yet, so a Firestore override does not reach the shell until Settings wires one. With the flag off there is no Run nav item and the shell does not import the Run desk.
+`commandRun` still defaults off in `resolveFeatureFlag`. The module itself is always in the Certo sidebar. Opening Run stays inside the Certo document at `/run` and mounts `CertoRunDesk`, which reads and writes items in `tasks`. A separate Run document was hiding the module behind a console flag and showed an empty page.
 
 Worlds stay on the item field `runWorld` for this change. An earlier decision said Personal Focus is a Certo workspace and not a Run world, and that the desk must not switch workspaces. Epic E2 says each world is a workspace and the Run switch changes Certo's active workspace. That conflict is not resolved here. E2 will record which rule wins before any workspace switch is added.
 

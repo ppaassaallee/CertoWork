@@ -3375,19 +3375,6 @@ Respond STRICTLY in a valid JSON schema:
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.use(async (req, res, next) => {
-      if (req.method !== "GET" && req.method !== "HEAD") return next();
-      const last = req.path.split("/").pop() || "";
-      const isRunDocument = (req.path === "/run" || req.path.startsWith("/run/")) && !last.includes(".");
-      if (!isRunDocument) return next();
-      try {
-        const template = fs.readFileSync(path.join(process.cwd(), "run.html"), "utf8");
-        const html = await vite.transformIndexHtml(req.originalUrl, template);
-        res.status(200).set({ "Content-Type": "text/html" }).end(html);
-      } catch (error) {
-        next(error);
-      }
-    });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
@@ -3395,13 +3382,8 @@ Respond STRICTLY in a valid JSON schema:
     app.use((req, res, next) => {
       if (req.path.startsWith('/api')) return next();
       const origin = `${req.protocol}://${req.get("host")}`;
-      const last = req.path.split("/").pop() || "";
-      const isRunDocument = (req.path === "/run" || req.path.startsWith("/run/")) && !last.includes(".");
-      const htmlName = isRunDocument ? "run.html" : "index.html";
-      const clientHtml = path.join(distPath, "client", htmlName);
-      const htmlPath = fs.existsSync(clientHtml) ? clientHtml : path.join(distPath, htmlName);
       const indexHtml = fs
-        .readFileSync(htmlPath, "utf8")
+        .readFileSync(path.join(distPath, "index.html"), "utf8")
         .replaceAll("__GAZELLE_ORIGIN__", origin);
       res.type("html").send(indexHtml);
     });

@@ -6,14 +6,9 @@ Evidence from Wednesday, Nov 4, 2026, 10:53 pm America/Guatemala. Commands were 
 
 `certo-run-ux-golden.zip` and the 10:17 pm AI Studio export are not in the repo, the uploads folder, or Drive. E1 is not started. No screen is marked visually done. See `docs/run/DECISIONS.md`.
 
-## RUN-0.1.1 Add the commandRun feature flag
+## Module entry
 
-Done when proven: flag off hides Run; flag on shows it; tenant, workspace, and user overrides resolve in that order.
-
-- Files: `src/lib/featureFlags.ts`, `tests/featureFlags.test.ts`, `src/components/DelivereeWorkspace.tsx`
-- Test: `commandRun stays off until a tenant, workspace, or user turns it on`
-- `npx tsc -p tsconfig.json --noEmit` last line: `TSC:0`
-- Browser: with the flag unset, the sidebar has no Run item. After `certo-flag:commandRun=1`, the item labeled Run is visible. Removing the flag and opening `/run/today` returns to `/home`.
+Run is always in the Certo sidebar, under Rutinas, and in the account menu. It opens `/run` inside the same Certo document. The desk reads and writes items on the signed-in workspace. No console flag is required.
 
 ## RUN-0.1.2 Serve the Run bundle from the same Worker
 

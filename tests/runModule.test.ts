@@ -8,34 +8,31 @@ import { RUN_STORE_ACTIONS } from "../src/run/data/RunStore.tsx";
 import { lastRunWorld, openRunWorldCount, readRunReturn, rememberRunReturn } from "../src/run/nav.ts";
 import { runDocumentPath } from "../worker/runAssets.js";
 
-test("commandRun defaults off and the nav source stays behind that flag", () => {
+test("Run is a Certo module in the sidebar and opens the desk", () => {
   assert.equal(resolveFeatureFlag("commandRun", { environment: "test" }), false);
   const desk = readFileSync("src/components/DelivereeWorkspace.tsx", "utf8");
-  assert.match(desk, /isProductFlagEnabled\("commandRun"\)/);
-  assert.match(desk, /\{runEnabled && \([\s\S]*data-testid="nav-certo-run"/);
+  assert.match(desk, /data-testid="nav-certo-run"/);
   assert.match(desk, /data-testid="nav-certo-run-count"/);
-  assert.equal(desk.includes("CertoRunDeskLazy"), false);
-  assert.match(desk, /window\.location\.assign\("\/run"\)/);
-  assert.match(desk, /rememberRunReturn/);
+  assert.match(desk, /navigate\("\/run"\)/);
+  assert.match(desk, /CertoRunDeskLazy/);
+  assert.equal(desk.includes("window.location.assign(\"/run\")"), false);
+  assert.equal(desk.includes("isProductFlagEnabled(\"commandRun\")"), false);
 });
 
-test("the Run document is served for /run routes and not for files or Certo routes", () => {
-  assert.equal(runDocumentPath("/run", "GET"), "/run.html");
-  assert.equal(runDocumentPath("/run/today", "GET"), "/run.html");
-  assert.equal(runDocumentPath("/run/queue", "HEAD"), "/run.html");
-  assert.equal(runDocumentPath("/run/assets/app.js", "GET"), null);
+test("/run stays on the Certo document", () => {
+  assert.equal(runDocumentPath("/run", "GET"), null);
+  assert.equal(runDocumentPath("/run/today", "GET"), null);
+  assert.equal(runDocumentPath("/run/queue", "HEAD"), null);
   assert.equal(runDocumentPath("/home", "GET"), null);
-  assert.equal(runDocumentPath("/api/health", "GET"), null);
   const worker = readFileSync("worker/index.js", "utf8");
   const wrangler = readFileSync("wrangler.jsonc", "utf8");
-  assert.match(worker, /runDocumentPath/);
+  assert.equal(worker.includes("runDocumentPath"), false);
   assert.match(worker, /from "\.\/runDomain\.js"/);
-  assert.match(wrangler, /"\/run"/);
-  assert.match(wrangler, /"\/run\/\*"/);
+  assert.equal(wrangler.includes("\"/run\""), false);
 });
 
 test("Run styles never enter Certo and Certo styles never enter Run", () => {
-  const runHtml = readFileSync("run.html", "utf8");
+  const runHtml = readFileSync("src/run/entry.html", "utf8");
   const main = readFileSync("src/run/main.tsx", "utf8");
   const css = readFileSync("src/run/run.css", "utf8");
   const certoMain = readFileSync("src/main.tsx", "utf8");
