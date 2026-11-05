@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { resolveFeatureFlag } from "../src/lib/featureFlags.ts";
@@ -8,48 +8,43 @@ import { RUN_STORE_ACTIONS } from "../src/run/data/RunStore.tsx";
 import { lastRunWorld, openRunWorldCount, readRunReturn, rememberRunReturn } from "../src/run/nav.ts";
 import { runDocumentPath } from "../worker/runAssets.js";
 
-test("commandRun defaults off and the nav source stays behind that flag", () => {
+test("Run is a Certo module in the sidebar and opens the desk", () => {
   assert.equal(resolveFeatureFlag("commandRun", { environment: "test" }), false);
   const desk = readFileSync("src/components/DelivereeWorkspace.tsx", "utf8");
-  assert.match(desk, /isProductFlagEnabled\("commandRun"\)/);
-  assert.match(desk, /\{runEnabled && \([\s\S]*data-testid="nav-certo-run"/);
+  assert.match(desk, /data-testid="nav-certo-run"/);
   assert.match(desk, /data-testid="nav-certo-run-count"/);
-  assert.equal(desk.includes("CertoRunDeskLazy"), false);
-  assert.match(desk, /window\.location\.assign\("\/run"\)/);
-  assert.match(desk, /rememberRunReturn/);
+  assert.match(desk, /navigate\("\/run"\)/);
+  assert.match(desk, /CertoRunDeskLazy/);
+  assert.equal(desk.includes("window.location.assign(\"/run\")"), false);
+  assert.equal(desk.includes("isProductFlagEnabled(\"commandRun\")"), false);
 });
 
-test("the Run document is served for /run routes and not for files or Certo routes", () => {
-  assert.equal(runDocumentPath("/run", "GET"), "/run.html");
-  assert.equal(runDocumentPath("/run/today", "GET"), "/run.html");
-  assert.equal(runDocumentPath("/run/queue", "HEAD"), "/run.html");
-  assert.equal(runDocumentPath("/run/assets/app.js", "GET"), null);
+test("/run stays on the Certo document", () => {
+  assert.equal(runDocumentPath("/run", "GET"), null);
+  assert.equal(runDocumentPath("/run/today", "GET"), null);
+  assert.equal(runDocumentPath("/run/queue", "HEAD"), null);
   assert.equal(runDocumentPath("/home", "GET"), null);
-  assert.equal(runDocumentPath("/api/health", "GET"), null);
   const worker = readFileSync("worker/index.js", "utf8");
   const wrangler = readFileSync("wrangler.jsonc", "utf8");
-  assert.match(worker, /runDocumentPath/);
+  assert.equal(worker.includes("runDocumentPath"), false);
   assert.match(worker, /from "\.\/runDomain\.js"/);
-  assert.match(wrangler, /"\/run"/);
-  assert.match(wrangler, /"\/run\/\*"/);
+  assert.equal(wrangler.includes("\"/run\""), false);
 });
 
-test("Run styles never enter Certo and Certo styles never enter Run", () => {
-  const runHtml = readFileSync("run.html", "utf8");
-  const main = readFileSync("src/run/main.tsx", "utf8");
-  const css = readFileSync("src/run/run.css", "utf8");
+test("Certo has one document and Run is a route in it", () => {
+  assert.equal(existsSync("run.html"), false);
+  assert.equal(existsSync("src/run/entry.html"), false);
+  assert.equal(existsSync("src/run/main.tsx"), false);
+  const vite = readFileSync("vite.config.ts", "utf8");
+  const server = readFileSync("server.ts", "utf8");
+  const pkg = readFileSync("package.json", "utf8");
   const certoMain = readFileSync("src/main.tsx", "utf8");
-  assert.match(runHtml, /Familjen\+Grotesk:wght@600;700/);
-  assert.match(runHtml, /Atkinson\+Hyperlegible:wght@400;700/);
-  assert.match(runHtml, /JetBrains\+Mono:wght@400;500;600/);
-  assert.match(runHtml, /display=swap/);
-  assert.equal(runHtml.includes("index.css"), false);
-  assert.equal(main.includes("index.css"), false);
-  assert.equal(main.includes("certo-tokens"), false);
+  assert.equal(vite.includes("entry.html"), false);
+  assert.equal(vite.includes("run.html"), false);
+  assert.equal(server.includes("run.html"), false);
+  assert.equal(server.includes("isRunDocument"), false);
+  assert.equal(pkg.includes("dist/run"), false);
   assert.equal(certoMain.includes("src/run/"), false);
-  assert.equal(certoMain.includes("run.css"), false);
-  assert.match(css, /@keyframes fade-in/);
-  assert.match(css, /prefers-reduced-motion/);
 });
 
 test("RunStore keeps the AI Studio action names and does not store data in localStorage", () => {

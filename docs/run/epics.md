@@ -39,7 +39,7 @@ The Cursor version looked like a Frankenstein because the agent rebuilt each scr
 
 | Layer | Rule | Proof |
 | --- | --- | --- |
-| Bundle | Run is a second Vite entry (`run.html`) built into `dist/run/` and served by the same Worker at `/run/*`. Same origin, so the Certo Firebase session, Firestore, `/api` and `/mcp` are shared | One login; Certo pages unchanged |
+| Bundle | Run is a module of the one Certo Work app, at `/run`, in the same Vite build and the same Worker. Same Firebase session, Firestore, `/api` and `/mcp` | One login; one HTML document |
 | Styles | Tailwind v4 and `tokens.css` only inside the Run entry; Certo's `index.css` never loads there | Editing Certo CSS changes no Run screenshot |
 | UI code | `src/run/ui/*` and `src/run/views/*` copied verbatim from the AI Studio export; only import paths change | `diff` shows imports and the store hook only |
 | Data | `RunStore` keeps the AI Studio store API (`setWorld`, `setOutcome`, `moveToMake`, `saveAllocation`…) but reads Firestore and writes through Worker routes | Views compile unchanged |
@@ -63,8 +63,7 @@ Certo Run lives inside Certo Work at /run behind a flag, on Certo's Worker, Fire
 
 | PBI | Deliverable | Done when | Agents and MCP | Days |
 | --- | --- | --- | --- | --- |
-| Add the commandRun feature flag | Flag `commandRun` in `featureFlags.ts`, default off, resolvable per tenant, workspace and user | Flag off: no Run entry, no Run bundle loaded. Flag on: Run entry visible in Certo nav | UI only; no agent call | 0.5 |
-| Serve the Run bundle from the same Worker | Second Vite entry `run.html` built into `dist/run/`; Worker serves it at `/run/*` with SPA fallback | `certo.work/run/today` loads with the Certo Firebase session (same origin, no second login); Lighthouse shows one Firebase app | UI only; no agent call | 1 |
+| Certo Run module | Run is always in the Certo sidebar. `/run` renders `CertoRunDesk` in the Certo shell. No second document and no flag gate | `/run` and Home share one HTML document. The sidebar item is visible without a console flag | UI only; no agent call | 1 |
 | Add the Run entry to Certo navigation | One nav item "Run" with the open-items count of the active world | Clicking it opens Today of the last world used; Back returns to the previous Certo route | UI only; no agent call | 0.5 |
 
 **F0.2 Shared services adapter** · Success: Run views talk to Certo services only through one adapter with the same action names the AI Studio store uses.

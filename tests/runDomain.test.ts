@@ -158,8 +158,9 @@ test("five Yes answers create a PBI", () => {
 });
 
 test("the manifesto keeps the two worlds apart", () => {
-  assert.match(DEFAULT_MANIFESTO, /Two worlds, never mixed/);
-  assert.match(DEFAULT_MANIFESTO, /Short night/);
+  assert.match(DEFAULT_MANIFESTO, /No mixed worlds/);
+  assert.match(DEFAULT_MANIFESTO, /five hours of sleep/);
+  assert.match(DEFAULT_MANIFESTO, /Close at 17:30/);
 });
 
 test("split clients are asked per world", () => {

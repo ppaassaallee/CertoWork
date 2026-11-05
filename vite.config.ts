@@ -52,10 +52,6 @@ export default defineConfig({
     outDir: 'dist/client',
     chunkSizeWarningLimit: 600,
     rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, "index.html"),
-        run: path.resolve(__dirname, "run.html"),
-      },
       output: {
         manualChunks(id) {
           return vendorChunk(id);

@@ -13,9 +13,7 @@
       "/api/*",
       "/__/auth/*",
       "/mcp",
-      "/mcp/*",
-      "/run",
-      "/run/*"
+      "/mcp/*"
     ]
   },
   "routes": [

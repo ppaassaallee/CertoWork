@@ -4,11 +4,9 @@
 
 The AI Studio export from 10:17 pm and `certo-run-ux-golden.zip` are not in the repo, the uploads, or Drive. E1 cannot copy the UI file by file or run the 85-screen gate until those two files are unzipped at `incoming/certo-run-aistudio/` and `tests/run-visual/golden/`. Work continues on everything that does not need those pixels.
 
-The earlier in-shell desk restyle is not the Run UI. Run is a second document (`run.html`) served at `/run/*` by the same Worker. It does not import `src/index.css`. Certo does not import `src/run/run.css`.
+There is one Certo Work app and one HTML document. `/run` is a route in that app, the same way `/my-work` and `/projects` are. The sidebar, the account menu, and the phone dock open it with the Certo router. The desk is `CertoRunDesk` inside the Certo shell. It reads and writes items in `tasks`.
 
-Wrangler has one asset directory, `dist/client`. The Run entry is emitted as `dist/client/run.html` and copied to `dist/run/index.html`. `/run` and `/run/*` are in `run_worker_first` so the Certo SPA fallback does not answer those routes. HTML under `/run` is served from `/run.html`.
-
-`commandRun` defaults off. The client reads that default through `isProductFlagEnabled` (`certo-flag:commandRun` in localStorage). `resolveFeatureFlag` already applies tenant, then workspace, then user. The nav does not load a flag document yet, so a Firestore override does not reach the shell until Settings wires one. With the flag off there is no Run nav item and the shell does not import the Run desk.
+There is no `run.html`, no second Vite entry, and no Worker route that serves a different document for `/run`. `commandRun` remains in the flag list and defaults off. It does not hide the module and it does not load a second app.
 
 Worlds stay on the item field `runWorld` for this change. An earlier decision said Personal Focus is a Certo workspace and not a Run world, and that the desk must not switch workspaces. Epic E2 says each world is a workspace and the Run switch changes Certo's active workspace. That conflict is not resolved here. E2 will record which rule wins before any workspace switch is added.
 
