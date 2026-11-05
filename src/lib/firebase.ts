@@ -9,8 +9,7 @@ import {
 import {
   getFirestore,
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -27,13 +26,12 @@ const app = initializeApp({
 
 function createFirestore() {
   try {
+    // A multi-tab IndexedDB lease was leaving the workspace reads pending.
+    // Boot then timed out on "Opening your workspace". Memory cache reads
+    // Firestore directly and does not wait for another tab.
     return initializeFirestore(
       app,
-      {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-      },
+      { localCache: memoryLocalCache() },
       firebaseConfig.firestoreDatabaseId,
     );
   } catch {

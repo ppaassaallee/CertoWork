@@ -32,6 +32,13 @@ test("workspace boot resumes the last workspace without waiting on collection sc
   assert.match(auth, /getDoc\(doc\(db, 'workspaces', storedId\)\)/);
 });
 
+test("workspace reads do not wait on a multi-tab IndexedDB lease", () => {
+  const firebaseSource = readFileSync(resolve("src/lib/firebase.ts"), "utf8");
+  assert.match(firebaseSource, /memoryLocalCache/);
+  assert.doesNotMatch(firebaseSource, /persistentMultipleTabManager/);
+  assert.doesNotMatch(firebaseSource, /persistentLocalCache/);
+});
+
 test("usage console URL points at the Certo Firebase project", () => {
   assert.match(firestoreUsageConsoleUrl(), /gen-lang-client-0277783597/);
   assert.match(firestoreUsageConsoleUrl(), /usage\/details/);
