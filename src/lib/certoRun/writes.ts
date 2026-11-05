@@ -68,6 +68,14 @@ export async function renegotiateRunItem(id: string, date: string) {
   });
 }
 
+export async function setRunHealth(id: string, health: "green" | "amber" | "red" | "") {
+  await patchRunItem(id, { runHealth: health });
+}
+
+export async function setRunUnblock(id: string, note: string) {
+  await patchRunItem(id, { runUnblock: note });
+}
+
 export async function createRunItem(input: {
   userId: string;
   workspaceId: string;
@@ -77,6 +85,11 @@ export async function createRunItem(input: {
   world: RunWorld;
   details?: string;
   dueDate?: string;
+  deliverable?: string;
+  doneWhen?: string;
+  nextStep?: string;
+  client?: string;
+  epic?: string;
 }): Promise<{ ok: true; id: string } | { ok: false; reason: "admin-make" }> {
   if (adminNeverMake(input.lane, input.decision)) return { ok: false, reason: "admin-make" };
   const ref = await addDoc(
@@ -87,11 +100,17 @@ export async function createRunItem(input: {
       title: input.title,
       description: input.details || "",
       status: "open",
+      epic: input.epic || "",
       runDecision: input.decision,
       runLane: input.lane,
       runWorld: input.world,
       runInQueue: true,
-      priority: "P3",
+      runContext: input.details || "",
+      runDeliverable: input.deliverable || "",
+      runDoneWhen: input.doneWhen || "",
+      runNextStep: input.nextStep || "",
+      runClient: input.client || "",
+      priority: "P2",
       dueDate: input.dueDate || "",
       createdBy: input.userId,
       createdAt: serverTimestamp(),

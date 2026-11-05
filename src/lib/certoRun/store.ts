@@ -12,6 +12,33 @@ function priorityOf(value: unknown): Priority {
   return "P3";
 }
 
+function stampDate(value: unknown): string {
+  if (typeof value === "string" && value) {
+    if (value.includes("T")) {
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Guatemala",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(date);
+      }
+    }
+    return value.slice(0, 10);
+  }
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    const date = (value as { toDate: () => Date }).toDate();
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Guatemala",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+  return "";
+}
+
 function laneOf(value: unknown): Lane {
   if (value === "admin" || value === "commercial" || value === "projects" || value === "personal") return value;
   return "projects";
@@ -36,9 +63,14 @@ export function runDocToDeskItem(
     decision,
     priority: priorityOf(data.priority),
     title: String(data.title || "Untitled"),
-    context: String(data.description || ""),
-    deliverable: "",
-    doneWhen: "",
+    context: String(data.runContext || data.context || data.description || ""),
+    deliverable: String(data.runDeliverable || data.deliverable || ""),
+    doneWhen: String(data.runDoneWhen || data.doneWhen || ""),
+    nextStep: String(data.runNextStep || data.nextStep || ""),
+    clientEntity: String(data.runClient || data.clientEntity || ""),
+    health: data.runHealth === "green" || data.runHealth === "amber" || data.runHealth === "red" ? data.runHealth : "",
+    unblock: String(data.runUnblock || ""),
+    created: stampDate(data.createdAt) || stampDate(data.created),
     epic: String(data.epic || ""),
     feature: "",
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],

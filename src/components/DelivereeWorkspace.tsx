@@ -298,6 +298,7 @@ import {
   useTasksGroupedByProject,
   useProject,
   useProjectsWhen,
+  useRunItems,
   useSidebarProjects,
   useTask,
   useTasksWhen,
@@ -342,6 +343,7 @@ const RelationshipMapLazy = lazy(() =>
     default: m.RelationshipMap,
   })),
 );
+import { lastRunWorld, openRunWorldCount } from "../run/nav";
 import { TablePage } from "../features/tables/TablePage";
 import { CreateTableWizard } from "../features/tables/CreateTableWizard";
 import { SystemTemplateGallery } from "../features/tables/SystemTemplateGallery";
@@ -641,6 +643,8 @@ export function DelivereeWorkspace() {
     [],
   );
   const tasks = useTasksWhen(shellNeedsTaskArray) as any[];
+  const runRows = useRunItems(workspace?.id || "");
+  const runOpenCount = openRunWorldCount(runRows, lastRunWorld());
   const setTasks = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
       applyStoreUpdate(tasksStore, update as any);
@@ -7519,6 +7523,9 @@ export function DelivereeWorkspace() {
           >
             <Gauge size="sm" />
             <span>{t("navCertoRun")}</span>
+            {runOpenCount > 0 && (
+              <em className="do-nav-badge" data-testid="nav-certo-run-count">{runOpenCount}</em>
+            )}
           </button>
         </nav>
 
@@ -8087,7 +8094,7 @@ export function DelivereeWorkspace() {
         </div>
       </aside>
 
-      <main className="do-main">
+      <main className={`do-main${centerView === "run" ? " is-run-module" : ""}`}>
         <header className="do-header">
           <button
             aria-label={t("openNav")}
@@ -9921,7 +9928,8 @@ export function DelivereeWorkspace() {
           type="button"
         >
           <Gauge size={16} />
-          Run
+          {t("navCertoRun")}
+          {runOpenCount > 0 && <em data-testid="dock-certo-run-count">{runOpenCount}</em>}
         </button>
       </nav>
 

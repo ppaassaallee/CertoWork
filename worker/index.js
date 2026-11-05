@@ -1,6 +1,7 @@
 import { handleCodexBridgeRequest } from "./codex-bridge.js";
 import { runOdysseusAgent } from "./odiseus-agent.js";
 import { hermesRuntimeEnabled, tryHermesChat } from "./runtime/hermesBridge.js";
+import { DEFAULT_CAPS as RUN_CAPS } from "./runDomain.js";
 import { createCaptureRequestsHandlers } from "./captureRequests.js";
 import { inviteEmailContent } from "./inviteEmail.js";
 import { portalEmailContent } from "./portalEmail.js";
@@ -2324,6 +2325,8 @@ async function inviteDeliveryStatus(request, env) {
   }
   return json(result);
 }
+
+export const CERTO_RUN_CAPS = RUN_CAPS;
 
 async function serveAsset(request, env) {
   const url = new URL(request.url);
