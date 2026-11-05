@@ -7,7 +7,8 @@ const surfaces = readFileSync(resolve("src/components/ProjectSurfaces.tsx"), "ut
 const css = readFileSync(resolve("src/index.css"), "utf8");
 
 test("Projects list starts with a compact toolbar and keeps advanced filters accessible", () => {
-  assert.match(surfaces, /useState\(false\);\s*const \[phaseFilter, setPhaseFilter\]/);
+  assert.match(surfaces, /const \[advancedFiltersOpen, setAdvancedFiltersOpen\] = useState\(false\)/);
+  assert.match(surfaces, /const \[phaseFilter, setPhaseFilter\] = useState\("all"\)/);
   assert.match(surfaces, /data-testid="projects-more-filters"/);
   assert.match(surfaces, /aria-expanded=\{advancedFiltersOpen\}/);
   assert.match(surfaces, /advancedFiltersOpen && \(\s*<div className="do-command-advanced-filters"/);

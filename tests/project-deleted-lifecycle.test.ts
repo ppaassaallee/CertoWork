@@ -15,7 +15,8 @@ test("workspace exposes permanent delete for soft-deleted projects", () => {
   const workspace = readFileSync(resolve("src/components/DelivereeWorkspace.tsx"), "utf8");
   assert.match(workspace, /const permanentlyDeleteProject = async/);
   assert.match(workspace, /Delete forever/);
-  assert.match(workspace, /batch\.delete\(doc\(db, "projects", project\.id\)\)/);
+  assert.match(workspace, /await deleteProjectItemsAndRecord\(project\.id\)/);
+  assert.match(workspace, /await deleteDoc\(doc\(db, "projects", projectId\)\)/);
   assert.match(
     workspace,
     /is in Deleted\. Restore it before adding items/,
