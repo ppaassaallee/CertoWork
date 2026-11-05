@@ -332,11 +332,11 @@ const MyWorkRouteLazy = lazy(() =>
 const ProjectRouteLazy = lazy(() =>
   import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
 ) as LazyExoticComponent<ComponentType<any>>;
-const BillingScreenLazy = lazy(() =>
-  import("../features/billing").then((m) => ({ default: m.BillingScreen })),
-);
 const CertoRunDeskLazy = lazy(() =>
   import("../features/certo-run/CertoRunDesk").then((mod) => ({ default: mod.CertoRunDesk })),
+);
+const BillingScreenLazy = lazy(() =>
+  import("../features/billing").then((m) => ({ default: m.BillingScreen })),
 );
 const RelationshipMapLazy = lazy(() =>
   import("../features/relationships/RelationshipMap").then((m) => ({
