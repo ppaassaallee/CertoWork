@@ -7121,7 +7121,7 @@ export function DelivereeWorkspace() {
   ]);
 
   const workPane = (
-    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" || lens.kind === "certo-run" ? "work" : lens.kind === "work" ? "work" : lens.kind}${centerView === "run" ? " is-run-focus" : ""}`}>
+    <div className={`do-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""} ${mobileCore ? "is-mobile-core" : ""} ${isPhone ? "is-phone-shell" : ""} ${panel === "settings" || panel === "workspace" ? "is-admin-page" : ""} do-page-${lens.kind === "more" || lens.kind === "agents" || lens.kind === "routines" ? "settings" : lens.kind === "project" || lens.kind === "my-work" || lens.kind === "inbox" || lens.kind === "invoices" || lens.kind === "feedback" || lens.kind === "requests" || lens.kind === "notes" || lens.kind === "tables" || lens.kind === "certo-run" ? "work" : lens.kind === "work" ? "work" : lens.kind}`}>
       {shortcutHelpOpen ? (
         <div aria-label={t("shortcuts.title")} aria-modal="true" className="do-skill-layer" role="dialog">
           <section className="do-skill-modal do-quick-project-modal">
@@ -7522,7 +7522,7 @@ export function DelivereeWorkspace() {
             type="button"
           >
             <Gauge size="sm" />
-            <span>Run</span>
+            <span>{t("navCertoRun")}</span>
             {runOpenCount > 0 && (
               <em className="do-nav-badge" data-testid="nav-certo-run-count">{runOpenCount}</em>
             )}
@@ -8049,7 +8049,7 @@ export function DelivereeWorkspace() {
                 }}
                 type="button"
               >
-                <Gauge size={14} /> Run
+                <Gauge size={14} /> {t("navCertoRun")}
               </button>
               {workspaces.map((item) => (
                 <button
@@ -9928,7 +9928,7 @@ export function DelivereeWorkspace() {
           type="button"
         >
           <Gauge size={16} />
-          Run
+          {t("navCertoRun")}
           {runOpenCount > 0 && <em data-testid="dock-certo-run-count">{runOpenCount}</em>}
         </button>
       </nav>

@@ -1,23 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Familjen+Grotesk:wght@500;600;700&display=swap");
 
-.do-shell.is-run-focus,
-.do-shell.is-run-focus.is-sidebar-collapsed,
-.do-shell.is-run-focus:not(:has(.d-rail)) {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.do-shell.is-run-focus > .do-sidebar {
-  display: none;
-}
-
 .do-main.is-run-module {
   background: #f3f0ea;
-}
-
-@media (min-width: 960px) {
-  .do-main.is-run-module > .do-header {
-    display: none;
-  }
 }
 
 .cr-desk {

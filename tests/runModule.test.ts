@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { resolveFeatureFlag } from "../src/lib/featureFlags.ts";
@@ -31,22 +31,20 @@ test("/run stays on the Certo document", () => {
   assert.equal(wrangler.includes("\"/run\""), false);
 });
 
-test("Run styles never enter Certo and Certo styles never enter Run", () => {
-  const runHtml = readFileSync("src/run/entry.html", "utf8");
-  const main = readFileSync("src/run/main.tsx", "utf8");
-  const css = readFileSync("src/run/run.css", "utf8");
+test("Certo has one document and Run is a route in it", () => {
+  assert.equal(existsSync("run.html"), false);
+  assert.equal(existsSync("src/run/entry.html"), false);
+  assert.equal(existsSync("src/run/main.tsx"), false);
+  const vite = readFileSync("vite.config.ts", "utf8");
+  const server = readFileSync("server.ts", "utf8");
+  const pkg = readFileSync("package.json", "utf8");
   const certoMain = readFileSync("src/main.tsx", "utf8");
-  assert.match(runHtml, /Familjen\+Grotesk:wght@600;700/);
-  assert.match(runHtml, /Atkinson\+Hyperlegible:wght@400;700/);
-  assert.match(runHtml, /JetBrains\+Mono:wght@400;500;600/);
-  assert.match(runHtml, /display=swap/);
-  assert.equal(runHtml.includes("index.css"), false);
-  assert.equal(main.includes("index.css"), false);
-  assert.equal(main.includes("certo-tokens"), false);
+  assert.equal(vite.includes("entry.html"), false);
+  assert.equal(vite.includes("run.html"), false);
+  assert.equal(server.includes("run.html"), false);
+  assert.equal(server.includes("isRunDocument"), false);
+  assert.equal(pkg.includes("dist/run"), false);
   assert.equal(certoMain.includes("src/run/"), false);
-  assert.equal(certoMain.includes("run.css"), false);
-  assert.match(css, /@keyframes fade-in/);
-  assert.match(css, /prefers-reduced-motion/);
 });
 
 test("RunStore keeps the AI Studio action names and does not store data in localStorage", () => {

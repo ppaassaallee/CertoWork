@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "node server.ts",
-    "build": "tsc -b && rm -rf dist && vite build && mkdir -p dist/server dist/.openai dist/run && cp dist/client/src/run/entry.html dist/run/index.html && cp worker/*.js dist/server/ && cp .openai/hosting.json dist/.openai/hosting.json",
+    "build": "tsc -b && rm -rf dist && vite build && mkdir -p dist/server dist/.openai && cp worker/*.js dist/server/ && cp .openai/hosting.json dist/.openai/hosting.json",
     "deploy:cloudflare": "npm run build && npx wrangler deploy",
     "deploy:cloudflare:dry": "npm run build && npx wrangler deploy --dry-run",
     "test": "tsx --test tests/*.test.ts",

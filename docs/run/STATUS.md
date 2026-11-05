@@ -12,14 +12,12 @@ Run is always in the Certo sidebar, under Rutinas, and in the account menu. It o
 
 Checked in the browser on Wednesday, Nov 4, 2026, about 6:50 am America/Guatemala. Intake saved "Send Roger the proposal" into the Pure AI Make queue. My Work did not list it. Back returned to Home. The test item was then dropped, and the queue was empty.
 
-## RUN-0.1.2 Serve the Run bundle from the same Worker
+## RUN-0.1.2 One Certo document
 
-Done when proven for routing: `/run/today` is the Run document, same origin, and it does not load Certo's stylesheet.
+The separate Run bundle is gone. `/run` is served by the same HTML document as the rest of Certo Work.
 
-- Files: `run.html`, `src/run/main.tsx`, `src/run/run.css`, `vite.config.ts`, `server.ts`, `worker/index.js`, `worker/runAssets.js`, `wrangler.jsonc`, `package.json`
-- Test: `the Run document is served for /run routes and not for files or Certo routes`
-- `curl http://localhost:3000/run/today` returned 200, `Content-Type: text/html`, and the body contains `/src/run/main.tsx` and the three font families. It does not contain `/src/main.tsx` or `index.css`.
-- Lighthouse was not run. The page initializes Firebase once, through `src/lib/firebase.ts`.
+- Files: `server.ts`, `vite.config.ts`, `worker/index.js`, `wrangler.jsonc`, `package.json`
+- Test: `Certo has one document and Run is a route in it`
 
 ## RUN-0.1.3 Add the Run entry to Certo navigation
 
@@ -27,7 +25,7 @@ Done when proven: the item shows the open count of the last world, opens Today, 
 
 - Files: `src/run/nav.ts`, `src/components/DelivereeWorkspace.tsx`, `src/data/index.ts`
 - Test: `the nav count is the open items of the last world, and Back returns to Certo`
-- Browser: from `/home`, Run opened `http://localhost:3000/run`. Back returned to `http://localhost:3000/home`. The Run document has no Certo sidebar.
+- Browser: from `/home`, Run opened `http://localhost:3000/run` inside the Certo shell. The sidebar stays.
 
 ## RUN-0.2.1 Create the RunStore adapter
 
