@@ -3,6 +3,7 @@
  * Stateless Streamable HTTP (protocol 2025-06-18) plus the token and item rules.
  * Storage is injected so tests never touch Firestore.
  */
+import { executeRunTool, hasRunDelegation, mutateRunItem, RUN_TOOLS, RUN_TOOL_NAMES, validateRunDelegation } from "./runDelegation.js";
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -96,6 +97,7 @@ export function publicToken(record) {
     tokenPrefix: record.tokenPrefix,
     workspaceIds: record.workspaceIds || [],
     permission: record.permission,
+    runDelegation: record.runDelegation || null,
     assign: Boolean(record.assign),
     canDelete: record.permission === "read-write" && record.canDelete !== false,
     admin: Boolean(record.admin),
@@ -2189,6 +2191,12 @@ export const MCP_TOOLS = [
 ];
 
 export async function executeTool(repo, token, name, args, now = Date.now()) {
+  if (hasRunDelegation(token) && name !== "list_workspaces") {
+    await requireWorkspace(repo,token,args?.workspace_id);
+    if (RUN_TOOL_NAMES.includes(name)) return executeRunTool(repo,token,name,args||{});
+    if (["create_item","update_item","add_comment"].includes(name)) return mutateRunItem(repo,token,name,args||{},now);
+    throw new McpError("run_tool_unavailable", "This private Run delegation cannot use that tool. Call get_readiness for missing capabilities.",403);
+  }
   const run = TOOL_RUNNERS[name];
   if (!run) throw new McpError("unknown_tool", `Unknown tool: ${name}`, 404);
   if (name !== "list_workspaces") {
@@ -2285,7 +2293,12 @@ async function dispatchMethod(repo, token, message, now) {
     };
   }
   if (method === "ping") return {};
-  if (method === "tools/list") return { tools: MCP_TOOLS };
+  if (method === "tools/list") {
+    if (!hasRunDelegation(token)) return {tools:MCP_TOOLS};
+    const fields=Object.fromEntries(["lane","decision","epic","feature","context","deliverable","doneWhen","done_when","nextStep","next_step","source","owner","dueDate","due_date","outcome","evidence_source_id"].map(key=>[key,{type:"string"}]));
+    const tools=MCP_TOOLS.filter(tool=>["list_workspaces","create_item","update_item","add_comment"].includes(tool.name)).map(tool=> tool.name==="list_workspaces" ? tool : ({...tool,description:`Private Run ${tool.name}. Completion requires evidence; no delete or access changes. Existing title/priority changes require proposals (not yet available).`,inputSchema:{type:"object",properties:{workspace_id:{type:"string"},item_id:{type:"string"},title:{type:"string"},external_id:{type:"string"},priority:{type:"string",enum:["P1","P2","P3","P4"]},comment:{type:"string"},...fields,dry_run:{type:"boolean"}},required:tool.name==="create_item"?["workspace_id","title","external_id","lane","decision","epic","context","deliverable","doneWhen","nextStep","source"]:["workspace_id","item_id"],additionalProperties:false}}));
+    return {tools:[...tools,...RUN_TOOLS]};
+  }
   if (method === "tools/call") {
     const name = text(message.params?.name);
     const args = message.params?.arguments || {};
@@ -2300,6 +2313,8 @@ async function dispatchMethod(repo, token, message, now) {
       const body = {
         code: error.code || "tool_error",
         message: error.message || "The tool failed.",
+        ...(error.status ? {status:error.status} : {}),
+        ...(error.current ? {current:error.current} : {}),
       };
       return {
         content: [{ type: "text", text: JSON.stringify(body) }],
@@ -2378,6 +2393,10 @@ export async function issueToken(repo, user, input, now = Date.now()) {
   }
   const permission = input?.permission === "read-write" || input?.permission === "read" ? input.permission : "";
   if (!permission) throw new McpError("invalid_permission", "Permission must be read or read-write.", 400);
+  let runDelegation;
+  try { runDelegation = validateRunDelegation(user,input?.runDelegation,workspaceIds); }
+  catch(error) { throw new McpError(error.code || "invalid_run_delegation",error.message,error.status || 400); }
+  if(runDelegation && (permission!=="read-write" || input?.canDelete || input?.admin)) throw new McpError("invalid_run_permissions","Run delegation requires read-write, without delete or admin.",400);
   if (input?.assign && permission !== "read-write") {
     throw new McpError("assign_requires_write", "The assign permission requires read-write.", 400);
   }
@@ -2400,9 +2419,10 @@ export async function issueToken(repo, user, input, now = Date.now()) {
     userId: user.uid,
     workspaceIds,
     permission,
+    ...(runDelegation ? {runDelegation,canDelete:false} : {}),
     assign: Boolean(input?.assign),
     admin: Boolean(input?.admin) && permission === "read-write",
-    ...(input?.canDelete === undefined ? {} : { canDelete: Boolean(input.canDelete) && permission === "read-write" }),
+    ...(runDelegation ? {canDelete:false} : input?.canDelete === undefined ? {} : { canDelete: Boolean(input.canDelete) && permission === "read-write" }),
     expiresAt: new Date(now + days * 24 * 60 * 60 * 1000).toISOString(),
     revokedAt: null,
     createdAt: new Date(now).toISOString(),
@@ -2425,6 +2445,7 @@ export async function issueToken(repo, user, input, now = Date.now()) {
       assign: record.assign,
       canDelete: record.canDelete !== false && permission === "read-write",
       admin: record.admin,
+      runDelegation: record.runDelegation || null,
       expiresAt: record.expiresAt,
     },
   });
@@ -2484,7 +2505,23 @@ export function createMemoryMcpRepo() {
     projects: [],
     views: [],
   };
+  let runQueue = Promise.resolve();
   return {
+    async mutateRun(workspaceId,build) {
+      const work=runQueue.then(async()=>{
+        const result=await build(state.items.filter(item=>item.workspaceId===workspaceId));
+        for(const write of result.writes||[]) {
+          if(write.collection==="tasks") {
+            const index=state.items.findIndex(item=>item.id===write.id);
+            const row={id:write.id,...write.data};
+            if(index<0)state.items.push(row);else state.items[index]=row;
+          } else if(write.collection==="mcp_audit_events")state.audits.push({id:write.id,...write.data});
+        }
+        return result.value;
+      });
+      runQueue=work.catch(()=>{});
+      return work;
+    },
     state,
     async getTokenByHash(hash) {
       return state.tokens.find((token) => token.tokenHash === hash) || null;

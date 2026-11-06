@@ -5,6 +5,7 @@ import {
   firestorePatchDocument,
   firestoreRunQuery,
   firestoreUpsertDocument,
+  firestoreRunTransaction,
 } from "../firestoreAdmin.js";
 
 const TOKENS = "mcp_api_tokens";
@@ -47,6 +48,7 @@ async function queryEqual(env, collectionId, field, value, limit) {
 
 export function createWorkerMcpRepo(env) {
   return {
+    mutateRun(workspaceId, build) { return firestoreRunTransaction(env,workspaceId,build); },
     configured() {
       return firestoreAdminConfigured(env);
     },

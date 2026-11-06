@@ -47,7 +47,7 @@ async function verifyUser(token, env) {
   if (payload.aud !== projectId || payload.iss !== `https://securetoken.google.com/${projectId}` || !payload.sub) {
     throw new McpError("unauthorized", "This identity token is not for Certo Work.", 401);
   }
-  return { uid: payload.sub, email: payload.email || "" };
+  return { uid: payload.sub, email: payload.email || "", emailVerified: payload.email_verified === true };
 }
 
 function corsHeaders(request) {
