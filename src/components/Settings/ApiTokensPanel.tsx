@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/AuthContext";
 import { mcpTokenText } from "../../lib/mcpTokenCopy";
 import { DestructiveDialog } from "../ui/DestructiveDialog";
+import { canUseCertoRun } from "../../run/access";
+import { NativeSelect } from "../ui/NativeSelect";
 
 type ApiTokenRow = {
   id: string;
@@ -15,6 +17,7 @@ type ApiTokenRow = {
   expiresAt: string | null;
   revokedAt: string | null;
   createdAt: string | null;
+  runDelegation?: { workspaceWorlds: Record<string, string> } | null;
 };
 
 const DAY_CHOICES = [30, 90, 365];
@@ -33,6 +36,8 @@ export function ApiTokensPanel() {
   const [assign, setAssign] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const [delegateRun, setDelegateRun] = useState(false);
+  const [runWorlds, setRunWorlds] = useState<Record<string, string>>({});
   const [expiresInDays, setExpiresInDays] = useState(90);
   const [selected, setSelected] = useState<string[]>([]);
   const [secret, setSecret] = useState("");
@@ -88,10 +93,11 @@ export function ApiTokensPanel() {
         body: JSON.stringify({
           name,
           workspaceIds: selected,
-          permission,
-          assign: permission === "read-write" && assign,
-          canDelete: permission === "read-write" && canDelete,
-          admin: permission === "read-write" && admin,
+          permission: delegateRun ? "read-write" : permission,
+          assign: !delegateRun && permission === "read-write" && assign,
+          canDelete: !delegateRun && permission === "read-write" && canDelete,
+          admin: !delegateRun && permission === "read-write" && admin,
+          ...(delegateRun ? {runDelegation:{workspaceWorlds:Object.fromEntries(selected.map(id=>[id,runWorlds[id] || "Pure AI"]))}} : {}),
           expiresInDays,
         }),
       });
@@ -134,7 +140,7 @@ export function ApiTokensPanel() {
       await navigator.clipboard.writeText(secret);
       setNotice(mcpTokenText("copied"));
     } catch {
-      setNotice(secret);
+      setNotice(mcpTokenText("copyFailed"));
     }
   };
 
@@ -184,6 +190,7 @@ export function ApiTokensPanel() {
           <label>
             <input
               checked={permission === "read"}
+              disabled={delegateRun}
               name="mcp-permission"
               onChange={() => {
                 setPermission("read");
@@ -206,11 +213,20 @@ export function ApiTokensPanel() {
             {mcpTokenText("readWrite")}
           </label>
         </fieldset>
+        {canUseCertoRun(user) ? (
+          <label className="mcp-tokens-check">
+            <input type="checkbox" checked={delegateRun} onChange={event=>{
+              setDelegateRun(event.target.checked);
+              if(event.target.checked) { setPermission("read-write"); setAssign(false); setCanDelete(false); setAdmin(false); }
+            }} />
+            <span>{mcpTokenText("runDelegate")}<small>{mcpTokenText("runHint")}</small></span>
+          </label>
+        ) : null}
         <label className="mcp-tokens-check">
           <input
             checked={assign}
             data-testid="mcp-token-assign"
-            disabled={permission !== "read-write"}
+            disabled={delegateRun || permission !== "read-write"}
             onChange={(event) => setAssign(event.target.checked)}
             type="checkbox"
           />
@@ -223,7 +239,7 @@ export function ApiTokensPanel() {
           <input
             checked={canDelete}
             data-testid="mcp-token-delete"
-            disabled={permission !== "read-write"}
+            disabled={delegateRun || permission !== "read-write"}
             onChange={(event) => setCanDelete(event.target.checked)}
             type="checkbox"
           />
@@ -236,7 +252,7 @@ export function ApiTokensPanel() {
           <input
             checked={admin}
             data-testid="mcp-token-admin"
-            disabled={permission !== "read-write"}
+            disabled={delegateRun || permission !== "read-write"}
             onChange={(event) => setAdmin(event.target.checked)}
             type="checkbox"
           />
@@ -269,6 +285,12 @@ export function ApiTokensPanel() {
                 type="checkbox"
               />
               {item.name || item.id}
+              {delegateRun && selected.includes(item.id) ? (
+                <NativeSelect aria-label={`${mcpTokenText("runWorld")} · ${item.name}`} value={runWorlds[item.id] || "Pure AI"} onChange={event=>setRunWorlds(current=>({...current,[item.id]:event.target.value}))}>
+                  <option value="Pure AI">Pure AI</option>
+                  <option value="Boldr AI">Boldr AI</option>
+                </NativeSelect>
+              ) : null}
             </label>
           ))}
         </fieldset>
@@ -292,6 +314,7 @@ export function ApiTokensPanel() {
                 {row.admin ? " · admin" : ""}
               </span>
               <span>{tokenState(row)}</span>
+              {row.runDelegation ? <span>Certo Run · {Object.values(row.runDelegation.workspaceWorlds).join(" / ")}</span> : null}
             </div>
             {!row.revokedAt ? (
               <button onClick={() => setRevokeId(row.id)} type="button">{mcpTokenText("revoke")}</button>

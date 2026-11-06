@@ -270,6 +270,40 @@ export function firestoreAdminConfigured(env = {}) {
   return Boolean(parseServiceAccount(env));
 }
 
+/** Serializable Run mutation: complete workspace read + item + audit commit.
+ * No partial-list cap decisions, no split item/audit writes. Conflicts retry. */
+export async function firestoreRunTransaction(env, workspaceId, build) {
+  const account = parseServiceAccount(env);
+  if (!account) throw new Error("Firestore Admin is not configured.");
+  const token = await googleAccessToken(account);
+  const root = `projects/${projectId(env)}/databases/${encodeURIComponent(databaseId(env))}/documents`;
+  const headers = {authorization:`Bearer ${token}`,"content-type":"application/json"};
+  for (let attempt=0;attempt<3;attempt++) {
+    const begin = await fetch(`https://firestore.googleapis.com/v1/${root}:beginTransaction`,{method:"POST",headers,body:JSON.stringify({options:{readWrite:{}}})});
+    const started = await begin.json();
+    if (!begin.ok) throw new Error(started.error?.message || "Cannot start Run transaction.");
+    const transaction=started.transaction;
+    let finished=false;
+    try {
+      const response=await fetch(`https://firestore.googleapis.com/v1/${root}:runQuery`,{method:"POST",headers,body:JSON.stringify({transaction,structuredQuery:{from:[{collectionId:"tasks"}],where:{fieldFilter:{field:{fieldPath:"workspaceId"},op:"EQUAL",value:{stringValue:workspaceId}}},limit:2001}})});
+      const payload=await response.json();
+      if (!response.ok) throw new Error(payload.error?.message || "Cannot read Run transaction.");
+      const rows=payload.filter((entry)=>entry.document).map((entry)=>({id:entry.document.name.split("/").pop(),...decodeFirestoreDocument(entry.document.fields)}));
+      if(rows.length>2000) throw Object.assign(new Error("Workspace snapshot exceeds safe limit."),{status:409,code:"incomplete_snapshot"});
+      const result=await build(rows);
+      if(!result.writes?.length) return result.value;
+      const writes=result.writes.map(({collection,id,data})=>({update:{name:`${root}/${collection}/${encodeURIComponent(id)}`,...encodeFirestoreDocument(data)}}));
+      const commit=await fetch(`https://firestore.googleapis.com/v1/${root}:commit`,{method:"POST",headers,body:JSON.stringify({transaction,writes})});
+      const committed=await commit.json();
+      if (commit.ok) { finished=true; return result.value; }
+      if (committed.error?.status!=="ABORTED" || attempt===2) throw new Error(committed.error?.message||"Run commit failed.");
+    } finally {
+      if(!finished) await fetch(`https://firestore.googleapis.com/v1/${root}:rollback`,{method:"POST",headers,body:JSON.stringify({transaction})}).catch(()=>{});
+    }
+  }
+  throw new Error("Run transaction could not commit.");
+}
+
 /** Structured query against a collection. Returns decoded docs. */
 export async function firestoreRunQuery(env, structuredQuery) {
   const serviceAccount = parseServiceAccount(env);

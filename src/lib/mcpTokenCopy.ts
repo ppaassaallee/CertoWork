@@ -2,6 +2,10 @@ import { getLocale, type Locale } from "./i18n";
 
 const copy = {
   en: {
+    runDelegate: "Delegate my private Certo Run to Grok",
+    runHint: "Create, update and complete with evidence. No delete, access administration or Personal world. Automatic sync is not configured by this token.",
+    runWorld: "Run world",
+    copyFailed: "Could not copy. Select the token above and copy it manually.",
     title: "API tokens",
     subtitle: "Personal tokens for an MCP client. The secret is shown once. Only its hash is stored.",
     name: "Name",
@@ -32,6 +36,10 @@ const copy = {
     connectBody: "URL {url}. Header Authorization: Bearer and the token. Pass workspace_id on every tool except list_workspaces.",
   },
   es: {
+    runDelegate: "Delegar mi Certo Run privado a Grok",
+    runHint: "Crear, actualizar y completar con evidencia. Sin borrar, administrar accesos ni acceder al mundo Personal. Este token no configura la sincronización automática.",
+    runWorld: "Mundo de Run",
+    copyFailed: "No se pudo copiar. Selecciona el token de arriba y cópialo manualmente.",
     title: "Tokens de API",
     subtitle: "Tokens personales para un cliente MCP. El secreto se muestra una vez. Solo se guarda el hash.",
     name: "Nombre",
