@@ -10,6 +10,14 @@ The existing browser session required no login changes. The visual suite indepen
 
 Self-hosted fonts use @fontsource packages. pnpm could not run because the repository's existing pnpm-workspace.yaml is malformed ("packages field missing or empty"); npm, the repository's CI installer, updated package.json and package-lock.json instead. No unrelated dependency audit fixes were applied.
 
+## Private rollout — explicit owner direction
+
+Run is available only to the verified account explicitly designated by the product owner. No workspace role, membership, invitation or user-editable feature flag grants access. Sidebar, account menu, mobile dock, direct routes and lazy module mounting enforce the same predicate. No grant-management UI or additional recipients were added.
+
+Firestore Run-item mutations require that same verified identity on both existing and incoming records, preventing non-authorized users from removing the Run marker as a bypass. Generic workspace MCP tokens neither list nor fetch Run items. Existing task read ACLs are unchanged: tightening those in-place without adapting workspace-wide queries would break Firestore query authorization for ordinary Work. This change restricts module use and mutations, but is NOT a certification of confidential isolation for legacy Run data already stored in shared tasks. A private-data migration remains a separate required hardening step before any broader rollout.
+
+Verification: 969 unit tests pass, including denied non-owner/unverified accounts, direct-route gating, rules mutation guard and generic MCP item refusal. No access was granted to any additional account. Firestore rules must deploy with the application; a local test is not evidence of deployed rules.
+
 ## 2026-11-05 validation against supplied v2 pack
 
 The new validation pack supplies compiled reference/empty HTML, a 482-row backlog (15 epics, 32 features, 80 PBIs, 355 tasks) and ingestion data. It does not supply source UI files, the 85 golden screenshots or interaction-inventory.json. Reference HTML was inspected as text; browser security policy refused its file URL and no workaround was attempted. The actual local Certo app was inspected in the browser using its existing demo session, without creating production test records.
