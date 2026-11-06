@@ -272,7 +272,7 @@ export function firestoreAdminConfigured(env = {}) {
 
 /** Serializable Run mutation: complete workspace read + item + audit commit.
  * No partial-list cap decisions, no split item/audit writes. Conflicts retry. */
-export async function firestoreRunTransaction(env, workspaceId, build) {
+export async function firestoreRunTransaction(env, workspaceId, build, options = {}) {
   const account = parseServiceAccount(env);
   if (!account) throw new Error("Firestore Admin is not configured.");
   const token = await googleAccessToken(account);
@@ -285,12 +285,23 @@ export async function firestoreRunTransaction(env, workspaceId, build) {
     const transaction=started.transaction;
     let finished=false;
     try {
-      const response=await fetch(`https://firestore.googleapis.com/v1/${root}:runQuery`,{method:"POST",headers,body:JSON.stringify({transaction,structuredQuery:{from:[{collectionId:"tasks"}],where:{fieldFilter:{field:{fieldPath:"workspaceId"},op:"EQUAL",value:{stringValue:workspaceId}}},limit:2001}})});
-      const payload=await response.json();
-      if (!response.ok) throw new Error(payload.error?.message || "Cannot read Run transaction.");
-      const rows=payload.filter((entry)=>entry.document).map((entry)=>({id:entry.document.name.split("/").pop(),...decodeFirestoreDocument(entry.document.fields)}));
+      let rows=[];
+      if(options.readItems!==false) {
+        const response=await fetch(`https://firestore.googleapis.com/v1/${root}:runQuery`,{method:"POST",headers,body:JSON.stringify({transaction,structuredQuery:{from:[{collectionId:"tasks"}],where:{fieldFilter:{field:{fieldPath:"workspaceId"},op:"EQUAL",value:{stringValue:workspaceId}}},limit:2001}})});
+        const payload=await response.json();
+        if (!response.ok) throw new Error(payload.error?.message || "Cannot read Run transaction.");
+        rows=payload.filter((entry)=>entry.document).map((entry)=>({id:entry.document.name.split("/").pop(),...decodeFirestoreDocument(entry.document.fields)}));
+      }
       if(rows.length>2000) throw Object.assign(new Error("Workspace snapshot exceeds safe limit."),{status:409,code:"incomplete_snapshot"});
-      const result=await build(rows);
+      let control=null;
+      if(options.controlId) {
+        const response=await fetch(`https://firestore.googleapis.com/v1/${root}:batchGet`,{method:"POST",headers,body:JSON.stringify({transaction,documents:[`${root}/run_agent_state/${options.controlId}`]})});
+        const payload=await response.json();
+        if(!response.ok) throw new Error(payload.error?.message||"Cannot read Run control state.");
+        const found=payload.find(entry=>entry.found)?.found;
+        if(found) control=decodeFirestoreDocument(found.fields);
+      }
+      const result=await build(rows,control);
       if(!result.writes?.length) return result.value;
       const writes=result.writes.map(({collection,id,data})=>({update:{name:`${root}/${collection}/${encodeURIComponent(id)}`,...encodeFirestoreDocument(data)}}));
       const commit=await fetch(`https://firestore.googleapis.com/v1/${root}:commit`,{method:"POST",headers,body:JSON.stringify({transaction,writes})});

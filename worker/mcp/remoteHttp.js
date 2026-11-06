@@ -1,5 +1,6 @@
 import { McpError, handleMcpAdmin, handleMcpHttp } from "./remoteCore.js";
 import { createWorkerMcpRepo } from "./remoteRepo.js";
+import { handleRunOwner } from "./runWorkflow.js";
 
 const FIREBASE_PROJECT_ID = "gen-lang-client-0277783597";
 const FIREBASE_JWKS_URL =
@@ -77,7 +78,8 @@ export async function handleWorkerMcp(request, env, url) {
   const path = url.pathname;
   const isMcp = path === "/mcp" || path === "/mcp/";
   const isAdmin = path === "/api/mcp/tokens" || path.startsWith("/api/mcp/tokens/");
-  if (!isMcp && !isAdmin) return null;
+  const isRun = path.startsWith("/api/run/agent/");
+  if (!isMcp && !isAdmin && !isRun) return null;
   const headers = corsHeaders(request);
   const repo = createWorkerMcpRepo(env);
   if (request.method === "OPTIONS") {
@@ -112,6 +114,13 @@ export async function handleWorkerMcp(request, env, url) {
       });
     }
     const user = await verifyUser(bearer(request), env);
+    if(isRun) {
+      const expected=path==="/api/run/agent/review"?"POST":"GET";
+      if(request.method!==expected)return jsonResponse({code:"method_not_allowed"},405,headers);
+      const input=request.method==="GET"?Object.fromEntries(url.searchParams):await request.json();
+      const result=await handleRunOwner(repo,user,path,input);
+      return jsonResponse(result,200,{...headers,"cache-control":"no-store"});
+    }
     const body = request.method === "GET" ? {} : await request.json().catch(() => ({}));
     const result = await handleMcpAdmin({
       repo,
@@ -122,7 +131,7 @@ export async function handleWorkerMcp(request, env, url) {
     });
     return jsonResponse(result.body, result.status, headers);
   } catch (error) {
-    const status = error instanceof McpError ? error.status : 500;
+    const status = error instanceof McpError || isRun && Number.isInteger(error.status) ? error.status : 500;
     return jsonResponse(
       { code: error.code || "internal", message: error.message || "MCP request failed." },
       status,

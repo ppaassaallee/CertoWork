@@ -782,6 +782,8 @@ async function startServer() {
   app.use("/api", (req, res, next) => {
     if (req.path === "/webhooks/hubspot") return next();
     if (req.path === "/mcp/tokens" || req.path.startsWith("/mcp/tokens/")) return next();
+    // Run routes verify Firebase identity + private owner + delegated workspace themselves.
+    if (req.path.startsWith("/run/agent/")) return next();
     return requireWorkspaceApiAuth(req, res, next);
   });
   app.use(

@@ -314,7 +314,7 @@ export function ApiTokensPanel() {
                 {row.admin ? " · admin" : ""}
               </span>
               <span>{tokenState(row)}</span>
-              {row.runDelegation ? <span>Certo Run · {Object.values(row.runDelegation.workspaceWorlds).join(" / ")}</span> : null}
+              {row.runDelegation ? <span>Certo Run · read / write / propose · {Object.values(row.runDelegation.workspaceWorlds).join(" / ")}</span> : null}
             </div>
             {!row.revokedAt ? (
               <button onClick={() => setRevokeId(row.id)} type="button">{mcpTokenText("revoke")}</button>

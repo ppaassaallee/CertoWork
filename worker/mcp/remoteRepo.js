@@ -48,7 +48,8 @@ async function queryEqual(env, collectionId, field, value, limit) {
 
 export function createWorkerMcpRepo(env) {
   return {
-    mutateRun(workspaceId, build) { return firestoreRunTransaction(env,workspaceId,build); },
+    mutateRun(workspaceId, build, options) { return firestoreRunTransaction(env,workspaceId,build,options); },
+    getRunControl(id) { return firestoreGetDocument(env,"run_agent_state",id); },
     configured() {
       return firestoreAdminConfigured(env);
     },

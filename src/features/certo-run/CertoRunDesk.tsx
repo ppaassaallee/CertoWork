@@ -53,6 +53,8 @@ import {
   patchRunItem,
 } from "../../lib/certoRun/writes";
 import { RunValidationDialog } from "./RunValidationDialog";
+import { RunAgentPanel, useRunAgentSnapshot, type AgentSnapshot } from "./RunAgentPanel";
+import { useLocale } from "../../lib/useLocale";
 import "./certo-run.css";
 import "../../run/styles/tokens.css";
 
@@ -170,12 +172,17 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
 }
 
 function AuthorizedRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
-  const rows = useRunItems(workspaceId);
-  return <RunDeskView workspaceId={workspaceId} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={rows} />;
+  const locale=useLocale();
+  const loadingCopy=locale==="es"?{loading:"Cargando tu workspace delegado…",retry:"Reintentar"}:{loading:"Loading your delegated workspace…",retry:"Retry"};
+  const personalRows = useRunItems(workspaceId);
+  const [world,setWorld]=useState<RunWorld>(savedWorld);
+  const {snapshot,error,refresh}=useRunAgentSnapshot(world);
+  if(world!=="Personal"&&!snapshot)return <section className="cr-desk cr-agent-loading" aria-live="polite"><h2>{world}</h2><p>{error||loadingCopy.loading}</p><button className="cr-tool" type="button" onClick={refresh}>{loadingCopy.retry}</button><button className="cr-tool" type="button" onClick={onBack}>Certo Work</button></section>;
+  return <RunDeskView workspaceId={world==="Personal"?workspaceId:snapshot!.workspace_id} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={world==="Personal"?personalRows:snapshot!.items} controlledWorld={world} onWorldChange={setWorld} agentSnapshot={world==="Personal"?undefined:snapshot!} onDataChanged={refresh} agentError={error} />;
 }
 
 /** The real view, separated from its live subscription for non-mutating visual tests. */
-export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Props & { rows: Array<Record<string, unknown> & { id: string }> }) {
+export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, controlledWorld, onWorldChange, agentSnapshot, onDataChanged, agentError }: Props & { rows: Array<Record<string, unknown> & { id: string }>; controlledWorld?:RunWorld; onWorldChange?:(world:RunWorld)=>void; agentSnapshot?:AgentSnapshot; onDataChanged?:()=>void; agentError?:string }) {
   const [mode, setMode] = useState<QueueMode>("make");
   const [projectView, setProjectView] = useState<ProjectView>("pipeline");
   const [teamView, setTeamView] = useState<TeamView>("allocation");
@@ -198,7 +205,8 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
   const [online, setOnline] = useState(() => navigator.onLine);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [world, setWorld] = useState<RunWorld>(savedWorld);
+  const [localWorld, setWorld] = useState<RunWorld>(savedWorld);
+  const world=controlledWorld??localWorld;
   const items = useMemo(
     () =>
       rows
@@ -220,7 +228,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
     if (!navigator.onLine) { setError("Offline: reconnect before changing commitments."); return; }
     setError("");
     setSaving(true);
-    try { await action(); }
+    try { await action(); onDataChanged?.(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save. Please try again."); }
     finally { setSaving(false); }
   }
@@ -244,7 +252,9 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
   const worldItems = items.filter((item) => item.world === world);
   const visibleItems = worldItems.filter((item) => matches(item, query));
   const options = { workspace: world };
-  const counts = queueCounts(worldItems, options);
+  const pendingProposals=agentSnapshot?.control.proposals.filter(proposal=>proposal.status==="pending").length||0;
+  const baseCounts=queueCounts(worldItems, options);
+  const counts = {...baseCounts,decide:baseCounts.decide+pendingProposals};
   const plan = useMemo(() => dayPlan(today, DEFAULT_TEMPLATE), [today]);
   const chip = nowChip(plan, world, minutes);
   const current = currentBlock(plan, minutes);
@@ -277,6 +287,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
     setDraftNext("");
     setDraftLane(next === "Personal" ? "personal" : "commercial");
     setWorld(next);
+    onWorldChange?.(next);
     try { window.localStorage.setItem(WORLD_KEY, next); } catch { /* private mode */ }
     onTab("today");
   }
@@ -304,7 +315,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
                 type="button"
               >
                 {name !== world && <span className="cr-dot" />}
-                {name} ({openCount(items, name)})
+                {name} ({controlledWorld&&name!==world?"—":openCount(items, name)})
               </button>
             ))}
           </div>
@@ -341,6 +352,8 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
         </div>
       </div>
       <div className="cr-body">
+        {agentError&&<p className="cr-flag" role="alert">{agentError}</p>}
+        {agentSnapshot&&<RunAgentPanel snapshot={agentSnapshot} tab={tab} decide={mode==="decide"} onRefresh={()=>onDataChanged?.()} onOpenDecide={()=>{setMode("decide");onTab("queue");}} />}
         {worldItems.length === 0 && tab === "today" && <section className="cr-empty-state"><p>{world} is empty. Add work through Intake or validate an ingestion file to get started.</p><button className="cr-solid" onClick={() => setValidationOpen(true)} type="button">Open Data & validation</button></section>}
         {!online && <p className="cr-flag" role="status">Offline: reconnect before changing commitments.</p>}
         {saving && <p role="status" className="cr-muted">Saving…</p>}
@@ -376,7 +389,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Pro
           <Queue
             counts={{
               make: soloQ(worldItems, options).length,
-              decide: decQ(worldItems, options).length,
+              decide: decQ(worldItems, options).length+pendingProposals,
               owed: segQ(worldItems, options).length,
               admin,
               delegated: delQ(worldItems, options).length,

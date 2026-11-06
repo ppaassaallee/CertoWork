@@ -22,13 +22,13 @@ export const RUN_TOOL_NAMES = ["get_readiness", "list_queue", "get_caps"];
 export const RUN_TOOLS = RUN_TOOL_NAMES.map((name) => ({name, description:`Owner-delegated Certo Run: ${name}. Always pass workspace_id. No Personal access.`, inputSchema:{type:"object",properties:{workspace_id:{type:"string"},queue:{type:"string",enum:["make","decide","follow_up","admin_batch","delegated"]},page_size:{type:"integer",maximum:200},cursor:{type:"integer",minimum:0},since:{type:"string"},fields:{type:"array",items:{type:"string"}}},required:["workspace_id"]}}));
 
 export async function executeRunTool(repo, token, name, args) {
+  if(!["list_queue","get_caps"].includes(name)) throw Object.assign(new Error("Unsupported queue tool."),{status:400,code:"unknown_tool"});
   if (!hasRunDelegation(token)) throw Object.assign(new Error("Run delegation required."), {status:403,code:"run_forbidden"});
   const workspaceId = String(args.workspace_id || "");
   const world = token.runDelegation.workspaceWorlds[workspaceId];
   if (!world || !token.workspaceIds.includes(workspaceId) || !await repo.userCanAccess(token.userId,workspaceId)) throw Object.assign(new Error("Workspace not delegated."),{status:403,code:"workspace_forbidden"});
   if(args.world!==undefined && args.world!==world) throw Object.assign(new Error("World does not match delegated workspace."),{status:403,code:"world_mismatch"});
   const envelope = {workspace_id:workspaceId,world};
-  if (name === "get_readiness") return {...envelope,ready:false,delegation:true,cap_readback:true,direct_item_writes:true,proposals:false,brief:false,scheduling:false,missing:["Run proposal approval lifecycle", "record_brief UI persistence", "07:00 / 12:00 source-connected scheduler"],scopes:["read","write"],delete:false,admin:false};
   const records = await repo.listItems(workspaceId);
   if (records.length >= 2000) throw Object.assign(new Error("Workspace exceeds the safe complete-read limit; do not infer caps from a partial list."),{status:409,code:"incomplete_snapshot"});
   const rows = records.filter((row)=>row.workspaceId===workspaceId && row.userId===token.userId && row.runWorld===world);
@@ -74,6 +74,7 @@ export async function mutateRunItem(repo,token,name,args,now) {
   const id=name==="create_item"?`run_${Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,"0")).join("")}`:String(args.item_id||"");
   return repo.mutateRun(workspaceId, async(records)=>{
     if(records.length>2000) throw Object.assign(new Error("Incomplete workspace snapshot."),{status:409,code:"incomplete_snapshot"});
+    if(name==="create_item"&&records.some(row=>row.workspaceId===workspaceId&&row.userId===token.userId&&!row.runWorld&&row.externalId===key)) throw Object.assign(new Error("A matching legacy item exists. Do not recreate it in Run."),{status:409,code:"legacy_conflict"});
     const rows=records.filter(row=>row.workspaceId===workspaceId&&row.userId===token.userId&&row.runWorld===world);
     const current=rows.find(row=>name==="create_item"?row.externalId===key:row.id===id);
     if(name==="create_item"&&current) return {value:{workspace_id:workspaceId,world,item_id:current.id,created:false},writes:[]};
