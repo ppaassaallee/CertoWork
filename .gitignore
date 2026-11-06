@@ -19,3 +19,5 @@ grep_output.txt
 firestore_full.txt
 scan-and-update.js
 functions/lib/
+test-results/
+playwright-report/

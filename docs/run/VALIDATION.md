@@ -2,7 +2,7 @@
 
 2026-11-05. This is an honest coverage inventory, not a completion certificate.
 
-The supplied pack contains reference HTML but no golden screenshots, interaction inventory or uncompiled AI Studio UI. Live import, real tokens, cloud permission changes and production test data were not authorized by the reference prompts and were not performed.
+Update: the user subsequently supplied the v2 golden archive: 125 screenshots, a 3,113-control inventory and fixture. The uncompiled AI Studio UI remains absent. Live import, real tokens, cloud permission changes and production test data were not authorized by the reference prompts and were not performed.
 
 The current module uses one Certo document and tasks with runWorld. The supplied spec instead requires an isolated Run entry and a workspace per world. Those contracts conflict with existing tests and docs/run/DECISIONS.md. This review does not silently migrate existing records or change workspace membership.
 
@@ -37,56 +37,56 @@ No full PBI is marked PASS based on partial unit tests. FAIL means a proven cont
 | RUN-0.2.2.T3 | task | MISSING | Prove the agent path: The same rules run in the Worker for agent writes, so Grok, muse and dots get the same results as the UI | Required acceptance test not implemented; no full completion claim. |
 | RUN-0.2.2.T4 | task | MISSING | Record the evidence | Required acceptance test not implemented; no full completion claim. |
 | RUN-1 | epic | MISSING | E1 UX parity with the AI Studio build | Required acceptance test not implemented; no full completion claim. |
-| RUN-1.1 | feature | BLOCKED | F1.1 Isolated styling | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.1 | pbi | BLOCKED | Build Run with its own Tailwind v4 pipeline | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.1.T1 | task | BLOCKED | Write the Playwright visual test for "Build Run with its own Tailwind v4 pipeline" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.1.T2 | task | BLOCKED | Build or confirm: Tailwind v4 + `@tailwindcss/vite` only in the Run entry; `tokens.css` copied verbatim | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.1.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.1.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.2 | pbi | BLOCKED | Copy the AI Studio UI verbatim | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.2.T1 | task | BLOCKED | Write the MCP contract test against the local Worker for "Copy the AI Studio UI verbatim" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.2.T2 | task | BLOCKED | Build or confirm: `src/run/ui/*` and `src/run/views/*` copied file for file from the AI Studio export; only imports change | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.2.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.2.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.3 | pbi | BLOCKED | Load the three fonts once | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.3.T1 | task | BLOCKED | Write the Playwright visual test for "Load the three fonts once" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.3.T2 | task | BLOCKED | Build or confirm: Familjen Grotesk 600/700, Atkinson Hyperlegible 400/700, JetBrains Mono 400/500/600, `display=swap` | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.3.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.1.3.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2 | feature | BLOCKED | F1.2 Visual and interaction regression gate | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1 | pbi | BLOCKED | Add the golden screenshots as baselines | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1.T1 | task | BLOCKED | Write the Playwright visual test for "Add the golden screenshots as baselines" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1.T2 | task | BLOCKED | Build or confirm: `tests/run-visual/golden/{desktop,phone}/*.png` from the AI Studio build | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1.T3 | task | BLOCKED | Prove the agent path: A fixture workspace is filled through MCP calls (create_item, record_brief…) before the screenshots, so the agent write path is part of the visual test | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1.T4 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.1.T5 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.2 | pbi | BLOCKED | Add the interaction inventory test | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.2.T1 | task | BLOCKED | Write the Playwright visual test for "Add the interaction inventory test" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.2.T2 | task | BLOCKED | Build or confirm: `tests/run-visual/interaction-inventory.json` (1,941 controls); test reads computed styles per screen | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.2.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.2.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.3 | pbi | BLOCKED | Define the missing fade-in animation | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.3.T1 | task | BLOCKED | Write the Playwright visual test for "Define the missing fade-in animation" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.3.T2 | task | BLOCKED | Build or confirm: `@keyframes fade-in` (opacity 0→1, translateY 4px→0, 150 ms ease-out) used by toast, menus and flags; `prefers-reduced-motion` disables it | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.3.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.2.3.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3 | feature | BLOCKED | F1.3 States and responsive rules | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1 | pbi | BLOCKED | Design empty states for an empty install | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1.T1 | task | BLOCKED | Write the MCP contract test against the local Worker for "Design empty states for an empty install" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1.T2 | task | BLOCKED | Build or confirm: One sentence and one action per screen ("Nothing here yet. Your agent fills this from your sources." + Open agent setup) | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1.T3 | task | BLOCKED | Prove the agent path: The action opens Settings → Agents with the Grok, muse and dots setup packs | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1.T4 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.1.T5 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.2 | pbi | BLOCKED | Hide record ids on screen | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.2.T1 | task | BLOCKED | Write the MCP contract test against the local Worker for "Hide record ids on screen" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.2.T2 | task | BLOCKED | Build or confirm: Ids only inside "Context and origin" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.2.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.2.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.3 | pbi | BLOCKED | Phone layout pass | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.3.T1 | task | BLOCKED | Write the Playwright visual test for "Phone layout pass" | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.3.T2 | task | BLOCKED | Build or confirm: Single column under 620 px; only pipeline and week grids scroll sideways | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.3.T3 | task | BLOCKED | Match the golden screens and controls it touches | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
-| RUN-1.3.3.T4 | task | BLOCKED | Record the evidence | No 85 goldens or interaction inventory in supplied ZIP. Targeted token/accessibility fixes are not pixel-parity evidence. |
+| RUN-1.1 | feature | FAIL | F1.1 Isolated styling | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.1 | pbi | FAIL | Build Run with its own Tailwind v4 pipeline | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.1.T1 | task | FAIL | Write the Playwright visual test for "Build Run with its own Tailwind v4 pipeline" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.1.T2 | task | FAIL | Build or confirm: Tailwind v4 + `@tailwindcss/vite` only in the Run entry; `tokens.css` copied verbatim | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.1.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.1.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.2 | pbi | FAIL | Copy the AI Studio UI verbatim | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.2.T1 | task | FAIL | Write the MCP contract test against the local Worker for "Copy the AI Studio UI verbatim" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.2.T2 | task | FAIL | Build or confirm: `src/run/ui/*` and `src/run/views/*` copied file for file from the AI Studio export; only imports change | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.2.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.2.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.3 | pbi | FAIL | Load the three fonts once | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.3.T1 | task | FAIL | Write the Playwright visual test for "Load the three fonts once" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.3.T2 | task | FAIL | Build or confirm: Familjen Grotesk 600/700, Atkinson Hyperlegible 400/700, JetBrains Mono 400/500/600, `display=swap` | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.3.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.1.3.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2 | feature | FAIL | F1.2 Visual and interaction regression gate | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1 | pbi | FAIL | Add the golden screenshots as baselines | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1.T1 | task | FAIL | Write the Playwright visual test for "Add the golden screenshots as baselines" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1.T2 | task | FAIL | Build or confirm: `tests/run-visual/golden/{desktop,phone}/*.png` from the AI Studio build | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1.T3 | task | FAIL | Prove the agent path: A fixture workspace is filled through MCP calls (create_item, record_brief…) before the screenshots, so the agent write path is part of the visual test | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1.T4 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.1.T5 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.2 | pbi | FAIL | Add the interaction inventory test | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.2.T1 | task | FAIL | Write the Playwright visual test for "Add the interaction inventory test" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.2.T2 | task | FAIL | Build or confirm: `tests/run-visual/interaction-inventory.json` (1,941 controls); test reads computed styles per screen | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.2.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.2.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.3 | pbi | FAIL | Define the missing fade-in animation | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.3.T1 | task | FAIL | Write the Playwright visual test for "Define the missing fade-in animation" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.3.T2 | task | FAIL | Build or confirm: `@keyframes fade-in` (opacity 0→1, translateY 4px→0, 150 ms ease-out) used by toast, menus and flags; `prefers-reduced-motion` disables it | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.3.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.2.3.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3 | feature | FAIL | F1.3 States and responsive rules | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1 | pbi | FAIL | Design empty states for an empty install | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1.T1 | task | FAIL | Write the MCP contract test against the local Worker for "Design empty states for an empty install" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1.T2 | task | FAIL | Build or confirm: One sentence and one action per screen ("Nothing here yet. Your agent fills this from your sources." + Open agent setup) | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1.T3 | task | FAIL | Prove the agent path: The action opens Settings → Agents with the Grok, muse and dots setup packs | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1.T4 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.1.T5 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.2 | pbi | FAIL | Hide record ids on screen | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.2.T1 | task | FAIL | Write the MCP contract test against the local Worker for "Hide record ids on screen" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.2.T2 | task | FAIL | Build or confirm: Ids only inside "Context and origin" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.2.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.2.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.3 | pbi | FAIL | Phone layout pass | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.3.T1 | task | FAIL | Write the Playwright visual test for "Phone layout pass" | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.3.T2 | task | FAIL | Build or confirm: Single column under 620 px; only pipeline and week grids scroll sideways | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.3.T3 | task | FAIL | Match the golden screens and controls it touches | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
+| RUN-1.3.3.T4 | task | FAIL | Record the evidence | V2 baseline received: 125 PNGs and 3,113 controls. Partial comparisons FAIL at ~3%; remaining screen tests and source UI parity are not implemented. |
 | RUN-2 | epic | MISSING | E2 Worlds on Certo workspaces | Required acceptance test not implemented; no full completion claim. |
 | RUN-2.1 | feature | FAIL | F2.1 World workspaces | Existing one-document/world-field design differs from supplied acceptance contract; RunStore mutations remain placeholders. |
 | RUN-2.1.1 | pbi | FAIL | Mark workspaces as worlds | Existing one-document/world-field design differs from supplied acceptance contract; RunStore mutations remain placeholders. |
@@ -517,7 +517,7 @@ Supplied 425-item file: 10 errors, 306 warnings. Errors at zero-based indexes 67
 1. Atomic Worker/MCP cap enforcement and real propose/approve lifecycle; frontend caps are not concurrency protection.
 2. Personal privacy and workspace-per-world migration need a defined mapping and backend/rules tests.
 3. RunStore remains incomplete; Team/Manifesto browser state, Close, Week and Life persistence are not certified.
-4. 85 supplied golden baselines + interaction inventory and source export are missing. Browser policy blocked opening the local reference HTML; no workaround was used.
+4. V2 goldens and inventory are now present. Full visual parity remains incomplete; the first two Today comparisons fail (~3% vs allowed 1%). Source UI export is still absent. Browser policy blocked opening the local reference HTML; no workaround was used.
 5. Emulator-backed rules/MCP fixtures and full end-to-end proof are missing; production credentials were not used.
 
 ## Final executed evidence for this change
@@ -532,5 +532,23 @@ Supplied 425-item file: 10 errors, 306 warnings. Errors at zero-based indexes 67
 - Not run: emulator-backed rules, real MCP lifecycle/cron integration, the 85 visual comparisons or a production import. These remain missing/blocked, not PASS.
 
 This ledger does not assert the requested 15/32/80/355 PASS target. Remaining rows retain FAIL/MISSING/BLOCKED until their complete acceptance criteria are implemented and exercised.
+
+## V2 golden evidence and repeatable commands
+
+The user-supplied archive was extracted outside the repository. No private screenshots or fixture rows are committed. To reproduce with your own extracted path:
+
+```sh
+CERTO_RUN_GOLDEN_DIR=/absolute/extracted/v2 npm run audit:run-goldens
+CERTO_RUN_GOLDEN_DIR=/absolute/extracted/v2 npm run test:run-visual
+```
+
+- Integrity audit: 125 valid PNGs, desktop 50, phone 35, desktop-empty 40; inventory 50 screens / 3,113 controls; fixture present. SHA256 computed for each PNG.
+- Actual clock: 2026-11-05T16:00Z; timezone America/Guatemala; desktop 1360×900 DPR1; phone smoke check 390×844 DPR3.
+- Self-hosted font loading assertions PASS for Familjen Grotesk, Atkinson Hyperlegible and JetBrains Mono. No Google Fonts request is required by Run.
+- Phone horizontal-overflow and validation-dialog Escape/focus check PASS.
+- Pure AI empty Today: FAIL, 35,391 differing pixels (~3%). Boldr AI empty Today: FAIL, 36,309 differing pixels (~3%). Limit remains 1%. Originals were not changed.
+- All remaining 123 screen comparisons and full 3,113-control parity have NOT been executed. No fixture was written through MCP; these are deliberately non-mutating view tests, not full integration proof.
+- UI changes: full-width Run content with shared auth intact, self-hosted fonts, real empty-state action, schedule rail and meetings/follow-up panel. Private pages and shared dialogs are not hidden; Back to Certo remains on the avatar.
+- Final v2-change checks: `npm test` 968 tests / 968 pass / 0 fail; `npm run lint -- --quiet` exit 0; `npm run lint:budget` no metric rose; `npm run build` exit 0 (`✓ built in 5.28s`). The visual command exits 1 for the two genuine comparison failures, with the phone smoke check passing. This is kept as a draft, not a production-ready parity claim.
 
 

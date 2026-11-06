@@ -1,4 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Familjen+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import "@fontsource/atkinson-hyperlegible/400.css";
+@import "@fontsource/atkinson-hyperlegible/700.css";
+@import "@fontsource/atkinson-hyperlegible/400-italic.css";
+@import "@fontsource/familjen-grotesk/600.css";
+@import "@fontsource/familjen-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 
 .do-main.is-run-module {
   background: #f3f0ea;
@@ -17,7 +24,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 18px 22px 48px;
+  padding: 0 16px 48px;
   color: var(--cr-ink);
   background: var(--cr-cream);
   font-family: "Atkinson Hyperlegible", var(--font-body), sans-serif;
@@ -42,11 +49,11 @@
 
 .cr-bar {
   position: sticky;
-  top: -18px;
+  top: 0;
   z-index: 4;
-  margin: -18px -22px 0;
-  padding: 16px 22px 0;
-  background: var(--cr-cream);
+  margin: 0 -16px;
+  padding: 8px 16px 0;
+  background: var(--cr-paper);
 }
 
 .cr-bar-row,
@@ -72,7 +79,7 @@
   border: 0;
   background: transparent;
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 4px 12px;
   cursor: pointer;
   color: #3f3a34;
 }
@@ -206,8 +213,8 @@
 .cr-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-top: 16px;
+  gap: 24px;
+  padding-top: 24px;
 }
 
 .cr-score {
@@ -702,8 +709,8 @@
 
 @media (max-width: 900px) {
   .cr-score, .cr-meters, .cr-principles { grid-template-columns: 1fr 1fr; }
-  .cr-desk { padding: 12px 12px 32px; }
-  .cr-bar { margin: -12px -12px 0; padding: 12px 12px 0; top: -12px; }
+  .cr-desk { padding: 0 16px 32px; }
+  .cr-bar { margin: 0 -16px; padding: 8px 16px 0; top: 0; }
   .cr-center { display: none; }
 }
 
@@ -719,14 +726,24 @@
   .cr-search { width: 100%; min-width: 0; }
 }
 
-.cr-body, .cr-bar-row, .cr-tabs { max-width: 1240px; margin-left: auto; margin-right: auto; }
+.cr-body, .cr-bar-row { max-width: 1208px; width: 100%; margin-left: auto; margin-right: auto; }
+.cr-tabs { max-width: 1240px; margin-left: auto; margin-right: auto; }
+.cr-empty-state { padding: 32px; border: 1px dashed var(--cr-line); border-radius: 12px; background: var(--cr-paper); text-align: center; }
+.cr-empty-state p { max-width: 380px; margin: 0 auto 16px; color: var(--cr-muted); font-size: 14px; }
+.do-shell:has(> .do-main.is-run-module) { grid-template-columns: minmax(0, 1fr) !important; }
+.do-main.is-run-module { grid-column: 1 / -1; }
+.do-shell:has(.is-run-module) > .do-sidebar, .do-shell:has(.is-run-module) > .do-mobile-dock { display: none; }
+.do-main.is-run-module > .do-header, .do-main.is-run-module > .do-center-bar { display: none; }
 /* Certo's legacy shell enforces Inter/compact sizes with !important.
    Contain the override here until Run has its isolated entry (E1). */
 .do-shell .cr-desk :is(span,strong,em,time,code,button,input,select,textarea,label,th,td),
 .do-shell .cr-modal :is(span,strong,em,time,code,button,input,select,textarea,label,th,td) {
   font-family: "Atkinson Hyperlegible", sans-serif !important;
   font-size: 14px !important;
+  font-weight: 400 !important;
 }
+.do-shell .cr-desk strong { font-weight: 700 !important; }
+.do-shell .cr-desk .cr-tabs button[aria-pressed="true"], .do-shell .cr-desk .cr-world[aria-pressed="true"] { font-weight: 600 !important; }
 .do-shell .cr-desk :is(h1,h2), .do-shell .cr-modal h2 { font: 700 24px/1.2 "Familjen Grotesk", sans-serif !important; }
 .do-shell .cr-desk h3 { font: 600 16px/1.35 "Familjen Grotesk", sans-serif !important; }
 .do-shell .cr-desk .cr-kicker { font-size: 11px !important; }
@@ -740,6 +757,9 @@
 .cr-stat strong, .cr-meter strong, .cr-code, .cr-pri, .cr-due, .cr-now { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
 .cr-desk :is(button, input, select, textarea):focus-visible, .cr-modal :is(button, input, textarea):focus-visible { outline: 2px solid var(--cr-teal); outline-offset: 3px; }
 .cr-desk button, .cr-modal button { min-height: 32px; transition: background-color 150ms, color 150ms, transform 150ms; }
+.cr-empty-state button { min-height: 24px; height: 24px; padding: 4px 12px; font-size: 12px !important; }
+.do-shell .cr-desk .cr-stat strong small { font: inherit !important; }
+.do-shell .cr-desk .cr-stat:last-child strong small { font: 400 12px "JetBrains Mono",monospace !important; }
 .cr-desk button:active { transform: scale(.98); }
 .cr-tabs button[aria-pressed="true"] { border-bottom-color: var(--cr-teal); }
 .cr-flag { border-left: 4px solid var(--cr-over); border-radius: 0 4px 4px 0; animation: cr-fade-in 150ms ease-out; }
@@ -747,6 +767,34 @@
 .cr-qcard summary { cursor: pointer; font-size: 12px; }
 .cr-qcard .cr-code { overflow-wrap: anywhere; }
 @keyframes cr-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.cr-today { margin-top: 24px; gap: 24px; }
+@media (min-width: 980px) { .cr-today { grid-template-columns: minmax(0, 1fr) minmax(0, 2.06fr); } }
+.cr-rail-head { padding: 0 4px; margin-bottom: 12px; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.cr-block { display: grid; grid-template-columns: 70px 110px minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px; }
+.cr-block-time { font: 500 12px/1.35 "JetBrains Mono", monospace !important; }
+.cr-block-title { display: flex; gap: 8px; align-items: center; }
+.cr-block-title strong { font-size: 14px !important; margin: 0; }
+.cr-block p { text-align: right; font-size: 12px !important; margin: 0; }
+.cr-block.is-muted { display: flex; justify-content: space-between; padding: 8px 12px; border-color: transparent; background: var(--cr-cream); opacity: .6; }
+.cr-block.is-muted .cr-block-title strong { font-style: italic; font-size: 12px !important; font-weight: 400; }
+.cr-block.is-muted p { font-size: 10px !important; text-transform: uppercase; }
+.cr-block.is-now { border: 2px solid var(--cr-teal); padding: 11px; box-shadow: none; }
+.cr-meeting-panel { padding: 24px; }
+.cr-meeting-panel .cr-brief-head { padding-bottom: 12px; border-bottom: 1px solid var(--cr-line); }
+.cr-meeting-panel .cr-brief-head h2 { font-size: 20px !important; }
+.cr-meeting-panel .cr-muted { margin-top: 4px; font-size: 12px !important; font-weight: 400; }
+.cr-meeting-rule { margin-top: 16px; padding: 16px; border: 1px solid color-mix(in srgb,var(--cr-teal) 30%,transparent); border-radius: 8px; background: var(--cr-accent-soft); }
+.cr-meeting-rule p { color: var(--cr-muted); font-size: 12px !important; margin: 8px 0 0; }
+.cr-meeting-followups { margin-top: 16px; padding: 16px; border: 1px solid var(--cr-line); border-radius: 8px; }
+.cr-meeting-followups .cr-row { padding-top: 12px; border-bottom: 1px solid var(--cr-line); }
+@media (max-width: 640px) {
+  .cr-block { grid-template-columns: auto minmax(0,1fr); }
+  .cr-block p { grid-column: 1 / -1; text-align: left; font-size: 14px !important; }
+  .cr-block.is-muted { flex-wrap: wrap; }
+  .cr-tools { margin-left: auto; }
+  .cr-worlds { min-width: 0; flex: 1; }
+  .cr-tools .cr-tool { padding: 0 8px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .cr-desk *, .cr-modal * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

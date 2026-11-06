@@ -1,5 +1,15 @@
 # Certo Run decisions
 
+## 2026-11-05 v2 goldens received (supersedes missing-baseline notes below)
+
+The user supplied certo-run-ux-golden-v2.zip. Verified 125 PNGs: 50 desktop at 1360px, 35 phone at 1170 physical pixels (390 CSS px × DPR3), 40 desktop-empty. The manifest fixes 2026-11-05T16:00Z, Guatemala timezone. Inventory contains 3,113 controls across 50 desktop screens. The fixture is present. The archive, screenshots, inventory and private fixture remain local, not committed or imported into production.
+
+`scripts/audit-run-goldens.mjs` verifies structure, dimensions, counts and computes each SHA256. The Playwright config requires an external `CERTO_RUN_GOLDEN_DIR`, disables snapshot updates and keeps the 1% threshold. Tests render the actual RunDeskView in a test-only entry with no live data subscription. This is UI-only evidence, not MCP fixture seeding or end-to-end auth/rules evidence.
+
+The existing browser session required no login changes. The visual suite independently uses no production fixture data or subscriptions. No screen is marked golden-PASS unless it actually passes. The provided fixture-driven MCP lifecycle and the remaining screens are still unimplemented tests.
+
+Self-hosted fonts use @fontsource packages. pnpm could not run because the repository's existing pnpm-workspace.yaml is malformed ("packages field missing or empty"); npm, the repository's CI installer, updated package.json and package-lock.json instead. No unrelated dependency audit fixes were applied.
+
 ## 2026-11-05 validation against supplied v2 pack
 
 The new validation pack supplies compiled reference/empty HTML, a 482-row backlog (15 epics, 32 features, 80 PBIs, 355 tasks) and ingestion data. It does not supply source UI files, the 85 golden screenshots or interaction-inventory.json. Reference HTML was inspected as text; browser security policy refused its file URL and no workaround was attempted. The actual local Certo app was inspected in the browser using its existing demo session, without creating production test records.
