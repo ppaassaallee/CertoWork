@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { allowedChildKinds, hierarchyKind, type HierarchyKind } from "../../lib/itemHierarchy";
 import {
   buildRelationshipRoots,
@@ -112,6 +112,8 @@ export function RelationshipMap({
   const [personName, setPersonName] = useState("");
   const [personEmail, setPersonEmail] = useState("");
   const [personRole, setPersonRole] = useState("");
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const pan = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -348,9 +350,26 @@ export function RelationshipMap({
                   {lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Related item", "Ítem relacionado") : tx("Project", "Proyecto")}</button> : null}
                   <button onClick={() => setExpanded(new Set(branchIds))} type="button">{tx("Expand all", "Expandir todo")}</button>
                   <button onClick={() => setExpanded(new Set())} type="button">{tx("Collapse all", "Contraer todo")}</button>
+                  <button onClick={() => canvasRef.current?.scrollTo({ top: 0, left: 0, behavior: "smooth" })} type="button">{tx("Back to start", "Volver al inicio")}</button>
                 </div>
               </div>
-              <div className="cw-map-scroll">
+              <div className="cw-map-scroll" ref={canvasRef} tabIndex={0} role="region"
+                aria-label={tx("Mind map canvas. Scroll in any direction or drag the background.", "Lienzo del mapa mental. Desplázate en cualquier dirección o arrastra el fondo.")}
+                onPointerDown={(event) => {
+                  if (event.pointerType !== "mouse" || event.button !== 0 || (event.target as HTMLElement).closest("button,input,a,select")) return;
+                  pan.current = { x: event.clientX, y: event.clientY, left: event.currentTarget.scrollLeft, top: event.currentTarget.scrollTop };
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  event.currentTarget.classList.add("is-panning");
+                }}
+                onPointerMove={(event) => {
+                  if (!pan.current) return;
+                  event.currentTarget.scrollLeft = pan.current.left - (event.clientX - pan.current.x);
+                  event.currentTarget.scrollTop = pan.current.top - (event.clientY - pan.current.y);
+                }}
+                onPointerUp={(event) => { pan.current = null; event.currentTarget.classList.remove("is-panning"); }}
+                onLostPointerCapture={(event) => { pan.current = null; event.currentTarget.classList.remove("is-panning"); }}
+              >
+                <div className="cw-map-scene">
                 <div className="cw-map-root-node">
                   <span>{lens === "people" ? <User size={18} /> : lens === "project" ? <FolderKanban size={18} /> : <Briefcase size={18} />}</span>
                   <div><small>{lensLabel(lens, locale)}</small><strong>{selectedRoot.label}</strong>{selectedRoot.meta ? <em>{selectedRoot.meta}</em> : null}{lens === "people" ? <em>{tx("Stakeholder tag · not a Certo user", "Tag de stakeholder · no es usuario de Certo")}</em> : null}</div>
@@ -358,6 +377,7 @@ export function RelationshipMap({
                 </div>
                 <div className="cw-map-trunk">{displayTree.map((node) => renderNode(node, 0))}</div>
                 {displayTree.length === 0 ? <div className="cw-map-canvas-empty"><Network size={28} /><strong>{tx("This entity is ready to connect", "Esta entidad está lista para conectarse")}</strong><p>{lens === "people" ? tx("Add the first item requested by or related to this stakeholder tag.", "Agrega el primer ítem solicitado por o relacionado con este tag de stakeholder.") : lens === "project" ? tx("Add the first Epic or PBI.", "Agrega la primera Épica o PBI.") : tx("Add its first project to begin the map.", "Agrega su primer proyecto para comenzar el mapa.")}</p>{lens === "project" && tree[0] ? <button onClick={() => openCreate(tree[0], selectedRoot)} type="button"><Plus size={14} /> {tx("Add item", "Agregar ítem")}</button> : lens !== "project" ? <button onClick={() => openCreate(null, selectedRoot)} type="button"><Plus size={14} /> {lens === "people" ? tx("Add related item", "Agregar ítem relacionado") : tx("Add project", "Agregar proyecto")}</button> : null}</div> : null}
+                </div>
               </div>
             </>
           ) : <div className="cw-map-canvas-empty"><Network size={30} /><strong>{tx("Choose an entity to start", "Elige una entidad para comenzar")}</strong></div>}
