@@ -164,6 +164,12 @@ async function copyText(value: string) {
 }
 
 export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
+  const rows = useRunItems(workspaceId);
+  return <RunDeskView workspaceId={workspaceId} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={rows} />;
+}
+
+/** The real view, separated from its live subscription for non-mutating visual tests. */
+export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows }: Props & { rows: Array<Record<string, unknown> & { id: string }> }) {
   const [mode, setMode] = useState<QueueMode>("make");
   const [projectView, setProjectView] = useState<ProjectView>("pipeline");
   const [teamView, setTeamView] = useState<TeamView>("allocation");
@@ -187,7 +193,6 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [world, setWorld] = useState<RunWorld>(savedWorld);
-  const rows = useRunItems(workspaceId);
   const items = useMemo(
     () =>
       rows
@@ -330,6 +335,7 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
         </div>
       </div>
       <div className="cr-body">
+        {worldItems.length === 0 && tab === "today" && <section className="cr-empty-state"><p>{world} is empty. Add work through Intake or validate an ingestion file to get started.</p><button className="cr-solid" onClick={() => setValidationOpen(true)} type="button">Open Data & validation</button></section>}
         {!online && <p className="cr-flag" role="status">Offline: reconnect before changing commitments.</p>}
         {saving && <p role="status" className="cr-muted">Saving…</p>}
         {refusal.length > 0 && (
@@ -351,6 +357,8 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             onDeck={() => { setMode("decide"); onTab("queue"); }}
             onNo={(id) => void perform(() => completeRunItem(id, "no"))}
             onQueue={() => onTab("queue")}
+            onIntake={() => onTab("intake")}
+            owed={segQ(worldItems, options)}
             onYes={(id) => void perform(() => completeRunItem(id, "yes"))}
             p1={p1}
             plan={plan}
@@ -519,6 +527,8 @@ function Today(props: {
   onNo: (id: string) => void;
   onDeck: () => void;
   onQueue: () => void;
+  onIntake: () => void;
+  owed: DeskItem[];
 }) {
   const inProgress = props.counts.make;
   const makeHot = inProgress >= 5;
@@ -557,17 +567,14 @@ function Today(props: {
             <span className="cr-muted">60s refresh</span>
           </div>
           <div className="cr-rail" data-testid="certo-run-rail">
-            {props.plan.filter((block) => block.kind !== "wake" && vis(block, props.activeWorld)).map((block) => {
+            {props.plan.filter((block) => block.kind !== "wake").map((block) => {
               const visible = vis(block, props.activeWorld);
               const now = block.start === props.current.start && block.kind === props.current.kind;
               const text = railCopy(block, visible, props.activeWorld);
               return (
                 <article className={`cr-block ${visible ? "" : "is-muted"} ${now ? "is-now" : ""}`} key={`${block.kind}-${block.start}`}>
-                  <div className="cr-row">
-                    <span className="cr-muted">{block.start}–{block.end}</span>
-                    {now && <span className="cr-badge">NOW</span>}
-                  </div>
-                  <strong>{text.name}</strong>
+                  <span className="cr-block-time">{block.start}–{block.end}</span>
+                  <div className="cr-block-title"><strong>{text.name}</strong>{now && <span className="cr-badge">NOW</span>}</div>
                   <p>{text.sub}</p>
                 </article>
               );
@@ -575,7 +582,11 @@ function Today(props: {
           </div>
           {props.aged > 0 && <p className="cr-flag">{props.aged} admin older than 72 hours</p>}
         </div>
-        <section className="cr-panel">
+        {props.current.kind === "meetings" ? <section className="cr-panel cr-meeting-panel">
+          <div className="cr-brief-head"><div><h2>Meetings &amp; Fronts</h2><p className="cr-muted">Client meetings and internal coordination. Any promise made goes through Intake.</p></div><button className="cr-solid" onClick={props.onIntake} type="button">Run It Through Intake →</button></div>
+          <div className="cr-meeting-rule"><strong>Meeting Discipline Rule</strong><p>Capture deliverables in real-time. If you promised a concrete date, record it before closing the call.</p></div>
+          <div className="cr-meeting-followups"><span className="cr-kicker">Active owed to me follow-ups ({props.owed.length})</span>{props.owed.slice(0, 4).map((item) => <div className="cr-row" key={item.id}><p>{item.deliverable || item.title}</p><span>{item.assigneeName || "Unassigned"}</span></div>)}</div>
+        </section> : <section className="cr-panel">
           <div className="cr-brief-head">
             <h2>{props.current.start !== "00:00" ? `${props.current.start} ` : ""}{copy.name}</h2>
             <button className="cr-solid" onClick={brief ? props.onDeck : props.onQueue} type="button">
@@ -609,7 +620,7 @@ function Today(props: {
               ) : null}
             </article>
           ))}
-        </section>
+        </section>}
       </div>
     </div>
   );
