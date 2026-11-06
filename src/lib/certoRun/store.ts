@@ -49,6 +49,7 @@ export function runDocToDeskItem(
   data: Record<string, unknown>,
   workspace: { id: string },
 ): DeskItem | null {
+  if (data.workspaceId !== workspace.id) return null;
   if (!isCertoRunItem(data)) return null;
   const status = String(data.status || "open");
   const decision = typeof data.runDecision === "string" && isDecision(data.runDecision) ? data.runDecision : "make";
@@ -67,12 +68,13 @@ export function runDocToDeskItem(
     deliverable: String(data.runDeliverable || data.deliverable || ""),
     doneWhen: String(data.runDoneWhen || data.doneWhen || ""),
     nextStep: String(data.runNextStep || data.nextStep || ""),
+    source: String(data.runSource || data.source || ""),
     clientEntity: String(data.runClient || data.clientEntity || ""),
     health: data.runHealth === "green" || data.runHealth === "amber" || data.runHealth === "red" ? data.runHealth : "",
     unblock: String(data.runUnblock || ""),
     created: stampDate(data.createdAt) || stampDate(data.created),
     epic: String(data.epic || ""),
-    feature: "",
+    feature: String(data.feature || ""),
     tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
     assigneeName: String(data.assigneeName || ""),
     dueDate: typeof data.dueDate === "string" ? data.dueDate : "",

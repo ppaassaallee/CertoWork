@@ -1,5 +1,17 @@
 # Certo Run decisions
 
+## 2026-11-05 validation against supplied v2 pack
+
+The new validation pack supplies compiled reference/empty HTML, a 482-row backlog (15 epics, 32 features, 80 PBIs, 355 tasks) and ingestion data. It does not supply source UI files, the 85 golden screenshots or interaction-inventory.json. Reference HTML was inspected as text; browser security policy refused its file URL and no workaround was attempted. The actual local Certo app was inspected in the browser using its existing demo session, without creating production test records.
+
+Do not replace the working app with the standalone localStorage HTML: that would discard the existing auth, permissions and cloud data model. Do not automatically import the user's 425 records: preflight finds the stated 10 errors and cannot decide ownership of cross-world epics. The new Data & validation dialog is deliberately read-only and describes its limited core-validation coverage. All-or-nothing import is not claimed until an authoritative backend implementation exists.
+
+The delivered fixes are targeted, not a claim to complete E0–E14. The earlier same-document design and world-field storage remain; changing to isolated entries and workspace-per-world is a migration/security decision. Team's existing browser-only allocation cache is now keyed by workspace/user/world; no unscoped legacy cache is automatically migrated. A visible notice states cloud sync is not connected. No extra listeners, Firebase apps, AI calls, cron jobs or infrastructure were added.
+
+The local browser revealed a black-on-black primary button and shell-forced Inter/compact typography. Scoped Run overrides restore visible primary labels, 30px mono counters and the specified display font without altering Certo's global stylesheet. This contains a known leak, but is not full CSS-isolation or pixel-parity proof.
+
+The full suite's two module-loading failures were corrected using createRequire in tests to consume the existing Functions CommonJS package. File-access implementation and authorization were not modified.
+
 ## 2026-11-03 (America/Guatemala)
 
 The AI Studio export from 10:17 pm and `certo-run-ux-golden.zip` are not in the repo, the uploads, or Drive. E1 cannot copy the UI file by file or run the 85-screen gate until those two files are unzipped at `incoming/certo-run-aistudio/` and `tests/run-visual/golden/`. Work continues on everything that does not need those pixels.

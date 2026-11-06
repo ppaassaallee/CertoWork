@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Familjen+Grotesk:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Familjen+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 .do-main.is-run-module {
   background: #f3f0ea;
@@ -60,10 +60,12 @@
 
 .cr-bar-row {
   justify-content: space-between;
+  flex-wrap: wrap;
   min-height: 40px;
 }
 
 .cr-world {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -91,6 +93,7 @@
 .cr-world[data-world="Personal"] .cr-dot { background: #6d5efc; }
 
 .cr-date {
+  white-space: nowrap;
   color: #5c564e;
   font-weight: 700;
 }
@@ -705,6 +708,45 @@
 }
 
 @media (max-width: 640px) {
-  .cr-score, .cr-meters, .cr-principles, .cr-pair { grid-template-columns: 1fr; }
+  .cr-score, .cr-meters, .cr-principles, .cr-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cr-bar-row { align-items: flex-start; }
+  .cr-bar-row { flex-wrap: wrap; }
+  .cr-worlds { max-width: 100%; overflow-x: auto; }
+  .cr-world { flex: none; white-space: nowrap; }
+  .cr-tools { flex-wrap: wrap; }
+  .cr-brief-head, .cr-row { flex-wrap: wrap; }
+  .cr-decision { flex-wrap: wrap; }
+  .cr-search { width: 100%; min-width: 0; }
+}
+
+.cr-body, .cr-bar-row, .cr-tabs { max-width: 1240px; margin-left: auto; margin-right: auto; }
+/* Certo's legacy shell enforces Inter/compact sizes with !important.
+   Contain the override here until Run has its isolated entry (E1). */
+.do-shell .cr-desk :is(span,strong,em,time,code,button,input,select,textarea,label,th,td),
+.do-shell .cr-modal :is(span,strong,em,time,code,button,input,select,textarea,label,th,td) {
+  font-family: "Atkinson Hyperlegible", sans-serif !important;
+  font-size: 14px !important;
+}
+.do-shell .cr-desk :is(h1,h2), .do-shell .cr-modal h2 { font: 700 24px/1.2 "Familjen Grotesk", sans-serif !important; }
+.do-shell .cr-desk h3 { font: 600 16px/1.35 "Familjen Grotesk", sans-serif !important; }
+.do-shell .cr-desk .cr-kicker { font-size: 11px !important; }
+.do-shell .cr-desk :is(.cr-stat strong,.cr-meter strong) { font: 700 30px/1.1 "JetBrains Mono", monospace !important; }
+.do-shell .cr-desk :is(.cr-code,.cr-pri,.cr-due,.cr-now) { font: 500 12px/1.4 "JetBrains Mono", monospace !important; }
+.cr-desk :is(.cr-solid,.cr-yes,.cr-avatar), .cr-modal .cr-solid { color: #fff; }
+.cr-stat, .cr-qcard, .cr-block, .cr-col, .cr-pcard, .cr-day, .cr-meter { border-radius: 8px; }
+.cr-panel, .cr-sheet, .cr-question, .cr-step { border-radius: 12px; }
+.cr-segbar, .cr-subtabs { border-radius: 8px; background: var(--cr-sunk); }
+.cr-segbar button, .cr-subtabs button { border-radius: 6px; }
+.cr-stat strong, .cr-meter strong, .cr-code, .cr-pri, .cr-due, .cr-now { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+.cr-desk :is(button, input, select, textarea):focus-visible, .cr-modal :is(button, input, textarea):focus-visible { outline: 2px solid var(--cr-teal); outline-offset: 3px; }
+.cr-desk button, .cr-modal button { min-height: 32px; transition: background-color 150ms, color 150ms, transform 150ms; }
+.cr-desk button:active { transform: scale(.98); }
+.cr-tabs button[aria-pressed="true"] { border-bottom-color: var(--cr-teal); }
+.cr-flag { border-left: 4px solid var(--cr-over); border-radius: 0 4px 4px 0; animation: cr-fade-in 150ms ease-out; }
+.cr-qcard details { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--cr-line); color: var(--cr-muted); }
+.cr-qcard summary { cursor: pointer; font-size: 12px; }
+.cr-qcard .cr-code { overflow-wrap: anywhere; }
+@keyframes cr-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .cr-desk *, .cr-modal * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

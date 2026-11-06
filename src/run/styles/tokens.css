@@ -1,0 +1,16 @@
+/* Spec v2 values, scoped to Run to avoid changing Certo Work. */
+.cr-desk, .cr-modal {
+  --cr-cream: #F7F6F2;
+  --cr-paper: #FFFFFF;
+  --cr-sunk: #EFEFEA;
+  --cr-line: #E2E1DA;
+  --cr-ink: #181816;
+  --cr-muted: #6E6D66;
+  --cr-good: #1D7F47;
+  --cr-hot: #A45F00;
+  --cr-over: #B4380F;
+  --cr-teal: #0B7F88;
+  --cr-accent-soft: #E6F4F5;
+}
+.cr-desk[data-world="Boldr AI"] { --cr-teal: #9A6F00; --cr-accent-soft: #FFF7DF; }
+.cr-desk[data-world="Personal"] { --cr-teal: #5B4FC4; --cr-accent-soft: #EFEFFC; }
