@@ -31,7 +31,7 @@ export function useRunAgentSnapshot(world:string) {
   },[world,revision]);
   return {snapshot:result?.world===world?result.data:null,error,refresh};
 }
-export function RunAgentPanel({snapshot,tab,decide,onRefresh,onReview=runOwnerRequest}:{snapshot:AgentSnapshot;tab:string;decide:boolean;onRefresh:()=>void;onReview?:typeof runOwnerRequest}) {
+export function RunAgentPanel({snapshot,tab,decide,onRefresh,onOpenDecide,onReview=runOwnerRequest}:{snapshot:AgentSnapshot;tab:string;decide:boolean;onRefresh:()=>void;onOpenDecide?:()=>void;onReview?:typeof runOwnerRequest}) {
   const locale=useLocale();
   const copy=locale==="es"?COPY.es:COPY.en;
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
@@ -49,6 +49,7 @@ export function RunAgentPanel({snapshot,tab,decide,onRefresh,onReview=runOwnerRe
     <header><div><h2>{copy.title}</h2><p>{snapshot.world} · {pending.length} {copy.pending}</p></div><button className="cr-tool" type="button" onClick={onRefresh} disabled={busy}>{copy.refresh}</button></header>
     {error&&<p role="alert" className="cr-flag">{error}</p>}
     {tab==="today"&&<>
+      {pending.length>0&&onOpenDecide&&<button className="cr-solid" type="button" onClick={onOpenDecide}>{copy.review}</button>}
       {brief?<article className="cr-agent-brief"><p className="cr-muted">{brief.date} · {brief.kind==="morning"?copy.morning:copy.midday}</p><h3>{copy.brief}</h3><div className="cr-agent-copy">{brief.body}</div><small>{brief.sourceIds.length} {copy.sources}</small></article>:<p className="cr-muted">{copy.noBrief}</p>}
       {log?<details><summary>{copy.lastSync} · {snapshot.control.sync.state.last_run_at||log.at}</summary><p className="cr-agent-copy">{log.summary}</p>{log.failed_sources.length>0&&<p role="status">{copy.failedSources}: {log.failed_sources.join(" · ")}</p>}</details>:<p className="cr-muted">{copy.noSync}</p>}
     </>}
@@ -60,7 +61,7 @@ export function RunAgentPanel({snapshot,tab,decide,onRefresh,onReview=runOwnerRe
   </section>;
 }
 const COPY={
-  en:{title:"Assistant updates",pending:"pending review",refresh:"Refresh",brief:"Daily brief",morning:"Morning",midday:"Midday",sources:"source references",noBrief:"Your assistant has not recorded a brief yet.",noSync:"No synchronization has been recorded. Sources and schedules run in Grok.",lastSync:"Last recorded sync",failedSources:"Unavailable sources",noProposals:"No proposals awaiting your review.",evidence:"Source reference",approve:"Approve",reject:"Reject",failed:"Could not review the proposal."},
-  es:{title:"Novedades de tu asistente",pending:"por revisar",refresh:"Actualizar",brief:"Resumen del día",morning:"Mañana",midday:"Mediodía",sources:"referencias de origen",noBrief:"Tu asistente todavía no ha guardado un resumen.",noSync:"No hay sincronizaciones registradas. Las fuentes y los horarios se ejecutan en Grok.",lastSync:"Última sincronización registrada",failedSources:"Fuentes no disponibles",noProposals:"No hay propuestas pendientes de revisión.",evidence:"Referencia de origen",approve:"Aprobar",reject:"Rechazar",failed:"No se pudo revisar la propuesta."},
+  en:{title:"Assistant updates",pending:"pending review",refresh:"Refresh",review:"Review proposals →",brief:"Daily brief",morning:"Morning",midday:"Midday",sources:"source references",noBrief:"Your assistant has not recorded a brief yet.",noSync:"No synchronization has been recorded. Sources and schedules run in Grok.",lastSync:"Last recorded sync",failedSources:"Unavailable sources",noProposals:"No proposals awaiting your review.",evidence:"Source reference",approve:"Approve",reject:"Reject",failed:"Could not review the proposal."},
+  es:{title:"Novedades de tu asistente",pending:"por revisar",refresh:"Actualizar",review:"Revisar propuestas →",brief:"Resumen del día",morning:"Mañana",midday:"Mediodía",sources:"referencias de origen",noBrief:"Tu asistente todavía no ha guardado un resumen.",noSync:"No hay sincronizaciones registradas. Las fuentes y los horarios se ejecutan en Grok.",lastSync:"Última sincronización registrada",failedSources:"Fuentes no disponibles",noProposals:"No hay propuestas pendientes de revisión.",evidence:"Referencia de origen",approve:"Aprobar",reject:"Rechazar",failed:"No se pudo revisar la propuesta."},
 };
 const ACTIONS:Record<"en"|"es",Record<string,string>>={en:{retitle:"Update title",set_priority:"Change priority",drop:"Drop commitment",mark_done:"Mark complete",renegotiate:"Renegotiate date",move_to_make:"Move to Make",delegate:"Delegate"},es:{retitle:"Actualizar título",set_priority:"Cambiar prioridad",drop:"Descartar compromiso",mark_done:"Marcar como terminado",renegotiate:"Renegociar fecha",move_to_make:"Mover a ejecución",delegate:"Delegar"}};

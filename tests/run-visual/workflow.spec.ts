@@ -7,7 +7,7 @@ test("brief, proposal review and bilingual copy use the real panel",async({page}
   await page.goto("/tests/run-visual/agent-harness.html");
   await expect(page.getByRole("heading",{name:"Daily brief"})).toBeVisible();
   await expect(page.getByText("Review the client proposal.",{exact:false})).toBeVisible();
-  await page.getByRole("button",{name:"Decide",exact:true}).click();
+  await page.getByRole("button",{name:"Review proposals →",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Prepare client proposal"})).toBeVisible();
   await page.getByRole("button",{name:"Español"}).click();
   await expect(page.getByRole("button",{name:"Aprobar",exact:true})).toBeVisible();

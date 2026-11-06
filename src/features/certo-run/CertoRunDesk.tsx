@@ -54,6 +54,7 @@ import {
 } from "../../lib/certoRun/writes";
 import { RunValidationDialog } from "./RunValidationDialog";
 import { RunAgentPanel, useRunAgentSnapshot, type AgentSnapshot } from "./RunAgentPanel";
+import { useLocale } from "../../lib/useLocale";
 import "./certo-run.css";
 import "../../run/styles/tokens.css";
 
@@ -171,10 +172,12 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
 }
 
 function AuthorizedRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
+  const locale=useLocale();
+  const loadingCopy=locale==="es"?{loading:"Cargando tu workspace delegado…",retry:"Reintentar"}:{loading:"Loading your delegated workspace…",retry:"Retry"};
   const personalRows = useRunItems(workspaceId);
   const [world,setWorld]=useState<RunWorld>(savedWorld);
   const {snapshot,error,refresh}=useRunAgentSnapshot(world);
-  if(world!=="Personal"&&!snapshot)return <section className="cr-desk cr-agent-loading" aria-live="polite"><h2>{world}</h2><p>{error||"Loading your delegated workspace…"}</p><button className="cr-tool" type="button" onClick={refresh}>Retry</button><button className="cr-tool" type="button" onClick={onBack}>Certo Work</button></section>;
+  if(world!=="Personal"&&!snapshot)return <section className="cr-desk cr-agent-loading" aria-live="polite"><h2>{world}</h2><p>{error||loadingCopy.loading}</p><button className="cr-tool" type="button" onClick={refresh}>{loadingCopy.retry}</button><button className="cr-tool" type="button" onClick={onBack}>Certo Work</button></section>;
   return <RunDeskView workspaceId={world==="Personal"?workspaceId:snapshot!.workspace_id} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={world==="Personal"?personalRows:snapshot!.items} controlledWorld={world} onWorldChange={setWorld} agentSnapshot={world==="Personal"?undefined:snapshot!} onDataChanged={refresh} agentError={error} />;
 }
 
@@ -350,7 +353,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
       </div>
       <div className="cr-body">
         {agentError&&<p className="cr-flag" role="alert">{agentError}</p>}
-        {agentSnapshot&&<RunAgentPanel snapshot={agentSnapshot} tab={tab} decide={mode==="decide"} onRefresh={()=>onDataChanged?.()} />}
+        {agentSnapshot&&<RunAgentPanel snapshot={agentSnapshot} tab={tab} decide={mode==="decide"} onRefresh={()=>onDataChanged?.()} onOpenDecide={()=>{setMode("decide");onTab("queue");}} />}
         {worldItems.length === 0 && tab === "today" && <section className="cr-empty-state"><p>{world} is empty. Add work through Intake or validate an ingestion file to get started.</p><button className="cr-solid" onClick={() => setValidationOpen(true)} type="button">Open Data & validation</button></section>}
         {!online && <p className="cr-flag" role="status">Offline: reconnect before changing commitments.</p>}
         {saving && <p role="status" className="cr-muted">Saving…</p>}
