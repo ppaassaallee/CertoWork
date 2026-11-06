@@ -1,11 +1,11 @@
 import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { prepareItemWrite, prepareTaskCreatePayload } from "../firestorePayload";
-import { checkMoveToMake, checkSetPriority, checkTop3, type CapResult } from "./caps";
+import { checkAdminWrite, checkMoveToMake, checkSetPriority, checkTop3, type CapResult } from "./caps";
 import { RUN_COLLECTION } from "./store";
 import type { DeskItem } from "./types";
 import type { Decision, Lane, RunWorld } from "./vocab";
-import { adminNeverMake } from "./intake";
+import { adminNeverMake, checkTitle } from "./intake";
 
 function runRef(id: string) {
   return doc(db, RUN_COLLECTION, id);
@@ -90,8 +90,15 @@ export async function createRunItem(input: {
   nextStep?: string;
   client?: string;
   epic?: string;
-}): Promise<{ ok: true; id: string } | { ok: false; reason: "admin-make" }> {
-  if (adminNeverMake(input.lane, input.decision)) return { ok: false, reason: "admin-make" };
+  currentItems: DeskItem[];
+}): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  if (!checkTitle(input.title).ok) return { ok: false, reason: "Use 1–12 words without dates, stars or prefixes." };
+  if (adminNeverMake(input.lane, input.decision)) return { ok: false, reason: "Admin is never Make." };
+  if ((input.world === "Personal") !== (input.lane === "personal")) return { ok: false, reason: "Personal work requires the Personal world and lane." };
+  const cap = input.decision === "make"
+    ? checkMoveToMake(input.currentItems, { workspace: input.world }, "new-item")
+    : input.lane === "admin" ? checkAdminWrite(input.currentItems, { workspace: input.world }, "new-item") : { ok: true as const };
+  if (!cap.ok) return { ok: false, reason: `Cap reached (${cap.cap}). Resolve or delegate first: ${cap.current.map((row) => row.title).join(" · ")}` };
   const ref = await addDoc(
     collection(db, RUN_COLLECTION),
     prepareTaskCreatePayload({

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { isPublishedDocumentPath } from "../functions/src/clientPortal/documentAccess";
+import { createRequire } from "node:module";
+// Functions is a CommonJS package; use its actual module boundary under tsx/Node.
+const { isPublishedDocumentPath } = createRequire(import.meta.url)("../functions/src/clientPortal/documentAccess.ts");
 
 test("portal document URLs can only sign objects under the published project", () => {
   assert.equal(isPublishedDocumentPath("project-docs/ws-a/prj-a/file.pdf", "ws-a", "prj-a"), true);

@@ -17,7 +17,7 @@ export interface GateDestination {
   pbi: boolean;
 }
 
-const TITLE_BANNED = /\d{1,2}\/\d{1,2}|⭐|^(rsvp|allied|boldr|waiting|delegate)\b|whatsapp|granola|outlook/i;
+const TITLE_BANNED = /\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|★|⭐|^\s*\[|^[A-Z]{2,}:|^(rsvp|allied|boldr|waiting)\b/i;
 
 export function gateDest(answers: Partial<Record<GateKey, boolean>>): GateDestination | null {
   for (const question of GATE_QUESTIONS) {

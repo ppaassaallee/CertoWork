@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { isProjectFilePath, legacyStoragePath } from "../functions/src/projectFilePaths";
+import { createRequire } from "node:module";
+const { isProjectFilePath, legacyStoragePath } = createRequire(import.meta.url)("../functions/src/projectFilePaths.ts");
 
 test("project file paths remain inside the authorized project prefix", () => {
   assert.equal(isProjectFilePath("project-docs/ws-a/project-a/file", "ws-a", "project-a"), true);

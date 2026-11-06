@@ -49,8 +49,11 @@ import {
   setRunHealth,
   setRunTop3,
   setRunUnblock,
+  patchRunItem,
 } from "../../lib/certoRun/writes";
+import { RunValidationDialog } from "./RunValidationDialog";
 import "./certo-run.css";
+import "../../run/styles/tokens.css";
 
 export type RunTab = "today" | "queue" | "projects" | "team" | "week" | "intake" | "close" | "life";
 type QueueMode = "make" | "decide" | "owed" | "admin" | "delegated" | "unsorted";
@@ -134,11 +137,6 @@ function matches(item: DeskItem, query: string): boolean {
   return `${item.title} ${item.epic} ${item.clientEntity || ""} ${item.deliverable || ""}`.toLowerCase().includes(needle);
 }
 
-function shortCode(item: DeskItem): string {
-  if (!item.externalId || item.externalId === item.id || item.externalId.length > 16) return "";
-  return item.externalId;
-}
-
 function railCopy(block: DayBlock, visible: boolean, world: string): { name: string; sub: string } {
   if (!visible) {
     if (block.kind === "family") return { name: "Personal time", sub: "FAMILY AND LUNCH" };
@@ -173,6 +171,7 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const [refusal, setRefusal] = useState<string[]>([]);
   const [minutes, setMinutes] = useState(zoneMinutes);
   const [manifestoOpen, setManifestoOpen] = useState(false);
+  const [validationOpen, setValidationOpen] = useState(false);
   const [focusUntil, setFocusUntil] = useState<number | null>(null);
   const [gate, setGate] = useState<Partial<Record<GateKey, boolean>>>({});
   const [draftTitle, setDraftTitle] = useState("");
@@ -183,6 +182,8 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const [draftDone, setDraftDone] = useState("");
   const [draftNext, setDraftNext] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [world, setWorld] = useState<RunWorld>(savedWorld);
@@ -195,6 +196,23 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
     [rows, workspaceId],
   );
   const today = zoneToday();
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
+  }, []);
+
+  async function perform(action: () => Promise<unknown>) {
+    if (saving) return;
+    if (!navigator.onLine) { setError("Offline: reconnect before changing commitments."); return; }
+    setError("");
+    setSaving(true);
+    try { await action(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save. Please try again."); }
+    finally { setSaving(false); }
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => setMinutes(zoneMinutes()), 60_000);
@@ -236,9 +254,20 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const cameIn = worldItems.filter((item) => item.created === today).length;
 
   function chooseWorld(next: RunWorld) {
+    setForm(null);
+    setRefusal([]);
+    setQuery("");
+    setError("");
+    setGate({});
+    setDraftTitle("");
+    setDraftClient("");
+    setDraftDeliverable("");
+    setDraftDone("");
+    setDraftNext("");
+    setDraftLane(next === "Personal" ? "personal" : "commercial");
     setWorld(next);
     try { window.localStorage.setItem(WORLD_KEY, next); } catch { /* private mode */ }
-    if (tab === "life") onTab("today");
+    onTab("today");
   }
 
   async function onMake(id: string) {
@@ -290,16 +319,19 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             )}
             <button className="cr-tool" onClick={() => setSearchOpen(true)} type="button">⌘K</button>
             <button className="cr-tool" onClick={() => setManifestoOpen(true)} type="button">Manifesto</button>
+            <button className="cr-tool" onClick={() => setValidationOpen(true)} type="button">Data & validation</button>
             <button className="cr-avatar" onClick={onBack} title="Certo Work" type="button">{initials(user.displayName)}</button>
           </div>
         </div>
         <div className="cr-tabs" role="tablist">
-          {(tab === "life" ? [...TABS, "life" as RunTab] : TABS).map((name) => (
+          {(world === "Personal" ? ["today", "life", "intake", "close"] as RunTab[] : TABS).map((name) => (
             <button aria-pressed={tab === name} key={name} onClick={() => onTab(name)} type="button">{TAB_LABEL[name]}</button>
           ))}
         </div>
       </div>
       <div className="cr-body">
+        {!online && <p className="cr-flag" role="status">Offline: reconnect before changing commitments.</p>}
+        {saving && <p role="status" className="cr-muted">Saving…</p>}
         {refusal.length > 0 && (
           <div className="cr-flag" data-testid="certo-run-cap" role="status">
             At the cap. The current list stays. {refusal.join(" · ")}
@@ -317,9 +349,9 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             decisions={decisions}
             make={makeItems.filter((item) => matches(item, query))}
             onDeck={() => { setMode("decide"); onTab("queue"); }}
-            onNo={(id) => void completeRunItem(id, "no")}
+            onNo={(id) => void perform(() => completeRunItem(id, "no"))}
             onQueue={() => onTab("queue")}
-            onYes={(id) => void completeRunItem(id, "yes")}
+            onYes={(id) => void perform(() => completeRunItem(id, "yes"))}
             p1={p1}
             plan={plan}
             resolvedToday={resolvedToday}
@@ -338,20 +370,22 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             }}
             form={form}
             items={queue}
+            key={`${workspaceId}:${world}`}
             mode={mode}
-            onDone={(id) => void completeRunItem(id, mode === "decide" ? "yes" : "done")}
+            onDone={(id) => void perform(() => completeRunItem(id, mode === "decide" ? "yes" : "done"))}
             onDrop={(id) => setForm({ id, kind: "drop" })}
             onForm={setForm}
-            onMake={(id) => void onMake(id)}
+            onMake={(id) => void perform(() => onMake(id))}
             onMode={setMode}
-            onNo={(id) => void completeRunItem(id, "no")}
-            onSave={async (value) => {
+            onNo={(id) => void perform(() => completeRunItem(id, "no"))}
+            onSave={(value) => void perform(async () => {
               if (!form) return;
               if (form.kind === "delegate") await delegateRunItem(form.id, value.who, value.date, "captain", value.context);
               if (form.kind === "date") await renegotiateRunItem(form.id, value.date);
               if (form.kind === "drop") await completeRunItem(form.id, "dropped", value.context || "Adds nothing");
               setForm(null);
-            }}
+            })}
+            onPostpone={(id) => void perform(() => patchRunItem(id, { runOutcome: { kind: "postponed", ts: Date.now(), at: new Date().toISOString() } }))}
           />
         )}
         {tab === "projects" && (
@@ -362,7 +396,7 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             world={world}
           />
         )}
-        {tab === "team" && <Team view={teamView} world={world} onView={setTeamView} />}
+        {tab === "team" && <Team key={`${workspaceId}:${user.uid}:${world}`} storageScope={`${workspaceId}:${user.uid}`} view={teamView} world={world} onView={setTeamView} />}
         {tab === "week" && <Week items={makeItems} today={today} world={world} />}
         {tab === "life" && <p className="cr-panel">Personal stays in its own world. Nothing from Work is copied here.</p>}
         {tab === "intake" && (
@@ -383,10 +417,11 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
             onNext={setDraftNext}
             onTitle={setDraftTitle}
             title={draftTitle}
-            onSave={async () => {
+            onSave={() => void perform(async () => {
               const created = await createRunItem({
                 userId: user.uid,
                 workspaceId,
+                currentItems: worldItems,
                 world,
                 title: draftTitle,
                 decision: draftDecision,
@@ -398,7 +433,7 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
                 client: draftClient,
                 epic: draftClient,
               });
-              if (!created.ok) setError("Admin is never Make.");
+              if (!created.ok) setError(created.reason);
               else {
                 setDraftTitle("");
                 setDraftDeliverable("");
@@ -407,34 +442,36 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
                 setGate({});
                 onTab("queue");
               }
-            }}
+            })}
           />
         )}
         {tab === "close" && (
           <Close
             cameIn={cameIn}
             make={makeItems}
-            onAdd={async (title, date) => {
+            onAdd={(title, date) => void perform(async () => {
               const decision: Decision = makeItems.length >= 5 ? "decide" : "make";
-              await createRunItem({
+              const result = await createRunItem({
                 userId: user.uid,
                 workspaceId,
+                currentItems: worldItems,
                 world,
                 title,
                 decision,
-                lane: "commercial",
+                lane: world === "Personal" ? "personal" : "commercial",
                 dueDate: date,
               });
-            }}
-            onDone={(id) => void completeRunItem(id, "done")}
-            onToggle={async (id) => {
+              if (!result.ok) throw new Error(result.reason);
+            })}
+            onDone={(id) => void perform(() => completeRunItem(id, "done"))}
+            onToggle={(id) => void perform(async () => {
               if (top3.includes(id)) {
                 await clearRunTop3(id);
                 return;
               }
               const result = await setRunTop3(top3, id, today);
               if (!result.ok) setRefusal(result.current.map((row) => row.title));
-            }}
+            })}
             promised={worldItems.filter((item) => item.state === "open" && item.dueDate)}
             resolved={resolvedToday}
             today={today}
@@ -450,6 +487,7 @@ export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
           onStart={() => setFocusUntil(Date.now() + 25 * 60_000)}
         />
       )}
+      {validationOpen && <RunValidationDialog onClose={() => setValidationOpen(false)} />}
     </section>
   );
 }
@@ -482,7 +520,7 @@ function Today(props: {
   onDeck: () => void;
   onQueue: () => void;
 }) {
-  const inProgress = Math.min(5, props.counts.make);
+  const inProgress = props.counts.make;
   const makeHot = inProgress >= 5;
   const p1Hot = props.p1 >= 8 && props.p1 <= 10;
   const brief = props.current.kind === "brief" || props.current.kind === "before";
@@ -519,7 +557,7 @@ function Today(props: {
             <span className="cr-muted">60s refresh</span>
           </div>
           <div className="cr-rail" data-testid="certo-run-rail">
-            {props.plan.filter((block) => block.kind !== "wake").map((block) => {
+            {props.plan.filter((block) => block.kind !== "wake" && vis(block, props.activeWorld)).map((block) => {
               const visible = vis(block, props.activeWorld);
               const now = block.start === props.current.start && block.kind === props.current.kind;
               const text = railCopy(block, visible, props.activeWorld);
@@ -550,7 +588,7 @@ function Today(props: {
               <p>
                 {props.decisions.length === 0
                   ? "Nothing is waiting on a yes or no."
-                  : `${props.decisions.length} decisions waiting in ${props.activeWorld}. No client is blocked on a deliverable without your sign-off. Resolve without re-reading deep threads.`}
+                  : `${props.decisions.length} decisions waiting in ${props.activeWorld}. Review each before deciding.`}
               </p>
             </div>
           ) : (
@@ -589,6 +627,7 @@ function Queue(props: {
   onDrop: (id: string) => void;
   onForm: (form: { id: string; kind: "delegate" | "date" | "drop" } | null) => void;
   onSave: (value: { who: string; date: string; context: string }) => void;
+  onPostpone: (id: string) => void;
 }) {
   const labels: Record<QueueMode, string> = {
     make: "Make",
@@ -602,6 +641,23 @@ function Queue(props: {
   const [who, setWho] = useState("");
   const [date, setDate] = useState("");
   const [context, setContext] = useState("");
+  useEffect(() => {
+    if (props.mode !== "decide" || props.form || !props.items[0]) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest("input,textarea,select,[contenteditable=true],[role=dialog]")) return;
+      const item = props.items[0];
+      const key = event.key.toLowerCase();
+      if (key === "y") props.onDone(item.id);
+      else if (key === "n") props.onNo(item.id);
+      else if (key === "d") props.onForm({ id: item.id, kind: "delegate" });
+      else if (key === "x") props.onDrop(item.id);
+      else if (key === "arrowright") props.onPostpone(item.id);
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props]);
   const capped = props.mode === "make" && props.counts.make >= 5;
   return (
     <div>
@@ -614,7 +670,7 @@ function Queue(props: {
       </div>
       {props.mode === "make" && (
         <div className="cr-qhead">
-          <h2 className={capped ? "cr-hot" : ""}>In progress ({Math.min(5, props.counts.make)} of 5 slots)</h2>
+          <h2 className={capped ? "cr-hot" : ""}>In progress ({props.counts.make} of 5 slots)</h2>
           <span>{capped ? <em className="cr-over">Cap reached</em> : null} <span className="cr-muted">Never a sixth</span></span>
         </div>
       )}
@@ -622,24 +678,25 @@ function Queue(props: {
       {props.items.length === 0 && (
         <p className="cr-panel">{props.mode === "unsorted" ? "Every open item already has a decision." : "Nothing open in this queue."}</p>
       )}
-      {props.items.slice(0, 40).map((item) => (
+      {(props.mode === "decide" ? props.items.slice(0, 1) : props.items).map((item) => (
         <article className="cr-qcard" key={item.id}>
           <div className="cr-meta">
             <span className={`cr-pri ${item.priority === "P1" ? "is-p1" : ""}`}>{item.priority}</span>
             {item.clientEntity && <span className="cr-client">{item.clientEntity}</span>}
             {item.epic && item.epic !== item.clientEntity && <span className="cr-client">{item.epic}</span>}
             {item.dueDate && <span className="cr-due">Due {formatDate(item.dueDate)}</span>}
-            {shortCode(item) && <span className="cr-code">{shortCode(item)}</span>}
           </div>
           <h3>{item.title}</h3>
           {item.deliverable && <p><strong>Deliverable: </strong>{item.deliverable}</p>}
           {item.doneWhen && <p><strong>Done when: </strong>{item.doneWhen}</p>}
           {item.nextStep && <p className="cr-next"><strong>Next step: </strong>{item.nextStep}</p>}
-          {(item.context || item.unblock) && (
+          {(item.context || item.unblock || item.source || item.id) && (
             <details>
               <summary>Context and origin</summary>
               <p>{item.context}</p>
               {item.unblock && <p>{item.unblock}</p>}
+              {item.source && <p>Source: {item.source}</p>}
+              <p className="cr-code">Record: {item.externalId || item.id}</p>
             </details>
           )}
           <div className="cr-actions">
@@ -647,6 +704,7 @@ function Queue(props: {
               <>
                 <button className="cr-solid" onClick={() => props.onDone(item.id)} type="button">Yes</button>
                 <button className="cr-ghost" onClick={() => props.onNo(item.id)} type="button">No</button>
+                <button className="cr-ghost" onClick={() => props.onPostpone(item.id)} type="button">Postpone →</button>
               </>
             ) : (
               <button className="cr-solid" onClick={() => props.onDone(item.id)} type="button">Done</button>
@@ -814,21 +872,23 @@ function DeliveryCard({ name, rows }: { name: string; rows: DeskItem[] }) {
   );
 }
 
-function Team(props: { view: TeamView; world: string; onView: (view: TeamView) => void }) {
-  const [rows, setRows] = useState<AllocRow[]>(() => loadAlloc(props.world));
+function Team(props: { view: TeamView; world: string; storageScope: string; onView: (view: TeamView) => void }) {
+  const storageKey = `${props.storageScope}:${props.world}`;
+  const [rows, setRows] = useState<AllocRow[]>(() => loadAlloc(storageKey));
   const [person, setPerson] = useState("");
   const [project, setProject] = useState("");
   const [pct, setPct] = useState("20");
   const [refusal, setRefusal] = useState("");
-  useEffect(() => { setRows(loadAlloc(props.world)); }, [props.world]);
+  useEffect(() => { setRows(loadAlloc(storageKey)); }, [storageKey]);
   const people = [...new Set(rows.map((row) => row.person))];
   const cap = () => DEFAULT_CAP_MONTH;
   function save(next: AllocRow[]) {
     setRows(next);
-    storeAlloc(props.world, next);
+    storeAlloc(storageKey, next);
   }
   return (
     <div>
+      <p className="cr-muted">Allocation planning is saved only on this browser. Cloud sync and week-by-week planning are not connected yet.</p>
       <div className="cr-row">
         <div className="cr-subtabs">
           <button aria-pressed={props.view === "allocation"} onClick={() => props.onView("allocation")} type="button">Team Allocation {people.length}</button>
@@ -997,7 +1057,7 @@ function Week(props: { world: string; today: string; items: DeskItem[] }) {
       <div className="cr-week">
         {days.map((iso) => {
           const owner = morningWorld(iso);
-          const blocks = dayPlan(iso).filter((block) => block.kind !== "wake");
+          const blocks = dayPlan(iso).filter((block) => block.kind !== "wake" && vis(block, props.world));
           return (
             <section className="cr-day" key={iso}>
               <div>
