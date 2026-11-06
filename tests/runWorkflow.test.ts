@@ -126,3 +126,12 @@ test("core sync can read, write, propose, record brief/state and render matching
   assert.equal((await executeTool(repo,token,"search",{workspace_id:"pure",external_id:"LUCY-GMAIL-1"},now)).items[0].status,"done");
   assert.equal((await executeTool(repo,token,"get_readiness",{workspace_id:"boldr"},now)).ready,true);
 });
+test("thousands of legacy records are not reread for cap writes; source IDs cannot cross worlds",async()=>{
+  const {repo,token,draft}=await setup();
+  for(let i=0;i<3000;i++)repo.state.items.push({id:`legacy:${i}`,workspaceId:"pure",userId:user.uid,title:"Legacy",status:"open"});
+  const result=await executeTool(repo,token,"create_item",{...draft,external_id:"fresh:2"},now);
+  assert.equal(result.created,true);
+  assert.equal((await executeTool(repo,token,"get_readiness",{workspace_id:"pure"},now)).ready,true);
+  repo.state.items.push({id:"other-world-source",workspaceId:"pure",userId:user.uid,runWorld:"Boldr AI",externalId:"world-conflict",status:"open"});
+  await assert.rejects(executeTool(repo,token,"create_item",{...draft,external_id:"world-conflict"},now),{code:"external_id_conflict"});
+});

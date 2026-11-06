@@ -40,5 +40,11 @@ test("REST Run transaction retries conflicts, atomically commits item/audit, rol
     },{controlId:"control",readItems:false});
     assert.equal(calls.filter(call=>call.url.endsWith(":runQuery")).length,queries);
     assert.equal(calls.find(call=>call.url.endsWith(":batchGet"))?.body.transaction,"dHg=");
+    const start=calls.length;
+    await firestoreRunTransaction(env,"work",async()=>({value:{ok:true},writes:[]}),{ownerId:"owner",world:"Pure AI",legacyExternalId:"source:1"});
+    const scoped=calls.slice(start).filter(call=>call.url.endsWith(":runQuery"));
+    assert.equal(scoped.length,2);
+    assert.deepEqual(scoped[0].body.structuredQuery.where.compositeFilter.filters.map(filter=>filter.fieldFilter.field.fieldPath),["workspaceId","userId","runWorld"]);
+    assert.deepEqual(scoped[1].body.structuredQuery.where.compositeFilter.filters.map(filter=>filter.fieldFilter.field.fieldPath),["workspaceId","userId","externalId"]);
   }finally{globalThis.fetch=original;}
 });

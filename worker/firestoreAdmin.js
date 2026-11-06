@@ -287,10 +287,20 @@ export async function firestoreRunTransaction(env, workspaceId, build, options =
     try {
       let rows=[];
       if(options.readItems!==false) {
-        const response=await fetch(`https://firestore.googleapis.com/v1/${root}:runQuery`,{method:"POST",headers,body:JSON.stringify({transaction,structuredQuery:{from:[{collectionId:"tasks"}],where:{fieldFilter:{field:{fieldPath:"workspaceId"},op:"EQUAL",value:{stringValue:workspaceId}}},limit:2001}})});
-        const payload=await response.json();
-        if (!response.ok) throw new Error(payload.error?.message || "Cannot read Run transaction.");
-        rows=payload.filter((entry)=>entry.document).map((entry)=>({id:entry.document.name.split("/").pop(),...decodeFirestoreDocument(entry.document.fields)}));
+        const filters={workspaceId,...(options.ownerId&&options.world?{userId:options.ownerId,runWorld:options.world}:{})};
+        const read=async(fields,limit)=>{
+          const conditions=Object.entries(fields).map(([fieldPath,value])=>({fieldFilter:{field:{fieldPath},op:"EQUAL",value:{stringValue:value}}}));
+          const where=conditions.length===1?conditions[0]:{compositeFilter:{op:"AND",filters:conditions}};
+          const response=await fetch(`https://firestore.googleapis.com/v1/${root}:runQuery`,{method:"POST",headers,body:JSON.stringify({transaction,structuredQuery:{from:[{collectionId:"tasks"}],where,limit}})});
+          const payload=await response.json();
+          if (!response.ok) throw new Error(payload.error?.message || "Cannot read Run transaction.");
+          return payload.filter((entry)=>entry.document).map((entry)=>({id:entry.document.name.split("/").pop(),...decodeFirestoreDocument(entry.document.fields)}));
+        };
+        rows=await read(filters,2001);
+        if(options.legacyExternalId&&options.ownerId) {
+          const matches=await read({workspaceId,userId:options.ownerId,externalId:options.legacyExternalId},3);
+          rows=[...new Map([...rows,...matches].map(row=>[row.id,row])).values()];
+        }
       }
       if(rows.length>2000) throw Object.assign(new Error("Workspace snapshot exceeds safe limit."),{status:409,code:"incomplete_snapshot"});
       let control=null;
