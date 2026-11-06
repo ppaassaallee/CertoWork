@@ -36,15 +36,29 @@ export function createMcpRepository(db: {
 
   return {
     configured: () => true,
+    async listRunItems(workspaceId:string,userId:string,world:string) {
+      const snap=await db.collection("tasks").where("workspaceId","==",workspaceId).where("userId","==",userId).where("runWorld","==",world).limit(2001).get();
+      return snap.docs.map(doc=>asRecord(doc.id,doc.data()));
+    },
+    async listOwnedRunCandidates(workspaceId:string,userId:string) {
+      const snap=await db.collection("tasks").where("workspaceId","==",workspaceId).where("userId","==",userId).limit(2001).get();
+      return snap.docs.map(doc=>asRecord(doc.id,doc.data()));
+    },
     async getRunControl(id:string) {
       const snap=await db.collection("run_agent_state").doc(id).get();
       return snap.exists?snap.data():null;
     },
-    async mutateRun(workspaceId:string,build:(rows:Array<Record<string,unknown>&{id:string}>,control:Record<string,unknown>|null)=>Promise<{value:unknown;writes?:Array<{collection:string;id:string;data:Record<string,unknown>}>}>,options:{controlId?:string;readItems?:boolean}={}) {
+    async mutateRun(workspaceId:string,build:(rows:Array<Record<string,unknown>&{id:string}>,control:Record<string,unknown>|null)=>Promise<{value:unknown;writes?:Array<{collection:string;id:string;data:Record<string,unknown>}>}>,options:{controlId?:string;readItems?:boolean;ownerId?:string;world?:string;legacyExternalId?:string}={}) {
       if(!db.runTransaction)throw new McpError("unavailable","Atomic Run storage is unavailable.",503);
       return db.runTransaction(async transaction=>{
-        const snap=options.readItems===false?null:await transaction.get(db.collection("tasks").where("workspaceId","==",workspaceId).limit(2001));
-        const rows=snap?snap.docs.map(doc=>asRecord(doc.id,doc.data())):[];
+        let query=db.collection("tasks").where("workspaceId","==",workspaceId);
+        if(options.ownerId&&options.world)query=query.where("userId","==",options.ownerId).where("runWorld","==",options.world);
+        const snap=options.readItems===false?null:await transaction.get(query.limit(2001));
+        let rows=snap?snap.docs.map(doc=>asRecord(doc.id,doc.data())):[];
+        if(options.readItems!==false&&options.ownerId&&options.legacyExternalId) {
+          const duplicates=await transaction.get(db.collection("tasks").where("workspaceId","==",workspaceId).where("userId","==",options.ownerId).where("externalId","==",options.legacyExternalId).limit(3));
+          rows=[...new Map([...rows,...duplicates.docs.map(doc=>asRecord(doc.id,doc.data()))].map(row=>[row.id,row])).values()];
+        }
         if(rows.length>2000)throw new McpError("incomplete_snapshot","Workspace exceeds the complete-read limit.",409);
         const control=options.controlId?await transaction.get(db.collection("run_agent_state").doc(options.controlId)):null;
         const result=await build(rows,control?.exists?control.data():null);

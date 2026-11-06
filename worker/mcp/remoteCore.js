@@ -2521,9 +2521,12 @@ export function createMemoryMcpRepo() {
   let runQueue = Promise.resolve();
   return {
     async getRunControl(id) { return state.runControls[id] || null; },
+    async listRunItems(workspaceId,userId,world) {return state.items.filter(row=>row.workspaceId===workspaceId&&row.userId===userId&&row.runWorld===world);},
+    async listOwnedRunCandidates(workspaceId,userId) {return state.items.filter(row=>row.workspaceId===workspaceId&&row.userId===userId);},
     async mutateRun(workspaceId,build,options={}) {
       const work=runQueue.then(async()=>{
-        const result=await build(state.items.filter(item=>item.workspaceId===workspaceId),state.runControls[options.controlId] || null);
+        const records=options.readItems===false?[]:state.items.filter(item=>item.workspaceId===workspaceId&&(!options.ownerId||item.userId===options.ownerId&&(item.runWorld===options.world||options.legacyExternalId&&item.externalId===options.legacyExternalId)));
+        const result=await build(records,state.runControls[options.controlId] || null);
         for(const write of result.writes||[]) {
           if(write.collection==="tasks") {
             const index=state.items.findIndex(item=>item.id===write.id);

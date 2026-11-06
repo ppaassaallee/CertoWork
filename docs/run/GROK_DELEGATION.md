@@ -40,7 +40,7 @@ issuance, workspace membership at each call, and owner/world on each item.
 
 Create/update/comment use a Firestore read-write transaction. Item and audit
 entry commit together; conflicting commits retry. Caps are checked against the
-transaction's complete workspace snapshot. A workspace over 2,000 records fails
+transaction's complete owner/world snapshot. A world over 2,000 Run records fails
 closed rather than calculating caps from truncated results. Agent concurrency
 tests do not certify global caps for concurrent legacy UI writers.
 
@@ -89,13 +89,17 @@ legacy Firestore Run-read ACL limitation remains unchanged by this change.
 ## Cost boundaries
 
 No new service, background listener, cron or model invocation. Readiness and
-queue/cap calls read on demand. Item/proposal approvals use a complete workspace
-snapshot up to the explicit limit. Brief and sync writes read only their single
+queue/cap calls use indexed workspace/owner/world reads on demand. Item/proposal
+approvals read only that Run partition, not all old workspace items. Creates
+also run a targeted workspace/owner/externalId query for legacy/cross-world
+conflicts. Brief and sync writes read only their single
 control document, not the workspace. Retention is bounded (28 brief editions,
 100 pending proposals, 50 reviewed proposals, 14 sync logs, 2,000 processed IDs,
-240 KB serialized control state). A scoped indexed Run query or counter ledger
-is still needed before high-volume unattended ingestion; do not call this a
-completed infrastructure cost optimization.
+240 KB serialized control state). Search includes owned legacy candidates (up
+to 2,000); Grok should batch inventory and cache it for a run rather than scan on
+every source event. Beyond the per-world limit, a counter ledger/search index
+would still be needed; do not call this a completed infrastructure optimization.
+The three added composite indexes must finish building before readiness passes.
 
 ## Core sync tool examples (no secrets)
 
@@ -114,7 +118,7 @@ Transaction contract checked against Google Cloud's official REST references:
 [beginTransaction](https://docs.cloud.google.com/firestore/docs/reference/rest/v1/projects.databases.documents/beginTransaction)
 and [runQuery](https://docs.cloud.google.com/firestore/docs/reference/rest/v1/projects.databases.documents/runQuery).
 
-Validation for the core workflow: 990 unit tests, two real-panel browser tests
+Validation for the core workflow: unit tests and two real-panel browser tests
 (English/Spanish, approve payload, stale failure retained, mobile width),
 TypeScript/build, ESLint quiet, debt budget, Worker deployment dry-run. Browser
 tests use intercepted synthetic fixtures; no source data or customer records are
