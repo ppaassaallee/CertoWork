@@ -798,3 +798,16 @@
 @media (prefers-reduced-motion: reduce) {
   .cr-desk *, .cr-modal * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+.cr-desk .cr-agent-panel { margin: 0 0 24px; padding: 24px; border: 1px solid var(--cr-line, #ddd); border-radius: 14px; background: var(--cr-paper, #fff); }
+.cr-desk .cr-agent-panel > header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.cr-desk .cr-agent-panel > header > div { min-width: 0; }
+.cr-desk .cr-agent-panel button { white-space: nowrap; }
+.cr-desk .cr-agent-panel h2 { margin: 0; font-size: 20px; }
+.cr-desk .cr-agent-panel h3 { margin: 8px 0; font-size: 17px; }
+.cr-desk .cr-agent-panel p { margin: 8px 0; }
+.cr-desk .cr-agent-copy { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; margin: 12px 0; }
+.cr-desk .cr-agent-proposals { display: grid; gap: 16px; }
+.cr-desk .cr-agent-proposals article { border-top: 1px solid var(--cr-line, #ddd); padding: 16px 0 0; overflow-wrap: anywhere; }
+.cr-desk .cr-agent-value { font-weight: 600; }
+.cr-desk .cr-agent-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.cr-agent-loading { padding: 32px; }

@@ -4,6 +4,7 @@
  * Storage is injected so tests never touch Firestore.
  */
 import { executeRunTool, hasRunDelegation, mutateRunItem, RUN_TOOLS, RUN_TOOL_NAMES, validateRunDelegation } from "./runDelegation.js";
+import { executeRunWorkflow, runReadiness, RUN_WORKFLOW_TOOLS, RUN_WORKFLOW_NAMES } from "./runWorkflow.js";
 
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -98,6 +99,7 @@ export function publicToken(record) {
     workspaceIds: record.workspaceIds || [],
     permission: record.permission,
     runDelegation: record.runDelegation || null,
+    ...(hasRunDelegation(record) ? {scopes:["read","write","propose"]} : {}),
     assign: Boolean(record.assign),
     canDelete: record.permission === "read-write" && record.canDelete !== false,
     admin: Boolean(record.admin),
@@ -2193,7 +2195,17 @@ export const MCP_TOOLS = [
 export async function executeTool(repo, token, name, args, now = Date.now()) {
   if (hasRunDelegation(token) && name !== "list_workspaces") {
     await requireWorkspace(repo,token,args?.workspace_id);
-    if (RUN_TOOL_NAMES.includes(name)) return executeRunTool(repo,token,name,args||{});
+    if(name==="get_readiness")return runReadiness(repo,token,args||{},now);
+    if(RUN_WORKFLOW_NAMES.includes(name))return executeRunWorkflow(repo,token,name,args||{},now);
+    if (RUN_TOOL_NAMES.includes(name)) {
+      const result=await executeRunTool(repo,token,name,args||{});
+      if(name==="get_caps"||!args?.queue||args.queue==="decide") {
+        const {proposals}=await executeRunWorkflow(repo,token,"list_proposals",args||{},now);
+        result.pending_proposals=proposals;
+        if(name==="get_caps")result.counts.decide+=proposals.length;
+      }
+      return result;
+    }
     if (["create_item","update_item","add_comment"].includes(name)) return mutateRunItem(repo,token,name,args||{},now);
     throw new McpError("run_tool_unavailable", "This private Run delegation cannot use that tool. Call get_readiness for missing capabilities.",403);
   }
@@ -2296,8 +2308,8 @@ async function dispatchMethod(repo, token, message, now) {
   if (method === "tools/list") {
     if (!hasRunDelegation(token)) return {tools:MCP_TOOLS};
     const fields=Object.fromEntries(["lane","decision","epic","feature","context","deliverable","doneWhen","done_when","nextStep","next_step","source","owner","dueDate","due_date","outcome","evidence_source_id"].map(key=>[key,{type:"string"}]));
-    const tools=MCP_TOOLS.filter(tool=>["list_workspaces","create_item","update_item","add_comment"].includes(tool.name)).map(tool=> tool.name==="list_workspaces" ? tool : ({...tool,description:`Private Run ${tool.name}. Completion requires evidence; no delete or access changes. Existing title/priority changes require proposals (not yet available).`,inputSchema:{type:"object",properties:{workspace_id:{type:"string"},item_id:{type:"string"},title:{type:"string"},external_id:{type:"string"},priority:{type:"string",enum:["P1","P2","P3","P4"]},comment:{type:"string"},...fields,dry_run:{type:"boolean"}},required:tool.name==="create_item"?["workspace_id","title","external_id","lane","decision","epic","context","deliverable","doneWhen","nextStep","source"]:["workspace_id","item_id"],additionalProperties:false}}));
-    return {tools:[...tools,...RUN_TOOLS]};
+    const tools=MCP_TOOLS.filter(tool=>["list_workspaces","create_item","update_item","add_comment"].includes(tool.name)).map(tool=> tool.name==="list_workspaces" ? tool : ({...tool,description:`Private Run ${tool.name}. Completion requires evidence; no delete or access changes. Existing title/priority changes must use propose_decision for human approval.`,inputSchema:{type:"object",properties:{workspace_id:{type:"string"},item_id:{type:"string"},title:{type:"string"},external_id:{type:"string"},priority:{type:"string",enum:["P1","P2","P3","P4"]},comment:{type:"string"},...fields,dry_run:{type:"boolean"}},required:tool.name==="create_item"?["workspace_id","title","external_id","lane","decision","epic","context","deliverable","doneWhen","nextStep","source"]:["workspace_id","item_id"],additionalProperties:false}}));
+    return {tools:[...tools,...RUN_TOOLS,...RUN_WORKFLOW_TOOLS]};
   }
   if (method === "tools/call") {
     const name = text(message.params?.name);
@@ -2504,18 +2516,21 @@ export function createMemoryMcpRepo() {
     members: [],
     projects: [],
     views: [],
+    runControls: {},
   };
   let runQueue = Promise.resolve();
   return {
-    async mutateRun(workspaceId,build) {
+    async getRunControl(id) { return state.runControls[id] || null; },
+    async mutateRun(workspaceId,build,options={}) {
       const work=runQueue.then(async()=>{
-        const result=await build(state.items.filter(item=>item.workspaceId===workspaceId));
+        const result=await build(state.items.filter(item=>item.workspaceId===workspaceId),state.runControls[options.controlId] || null);
         for(const write of result.writes||[]) {
           if(write.collection==="tasks") {
             const index=state.items.findIndex(item=>item.id===write.id);
             const row={id:write.id,...write.data};
             if(index<0)state.items.push(row);else state.items[index]=row;
           } else if(write.collection==="mcp_audit_events")state.audits.push({id:write.id,...write.data});
+          else if(write.collection==="run_agent_state")state.runControls[write.id]=write.data;
         }
         return result.value;
       });

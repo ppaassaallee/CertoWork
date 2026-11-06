@@ -11,6 +11,7 @@
     "deploy:cloudflare:dry": "npm run build && npx wrangler deploy --dry-run",
     "test": "tsx --test tests/*.test.ts",
     "test:run-visual": "playwright test -c playwright.run.config.ts",
+    "test:run-workflow": "playwright test -c playwright.run-workflow.config.ts",
     "audit:run-goldens": "node scripts/audit-run-goldens.mjs",
     "lint": "eslint .",
     "lint:budget": "node scripts/lint-budget.mjs",

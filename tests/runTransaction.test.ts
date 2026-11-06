@@ -16,6 +16,7 @@ test("REST Run transaction retries conflicts, atomically commits item/audit, rol
     const body=JSON.parse(String(options?.body||"{}"));calls.push({url:address,body});
     if(address.endsWith(":beginTransaction"))return Response.json({transaction:"dHg="});
     if(address.endsWith(":runQuery"))return Response.json([{document:{name:"projects/test/databases/test-db/documents/tasks/item",fields:{workspaceId:{stringValue:"work"},title:{stringValue:"Existing item"}}}}]);
+    if(address.endsWith(":batchGet"))return Response.json([{missing:"projects/test/databases/test-db/documents/run_agent_state/control"}]);
     if(address.endsWith(":commit"))return ++commits===1?Response.json({error:{status:"ABORTED"}},{status:409}):Response.json({commitTime:"2026-11-06T12:00:00Z"});
     if(address.endsWith(":rollback"))return Response.json({});
     throw new Error(`Unexpected test request ${address}`);
@@ -32,5 +33,12 @@ test("REST Run transaction retries conflicts, atomically commits item/audit, rol
     assert.equal(calls.find(call=>call.url.endsWith(":runQuery"))?.body.transaction,"dHg=");
     await assert.rejects(firestoreRunTransaction(env,"work",async()=>{throw new Error("cap refused");}),/cap refused/);
     assert.equal(commits,2);assert.equal(calls.filter(call=>call.url.endsWith(":rollback")).length,2);
+    const queries=calls.filter(call=>call.url.endsWith(":runQuery")).length;
+    await firestoreRunTransaction(env,"work",async(rows,control)=>{
+      assert.deepEqual(rows,[]);assert.equal(control,null);
+      return {value:{saved:true},writes:[{collection:"run_agent_state",id:"control",data:{world:"Pure AI"}}]};
+    },{controlId:"control",readItems:false});
+    assert.equal(calls.filter(call=>call.url.endsWith(":runQuery")).length,queries);
+    assert.equal(calls.find(call=>call.url.endsWith(":batchGet"))?.body.transaction,"dHg=");
   }finally{globalThis.fetch=original;}
 });

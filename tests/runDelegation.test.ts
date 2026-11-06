@@ -19,7 +19,7 @@ test("MCP discovery advertises only implemented Run tools and usable required fi
   const {repo,secret}=await setup();
   const response=await handleMcpHttp({repo,method:"POST",authorization:`Bearer ${secret}`,accept:"application/json",now,body:{jsonrpc:"2.0",id:1,method:"tools/list"}});
   const tools=JSON.parse(response.body).result.tools;
-  assert.deepEqual(tools.map(tool=>tool.name).sort(),["list_workspaces","create_item","update_item","add_comment","get_readiness","list_queue","get_caps"].sort());
+  assert.deepEqual(tools.map(tool=>tool.name).sort(),["list_workspaces","create_item","update_item","add_comment","get_readiness","list_queue","get_caps","search","list_fields","propose_decision","list_proposals","record_brief","get_brief","get_sync_state","record_sync_state"].sort());
   const schema=tools.find(tool=>tool.name==="create_item").inputSchema;
   assert.equal(schema.required.includes("external_id"),true);assert.equal(schema.required.includes("type"),false);
 });
@@ -68,5 +68,5 @@ test("world, account, workspace and tool boundaries fail closed",async()=>{
   repo.state.items.push({...draft(),id:"hidden",workspaceId:"work",userId:"other",runWorld:"Pure AI",runDecision:"make"});
   assert.equal((await executeTool(repo,token,"list_queue",{workspace_id:"work"},now)).total,0);
   const readiness=await executeTool(repo,token,"get_readiness",{workspace_id:"work"},now);
-  assert.equal(readiness.ready,false);assert.equal(readiness.scheduling,false);
+  assert.equal(readiness.ready,true);assert.equal(readiness.scheduling.configured_by_certo,false);
 });

@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { handleMcpAdmin, handleMcpHttp, McpError } from "../../worker/mcp/remoteCore.js";
 import { createMcpRepository } from "../mcpRepository";
+import { handleRunOwner } from "../../worker/mcp/runWorkflow.js";
+import type { Firestore } from "firebase-admin/firestore";
 
 function sendPacked(res: Response, result: { status: number; headers?: Record<string, string>; body: string }) {
   res.status(result.status);
@@ -12,7 +14,7 @@ function sendPacked(res: Response, result: { status: number; headers?: Record<st
 
 export function registerMcpRoutes(
   app: Express,
-  deps: { getDb: () => { collection: (name: string) => any } | null | undefined },
+  deps: { getDb: () => { collection: (name: string) => any;runTransaction?:Firestore["runTransaction"] } | null | undefined },
 ) {
   const serve = async (req: Request, res: Response) => {
     const db = deps.getDb();
@@ -42,6 +44,24 @@ export function registerMcpRoutes(
   app.get("/mcp", serve);
   app.post("/mcp", serve);
   app.delete("/mcp", serve);
+  app.use("/api/run/agent",async(req:Request,res:Response)=>{
+    try {
+      const db=deps.getDb();
+      if(!db)return res.status(503).json({code:"unavailable",message:"Firebase Admin is not configured."});
+      const match=String(req.headers.authorization||"").match(/^Bearer\s+(\S+)$/i);
+      if(!match)return res.status(401).json({code:"unauthorized"});
+      const decoded=await getAdminAuth().verifyIdToken(match[1]);
+      const url=new URL(req.originalUrl,"http://localhost");
+      const expected=url.pathname==="/api/run/agent/review"?"POST":"GET";
+      if(req.method!==expected)return res.status(405).json({code:"method_not_allowed"});
+      const result=await handleRunOwner(createMcpRepository(db),{uid:decoded.uid,email:decoded.email||"",emailVerified:decoded.email_verified===true},url.pathname,req.method==="GET"?Object.fromEntries(url.searchParams):req.body);
+      res.setHeader("cache-control","no-store");
+      return res.json(result);
+    }catch(error){
+      const failure=error as Error&{status?:number;code?:string};
+      return res.status(failure.status||401).json({code:failure.code||"unauthorized",message:failure.message});
+    }
+  });
 
   app.use("/api/mcp/tokens", async (req: Request, res: Response) => {
     const db = deps.getDb();
@@ -64,7 +84,7 @@ export function registerMcpRoutes(
         method: req.method,
         path: url.pathname,
         body: req.body,
-        user: { uid: decoded.uid, email: decoded.email || "" },
+        user: { uid: decoded.uid, email: decoded.email || "", emailVerified:decoded.email_verified===true },
       });
       return res.status(result.status).json(result.body);
     } catch (error) {

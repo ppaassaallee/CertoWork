@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type Firestore } from "firebase-admin/firestore";
 import { ITEM_FETCH_CAP, McpError } from "../worker/mcp/remoteCore.js";
 
 const TOKENS = "mcp_api_tokens";
@@ -27,6 +27,7 @@ function stamp(data: Record<string, unknown>) {
 
 export function createMcpRepository(db: {
   collection: (name: string) => any;
+  runTransaction?: Firestore["runTransaction"];
 }) {
   async function queryEqual(collection: string, field: string, value: string, limit: number) {
     const snap = await db.collection(collection).where(field, "==", value).limit(limit).get();
@@ -35,6 +36,22 @@ export function createMcpRepository(db: {
 
   return {
     configured: () => true,
+    async getRunControl(id:string) {
+      const snap=await db.collection("run_agent_state").doc(id).get();
+      return snap.exists?snap.data():null;
+    },
+    async mutateRun(workspaceId:string,build:(rows:Array<Record<string,unknown>&{id:string}>,control:Record<string,unknown>|null)=>Promise<{value:unknown;writes?:Array<{collection:string;id:string;data:Record<string,unknown>}>}>,options:{controlId?:string;readItems?:boolean}={}) {
+      if(!db.runTransaction)throw new McpError("unavailable","Atomic Run storage is unavailable.",503);
+      return db.runTransaction(async transaction=>{
+        const snap=options.readItems===false?null:await transaction.get(db.collection("tasks").where("workspaceId","==",workspaceId).limit(2001));
+        const rows=snap?snap.docs.map(doc=>asRecord(doc.id,doc.data())):[];
+        if(rows.length>2000)throw new McpError("incomplete_snapshot","Workspace exceeds the complete-read limit.",409);
+        const control=options.controlId?await transaction.get(db.collection("run_agent_state").doc(options.controlId)):null;
+        const result=await build(rows,control?.exists?control.data():null);
+        for(const write of result.writes||[])transaction.set(db.collection(write.collection).doc(write.id),write.data);
+        return result.value;
+      });
+    },
     async getTokenByHash(hash: string) {
       const rows = await queryEqual(TOKENS, "tokenHash", hash, 2);
       return rows.length === 1 ? rows[0] : null;
