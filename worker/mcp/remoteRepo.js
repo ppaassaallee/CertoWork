@@ -45,11 +45,19 @@ async function queryEqual(env, collectionId, field, value, limit) {
   }
   return result.documents || [];
 }
+async function queryRunScope(env,workspaceId,userId,world) {
+  const fields={workspaceId,userId,...(world?{runWorld:world}:{})};
+  const result=await firestoreRunQuery(env,{from:[{collectionId:"tasks"}],where:{compositeFilter:{op:"AND",filters:Object.entries(fields).map(([field,value])=>equalFilter(field,value))}},limit:2001});
+  if(!result.ok)throw new McpError("unavailable",result.reason||"Scoped Run index is unavailable.",503);
+  return result.documents||[];
+}
 
 export function createWorkerMcpRepo(env) {
   return {
     mutateRun(workspaceId, build, options) { return firestoreRunTransaction(env,workspaceId,build,options); },
     getRunControl(id) { return firestoreGetDocument(env,"run_agent_state",id); },
+    listRunItems(workspaceId,userId,world) {return queryRunScope(env,workspaceId,userId,world);},
+    listOwnedRunCandidates(workspaceId,userId) {return queryRunScope(env,workspaceId,userId);},
     configured() {
       return firestoreAdminConfigured(env);
     },

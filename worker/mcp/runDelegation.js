@@ -29,7 +29,7 @@ export async function executeRunTool(repo, token, name, args) {
   if (!world || !token.workspaceIds.includes(workspaceId) || !await repo.userCanAccess(token.userId,workspaceId)) throw Object.assign(new Error("Workspace not delegated."),{status:403,code:"workspace_forbidden"});
   if(args.world!==undefined && args.world!==world) throw Object.assign(new Error("World does not match delegated workspace."),{status:403,code:"world_mismatch"});
   const envelope = {workspace_id:workspaceId,world};
-  const records = await repo.listItems(workspaceId);
+  const records = await repo.listRunItems(workspaceId,token.userId,world);
   if (records.length >= 2000) throw Object.assign(new Error("Workspace exceeds the safe complete-read limit; do not infer caps from a partial list."),{status:409,code:"incomplete_snapshot"});
   const rows = records.filter((row)=>row.workspaceId===workspaceId && row.userId===token.userId && row.runWorld===world);
   const items = rows.map((row)=>runDocToDeskItem(row.id,row,{id:workspaceId})).filter(Boolean);
@@ -75,6 +75,7 @@ export async function mutateRunItem(repo,token,name,args,now) {
   return repo.mutateRun(workspaceId, async(records)=>{
     if(records.length>2000) throw Object.assign(new Error("Incomplete workspace snapshot."),{status:409,code:"incomplete_snapshot"});
     if(name==="create_item"&&records.some(row=>row.workspaceId===workspaceId&&row.userId===token.userId&&!row.runWorld&&row.externalId===key)) throw Object.assign(new Error("A matching legacy item exists. Do not recreate it in Run."),{status:409,code:"legacy_conflict"});
+    if(name==="create_item"&&records.some(row=>row.workspaceId===workspaceId&&row.userId===token.userId&&row.runWorld&&row.runWorld!==world&&row.externalId===key)) throw Object.assign(new Error("That source ID already belongs to another world in this workspace."),{status:409,code:"external_id_conflict"});
     const rows=records.filter(row=>row.workspaceId===workspaceId&&row.userId===token.userId&&row.runWorld===world);
     const current=rows.find(row=>name==="create_item"?row.externalId===key:row.id===id);
     if(name==="create_item"&&current) return {value:{workspace_id:workspaceId,world,item_id:current.id,created:false},writes:[]};
@@ -121,5 +122,5 @@ export async function mutateRunItem(repo,token,name,args,now) {
     if(args.dry_run===true) return {value,writes:[]};
     const auditId=`run_audit_${crypto.randomUUID()}`;
     return {value,writes:[{collection:"tasks",id,data:Object.fromEntries(Object.entries(next).filter(([key])=>key!=="id"))},{collection:"mcp_audit_events",id:auditId,data:{userId:token.userId,tokenId:token.id,tokenName:token.name,workspaceId,world,itemId:id,action:name,at:next.updatedAt,sourceId:args.evidence_source_id||next.externalId}}]};
-  });
+  },{ownerId:token.userId,world,legacyExternalId:name==="create_item"?key:undefined});
 }

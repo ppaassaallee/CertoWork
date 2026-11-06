@@ -79,11 +79,11 @@ function persist(scope,control,value,token,action,now,extra=[]) {
 export async function runReadiness(repo,token,args,now=Date.now()) {
   const scope=await runScope(repo,token,args);
   const writable=token.permission==="read-write"&&typeof repo.mutateRun==="function";
-  const checks={read:typeof repo.listItems==="function",write:writable,propose:writable&&typeof repo.getRunControl==="function",brief:writable&&typeof repo.getRunControl==="function",owner_review:true};
+  const checks={read:typeof repo.listRunItems==="function",write:writable,propose:writable&&typeof repo.getRunControl==="function",brief:writable&&typeof repo.getRunControl==="function",owner_review:true};
   const mappings=await delegatedMappings(repo,token.userId,now);
   checks.owner_review=mappings.some(mapping=>mapping.world===scope.world&&mapping.workspace_id===scope.workspaceId);
   if(checks.propose)checkedControl(scope,await repo.getRunControl(scope.controlId));
-  if(checks.read)ownRows(await repo.listItems(scope.workspaceId),scope);
+  if(checks.read)ownRows(await repo.listRunItems(scope.workspaceId,scope.userId,scope.world),scope);
   const ready=Object.values(checks).every(Boolean);
   return {workspace_id:scope.workspaceId,world:scope.world,ready,contract:"certo-run-sync/1",profile:"core_sync",full_operating_brief_ready:false,checks,scopes:["read","write","propose"],direct_item_writes:checks.write,proposals:checks.propose,brief:checks.brief,scheduling:{executor:"external_grok",required_for_mcp_ready:false,configured_by_certo:false},sources:{executor:"external_grok",verified_by_certo:false},missing:Object.entries(checks).filter(([,ok])=>!ok).map(([key])=>key),unsupported:["legacy item enrichment","set_parent","bulk_update","get_close","get_projects","set_pipeline_stage","set_health","get_allocation","set_allocation","get_week_plan","record_checkin","get_life"],delete:false,admin:false};
 }
@@ -91,7 +91,7 @@ export async function executeRunWorkflow(repo,token,name,args,now=Date.now()) {
   const scope=await runScope(repo,token,args);
   const envelope={workspace_id:scope.workspaceId,world:scope.world};
   if(name==="search"||name==="list_fields") {
-    const records=await repo.listItems(scope.workspaceId);
+    const records=name==="search"?await repo.listOwnedRunCandidates(scope.workspaceId,scope.userId):await repo.listRunItems(scope.workspaceId,scope.userId,scope.world);
     const rows=ownRows(records,scope);
     if(name==="list_fields")return {...envelope,lanes:["commercial","projects","admin"],decisions:["make","decide","delegate","follow_up","admin_batch"],priorities:["P1","P2","P3","P4"],epics:[...new Set(rows.map(row=>row.epic).filter(Boolean))],features:[...new Set(rows.map(row=>row.feature).filter(Boolean))],tags:[...new Set(rows.flatMap(row=>Array.isArray(row.tags)?row.tags:[]))],catalog_source:"existing owner Run items only",catalog_admin:false};
     const query=String(args.query||"").toLowerCase().trim();
@@ -148,7 +148,7 @@ export async function executeRunWorkflow(repo,token,name,args,now=Date.now()) {
     } else fail("unknown_tool","Unsupported Run workflow tool.",404);
     if(args.dry_run===true)return {value:{...value,dry_run:true},writes:[]};
     return persist(scope,control,value,token,name,now);
-  },{controlId:scope.controlId,readItems:name==="propose_decision"});
+  },{controlId:scope.controlId,readItems:name==="propose_decision",ownerId:scope.userId,world:scope.world});
 }
 
 export async function ownerMappings(repo,user,now=Date.now()) {
@@ -174,7 +174,7 @@ export async function handleRunOwner(repo,user,path,args,now=Date.now()) {
   const mapping=mappings.find(row=>row.world===args.world);
   if(!mapping||args.workspace_id&&mapping.workspace_id!==args.workspace_id)fail("unmapped_world","No active delegation maps this world to the requested workspace.",403);
   const scope={workspaceId:mapping.workspace_id,world:mapping.world,userId:user.uid,controlId:await runControlId(user.uid,mapping.workspace_id,mapping.world)};
-  if(path==="/api/run/agent/snapshot")return {workspace_id:scope.workspaceId,world:scope.world,items:ownRows(await repo.listItems(scope.workspaceId),scope),control:checkedControl(scope,await repo.getRunControl(scope.controlId))};
+  if(path==="/api/run/agent/snapshot")return {workspace_id:scope.workspaceId,world:scope.world,items:ownRows(await repo.listRunItems(scope.workspaceId,scope.userId,scope.world),scope),control:checkedControl(scope,await repo.getRunControl(scope.controlId))};
   if(path!=="/api/run/agent/review")fail("not_found","Unknown Run operation.",404);
   if(!["approve","reject","defer"].includes(args.decision))fail("invalid_decision","Choose approve, reject or defer.");
   return repo.mutateRun(scope.workspaceId,async(records,stored)=>{
@@ -195,5 +195,5 @@ export async function handleRunOwner(repo,user,path,args,now=Date.now()) {
     proposal.status=args.decision==="approve"?"approved":"rejected";
     proposal.reviewedAt=new Date(now).toISOString();proposal.reviewedBy=user.uid;
     return persist(scope,control,{status:proposal.status},null,`proposal.${proposal.status}`,now,extra);
-  },{controlId:scope.controlId,readItems:args.decision==="approve"});
+  },{controlId:scope.controlId,readItems:args.decision==="approve",ownerId:scope.userId,world:scope.world});
 }
