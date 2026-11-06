@@ -332,6 +332,8 @@ const MyWorkRouteLazy = lazy(() =>
 const ProjectRouteLazy = lazy(() =>
   import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
 ) as LazyExoticComponent<ComponentType<any>>;
+import { canUseCertoRun } from "../run/access";
+
 const CertoRunDeskLazy = lazy(() =>
   import("../features/certo-run/CertoRunDesk").then((mod) => ({ default: mod.CertoRunDesk })),
 );
@@ -643,7 +645,8 @@ export function DelivereeWorkspace() {
     [],
   );
   const tasks = useTasksWhen(shellNeedsTaskArray) as any[];
-  const runRows = useRunItems(workspace?.id || "");
+  const runAllowed = canUseCertoRun(user);
+  const runRows = useRunItems(runAllowed ? workspace?.id || "" : "");
   const runOpenCount = openRunWorldCount(runRows, lastRunWorld());
   const setTasks = useCallback(
     (update: any[] | ((prev: any[]) => any[])) => {
@@ -7512,7 +7515,7 @@ export function DelivereeWorkspace() {
             <Sparkles size="sm" />
             <span>{t("navRutinas")}</span>
           </button>
-          <button
+          {runAllowed && <button
             className={`do-nav-item is-run ${lens.kind === "certo-run" ? "is-active" : ""}`}
             data-testid="nav-certo-run"
             onClick={() => {
@@ -7526,7 +7529,7 @@ export function DelivereeWorkspace() {
             {runOpenCount > 0 && (
               <em className="do-nav-badge" data-testid="nav-certo-run-count">{runOpenCount}</em>
             )}
-          </button>
+          </button>}
         </nav>
 
         <div className="do-sidebar-scroll">
@@ -8041,7 +8044,7 @@ export function DelivereeWorkspace() {
           {workspaceOpen && (
             <div className="do-account-menu" data-testid="workspace-switcher-menu" role="menu">
               <span className="do-account-menu-label">Workspaces</span>
-              <button
+              {runAllowed && <button
                 data-testid="menu-certo-run"
                 onClick={() => {
                   setWorkspaceOpen(false);
@@ -8050,7 +8053,7 @@ export function DelivereeWorkspace() {
                 type="button"
               >
                 <Gauge size={14} /> {t("navCertoRun")}
-              </button>
+              </button>}
               {workspaces.map((item) => (
                 <button
                   className={item.id === workspace?.id ? "is-current" : ""}
@@ -9855,13 +9858,15 @@ export function DelivereeWorkspace() {
               tables={visibleTables}
             />
           )
-        ) : centerView === "run" && workspace && user ? (
+        ) : centerView === "run" && !runAllowed ? (
+          <div className="do-panel-empty" data-testid="run-access-denied"><h2>{tr("Module unavailable", "Módulo no disponible")}</h2><p>{tr("This module requires the owner's personal authorization.", "Este módulo requiere autorización personal del propietario.")}</p><button type="button" onClick={() => navigate("/home")}>{tr("Back to Home", "Volver a Inicio")}</button></div>
+        ) : centerView === "run" && workspace && user && runAllowed ? (
           <Suspense fallback={<div className="do-panel-empty">Opening Certo Run…</div>}>
             <CertoRunDeskLazy
               onBack={() => navigate("/home")}
               onTab={(next) => navigate(next === "today" ? "/run" : `/run/${next}`)}
               tab={lens.kind === "certo-run" ? lens.tab : "today"}
-              user={{ uid: user.uid, displayName: user.displayName }}
+              user={{ uid: user.uid, displayName: user.displayName, email: user.email, emailVerified: user.emailVerified }}
               workspaceId={workspace.id}
             />
           </Suspense>
@@ -9921,7 +9926,7 @@ export function DelivereeWorkspace() {
           <BookOpen size={16} />
           Notes
         </button>
-        <button
+        {runAllowed && <button
           className={location.pathname.startsWith("/run") ? "is-active" : ""}
           data-testid="dock-certo-run"
           onClick={() => navigate("/run")}
@@ -9930,7 +9935,7 @@ export function DelivereeWorkspace() {
           <Gauge size={16} />
           {t("navCertoRun")}
           {runOpenCount > 0 && <em data-testid="dock-certo-run-count">{runOpenCount}</em>}
-        </button>
+        </button>}
       </nav>
 
       {isPhone ? (

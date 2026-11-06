@@ -434,13 +434,15 @@ function requireAdmin(token) {
 
 async function workspaceItems(repo, workspaceId) {
   const rows = await repo.listItems(workspaceId);
-  return (rows || []).filter((item) => text(item.workspaceId) === workspaceId);
+  // Run is a private rollout, not part of generic workspace MCP grants.
+  return (rows || []).filter((item) => text(item.workspaceId) === workspaceId && !text(item.runWorld));
 }
 
 async function requireItem(repo, workspaceId, itemId) {
   const id = text(itemId);
   if (!id) throw new McpError("item_required", "item_id is required.", 400);
   const item = await repo.getItem(id);
+  if (item && text(item.runWorld)) throw new McpError("forbidden", "This module is not available through this token.", 403);
   if (!item || text(item.workspaceId) !== workspaceId) {
     throw new McpError("not_found", "Item not found in this workspace.", 404);
   }

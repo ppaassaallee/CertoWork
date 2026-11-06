@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRunItems } from "../../data/collections";
+import { canUseCertoRun } from "../../run/access";
 import {
   availableFte,
   checkAllocation,
@@ -62,7 +63,7 @@ type TeamView = "allocation" | "utilization" | "lead";
 
 interface Props {
   workspaceId: string;
-  user: { uid: string; displayName?: string | null };
+  user: { uid: string; displayName?: string | null; email?: string | null; emailVerified?: boolean };
   tab: RunTab;
   onTab: (tab: RunTab) => void;
   onBack: () => void;
@@ -164,6 +165,11 @@ async function copyText(value: string) {
 }
 
 export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
+  if (!canUseCertoRun(user)) return <section role="alert">This module is not available for this account.</section>;
+  return <AuthorizedRunDesk workspaceId={workspaceId} user={user} tab={tab} onTab={onTab} onBack={onBack} />;
+}
+
+function AuthorizedRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const rows = useRunItems(workspaceId);
   return <RunDeskView workspaceId={workspaceId} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={rows} />;
 }
