@@ -2290,15 +2290,11 @@ async function dispatchMethod(repo, token, message, now) {
   const method = message.method;
   if (method === "initialize") {
     const requested = message.params?.protocolVersion;
-    if (requested && !SUPPORTED_PROTOCOL_VERSIONS.includes(requested)) {
-      throw new McpError(
-        "unsupported_protocol",
-        `Unsupported protocol version. Use one of: ${SUPPORTED_PROTOCOL_VERSIONS.join(", ")}.`,
-        400,
-      );
-    }
+    // MCP lifecycle: echo a supported request, otherwise offer our latest version.
+    // The client decides whether it can use the negotiated version. New clients
+    // must not receive an HTTP 400 merely for advertising a newer protocol.
     return {
-      protocolVersion: MCP_PROTOCOL_VERSION,
+      protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "Certo Work", version: "1.0.0" },
       instructions: "Pass workspace_id on every tool except list_workspaces. Never infer the workspace. Every item includes workspace_id and workspace_name. Do not invent clients, deliveries, tags, or projects unless the token has admin.",

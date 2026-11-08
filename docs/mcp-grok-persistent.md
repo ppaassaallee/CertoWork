@@ -70,12 +70,31 @@ On 403/1010 stop and report the HTTP status and CF-Ray without credentials.
 On missing_credential stop and identify the missing runtime binding. Never rotate
 the token or weaken site security merely to make a health check turn green.
 
+## Native initialization follow-up
+
+The command connection was registered as `user-Certo Run`, but initially loaded
+zero tools with a generic HTTP failure. Cloudflare's sampled logs for the Node
+POSTs at 09:46:27 and 09:46:33 show `Not mitigated`; this is not evidence of a
+WAF block. No security settings were changed. The adapter now includes only
+the safe HTTP status and CF-Ray in its error message, because Grok drops the
+structured error data. Successful authentication is still a separate check.
+
+An independent server interoperability defect was found during this review:
+`initialize` rejected unrecognized protocol versions with HTTP 400 instead of
+offering its latest supported version. It now echoes supported versions and
+offers `2025-06-18` otherwise, as required by MCP version negotiation. This does
+not add permissions or declare support for a newer protocol. Authentication
+still runs first. Native registration/read/write success must be verified after
+deployment; do not treat this code correction as proof of the incident's cause.
+
 ## References and tests
 
 - [Grok Bot: computer and apps](https://docs.x.ai/grok-bot/computer-and-apps)
   documents command-based MCP servers, account-wide connections and shared runtime.
 - [MCP transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
   defines newline-delimited stdio and Streamable HTTP.
+- [MCP lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle)
+  defines version negotiation rather than rejecting a newer client's initial offer.
 - [Cloudflare 1010](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1010/)
   explains the browser-signature denial; review policy rather than bypassing it.
 - `tests/mcpStdioBridge.test.ts` uses injected transports and synthetic credentials;
