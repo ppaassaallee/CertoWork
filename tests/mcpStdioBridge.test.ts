@@ -31,6 +31,8 @@ test("security denial latches the adapter stopped; there is no retry, redirect o
     const bridge=createCertoBridge({env:{CERTO_MCP_TOKEN:secret},fetchImpl:async()=>{calls++;return new Response("sensitive response body",{status,headers:{"cf-ray":"example-ray"}});}});
     const denied=await bridge.handleLine(request(1));
     assert.equal(denied[0].error.data.http_status,status);assert.equal(bridge.isStopped(),true);
+    assert.match(denied[0].error.message,new RegExp(`HTTP ${status}`));
+    assert.match(denied[0].error.message,/CF-Ray example-ray/);
     await bridge.handleLine(request(2));assert.equal(calls,1);assert.equal(JSON.stringify(denied).includes("sensitive response body"),false);
   }
 });
