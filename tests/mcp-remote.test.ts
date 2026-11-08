@@ -371,6 +371,21 @@ test("streamable HTTP speaks initialize and SSE without taking the Codex route",
   assert.match(wrangler, /"\/mcp\/\*"/);
 });
 
+test("initialize negotiates supported versions and offers a fallback to newer clients", async () => {
+  const repo = seed();
+  const issued = await tokenFor(repo, "read");
+  for (const requested of ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2099-01-01"]) {
+    const opened = await handleMcpHttp({repo, method:"POST", authorization:`Bearer ${issued.token}`, accept:"application/json",
+      body:{jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:requested,capabilities:{},clientInfo:{name:"native-client",version:"1"}}},now:NOW});
+    assert.equal(opened.status,200);
+    const expected=["2024-11-05","2025-03-26","2025-06-18"].includes(requested)?requested:"2025-06-18";
+    assert.equal(JSON.parse(opened.body).result.protocolVersion,expected);
+  }
+  const unauthenticated=await handleMcpHttp({repo,method:"POST",authorization:"",accept:"application/json",
+    body:{jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-11-25"}},now:NOW});
+  assert.equal(unauthenticated.status,401);
+});
+
 test("search stays inside the workspace and compact fields keep the workspace", async () => {
   const repo = seed();
   const issued = await tokenFor(repo, "read", ["w1", "w2"]);
