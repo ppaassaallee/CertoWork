@@ -39,7 +39,7 @@ export function createCertoBridge({env=process.env,fetchImpl=fetch}={}) {
         if([401,403].includes(response.status)||response.status>=300&&response.status<400)stopped=true;
         const ray=clean(response.headers.get("cf-ray")||"",secret).replace(/[^A-Za-z0-9_-]/g,"").slice(0,80);
         // Some clients discard error.data: retain safe diagnostics in the message too.
-        return reply(rpcError(request.id,-32000,`Certo HTTP ${response.status}${ray?` (CF-Ray ${ray})`:""}. Stopped on security denial/redirect; do not bypass security blocks.`,{http_status:response.status,cf_ray:ray}));
+        return reply(rpcError(request.id,-32000,`Certo HTTP ${response.status}${ray?` (CF-Ray ${ray})`:""}. ${stopped?"Connection stopped.":"No automatic retry."} Do not bypass security blocks.`,{http_status:response.status,cf_ray:ray}));
       }
       if(response.status===202)return [];
       const body=clean(await response.text(),secret);
