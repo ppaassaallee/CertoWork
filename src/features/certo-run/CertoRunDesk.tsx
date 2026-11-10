@@ -14,7 +14,7 @@ import {
   type AllocRow,
 } from "../../lib/certoRun/allocation";
 import { agedAdminCount } from "../../lib/certoRun/caps";
-import { addDays, dayName, formatDate, mondayOf, workingDaysOfMonth } from "../../lib/certoRun/dates";
+import { addDays, mondayOf, workingDaysOfMonth } from "../../lib/certoRun/dates";
 import {
   DEFAULT_TEMPLATE,
   currentBlock,
@@ -55,11 +55,15 @@ import {
 import { RunValidationDialog } from "./RunValidationDialog";
 import { RunAgentPanel, useRunAgentSnapshot, type AgentSnapshot } from "./RunAgentPanel";
 import { useLocale } from "../../lib/useLocale";
+import { runText as t, runDate as formatDate, runDay as dayName, runMonth, runError } from "./runCopy";
+import { RunDialog, RunTabs } from "./RunDialog";
+import { RunQueue, RunItemDrawer, type QueueMode, type RunItemActions } from "./RunQueue";
+import { RunCommand } from "./RunCommand";
 import "./certo-run.css";
+import "./run-interactions.css";
 import "../../run/styles/tokens.css";
 
 export type RunTab = "today" | "queue" | "projects" | "team" | "week" | "intake" | "close" | "life";
-type QueueMode = "make" | "decide" | "owed" | "admin" | "delegated" | "unsorted";
 type ProjectView = "pipeline" | "delivery" | "portfolio";
 type TeamView = "allocation" | "utilization" | "lead";
 
@@ -144,7 +148,7 @@ function railCopy(block: DayBlock, visible: boolean, world: string): { name: str
   if (!visible) {
     if (block.kind === "family") return { name: "Personal time", sub: "FAMILY AND LUNCH" };
     if (block.kind === "evening") return { name: "Personal time", sub: "FAMILY AND EVENING" };
-    return { name: muteLabel(block, world), sub: block.world && block.world !== "work" ? `Use for ${block.world}` : "Outside this world" };
+    return { name: t(muteLabel(block, world)), sub: block.world && block.world !== "work" ? t("Use for {world}", { world: block.world }) : t("Outside this world") };
   }
   if (block.kind === "brief") return { name: "Brief and decisions", sub: "Read the brief, answer yes or no" };
   if (block.kind === "make") return { name: "Make: only me", sub: "No meetings" };
@@ -167,22 +171,23 @@ async function copyText(value: string) {
 }
 
 export function CertoRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
-  if (!canUseCertoRun(user)) return <section role="alert">This module is not available for this account.</section>;
+  if (!canUseCertoRun(user)) return <section role="alert">{t("This module is not available for this account.")}</section>;
   return <AuthorizedRunDesk workspaceId={workspaceId} user={user} tab={tab} onTab={onTab} onBack={onBack} />;
 }
 
 function AuthorizedRunDesk({ workspaceId, user, tab, onTab, onBack }: Props) {
   const locale=useLocale();
-  const loadingCopy=locale==="es"?{loading:"Cargando tu workspace delegado…",retry:"Reintentar"}:{loading:"Loading your delegated workspace…",retry:"Retry"};
+  const loadingCopy=locale==="es"?{loading:"Cargando tu espacio delegado…",retry:"Reintentar"}:{loading:"Loading your delegated workspace…",retry:"Retry"};
   const personalRows = useRunItems(workspaceId);
   const [world,setWorld]=useState<RunWorld>(savedWorld);
   const {snapshot,error,refresh}=useRunAgentSnapshot(world);
-  if(world!=="Personal"&&!snapshot)return <section className="cr-desk cr-agent-loading" aria-live="polite"><h2>{world}</h2><p>{error||loadingCopy.loading}</p><button className="cr-tool" type="button" onClick={refresh}>{loadingCopy.retry}</button><button className="cr-tool" type="button" onClick={onBack}>Certo Work</button></section>;
+  if(world!=="Personal"&&!snapshot)return <section className="cr-desk cr-agent-loading" aria-live="polite"><h2>{world}</h2><p>{error?runError(error):loadingCopy.loading}</p><button className="cr-tool" type="button" onClick={refresh}>{loadingCopy.retry}</button><button className="cr-tool" type="button" onClick={onBack}>{t("Certo Work")}</button></section>;
   return <RunDeskView workspaceId={world==="Personal"?workspaceId:snapshot!.workspace_id} user={user} tab={tab} onTab={onTab} onBack={onBack} rows={world==="Personal"?personalRows:snapshot!.items} controlledWorld={world} onWorldChange={setWorld} agentSnapshot={world==="Personal"?undefined:snapshot!} onDataChanged={refresh} agentError={error} />;
 }
 
 /** The real view, separated from its live subscription for non-mutating visual tests. */
 export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, controlledWorld, onWorldChange, agentSnapshot, onDataChanged, agentError }: Props & { rows: Array<Record<string, unknown> & { id: string }>; controlledWorld?:RunWorld; onWorldChange?:(world:RunWorld)=>void; agentSnapshot?:AgentSnapshot; onDataChanged?:()=>void; agentError?:string }) {
+  const locale = useLocale();
   const [mode, setMode] = useState<QueueMode>("make");
   const [projectView, setProjectView] = useState<ProjectView>("pipeline");
   const [teamView, setTeamView] = useState<TeamView>("allocation");
@@ -205,6 +210,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
   const [online, setOnline] = useState(() => navigator.onLine);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [localWorld, setWorld] = useState<RunWorld>(savedWorld);
   const world=controlledWorld??localWorld;
   const items = useMemo(
@@ -240,7 +246,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      if (!event.defaultPrevented && !(event.target as HTMLElement)?.closest("dialog") && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setSearchOpen(true);
       }
@@ -275,6 +281,8 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
   const cameIn = worldItems.filter((item) => item.created === today).length;
 
   function chooseWorld(next: RunWorld) {
+    setSelectedId(null);
+    setSearchOpen(false);
     setForm(null);
     setRefusal([]);
     setQuery("");
@@ -299,11 +307,22 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
     else setRefusal([]);
   }
 
+  const selectedItem = worldItems.find(item => item.id === selectedId && item.state === "open");
+  const itemActions: RunItemActions = {
+    busy: saving,
+    onDone: id => void perform(() => completeRunItem(id, worldItems.find(item => item.id === id)?.decision === "decide" ? "yes" : "done")),
+    onNo: id => void perform(() => completeRunItem(id, "no")),
+    onMake: id => void perform(() => onMake(id)),
+    onDrop: id => { setSelectedId(id); setForm({ id, kind: "drop" }); },
+    onForm: next => { if (next) setSelectedId(next.id); setForm(next); },
+    onPostpone: id => void perform(() => patchRunItem(id, { runOutcome: { kind: "postponed", ts: Date.now(), at: new Date().toISOString() } })),
+  };
+
   return (
-    <section className="cr-desk" data-testid="certo-run-desk" data-world={world}>
+    <section className="cr-desk" data-testid="certo-run-desk" data-world={world} lang={locale}>
       <div className="cr-bar">
         <div className="cr-bar-row">
-          <div className="cr-worlds" aria-label="Worlds" data-testid="certo-run-worlds">
+          <div className="cr-worlds" aria-label={t("Worlds")} data-testid="certo-run-worlds">
             {RUN_WORLDS.map((name) => (
               <button
                 aria-pressed={name === world}
@@ -323,46 +342,33 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
             <span className="cr-date">{formatDate(today)}</span>
             {chip.label && (
               <span className="cr-now" data-testid="certo-run-now">
-                {nowVisible ? chip.label : `Next · ${chip.label}`} ({chip.time})
+                {nowVisible ? t(chip.label) : t("Next · {label}", { label: t(chip.label) })} ({chip.time})
               </span>
             )}
           </div>
           <div className="cr-tools">
-            {searchOpen ? (
-              <input
-                aria-label="Search"
-                className="cr-search"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                value={query}
-              />
-            ) : (
-              <button aria-label="Search" className="cr-tool" onClick={() => setSearchOpen(true)} type="button">Search</button>
-            )}
-            <button className="cr-tool" onClick={() => setSearchOpen(true)} type="button">⌘K</button>
-            <button className="cr-tool" onClick={() => setManifestoOpen(true)} type="button">Manifesto</button>
-            <button className="cr-tool" onClick={() => setValidationOpen(true)} type="button">Data & validation</button>
-            <button className="cr-avatar" onClick={onBack} title="Certo Work" type="button">{initials(user.displayName)}</button>
+            <button aria-label={t("Search")} aria-keyshortcuts="Meta+K Control+K" className="cr-tool cr-command-trigger" onClick={() => setSearchOpen(true)} type="button">{t("Search")} <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd></button>
+            <button className="cr-tool" onClick={() => setManifestoOpen(true)} type="button">{t("Manifesto")}</button>
+            <button className="cr-tool" onClick={() => setValidationOpen(true)} type="button">{t("Data & validation")}</button>
+            <button className="cr-avatar" onClick={onBack} title={t("Certo Work")} type="button">{initials(user.displayName)}</button>
           </div>
         </div>
-        <div className="cr-tabs" role="tablist">
-          {(world === "Personal" ? ["today", "life", "intake", "close"] as RunTab[] : TABS).map((name) => (
-            <button aria-pressed={tab === name} key={name} onClick={() => onTab(name)} type="button">{TAB_LABEL[name]}</button>
-          ))}
-        </div>
+        <RunTabs className="cr-tabs" label={t("Run navigation")} value={tab} onChange={onTab} panelId="cr-main-panel"
+          options={(world === "Personal" ? ["today", "life", "intake", "close"] as RunTab[] : TABS).map(name => ({ value: name, label: t(TAB_LABEL[name]) }))} />
       </div>
-      <div className="cr-body">
-        {agentError&&<p className="cr-flag" role="alert">{agentError}</p>}
+      <div className="cr-body" id="cr-main-panel" role="tabpanel" aria-labelledby={`cr-main-panel-tab-${tab}`}>
+        {query && <div className="cr-filter-summary"><span>{t("Filtered by {query}", { query })}</span><button type="button" className="cr-link" onClick={() => setQuery("")}>{t("Clear filter")}</button></div>}
+        {agentError&&<p className="cr-flag" role="alert">{runError(agentError)}</p>}
         {agentSnapshot&&<RunAgentPanel snapshot={agentSnapshot} tab={tab} decide={mode==="decide"} onRefresh={()=>onDataChanged?.()} onOpenDecide={()=>{setMode("decide");onTab("queue");}} />}
-        {worldItems.length === 0 && tab === "today" && <section className="cr-empty-state"><p>{world} is empty. Add work through Intake or validate an ingestion file to get started.</p><button className="cr-solid" onClick={() => setValidationOpen(true)} type="button">Open Data & validation</button></section>}
-        {!online && <p className="cr-flag" role="status">Offline: reconnect before changing commitments.</p>}
-        {saving && <p role="status" className="cr-muted">Saving…</p>}
+        {worldItems.length === 0 && tab === "today" && <section className="cr-empty-state"><p>{world} {t("is empty. Add work through Intake or validate an ingestion file to get started.")}</p><button className="cr-solid" onClick={() => setValidationOpen(true)} type="button">{t("Open Data & validation")}</button></section>}
+        {!online && <p className="cr-flag" role="status">{t("Offline: reconnect before changing commitments.")}</p>}
+        {saving && <p role="status" className="cr-muted">{t("Saving…")}</p>}
         {refusal.length > 0 && (
           <div className="cr-flag" data-testid="certo-run-cap" role="status">
-            At the cap. The current list stays. {refusal.join(" · ")}
+            {t("At the cap. The current list stays.")} {refusal.join(" · ")}
           </div>
         )}
-        {error && <p className="cr-flag" role="alert">{error}</p>}
+        {error && <p className="cr-flag" role="alert">{runError(error)}</p>}
         {tab === "today" && (
           <Today
             activeWorld={world}
@@ -386,7 +392,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
           />
         )}
         {tab === "queue" && (
-          <Queue
+          <RunQueue
             counts={{
               make: soloQ(worldItems, options).length,
               decide: decQ(worldItems, options).length+pendingProposals,
@@ -395,24 +401,13 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
               delegated: delQ(worldItems, options).length,
               unsorted: worldItems.filter((item) => item.state === "open" && item.inQueue === false).length,
             }}
-            form={form}
             items={queue}
             key={`${workspaceId}:${world}`}
             mode={mode}
-            onDone={(id) => void perform(() => completeRunItem(id, mode === "decide" ? "yes" : "done"))}
-            onDrop={(id) => setForm({ id, kind: "drop" })}
-            onForm={setForm}
-            onMake={(id) => void perform(() => onMake(id))}
+            actions={itemActions}
+            onOpen={setSelectedId}
+            onIntake={() => onTab("intake")}
             onMode={setMode}
-            onNo={(id) => void perform(() => completeRunItem(id, "no"))}
-            onSave={(value) => void perform(async () => {
-              if (!form) return;
-              if (form.kind === "delegate") await delegateRunItem(form.id, value.who, value.date, "captain", value.context);
-              if (form.kind === "date") await renegotiateRunItem(form.id, value.date);
-              if (form.kind === "drop") await completeRunItem(form.id, "dropped", value.context || "Adds nothing");
-              setForm(null);
-            })}
-            onPostpone={(id) => void perform(() => patchRunItem(id, { runOutcome: { kind: "postponed", ts: Date.now(), at: new Date().toISOString() } }))}
           />
         )}
         {tab === "projects" && (
@@ -425,7 +420,7 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
         )}
         {tab === "team" && <Team key={`${workspaceId}:${user.uid}:${world}`} storageScope={`${workspaceId}:${user.uid}`} view={teamView} world={world} onView={setTeamView} />}
         {tab === "week" && <Week items={makeItems} today={today} world={world} />}
-        {tab === "life" && <p className="cr-panel">Personal stays in its own world. Nothing from Work is copied here.</p>}
+        {tab === "life" && <p className="cr-panel">{t("Personal stays in its own world. Nothing from Work is copied here.")}</p>}
         {tab === "intake" && (
           <Intake
             client={draftClient}
@@ -507,6 +502,16 @@ export function RunDeskView({ workspaceId, user, tab, onTab, onBack, rows, contr
           />
         )}
       </div>
+      {searchOpen && <RunCommand items={worldItems} tabs={world === "Personal" ? ["today", "life", "intake", "close"] : TABS}
+        onTab={onTab} onItem={id => { setForm(null); setSelectedId(id); }} onFilter={setQuery} onClose={() => setSearchOpen(false)} />}
+      {selectedItem && <RunItemDrawer key={selectedItem.id} item={selectedItem} actions={itemActions} form={form} error={error ? runError(error) : ""} onClose={() => { setSelectedId(null); setForm(null); }}
+        onSave={value => void perform(async () => {
+          if (!form) return;
+          if (form.kind === "delegate") await delegateRunItem(form.id, value.who, value.date, "captain", value.context);
+          if (form.kind === "date") await renegotiateRunItem(form.id, value.date);
+          if (form.kind === "drop") await completeRunItem(form.id, "dropped", value.context || "Adds nothing");
+          setForm(null);
+        })} />}
       {manifestoOpen && (
         <Manifesto
           until={focusUntil}
@@ -559,31 +564,31 @@ function Today(props: {
     <div>
       <div className="cr-score">
         <article className={`cr-stat ${makeHot ? "is-hot" : ""}`}>
-          <span className="cr-kicker">Make in progress</span>
+          <span className="cr-kicker">{t("Make in progress")}</span>
           <strong>{inProgress}<small> / 5</small></strong>
         </article>
         <article className="cr-stat">
-          <span className="cr-kicker">Decisions waiting</span>
+          <span className="cr-kicker">{t("Decisions waiting")}</span>
           <strong>{props.counts.decide}</strong>
         </article>
         <article className={`cr-stat ${props.p1 > 10 ? "is-over" : p1Hot ? "is-hot" : ""}`}>
-          <span className="cr-kicker">P1 alive</span>
+          <span className="cr-kicker">{t("P1 alive")}</span>
           <strong>{props.p1}<small> / 10</small></strong>
         </article>
         <article className={`cr-stat ${props.admin > 15 ? "is-over" : props.admin === 15 ? "is-hot" : ""}`}>
-          <span className="cr-kicker">Admin open</span>
+          <span className="cr-kicker">{t("Admin open")}</span>
           <strong>{props.admin}<small> / 15</small></strong>
         </article>
         <article className="cr-stat">
-          <span className="cr-kicker">Resolved today</span>
-          <strong>{props.resolvedToday}<small> · {props.resolvedWeek} wk</small></strong>
+          <span className="cr-kicker">{t("Resolved today")}</span>
+          <strong>{props.resolvedToday}<small> · {props.resolvedWeek} {t("wk")}</small></strong>
         </article>
       </div>
       <div className="cr-today">
         <div>
           <div className="cr-rail-head">
-            <span className="cr-kicker">Today's schedule ({props.activeWorld})</span>
-            <span className="cr-muted">60s refresh</span>
+            <span className="cr-kicker">{t("Today's schedule (")}{props.activeWorld})</span>
+            <span className="cr-muted">{t("60s refresh")}</span>
           </div>
           <div className="cr-rail" data-testid="certo-run-rail">
             {props.plan.filter((block) => block.kind !== "wake").map((block) => {
@@ -593,38 +598,38 @@ function Today(props: {
               return (
                 <article className={`cr-block ${visible ? "" : "is-muted"} ${now ? "is-now" : ""}`} key={`${block.kind}-${block.start}`}>
                   <span className="cr-block-time">{block.start}–{block.end}</span>
-                  <div className="cr-block-title"><strong>{text.name}</strong>{now && <span className="cr-badge">NOW</span>}</div>
-                  <p>{text.sub}</p>
+                  <div className="cr-block-title"><strong>{t(text.name)}</strong>{now && <span className="cr-badge">{t("NOW")}</span>}</div>
+                  <p>{t(text.sub)}</p>
                 </article>
               );
             })}
           </div>
-          {props.aged > 0 && <p className="cr-flag">{props.aged} admin older than 72 hours</p>}
+          {props.aged > 0 && <p className="cr-flag">{props.aged} {t("admin older than 72 hours")}</p>}
         </div>
         {props.current.kind === "meetings" ? <section className="cr-panel cr-meeting-panel">
-          <div className="cr-brief-head"><div><h2>Meetings &amp; Fronts</h2><p className="cr-muted">Client meetings and internal coordination. Any promise made goes through Intake.</p></div><button className="cr-solid" onClick={props.onIntake} type="button">Run It Through Intake →</button></div>
-          <div className="cr-meeting-rule"><strong>Meeting Discipline Rule</strong><p>Capture deliverables in real-time. If you promised a concrete date, record it before closing the call.</p></div>
-          <div className="cr-meeting-followups"><span className="cr-kicker">Active owed to me follow-ups ({props.owed.length})</span>{props.owed.slice(0, 4).map((item) => <div className="cr-row" key={item.id}><p>{item.deliverable || item.title}</p><span>{item.assigneeName || "Unassigned"}</span></div>)}</div>
+          <div className="cr-brief-head"><div><h2>{t("Meetings & Fronts")}</h2><p className="cr-muted">{t("Client meetings and internal coordination. Any promise made goes through Intake.")}</p></div><button className="cr-solid" onClick={props.onIntake} type="button">{t("Run It Through Intake →")}</button></div>
+          <div className="cr-meeting-rule"><strong>{t("Meeting Discipline Rule")}</strong><p>{t("Capture deliverables in real-time. If you promised a concrete date, record it before closing the call.")}</p></div>
+          <div className="cr-meeting-followups"><span className="cr-kicker">{t("Active owed to me follow-ups (")}{props.owed.length})</span>{props.owed.slice(0, 4).map((item) => <div className="cr-row" key={item.id}><p>{item.deliverable || item.title}</p><span>{item.assigneeName || t("Unassigned")}</span></div>)}</div>
         </section> : <section className="cr-panel">
           <div className="cr-brief-head">
-            <h2>{props.current.start !== "00:00" ? `${props.current.start} ` : ""}{copy.name}</h2>
+            <h2>{props.current.start !== "00:00" ? `${props.current.start} ` : ""}{t(copy.name)}</h2>
             <button className="cr-solid" onClick={brief ? props.onDeck : props.onQueue} type="button">
-              {brief ? "Open Decide Deck →" : "Open the queue →"}
+              {brief ? t("Open Decide Deck →") : t("Open the queue →")}
             </button>
           </div>
           {brief ? (
             <div className="cr-synthesis" data-testid="certo-run-empty">
-              <strong>Morning synthesis</strong>
+              <strong>{t("Morning synthesis")}</strong>
               <p>
                 {props.decisions.length === 0
-                  ? "Nothing is waiting on a yes or no."
-                  : `${props.decisions.length} decisions waiting in ${props.activeWorld}. Review each before deciding.`}
+                  ? t("Nothing is waiting on a yes or no.")
+                  : t("{count} decisions waiting in {world}. Review each before deciding.", { count: props.decisions.length, world: props.activeWorld })}
               </p>
             </div>
           ) : (
-            <p className="cr-muted">{copy.sub}{props.cameIn > 0 ? ` · ${props.cameIn} came in today.` : ""}</p>
+            <p className="cr-muted">{t(copy.sub)}{props.cameIn > 0 ? t(" · {count} came in today.", { count: props.cameIn }) : ""}</p>
           )}
-          {shown.length === 0 && <p className="cr-muted">Nothing open in this block.</p>}
+          {shown.length === 0 && <p className="cr-muted">{t("Nothing open in this block.")}</p>}
           {shown.slice(0, 6).map((item) => (
             <article className="cr-decision" key={item.id}>
               <div>
@@ -633,8 +638,8 @@ function Today(props: {
               </div>
               {brief ? (
                 <div className="cr-actions">
-                  <button className="cr-yes" onClick={() => props.onYes(item.id)} type="button">Yes</button>
-                  <button className="cr-no" onClick={() => props.onNo(item.id)} type="button">No</button>
+                  <button className="cr-yes" onClick={() => props.onYes(item.id)} type="button">{t("Yes")}</button>
+                  <button className="cr-no" onClick={() => props.onNo(item.id)} type="button">{t("No")}</button>
                 </div>
               ) : null}
             </article>
@@ -645,131 +650,7 @@ function Today(props: {
   );
 }
 
-function Queue(props: {
-  mode: QueueMode;
-  counts: Record<QueueMode, number>;
-  items: DeskItem[];
-  form: { id: string; kind: "delegate" | "date" | "drop" } | null;
-  onMode: (mode: QueueMode) => void;
-  onDone: (id: string) => void;
-  onNo: (id: string) => void;
-  onMake: (id: string) => void;
-  onDrop: (id: string) => void;
-  onForm: (form: { id: string; kind: "delegate" | "date" | "drop" } | null) => void;
-  onSave: (value: { who: string; date: string; context: string }) => void;
-  onPostpone: (id: string) => void;
-}) {
-  const labels: Record<QueueMode, string> = {
-    make: "Make",
-    decide: "Decide",
-    owed: "Owed to me",
-    admin: "Admin batch",
-    delegated: "Delegated",
-    unsorted: "Not in a queue",
-  };
-  const modes = (Object.keys(labels) as QueueMode[]).filter((name) => name !== "unsorted" || props.counts.unsorted > 0);
-  const [who, setWho] = useState("");
-  const [date, setDate] = useState("");
-  const [context, setContext] = useState("");
-  useEffect(() => {
-    if (props.mode !== "decide" || props.form || !props.items[0]) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.closest("input,textarea,select,[contenteditable=true],[role=dialog]")) return;
-      const item = props.items[0];
-      const key = event.key.toLowerCase();
-      if (key === "y") props.onDone(item.id);
-      else if (key === "n") props.onNo(item.id);
-      else if (key === "d") props.onForm({ id: item.id, kind: "delegate" });
-      else if (key === "x") props.onDrop(item.id);
-      else if (key === "arrowright") props.onPostpone(item.id);
-      else return;
-      event.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [props]);
-  const capped = props.mode === "make" && props.counts.make >= 5;
-  return (
-    <div>
-      <div className="cr-segbar" role="tablist">
-        {modes.map((name) => (
-          <button aria-pressed={props.mode === name} key={name} onClick={() => props.onMode(name)} type="button">
-            {labels[name]} {props.counts[name]}
-          </button>
-        ))}
-      </div>
-      {props.mode === "make" && (
-        <div className="cr-qhead">
-          <h2 className={capped ? "cr-hot" : ""}>In progress ({props.counts.make} of 5 slots)</h2>
-          <span>{capped ? <em className="cr-over">Cap reached</em> : null} <span className="cr-muted">Never a sixth</span></span>
-        </div>
-      )}
-      {props.mode === "admin" && props.counts.admin > 15 && <p className="cr-flag">Beyond 15 items. Hand the whole batch to someone else.</p>}
-      {props.items.length === 0 && (
-        <p className="cr-panel">{props.mode === "unsorted" ? "Every open item already has a decision." : "Nothing open in this queue."}</p>
-      )}
-      {(props.mode === "decide" ? props.items.slice(0, 1) : props.items).map((item) => (
-        <article className="cr-qcard" key={item.id}>
-          <div className="cr-meta">
-            <span className={`cr-pri ${item.priority === "P1" ? "is-p1" : ""}`}>{item.priority}</span>
-            {item.clientEntity && <span className="cr-client">{item.clientEntity}</span>}
-            {item.epic && item.epic !== item.clientEntity && <span className="cr-client">{item.epic}</span>}
-            {item.dueDate && <span className="cr-due">Due {formatDate(item.dueDate)}</span>}
-          </div>
-          <h3>{item.title}</h3>
-          {item.deliverable && <p><strong>Deliverable: </strong>{item.deliverable}</p>}
-          {item.doneWhen && <p><strong>Done when: </strong>{item.doneWhen}</p>}
-          {item.nextStep && <p className="cr-next"><strong>Next step: </strong>{item.nextStep}</p>}
-          {(item.context || item.unblock || item.source || item.id) && (
-            <details>
-              <summary>Context and origin</summary>
-              <p>{item.context}</p>
-              {item.unblock && <p>{item.unblock}</p>}
-              {item.source && <p>Source: {item.source}</p>}
-              <p className="cr-code">Record: {item.externalId || item.id}</p>
-            </details>
-          )}
-          <div className="cr-actions">
-            {props.mode === "decide" ? (
-              <>
-                <button className="cr-solid" onClick={() => props.onDone(item.id)} type="button">Yes</button>
-                <button className="cr-ghost" onClick={() => props.onNo(item.id)} type="button">No</button>
-                <button className="cr-ghost" onClick={() => props.onPostpone(item.id)} type="button">Postpone →</button>
-              </>
-            ) : (
-              <button className="cr-solid" onClick={() => props.onDone(item.id)} type="button">Done</button>
-            )}
-            {props.mode === "unsorted" || props.mode === "owed" || props.mode === "admin" ? (
-              <button className="cr-ghost" data-testid={`make-${item.id}`} onClick={() => props.onMake(item.id)} type="button">Make</button>
-            ) : props.mode === "make" || props.mode === "delegated" ? (
-              <button className="cr-ghost" onClick={() => props.onForm({ id: item.id, kind: "date" })} type="button">Renegotiate</button>
-            ) : null}
-            <button className="cr-ghost" onClick={() => props.onForm({ id: item.id, kind: "delegate" })} type="button">Delegate</button>
-            <button className="cr-ghost" onClick={() => props.onDrop(item.id)} type="button">Drop</button>
-          </div>
-          {props.form?.id === item.id && (
-            <form
-              className="cr-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                props.onSave({ who, date, context });
-                setWho("");
-                setDate("");
-                setContext("");
-              }}
-            >
-              {props.form.kind === "delegate" && <input aria-label="Who" onChange={(event) => setWho(event.target.value)} placeholder="Who" value={who} />}
-              {props.form.kind !== "drop" && <input aria-label="Date" onChange={(event) => setDate(event.target.value)} type="date" value={date} />}
-              <input aria-label="Why it matters" onChange={(event) => setContext(event.target.value)} placeholder="Why it matters" value={context} />
-              <button className="cr-solid" type="submit">Save</button>
-              <button className="cr-ghost" onClick={() => props.onForm(null)} type="button">Cancel</button>
-            </form>
-          )}
-        </article>
-      ))}
-    </div>
-  );
-}
+
 
 function Projects(props: {
   items: DeskItem[];
@@ -789,33 +670,31 @@ function Projects(props: {
   return (
     <div>
       <div className="cr-row">
-        <div className="cr-subtabs">
-          <button aria-pressed={props.view === "pipeline"} onClick={() => props.onView("pipeline")} type="button">Pipeline Board {groups.size}</button>
-          <button aria-pressed={props.view === "delivery"} onClick={() => props.onView("delivery")} type="button">Delivery Rows {props.items.length}</button>
-          <button aria-pressed={props.view === "portfolio"} onClick={() => props.onView("portfolio")} type="button">Portfolio Sheets</button>
-        </div>
+        <RunTabs label={t("Project views")} value={props.view} onChange={props.onView} panelId="cr-project-panel" options={[
+          { value: "pipeline", label: `${t("Pipeline Board")} ${groups.size}` }, { value: "delivery", label: `${t("Delivery Rows")} ${props.items.length}` }, { value: "portfolio", label: t("Portfolio Sheets") },
+        ]} />
         {props.view === "pipeline" && (
           <button
             className="cr-ghost"
             onClick={() => void copyText(pipelineText(props.world, columns))}
             type="button"
           >
-            Copy pipeline update
-          </button>
+            {t("Copy pipeline update")}</button>
         )}
       </div>
+      <div id="cr-project-panel" role="tabpanel" aria-labelledby={`cr-project-panel-tab-${props.view}`}>
       {props.view === "pipeline" && (
         <div className="cr-board">
           {columns.map((column) => (
             <section className="cr-col" key={column.stage}>
-              <header><span>{column.stage}</span><span>{column.cards.length}</span></header>
-              {column.cards.length === 0 && <p className="cr-muted">Nothing in this stage.</p>}
+              <header><span>{t(column.stage)}</span><span>{column.cards.length}</span></header>
+              {column.cards.length === 0 && <p className="cr-muted">{t("Nothing in this stage.")}</p>}
               {column.cards.map(([name, rows]) => (
                 <article className="cr-pcard" key={name}>
                   <span className="cr-kicker">{rows[0]?.clientEntity || props.world}</span>
                   <h3>{name}</h3>
-                  <p className="cr-next">Next: {rows.find((row) => row.nextStep)?.nextStep || rows[0]?.title}</p>
-                  <p className="cr-muted">{rows.length} open items · {rows.filter((row) => row.decision === "make").length} solo</p>
+                  <p className="cr-next">{t("Next:")} {rows.find((row) => row.nextStep)?.nextStep || rows[0]?.title}</p>
+                  <p className="cr-muted">{rows.length} {t("open items ·")} {rows.filter((row) => row.decision === "make").length} {t("solo")}</p>
                 </article>
               ))}
             </section>
@@ -824,7 +703,7 @@ function Projects(props: {
       )}
       {props.view === "delivery" && (
         <div>
-          {groups.size === 0 && <p className="cr-panel">No delivery rows in this world.</p>}
+          {groups.size === 0 && <p className="cr-panel">{t("No delivery rows in this world.")}</p>}
           {[...groups.entries()].map(([name, rows]) => (
             <DeliveryCard key={name} name={name} rows={rows} />
           ))}
@@ -833,23 +712,24 @@ function Projects(props: {
       {props.view === "portfolio" && (
         <div>
           <div className="cr-meters">
-            <article className="cr-meter"><span className="cr-kicker">Monthly revenue</span><strong>—</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Team cost</span><strong>—</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Margin</span><strong>—</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Overdue 30+</span><strong className="cr-over">—</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Monthly revenue")}</span><strong>—</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Team cost")}</span><strong>—</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Margin")}</span><strong>—</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Overdue 30+")}</span><strong className="cr-over">—</strong></article>
           </div>
-          {groups.size === 0 && <p className="cr-panel">No portfolio sheet in this world.</p>}
+          {groups.size === 0 && <p className="cr-panel">{t("No portfolio sheet in this world.")}</p>}
           {[...groups.entries()].map(([name, rows]) => (
             <details className="cr-sheet" key={name}>
               <summary>
-                <span><strong>{name}</strong><br /><span className="cr-muted">{rows.length} open items</span></span>
-                <span className="cr-muted">No sheet yet</span>
+                <span><strong>{name}</strong><br /><span className="cr-muted">{rows.length} {t("open items")}</span></span>
+                <span className="cr-muted">{t("No sheet yet")}</span>
               </summary>
               {rows.map((row) => <p key={row.id}>{row.title}</p>)}
             </details>
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -860,7 +740,7 @@ function stageOf(item: DeskItem | undefined): (typeof STAGES)[number] {
 }
 
 function pipelineText(world: string, columns: { stage: string; cards: [string, DeskItem[]][] }[]): string {
-  return [`Pipeline · ${world}`, ...columns.map((column) => `${column.stage}: ${column.cards.map(([name]) => name).join(", ") || "—"}`)].join("\n");
+  return [t("Pipeline · {world}", { world }), ...columns.map((column) => `${t(column.stage)}: ${column.cards.map(([name]) => name).join(", ") || "—"}`)].join("\n");
 }
 
 function DeliveryCard({ name, rows }: { name: string; rows: DeskItem[] }) {
@@ -876,11 +756,11 @@ function DeliveryCard({ name, rows }: { name: string; rows: DeskItem[] }) {
       <div className="cr-row">
         <div>
           <h3 style={{ margin: 0 }}>{name}</h3>
-          <p className="cr-muted">{rows.length} open items</p>
+          <p className="cr-muted">{rows.length} {t("open items")}</p>
         </div>
         <div className="cr-lights">
           {(["green", "amber", "red"] as Health[]).map((color) => (
-            <button aria-pressed={light === color} data-light={color} key={color} onClick={() => void paint(color)} type="button">{color.toUpperCase()}</button>
+            <button aria-pressed={light === color} data-light={color} key={color} onClick={() => void paint(color)} type="button">{t(color.toUpperCase())}</button>
           ))}
         </div>
       </div>
@@ -894,9 +774,9 @@ function DeliveryCard({ name, rows }: { name: string; rows: DeskItem[] }) {
           if (first) void setRunUnblock(first.id, note);
         }}
       >
-        <label className="cr-kicker">What I must do to unblock</label>
-        <input className="wide" onChange={(event) => setNote(event.target.value)} placeholder="e.g. Can Raúl confirm API credentials…" value={note} />
-        <button className="cr-ghost" type="submit">Save</button>
+        <label className="cr-kicker">{t("What I must do to unblock")}</label>
+        <input className="wide" onChange={(event) => setNote(event.target.value)} placeholder={t("e.g. Can Raúl confirm API credentials…")} value={note} />
+        <button className="cr-ghost" type="submit">{t("Save")}</button>
       </form>
     </article>
   );
@@ -908,7 +788,7 @@ function Team(props: { view: TeamView; world: string; storageScope: string; onVi
   const [person, setPerson] = useState("");
   const [project, setProject] = useState("");
   const [pct, setPct] = useState("20");
-  const [refusal, setRefusal] = useState("");
+  const [refusal, setRefusal] = useState<{ person: string; load: number } | null>(null);
   useEffect(() => { setRows(loadAlloc(storageKey)); }, [storageKey]);
   const people = [...new Set(rows.map((row) => row.person))];
   const cap = () => DEFAULT_CAP_MONTH;
@@ -918,35 +798,34 @@ function Team(props: { view: TeamView; world: string; storageScope: string; onVi
   }
   return (
     <div>
-      <p className="cr-muted">Allocation planning is saved only on this browser. Cloud sync and week-by-week planning are not connected yet.</p>
+      <p className="cr-muted">{t("Allocation planning is saved only on this browser. Cloud sync and week-by-week planning are not connected yet.")}</p>
       <div className="cr-row">
-        <div className="cr-subtabs">
-          <button aria-pressed={props.view === "allocation"} onClick={() => props.onView("allocation")} type="button">Team Allocation {people.length}</button>
-          <button aria-pressed={props.view === "utilization"} onClick={() => props.onView("utilization")} type="button">Utilization Matrix</button>
-          <button aria-pressed={props.view === "lead"} onClick={() => props.onView("lead")} type="button">How I Lead & Feedback</button>
-        </div>
-        <button className="cr-ghost" onClick={() => void copyText(allocText(props.world, rows))} type="button">Copy for Lucy</button>
+        <RunTabs label={t("Team views")} value={props.view} onChange={props.onView} panelId="cr-team-panel" options={[
+          { value: "allocation", label: `${t("Team Allocation")} ${people.length}` }, { value: "utilization", label: t("Utilization Matrix") }, { value: "lead", label: t("How I Lead & Feedback") },
+        ]} />
+        <button className="cr-ghost" onClick={() => void copyText(allocText(props.world, rows))} type="button">{t("Copy for Lucy")}</button>
       </div>
+      <div id="cr-team-panel" role="tabpanel" aria-labelledby={`cr-team-panel-tab-${props.view}`}>
       {props.view === "lead" && (
         <div>
           <div className="cr-principles">
             {PRINCIPLES.map(([title, body]) => (
               <article className="cr-principle" key={title}>
-                <h3>{title.toUpperCase()}</h3>
-                <p>{body}</p>
+                <h3>{t(title).toUpperCase()}</h3>
+                <p>{t(body)}</p>
               </article>
             ))}
           </div>
           <section className="cr-panel" style={{ marginTop: 12 }}>
-            <h2>Team keeper test & 14-day 4A feedback</h2>
-            {people.length === 0 && <p className="cr-muted">No one is on the team list in this world yet.</p>}
+            <h2>{t("Team keeper test & 14-day 4A feedback")}</h2>
+            {people.length === 0 && <p className="cr-muted">{t("No one is on the team list in this world yet.")}</p>}
             {people.map((name) => (
               <div className="cr-alloc-row" key={name}>
                 <div>
                   <strong>{name}</strong>
-                  <p className="cr-muted">Keeper: not set · Last feedback: —</p>
+                  <p className="cr-muted">{t("Keeper: not set · Last feedback: —")}</p>
                 </div>
-                <span className="cr-muted">Keep</span>
+                <span className="cr-muted">{t("Keep")}</span>
               </div>
             ))}
           </section>
@@ -955,11 +834,11 @@ function Team(props: { view: TeamView; world: string; storageScope: string; onVi
       {props.view === "allocation" && (
         <div>
           <div className="cr-meters">
-            <article className="cr-meter"><span className="cr-kicker">People allocated</span><strong>{people.length}</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">FTE allocated</span><strong>{fteOf(rows).toFixed(1)}</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Hours / week</span><strong>{Math.round(hoursWeek(rows, cap))} h</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Available FTE</span><strong className="cr-good">{availableFte(rows).toFixed(1)}</strong></article>
-            <article className="cr-meter"><span className="cr-kicker">Over-allocated</span><strong className={overAllocated(rows).length ? "cr-over" : ""}>{overAllocated(rows).length}</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("People allocated")}</span><strong>{people.length}</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("FTE allocated")}</span><strong>{fteOf(rows).toFixed(1)}</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Hours / week")}</span><strong>{Math.round(hoursWeek(rows, cap))} {t("h")}</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Available FTE")}</span><strong className="cr-good">{availableFte(rows).toFixed(1)}</strong></article>
+            <article className="cr-meter"><span className="cr-kicker">{t("Over-allocated")}</span><strong className={overAllocated(rows).length ? "cr-over" : ""}>{overAllocated(rows).length}</strong></article>
           </div>
           <form
             className="cr-panel cr-form"
@@ -968,34 +847,34 @@ function Team(props: { view: TeamView; world: string; storageScope: string; onVi
               const next = [...rows, { person: person.trim(), project: project.trim(), pct: Number(pct) || 0 }];
               const check = checkAllocation(next, person.trim());
               if (!check.ok) {
-                setRefusal(`${check.person} is at ${Math.round(check.load)}%. The 100% cap holds.`);
+                setRefusal({ person: check.person, load: Math.round(check.load) });
                 return;
               }
               if (!person.trim() || !project.trim()) return;
-              setRefusal("");
+              setRefusal(null);
               save(next);
               setPerson("");
               setProject("");
             }}
           >
-            <span className="cr-kicker">Allocate a person (100% hard cap)</span>
-            <input aria-label="Person" onChange={(event) => setPerson(event.target.value)} placeholder="Person" value={person} />
-            <input aria-label="Project" onChange={(event) => setProject(event.target.value)} placeholder="Project or front" value={project} />
-            <input aria-label="Percent" onChange={(event) => setPct(event.target.value)} type="number" value={pct} />
-            <button className="cr-solid" type="submit">+ Add allocation</button>
+            <span className="cr-kicker">{t("Allocate a person (100% hard cap)")}</span>
+            <input aria-label={t("Person")} onChange={(event) => setPerson(event.target.value)} placeholder={t("Person")} value={person} />
+            <input aria-label={t("Project")} onChange={(event) => setProject(event.target.value)} placeholder={t("Project or front")} value={project} />
+            <input aria-label={t("Percent")} onChange={(event) => setPct(event.target.value)} type="number" value={pct} />
+            <button className="cr-solid" type="submit">{t("+ Add allocation")}</button>
           </form>
-          {refusal && <p className="cr-flag">{refusal}</p>}
-          {people.length === 0 && <p className="cr-panel">No allocation in this world.</p>}
+          {refusal && <p className="cr-flag" role="alert">{t("{person} is at {load}%. The 100% cap holds.", refusal)}</p>}
+          {people.length === 0 && <p className="cr-panel">{t("No allocation in this world.")}</p>}
           {[...groupProjects(rows).entries()].map(([projectName, assigned]) => (
             <section className="cr-sheet" key={projectName}>
               <div className="cr-row">
                 <strong>{projectName}</strong>
-                <span>Total: {assigned.reduce((sum, row) => sum + row.pct, 0)}%</span>
+                <span>{t("Total:")} {assigned.reduce((sum, row) => sum + row.pct, 0)}%</span>
               </div>
               {assigned.map((row) => (
                 <div className="cr-alloc-row" key={`${row.person}-${row.pct}`}>
                   <span>{row.person}</span>
-                  <span>{row.pct}% ({Math.round(hoursWeek([row], cap))} h/wk)</span>
+                  <span>{row.pct}% ({Math.round(hoursWeek([row], cap))} {t("h/wk)")}</span>
                 </div>
               ))}
             </section>
@@ -1003,6 +882,7 @@ function Team(props: { view: TeamView; world: string; storageScope: string; onVi
         </div>
       )}
       {props.view === "utilization" && <Utilization rows={rows} world={props.world} />}
+      </div>
     </div>
   );
 }
@@ -1023,20 +903,20 @@ function Utilization({ rows }: { rows: AllocRow[]; world: string }) {
   const days = workingDaysOfMonth(year, month).length;
   return (
     <div>
-      <p className="cr-muted">Person × 8 weeks. Red over 100%, green 85–100%. {formatDate(`${year}-${String(month).padStart(2, "0")}-01`).split(" ")[0]} {year} computed on {days} working days.</p>
+      <p className="cr-muted">{t("Person × 8 weeks. Red over 100%, green 85–100%.")} {runMonth(`${year}-${String(month).padStart(2, "0")}-01`)} {year} {t("computed on")} {days} {t("working days.")}</p>
       <div className="cr-table-wrap">
         <table className="cr-table">
           <thead>
             <tr>
-              <th>Team member</th>
-              <th>Cap</th>
+              <th>{t("Team member")}</th>
+              <th>{t("Cap")}</th>
               {weeks.map((week) => <th key={week}>{formatDate(week)}</th>)}
-              <th>{formatDate(today).split(" ")[0]} {year}</th>
+              <th>{runMonth(today)} {year}</th>
             </tr>
           </thead>
           <tbody>
             {people.length === 0 && (
-              <tr><td colSpan={11}>No one is allocated this month.</td></tr>
+              <tr><td colSpan={11}>{t("No one is allocated this month.")}</td></tr>
             )}
             {people.map((person) => {
               const load = loadOf(rows, person);
@@ -1050,13 +930,13 @@ function Utilization({ rows }: { rows: AllocRow[]; world: string }) {
               return (
                 <tr key={person}>
                   <td>{person}</td>
-                  <td>{DEFAULT_CAP_MONTH}h</td>
+                  <td>{DEFAULT_CAP_MONTH}{t("h")}</td>
                   {weeks.map((week) => {
                     const value = week === start ? load : 0;
                     const tone = utilClass(value);
                     return <td className={tone === "bad" ? "is-bad" : tone === "ok" ? "is-ok" : tone === "zero" ? "is-zero" : ""} key={week}>{value}%</td>;
                   })}
-                  <td>{Math.round(hours.hours)} h</td>
+                  <td>{Math.round(hours.hours)} {t("h")}</td>
                 </tr>
               );
             })}
@@ -1074,14 +954,14 @@ function Week(props: { world: string; today: string; items: DeskItem[] }) {
     <div>
       <div className="cr-row">
         <div>
-          <h2 style={{ margin: 0 }}>Week time blocking · {props.world}</h2>
-          <p className="cr-muted">Morning Make fronts, midday protected time, and afternoon focus.</p>
+          <h2 style={{ margin: 0 }}>{t("Week time blocking ·")} {props.world}</h2>
+          <p className="cr-muted">{t("Morning Make fronts, midday protected time, and afternoon focus.")}</p>
         </div>
-        <button className="cr-ghost" onClick={() => void copyText(weekText(props.world, days, props.items))} type="button">Copy blocks for Lucy</button>
+        <button className="cr-ghost" onClick={() => void copyText(weekText(props.world, days, props.items))} type="button">{t("Copy blocks for Lucy")}</button>
       </div>
       <div className="cr-budget">
-        <span>Weekly attention budget target: 60% commercial / 25% projects / 15% admin</span>
-        <strong className="cr-good">Target 60% / 25% / 15%</strong>
+        <span>{t("Weekly attention budget target: 60% commercial / 25% projects / 15% admin")}</span>
+        <strong className="cr-good">{t("Target 60% / 25% / 15%")}</strong>
         <div className="cr-bar-track" aria-hidden="true"><span /><span /><span /></div>
       </div>
       <div className="cr-week">
@@ -1098,12 +978,12 @@ function Week(props: { world: string; today: string; items: DeskItem[] }) {
                 const visible = vis(block, props.world);
                 const focus = block.kind === "make" && visible;
                 const note = block.kind === "make"
-                  ? (visible ? (props.items[0]?.title || "No meetings") : `Not ${props.world} · Use for ${owner === props.world ? "the other world" : owner}`)
-                  : railCopy(block, visible, props.world).name;
+                  ? (visible ? (props.items[0]?.title || t("No meetings")) : t("Use for {world}", { world: owner }))
+                  : t(railCopy(block, visible, props.world).name);
                 return (
                   <div className={`cr-slot ${focus ? "is-focus" : ""} ${visible ? "" : "is-quiet"}`} key={`${iso}-${block.start}`}>
                     <span className="cr-muted">{block.start}–{block.end}</span>
-                    <strong>{block.kind === "make" ? "Make (2h)" : note}</strong>
+                    <strong>{block.kind === "make" ? t("Make (2h)") : note}</strong>
                     {block.kind === "make" && <span>{note}</span>}
                   </div>
                 );
@@ -1118,9 +998,9 @@ function Week(props: { world: string; today: string; items: DeskItem[] }) {
 
 function weekText(world: string, days: string[], items: DeskItem[]): string {
   return [
-    `Week time blocking · ${world}`,
-    ...days.flatMap((iso) => dayPlan(iso).filter((block) => block.kind !== "wake").map((block) => `${dayName(iso)} ${block.start}–${block.end} ${block.name}`)),
-    items[0] ? `First Make: ${items[0].title}` : "No Make item yet.",
+    `${t("Week time blocking ·")} ${world}`,
+    ...days.flatMap((iso) => dayPlan(iso).filter((block) => block.kind !== "wake").map((block) => `${dayName(iso)} ${block.start}–${block.end} ${t(block.name)}`)),
+    items[0] ? t("First Make: {title}", { title: items[0].title }) : t("No Make item yet."),
   ].join("\n");
 }
 
@@ -1147,47 +1027,48 @@ function Intake(props: {
   const title = checkTitle(props.title);
   return (
     <div>
-      <h2 style={{ marginBottom: 4 }}>Intake Gate & PBI Creator</h2>
-      <p className="cr-muted">Five questions before any commitment enters the desk. Protect the queue from noise.</p>
+      <h2 style={{ marginBottom: 4 }}>{t("Intake Gate & PBI Creator")}</h2>
+      <p className="cr-muted">{t("Five questions before any commitment enters the desk. Protect the queue from noise.")}</p>
       <div className="cr-split">
         <div>
-          <div className="cr-row"><span className="cr-kicker">The 5 questions</span><button className="cr-link" onClick={() => props.onGate({})} type="button">Reset</button></div>
+          <div className="cr-row"><span className="cr-kicker">{t("The 5 questions")}</span><button className="cr-link" onClick={() => props.onGate({})} type="button">{t("Reset")}</button></div>
           {GATE_QUESTIONS.map((question, index) => (
             <article className="cr-question" key={question.key}>
               <header>
-                <strong>{index + 1}. {question.question}</strong>
+                <strong>{index + 1}. {t(question.question)}</strong>
                 <span className="cr-choice">
-                  <button aria-pressed={props.gate[question.key] === true} className="cr-ghost" onClick={() => props.onGate({ ...props.gate, [question.key]: true })} type="button">Yes</button>
-                  <button aria-pressed={props.gate[question.key] === false} className="cr-ghost" onClick={() => props.onGate({ ...props.gate, [question.key]: false })} type="button">No</button>
+                  <button aria-pressed={props.gate[question.key] === true} className="cr-ghost" onClick={() => props.onGate({ ...props.gate, [question.key]: true })} type="button">{t("Yes")}</button>
+                  <button aria-pressed={props.gate[question.key] === false} className="cr-ghost" onClick={() => props.onGate({ ...props.gate, [question.key]: false })} type="button">{t("No")}</button>
                 </span>
               </header>
-              <p>{question.hint}</p>
+              <p>{t(question.hint)}</p>
             </article>
           ))}
         </div>
         <aside className={`cr-preview ${dest ? "is-ready" : ""}`}>
-          {!dest && <p>Answer the questions on the left to evaluate this intake.</p>}
-          {dest && !dest.pbi && <div><h2>{dest.name}</h2><p>{dest.detail}</p></div>}
+          {!dest && <p>{t("Answer the questions on the left to evaluate this intake.")}</p>}
+          {dest && !dest.pbi && <div><h2>{t(dest.name)}</h2><p>{t(dest.detail)}</p></div>}
           {dest?.pbi && (
             <form className="cr-form" onSubmit={(event) => { event.preventDefault(); props.onSave(); }}>
-              <h2>Create the PBI</h2>
-              <p>{dest.detail}</p>
-              <input aria-label="Title" onChange={(event) => props.onTitle(event.target.value)} placeholder="Verb + object + for whom" value={props.title} />
-              <span className={title.ok ? "cr-muted" : "cr-over"}>{title.words} / 12 words</span>
-              <input aria-label="Client" onChange={(event) => props.onClient(event.target.value)} placeholder="Client" value={props.client} />
-              <input aria-label="Deliverable" onChange={(event) => props.onDeliverable(event.target.value)} placeholder="Deliverable" value={props.deliverable} />
-              <input aria-label="Done when" onChange={(event) => props.onDone(event.target.value)} placeholder="Done when" value={props.doneWhen} />
-              <input aria-label="Next step" onChange={(event) => props.onNext(event.target.value)} placeholder="Next step" value={props.nextStep} />
+              <h2>{t("Create the PBI")}</h2>
+              <p>{t(dest.detail)}</p>
+              <label className="cr-field-label">{t("Title")}<input aria-label={t("Title")} onChange={(event) => props.onTitle(event.target.value)} placeholder={t("Verb + object + for whom")} value={props.title} /></label>
+              <span className={title.ok ? "cr-muted" : "cr-over"}>{title.words} {t("/ 12 words")}</span>
+              {!title.ok && props.title && <p role="status" className="cr-over">{t("Use 1–12 words without dates, stars or prefixes.")}</p>}
+              <label className="cr-field-label">{t("Client")}<input aria-label={t("Client")} onChange={(event) => props.onClient(event.target.value)} value={props.client} /></label>
+              <label className="cr-field-label">{t("Deliverable")}<input aria-label={t("Deliverable")} onChange={(event) => props.onDeliverable(event.target.value)} value={props.deliverable} /></label>
+              <label className="cr-field-label">{t("Done when")}<input aria-label={t("Done when")} onChange={(event) => props.onDone(event.target.value)} value={props.doneWhen} /></label>
+              <label className="cr-field-label">{t("Next step")}<input aria-label={t("Next step")} onChange={(event) => props.onNext(event.target.value)} value={props.nextStep} /></label>
               <div className="cr-actions">
                 {(["commercial", "projects", "admin"] as Lane[]).map((lane) => (
-                  <button aria-pressed={props.lane === lane} className="cr-ghost" key={lane} onClick={() => props.onLane(lane)} type="button">{lane}</button>
+                  <button aria-pressed={props.lane === lane} className="cr-ghost" key={lane} onClick={() => props.onLane(lane)} type="button">{t(lane)}</button>
                 ))}
                 {(["make", "decide", "delegate", "admin_batch"] as Decision[]).map((decision) => (
-                  <button aria-pressed={props.decision === decision} className="cr-ghost" key={decision} onClick={() => props.onDecision(decision)} type="button">{decision}</button>
+                  <button aria-pressed={props.decision === decision} className="cr-ghost" key={decision} onClick={() => props.onDecision(decision)} type="button">{t(decision)}</button>
                 ))}
               </div>
-              {props.lane === "admin" && props.decision === "make" && <p className="cr-flag">Admin is never Make.</p>}
-              <button className="cr-solid" disabled={!title.ok} type="submit">Save to this world</button>
+              {props.lane === "admin" && props.decision === "make" && <p className="cr-flag">{t("Admin is never Make.")}</p>}
+              <button className="cr-solid" disabled={!title.ok} type="submit">{t("Save to this world")}</button>
             </form>
           )}
         </aside>
@@ -1213,20 +1094,20 @@ function Close(props: {
   const forward = props.resolved >= props.cameIn;
   return (
     <div>
-      <h2 style={{ marginBottom: 4 }}>17:30 Close the day · {props.world}</h2>
-      <p className="cr-muted">Four numbered steps. Leave the desk clean, promises intact, hand-off prepared.</p>
+      <h2 style={{ marginBottom: 4 }}>{t("17:30 Close the day ·")} {props.world}</h2>
+      <p className="cr-muted">{t("Four numbered steps. Leave the desk clean, promises intact, hand-off prepared.")}</p>
       <section className="cr-step">
-        <h2><span className="cr-num">1</span> What you resolved today vs came in</h2>
+        <h2><span className="cr-num">1</span> {t("What you resolved today vs came in")}</h2>
         <div className="cr-pair">
-          <div><span className="cr-kicker">Resolved today</span><strong className="cr-good">{props.resolved}</strong></div>
-          <div><span className="cr-kicker">Came in as PBIs</span><strong>{props.cameIn}</strong></div>
+          <div><span className="cr-kicker">{t("Resolved today")}</span><strong className="cr-good">{props.resolved}</strong></div>
+          <div><span className="cr-kicker">{t("Came in as PBIs")}</span><strong>{props.cameIn}</strong></div>
         </div>
-        <p className="cr-banner">{forward ? "Desk moved forward: resolved more than entered." : "More came in than got resolved. Drop or delegate before you leave."}</p>
+        <p className="cr-banner">{forward ? t("Desk moved forward: resolved more than entered.") : t("More came in than got resolved. Drop or delegate before you leave.")}</p>
       </section>
       <section className="cr-step">
-        <h2><span className="cr-num">2</span> Promised dates checklist</h2>
-        <p className="cr-muted">Promises to clients or the team made today. Check them off or add a pending one.</p>
-        {props.promised.length === 0 && <p className="cr-muted">No promised date is open.</p>}
+        <h2><span className="cr-num">2</span> {t("Promised dates checklist")}</h2>
+        <p className="cr-muted">{t("Promises to clients or the team made today. Check them off or add a pending one.")}</p>
+        {props.promised.length === 0 && <p className="cr-muted">{t("No promised date is open.")}</p>}
         {props.promised.map((item) => (
           <label className="cr-pick" key={item.id}>
             <input onChange={() => props.onDone(item.id)} type="checkbox" />
@@ -1242,14 +1123,14 @@ function Close(props: {
             setTitle("");
           }}
         >
-          <input aria-label="Promised deliverable" onChange={(event) => setTitle(event.target.value)} placeholder="Add another promised deliverable…" value={title} />
-          <input aria-label="Promised date" onChange={(event) => setDate(event.target.value)} type="date" value={date} />
-          <button className="cr-ghost" type="submit">Add promise</button>
+          <input aria-label={t("Promised deliverable")} onChange={(event) => setTitle(event.target.value)} placeholder={t("Add another promised deliverable…")} value={title} />
+          <input aria-label={t("Promised date")} onChange={(event) => setDate(event.target.value)} type="date" value={date} />
+          <button className="cr-ghost" type="submit">{t("Add promise")}</button>
         </form>
       </section>
       <section className="cr-step">
-        <h2><span className="cr-num">3</span> Three for tomorrow <span className="cr-good" style={{ marginLeft: "auto", fontSize: 14 }}>{props.top3.length} of 3 selected</span></h2>
-        {props.make.length === 0 && <p className="cr-muted">Nothing is in Make yet.</p>}
+        <h2><span className="cr-num">3</span> {t("Three for tomorrow")}<span className="cr-good" style={{ marginLeft: "auto", fontSize: 14 }}>{props.top3.length} {t("of 3 selected")}</span></h2>
+        {props.make.length === 0 && <p className="cr-muted">{t("Nothing is in Make yet.")}</p>}
         {props.make.slice(0, 12).map((item) => (
           <label className={`cr-pick ${props.top3.includes(item.id) ? "is-on" : ""}`} key={item.id}>
             <input checked={props.top3.includes(item.id)} onChange={() => props.onToggle(item.id)} type="checkbox" />
@@ -1258,19 +1139,18 @@ function Close(props: {
         ))}
       </section>
       <section className="cr-step">
-        <h2><span className="cr-num">4</span> Hand-off</h2>
-        <p>{props.top3.length === 3 ? "Hand-off ready. Three for tomorrow are chosen." : "Choose three for tomorrow before the hand-off."}</p>
+        <h2><span className="cr-num">4</span> {t("Hand-off")}</h2>
+        <p>{props.top3.length === 3 ? t("Hand-off ready. Three for tomorrow are chosen.") : t("Choose three for tomorrow before the hand-off.")}</p>
         <button
           className="cr-solid"
           onClick={() => void copyText([
-            `Close · ${props.world} · ${formatDate(props.today)}`,
-            `Resolved ${props.resolved}. Came in ${props.cameIn}.`,
-            ...props.make.filter((item) => props.top3.includes(item.id)).map((item) => `Tomorrow: ${item.title}`),
+            `${t("Close the day")} · ${props.world} · ${formatDate(props.today)}`,
+            t("Resolved {resolved}. Came in {incoming}.", { resolved: props.resolved, incoming: props.cameIn }),
+            ...props.make.filter((item) => props.top3.includes(item.id)).map((item) => t("Tomorrow: {title}", { title: item.title })),
           ].join("\n"))}
           type="button"
         >
-          Copy hand-off for Lucy
-        </button>
+          {t("Copy hand-off for Lucy")}</button>
       </section>
     </div>
   );
@@ -1298,34 +1178,23 @@ function Manifesto(props: { until: number | null; onClose: () => void; onStart: 
     return () => window.clearInterval(timer);
   }, [props.until]);
   return (
-    <div className="cr-modal-back" onClick={props.onClose} role="presentation">
-      <div
-        aria-labelledby="cr-manifesto-title"
-        aria-modal="true"
-        className="cr-modal"
-        data-testid="certo-run-manifesto"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <header>
-          <h2 id="cr-manifesto-title">Morning Read · The Manifesto</h2>
-          <button aria-label="Close" className="cr-x" onClick={props.onClose} type="button">×</button>
-        </header>
+    <RunDialog title={t("Morning Read · The Manifesto")} onClose={props.onClose}>
+      <div data-testid="certo-run-manifesto">
         {props.until ? <p className="cr-clock">{left}</p> : checkIn ? (
           <div className="cr-manifesto">
-            <p>Hours of sleep</p>
-            <input aria-label="Hours of sleep" className="cr-field" onChange={(event) => setSleep(event.target.value)} type="number" value={sleep} />
+            <p>{t("Hours of sleep")}</p>
+            <input aria-label={t("Hours of sleep")} className="cr-field" onChange={(event) => setSleep(event.target.value)} type="number" value={sleep} />
             <div className="cr-moods">
               {MOOD_KEYS.map((key) => (
-                <button aria-pressed={mood === key} className="cr-ghost" key={key} onClick={() => setMood(key)} type="button">{key.replace("_", " ")}</button>
+                <button aria-pressed={mood === key} className="cr-ghost" key={key} onClick={() => setMood(key)} type="button">{t(key.replace("_", " "))}</button>
               ))}
             </div>
-            <button className="cr-solid" onClick={props.onStart} type="button">Focus 25 min</button>
+            <button className="cr-solid" onClick={props.onStart} type="button">{t("Focus 25 min")}</button>
           </div>
         ) : editing ? (
-          <textarea className="cr-field wide" onChange={(event) => setText(event.target.value)} rows={16} value={text} />
+          <textarea aria-label={t("Manifesto")} className="cr-field wide" onChange={(event) => setText(event.target.value)} rows={16} value={text} />
         ) : (
-          <div className="cr-manifesto">{text}</div>
+          <div className="cr-manifesto">{text === DEFAULT_MANIFESTO ? t(DEFAULT_MANIFESTO) : text}</div>
         )}
         {!props.until && (
           <footer>
@@ -1335,18 +1204,19 @@ function Manifesto(props: { until: number | null; onClose: () => void; onStart: 
                 if (editing) {
                   try { window.localStorage.setItem("certo-run-manifesto", text); } catch { /* private mode */ }
                 }
+                else if (text === DEFAULT_MANIFESTO) setText(t(DEFAULT_MANIFESTO));
                 setEditing((value) => !value);
               }}
               type="button"
             >
-              {editing ? "Save manifesto" : "Edit manifesto"}
+              {editing ? t("Save manifesto") : t("Edit manifesto")}
             </button>
-            {!checkIn && <button className="cr-solid" onClick={() => setCheckIn(true)} type="button">Read. Now the check-in →</button>}
-            {checkIn && <button className="cr-ghost" onClick={props.onClose} type="button">Close</button>}
+            {!checkIn && <button className="cr-solid" onClick={() => setCheckIn(true)} type="button">{t("Read. Now the check-in →")}</button>}
+            {checkIn && <button className="cr-ghost" onClick={props.onClose} type="button">{t("Close")}</button>}
           </footer>
         )}
       </div>
-    </div>
+    </RunDialog>
   );
 }
 
@@ -1376,6 +1246,6 @@ function storeAlloc(world: string, rows: AllocRow[]) {
 }
 
 function allocText(world: string, rows: AllocRow[]): string {
-  if (rows.length === 0) return `Team allocation · ${world}\nNo one is allocated.`;
-  return [`Team allocation · ${world}`, ...rows.map((row) => `${row.person} · ${row.project} · ${row.pct}%`)].join("\n");
+  if (rows.length === 0) return `${t("Team allocation · {world}", { world })}\n${t("No one is allocated.")}`;
+  return [t("Team allocation · {world}", { world }), ...rows.map((row) => `${row.person} · ${row.project} · ${row.pct}%`)].join("\n");
 }

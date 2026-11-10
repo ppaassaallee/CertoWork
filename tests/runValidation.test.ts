@@ -37,8 +37,10 @@ test("RUN-2 adapter refuses a record from another workspace", () => {
 });
 test("RUN-1 queue never truncates records and keeps IDs behind context", () => {
   const source = readFileSync("src/features/certo-run/CertoRunDesk.tsx", "utf8");
-  assert.doesNotMatch(source, /props.items.slice\(0, 40\)/);
-  assert.doesNotMatch(source, /Math.min\(5, props.counts.make\)/);
-  assert.match(source, /Record: \{item.externalId/);
+  const queue = readFileSync("src/features/certo-run/RunQueue.tsx", "utf8");
+  assert.doesNotMatch(queue, /items.slice\(0, 40\)/);
+  assert.doesNotMatch(queue, /Math.min\(5, counts.make\)/);
+  assert.match(queue, /cr-detail-record/);
+  assert.match(queue, /<code>\{item.externalId \|\| item.id\}<\/code>/);
   assert.match(source, /storageScope=\{`\$\{workspaceId\}:\$\{user.uid\}`\}/);
 });

@@ -1,5 +1,5 @@
 /* Spec v2 values, scoped to Run to avoid changing Certo Work. */
-.cr-desk, .cr-modal {
+.cr-desk, .cr-modal, .cr-run-layer, .cr-action-popover {
   --cr-cream: #F7F6F2;
   --cr-paper: #FFFFFF;
   --cr-sunk: #EFEFEA;
