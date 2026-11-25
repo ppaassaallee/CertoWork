@@ -1,12 +1,17 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import TimeWorkspace from "../../src/features/time/TimeWorkspace";
-import { civilDate, type TimeEntry, type TimeSheet } from "../../src/features/time/model";
+import { civilDate, weekDates, type TimeEntry, type TimeSheet } from "../../src/features/time/model";
 import { setLocale } from "../../src/lib/localeStore";
 import { type Timer, type timeStore } from "../../src/lib/time/storage";
 let rows: TimeEntry[] = [];
 let sheets: TimeSheet[] = [];
 let timer: Timer | null = null;
+if (new URLSearchParams(window.location.search).has("report-fixture")) {
+  sheets = [{ id: "legal", name: "Legal review" }];
+  const days = weekDates(civilDate());
+  rows = Array.from({ length: 100 }, (_, index) => ({ id: `report-${index}`, workspaceId: "test", userId: "me", sheetId: index < 50 ? "default" : "legal", projectId: "p", itemId: "i", date: days[index % 7], minutes: 30, billable: index % 2 === 0, description: `Review ${index + 1}: Revisión técnica - análisis de contratos y documentación de ingeniería. ` + "Delivery notes and client context. ".repeat(4) }));
+}
 const repository: ReturnType<typeof timeStore> = {
   async loadWeek(first, last) {
     return {
@@ -64,6 +69,8 @@ createRoot(document.getElementById("root")!).render(
     <TimeWorkspace
       workspaceId="test"
       userId="me"
+      person="Ana Martínez"
+      workspaceName="Certo Studio"
       projects={[{ id: "p", title: "Certo engineering" }]}
       items={[
         {

@@ -4,6 +4,7 @@ import {
   doc,
   documentId,
   getDocs,
+  getDocsFromServer,
   limit,
   orderBy,
   query,
@@ -29,18 +30,18 @@ export function timeStore(workspaceId: string, userId: string, database: Firesto
   const entries = collection(database, `${path}/entries`);
   const state = doc(database, `${path}/state/timer`);
   return {
-    async loadWeek(first: string, last: string, cursor?: PageCursor) {
-      const result = await getDocs(
-        query(
-          entries,
-          where("date", ">=", first),
-          where("date", "<=", last),
-          orderBy("date"),
-          orderBy(documentId()),
-          ...(cursor ? [startAfter(cursor)] : []),
-          limit(TIME_PAGE_SIZE),
-        ),
+    async loadWeek(first: string, last: string, cursor?: PageCursor, serverOnly = false) {
+      const selection = query(
+        entries,
+        where("date", ">=", first),
+        where("date", "<=", last),
+        orderBy("date"),
+        orderBy(documentId()),
+        ...(cursor ? [startAfter(cursor)] : []),
+        limit(TIME_PAGE_SIZE),
       );
+      // Reports must fail offline rather than print an incomplete local cache.
+      const result = serverOnly ? await getDocsFromServer(selection) : await getDocs(selection);
       return {
         rows: result.docs.map((row) => ({ ...row.data(), id: row.id }) as TimeEntry),
         cursor: result.docs[result.docs.length - 1],

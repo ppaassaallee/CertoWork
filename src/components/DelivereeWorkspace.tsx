@@ -9655,7 +9655,7 @@ export function DelivereeWorkspace() {
           )
         ) : centerView === "timesheets" && workspace && user ? (
           <Suspense fallback={<div role="status">{tr("Loading time…", "Cargando horas…")}</div>}>
-            <TimeWorkspaceLazy key={workspace.id + user.uid} workspaceId={workspace.id} userId={user.uid} projects={projects} items={tasks} />
+            <TimeWorkspaceLazy key={workspace.id + user.uid} workspaceId={workspace.id} userId={user.uid} projects={projects} items={tasks} person={user.displayName || undefined} workspaceName={workspace.name} />
           </Suspense>
         ) : centerView === "notes" ? (
           <NotesWorkspace
