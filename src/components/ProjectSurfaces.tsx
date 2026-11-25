@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, memo, useCallback, useEffect, useMemo, useState } from "react";
+const TimeWorkspaceLazy = lazy(() => import("../features/time/TimeWorkspace"));
 import { useLocation, useNavigate } from "react-router-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { app } from "../lib/firebase";
@@ -1277,6 +1278,7 @@ export const ProjectRecordModal = memo(function ProjectRecordModal({
 });
 
 export type ProjectConsoleTab =
+  | "time"
   | "brief"
   | "items"
   | "plan"
@@ -1457,6 +1459,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
     return "overview";
   });
   const applyChromeView = useCallback((view: ProjectViewId) => {
+    if (view === "time") { setTab("time"); setChromeView("time"); return; }
     if (view === "costs") {
       setTab("costs");
       setChromeView("costs");
@@ -2011,14 +2014,14 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
         />
       ) : null}
 
-      {(tab === "items" ||
+      {(tab === "items" || tab === "time" ||
         tab === "docs" ||
         tab === "costs" ||
         tab === "tables" ||
         (isOverviewEnabled() && chromeView === "overview")) && (
         <ProjectViewTabs
           activeView={
-            (tab === "docs"
+            (tab === "time" ? "time" : tab === "docs"
               ? "docs"
               : tab === "costs"
                 ? "costs"
@@ -2071,14 +2074,17 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
               <WorkHistoryTools rows={tasks} scope={`project:${String(project.id)}`} />
             ) : null
           }
-          showActions={chromeView !== "overview" && tab !== "costs" && tab !== "tables"}
+          showActions={chromeView !== "overview" && tab !== "costs" && tab !== "tables" && tab !== "time"}
           showCosts={canViewFinance}
           showTables={tablesEnabled}
           sortOpen={notionSortOpen}
         />
       )}
 
-      {tab !== "items" && tab !== "docs" && tab !== "costs" && tab !== "tables" && (
+      {tab === "time" && authUser && workspaceIdForViews && <Suspense fallback={<p role="status">{tr("Loading time…", "Cargando horas…")}</p>}>
+        <TimeWorkspaceLazy key={workspaceIdForViews + authUser.uid + project.id} workspaceId={workspaceIdForViews} userId={authUser.uid} projects={workspaceProjects || [project]} items={tasks} projectId={String(project.id)} />
+      </Suspense>}
+      {tab !== "items" && tab !== "time" && tab !== "docs" && tab !== "costs" && tab !== "tables" && (
         <button
           className="do-notion-page-back"
           onClick={() => {

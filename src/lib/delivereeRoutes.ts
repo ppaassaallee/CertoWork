@@ -40,6 +40,7 @@ export type DelivereeLens =
   | { kind: "dashboard" }
   | { kind: "workload" }
   | { kind: "relationships" }
+  | { kind: "timesheets" }
   | { kind: "more"; section: MoreSection }
   | { kind: "inbox" }
   | { kind: "certo-run"; tab: RunTab };
@@ -56,6 +57,7 @@ const MORE_SECTIONS: MoreSection[] = [
 
 export function resolveDelivereeLens(pathname: string): DelivereeLens {
   const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/timesheets") return { kind: "timesheets" };
 
   const projectMatch = path.match(
     /^\/(?:work\/)?projects\/([^/]+)(?:\/(notes|tasks|strategy|overview))?$/,

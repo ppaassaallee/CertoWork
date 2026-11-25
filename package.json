@@ -13,6 +13,8 @@
     "test:run-visual": "playwright test -c playwright.run.config.ts",
     "test:run-workflow": "playwright test -c playwright.run-workflow.config.ts",
     "test:run-ux": "playwright test -c playwright.run-ux.config.ts",
+    "test:time-ui": "playwright test -c playwright.time.config.ts",
+    "test:time-security": "node tests/time/security.mjs && tsx tests/time/storage-check.ts",
     "audit:run-goldens": "node scripts/audit-run-goldens.mjs",
     "lint": "eslint .",
     "lint:budget": "node scripts/lint-budget.mjs",

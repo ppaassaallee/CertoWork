@@ -1,4 +1,5 @@
 const TOKEN_TO_CHROME: Record<string, string> = {
+  time: "time",
   board: "kanban",
   table: "list",
   gantt: "gantt",
@@ -14,6 +15,7 @@ const TOKEN_TO_CHROME: Record<string, string> = {
 };
 
 const CHROME_TO_TOKEN: Record<string, string> = {
+  time: "time",
   kanban: "board",
   list: "table",
   gantt: "gantt",
@@ -71,8 +73,9 @@ export function searchWithItem(search: string, itemId: string | null) {
   return next ? `?${next}` : "";
 }
 
-export function tabForProjectView(chromeView: string | null): "docs" | "costs" | "tables" | "items" | null {
+export function tabForProjectView(chromeView: string | null): "docs" | "costs" | "tables" | "time" | "items" | null {
   if (!chromeView) return null;
+  if (chromeView === "time") return "time";
   if (chromeView === "docs" || chromeView === "costs" || chromeView === "tables") return chromeView;
   return "items";
 }
