@@ -31,6 +31,7 @@ import {
 } from "../../lib/collaborationAccess";
 import { memberPublicLabel } from "../../lib/workspaceCollaboration";
 import { getLocale, isSpanish } from "../../lib/i18n";
+import { viewRequestsDeletedProjects } from "../../lib/projectVisibility";
 
 type ProjectMember = {
   id: string;
@@ -118,6 +119,8 @@ export function ProjectsViewsSurface({
   selectedIds,
   onSelectionChange,
   ctxExtras: _ctxExtras,
+  onDeletedViewChange,
+  onVisibleCountChange,
 }: {
   projects: ProjectRow[];
   tasks?: Array<Record<string, unknown> & { id?: string; projectId?: string; status?: string }>;
@@ -133,6 +136,8 @@ export function ProjectsViewsSurface({
   selectedIds?: string[];
   onSelectionChange?(ids: string[]): void;
   ctxExtras?: Partial<ActionContext>;
+  onDeletedViewChange?: (requested: boolean) => void;
+  onVisibleCountChange?: (count: number) => void;
 }) {
   const surface: Surface = "projects-list";
   const tasksByProject = useMemo(() => groupByProjectId(tasks), [tasks]);
@@ -214,6 +219,9 @@ export function ProjectsViewsSurface({
     () => applyView(projects, adapter, listView, { userId: actorId }),
     [projects, adapter, listView, actorId],
   );
+  const requestsDeleted = viewRequestsDeletedProjects(listView.filters);
+  useEffect(() => { onDeletedViewChange?.(requestsDeleted); }, [requestsDeleted, onDeletedViewChange]);
+  useEffect(() => { onVisibleCountChange?.(applied.rows.length); }, [applied.rows.length, onVisibleCountChange]);
 
   const selected = useMemo(() => new Set(selectedIds || []), [selectedIds]);
   const visibleIds = useMemo(

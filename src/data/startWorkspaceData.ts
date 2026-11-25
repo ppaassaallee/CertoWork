@@ -1,3 +1,4 @@
+import { preferRecentProjectSnapshot } from "../lib/projectVisibility";
 import {
   collection,
   getDocs,
@@ -171,6 +172,7 @@ export function startWorkspaceData(args: StartArgs): () => void {
       queryClauses.length,
       publish,
       (item) => item?.workspaceId === workspace.id,
+      name === "projects" ? preferRecentProjectSnapshot : undefined,
     );
     return queryClauses.map((clauses, index) =>
       onSnapshot(

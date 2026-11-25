@@ -362,7 +362,7 @@ test("portfolio list opens a project from the title or row click", () => {
   assert.match(projectAdapter, /id: "open"/);
   assert.match(projectAdapter, /layout: "list"/);
   assert.match(projectAdapter, /tasksByProject/);
-  assert.match(projectSurfaces, /onOpenProject=\{\(project\) => onOpenProject\(project\)\}/);
+  assert.match(projectSurfaces, /onOpenProject=\{onOpenProject\}/);
   assert.match(css, /\.do-command-project-title-open/);
   assert.match(tokens, /\.do-projects-asana-list/);
 });
