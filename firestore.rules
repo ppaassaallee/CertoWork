@@ -993,6 +993,58 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(categoryId) && resource.data.userId == request.auth.uid;
     }
 
+    // Personal timesheets are nested under a tenant and an authenticated author.
+    // Membership never grants access to another person's entries or timer.
+    function ownTime(workspaceId, userId) {
+      return isSignedIn() && request.auth.uid == userId && isWorkspaceParticipant(workspaceId);
+    }
+    // ownTime + target.workspaceId already establish tenant membership. Public
+    // project inheritance is checked first to avoid evaluating expensive direct
+    // share grants when unnecessary. The two access branches are unchanged.
+    function canLinkTimeItem(data) {
+      return hasProjectTaskAccess(data) || hasDirectTaskAccess(data);
+    }
+    function validTimeTarget(data, workspaceId, userId) {
+      return data.workspaceId == workspaceId && data.userId == userId
+        && data.sheetId is string && data.sheetId.size() > 0
+        && (data.sheetId == 'default' || exists(/databases/$(database)/documents/workspaces/$(workspaceId)/time_users/$(userId)/sheets/$(data.sheetId)))
+        && data.projectId is string && data.itemId is string
+        && (data.projectId == '' || (
+          exists(/databases/$(database)/documents/projects/$(data.projectId))
+          && get(/databases/$(database)/documents/projects/$(data.projectId)).data.workspaceId == workspaceId
+          && (data.itemId != '' || canReadProject(get(/databases/$(database)/documents/projects/$(data.projectId)).data))))
+        && (data.itemId == '' || (
+          exists(/databases/$(database)/documents/tasks/$(data.itemId))
+          && get(/databases/$(database)/documents/tasks/$(data.itemId)).data.workspaceId == workspaceId
+          && get(/databases/$(database)/documents/tasks/$(data.itemId)).data.get('projectId', '') == data.projectId
+          && canLinkTimeItem(get(/databases/$(database)/documents/tasks/$(data.itemId)).data)))
+        && data.description is string && data.description.size() > 0 && data.description.size() <= 2000
+        && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.billable is bool;
+    }
+    match /workspaces/{workspaceId}/time_users/{userId}/sheets/{sheetId} {
+      allow read, delete: if ownTime(workspaceId, userId);
+      allow create, update: if ownTime(workspaceId, userId)
+        && incoming().keys().hasOnly(['name', 'createdAt'])
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 80
+        && incoming().createdAt is timestamp;
+    }
+    match /workspaces/{workspaceId}/time_users/{userId}/entries/{entryId} {
+      allow read, delete: if ownTime(workspaceId, userId);
+      allow create, update: if ownTime(workspaceId, userId)
+        && incoming().keys().hasOnly(['workspaceId', 'userId', 'sheetId', 'projectId', 'itemId', 'description', 'date', 'minutes', 'billable', 'updatedAt'])
+        && validTimeTarget(incoming(), workspaceId, userId)
+        && incoming().minutes is int && incoming().minutes > 0 && incoming().minutes <= 1440
+        && incoming().updatedAt == request.time;
+    }
+    match /workspaces/{workspaceId}/time_users/{userId}/state/{stateId} {
+      allow read, delete: if stateId == 'timer' && ownTime(workspaceId, userId);
+      allow create: if stateId == 'timer' && ownTime(workspaceId, userId)
+        && incoming().keys().hasOnly(['workspaceId', 'userId', 'sheetId', 'projectId', 'itemId', 'description', 'date', 'billable', 'startedAtMs'])
+        && validTimeTarget(incoming(), workspaceId, userId)
+        && incoming().startedAtMs is int && incoming().startedAtMs > 0;
+    }
+
     // Stakeholders
     function isValidStakeholder(data) {
        return data.keys().hasAll(['userId', 'workspaceId', 'name', 'createdAt'])
