@@ -15,6 +15,7 @@
     "test:run-ux": "playwright test -c playwright.run-ux.config.ts",
     "test:time-ui": "playwright test -c playwright.time.config.ts",
     "test:time-security": "node tests/time/security.mjs && tsx tests/time/storage-check.ts",
+    "test:project-delete": "playwright test -c playwright.project-delete.config.ts",
     "audit:run-goldens": "node scripts/audit-run-goldens.mjs",
     "lint": "eslint .",
     "lint:budget": "node scripts/lint-budget.mjs",

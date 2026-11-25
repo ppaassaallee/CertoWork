@@ -13,6 +13,7 @@ import {
 } from "../../../lib/projectDelivery";
 import { t } from "../../../lib/i18n";
 import { toDateKey } from "../../../shared/formatDate";
+import { projectLifecycleStatus } from "../../../lib/projectVisibility";
 
 export type ProjectRow = Record<string, unknown> & { id: string };
 
@@ -113,7 +114,7 @@ export function buildProjectAdapter(
       groupable: true,
       filterable: true,
       width: 120,
-      read: (row) => readString(row, ["status"]) || "active",
+      read: (row) => projectLifecycleStatus(row),
       write: async (row, value) => {
         await deps.onUpdateProject(row.id, { status: value ? String(value) : "active" });
       },

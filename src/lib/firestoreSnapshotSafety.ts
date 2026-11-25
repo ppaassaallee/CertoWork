@@ -13,6 +13,7 @@ export function createCompleteSnapshotMerge<T extends { id: string }>(
   queryCount: number,
   publish: (items: T[]) => void,
   include: (item: T) => boolean = () => true,
+  reconcile: (previous: T, incoming: T) => T = (_previous, incoming) => incoming,
 ) {
   const buckets = new Map<number, T[]>();
   const settled = new Set<number>();
@@ -22,7 +23,11 @@ export function createCompleteSnapshotMerge<T extends { id: string }>(
     if (settled.size !== queryCount || buckets.size === 0 || (failed && publishedComplete)) return;
     const merged = new Map<string, T>();
     for (const bucket of buckets.values()) {
-      for (const item of bucket) if (include(item)) merged.set(item.id, item);
+      for (const item of bucket)
+        if (include(item)) {
+          const previous = merged.get(item.id);
+          merged.set(item.id, previous ? reconcile(previous, item) : item);
+        }
     }
     publish([...merged.values()]);
     if (!failed) publishedComplete = true;

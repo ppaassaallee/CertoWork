@@ -9,6 +9,7 @@ import { NativeSelect } from "./ui/NativeSelect";
 import { workItemTypeLabel } from "../lib/workItemTypeLabels";
 import { localize } from "../lib/localize";
 import { useLocale } from "../lib/useLocale";
+import { matchesPortfolioLifecycle } from "../lib/projectVisibility";
 import { useMobileCore } from "../hooks/useMobileCore";
 import {
   ProjectPageHeader,
@@ -5472,6 +5473,8 @@ function ProjectCommandCenterInner({
   const locale = useLocale();
   const tr = (en: string, es: string) => localize(locale, en, es);
   const [filter, setFilter] = useState("active");
+  const [savedViewRequestsDeleted, setSavedViewRequestsDeleted] = useState(false);
+  const [visibleViewCount, setVisibleViewCount] = useState<number | null>(null);
   const [statusFilters, setStatusFilters] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -5625,30 +5628,12 @@ function ProjectCommandCenterInner({
     () =>
       portfolio.filter((project) => {
         if (!matchesProjectContents(tasksFor(project.id), contentFilter)) return false;
-        const status = String(project.status || "planning").toLowerCase();
         const health = projectHealth(
           project,
           tasksFor(project.id),
           risksFor(project.id),
         );
-        const matchesFilter =
-          statusFilters.length > 0
-            ? statusFilters.some((value) =>
-                value === "active"
-                  ? ["active", "in_progress"].includes(status)
-                  : status === value,
-              )
-            : filter === "all"
-              ? true
-              : filter === "active"
-                ? ![
-                    "completed",
-                    "archived",
-                    "done",
-                    "deleted",
-                    "cancelled",
-                  ].includes(status)
-                : status === filter;
+        const matchesFilter = matchesPortfolioLifecycle(project, filter, statusFilters, view === "overview" && savedViewRequestsDeleted);
         const matchesStage =
           stageFilter === "all" || deliveryStage(project) === stageFilter;
         const matchesPhase =
@@ -5693,6 +5678,8 @@ function ProjectCommandCenterInner({
       contentFilter,
       statusFilters,
       filter,
+      view,
+      savedViewRequestsDeleted,
       stageFilter,
       phaseFilter,
       healthFilter,
@@ -5752,6 +5739,7 @@ function ProjectCommandCenterInner({
       ),
     [sortedFiltered],
   );
+  const visibleProjectCount = view === "overview" ? (visibleViewCount ?? sortedFiltered.length) : sortedFiltered.length;
   const visibleProjectIds = useMemo(
     () => sortedFiltered.map((project) => project.id),
     [sortedFiltered],
@@ -6530,7 +6518,7 @@ function ProjectCommandCenterInner({
           <div className="do-command-toolbar">
             <div className="do-command-toolbar-left">
               <span className="do-command-visible-count" role="status">
-                {sortedFiltered.length} project{sortedFiltered.length === 1 ? "" : "s"}
+                {visibleProjectCount} {visibleProjectCount === 1 ? tr("project", "proyecto") : tr("projects", "proyectos")}
               </span>
               <button
                 aria-controls="projects-advanced-filters projects-advanced-options"
@@ -7150,10 +7138,12 @@ function ProjectCommandCenterInner({
             <ProjectsViewsSurface
               actorId={actorId}
               members={workspaceMembers}
-              onArchiveProject={(project) => onArchiveProject(project)}
-              onOpenBrief={(project) => onOpenProject(project)}
-              onOpenProject={(project) => onOpenProject(project)}
-              onOpenSummary={(project) => onOpenProject(project)}
+              onArchiveProject={onArchiveProject}
+              onOpenBrief={onOpenProject}
+              onOpenProject={onOpenProject}
+              onOpenSummary={onOpenProject}
+              onDeletedViewChange={setSavedViewRequestsDeleted}
+              onVisibleCountChange={setVisibleViewCount}
               onSelectionChange={setSelectedProjectIds}
               onUpdateProject={onUpdateProject}
               projects={sortedFiltered as Array<Record<string, unknown> & { id: string }>}

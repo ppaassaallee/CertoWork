@@ -39,8 +39,8 @@ export function isProjectFavorite(project: any) {
 }
 
 export function isProjectClosed(project: any) {
-  return ["completed", "done", "closed", "archived", "cancelled", "deleted"].includes(
-    String(project?.status || "").toLowerCase(),
+  return ["completed", "done", "closed", "archived", "cancelled", "canceled", "deleted"].includes(
+    projectLifecycleStatus(project || {}),
   );
 }
 
@@ -314,3 +314,4 @@ export function isActiveWorkLane(task: unknown) {
   const lane = taskWorkLane(task);
   return lane !== "done" && lane !== "removed";
 }
+import { projectLifecycleStatus } from "./projectVisibility";
