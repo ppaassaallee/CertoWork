@@ -514,8 +514,8 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
         {tr("Timer sheet", "Hoja del temporizador")}:{" "}
         {allSheets.find((row) => row.id === (sheet === "all" ? "default" : sheet))?.name}.{" "}
         {tr(
-          "Timers round up to the next minute. Manual time is never rounded.",
-          "Los temporizadores redondean al minuto siguiente. Las horas manuales no se redondean.",
+          "Timers round up to the next minute. Manual durations are stored in whole minutes.",
+          "Los temporizadores redondean al minuto siguiente. Las duraciones manuales se guardan en minutos enteros.",
         )}
       </p>
       {busy && !draft && sheetName === null && <p role="status">{tr("Saving…", "Guardando…")}</p>}
@@ -704,6 +704,13 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
         className="cw-time-dialog"
         aria-labelledby="cw-time-dialog-title"
         ref={dialog}
+        onKeyDown={event => {
+          if (event.key !== "Tab") return;
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex='0']")].filter(control => control.getClientRects().length > 0);
+          const first = controls[0], last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }}
         onCancel={(event) => {
           event.preventDefault();
           close();

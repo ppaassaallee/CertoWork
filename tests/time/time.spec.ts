@@ -45,6 +45,11 @@ test("manual project/item entry, edit, billable total, sheet and bilingual UI", 
   await dialog.getByRole("combobox", { name: "Project", exact: true }).selectOption("p");
   await dialog.getByRole("combobox", { name: "Linked item (any type)" }).selectOption("i");
   await dialog.getByLabel("Duration (H:MM or hours)").fill("1.5");
+  await dialog.getByRole("button", { name: "Save time", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", { name: "Save time", exact: true })).toBeFocused();
   await dialog.getByLabel("Billable time").check();
   await dialog.getByRole("button", { name: "Save time", exact: true }).click();
   await expect(page.getByRole("rowheader", { name: /Architecture review/ })).toBeVisible();
