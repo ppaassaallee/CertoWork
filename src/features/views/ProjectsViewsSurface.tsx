@@ -31,7 +31,7 @@ import {
 } from "../../lib/collaborationAccess";
 import { memberPublicLabel } from "../../lib/workspaceCollaboration";
 import { getLocale, isSpanish } from "../../lib/i18n";
-import { viewRequestsDeletedProjects } from "../../lib/projectVisibility";
+import { projectLifecycleStatus, viewRequestsDeletedProjects } from "../../lib/projectVisibility";
 
 type ProjectMember = {
   id: string;
@@ -448,7 +448,7 @@ export function ProjectsViewsSurface({
                     </span>
                   </div>
                   <span className="do-projects-asana-pill">
-                    {projectStatusLabel(String(project.status || "active"))}
+                    {projectStatusLabel(projectLifecycleStatus(project))}
                   </span>
                   <span
                     className={`do-projects-asana-health is-${String(health).replace(/_/g, "-")}`}

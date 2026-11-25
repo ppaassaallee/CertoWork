@@ -40,6 +40,7 @@ test("saved Deleted view is explicit and Default exits trash", async ({ page }) 
   await page.getByRole("tab", { name: "Deleted projects", exact: true }).click();
   await expect(list).toContainText("Deleted project");
   await expect(list).toContainText("Tombstone project");
+  await expect(list.getByTestId("projects-asana-row").filter({ hasText: "Tombstone project" })).toContainText("Deleted");
   await expect(list).not.toContainText("Live project");
   await page.getByRole("tab", { name: "Default", exact: true }).click();
   await expect(list).toContainText("Live project");
