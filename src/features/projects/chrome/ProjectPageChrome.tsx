@@ -43,6 +43,7 @@ import { isOverviewEnabled } from "../../overview/overviewFlag";
 export type ProjectViewId =
   | WorkItemsViewMode
   | "docs"
+  | "time"
   | "overview"
   | "costs"
   | "tables";
@@ -55,6 +56,7 @@ const BASE_VIEW_TABS: Array<{ id: ProjectViewId; label: string; Icon: IconType }
   { id: "gantt", label: "Gantt", Icon: CalendarRange },
   { id: "calendar", label: "Calendario", Icon: Calendar },
   { id: "docs", label: "Docs", Icon: FileText },
+  { id: "time", label: "Time", Icon: Calendar },
   { id: "tables", label: "Tablas", Icon: LayoutGrid },
 ];
 
@@ -95,7 +97,7 @@ function viewTabs(includeCosts = false, includeTables = false) {
       })();
   return withCosts.map((tab) => ({
     ...tab,
-    label: t(VIEW_LABEL_KEYS[tab.id] || "project.view.table"),
+    label: tab.id === "time" ? localize(getLocale(), "Time", "Tiempo") : t(VIEW_LABEL_KEYS[tab.id] || "project.view.table"),
   }));
 }
 

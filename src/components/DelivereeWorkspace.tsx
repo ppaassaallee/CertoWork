@@ -332,6 +332,7 @@ const MyWorkRouteLazy = lazy(() =>
 const ProjectRouteLazy = lazy(() =>
   import("../routes/ProjectRoute").then((m) => ({ default: m.ProjectRoute })),
 ) as LazyExoticComponent<ComponentType<any>>;
+const TimeWorkspaceLazy = lazy(() => import("../features/time/TimeWorkspace"));
 import { canUseCertoRun } from "../run/access";
 
 const CertoRunDeskLazy = lazy(() =>
@@ -548,6 +549,7 @@ export type CenterView =
   | "feedback"
   | "requests"
   | "relationships"
+  | "timesheets"
   | "tables-dashboard"
   | "run";
 
@@ -899,6 +901,8 @@ export function DelivereeWorkspace() {
       ? "workload"
       : lens.kind === "relationships"
       ? "relationships"
+      : lens.kind === "timesheets"
+      ? "timesheets"
       : lens.kind === "project"
       ? lens.tab === "strategy"
           ? "strategy"
@@ -7460,6 +7464,9 @@ export function DelivereeWorkspace() {
             <CheckCircle2 size="sm" />
             <span>{t("navMyWork")}</span>
           </button>
+          <button className={`do-nav-item ${lens.kind === "timesheets" ? "is-active" : ""}`} onClick={() => { navigate("/timesheets"); setSidebarOpen(false); }} type="button">
+            <CalendarDays size="sm" /><span>{tr("My time", "Mi tiempo")}</span>
+          </button>
           <button
             className={`do-nav-item is-projects ${lens.kind === "work" || lens.kind === "project" ? "is-active" : ""}`}
             data-testid="nav-projects"
@@ -8177,6 +8184,7 @@ export function DelivereeWorkspace() {
                 ...(lens.kind === "relationships"
                   ? [{ label: tr("Relationships", "Relaciones") }]
                   : []),
+                ...(lens.kind === "timesheets" ? [{ label: tr("My time", "Mi tiempo") }] : []),
                 ...(lens.kind === "feedback"
                   ? [
                       {
@@ -9645,6 +9653,10 @@ export function DelivereeWorkspace() {
               <span>Choose a project from the portfolio.</span>
             </div>
           )
+        ) : centerView === "timesheets" && workspace && user ? (
+          <Suspense fallback={<div role="status">{tr("Loading time…", "Cargando horas…")}</div>}>
+            <TimeWorkspaceLazy key={workspace.id + user.uid} workspaceId={workspace.id} userId={user.uid} projects={projects} items={tasks} />
+          </Suspense>
         ) : centerView === "notes" ? (
           <NotesWorkspace
             activeProject={routeOrPrimaryProject}
