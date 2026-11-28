@@ -28,6 +28,7 @@ import {
 import { timeStore, type PageCursor, type Timer } from "../../lib/time/storage";
 import "./time.css";
 import { TimeInsights } from "./TimeInsights";
+import { TimeReportDialog } from "./TimeReportDialog";
 
 type Props = {
   workspaceId: string;
@@ -35,9 +36,11 @@ type Props = {
   projects: TimeTarget[];
   items: TimeTarget[];
   projectId?: string;
+  person?: string;
+  workspaceName?: string;
   repository?: ReturnType<typeof timeStore>;
 };
-export default function TimeWorkspace({ workspaceId, userId, projects, items, projectId = "", repository }: Props) {
+export default function TimeWorkspace({ workspaceId, userId, projects, items, projectId = "", repository, person, workspaceName }: Props) {
   const locale = useLocale();
   const tr = (en: string, es: string) => localize(locale, en, es);
   const store = useMemo(() => repository || timeStore(workspaceId, userId), [repository, workspaceId, userId]);
@@ -63,6 +66,7 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
   const [pasteMode, setPasteMode] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [savedCount, setSavedCount] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
   const fileVersion = useRef(0);
   const [sheetName, setSheetName] = useState<string | null>(null);
@@ -73,7 +77,7 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
   const saveKey = useRef("");
   const dialog = useRef<HTMLDialogElement>(null);
   const requestVersion = useRef(0);
-  const allSheets = [{ id: "default", name: tr("My timesheet", "Mi hoja de horas") }, ...sheets];
+  const allSheets = useMemo(() => [{ id: "default", name: localize(locale, "My timesheet", "Mi hoja de horas") }, ...sheets], [sheets, locale]);
   const label = (list: TimeTarget[], id: string) =>
     list.find((row) => row.id === id)?.title ||
     list.find((row) => row.id === id)?.name ||
@@ -392,6 +396,7 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
         </p>
       )}
       <div className="cw-time-toolbar">
+        <button disabled={busy || loading} onClick={() => setReportOpen(true)}><Download size={15}/>{tr("Export PDF", "Exportar PDF")}</button>
         <label className="cw-time-jump">
           {tr("Week of", "Semana del")}
           <input
@@ -1003,6 +1008,7 @@ export default function TimeWorkspace({ workspaceId, userId, projects, items, pr
           )
         )}
       </dialog>
+      {reportOpen && <TimeReportDialog workspaceId={workspaceId} userId={userId} from={first} to={last} initialSheetId={sheet} projectId={selectedProject} sheets={allSheets} projects={projects} items={items} store={store} person={person} workspace={workspaceName} onClose={() => setReportOpen(false)}/>}
     </section>
   );
 }

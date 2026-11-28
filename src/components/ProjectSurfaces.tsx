@@ -2083,7 +2083,7 @@ export const ProjectConsolePanel = memo(function ProjectConsolePanel({
       )}
 
       {tab === "time" && authUser && workspaceIdForViews && <Suspense fallback={<p role="status">{tr("Loading time…", "Cargando horas…")}</p>}>
-        <TimeWorkspaceLazy key={workspaceIdForViews + authUser.uid + project.id} workspaceId={workspaceIdForViews} userId={authUser.uid} projects={workspaceProjects || [project]} items={tasks} projectId={String(project.id)} />
+        <TimeWorkspaceLazy key={workspaceIdForViews + authUser.uid + project.id} workspaceId={workspaceIdForViews} userId={authUser.uid} projects={workspaceProjects || [project]} items={tasks} projectId={String(project.id)} person={authUser.displayName || undefined} workspaceName={authWorkspace?.name} />
       </Suspense>}
       {tab !== "items" && tab !== "time" && tab !== "docs" && tab !== "costs" && tab !== "tables" && (
         <button
